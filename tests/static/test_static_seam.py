@@ -1168,6 +1168,43 @@ class TestACustomLayerIsDrawnLikeAnyOther:
         assert drawn is None, drawn
 
 
+class TestTwoScenesOnOneAxesIsUnsupported:
+    """Handing one axes to a second scene is documented as unsupported; this pins what it does today.
+
+    Each scene owns its own record of what it has drawn and its own "have I drawn here yet" flag, and a
+    cleopatra glyph clears the axes on a scene's *first* render. So the second scene wipes the first one's
+    drawing while the first goes on describing it. The flag is per scene on purpose — keying it on the axes
+    was tried in #313 and made ``Map(ax=ax)`` used twice stack rather than replace — so this is a real
+    limitation rather than a defect to fix here.
+    """
+
+    def test_the_second_scene_wipes_what_the_first_drew(self, dataset):
+        """A scene handed an axes supersedes whatever was on it, which is the documented first render.
+
+        Args:
+            dataset: The raster both maps draw.
+        """
+        first = Map(crs=dataset.epsg)
+        first.imshow(dataset)
+        held = first._renderer.drawn["raster-1"].artist
+        second = Map(ax=first.ax, fig=first.fig, crs=dataset.epsg)
+        second.imshow(dataset)
+        assert held not in list(first.ax.images), "the first map's image survived"
+
+    def test_the_first_scene_goes_on_describing_what_it_lost(self, dataset):
+        """The consequence, and the reason sharing is unsupported rather than merely discouraged.
+
+        Args:
+            dataset: The raster both maps draw.
+        """
+        first = Map(crs=dataset.epsg)
+        first.imshow(dataset)
+        second = Map(ax=first.ax, fig=first.fig, crs=dataset.epsg)
+        second.imshow(dataset)
+        assert first.layer_ids == ["raster-1"], first.layer_ids
+        assert second.layer_ids == ["raster-1"], second.layer_ids
+
+
 class _FakeCollection:
     """A stand-in for a pyramids ``DatasetCollection``, which ``spaghetti`` reads one attribute of."""
 

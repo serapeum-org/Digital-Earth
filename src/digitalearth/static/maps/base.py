@@ -40,7 +40,8 @@ class GeoLayerBase(Scene):
             crs: Display CRS every layer is reprojected to before drawing (EPSG code or anything pyramids
                 resolves). Defaults to Web Mercator.
             domain: Optional named region or bbox setting the initial extent.
-            ax: An existing axes to draw on; the scene then does not own the figure.
+            ax: An existing axes to draw on; the scene then does not own the figure. One axes holds one map:
+                a second map on the same axes wipes the first one's drawing (see `Scene`).
             fig: The figure `ax` belongs to; taken from `ax` when omitted.
             figsize: Size of the figure created when `ax` is None, in inches.
             globe: Draw on a globe frame rather than a flat projection.

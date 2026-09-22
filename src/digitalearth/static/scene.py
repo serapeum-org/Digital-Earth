@@ -158,8 +158,16 @@ class Scene(WatermarkMixin):
     package's documented spelling for the logo stamp, and ``stamp_watermark(text)`` (diagonal brand text
     with an optional credit line) is available unchanged from upstream, documented there rather than here.
 
+    **One scene per axes.** A scene may be handed an axes to draw on — to place a map inside a figure you
+    are laying out yourself — but **two scenes sharing one axes is not supported**. Each keeps its own
+    record of what it has drawn and its own "have I drawn here yet" flag, and a cleopatra glyph clears the
+    axes on a scene's first render: so the second scene wipes the first one's drawing while the first goes
+    on describing it, and the figure it reports names a layer whose artist is gone. Lay several maps out as
+    several axes (:func:`~digitalearth.static.figure.grid` does), and give each its own.
+
     Args:
-        ax: An existing axes to draw on. When ``None`` a new figure/axes is created.
+        ax: An existing axes to draw on. When ``None`` a new figure/axes is created. One axes, one scene —
+            see above.
         fig: The figure owning ``ax``. Ignored unless ``ax`` is also given.
         figsize: Size of the new figure when one is created (``(width, height)`` in inches).
         strict: How a layer with nothing to draw is handled. ``False`` (default) skips it and logs a
@@ -213,7 +221,8 @@ class Scene(WatermarkMixin):
         Args:
             ax: An existing axes to draw on. When given, the scene does **not** own the figure and will not
                 close it on exit — pass one to compose a Digital-Earth layer into a figure you are laying out
-                yourself.
+                yourself. Give each scene an axes of its own: a second scene on the same axes clears what the
+                first drew on its opening render, and the first still describes it (see the class docstring).
             fig: The figure `ax` belongs to; taken from `ax` when omitted.
             figsize: Size of the figure created when `ax` is None, in inches.
             strict: What to do with a layer that has nothing to draw — data entirely outside the view, or a
