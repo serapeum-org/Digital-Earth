@@ -7397,7 +7397,16 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <span class="normal"><a href="#__codelineno-0-758">758</a></span>
 <span class="normal"><a href="#__codelineno-0-759">759</a></span>
 <span class="normal"><a href="#__codelineno-0-760">760</a></span>
-<span class="normal"><a href="#__codelineno-0-761">761</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-761">761</a></span>
+<span class="normal"><a href="#__codelineno-0-762">762</a></span>
+<span class="normal"><a href="#__codelineno-0-763">763</a></span>
+<span class="normal"><a href="#__codelineno-0-764">764</a></span>
+<span class="normal"><a href="#__codelineno-0-765">765</a></span>
+<span class="normal"><a href="#__codelineno-0-766">766</a></span>
+<span class="normal"><a href="#__codelineno-0-767">767</a></span>
+<span class="normal"><a href="#__codelineno-0-768">768</a></span>
+<span class="normal"><a href="#__codelineno-0-769">769</a></span>
+<span class="normal"><a href="#__codelineno-0-770">770</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
 <a id="__codelineno-0-637" name="__codelineno-0-637"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-638" name="__codelineno-0-638"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-639" name="__codelineno-0-639"></a>    <span class="o">*</span><span class="p">,</span>
@@ -7503,26 +7512,35 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <a id="__codelineno-0-739" name="__codelineno-0-739"></a>    <span class="c1"># Lines carry `level`; filled bands carry `level_min`/`level_max` for the band&#39;s two edges, so</span>
 <a id="__codelineno-0-740" name="__codelineno-0-740"></a>    <span class="c1"># colour and label the lower edge — it is what orders the bands.</span>
 <a id="__codelineno-0-741" name="__codelineno-0-741"></a>    <span class="n">attribute</span> <span class="o">=</span> <span class="s2">&quot;level_min&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;level&quot;</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a>    <span class="n">column</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">color</span> <span class="k">else</span> <span class="n">attribute</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_contour_features</span><span class="p">(</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a>        <span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a>        <span class="n">filled</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="n">column</span><span class="o">=</span><span class="n">column</span><span class="p">,</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>        <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a>    <span class="p">)</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a>        <span class="c1"># The classification the sub-builder just recorded describes this raster&#39;s values, so the key</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>        <span class="c1"># can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span><span class="p">[</span><span class="s2">&quot;units&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="c1"># Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.</span>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a>    <span class="c1"># Held by identity, to tell a key this call produces from the one already sitting in `last_legend`.</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a>    <span class="n">keyed_before</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a>    <span class="n">column</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">color</span> <span class="k">else</span> <span class="n">attribute</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_contour_features</span><span class="p">(</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a>        <span class="n">filled</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="n">column</span><span class="o">=</span><span class="n">column</span><span class="p">,</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a>        <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a>        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a>    <span class="p">)</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a>    <span class="k">if</span> <span class="p">(</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>        <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">keyed_before</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a>    <span class="p">):</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="c1"># The classification the sub-builder just recorded describes this raster&#39;s values, so the key</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a>        <span class="c1"># can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a>        <span class="c1"># Compared by identity, because with an explicit `color=` this layer classifies nothing —</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="c1"># `column` is `None` above — and `last_legend` then still belongs to whichever layer classified</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>        <span class="c1"># before it. Stamping it there labelled one layer&#39;s classes in another layer&#39;s units (#314).</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span><span class="p">[</span><span class="s2">&quot;units&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="c1"># Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
