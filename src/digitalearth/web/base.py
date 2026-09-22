@@ -42,6 +42,7 @@ from digitalearth.base.registry import (
     KIND_BANDS,
     band_of,
     forget_namespace,
+    forget_object,
     kind_info,
     object_namespace,
 )
@@ -1288,6 +1289,9 @@ class WebMapBase:
                 description built by hand can miss.
             OffLimbError: when the map is `strict` and the drawer found nothing it could place. Without
                 `strict` the layer is skipped with a warning and `False` comes back instead.
+            Exception: whatever else a drawer raises, after the layer has been forgotten again (see
+                :meth:`_forget_layer`) — a figure must not name a layer that was not drawn, and that is as
+                true of a refusal as it is of a skip.
         """
         kind_info(kind)
         # Whatever this builder classified belongs to the layer it is indexing. Captured here because this
@@ -1321,20 +1325,78 @@ class WebMapBase:
         from digitalearth.web.renderer import DRAWN_KINDS
 
         if kind in DRAWN_KINDS:
-            if (
-                self._renderer.draw_layer(self.figure_spec, layer_id, opened=placed)
-                is None
-            ):
+            try:
+                drawn = self._renderer.draw_layer(
+                    self.figure_spec, layer_id, opened=placed
+                )
+            except BaseException:
+                # A refusal — `strict`, a description its drawer cannot read — is the same drift as a
+                # decline, and takes the record back the same way before it reaches the caller.
+                self._forget_layer(layer_id)
+                raise
+            if drawn is None:
                 # The drawer declined — an unplaceable raster, an empty collection — and has said why.
                 # A described layer nothing draws is exactly the drift this seam removes, so the record
                 # goes with the drawing: the caller sees a map that never registered it.
-                self._layer_tree = self._layer_tree.remove(layer_id)
-                self._sources.pop(layer_id, None)
+                self._forget_layer(layer_id)
                 return False
             # In the layer's *own* band when it declares one — what a caller's `custom:maplibre` object
             # needs, since the engine name says nothing about what it draws — else the kind's.
             self._queue_in_band(_Described(layer_id), band or band_of(kind))
         return True
+
+    def _forget_layer(self, layer_id: str) -> None:
+        """Take back everything :meth:`_index_layer` recorded for a layer its drawer did not draw.
+
+        What `_index_layer` calls when a drawer declines or raises. Dropping the tree entry and the source
+        reference alone left the rest behind (review M6): the object stayed in the process-global registry
+        for the life of the process, and the id stayed issued, so a caller who retried the same `name=` got
+        `dem-2` — which a layer switcher shows the viewer. The classification the builder filed under the
+        id goes too, since a later layer may now be given the same id. This is what the static tier's
+        `Scene._forget_layer` does for the same two paths.
+
+        Unlike :meth:`remove_layer`, the registered object *is* forgotten here: a layer that was never
+        drawn was never in a figure this map reported, so no captured `figure_spec` can name it.
+
+        Args:
+            layer_id: The layer to forget. Parts it never recorded are skipped, so this is safe to call
+                however far `_index_layer` got.
+        """
+        if layer_id in self._layer_tree.ids:
+            self._layer_tree = self._layer_tree.remove(layer_id)
+        self._sources.pop(layer_id, None)
+        # The key `_index_layer` registered under, rather than whatever reference the builder was given:
+        # a path, or a `DataRef` the caller registered themselves, is not this map's to forget.
+        forget_object(f"{self._objects_ns}:{layer_id}")
+        self._custom.pop(layer_id, None)
+        self._issued_ids.discard(layer_id)
+        self._forget_legend(layer_id)
+
+    def _forget_legend(self, layer_id: str) -> None:
+        """Drop the classification filed under a layer, and stop describing it as the most recent one.
+
+        Args:
+            layer_id: The layer whose key goes.
+
+        Note:
+            When the dropped key was `last_legend`, the most recent surviving layer's key takes its place,
+            or none. `_filed_legend` follows it: it is how `_index_layer` tells a fresh classification from
+            the one already filed, and left pointing at the dropped key, the next *unclassified* layer was
+            filed under the survivor's key and drew a colour key it was never classified with.
+        """
+        dropped = self._legends.pop(layer_id, None)
+        if dropped is None or dropped is not self.last_legend:
+            return
+        # The keyed path forgets it; the default path read `last_legend`, which was cleared only when the
+        # map went empty — so `legend()` kept drawing the key of a layer that was gone (review M5). The most
+        # recent surviving classification takes its place, or none.
+        surviving = [
+            self._legends[held] for held in self.layer_ids if held in self._legends
+        ]
+        self.last_legend = surviving[-1] if surviving else None
+        self._filed_legend = self.last_legend
+        if not surviving:
+            self.last_breaks = None
 
     def _rekind_layer(self, layer_id: str, kind: str) -> None:
         """Record a different kind for a layer already in the tree, keeping its id, label, visibility and place.
@@ -1519,17 +1581,7 @@ class WebMapBase:
         # (review M6). `close()` is where a map lets its data go, which is the caller saying they are
         # finished with every figure it produced.
         self._sources.pop(layer_id, None)
-        dropped_legend = self._legends.pop(layer_id, None)
-        if dropped_legend is not None and dropped_legend is self.last_legend:
-            # The keyed path forgets it; the default path read `last_legend`, which was cleared only when
-            # the map went empty — so `legend()` kept drawing the key of a layer that had been removed
-            # (review M5). The most recent surviving classification takes its place, or none.
-            surviving = [
-                self._legends[held] for held in self.layer_ids if held in self._legends
-            ]
-            self.last_legend = surviving[-1] if surviving else None
-            if not surviving:
-                self.last_breaks = None
+        self._forget_legend(layer_id)
         self._forget_slider_frame(layer_id)
 
         def _is_layer(layer: Any) -> bool:

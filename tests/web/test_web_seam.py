@@ -492,6 +492,225 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
         assert any("field" in line for line in warning_log), warning_log
 
 
+def _unplaceable(monkeypatch) -> None:
+    """Make every raster's corners unrepresentable in lon/lat, so a raster drawer declines — or, strict, raises.
+
+    Args:
+        monkeypatch: pytest's patcher, which restores the method after the test (or on `undo()`).
+    """
+    from digitalearth.web import WebMap
+
+    monkeypatch.setattr(WebMap, "_lonlat_corners", lambda self, source: None)
+
+
+def _registered(web_map) -> list:
+    """Return the ids this map holds in the process-global object registry.
+
+    Read from the registry itself rather than from `figure_spec.sources`, which filters by the layers in the
+    tree — so a source a declined layer left registered is invisible there (review M6).
+
+    Args:
+        web_map: The map whose namespace is read.
+
+    Returns:
+        The registry keys under the map's namespace, sorted.
+    """
+    from digitalearth.base import registry
+
+    return sorted(
+        key for key in registry._OBJECTS if key.startswith(f"{web_map._objects_ns}:")
+    )
+
+
+#: The two raster builders, each drawn under the name the tests below reuse.
+_RASTER_BUILDERS = [
+    pytest.param(lambda m, ds: m.field(ds, name="dem"), id="field"),
+    pytest.param(
+        lambda m, ds: m.rgb_composite(ds, bands=(1, 1, 1), name="dem"),
+        id="rgb_composite",
+    ),
+]
+
+
+class TestALayerThatIsNotDrawnLeavesNothingBehind:
+    """Review M6: a declined or refused layer gives back its record, its data and its name."""
+
+    @pytest.mark.parametrize("build", _RASTER_BUILDERS)
+    def test_a_declined_layer_lets_its_data_go(self, monkeypatch, dataset, build):
+        """The object registry is process-global, so a source left in it is held for the process's life.
+
+        Args:
+            monkeypatch: Used to make the drawer decline.
+            dataset: A small raster.
+            build: The raster builder under test.
+        """
+        from digitalearth.web import WebMap
+
+        _unplaceable(monkeypatch)
+        m = WebMap()
+        build(m, dataset)
+        assert _registered(m) == [], "a declined layer left its data registered"
+
+    @pytest.mark.parametrize("build", _RASTER_BUILDERS)
+    def test_a_declined_name_is_free_again(self, monkeypatch, dataset, build):
+        """A caller who names a layer, watches it skip, and names it again gets the name they asked for.
+
+        Args:
+            monkeypatch: Used to make the drawer decline once.
+            dataset: A small raster.
+            build: The raster builder under test.
+
+        Test scenario:
+            The id stayed issued, so the retry became `dem-2` — and a layer switcher captions a row with
+            its id, so the viewer read the suffix.
+        """
+        from digitalearth.web import WebMap
+
+        _unplaceable(monkeypatch)
+        m = WebMap()
+        build(m, dataset)
+        monkeypatch.undo()
+        build(m, dataset)
+        assert m.layer_ids == ["dem"], m.layer_ids
+
+    @pytest.mark.parametrize("build", _RASTER_BUILDERS)
+    def test_a_refused_layer_is_not_described(self, monkeypatch, dataset, build):
+        """Under `strict` the drawer raises, and the record must go with the drawing just as on a decline.
+
+        Args:
+            monkeypatch: Used to make the drawer refuse.
+            dataset: A small raster.
+            build: The raster builder under test.
+
+        Test scenario:
+            The description is written before the drawer runs. A decline took it back; a raise did not, so
+            the figure named a layer no widget would ever hold.
+        """
+        from digitalearth.base.crs import OffLimbError
+        from digitalearth.web import WebMap
+
+        _unplaceable(monkeypatch)
+        m = WebMap(strict=True)
+        with pytest.raises(OffLimbError):
+            build(m, dataset)
+        assert m.layer_ids == [], m.layer_ids
+
+    @pytest.mark.parametrize("build", _RASTER_BUILDERS)
+    def test_a_refused_layer_lets_its_data_go(self, monkeypatch, dataset, build):
+        """The raise path forgets the source too, not only the decline path.
+
+        Args:
+            monkeypatch: Used to make the drawer refuse.
+            dataset: A small raster.
+            build: The raster builder under test.
+        """
+        from digitalearth.base.crs import OffLimbError
+        from digitalearth.web import WebMap
+
+        _unplaceable(monkeypatch)
+        m = WebMap(strict=True)
+        with pytest.raises(OffLimbError):
+            build(m, dataset)
+        assert _registered(m) == [], "a refused layer left its data registered"
+
+    @pytest.mark.parametrize("build", _RASTER_BUILDERS)
+    def test_a_refused_name_is_free_again(self, monkeypatch, dataset, build):
+        """A retry after a refusal gets the name it asked for.
+
+        Args:
+            monkeypatch: Used to make the drawer refuse once.
+            dataset: A small raster.
+            build: The raster builder under test.
+        """
+        from digitalearth.base.crs import OffLimbError
+        from digitalearth.web import WebMap
+
+        _unplaceable(monkeypatch)
+        m = WebMap(strict=True)
+        with pytest.raises(OffLimbError):
+            build(m, dataset)
+        monkeypatch.undo()
+        build(m, dataset)
+        assert m.layer_ids == ["dem"], m.layer_ids
+
+    def test_a_refused_classification_is_not_filed_under_its_id(
+        self, monkeypatch, points_gdf
+    ):
+        """The key a refused layer classified must not stay filed under an id that is free again.
+
+        Args:
+            monkeypatch: Used to make the vector drawer refuse.
+            points_gdf: A small point collection.
+
+        Test scenario:
+            `_index_layer` files the builder's classification under the layer's id before it draws. With the
+            id released, a later layer reusing it would inherit a key it was never drawn with; and `legend()`
+            with no id would describe a layer that is not on the map.
+        """
+        from digitalearth.web import WebMap, vector
+
+        m = WebMap().points(points_gdf, name="kept")
+        monkeypatch.setattr(vector, "draw_vector", _refusing_drawer)
+        with pytest.raises(ValueError, match="cannot be drawn"):
+            m.points(points_gdf, column="value", name="classified")
+        assert "classified" not in m._legends, sorted(m._legends)
+        assert m.last_legend is None, m.last_legend
+
+    def test_a_later_unclassified_layer_inherits_no_key(self, monkeypatch, points_gdf):
+        """The surviving key takes `last_legend` back, and must not be filed again under the next layer.
+
+        Args:
+            monkeypatch: Used to make the vector drawer refuse once.
+            points_gdf: A small point collection.
+
+        Test scenario:
+            `_index_layer` files `last_legend` under a new layer when it differs from the one it last filed.
+            A refusal hands `last_legend` back to the surviving layer's key; unless the filing marker
+            follows, the next *unclassified* layer is filed under that key and a colour key is drawn for a
+            layer that was never classified.
+        """
+        from digitalearth.web import WebMap, vector
+
+        m = WebMap().points(points_gdf, column="value", name="first")
+        drawer = vector.draw_vector
+        monkeypatch.setattr(vector, "draw_vector", _refusing_drawer)
+        with pytest.raises(ValueError, match="cannot be drawn"):
+            m.points(points_gdf, column="value", name="refused")
+        monkeypatch.setattr(vector, "draw_vector", drawer)
+        m.points(points_gdf, name="plain")
+        assert "plain" not in m._legends, sorted(m._legends)
+
+    def test_removing_a_classified_layer_files_no_key_under_the_next(self, points_gdf):
+        """The same marker, on :meth:`remove_layer`'s path — the one the shared helper was lifted from.
+
+        Args:
+            points_gdf: A small point collection.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .points(points_gdf, column="value", name="first")
+            .points(points_gdf, column="value", name="second")
+        )
+        m.remove_layer("second").points(points_gdf, name="plain")
+        assert "plain" not in m._legends, sorted(m._legends)
+
+
+def _refusing_drawer(web_map, data, layer):
+    """Behave like a drawer that cannot draw what it was given.
+
+    Args:
+        web_map: Unused — the drawer refuses before it would read the map.
+        data: Unused — the collection it would have drawn.
+        layer: Unused — the description it would have drawn.
+
+    Raises:
+        ValueError: always.
+    """
+    raise ValueError("this description cannot be drawn")
+
+
 class TestTheBandOfALayerIsItsKinds:
     """Where a layer is drawn is a property of what it is, not of which path drew it."""
 
