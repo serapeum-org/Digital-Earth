@@ -1038,8 +1038,13 @@ class DecorationMixin(_MixinBase):
                     f"graticule({name_of}={step!r}) must be greater than 0 and at most 180 degrees"
                 )
         # The degree labels are drawn under an id derived from this one, which the allocation reserves too,
-        # so a caller's `name=` can no longer take it (review M5).
-        layer_id = self._layer_id("graticule", name or "Graticule", kind="graticule")
+        # so a caller's `name=` can no longer take it (review M5). Only when they are drawn, though: the
+        # reservation table is keyed by kind, and whether a graticule labels itself is in its description.
+        # Reserving unconditionally held an id nothing drew, and the caller who then asked for that name got
+        # it silently suffixed — which is the string a layer switcher captions the row with (review L2).
+        layer_id = self._layer_id(
+            "graticule", name or "Graticule", kind="graticule" if labels else None
+        )
         # What was asked for, as values. The lines themselves are built by `draw_graticule` from exactly
         # this, so the figure describes the grid rather than naming one that a closure drew elsewhere.
         self._index_layer(

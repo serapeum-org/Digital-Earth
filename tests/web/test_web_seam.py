@@ -860,6 +860,39 @@ class TestADerivedIdIsReserved:
         m = WebMap().text(4.9, 52.4, "here", name="g-label").graticule(name="g")
         assert _duplicates(_widget_layer_ids(m)) == [], _widget_layer_ids(m)
 
+    def test_an_unlabelled_graticule_draws_no_label_layer(self):
+        """The premise of the two checks below: with `labels=False` there is nothing to reserve for.
+
+        Test scenario:
+            The reservation is keyed by kind, and the kind says a graticule labels itself — but whether it
+            does is in the description, not in the kind (review L2).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="g", labels=False)
+        assert m._renderer.drawn["g"].extra_layers == (), "nothing draws the labels"
+
+    def test_an_unlabelled_graticule_leaves_the_label_name_to_a_later_caller(self):
+        """The id a layer switcher captions the row with is the caller's to choose when it is free.
+
+        Test scenario:
+            `graticule(labels=False)` reserved `g-label` anyway, so a caller who then asked for that name
+            silently got `g-label-2` — and that string is what the switcher shows the viewer.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="g", labels=False)
+        m.text(4.9, 52.4, "here", name="g-label")
+        assert sorted(m.layer_ids) == ["g", "g-label"], m.layer_ids
+
+    def test_a_labelled_graticule_still_keeps_its_label_name(self):
+        """The guard must follow the description, not simply stop reserving."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="g", labels=True)
+        m.text(4.9, 52.4, "here", name="g-label")
+        assert sorted(m.layer_ids) == ["g", "g-label-2"], m.layer_ids
+
     @pytest.mark.parametrize("suffix", ["count", "unclustered"])
     def test_a_caller_name_after_a_cluster_does_not_take_its_derived_ids(
         self, points_gdf, suffix
