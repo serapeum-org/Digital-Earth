@@ -1237,7 +1237,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         logger.info(
             "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
-            "save to a .png/.svg, not interactive .html"
+            "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
         return self.add_element(
             None,
@@ -1287,7 +1287,7 @@ class VectorMixin(_MixinBase):
             )
         logger.info(
             "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
-            "save to a .png/.svg, not interactive .html"
+            "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
         return self.add_element(
             None,

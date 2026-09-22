@@ -360,3 +360,95 @@ class TestEachLayerKeepsItsOwnStyle:
         m.image(_dem(), cmap="magma")
         styles = self._styles(m._render_with_overrides({}))
         assert styles[0].get("cmap") == "magma", styles
+
+
+class TestWhatIsDeclaredAbsentIsRefused:
+    """#294's premise is that a declaration is checkable — in both directions (round 2, L3).
+
+    Every tier's suite checks the `supports` direction: a declared kind is drawn, a declared channel folds.
+    Nothing checked the `absent` direction against the tier's own methods, and one of the 27 reasons across
+    the three changed declarations was false. `export_vector` is declared absent — "the figure is a Bokeh
+    canvas; a vector export is the static tier's" — while `save()` routed every non-`.html` suffix through
+    HoloViews' matplotlib backend and happily wrote SVG, PDF and PGF.
+
+    The declaration is the contract and is kept: `static/capabilities.py` states that vector export is the
+    matplotlib tier's alone, and `tests/static/test_static_capabilities.py` refuses any other tier claiming
+    it. So `save()` is what changed, and these are the checks that keep the two from drifting apart again.
+    """
+
+    #: The suffixes matplotlib writes as vector art, which is the capability declared absent here.
+    VECTOR_SUFFIXES = [".svg", ".pdf", ".pgf"]
+
+    @pytest.fixture
+    def drawable(self):
+        """Yield a map carrying one real layer, so only a refusal can stop `save()`.
+
+        An empty map cannot be rendered at all — HoloViews raises `SkipRendering` for an overlay with
+        nothing in it — so an empty map would let a refusal test pass without any refusal existing.
+
+        Yields:
+            The map.
+        """
+        pytest.importorskip("geoviews")
+        from pyramids.feature import FeatureCollection
+
+        interactive_map = InteractiveMap()
+        interactive_map.points(FeatureCollection.read_file("tests/data/points.geojson"))
+        yield interactive_map
+        interactive_map.close()
+
+    @pytest.mark.parametrize("suffix", VECTOR_SUFFIXES)
+    def test_a_vector_suffix_is_refused_by_name(self, suffix, drawable, tmp_path):
+        """A caller asking for what the tier says it cannot do is told so, and told where to go.
+
+        Args:
+            suffix: The vector extension asked for.
+            drawable: A map with one layer, which would otherwise save.
+            tmp_path: pytest's per-test directory.
+        """
+        target = tmp_path / f"map{suffix}"
+        with pytest.raises(ValueError, match="export_vector"):
+            drawable.save(target)
+
+    @pytest.mark.parametrize("suffix", VECTOR_SUFFIXES)
+    def test_the_refusal_writes_no_file(self, suffix, drawable, tmp_path):
+        """A refusal that has already written the file refuses nothing.
+
+        Args:
+            suffix: The vector extension asked for.
+            drawable: A map with one layer.
+            tmp_path: pytest's per-test directory.
+        """
+        target = tmp_path / f"map{suffix}"
+        with pytest.raises(ValueError):
+            drawable.save(target)
+        assert not target.exists(), f"{suffix} was written despite the refusal"
+
+    def test_the_refusal_quotes_the_declaration(self, drawable, tmp_path):
+        """The reason a caller is given must be the declaration's, not a second copy of it.
+
+        Args:
+            drawable: A map with one layer.
+            tmp_path: pytest's per-test directory.
+        """
+        target = tmp_path / "map.svg"
+        with pytest.raises(ValueError) as excinfo:
+            drawable.save(target)
+        assert CAPABILITIES.reason("export_vector") in str(excinfo.value), str(
+            excinfo.value
+        )
+
+    @pytest.mark.parametrize("suffix", [".png", ".html"])
+    def test_what_the_tier_does_declare_still_writes(self, suffix, drawable, tmp_path):
+        """The positive control: `export_image` and `export_html` are declared and must keep working.
+
+        Args:
+            suffix: A declared export format.
+            drawable: A map with one layer.
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            Without this, refusing every suffix would pass the checks above while taking `save()` away.
+        """
+        written = drawable.save(tmp_path / f"map{suffix}")
+        assert written.exists(), f"{suffix} is declared supported but was not written"

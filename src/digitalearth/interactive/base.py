@@ -54,6 +54,7 @@ from digitalearth.base.spec import (
 )
 from digitalearth.base.spec._serial import to_json_value
 from digitalearth.base.spec.bounds import same_crs
+from digitalearth.interactive.capabilities import CAPABILITIES
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
 # vector builder auto-routes to its tier's big-data renderer (#250) lives in `digitalearth.base.bigdata`, so
@@ -65,6 +66,12 @@ from digitalearth.base.spec.bounds import same_crs
 #: The id of the one panel this tier draws into. A map is a single view; the constant is named so a
 #: reader of `figure_spec` sees the same panel id every tier writes.
 PANEL_ID: str = "main"
+
+#: The file suffixes matplotlib writes as vector art. `save()` refuses them, because this tier declares
+#: `export_vector` absent and the static tier declares it as its own alone — and HoloViews' matplotlib
+#: fallback, which the raster suffixes ride, would otherwise write all three (review L3). `.eps` and `.ps`
+#: are not here: HoloViews' matplotlib renderer refuses those itself, naming the formats it takes.
+VECTOR_SUFFIXES: frozenset = frozenset({".svg", ".pdf", ".pgf"})
 
 #: The pip extra / pixi env that provides the HoloViz engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -1449,8 +1456,9 @@ class InteractiveMapBase:
 
         Args:
             path: Output file (``str`` or ``pathlib.Path``). ``*.html`` writes a self-contained
-                interactive Bokeh page; any other suffix (``.png``/``.svg``/…) renders through
-                HoloViews' matplotlib backend (headless, no browser/selenium needed).
+                interactive Bokeh page; ``.png`` and the other raster suffixes render through HoloViews'
+                matplotlib backend (headless, no browser/selenium needed). A vector suffix is refused —
+                see below.
             **kwargs: Forwarded to :func:`holoviews.save` (e.g. ``fmt``, ``dpi``).
 
         Returns:
@@ -1459,6 +1467,13 @@ class InteractiveMapBase:
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
+            ValueError: for a vector suffix (``.svg``/``.pdf``/``.pgf``). This tier declares
+                ``export_vector`` absent, because its figure is a Bokeh canvas and a vector export is the
+                static tier's — and the static tier declares that capability as its own alone. The
+                matplotlib fallback the raster suffixes use would write those three too, so a caller asking
+                for one got a file the declaration says the tier cannot produce, drawn by a renderer that
+                is not this tier's (review L3). Build the same map with ``digitalearth.Map`` for a vector
+                file.
 
         Examples:
             - The suffix picks the backend — ``.html`` is interactive Bokeh, ``.png`` renders
@@ -1473,7 +1488,27 @@ class InteractiveMapBase:
                 '.png'
 
                 ```
+            - A vector file is the static tier's, and the refusal says so rather than writing one (it
+              needs no engine: nothing is rendered for a call that cannot be honoured):
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().save("map.svg")           # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: InteractiveMap.save('map.svg') cannot write a vector file: ...
+
+                ```
         """
+        suffix = Path(str(path)).suffix.lower()
+        if suffix in VECTOR_SUFFIXES:
+            # Refused before the figure is rendered, so nothing is drawn and nothing is written for a call
+            # that cannot be honoured. The reason is read from the declaration rather than repeated, so the
+            # two cannot say different things (review L3).
+            raise ValueError(
+                f"InteractiveMap.save({str(path)!r}) cannot write a vector file: the interactive tier "
+                f"declares export_vector absent - {CAPABILITIES.reason('export_vector')}. Build the map "
+                f"with digitalearth.Map for {suffix}, or save .png or .html here."
+            )
         _, hv = _require_holoviz()
         obj = self.render()
         backend = "bokeh" if str(path).lower().endswith(".html") else "matplotlib"
