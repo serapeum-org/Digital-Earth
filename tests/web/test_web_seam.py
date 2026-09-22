@@ -72,21 +72,28 @@ class TestTheTwoPathsAreDisjoint:
             A converted builder records a description and the renderer draws it; an unconverted one queues
             a closure. If a builder did both, the layer would be added to the widget twice — once from the
             description and once from the queue — and the second would win silently.
+
+            The queue is read by *count*, not by looking up the first entry under an id: the marker is
+            always queued first, so asking what the first entry under an id is answered "a marker" whether
+            or not a closure followed it, and a builder that did both passed (review M11). Every id in the
+            queue must appear once, and the ids in the queue must be exactly the layers described.
         """
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().points(points_gdf, name="obs").graticule(name="grid")
-        drawn = set(m._renderer.drawn)
-        queued_ids = {
-            getattr(entry, "_digitalearth_layer_id", None) for entry in m._queued
-        }
-        described_and_queued = {
+        queued = [
             layer_id
-            for layer_id in drawn
-            if layer_id in queued_ids and not _is_marker(m, layer_id)
-        }
-        assert described_and_queued == set(), (
-            f"{sorted(described_and_queued)} are both drawn from a description and queued as a drawing"
+            for entry in m._queued
+            if (layer_id := getattr(entry, "_digitalearth_layer_id", None)) is not None
+        ]
+        repeated = sorted(
+            {layer_id for layer_id in queued if queued.count(layer_id) > 1}
+        )
+        assert repeated == [], (
+            f"{repeated} are queued twice — described and queued as a drawing, so the widget adds them twice"
+        )
+        assert sorted(queued) == sorted(m.layer_ids), (
+            f"the queue names {sorted(queued)}; the map describes {sorted(m.layer_ids)}"
         )
 
     def test_the_widget_holds_each_layer_once(self, points_gdf):
@@ -197,25 +204,6 @@ class TestTheTwoPathsAreDisjoint:
             m._apply_layer(Recorder(), entry)
         assert sources == [], f"a custom layer added a source of its own: {sources}"
         assert added == [own], f"the caller's own object must be what is added: {added}"
-
-
-def _is_marker(web_map, layer_id: str) -> bool:
-    """Whether a queue entry for `layer_id` is a description marker rather than a drawing.
-
-    Args:
-        web_map: The map holding the queue.
-        layer_id: The layer to look for.
-
-    Returns:
-        `True` when the entry standing for that layer is the seam's marker, which is expected, rather than
-        a closure that would draw it a second time.
-    """
-    from digitalearth.web.base import _Described
-
-    for entry in web_map._queued:
-        if getattr(entry, "_digitalearth_layer_id", None) == layer_id:
-            return isinstance(entry, _Described)
-    return False
 
 
 class TestADescriptionIsWhatIsDrawn:
