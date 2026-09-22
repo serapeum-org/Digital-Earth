@@ -619,22 +619,37 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
 
 
 class TestAnOutlineAlphaTheCallerChose:
-    """The outline-only default is a default, so an explicit value has to survive it."""
+    """The outline-only default is the builder's, so it is described only where it applies."""
 
-    def test_a_caller_s_own_fill_alpha_is_kept(self, m, polygon_fc):
-        """Polygons with no column are drawn as outlines *unless* the caller asked for a fill.
+    @pytest.mark.parametrize(
+        "opts, expected",
+        [
+            pytest.param({}, {"fill_alpha": 0.0}, id="no-fill-was-asked-for"),
+            pytest.param({"fill_alpha": 0.4}, {}, id="the-caller-asked-for-a-fill"),
+        ],
+    )
+    def test_the_description_carries_the_default_only_when_it_applies(
+        self, m, polygon_fc, opts, expected
+    ):
+        """A figure holds the resolved style; the caller's own keywords are held beside the layer.
 
         Args:
             m: The map under test.
             polygon_fc: Buffered points with a numeric `fid`.
+            opts: The styling keywords the caller passes.
+            expected: The resolved style the layer must be described with.
 
         Test scenario:
-            The companion check above pins the default at ``fill_alpha=0.0``. Setting it unconditionally
-            would pass that check and silently discard a translucent fill the caller asked for, which is
-            the only way to draw semi-transparent polygons without colouring them by a column.
+            The drawer merges the caller's keywords *over* the resolved style, so recording
+            ``fill_alpha = 0.0`` unconditionally still draws the fill they asked for on this map — the
+            check above, which reads the rendered style, cannot tell the two apart. What it changes is
+            the description: a figure written from it and read back elsewhere, without the held
+            keywords, then says "outlines only" for a layer the caller asked to fill.
         """
-        m.polygons(polygon_fc, fill_alpha=0.4)
-        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
-        assert style["fill_alpha"] == pytest.approx(0.4), (
-            f"the caller's own fill_alpha was overwritten: {style['fill_alpha']}"
+        m.polygons(polygon_fc, **opts)
+        described = m.figure_spec.layers.get(
+            list(m.figure_spec.layers.ids)[0]
+        ).symbology.props["common"]
+        assert described == expected, (
+            f"polygons(**{opts}) was described with the resolved style {described}"
         )
