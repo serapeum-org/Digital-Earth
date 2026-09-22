@@ -653,3 +653,90 @@ class TestAnOutlineAlphaTheCallerChose:
         assert described == expected, (
             f"polygons(**{opts}) was described with the resolved style {described}"
         )
+
+
+class TestAClassifiedLayerTakesThePathEveryOtherBuilderTakes:
+    """A path is the only input that yields a storable figure, so a classified layer has to take one.
+
+    `DataRef.of` records a path as a path and anything else as an `object:` reference, and
+    `FigureSpec.to_dict` refuses an `object:`-backed figure by name. So on this tier a classified layer was
+    either drawable (from a `FeatureCollection`) or storable (from a path), never both: the two classifying
+    helpers indexed the caller's argument rather than the frame it names, and a string answered
+    `TypeError: string indices must be integers` from inside the classifier (round 2, M8). The unclassified
+    branch never had the problem, because it hands the argument to the drawer and the renderer opens it.
+    """
+
+    #: The point fixture as the path a storable figure records, rather than as an opened object.
+    POINTS = "tests/data/points.geojson"
+
+    @staticmethod
+    def _stored(interactive_map):
+        """Return the sources a figure built from this map would be written with.
+
+        Args:
+            interactive_map: The map whose figure is written.
+
+        Returns:
+            `{layer_id: uri}` — a path for a layer a figure can carry, an `object:` reference for one it
+            cannot.
+        """
+        figure = interactive_map.figure_spec
+        return {layer_id: ref.uri for layer_id, ref in sorted(figure.sources.items())}
+
+    @pytest.mark.parametrize("scheme", ["categorical", "quantiles"])
+    def test_a_classified_choropleth_builds_from_a_path(self, m, scheme):
+        """Both classifying branches of `choropleth` must read the named file, not the name.
+
+        Args:
+            m: The map under test.
+            scheme: The classifying branch — distinct values, or classes.
+        """
+        m.choropleth(self.POINTS, "fid", scheme=scheme, k=3)
+        assert self._stored(m) == {"choropleth-1": self.POINTS}, self._stored(m)
+
+    @pytest.mark.parametrize("scheme", ["categorical", "quantiles"])
+    def test_a_classified_point_layer_builds_from_a_path(self, m, scheme):
+        """The sibling call site: `points` classifies through the same two helpers.
+
+        Args:
+            m: The map under test.
+            scheme: The classifying branch — distinct values, or classes.
+
+        Test scenario:
+            Reported against `choropleth`, but the two helpers are shared with `points`, which fails the
+            same way. Fixing only the reported builder would leave half the class.
+        """
+        m.points(self.POINTS, value_column="fid", scheme=scheme, k=3)
+        assert self._stored(m) == {"points-1": self.POINTS}, self._stored(m)
+
+    def test_the_classes_are_the_ones_the_opened_frame_yields(self, m, point_fc):
+        """Opening the path must classify the file's own values, not merely stop raising.
+
+        Args:
+            m: The map under test.
+            point_fc: The same features, already opened.
+
+        Test scenario:
+            A fix that classified an empty or placeholder frame would build a layer and store a path while
+            colouring it by breaks that belong to nothing; the two inputs have to agree on the edges.
+        """
+        opened = InteractiveMap()
+        try:
+            opened.choropleth(point_fc, "fid", scheme="quantiles", k=3)
+            expected = list(opened.last_breaks)
+        finally:
+            opened.close()
+        m.choropleth(self.POINTS, "fid", scheme="quantiles", k=3)
+        assert list(m.last_breaks) == expected, (
+            f"a path classified to {m.last_breaks}, the opened frame to {expected}"
+        )
+
+    def test_a_path_the_column_is_not_in_is_still_refused(self, m):
+        """Opening the frame must not swallow the refusal a wrong column earns.
+
+        Test scenario:
+            `choropleth` checks the column against `features.columns`, which a string does not have, so a
+            path has always deferred that refusal to the draw. It must still arrive.
+        """
+        with pytest.raises(KeyError):
+            m.choropleth(self.POINTS, "not_a_column", scheme="quantiles", k=3)

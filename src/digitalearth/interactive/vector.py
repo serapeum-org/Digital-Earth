@@ -15,11 +15,12 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
+import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.spec import LayerSpec, Scale, Symbology
+from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
 from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
@@ -47,6 +48,34 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: pair, and HoloViews reads it as one. The caller's own keywords never go through the freeze at all now —
 #: they are held beside the layer, exactly as passed (C1/H3/M9) — so nothing in `opts` needs thawing.
 _AS_LISTS: Tuple[str, ...] = ("cmap", "color_levels")
+
+
+def _classifiable(features: Any) -> Any:
+    """Return the frame a column is classified from, opening a path the way the drawer opens one.
+
+    Every builder on this tier takes a path as well as an opened object, and a path is the only input a
+    figure can be *written* with: `DataRef.of` records a path as a path and anything else as an `object:`
+    reference, which `FigureSpec.to_dict` refuses. The unclassified branches never had to read the data
+    themselves — they hand the caller's argument to `add_element` and the renderer opens it at draw time —
+    but classifying is different: the class edges or the distinct values have to be known before the layer
+    is described, because they are part of the description. Indexing the argument itself answered
+    `TypeError: string indices must be integers` for the one input that yields a storable figure
+    (review M8).
+
+    Opened through the same reference the layer is registered under, so a path is read by exactly the
+    resolver that will read it again at draw time. Only the classification reads this frame; the caller's
+    own argument stays the layer's source, so the figure still records the path rather than an object.
+
+    Args:
+        features: The caller's argument — a `FeatureCollection`, a GeoDataFrame, or a path or URL to one.
+
+    Returns:
+        A frame whose columns can be read. An object is handed back untouched, so the common case opens
+        nothing.
+    """
+    if isinstance(features, (str, os.PathLike)):
+        return DataRef.of(features).open()
+    return features
 
 
 def _as_labels(gdf: Any, column: str, missing: str) -> Any:
@@ -859,7 +888,8 @@ class VectorMixin(_MixinBase):
         Args:
             gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
                 in any CRS, so the drawer's warp is the only one the layer needs (never mutated — a copy is
-                relabelled and returned).
+                relabelled and returned). A path or URL is opened first, by :func:`_classifiable`, because
+                a path is the only input a figure can be written with (review M8).
             column: The attribute to colour by (any hashable value; assumed single-dtype — see
                 :meth:`_categorical_polygons` on the string-keyed collapse).
             cmap: A qualitative colormap name, already resolved by the caller's default.
@@ -876,6 +906,7 @@ class VectorMixin(_MixinBase):
             resolve_categorical_cmap,
         )
 
+        gdf = _classifiable(gdf)
         categories, colors = categorical_colors(
             gdf[column], resolve_categorical_cmap(cmap)
         )
@@ -912,7 +943,9 @@ class VectorMixin(_MixinBase):
 
         Args:
             gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
-                in any CRS, so the drawer's warp is the only one the layer needs.
+                in any CRS, so the drawer's warp is the only one the layer needs. A path or URL is opened
+                first, by :func:`_classifiable`, because a path is the only input a figure can be written
+                with (review M8).
             column: The numeric attribute to classify and colour by.
             scheme: A named scheme or an explicit sequence of class edges.
             k: Number of classes for a named scheme.
@@ -930,6 +963,7 @@ class VectorMixin(_MixinBase):
                 and when an explicit ``cmap`` sequence carries a different number of colours than the
                 scheme produced classes — see the note above.
         """
+        gdf = _classifiable(gdf)
         try:
             edges = Scale.breaks_of(gdf[column].to_numpy(), scheme, k)
         except ValueError as err:  # constant column, unknown scheme, k < 1, …
