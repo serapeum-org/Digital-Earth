@@ -486,3 +486,86 @@ class TestForgettingALayerTheTreeNeverHeld:
             )
         finally:
             interactive_map.close()
+
+
+class TestForgettingTheLayerTheTogglesActOn:
+    """`_forget_layer` must also let go of the pointer the toggles follow (round 2, N8).
+
+    `_note_last_layer` records which layer `colorbar()`, `legend()`, `hover()` and `on_tap()` act on, and
+    `_last_layer_index` resolves it by looking the id up in the tree. Forgetting a layer dropped it from the
+    tree, the id pool, the sources, the held keys and the held values — and left the pointer naming it, so
+    the next toggle answered `ValueError: tuple.index(x): x not in tuple` from inside the lookup where the
+    method documents a refusal naming itself. The web tier already re-points its own `_last_layer_id` when
+    it forgets a layer (`web/base.py`); this is the same rule on this tier.
+    """
+
+    @staticmethod
+    def _map_with(count):
+        """Return a map carrying `count` point layers, and the features they were built from.
+
+        Args:
+            count: How many layers to add.
+
+        Returns:
+            The map. The caller closes it.
+        """
+        from pyramids.feature import FeatureCollection
+
+        features = FeatureCollection.read_file("tests/data/points.geojson")
+        interactive_map = InteractiveMap()
+        for _ in range(count):
+            interactive_map.points(features)
+        return interactive_map
+
+    def test_forgetting_the_only_layer_leaves_the_documented_refusal(self):
+        """With nothing left to act on, a toggle must say so in its own words.
+
+        Test scenario:
+            The refusal is what tells a caller to add a builder call first. A stale pointer replaced it
+            with a `tuple.index` message about an id the caller never saw.
+        """
+        pytest.importorskip("geoviews")
+        interactive_map = self._map_with(1)
+        try:
+            interactive_map._forget_layer(interactive_map.layer_ids[-1])
+            with pytest.raises(ValueError, match="at least one layer"):
+                interactive_map.colorbar(False)
+        finally:
+            interactive_map.close()
+
+    def test_forgetting_the_last_layer_moves_the_toggle_to_the_one_before_it(self):
+        """A map that still has layers must still have a layer the toggles act on.
+
+        Test scenario:
+            Clearing the pointer outright would refuse a toggle on a map that plainly has something to
+            toggle, which is the opposite mistake.
+        """
+        pytest.importorskip("geoviews")
+        interactive_map = self._map_with(2)
+        try:
+            first, second = interactive_map.layer_ids
+            interactive_map._forget_layer(second)
+            assert interactive_map._last_layer_id == first, (
+                f"the toggles still follow {interactive_map._last_layer_id!r}"
+            )
+        finally:
+            interactive_map.close()
+
+    def test_forgetting_another_layer_leaves_the_pointer_alone(self):
+        """Only the layer that was forgotten may move the pointer.
+
+        Test scenario:
+            Re-pointing on every forget would move the toggle off the layer the caller last added
+            whenever an unrelated one was declined.
+        """
+        pytest.importorskip("geoviews")
+        interactive_map = self._map_with(2)
+        try:
+            first, second = interactive_map.layer_ids
+            interactive_map._forget_layer(first)
+            assert interactive_map._last_layer_id == second, (
+                f"forgetting {first!r} moved the toggle to "
+                f"{interactive_map._last_layer_id!r}"
+            )
+        finally:
+            interactive_map.close()

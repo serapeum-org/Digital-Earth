@@ -900,6 +900,12 @@ class InteractiveMapBase:
         who names a layer, watches it decline, and names it again gets the name they asked for; and a
         credential held for a layer nothing draws is a secret held for nothing.
 
+        The pointer :meth:`_note_last_layer` keeps goes too, when it named this layer. It is resolved by
+        looking the id up in the tree, so leaving it behind made the next :meth:`colorbar` or
+        :meth:`legend` answer `ValueError: tuple.index(x): x not in tuple` where those methods document a
+        refusal naming themselves (review N8). It moves to the layer still drawn last rather than being
+        cleared, because a map with layers left has a layer to toggle; only a map left with none refuses.
+
         Args:
             layer_id: The layer to forget. A layer the tree no longer holds is ignored, so a caller can
                 forget one whose description was never finished.
@@ -912,6 +918,9 @@ class InteractiveMapBase:
             forget_object(ref.uri)
         self._layer_keys.pop(layer_id, None)
         self._layer_held.pop(layer_id, None)
+        if self._last_layer_id == layer_id:
+            remaining = self._layer_tree.ids
+            self._last_layer_id = remaining[-1] if remaining else None
 
     def _held_for(self, layer_id: str) -> Dict[str, Any]:
         """Return the engine values held beside one layer.
@@ -1505,6 +1514,12 @@ class InteractiveMapBase:
         The credentials held for keyed basemaps go too, and with them the engine values held beside each
         layer: they are kept off the figure so it can be written down without them, and a closed map has
         nothing left to draw with them.
+
+        What does **not** go is the figure: the layer tree, the elements already built and the pointer the
+        toggles follow all survive, so a closed map still renders, saves and can have its colorbar or
+        legend switched. Closing lets go of the *data*, not of the picture — a `colorbar()` after `close()`
+        acts on a layer that is still there, which is why the pointer is not cleared here as it is in
+        :meth:`_forget_layer` (review N8). Only a layer that was forgotten takes the pointer with it.
 
         Examples:
             - A map that drew nothing closes quietly, with no engine installed:
