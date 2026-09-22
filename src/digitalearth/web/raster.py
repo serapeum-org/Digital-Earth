@@ -191,12 +191,15 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Args:
         web_map: The map being drawn.
-        data: The layer's source — the dataset the bands are read from.
+        data: The layer's source — the dataset the bands are read from, in whatever CRS it was recorded
+            in. It is warped to the display CRS here, so a figure handed straight to the renderer draws
+            the same image as the builder call that recorded it.
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the composite's corners will not
-        express as lon/lat — reported through the map's skip log before this answers.
+        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the composite cannot be placed —
+        it lies outside what the display CRS can show, or its corners will not express as lon/lat. Either
+        way it has been reported through the map's skip log before this answers.
 
     Raises:
         ValueError: when the description records none of the values the composite is built from — its
@@ -213,9 +216,20 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     props = required_props(layer, "bands", "mask_nodata", "limits", "opacity")
     bands = list(props["bands"])
-    # `data` is already in the display CRS, so the stack and the placement come from one reprojection
-    # rather than from two independent ones.
+    # One warp for both halves: the pixels are read from the warped dataset and the corners are taken from
+    # that same grid. Stacking `data` itself drew the source-CRS grid stretched over the warped grid's
+    # extent — a different shape at a different resolution (review H1).
+    data = web_map._display_raster_or_skip(data, layer="rgb_composite")
+    if data is None:
+        return None
     stack = get_stack(data, bands, mask=props["mask_nodata"])
+    pixels = int(stack.size // max(stack.shape[-1], 1))
+    if pixels > _LARGE_RASTER_PIXELS:
+        logger.warning(
+            "rgb_composite: inlining a {}-pixel composite as a data-URI image source bloats the page; "
+            "for large rasters serve COG/XYZ tiles from pyramids instead",
+            pixels,
+        )
     source = web_map._to_display_source(data, band=bands[0])
     y = np.asarray(source.y.values, dtype=float)
     if y.size > 1 and y[0] < y[-1]:
@@ -326,8 +340,6 @@ class RasterMixin(_MixinBase):
             digitalearth.web.raster.RasterMixin.rgb_composite: the three-band composite path.
             digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
         """
-        import numpy as np
-
         vmin, vmax = _colour_limits(limits, vmin, vmax, caller="WebMap.field()")
         _require_layer_api()
         source = self._display_source_or_skip(data, band=band, layer="field")
@@ -344,21 +356,18 @@ class RasterMixin(_MixinBase):
                 "rasters serve COG/XYZ tiles from pyramids instead",
                 getattr(values, "size", 0),
             )
-        y = np.asarray(source.y.values, dtype=float)
-        if (
-            y.size > 1 and y[0] < y[-1]
-        ):  # ascending y → flip so PNG row 0 is the northern edge
-            values = values[::-1]
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
-        # caller's request as much as `cmap=` is; the image itself is encoded by `draw_field`, from the
-        # source this records.
+        # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
+        # `draw_field`, which is handed the band already warped above rather than warping the recorded
+        # `data` a second time (review M8).
         if self._index_layer(
             layer_id,
             name,
             kind="raster",
             visible=visible,
             source=data,
+            placed=source,
             symbology=Symbology(
                 props={
                     "cmap": cmap_name,
@@ -424,32 +433,17 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
             digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.
         """
-        import numpy as np
-
-        from digitalearth.base.sources import get_stack
         from digitalearth.base.stretch import require_three_bands
 
         _require_layer_api()
         require_three_bands("rgb_composite", bands)
+        # Warped here only so an off-limb dataset is refused before anything is recorded, and so the first
+        # draw is handed the warped dataset rather than warping it again. The stack, the size warning, the
+        # north-up flip and the placement are all the drawer's, which is the one place they are computed
+        # (review M8).
         data = self._display_raster_or_skip(dataset, layer="rgb_composite")
         if data is None:
             return self
-        stack = get_stack(data, bands, mask=mask_nodata)
-        pixels = int(stack.size // max(stack.shape[-1], 1))
-        if pixels > _LARGE_RASTER_PIXELS:
-            logger.warning(
-                "rgb_composite: inlining a {}-pixel composite as a data-URI image source bloats the page; "
-                "for large rasters serve COG/XYZ tiles from pyramids instead",
-                pixels,
-            )
-        # `data` is already in the display CRS; warping `dataset` again here would repeat a multi-second
-        # GDAL warp and take the placement from a second, independent reprojection of the same pixels.
-        source = self._to_display_source(data, band=int(bands[0]))
-        y = np.asarray(source.y.values, dtype=float)
-        if (
-            y.size > 1 and y[0] < y[-1]
-        ):  # ascending y → flip so PNG row 0 is the north edge
-            stack = stack[::-1]
         layer_id = self._layer_id("rgb", name)
         if self._index_layer(
             layer_id,
@@ -457,6 +451,7 @@ class RasterMixin(_MixinBase):
             kind="rgb",
             visible=visible,
             source=dataset,
+            placed=data,
             symbology=Symbology(
                 props={
                     "bands": tuple(int(band) for band in bands),

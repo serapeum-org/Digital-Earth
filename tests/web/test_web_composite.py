@@ -158,6 +158,114 @@ class TestTheCompositeOnTheMap:
         )
 
 
+class TestACompositeTheWarpReshapes:
+    """Review H1: the image and the corners it is placed on come from one warp of the same pixels."""
+
+    #: The three bands every case below draws, one per channel so a swap would show.
+    BANDS = (1, 2, 3)
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    def test_the_fixture_is_one_the_warp_reshapes(self, mercator_rgb):
+        """A grid the warp leaves alone cannot tell the warped pixels from the unwarped ones.
+
+        Args:
+            mercator_rgb: A three-band EPSG:3857 raster.
+
+        Test scenario:
+            `acc4000.tif` keeps its shape and values through the warp, which is why the defect passed the
+            suite. This pins that the fixture below does not, so the next test asks a real question.
+        """
+        warped = WebMap()._to_display_raster(mercator_rgb)
+        assert (warped.rows, warped.columns) != (
+            mercator_rgb.rows,
+            mercator_rgb.columns,
+        ), "the warp kept the grid, so the test below cannot fail"
+
+    def test_the_drawn_image_is_the_warped_grid(self, mercator_rgb):
+        """The PNG placed on the lon/lat corners is the stretch of the pixels those corners bound.
+
+        Args:
+            mercator_rgb: A three-band EPSG:3857 raster.
+
+        Test scenario:
+            The expected image is built here from the dataset warped to the display CRS — the grid the
+            corners are taken from. A drawer that stacked the unwarped EPSG:3857 grid encodes a 6 x 8 image
+            and stretches it over the 4 x 9 grid's extent; the whole payload is compared, so a different
+            shape or different pixels both fail.
+        """
+        from digitalearth.base.sources import get_source, get_stack
+        from digitalearth.base.stretch import stretch_to_unit
+
+        m = WebMap()
+        warped = m._to_display_raster(mercator_rgb)
+        stack = stretch_to_unit(get_stack(warped, self.BANDS, mask=True))
+        y = np.asarray(get_source(warped).y.values, dtype=float)
+        if y.size > 1 and y[0] < y[-1]:
+            stack = stack[::-1]
+        expected = m._composite_png_datauri(stack)
+
+        m.rgb_composite(mercator_rgb, bands=self.BANDS, name="rgb")
+        drawn = m._renderer.drawn["rgb"].source_spec["url"]
+        assert _decode(drawn).shape[:2] == (warped.rows, warped.columns), (
+            "the image is not the warped grid"
+        )
+        assert drawn == expected, "the drawn pixels are not the warped stretch"
+
+    def test_a_redraw_from_the_figure_draws_the_same_image(self, mercator_rgb):
+        """A figure handed straight to the renderer is placed by the drawer, not by the builder.
+
+        Args:
+            mercator_rgb: A three-band EPSG:3857 raster.
+
+        Test scenario:
+            The figure records the caller's own, unwarped dataset. The builder's call warps it before the
+            first draw; a redraw from the figure has no builder, so the drawer has to warp it itself — and
+            what it draws must be the image the build drew.
+        """
+        m = WebMap().rgb_composite(mercator_rgb, bands=self.BANDS, name="rgb")
+        built = m._renderer.drawn["rgb"].source_spec
+        redrawn = m._renderer.draw_layer(m.figure_spec, "rgb").source_spec
+        assert redrawn["url"] == built["url"], "the redraw encoded a different image"
+        assert redrawn["coordinates"] == built["coordinates"], (
+            "the redraw placed the image elsewhere"
+        )
+
+
+class TestOneBuildWarpsOnce:
+    """Review M8: a builder must not warp the raster its drawer then warps again."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            pytest.param(lambda m, ds: m.field(ds, band=1), id="field"),
+            pytest.param(
+                lambda m, ds: m.rgb_composite(ds, bands=(1, 2, 3)), id="rgb_composite"
+            ),
+        ],
+    )
+    def test_the_raster_is_warped_once(self, mercator_rgb, warp_counter, build):
+        """The comment on the builder promised to spare "a multi-second GDAL warp"; it paid for two.
+
+        Args:
+            mercator_rgb: A raster that is not in the display CRS, so every build has to warp it.
+            warp_counter: Counts the warps made on either of the tier's two warp paths.
+            build: The builder call under test.
+        """
+        build(WebMap(), mercator_rgb)
+        assert warp_counter["warps"] == 1, (
+            f"one build warped the raster {warp_counter['warps']} times"
+        )
+
+
 def _source_with(y_values):
     """Build a stand-in source exposing only the coordinate arrays the raster builders read.
 

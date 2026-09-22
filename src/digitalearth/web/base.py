@@ -42,7 +42,6 @@ from digitalearth.base.registry import (
     KIND_BANDS,
     band_of,
     forget_namespace,
-    forget_object,
     kind_info,
     object_namespace,
 )
@@ -1241,6 +1240,7 @@ class WebMapBase:
         band: Optional[str] = None,
         source: Any = None,
         symbology: Any = None,
+        placed: Any = None,
     ) -> bool:
         """Record a data layer so it can be addressed later.
 
@@ -1260,6 +1260,10 @@ class WebMapBase:
                 URL, or the object itself. `None` for a layer drawn from no data, such as a graticule.
             symbology: How the layer looks, as values rather than as the compiled engine expression. `None`
                 records an empty symbology.
+            placed: `source` as the builder already holds it in the display CRS, handed to the first draw so
+                the drawer does not warp the same data again (review M8). What the figure records is still
+                `source`, the caller's own data, so a redraw from the figure places it for itself. `None` has
+                the first draw open `source` too.
 
         Returns:
             `True` when the layer is registered. `False` when its drawer declined to draw it — an
@@ -1317,7 +1321,10 @@ class WebMapBase:
         from digitalearth.web.renderer import DRAWN_KINDS
 
         if kind in DRAWN_KINDS:
-            if self._renderer.draw_layer(self.figure_spec, layer_id) is None:
+            if (
+                self._renderer.draw_layer(self.figure_spec, layer_id, opened=placed)
+                is None
+            ):
                 # The drawer declined — an unplaceable raster, an empty collection — and has said why.
                 # A described layer nothing draws is exactly the drift this seam removes, so the record
                 # goes with the drawing: the caller sees a map that never registered it.

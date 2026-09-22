@@ -305,12 +305,19 @@ class Renderer:
         """
         return dict(self._drawn)
 
-    def draw_layer(self, figure: FigureSpec, layer_id: str) -> Any:
+    def draw_layer(
+        self, figure: FigureSpec, layer_id: str, *, opened: Any = None
+    ) -> Any:
         """Draw one of a figure's layers and record what it produced.
 
         Args:
             figure: The figure holding the layer and its source.
             layer_id: Which layer to draw.
+            opened: The layer's source as the builder that recorded it already holds it — placed in the
+                display CRS — so the first draw does not read and warp the same data a second time (review
+                M8). The figure still records the caller's own data; a drawer places whatever it is given,
+                and placing data already in the display CRS costs nothing, so both paths draw one image.
+                `None` opens the recorded source, which is how every redraw from a figure reaches it.
 
         Returns:
             The `DrawnLayer` the drawer produced, or `None` for a layer it declined to draw — an
@@ -325,7 +332,7 @@ class Renderer:
                 is not `strict` gets `None` back and a warning instead.
         """
         layer = figure.layers.get(layer_id)
-        data = self._source_object(figure, layer)
+        data = self._source_object(figure, layer) if opened is None else opened
         drawn = drawer_for(layer.kind)(self._map, data, layer)
         if drawn is not None:
             self._drawn[layer_id] = drawn
