@@ -405,6 +405,30 @@ def _require_layer_api() -> tuple:
     return Layer, LayerType
 
 
+def _layer_is_visible(layer: Any) -> bool:
+    """Return whether a caller's own MapLibre layer was built visible.
+
+    MapLibre decides a layer's visibility from ``layout.visibility``, and an absent property means visible —
+    which is why no builder writes one for a layer it shows. :meth:`WebMapBase.add_layer` recorded every
+    caller's layer as visible whatever the object said, so a layer built hidden was described visible and a
+    later ``set_visible(..., True)`` "restored" it to a state it had never been in (review L10).
+
+    Args:
+        layer: Whatever was handed to `add_layer` — a ``maplibre`` ``Layer``, a spec dict, or a callable
+            ``apply(widget)``, which has no visibility of its own.
+
+    Returns:
+        `False` only when the object says ``visibility`` is ``"none"``; `True` otherwise, which is
+        MapLibre's own default and the only honest answer for an object that says nothing.
+    """
+    layout = getattr(layer, "layout", None)
+    if layout is None and isinstance(layer, dict):
+        layout = layer.get("layout")
+    if not isinstance(layout, dict):
+        return True
+    return layout.get("visibility") != "none"
+
+
 def as_finite(value: Any, argument: str, caller: str) -> float:
     """Return a builder's numeric keyword as a plain float, refusing one a figure cannot be written with.
 
@@ -1893,7 +1917,13 @@ class WebMapBase:
         # Held before the description is recorded: `draw_custom` reads the object from here, so it has
         # to be in place by the time `_index_layer` draws.
         self._custom[layer_id] = layer
-        self._index_layer(layer_id, name, kind=custom_kind("maplibre"), band=band)
+        self._index_layer(
+            layer_id,
+            name,
+            kind=custom_kind("maplibre"),
+            band=band,
+            visible=_layer_is_visible(layer),
+        )
         return self
 
     def _queue(self, layer: Any) -> Self:

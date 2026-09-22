@@ -1537,6 +1537,56 @@ class TestACallersOwnLayer:
 
         return Layer(id=layer_id, type=LayerType.CIRCLE, source=f"{layer_id}-src")
 
+    def test_a_layer_built_hidden_is_described_hidden(self):
+        """Review L10 — the description is what decides the drawing now, so it has to read the object.
+
+        Test scenario:
+            `add_layer` indexed every caller's layer as visible, whatever the object said. That was only
+            drift while nothing read `layer.visible`; this branch made it drive the drawing, so a layer the
+            caller built hidden is now described visible and a later `set_visible(..., True)` "restores" it
+            to a state it was never in.
+        """
+        from maplibre import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        hidden = Layer(
+            id="mine",
+            type=LayerType.CIRCLE,
+            source="mine-src",
+            layout={"visibility": "none"},
+        )
+        described = WebMap().add_layer(hidden).figure_spec.layers.get("mine")
+        assert described.visible is False, (
+            "a layer built hidden must be described hidden"
+        )
+
+    def test_a_layer_built_visible_is_described_visible(self):
+        """The guard must read the object rather than simply answering hidden."""
+        from maplibre import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        shown = Layer(
+            id="mine",
+            type=LayerType.CIRCLE,
+            source="mine-src",
+            layout={"visibility": "visible"},
+        )
+        described = WebMap().add_layer(shown).figure_spec.layers.get("mine")
+        assert described.visible is True, (
+            "a layer built visible must be described visible"
+        )
+
+    def test_a_layer_that_says_nothing_about_visibility_is_described_visible(self):
+        """MapLibre's own default is visible, and most callers never write the property at all."""
+        from digitalearth.web import WebMap
+
+        described = (
+            WebMap().add_layer(self._layer("quiet")).figure_spec.layers.get("quiet")
+        )
+        assert described.visible is True, "no layout means MapLibre's own default"
+
     def test_a_layer_the_caller_built_is_addressable(self):
         """The reproduction from the issue: `layer_ids` listed nothing and `remove_layer` raised.
 
