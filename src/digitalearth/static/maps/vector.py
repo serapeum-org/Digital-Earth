@@ -40,6 +40,10 @@ from digitalearth.static.scene import LayerRecord
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
+#: The reducer a quadtree uses when the caller names none, and the one a figure falls back to when it carries
+#: no name because the caller passed a callable — which no reader but the scene that held it can resolve.
+DEFAULT_QUADTREE_AGG = "mean"
+
 #: The registered kind each u/v render draws (#303). ``quiver`` and ``barbs`` are two glyphs for one thing —
 #: a vector field — while a streamplot integrates that field into flow lines, which is a different layer.
 _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streamlines"}
@@ -482,8 +486,9 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     Args:
         scene: The map being drawn on.
         data: The pyramids ``FeatureCollection`` of points the layer draws.
-        layer: The layer's description; the clip boundary and the per-cell reducer, neither of which a
-            figure can carry, are held on the scene under the layer's id.
+        layer: The layer's description, which names the per-cell reducer when it has a name. The clip
+            boundary — a geometry, which a figure cannot carry — and a reducer the caller wrote themselves
+            are held on the scene under the layer's id.
 
     Returns:
         A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
@@ -494,7 +499,12 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     props = dict(layer.symbology.props)
     column = props["column"]
-    agg, clip = scene._layer_keys.get(layer.id, ("mean", None))
+    held_agg, clip = scene._layer_keys.get(layer.id, (None, None))
+    # The named reducer travels in the figure; only a caller's own callable is held beside the layer, and a
+    # scene that holds none — a figure read back from JSON — reads the name the description carries. A
+    # figure built with a callable carries no name, and falls back to the default the builder documents.
+    described_agg = props["agg"]
+    agg = held_agg if held_agg is not None else described_agg or DEFAULT_QUADTREE_AGG
     gdf = scene._vector_input(
         data, geom_types=("Point",), name="quadtree", geom_label="point"
     )
@@ -598,6 +608,25 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _described_agg(agg: Any) -> Tuple[Any, Any]:
+    """Split a quadtree reducer into the name a description records and the callable held beside the layer.
+
+    The sibling of :func:`~digitalearth.static.maps.raster._described_cmap`, and it exists for the same
+    reason: ``agg`` decides the **values** a cell carries, so a figure that cannot say which reducer it was
+    built with redraws different data rather than the same data styled differently.
+
+    Args:
+        agg: What the caller asked for — one of the registered names, or a callable of their own.
+
+    Returns:
+        ``(recorded, held)``. A name is recorded and nothing is held: it resolves to the same reducer
+        wherever the figure is read. A callable resolves nowhere, so it is recorded as ``None`` and held
+        beside the layer, which is what aggregates this drawing; a figure read back elsewhere then falls
+        back to :data:`DEFAULT_QUADTREE_AGG`.
+    """
+    return (agg, None) if isinstance(agg, str) else (None, agg)
 
 
 def _quadtree_reducer(agg: Any, column: Optional[str], col_vals: Any) -> Any:
@@ -1789,7 +1818,7 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: Optional[str] = None,
         *,
-        agg: Any = "mean",
+        agg: Any = DEFAULT_QUADTREE_AGG,
         nmax: int = 100,
         nmin: int = 0,
         clip: Any = None,
@@ -1806,6 +1835,10 @@ class VectorMixin(_MixinBase):
             column: Numeric column aggregated per cell, or ``None`` to colour by point count (density).
             agg: Per-cell reducer — one of ``"mean"``/``"sum"``/``"median"``/``"min"``/``"max"``/``"std"``/
                 ``"count"`` or a callable taking a 1-D array. Ignored when ``column`` is ``None`` (count).
+                A **name** is recorded in the figure, because it decides which values the cells carry and
+                every reader resolves it to the same reducer. A **callable** is held beside the layer like
+                any other engine object, so a figure read back elsewhere aggregates by
+                :data:`DEFAULT_QUADTREE_AGG` instead.
             nmax: Maximum points in a cell before it is split (smaller → finer grid).
             nmin: Cells with fewer than this many points are dropped.
             clip: Optional boundary the cells are clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
@@ -1838,6 +1871,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        recorded_agg, held_agg = _described_agg(agg)
         return self._draw(
             LayerRecord(
                 # A quadtree is always filled — by the column's aggregate, or by the point count.
@@ -1847,14 +1881,16 @@ class VectorMixin(_MixinBase):
                     props={
                         "via": "quadtree",
                         "column": column,
+                        "agg": recorded_agg,
                         "nmax": nmax,
                         "nmin": nmin,
                     }
                 ),
                 opts=opts,
-                # Neither travels in a figure: `agg` may be a callable, and `clip` is a geometry (see
-                # `voronoi`). They are held on the scene under this layer's id instead.
-                key=(agg, clip),
+                # What a figure cannot carry: `clip` is a geometry (see `voronoi`), and a reducer the
+                # caller wrote themselves is a function. A *named* reducer is a plain string that decides
+                # which values the cells carry, so it is described rather than held (round 2, M2).
+                key=(held_agg, clip),
             )
         )
 

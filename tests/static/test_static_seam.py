@@ -1086,6 +1086,96 @@ def _framed_map():
     return canvas
 
 
+#: The point fixture as a path, which is what makes a vector layer's figure storable.
+POINTS_PATH = "tests/data/points.geojson"
+
+
+def _cell_values(artist):
+    """Return the values a quadtree coloured its cells by, sorted so cell order cannot matter.
+
+    Args:
+        artist: The ``PolyCollection`` the quadtree drew.
+
+    Returns:
+        The per-cell values, rounded and sorted.
+    """
+    return sorted(round(float(value), 3) for value in artist.get_array())
+
+
+class TestAQuadtreeRedrawsWithTheReducerItWasBuiltWith:
+    """``agg`` decides the **values** a quadtree is coloured by, so a figure that loses it draws other data.
+
+    It was held beside the layer whatever it was, on the grounds that it *may* be a callable. A named
+    reducer is a plain string, though, and a figure that did not carry it silently redrew as the default
+    ``"mean"`` — unlike the engine-keyword carve-out, which loses styling and says so (round 2, M2).
+    """
+
+    def test_a_named_reducer_is_recorded_in_the_description(self):
+        """A name is a value JSON carries, so it belongs in the figure rather than beside it."""
+        canvas = Map(crs=32618)
+        canvas.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        recorded = canvas.figure_spec.layers.get(canvas.layer_ids[0]).symbology.props
+        canvas.close()
+        assert recorded["agg"] == "max", dict(recorded)
+
+    def test_a_figure_built_with_one_reducer_redraws_with_that_reducer(self):
+        """The finding itself: built with ``max``, a reloaded figure coloured its cells by ``mean``.
+
+        Test scenario:
+            The points are given as a path, so the figure is storable without restating its sources, and
+            the replay is a real JSON round trip onto a map that holds nothing of the first one's.
+        """
+        canvas = Map(crs=32618)
+        built = _cell_values(
+            canvas.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        )
+        figure = _written_and_read_back(canvas.figure_spec)
+        canvas.close()
+        target = Map(crs=32618)
+        target._renderer.apply(target.figure_spec, figure)
+        layer_id = figure.layers.ids[0]
+        redrawn = _cell_values(target._renderer.drawn[layer_id].artist)
+        target.close()
+        assert redrawn == built, (redrawn, built)
+
+    def test_two_reducers_really_do_colour_different_cells(self):
+        """The guard on the check above: if every reducer drew alike, it could not fail.
+
+        Test scenario:
+            ``max`` and ``sum`` over the same points must disagree, or the round-trip check proves nothing.
+        """
+        by_max = Map(crs=32618)
+        highest = _cell_values(
+            by_max.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        )
+        by_max.close()
+        by_sum = Map(crs=32618)
+        totals = _cell_values(
+            by_sum.quadtree(POINTS_PATH, column="fid", agg="sum", nmax=6)
+        )
+        by_sum.close()
+        assert highest != totals, (highest, totals)
+
+    def test_a_reducer_of_the_callers_own_is_held_and_still_colours_the_cells(self):
+        """A callable has no JSON form, so it travels beside the layer — and the figure still writes."""
+        canvas = Map(crs=32618)
+        drawn = canvas.quadtree(
+            POINTS_PATH, column="fid", agg=lambda values: float(np.max(values)), nmax=6
+        )
+        by_callable = _cell_values(drawn)
+        recorded = canvas.figure_spec.layers.get(canvas.layer_ids[0]).symbology.props
+        written = json.dumps(canvas.figure_spec.to_dict(), allow_nan=False)
+        canvas.close()
+        by_name = Map(crs=32618)
+        expected = _cell_values(
+            by_name.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        )
+        by_name.close()
+        assert recorded["agg"] is None, dict(recorded)
+        assert by_callable == expected, (by_callable, expected)
+        assert written.startswith("{"), written[:40]
+
+
 class TestATileProviderIsHeldRatherThanDescribed:
     """A provider object is an engine object that carries a credential: it may not enter a figure."""
 
