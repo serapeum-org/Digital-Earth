@@ -1457,6 +1457,46 @@ class TestWhatTravelsInAFigure:
 
     @pytest.mark.parametrize(
         "value",
+        [np.bool_(True), np.float64(2.5), np.int64(5), np.float32(1.5), np.uint8(3)],
+        ids=["np-bool", "np-float64", "np-int64", "np-float32", "np-uint8"],
+    )
+    def test_every_numpy_scalar_the_writer_takes_travels(self, value):
+        """The numpy family answers as one, rather than per type.
+
+        Args:
+            value: The numpy scalar under test.
+
+        Test scenario:
+            `np.bool_` was held while `np.float64` beside it travelled (#329) — not by decision, but because
+            the gate named types and a numpy bool is neither `bool` nor `numbers.Real`, so it fell off before
+            the writer was asked. A flag from any numpy comparison is an ordinary thing to hand a builder.
+            Parametrised across the family so a type added later is not a fresh special case.
+        """
+        assert travels_in_a_figure(value), (
+            f"{value!r} is a numpy scalar the writer accepts, so a figure carries it"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [np.datetime64("2024-01-01"), np.complex128(1 + 2j), np.timedelta64(5, "D")],
+        ids=["np-datetime64", "np-complex128", "np-timedelta64"],
+    )
+    def test_a_numpy_scalar_the_writer_refuses_still_does_not_travel(self, value):
+        """Admitting the family did not admit what it cannot write down.
+
+        Args:
+            value: The numpy scalar under test.
+
+        Test scenario:
+            The gate lets every `np.generic` reach the writer, so the writer is what still refuses these. The
+            counterpart to the check above: widening membership must not widen the answer.
+        """
+        assert not travels_in_a_figure(value), (
+            f"the writer has no JSON form for {value!r}, so the tier holds it beside the layer"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
         [[1, 2], _DASH_PATTERN, {"a": 1}, np.array([1.0, 2.0]), ["fid"]],
         ids=["list", "dash-pattern", "mapping", "array", "columns"],
     )

@@ -556,8 +556,23 @@ def travels_in_a_figure(value: Any) -> bool:
             False
 
             ```
+        - A numpy scalar travels wherever its Python counterpart does, and the array around it does not:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure(np.bool_(True)), travels_in_a_figure(np.float64(2.5))
+            (True, True)
+            >>> travels_in_a_figure(np.array([1.0, 2.0]))
+            False
+
+            ```
     """
-    if value is None or isinstance(value, (bool, str, Real)):
+    # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather than
+    # naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64` travelled
+    # (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses `str`, but a numpy
+    # bool is neither, so it missed a gate it belonged in. Membership is not the decision — the writer still
+    # is, and it refuses `datetime64`, `complex128` and `timedelta64` on the line below.
+    if value is None or isinstance(value, (bool, str, Real, np.generic)):
         return _has_a_json_form(value)
     return False
 
