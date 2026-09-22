@@ -677,7 +677,24 @@ def _basemap_source(basemap: Any) -> Any:
 
 
 def quickplot(data: PlottableData, **kwargs) -> Any:
-    """Alias of :func:`quickmap` — build a finished map from ``data`` in one call."""
+    """Alias of :func:`quickmap` — build a finished map from ``data`` in one call.
+
+    Args:
+        data: A pyramids ``Dataset`` or ``FeatureCollection`` to draw.
+        **kwargs: Forwarded to :func:`quickmap` unchanged — ``crs``, ``domain``, ``basemap``,
+            ``coastlines``, ``colorbar``, ``kind``, ``backend`` and the styling kwargs the chosen
+            builder takes.
+
+    Returns:
+        Whatever :func:`quickmap` built for the chosen backend: a :class:`Map` by default, else an
+        ``InteractiveMap``, a ``Scene3D`` or a ``WebMap``.
+
+    Raises:
+        CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
+        ValueError: as :func:`quickmap` raises it, for an unknown ``backend`` or an empty collection.
+        TypeError: as :func:`quickmap` raises it, for input that is neither a ``Dataset`` nor a
+            ``FeatureCollection``.
+    """
     return quickmap(data, **kwargs)
 
 
@@ -1100,19 +1117,74 @@ pcolormesh = _method("pcolormesh")
 
 
 def scatter(data: PlottableData, **kwargs) -> Map:
-    """Quick-draw a FeatureCollection of points as a scatter map; returns the finished Map."""
+    """Quick-draw a FeatureCollection of points as a scatter map; returns the finished Map.
+
+    Point input is what makes it a scatter: this adds no ``kind``, so :func:`quickmap`'s own input-type
+    dispatch chooses the builder. Sizing by an attribute is ``size_column``, not ``column`` — the latter
+    names a polygon fill and is refused on points by name.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of point geometries.
+        **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
+            ``colorbar``, ``backend``, plus the styling kwargs ``Map.scatter`` takes).
+
+    Returns:
+        The finished :class:`Map` — or the other tier's map when ``backend=`` names one.
+
+    Raises:
+        ValueError: as :func:`quickmap` raises it, including for ``column`` on point input and for an
+            empty collection.
+        CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
+    """
     return quickmap(data, **kwargs)
 
 
 def grid_cells(data: PlottableData, **kwargs) -> Map:
-    """Quick-draw raster cells as coloured polygons; returns the finished Map."""
+    """Quick-draw raster cells as coloured polygons; returns the finished Map.
+
+    Unlike :func:`scatter` and :func:`choropleth`, this does not go through :func:`quickmap`: it builds a
+    :class:`Map` and calls :meth:`Map.grid_cells` on it, so it is **matplotlib only**. There is no
+    ``backend=`` to choose, and passing one reaches the cleopatra glyph as an unknown styling keyword and
+    is refused there.
+
+    Args:
+        data: A pyramids ``Dataset`` whose cells become one coloured polygon each.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else goes to
+            :meth:`Map.grid_cells` — ``band``, a ``scheme``, and the caller's own ``PolygonGlyph``
+            styling.
+
+    Returns:
+        The finished :class:`Map`, with a colorbar added when the drawn layer has one to draw.
+
+    Raises:
+        ValueError: from ``PolygonGlyph`` for a styling keyword it does not accept — which is also what a
+            stray ``backend=`` becomes here.
+    """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.grid_cells(data, **kwargs)
     return _finish(scene, colorbar=True)
 
 
 def choropleth(data: PlottableData, column: str, **kwargs) -> Map:
-    """Quick-draw a polygon FeatureCollection coloured by ``column``; returns the finished Map."""
+    """Quick-draw a polygon FeatureCollection coloured by ``column``; returns the finished Map.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of polygon geometries.
+        column: The attribute whose value fills each polygon. It is what makes the map a choropleth, so
+            it is positional here rather than a keyword; on **point** input :func:`quickmap` refuses it by
+            name, since points are sized by ``size_column`` instead.
+        **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
+            ``colorbar``, ``backend``, plus ``scheme``/``k``/``cmap`` and the rest of the builder's
+            styling).
+
+    Returns:
+        The finished :class:`Map` — or the other tier's map when ``backend=`` names one.
+
+    Raises:
+        ValueError: as :func:`quickmap` raises it, including for ``column`` on point input and for an
+            empty collection.
+        CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
+    """
     return quickmap(data, column=column, **kwargs)
 
 
@@ -1285,6 +1357,20 @@ def kde(data: PlottableData, **kwargs) -> Map:
     """Quick-draw a 2-D kernel-density surface of a point FeatureCollection; returns the finished Map.
 
     ``clip`` and styling kwargs (``levels``/``shade``/``gridsize``/``cmap``/…) are forwarded to :meth:`Map.kde`.
+
+    Like :func:`grid_cells`, this builds a :class:`Map` and draws on it rather than going through
+    :func:`quickmap`, so it is **matplotlib only**: there is no ``backend=`` to choose.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of point geometries.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else goes to
+            :meth:`Map.kde` — ``clip``, and the caller's own ``KDEGlyph`` styling.
+
+    Returns:
+        The finished :class:`Map`, with a colorbar added when the drawn layer has one to draw.
+
+    See Also:
+        digitalearth.static.maps.vector.VectorMixin.kde: the ``Map`` method this wraps.
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.kde(data, **kwargs)

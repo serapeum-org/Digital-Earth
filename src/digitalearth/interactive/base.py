@@ -560,6 +560,15 @@ class InteractiveMapBase:
             A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`, whose layers are the
             tree in draw order and whose sources are what each builder was given.
 
+            It carries the JSON-safe half of the styling only. A colormap object, a Datashader reduction,
+            a tile provider and a timestamp are held beside the layer instead (:func:`describe`), so a
+            figure read back elsewhere draws each layer with what the description alone can say.
+
+            A map built from a GeoDataFrame or a dataset already in memory can be handed straight to a
+            renderer, but not written: `to_dict()` refuses an `object:` source, since a reference into this
+            process's memory would be unreadable everywhere else. Give a builder a path or a URL to get a
+            figure that can be stored.
+
         Examples:
             - The panel names the layers it draws, and each layer says what it is:
                 ```python
