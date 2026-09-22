@@ -335,17 +335,37 @@ class TestARefusalLeavesTheRecordAsItWas:
             drawn_map._renderer._reconcile(figure, refused)
         assert "second" in drawn_map._renderer.drawn, sorted(drawn_map._renderer.drawn)
 
-    def test_the_map_still_reports_the_figure_it_can_draw(self, drawn_map):
-        """A refused change must not leave the map advertising a figure it never drew.
+
+class TestApplyIsRecordOnly:
+    """On this tier, for this wave, `apply` reconciles the renderer's record and nothing the map reports."""
+
+    def test_a_successful_apply_moves_the_record_and_not_the_map(self, drawn_map):
+        """Even an `apply` that succeeds leaves `figure_spec` and the composed elements as they were.
 
         Args:
             drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            This replaces a check that, after a *refused* `apply`, `figure_spec` was unchanged. Nothing
+            `apply` does reaches `figure_spec` on this tier, rollback or not, so that check passed with the
+            rollback deleted (review M1). What is true — and what the module docstring now says — is that
+            `apply` is record-only here: the record follows the new figure, while the map's description and
+            the elements `render()` overlays stay where they were. Wiring `apply` into the map is Wave 7
+            (order 23); this test is meant to fail then, and to be rewritten with that change.
         """
-        held = drawn_map.figure_spec
-        refused = _refused_figure(drawn_map)
-        with pytest.raises(KeyError):
-            drawn_map._renderer.apply(held, refused)
-        assert drawn_map.figure_spec == held, "the map kept a figure it could not draw"
+        held_figure = drawn_map.figure_spec
+        held_elements = [id(element) for element in drawn_map.layers]
+        panel = with_fields(held_figure.panels[0], layers=())
+        emptied = with_fields(
+            held_figure, layers=held_figure.layers.remove("points-1"), panels=(panel,)
+        )
+        drawn_map._renderer.apply(held_figure, emptied)
+        # The record moved, so the two checks after this are not passing because `apply` did nothing.
+        assert drawn_map._renderer.drawn == {}, drawn_map._renderer.drawn
+        assert drawn_map.figure_spec == held_figure, drawn_map.layer_ids
+        assert [id(element) for element in drawn_map.layers] == held_elements, (
+            drawn_map.layers
+        )
 
 
 class TestRemovingALayer:

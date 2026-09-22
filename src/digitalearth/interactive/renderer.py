@@ -9,10 +9,16 @@ This is the other half of that seam. A builder records what it drew — kind, so
 symbology as values — and the drawer here rebuilds the element from that description.
 
 **This tier composes rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
-place; HoloViews elements are immutable values composed into an overlay on every `render()`. So, as in the
-web tier, :meth:`Renderer.apply` reconciles the *record* of what is drawn and the next compose reflects it.
-The observable contract is the same one the shared renderer conformance suite states, which is why all
-four tiers can sign it.
+place; HoloViews elements are immutable values composed into an overlay on every `render()`. So
+:meth:`Renderer.apply` reconciles the renderer's own *record* of what is drawn — :attr:`Renderer.drawn` —
+and the observable contract it signs is the one the shared renderer conformance suite states, which is why
+all four tiers can sign it.
+
+**On this tier, for this wave, `apply` is record-only.** It does not change what `render()` overlays, which
+is the map's `layers`, and it does not change what `figure_spec` reports, which is the map's own layer tree.
+Nothing in the tier calls it: every builder draws through :meth:`Renderer.draw_layer`, one layer at a time.
+Wiring `apply` into the map's public state is Wave 7 (order 23); until then a caller who applies a figure
+has moved the record and nothing a viewer sees.
 """
 
 from dataclasses import dataclass
@@ -277,14 +283,19 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring what the map draws from one figure to another.
+        """Bring the renderer's record of what is drawn from one figure to another.
+
+        **Record-only on this tier, for this wave.** It reconciles :attr:`drawn` and nothing else: the
+        elements the map's `render()` overlays and the figure its `figure_spec` reports are the map's own,
+        and neither follows. Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
 
         Args:
-            before: The figure the map currently draws.
-            after: The figure it should draw.
+            before: The figure the record currently holds.
+            after: The figure it should hold.
 
         Raises:
-            KeyError: when a layer names a kind this tier does not draw.
+            KeyError: when a layer names a kind this tier does not draw. The record is rolled back to what it
+                held before the call, so a refusal part-way through leaves no layer drawn that no figure owns.
         """
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third has already drawn the
         # first two. Rolling back only the caller's description would leave this record holding layers no
