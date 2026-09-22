@@ -407,12 +407,15 @@ class TestOnlyTheDataDrivenChannelsTakeAField:
             key: The MapLibre paint property it lands under.
 
         Test scenario:
-            A MapLibre expression is a list. If one of these ever grew a `column=` of its own, the value
-            here would become a list and this would fail — which is the point: `data_driven` is a promise
-            about *which* channels take a field, and a promise that cannot be broken is not one.
+            The recorded value has to *be a number*. Asking instead that it is not a `list` asked nothing:
+            a description freezes every sequence to a tuple, so a data-driven expression recorded here is a
+            tuple and was never a list (review M12). `data_driven` is a promise about *which* channels take
+            a field, and a promise that cannot be broken is not one — so if one of these ever grew a
+            `column=`, the value stops being a number and this fails.
         """
+        recorded = _paint(build, key)
         assert channel not in CAPABILITIES.data_driven, sorted(CAPABILITIES.data_driven)
-        assert not isinstance(_paint(build, key), list), (channel, key)
+        assert isinstance(recorded, (int, float)), (channel, key, recorded)
 
 
 class TestTheSchemesAreTheSharedClassifiers:
