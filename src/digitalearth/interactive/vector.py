@@ -546,14 +546,17 @@ class VectorMixin(_MixinBase):
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.points()"
         )
-        gdf = self._display_gdf(features)
+        # Nothing here is reprojected: the drawer warps what it draws, and what the description needs — the
+        # row count and a column's values — is the same before a warp as after it. Warping here as well did
+        # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
+        # still refused, by the drawer, and `_skips_off_limb` answers it as before.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("points", len(gdf), threshold)
+            and _route_through_rasterize("points", len(features), threshold)
         ):
             aggregator = "mean" if value_column else "count"
             return self.rasterize(
-                gdf, aggregator=aggregator, column=value_column, cmap=cmap, **opts
+                features, aggregator=aggregator, column=value_column, cmap=cmap, **opts
             )
         styling: dict = {}
         labels: Optional[dict] = None
@@ -562,12 +565,12 @@ class VectorMixin(_MixinBase):
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
             # a point layer and a polygon layer key an unordered column identically (review M3).
             styling, categories, labels = self._categorical_style(
-                gdf, value_column, cmap=cmap
+                features, value_column, cmap=cmap
             )
             self.last_breaks = categories
         elif value_column and scheme is not None:
             styling = self._graduated_style(
-                gdf, value_column, scheme=scheme, k=k, cmap=cmap
+                features, value_column, scheme=scheme, k=k, cmap=cmap
             )
             self.last_breaks = list(styling["color_levels"])
         elif value_column:
@@ -722,9 +725,11 @@ class VectorMixin(_MixinBase):
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
-        gdf = self._display_gdf(features)
+        # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
+        # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
         if rasterize is True or (
-            rasterize == "auto" and _route_through_rasterize(kind, len(gdf), threshold)
+            rasterize == "auto"
+            and _route_through_rasterize(kind, len(features), threshold)
         ):
             from importlib.util import find_spec
 
@@ -737,7 +742,9 @@ class VectorMixin(_MixinBase):
                 )
             element = (
                 self._vector_element(  # pragma: no cover - needs optional spatialpandas
-                    "Polygons", gdf, vdims=[column] if column else None
+                    "Polygons",
+                    self._display_gdf(features),
+                    vdims=[column] if column else None,
                 )
             )
             return self.rasterize(  # pragma: no cover - needs optional spatialpandas
@@ -790,7 +797,7 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         styling, categories, labels = self._categorical_style(
-            self._display_gdf(features), column, cmap=cmap
+            features, column, cmap=cmap
         )
         self.last_breaks = categories
         return self.add_element(
@@ -813,7 +820,8 @@ class VectorMixin(_MixinBase):
         (review M3).
 
         Args:
-            gdf: The already-reprojected GeoDataFrame carrying ``column`` (never mutated — a copy is
+            gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
+                in any CRS, so the drawer's warp is the only one the layer needs (never mutated — a copy is
                 relabelled and returned).
             column: The attribute to colour by (any hashable value; assumed single-dtype — see
                 :meth:`_categorical_polygons` on the string-keyed collapse).
@@ -866,7 +874,8 @@ class VectorMixin(_MixinBase):
         instead of interpolating the ramp.
 
         Args:
-            gdf: The already-reprojected GeoDataFrame carrying ``column``.
+            gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
+                in any CRS, so the drawer's warp is the only one the layer needs.
             column: The numeric attribute to classify and colour by.
             scheme: A named scheme or an explicit sequence of class edges.
             k: Number of classes for a named scheme.
@@ -942,8 +951,9 @@ class VectorMixin(_MixinBase):
             ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
                 wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
         """
-        gdf = self._display_gdf(features)
-        classified = self._graduated_style(gdf, column, scheme=scheme, k=k, cmap=cmap)
+        classified = self._graduated_style(
+            features, column, scheme=scheme, k=k, cmap=cmap
+        )
         self.last_breaks = list(classified["color_levels"])
         return self.add_element(
             None,

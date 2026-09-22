@@ -244,6 +244,85 @@ class TestPolygonsAndChoropleth:
         assert out.exists() and out.stat().st_size > 0
 
 
+#: Each vector builder call, by the name a failure reports it under, as `(builder, geometry, kwargs)`.
+_ONE_WARP_CALLS = {
+    "points": ("points", "point", {}),
+    "points-graduated": (
+        "points",
+        "point",
+        {"value_column": "fid", "scheme": "quantiles", "k": 3},
+    ),
+    "points-categorical": (
+        "points",
+        "point",
+        {"value_column": "fid", "scheme": "categorical"},
+    ),
+    "polygons": ("polygons", "polygon", {}),
+    "polygons-column": ("polygons", "polygon", {"column": "fid"}),
+    "choropleth": ("choropleth", "polygon", {"column": "fid"}),
+    "choropleth-categorical": (
+        "choropleth",
+        "polygon",
+        {"column": "fid", "scheme": "categorical"},
+    ),
+    "choropleth-graduated": (
+        "choropleth",
+        "polygon",
+        {"column": "fid", "scheme": "quantiles", "k": 3},
+    ),
+}
+
+
+class TestAVectorLayerIsReprojectedOnce:
+    """The drawer reprojects what it draws, so the builder must not warp the same frame first."""
+
+    @pytest.mark.parametrize("call", sorted(_ONE_WARP_CALLS))
+    def test_one_builder_call_warps_its_features_once(
+        self, call, point_fc, polygon_fc, monkeypatch
+    ):
+        """A builder that describes its layer needs the attribute values and the row count, not a warp.
+
+        Args:
+            call: Which builder call to count, a key of `_ONE_WARP_CALLS`.
+            point_fc: The point fixture, in EPSG:32618 so the Web-Mercator map has to reproject it.
+            polygon_fc: The same points buffered into polygons.
+            monkeypatch: Used to count calls to the tier's vector reprojection.
+
+        Test scenario:
+            Since the seam, the drawer reprojects what it draws. The builders kept their own
+            `_display_gdf` too — for a row count and a column's values, which a warp does not change — and
+            discarded the result, so every one of these warped the frame twice (review M8).
+        """
+        from digitalearth.interactive import vector
+
+        warps = []
+        real = vector.reproject
+
+        def counting(dataset, crs):
+            """Count the call and warp as the tier would.
+
+            Args:
+                dataset: What is being warped.
+                crs: Where to.
+
+            Returns:
+                The warped dataset.
+            """
+            warps.append(crs)
+            return real(dataset, crs)
+
+        monkeypatch.setattr(vector, "reproject", counting)
+        builder, geometry, kwargs = _ONE_WARP_CALLS[call]
+        features = point_fc if geometry == "point" else polygon_fc
+        interactive_map = InteractiveMap()
+        try:
+            getattr(interactive_map, builder)(features, **kwargs)
+            assert len(interactive_map.layers) == 1, "the layer was not drawn"
+            assert len(warps) == 1, f"{call} warped its features {len(warps)} times"
+        finally:
+            interactive_map.close()
+
+
 class TestRasterVectorCompose:
     """Raster + vector layers compose into one overlay (the DI.1 headline)."""
 
