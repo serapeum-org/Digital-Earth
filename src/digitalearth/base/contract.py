@@ -90,10 +90,34 @@ _LAYER_MANAGEMENT_ORDER = "order 23"
 _PENDING_LAYERS = f"layer management — {_LAYER_MANAGEMENT_ORDER}"
 _PENDING_LIVE_LAYERS = f"layer management on a live page — {_LAYER_MANAGEMENT_ORDER}"
 
-#: Why a tier answers to less of the Core than it will: its renderer seam has not landed. One string per tier,
-#: so the issue number is corrected in one place when the seam does land.
-_PENDING_INTERACTIVE_SEAM = "the tier's seam — #300"
-_PENDING_STATIC_SEAM = "the tier's seam — #303"
+#: Why a tier cannot add, read back or drop a layer by id. The same order, because it is the same decision seen
+#: from its other side: every renderer already indexes its layers, so what order 23 adds is the **public**
+#: method on each tier rather than the machinery underneath it.
+_PENDING_IDENTITY = f"layer identity — {_LAYER_MANAGEMENT_ORDER}"
+
+#: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the "canonical
+#: names + deprecated aliases" half of the contract (DE-26, folded into U-3), which PR #304 froze without any
+#: tier adopting. :data:`PLANNED_RENAMES` is the record of what each tier agreed to call these.
+_RENAME_ORDER = "order 27a"
+
+#: Where a figure learns to frame itself: order 26, auto-framing and camera round-trip.
+_FRAMING_ORDER = "order 26"
+
+
+def _drawn_as(old: str) -> str:
+    """Say that only the spelling is missing, and where the Core one is adopted.
+
+    A tier that draws the thing under its own name is not missing the capability, and a reason that implies it
+    is sends the reader looking for work nobody is going to do. The old spelling is the one
+    :data:`PLANNED_RENAMES` records, so the two tables answer consistently.
+
+    Args:
+        old: What the tier calls the method today.
+
+    Returns:
+        The reason to list against the Core name.
+    """
+    return f"drawn as {old}() here; adopting the Core spelling is {_RENAME_ORDER}"
 
 
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
@@ -260,10 +284,16 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
 
 #: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
 #: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
-#: it will be called when its seam lands (#300 interactive, #303 static). Kept in the contract because the
-#: agreement is part of it — a tier that seams later should not have to re-decide the spelling — and kept
-#: apart from :data:`ALIASES` because "you may still write this" and "we intend to rename this" are answers to
-#: different questions.
+#: it will be called once the tier adopts it, at order 27a.
+#:
+#: This said the renames arrive "when its seam lands". Both seams have since landed — #300 (interactive) and
+#: #303 (static) closed with Wave 6 — and none of the renames came with them, because adopting a Core spelling
+#: was never part of a seam's work. That is why every one of these names explains itself in :data:`PENDING` by
+#: the order that adopts it rather than by a seam.
+#:
+#: Kept in the contract because the agreement is part of it — a tier that seams later should not have to
+#: re-decide the spelling — and kept apart from :data:`ALIASES` because "you may still write this" and "we
+#: intend to rename this" are answers to different questions.
 PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "interactive": MappingProxyType(
@@ -308,44 +338,44 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 ),
                 "add_layer": (
                     "a caller's own object is a PyVista mesh or volume, so it is added with add_mesh() or "
-                    "add_volume(), which record a custom:pyvista layer (#293)"
+                    "add_volume(), each of which records a custom:pyvista layer"
                 ),
                 "lines": "line features in three dimensions — TD, Wave 5",
                 "polygons": "polygons are drawn extruded here; a flat fill is Wave 5",
                 "choropleth": "a classified fill follows polygons — Wave 5",
-                "colorbar": "the scalar bar is PyVista's, and is a guide on the encoding (#292)",
+                "colorbar": "the scalar bar is PyVista's, and becomes a guide on the encoding — order 24",
                 "legend": "a keyed list beside a scene — Wave 5, order 24",
                 "set_bounds": "a scene is framed by its camera, not by an extent (see Capabilities.absent)",
             }
         ),
         "interactive": MappingProxyType(
             {
-                "field": _PENDING_INTERACTIVE_SEAM,
-                "lines": _PENDING_INTERACTIVE_SEAM,
-                "add_layer": _PENDING_INTERACTIVE_SEAM,
-                "get_layer": _PENDING_INTERACTIVE_SEAM,
-                "remove_layer": _PENDING_INTERACTIVE_SEAM,
+                "field": _drawn_as("image"),
+                "lines": _drawn_as("path"),
+                "add_layer": _drawn_as("add_element"),
+                "get_layer": _PENDING_IDENTITY,
+                "remove_layer": _PENDING_IDENTITY,
                 "set_visible": _PENDING_LAYERS,
                 "move_layer": _PENDING_LAYERS,
                 "replace_layer": _PENDING_LAYERS,
-                "layer_ids": _PENDING_INTERACTIVE_SEAM,
-                "set_bounds": _PENDING_INTERACTIVE_SEAM,
+                "set_bounds": f"no framing method here under any spelling — {_FRAMING_ORDER}",
             }
         ),
         "matplotlib": MappingProxyType(
             {
-                "field": _PENDING_STATIC_SEAM,
-                "points": _PENDING_STATIC_SEAM,
+                "field": _drawn_as("imshow"),
+                "points": _drawn_as("scatter"),
                 "lines": "line features on the static tier — #226",
-                "polygons": _PENDING_STATIC_SEAM,
-                "add_layer": _PENDING_STATIC_SEAM,
-                "get_layer": _PENDING_STATIC_SEAM,
-                "remove_layer": _PENDING_STATIC_SEAM,
+                "polygons": _drawn_as("shapes"),
+                "add_layer": _PENDING_IDENTITY,
+                "get_layer": _PENDING_IDENTITY,
+                "remove_layer": _PENDING_IDENTITY,
                 "set_visible": _PENDING_LAYERS,
                 "move_layer": _PENDING_LAYERS,
                 "replace_layer": _PENDING_LAYERS,
-                "layer_ids": _PENDING_STATIC_SEAM,
-                "set_bounds": _PENDING_STATIC_SEAM,
+                "set_bounds": (
+                    f"framed by set_extent(bbox) here, which neither pads nor fits the data — {_FRAMING_ORDER}"
+                ),
             }
         ),
     }

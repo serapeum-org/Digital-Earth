@@ -6,8 +6,8 @@ on one; and eight names meant two different things depending on which facade you
 the agreement that ends that, and these are what hold the tiers to it — including the honest half, which is
 what a tier has *not* built and which order builds it.
 
-The tiers whose seams have landed (web, 3-D) must answer to every Core name they can draw; interactive and
-static carry pending lists their own seams (#300, #303) empty.
+The tiers that adopted the Core names (web, 3-D) must answer to every one they can draw; interactive and
+static carry pending lists, each entry naming the roadmap order that empties it.
 """
 
 import inspect
@@ -21,7 +21,6 @@ from digitalearth.base.contract import (
     PENDING,
     TIER2,
     alias_table,
-    core_method,
     pending_for,
 )
 
@@ -233,7 +232,11 @@ class TestAPlannedRenameIsNotAnAlias:
 
 
 class TestTheUnseamedTiersDeclareTheirGap:
-    """interactive and static, whose seams are #300 and #303."""
+    """interactive and static, which answer to less of the Core than the two tiers that adopted its names.
+
+    Their seams (#300, #303) landed with Wave 6 and left these lists standing, because rendering a figure from
+    its description and calling the builders what the Core calls them were never the same job (#319).
+    """
 
     @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
     def test_what_is_missing_is_listed_rather_than_discovered(self, backend):
@@ -250,6 +253,22 @@ class TestTheUnseamedTiersDeclareTheirGap:
             if not hasattr(facade, method.name) and method.name not in pending
         ]
         assert missing == [], f"{backend} is missing {missing} without saying so"
+
+    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
+    def test_nothing_pending_is_quietly_present(self, backend):
+        """A name the tier does have is not pending, whatever the list says.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The seamed tiers have been held to this since the contract froze; these two were not, and both
+            listed `layer_ids` as pending while Wave 6 was giving every tier the property (#319). Nothing in
+            the suite noticed, because the check stopped at the tiers that had adopted the Core names.
+        """
+        facade = _facade(backend)
+        built = [name for name in pending_for(backend) if hasattr(facade, name)]
+        assert built == [], f"{backend} lists {built} as pending, but has them"
 
     @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
     def test_each_pending_name_says_which_seam_or_order_builds_it(self, backend):
