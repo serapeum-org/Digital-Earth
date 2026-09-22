@@ -631,18 +631,51 @@ class TestACustomLayerIsDescribedButNotRebuildable:
 class TestTheFigureIsOneWholeThing:
     """`figure_spec` is the tier's answer, so it has to hold together as a value."""
 
-    def test_the_panel_holds_the_layers_in_draw_order(self, dataset, features):
+    def test_the_panel_holds_the_layers_the_tree_holds(self, dataset, features):
         """One axes is one panel, and its layer list is the tree's order rather than a second one.
 
         Args:
             dataset: A raster.
             features: Points drawn over it.
+
+        Test scenario:
+            These two are added in the order their bands put them in, so this says the panel and the tree
+            agree — and nothing about *which* order that is. The test below is the one that says that.
         """
         canvas = Map(crs=dataset.epsg)
         canvas.imshow(dataset)
         canvas.scatter(features)
         panel = canvas.figure_spec.panels[0]
         assert list(panel.layers) == canvas.layer_ids, panel.layers
+
+    def test_the_panel_lists_the_layers_in_the_order_they_are_painted(self, dataset):
+        """The panel's order is the drawing's, which is only visible when it differs from the call order.
+
+        Args:
+            dataset: The raster drawn as data and then as a backdrop beneath it.
+
+        Test scenario:
+            A backdrop is added **second** and drawn **first** — that is what its band and its z-order both
+            say. Read off `layer_ids`, or off two layers added in band order, the panel's list agrees with
+            the call order and the claim cannot fail; read off the axes, it is a statement about the
+            picture. The assertion is on what matplotlib paints, in the order it paints it.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset)
+        canvas.stock_img(dataset)
+        owner = {
+            id(artist): layer_id
+            for layer_id, drawn in canvas._renderer.drawn.items()
+            for artist in drawn.artists
+        }
+        painted = sorted(
+            canvas.ax.get_children(), key=lambda artist: artist.get_zorder()
+        )
+        order = [owner[id(artist)] for artist in painted if id(artist) in owner]
+        panel = canvas.figure_spec.panels[0]
+        canvas.close()
+        assert order == ["raster-2", "raster-1"], order  # the backdrop is painted first
+        assert list(panel.layers) == order, panel.layers
 
     def test_the_panel_is_named_the_way_every_tier_names_its_own(self, dataset):
         """A reader moving between tiers should not have to learn a new panel id each time.
