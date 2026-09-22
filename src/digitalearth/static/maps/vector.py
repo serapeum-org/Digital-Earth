@@ -48,6 +48,12 @@ _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streaml
 #: deprecated-alias resolution all speak for the same public call, so they share the one spelling.
 _SCATTER_CALLER = "Map.scatter()"
 
+#: The frame :func:`_skips_off_limb` puts between a builder it wraps and that builder's caller. A deprecation
+#: warning raised inside such a builder counts it, or it lands on the wrapper's line instead of the caller's —
+#: and Python's default filters show a ``DeprecationWarning`` only when it is attributed to ``__main__``, so a
+#: warning blamed on the wrapper is one no user sees.
+_GUARD_FRAMES = 1
+
 
 def _polygon_kind(fill: Any) -> str:
     """Return the kind a polygon layer is recorded under, given what colours it.
@@ -919,16 +925,19 @@ class VectorMixin(_MixinBase):
                 ``point_size=`` is used instead of ``size=``. Both old spellings keep working
                 for one release.
         """
+        # Both counts add the `_skips_off_limb` wrapper's frame: `renamed_parameter`'s own default (3) and
+        # `resolve_marker_size`'s (4) assume a builder called straight from the user's line.
         size_column = renamed_parameter(
             new="size_column",
             value=size_column,
             old="scale",
             alias=scale,
             caller=_SCATTER_CALLER,
+            stacklevel=3 + _GUARD_FRAMES,
         )
         # Resolved here rather than in the drawer so the deprecation warning lands on the caller's own
         # line: the drawer sits four frames further down, and a `stacklevel` counted that deep is brittle.
-        resolve_marker_size(opts, caller=_SCATTER_CALLER)
+        resolve_marker_size(opts, caller=_SCATTER_CALLER, depth=4 + _GUARD_FRAMES)
         return self._draw(
             LayerRecord(
                 "points",

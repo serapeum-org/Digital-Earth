@@ -312,6 +312,50 @@ class TestMarkerSizeAndColumn:
         assert f"pass only {new_name}=" in message, message
 
 
+#: Every static builder that resolves a deprecated spelling, called the way a user writes it. The list is the
+#: whole class, not a sample: `scatter` is wrapped by `_skips_off_limb`, `grid_points` is not, and
+#: `point_cloud` delegates to `grid_points`, so each sits a different number of frames from the caller.
+DEPRECATED_SPELLINGS = {
+    "scatter(point_size=)": lambda fc, ds: Map(crs=fc.epsg).scatter(fc, point_size=5),
+    "scatter(scale=)": lambda fc, ds: Map(crs=fc.epsg).scatter(fc, scale="fid"),
+    "grid_points(point_size=)": lambda fc, ds: Map(crs=ds.epsg).grid_points(
+        ds, point_size=5
+    ),
+    "point_cloud(point_size=)": lambda fc, ds: Map(crs=ds.epsg).point_cloud(
+        ds, point_size=5
+    ),
+}
+
+
+class TestADeprecationWarningPointsAtTheCaller:
+    """A deprecation warning is only seen when it lands on the caller's line.
+
+    Python's default filters show a ``DeprecationWarning`` only when it is attributed to ``__main__``, so a
+    warning attributed to a line inside this package is one a user never sees at all.
+    """
+
+    @pytest.mark.parametrize("spelling", sorted(DEPRECATED_SPELLINGS))
+    def test_the_warning_names_this_file(self, spelling, points_fc, dataset):
+        """The ``stacklevel`` counted for each builder must reach the frame that called it.
+
+        Args:
+            spelling: The entry in :data:`DEPRECATED_SPELLINGS` under test.
+            points_fc: The committed point fixture.
+            dataset: The committed raster fixture.
+
+        Test scenario:
+            The call is made from this file, so the warning's ``filename`` must be this file. A decorator
+            between the caller and the builder adds a frame; a count that forgets it blames the wrapper.
+        """
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            DEPRECATED_SPELLINGS[spelling](points_fc, dataset)
+        deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        assert len(deprecations) == 1, [str(w.message) for w in deprecations]
+        warned = deprecations[0]
+        assert warned.filename == __file__, f"{warned.filename}:{warned.lineno}"
+
+
 class TestClassification:
     """C4 — a classifiable layer takes ``scheme`` + ``k``, and ``scheme=None`` is a continuous ramp."""
 
