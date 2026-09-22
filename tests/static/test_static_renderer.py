@@ -746,6 +746,75 @@ class TestADrawerThatFailsPartWay:
         assert painted == [kept], painted
 
 
+class TestAFailingGraticuleLeavesNothingBehind:
+    """``graticule()`` is the one builder outside ``Scene._draw``'s undo funnel, and needs the same undo.
+
+    The bypass is deliberate: a second call *replaces* the layer the map already has rather than adding
+    one, and the funnel only knows how to add. The rollback went with it, so a refused call left the figure
+    naming a layer nothing drew — the invariant ``Scene._draw``'s own docstring states — and a refused
+    *replacement* rewrote the description of a graticule that was still on the axes (round 2, M1).
+    """
+
+    def test_a_refused_graticule_is_not_in_the_figure(self):
+        """A spacing of zero divides by zero inside the projection; the layer goes with the refusal."""
+        canvas = Map(crs=4326)
+        with pytest.raises(ZeroDivisionError):
+            canvas.graticule(lon_step=0)
+        described = canvas.layer_ids
+        canvas.close()
+        assert described == [], described
+
+    def test_a_refused_graticule_leaves_the_renderer_owning_nothing(self):
+        """The other spacing reaches the same divide, and the renderer must record neither."""
+        canvas = Map(crs=4326)
+        with pytest.raises(ZeroDivisionError):
+            canvas.graticule(lat_step=0)
+        recorded = sorted(canvas._renderer.drawn)
+        canvas.close()
+        assert recorded == [], recorded
+
+    def test_a_refused_graticule_leaves_the_map_pointing_at_no_graticule(self):
+        """The map remembers its graticule so a later call replaces it; a refused one must not be it."""
+        canvas = Map(crs=4326)
+        with pytest.raises(ZeroDivisionError):
+            canvas.graticule(lon_step=0)
+        pointer = canvas._graticule_id
+        canvas.close()
+        assert pointer is None, pointer
+
+    def test_a_graticule_after_a_refused_one_is_the_only_one_described(self):
+        """A caller who watches one fail and asks again gets one graticule, not a ghost beside it."""
+        canvas = Map(crs=4326)
+        with pytest.raises(ZeroDivisionError):
+            canvas.graticule(lon_step=0)
+        canvas.graticule(lon_step=30.0)
+        described = canvas.layer_ids
+        canvas.close()
+        assert len(described) == 1, described
+
+    def test_a_refused_replacement_keeps_the_first_graticules_description(self):
+        """The replace branch: what the map draws is still the 30-degree grid, so the figure must say so."""
+        canvas = Map(crs=4326)
+        canvas.graticule(lon_step=30.0)
+        described = canvas.layer_ids[0]
+        with pytest.raises(ZeroDivisionError):
+            canvas.graticule(lon_step=0)
+        spacing = canvas.figure_spec.layers.get(described).symbology.props["lon_step"]
+        canvas.close()
+        assert spacing == 30.0, spacing
+
+    def test_a_refused_replacement_keeps_the_lines_the_map_is_drawing(self):
+        """The description and the grid on the axes have to name the same graticule after a refusal."""
+        canvas = Map(crs=4326)
+        canvas.graticule(lon_step=30.0)
+        drawing = canvas._graticule_lines
+        with pytest.raises(ZeroDivisionError):
+            canvas.graticule(lat_step=0)
+        kept = canvas._graticule_lines is drawing
+        canvas.close()
+        assert kept, "the refused replacement changed what the map draws"
+
+
 class TestApplyIsRecordOnlyOnThisTier:
     """``apply`` reconciles this renderer's record and the axes — and nothing else, in this wave.
 

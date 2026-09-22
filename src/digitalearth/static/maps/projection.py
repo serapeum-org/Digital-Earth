@@ -180,24 +180,43 @@ class ProjectionMixin(_MixinBase):
         Args:
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
+
+        Raises:
+            Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
+                projection — after the description has been put back as it was. A figure must not name a
+                layer that was not drawn, and a refused *replacement* must not restyle the graticule the
+                map is still drawing (round 2, M1).
         """
         symbology = Symbology(
             props={"via": "graticule", "lon_step": lon_step, "lat_step": lat_step}
         )
-        held = self._graticule_id
+        pointer = self._graticule_id
         # `_reset_layers` clears the tree between animation frames while the lines themselves survive, so the
         # remembered id can outlive its layer; the membership test is what keeps that from raising.
-        if held is not None and held in self._layer_tree.ids:
+        was: Optional[LayerSpec] = None
+        if pointer is not None and pointer in self._layer_tree.ids:
+            was = self._layer_tree.get(pointer)
+        if was is not None:
+            held = was.id
             self._layer_tree = self._layer_tree.replace(
-                with_fields(self._layer_tree.get(held), symbology=symbology)
+                with_fields(was, symbology=symbology)
             )
         else:
             held = self._describe_layer(LayerRecord("graticule", symbology=symbology))
             self._graticule_id = held
         # Described first, then drawn — but through the renderer directly rather than through
         # `Scene._draw`, because a second call replaces the layer it already has rather than adding one,
-        # and the funnel only knows how to add.
-        self._renderer.draw_layer(self.figure_spec, held)
+        # and the funnel only knows how to add. The undo the funnel owns is therefore spelled here, in the
+        # two shapes this method has: an added layer is forgotten, a replaced one is put back as it was.
+        try:
+            self._renderer.draw_layer(self.figure_spec, held)
+        except BaseException:
+            if was is None:
+                self._forget_layer(held)
+                self._graticule_id = pointer
+            else:
+                self._layer_tree = self._layer_tree.replace(was)
+            raise
 
     def _frame(self) -> tuple:
         """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).
