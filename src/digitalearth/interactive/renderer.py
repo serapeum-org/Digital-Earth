@@ -12,7 +12,7 @@ symbology as values — and the drawer here rebuilds the element from that descr
 place; HoloViews elements are immutable values composed into an overlay on every `render()`. So, as in the
 web tier, :meth:`Renderer.apply` reconciles the *record* of what is drawn and the next compose reflects it.
 The observable contract is the same one the shared renderer conformance suite states, which is why all
-three tiers can sign it.
+four tiers can sign it.
 """
 
 from dataclasses import dataclass
@@ -288,7 +288,7 @@ class Renderer:
         """
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third has already drawn the
         # first two. Rolling back only the caller's description would leave this record holding layers no
-        # figure owns — the defect the shared conformance contract states, and which both other tiers hit.
+        # figure owns — the defect the shared conformance contract states, and which the other tiers hit too.
         held = dict(self._drawn)
         try:
             self._reconcile(before, after)
