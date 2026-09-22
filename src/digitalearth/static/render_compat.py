@@ -479,7 +479,18 @@ _POINT_OVERLAY_KEYS = frozenset({"points", *_POINT_FIELDS})
 
 
 def _fold_points(out: Dict[str, Any]) -> None:
-    """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place)."""
+    """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place).
+
+    Args:
+        out: The keyword dict being prepared, mutated in place: ``points`` and every ``point_*`` key are
+            taken out of it and one built ``points`` overlay put back. A dict whose ``points`` is already
+            a ``PointOverlay`` is left alone, stray ``point_*`` keys included, so nothing is dropped in
+            silence; one carrying neither an array nor any styling is a no-op.
+
+    Raises:
+        ValueError: when ``point_*`` styling was written with no ``points=`` array to attach it to,
+            naming the key the caller actually spelled.
+    """
     if isinstance(out.get("points"), PointOverlay):
         return  # already a built overlay; leave any stray point_* keys in place, don't silently drop them
     points = out.pop("points", None)
@@ -572,7 +583,16 @@ def group_render_kwargs(
 
 @lru_cache(maxsize=None)
 def _plot_params(glyph_cls: type) -> frozenset:
-    """The parameter names of a glyph class's ``plot`` method (cached per class)."""
+    """The parameter names of a glyph class's ``plot`` method (cached per class).
+
+    Args:
+        glyph_cls: The glyph class — not an instance, since the signature is the class's and the cache is
+            keyed on it.
+
+    Returns:
+        Every named parameter of ``glyph_cls.plot``, ``self`` and the trailing ``**kwargs`` name included.
+        The membership test is what callers want it for, so the names are returned as a frozenset.
+    """
     return frozenset(inspect.signature(glyph_cls.plot).parameters)
 
 

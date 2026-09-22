@@ -1479,6 +1479,10 @@ class InteractiveMapBase:
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
         """Render the map inline in notebooks by delegating to the composed HoloViews object.
 
+        Args:
+            include: The mime types Jupyter asks for, passed through untouched.
+            exclude: The mime types Jupyter asks to be left out, passed through untouched.
+
         Returns:
             The mimebundle of the rendered object, or an empty dict when the engine is missing
             (so a bare repr in a notebook degrades gracefully instead of raising).

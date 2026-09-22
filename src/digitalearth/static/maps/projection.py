@@ -221,7 +221,13 @@ class ProjectionMixin(_MixinBase):
         self.set_extent([xlim[0], xlim[1], ylim[0], ylim[1]])
 
     def _apply_frame(self) -> Any:
-        """Draw the projection boundary + graticule and clip the layers to it (once, at render time)."""
+        """Draw the projection boundary + graticule and clip the layers to it (once, at render time).
+
+        Returns:
+            The boundary patch the frame put on the axes, or ``None`` when there was nothing to do — the
+            map is flat, or the frame has already been applied. It is idempotent for that reason: a scene
+            that is rendered, saved and shown frames itself once.
+        """
         if not self.globe or self._framed:
             return None
         boundary, xlim, ylim = self._frame()

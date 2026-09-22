@@ -2392,7 +2392,12 @@ class WebMapBase:
         return sample_cmap(cmap, n)
 
     def _map_options(self) -> dict:
-        """Build the ``MapOptions`` kwargs from the display config (drops an unset ``center``)."""
+        """Build the ``MapOptions`` kwargs from the display config (drops an unset ``center``).
+
+        Returns:
+            The ``zoom`` and the resolved ``style``, plus ``center`` only when one was given — MapLibre
+            frames an unset centre itself, and passing ``None`` would pin it to null island instead.
+        """
         options: dict = {"zoom": self.zoom, "style": _resolve_style(self.style)}
         if self.center is not None:
             options["center"] = self.center
@@ -2659,6 +2664,10 @@ class WebMapBase:
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
         """Render the map inline in notebooks by delegating to the MapLibre widget.
+
+        Args:
+            include: The mime types Jupyter asks for, passed through untouched.
+            exclude: The mime types Jupyter asks to be left out, passed through untouched.
 
         Returns:
             The widget's mimebundle, or an empty dict when the engine is missing (so a bare repr in a
