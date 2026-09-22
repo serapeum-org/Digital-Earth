@@ -26,7 +26,7 @@ second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
@@ -373,6 +373,80 @@ def _forget_render_artist(axes: Any, artist: Any) -> None:
     axes._cleo_render_artists = pruned or None
 
 
+def _painted(axes: Any) -> Optional[List[Any]]:
+    """Return the axes' own list of the artists added to it, in the order they were added.
+
+    matplotlib draws artists sorted by z-order, and artists of one z-order in the order they were added —
+    so that order is part of what the axes shows, and a layer put back last is painted over layers it was
+    under. The list is the one matplotlib draws from, so reordering it reorders the painting.
+
+    Args:
+        axes: The axes being drawn on.
+
+    Returns:
+        The live list, or ``None`` when the axes keeps none — in which case a restored layer is left where
+        matplotlib put it rather than guessed into place.
+
+    Note:
+        ``Axes._children`` is private to matplotlib (it has held every artist an axes owns since 3.5), and
+        there is no public way to insert an artist at a position. Read with ``getattr`` rather than probed:
+        it is a plain list attribute, not a property whose getter does work.
+    """
+    children = getattr(axes, "_children", None)
+    return children if isinstance(children, list) else None
+
+
+def _reinsert(
+    painted: List[Any], block: List[Any], was: Tuple[Any, ...], order: Tuple[Any, ...]
+) -> None:
+    """Move the artists a restored layer added back to where that layer's old artists stood, in place.
+
+    Args:
+        painted: The axes' live artist list (see :func:`_painted`).
+        block: The artists the restored layer just added, which matplotlib appended at the end.
+        was: The artists the layer had before it was taken off, which fix where it belongs.
+        order: The axes' artists as they stood before the refused change.
+    """
+    old = {id(artist) for artist in was}
+    positions = [index for index, artist in enumerate(order) if id(artist) in old]
+    if not block or not positions:
+        return
+    moving = {id(artist) for artist in block}
+    rest = [artist for artist in painted if id(artist) not in moving]
+    present = {id(artist) for artist in rest}
+    # The first artist that stood after the layer and is still on the axes is what it goes back in front
+    # of. When none is left, the layer was the last thing painted, and appended it still is.
+    successor = next(
+        (artist for artist in order[positions[-1] + 1 :] if id(artist) in present),
+        None,
+    )
+    if successor is None:
+        return
+    at = next(index for index, artist in enumerate(rest) if artist is successor)
+    painted[:] = [*rest[:at], *block, *rest[at:]]
+
+
+@dataclass(frozen=True)
+class _Held:
+    """What a refused :meth:`Renderer.apply` has to put back, captured before it starts.
+
+    A rollback that re-draws a removed layer re-appends it everywhere matplotlib and the scene append:
+    last in the renderer's record, last in the colorbar registry — so ``colorbar()``'s default ``-1`` keys
+    a different layer — and last on the axes, painted over layers it was under. Each of the three is put
+    back from here.
+
+    Attributes:
+        drawn: Layer id -> what was drawn for it, in draw order.
+        registered: The scene's ``(glyph, mappable)`` pairs with their default colorbar labels, in the order
+            ``colorbar(layer=...)`` indexes them.
+        painted: The axes' artists in the order they were added (see :func:`_painted`).
+    """
+
+    drawn: Dict[str, DrawnLayer]
+    registered: Tuple[Tuple[Tuple[Any, Any], Optional[str]], ...]
+    painted: Tuple[Any, ...]
+
+
 class Renderer:
     """Draws a figure's layers onto one matplotlib axes, and reconciles one figure with another.
 
@@ -461,7 +535,11 @@ class Renderer:
             earlier tier hit. Both go back together, which for this tier means taking the new artists off
             the axes and drawing the old ones again.
         """
-        held = dict(self._drawn)
+        held = _Held(
+            drawn=dict(self._drawn),
+            registered=tuple(zip(self._scene.layers, self._scene._layer_labels)),
+            painted=tuple(_painted(self._scene.ax) or ()),
+        )
         try:
             self._reconcile(before, after)
         except BaseException:
@@ -507,41 +585,99 @@ class Renderer:
         for layer_id in change.hidden:
             self.set_visible(layer_id, False)
 
-    def _rollback(self, held: Mapping[str, DrawnLayer], before: FigureSpec) -> None:
+    def _rollback(self, held: _Held, before: FigureSpec) -> None:
         """Put the axes and this record back the way a refused :meth:`apply` found them.
 
         Args:
-            held: What was drawn before the refused change, by layer id.
+            held: What was drawn, registered and painted before the refused change.
             before: The figure those layers were drawn from, which is what a restored layer is drawn from
                 again.
 
         Note:
             Restoring is a re-draw rather than a re-attach: matplotlib's ``Artist.remove`` unlinks an artist
             from its axes and from the transform stack, and adding the same object back is not supported.
-            Drawing it again from `before` is, and it is the same call that drew it the first time.
+            Drawing it again from `before` is, and it is the same call that drew it the first time. A
+            re-draw appends, so the restored layer is then moved back to the place it held — in this
+            record, in the colorbar registry and in the order the axes paints.
         """
         # Decided first, removed after: `remove` takes each layer out of `_drawn`, which cannot shrink while
         # it is being read.
         partial = [
             layer_id
             for layer_id, drawn in self._drawn.items()
-            if drawn is not held.get(layer_id)
+            if drawn is not held.drawn.get(layer_id)
         ]
         for layer_id in partial:
             self.remove(layer_id)
-        for layer_id in [key for key in held if key not in self._drawn]:
-            try:
-                self.draw_layer(before, layer_id)
-            except (
-                Exception
-            ) as error:  # pragma: no cover - a drawer that drew once draws again
-                # Never mask the refusal that started the rollback: a layer that cannot be restored is
-                # reported and the original exception carries on out of `apply`.
-                logger.warning(
-                    "rolling back a refused change could not re-draw layer %r: %s",
-                    layer_id,
-                    error,
-                )
+        for layer_id in [key for key in held.drawn if key not in self._drawn]:
+            self._restore(layer_id, before, held)
+        self._drawn = {
+            layer_id: self._drawn[layer_id]
+            for layer_id in held.drawn
+            if layer_id in self._drawn
+        }
+        self._restore_registry(held)
+
+    def _restore(self, layer_id: str, before: FigureSpec, held: _Held) -> None:
+        """Draw one removed layer again and move what it drew back to where the layer stood on the axes.
+
+        Args:
+            layer_id: The layer to restore.
+            before: The figure it is drawn from.
+            held: What the axes held before the refused change.
+        """
+        painted = _painted(self._scene.ax)
+        existing = {id(artist) for artist in painted or ()}
+        try:
+            self.draw_layer(before, layer_id)
+        except (
+            Exception
+        ) as error:  # pragma: no cover - a drawer that drew once draws again
+            # Never mask the refusal that started the rollback: a layer that cannot be restored is reported
+            # and the original exception carries on out of `apply`.
+            logger.warning(
+                "rolling back a refused change could not re-draw layer %r: %s",
+                layer_id,
+                error,
+            )
+            return
+        if painted is None:
+            return
+        # Everything the re-draw added, not only the artists the drawer reported: a glyph can leave more on
+        # the axes than its mappable, and all of it belongs where the layer was.
+        added = [artist for artist in painted if id(artist) not in existing]
+        _reinsert(painted, added, held.drawn[layer_id].artists, held.painted)
+
+    def _restore_registry(self, held: _Held) -> None:
+        """Put the scene's colorbar registry back in the order it had, with restored layers in place.
+
+        ``Scene.layers`` is what ``colorbar(layer=-1)`` indexes, so a restored layer re-registered last would
+        silently re-key the default colorbar. The registry is rebuilt from what it held, each restored
+        layer's old pair swapped for the one its re-draw registered, and a layer that could not be restored
+        dropped.
+
+        Args:
+            held: What the scene had registered before the refused change.
+        """
+        swapped: Dict[Tuple[int, int], Optional[Tuple[Any, Any]]] = {}
+        for layer_id, was in held.drawn.items():
+            now = self._drawn.get(layer_id)
+            if now is was or was.artist is None:
+                continue
+            swapped[(id(was.glyph), id(was.artist))] = (
+                None if now is None else (now.glyph, now.artist)
+            )
+        pairs: List[Tuple[Any, Any]] = []
+        labels: List[Optional[str]] = []
+        for (glyph, mappable), label in held.registered:
+            key = (id(glyph), id(mappable))
+            pair = swapped[key] if key in swapped else (glyph, mappable)
+            if pair is None:
+                continue
+            pairs.append(pair)
+            labels.append(label)
+        self._scene.layers = pairs
+        self._scene._layer_labels = labels
 
     @staticmethod
     def _reaches_matplotlib(

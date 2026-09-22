@@ -47,6 +47,45 @@ def drawn_map(dataset):
     canvas.close()
 
 
+@pytest.fixture
+def layered_map(dataset):
+    """Yield a map with a raster drawn under a mesh, closed on the way out.
+
+    Args:
+        dataset: The raster fixture both layers draw.
+
+    Yields:
+        The map, whose layers are ``raster-1`` then ``mesh-2``.
+    """
+    canvas = Map(crs=dataset.epsg)
+    canvas.imshow(dataset)
+    canvas.pcolormesh(dataset)
+    yield canvas
+    canvas.close()
+
+
+def _refused_removal(figure, layer_id):
+    """Return a figure that removes one drawn layer and then names a kind this tier does not draw.
+
+    The removal runs before the refusal, so the rollback has to put back a layer it already took off the
+    axes — which it can only do by drawing it again, and the question is where.
+
+    Args:
+        figure: The figure the map shows now.
+        layer_id: The drawn layer the refused figure drops.
+
+    Returns:
+        The refused `FigureSpec`.
+    """
+    kept = tuple(held for held in figure.panels[0].layers if held != layer_id)
+    panel = with_fields(figure.panels[0], layers=kept)
+    return with_fields(
+        figure,
+        panels=(panel,),
+        layers=figure.layers.remove(layer_id).add(LayerSpec("refused", "terrain")),
+    )
+
+
 def _text_layer(layer_id, crs):
     """Return a drawable text layer, the cheapest thing this tier really puts on an axes.
 
@@ -521,6 +560,63 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             drawn_map._renderer.drawn
         )
         assert len(drawn_map.ax.images) == 1, len(drawn_map.ax.images)
+
+    def test_a_restored_layer_keeps_its_place_in_the_record(self, layered_map):
+        """The renderer's record is in draw order, so a restored layer goes back where it was, not last.
+
+        Args:
+            layered_map: A map with a raster under a mesh.
+        """
+        figure = layered_map.figure_spec
+        with pytest.raises(KeyError):
+            layered_map._renderer.apply(figure, _refused_removal(figure, "raster-1"))
+        assert list(layered_map._renderer.drawn) == ["raster-1", "mesh-2"]
+
+    def test_a_restored_layer_keeps_its_place_in_the_colorbar_registry(
+        self, layered_map
+    ):
+        """``colorbar()`` keys ``layers[-1]``, so a restored layer appended last re-keys the default.
+
+        Args:
+            layered_map: A map with a raster under a mesh.
+        """
+        figure = layered_map.figure_spec
+        with pytest.raises(KeyError):
+            layered_map._renderer.apply(figure, _refused_removal(figure, "raster-1"))
+        drawn = layered_map._renderer.drawn
+        assert [mappable for _, mappable in layered_map.layers] == [
+            drawn["raster-1"].artist,
+            drawn["mesh-2"].artist,
+        ], layered_map.layers
+        assert layered_map.colorbar().mappable is drawn["mesh-2"].artist
+
+    def test_a_restored_layer_is_drawn_where_it_was(self, dataset):
+        """Between artists of one z-order, matplotlib draws in insertion order, so that is restored too.
+
+        Args:
+            dataset: The raster drawn twice, once under the other.
+
+        Test scenario:
+            Two field images share a z-order, so the bottom one is drawn first only because it was added
+            first. A rollback that re-adds it last paints it over the image that was on top of it.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset)
+        canvas.imshow(dataset)
+        figure = canvas.figure_spec
+        with pytest.raises(KeyError):
+            canvas._renderer.apply(figure, _refused_removal(figure, "raster-1"))
+        owner = {
+            id(artist): layer_id
+            for layer_id, drawn in canvas._renderer.drawn.items()
+            for artist in drawn.artists
+        }
+        painted = sorted(
+            canvas.ax.get_children(), key=lambda artist: artist.get_zorder()
+        )
+        order = [owner[id(artist)] for artist in painted if id(artist) in owner]
+        canvas.close()
+        assert order == ["raster-1", "raster-2"], order
 
     def test_a_refused_builder_call_describes_nothing(self, dataset, monkeypatch):
         """The same guarantee one level up: a drawer that raises must not leave a named layer behind.
