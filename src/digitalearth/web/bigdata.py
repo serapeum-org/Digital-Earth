@@ -23,7 +23,7 @@ from loguru import logger
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Scale, Symbology
-from digitalearth.web.base import _require_layer_api, placed_features
+from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -201,13 +201,13 @@ class BigDataMixin(_MixinBase):
         import numpy as np
 
         _require_layer_api()
+        paint: dict = {
+            "heatmap-radius": as_finite(radius, "radius", "WebMap.heatmap()"),
+            "heatmap-intensity": as_finite(intensity, "intensity", "WebMap.heatmap()"),
+            "heatmap-opacity": as_finite(opacity, "opacity", "WebMap.heatmap()"),
+        }
         gdf = self._display_gdf(features, method="heatmap")
         self._require_points(gdf, "heatmap")
-        paint: dict = {
-            "heatmap-radius": float(radius),
-            "heatmap-intensity": float(intensity),
-            "heatmap-opacity": float(opacity),
-        }
         if weight is not None:
             values = np.asarray(self._require_column(gdf, weight), dtype=float)
             finite = values[np.isfinite(values)]

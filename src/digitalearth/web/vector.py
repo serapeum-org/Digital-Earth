@@ -20,7 +20,7 @@ from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, LegendSpec, Scale, Symbology
-from digitalearth.web.base import _require_layer_api, placed_features
+from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
 
 @dataclass(frozen=True)
@@ -479,6 +479,8 @@ class VectorMixin(_MixinBase):
             caller="WebMap.labels()",
             default=12.0,
         )
+        text_size = as_finite(text_size, "text_size", "WebMap.labels()")
+        halo_width = as_finite(halo_width, "halo_width", "WebMap.labels()")
         gdf = self._display_gdf(features, method="labels")
         if column not in getattr(gdf, "columns", []):
             raise KeyError(
@@ -712,6 +714,8 @@ class VectorMixin(_MixinBase):
             digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
         spacing = _as_interval(interval)
+        width = as_finite(width, "width", "WebMap.contours()")
+        opacity = as_finite(opacity, "opacity", "WebMap.contours()")
         data = self._display_raster_or_skip(dataset, layer="contours")
         if data is None:
             return self
@@ -966,6 +970,8 @@ class VectorMixin(_MixinBase):
             caller="WebMap.points()",
             default=5.0,
         )
+        size = as_finite(size, "size", "WebMap.points()")
+        opacity = as_finite(opacity, "opacity", "WebMap.points()")
         gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).
@@ -1082,6 +1088,8 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
         """
         _, layer_types = _require_layer_api()
+        width = as_finite(width, "width", "WebMap.lines()")
+        opacity = as_finite(opacity, "opacity", "WebMap.lines()")
         gdf = self._display_gdf(features, method="lines")
         colour = (
             color
@@ -1194,6 +1202,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
         _, layer_types = _require_layer_api()
+        opacity = as_finite(opacity, "opacity", "WebMap.polygons()")
         gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
@@ -1331,6 +1340,7 @@ class VectorMixin(_MixinBase):
                 classification.
         """
         _, layer_types = _require_layer_api()
+        opacity = as_finite(opacity, "opacity", "WebMap.choropleth()")
         gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
         paint = {

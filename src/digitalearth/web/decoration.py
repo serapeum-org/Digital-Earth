@@ -27,7 +27,7 @@ from digitalearth.base.basemaps import (
 )
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.web.base import _require_layer_api, _require_maplibre
+from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
 # Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
 # collision belongs to the Core contract, not here.
@@ -885,16 +885,25 @@ class DecorationMixin(_MixinBase):
             raise TypeError(
                 "text() needs the string to draw; pass it as the third argument"
             )
-        lon, lat = self._as_display_point(float(lon), float(lat), crs)
-        _require_layer_api()
-        text_size = renamed_parameter(
-            new="text_size",
-            value=text_size,
-            old="size",
-            alias=size,
-            caller="WebMap.text()",
-            default=14.0,
+        lon, lat = self._as_display_point(
+            as_finite(lon, "lon", "WebMap.text()"),
+            as_finite(lat, "lat", "WebMap.text()"),
+            crs,
         )
+        _require_layer_api()
+        text_size = as_finite(
+            renamed_parameter(
+                new="text_size",
+                value=text_size,
+                old="size",
+                alias=size,
+                caller="WebMap.text()",
+                default=14.0,
+            ),
+            "text_size",
+            "WebMap.text()",
+        )
+        halo_width = as_finite(halo_width, "halo_width", "WebMap.text()")
         layer_id = self._layer_id("text", name)
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
         # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
@@ -1015,6 +1024,12 @@ class DecorationMixin(_MixinBase):
         lat_step = _DEFAULT_GRID_STEP if lat_step is None else lat_step
         if spacing is not None:
             lon_step = lat_step = spacing
+        # Finite first: a NaN step passes the range check below (every comparison against NaN is false) and
+        # was written into the description, where it made the whole figure unwritable (review L1).
+        lon_step = as_finite(lon_step, "lon_step", "WebMap.graticule()")
+        lat_step = as_finite(lat_step, "lat_step", "WebMap.graticule()")
+        width = as_finite(width, "width", "WebMap.graticule()")
+        opacity = as_finite(opacity, "opacity", "WebMap.graticule()")
         for name_of, step in (("lon_step", lon_step), ("lat_step", lat_step)):
             if step <= 0 or step > 180:
                 # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,

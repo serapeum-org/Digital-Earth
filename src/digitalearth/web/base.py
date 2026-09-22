@@ -405,6 +405,42 @@ def _require_layer_api() -> tuple:
     return Layer, LayerType
 
 
+def as_finite(value: Any, argument: str, caller: str) -> float:
+    """Return a builder's numeric keyword as a plain float, refusing one a figure cannot be written with.
+
+    JSON has no spelling for NaN or infinity, so a description holding one cannot be written at all:
+    `to_dict` refuses the whole figure. Left to be caught there, the refusal named a MapLibre paint key
+    (`Symbology.props['paint']['circle-radius']`) long after the call, for an argument the caller wrote as
+    `size=`. `rgb_composite(limits=)` was normalised for exactly this reason; every other numeric keyword
+    this tier records was not (review L1). Refusing at the call names what the caller wrote.
+
+    Args:
+        value: The keyword's value, as given.
+        argument: The keyword's name, as the caller spells it.
+        caller: The builder's name, for the message.
+
+    Returns:
+        The value as a `float`.
+
+    Raises:
+        ValueError: when `value` is NaN or infinite, or is not a number at all — the conversion's own
+            failure is re-raised in the builder's words, since an argument named in the signature should
+            not surface as a bare `float()` error several frames down.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{caller} needs {argument}= as a finite number; got {value!r}"
+        ) from None
+    if not math.isfinite(number):
+        raise ValueError(
+            f"{caller} needs {argument}= as a finite number; got {value!r}. A figure holding it could not "
+            f"be written down: JSON has no spelling for NaN or infinity"
+        )
+    return number
+
+
 def placed_features(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Return a vector drawer's source placed in the display CRS, ready to serve as GeoJSON.
 

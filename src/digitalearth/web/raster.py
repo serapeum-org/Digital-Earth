@@ -17,7 +17,7 @@ from loguru import logger
 
 from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.spec import Bounds, LayerSpec, Scale, Symbology
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
 _LARGE_RASTER_PIXELS = 4_000_000
@@ -448,6 +448,7 @@ class RasterMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
         """
         vmin, vmax = _colour_limits(limits, vmin, vmax, caller="WebMap.field()")
+        opacity = as_finite(opacity, "opacity", "WebMap.field()")
         _require_layer_api()
         source = self._display_source_or_skip(data, band=band, layer="field")
         if source is None:
@@ -536,6 +537,7 @@ class RasterMixin(_MixinBase):
         """
         from digitalearth.base.stretch import require_three_bands
 
+        opacity = as_finite(opacity, "opacity", "WebMap.rgb_composite()")
         _require_layer_api()
         require_three_bands("rgb_composite", bands)
         # Warped here only so an off-limb dataset is refused before anything is recorded, and so the first

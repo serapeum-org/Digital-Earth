@@ -37,6 +37,12 @@ from digitalearth.web.base import DEFAULT_BIG_DATA_THRESHOLD, DISPLAY_CRS
 from digitalearth.web.decoration import DEFAULT_BASEMAP_PROVIDER
 from digitalearth.web.export import DEFAULT_FPS
 
+#: The raster the non-finite-keyword checks read, relative to the repo root the suite runs from.
+RASTER_PATH = "examples/data/acc4000.tif"
+
+#: The vector collection those same checks read.
+VECTOR_PATH = "tests/data/points.geojson"
+
 
 def _source(variable: str) -> Source:
     """Build a minimal display-CRS source whose variable drives the autostyle lookup.
@@ -1089,3 +1095,84 @@ class TestC13TheDisplayCrsIsDeclared:
         """An error that only says no leaves the caller to guess which tier can project."""
         with pytest.raises(ValueError, match="static tier"):
             WebMap(crs=3857)
+
+
+#: Every builder keyword this tier records as a number in the figure, with a non-finite value for it. The id
+#: is what the refusal must name; the callable applies the value to an otherwise valid call.
+NON_FINITE_KEYWORDS = {
+    "field(opacity=)": lambda m, bad: m.field(RASTER_PATH, opacity=bad),
+    "rgb_composite(opacity=)": lambda m, bad: m.rgb_composite(
+        RASTER_PATH, bands=(1, 1, 1), opacity=bad
+    ),
+    "contours(width=)": lambda m, bad: m.contours(RASTER_PATH, interval=1.0, width=bad),
+    "contours(opacity=)": lambda m, bad: m.contours(
+        RASTER_PATH, interval=1.0, opacity=bad
+    ),
+    "points(size=)": lambda m, bad: m.points(VECTOR_PATH, size=bad),
+    "points(opacity=)": lambda m, bad: m.points(VECTOR_PATH, opacity=bad),
+    "lines(width=)": lambda m, bad: m.lines(VECTOR_PATH, width=bad),
+    "lines(opacity=)": lambda m, bad: m.lines(VECTOR_PATH, opacity=bad),
+    "polygons(opacity=)": lambda m, bad: m.polygons(VECTOR_PATH, opacity=bad),
+    "choropleth(opacity=)": lambda m, bad: m.choropleth(
+        VECTOR_PATH, column="fid", opacity=bad
+    ),
+    "labels(text_size=)": lambda m, bad: m.labels(VECTOR_PATH, "fid", text_size=bad),
+    "labels(halo_width=)": lambda m, bad: m.labels(VECTOR_PATH, "fid", halo_width=bad),
+    "heatmap(radius=)": lambda m, bad: m.heatmap(VECTOR_PATH, radius=bad),
+    "heatmap(intensity=)": lambda m, bad: m.heatmap(VECTOR_PATH, intensity=bad),
+    "heatmap(opacity=)": lambda m, bad: m.heatmap(VECTOR_PATH, opacity=bad),
+    "extrusion(height=)": lambda m, bad: m.extrusion(VECTOR_PATH, height=bad),
+    "extrusion(opacity=)": lambda m, bad: m.extrusion(
+        VECTOR_PATH, height=1.0, opacity=bad
+    ),
+    "text(lon=)": lambda m, bad: m.text(bad, 52.4, "A"),
+    "text(lat=)": lambda m, bad: m.text(4.9, bad, "A"),
+    "text(text_size=)": lambda m, bad: m.text(4.9, 52.4, "A", text_size=bad),
+    "text(halo_width=)": lambda m, bad: m.text(4.9, 52.4, "A", halo_width=bad),
+    "graticule(lon_step=)": lambda m, bad: m.graticule(lon_step=bad),
+    "graticule(lat_step=)": lambda m, bad: m.graticule(lat_step=bad),
+    "graticule(width=)": lambda m, bad: m.graticule(width=bad),
+    "graticule(opacity=)": lambda m, bad: m.graticule(opacity=bad),
+}
+
+
+class TestANonFiniteKeywordIsRefusedAtTheCall:
+    """Review L1 — only `rgb_composite(limits=)` was normalised; the rest let the figure become unwritable."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip the class when the web extra is not installed."""
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize("keyword", sorted(NON_FINITE_KEYWORDS))
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_the_refusal_names_the_argument_the_caller_wrote(self, keyword, bad):
+        """A figure holding NaN or infinity cannot be written, which is what the seam exists to provide.
+
+        Args:
+            keyword: Which entry of :data:`NON_FINITE_KEYWORDS` to call.
+            bad: The non-finite value to pass.
+
+        Test scenario:
+            Before this the builder accepted the value and `to_dict()` refused the whole figure much later,
+            naming a MapLibre paint key (`Symbology.props['paint']['circle-radius']`) rather than the
+            argument the caller actually wrote.
+        """
+        call = NON_FINITE_KEYWORDS[keyword]
+        argument = keyword.split("(")[1].rstrip("=)")
+        web_map = WebMap()
+        with pytest.raises(ValueError, match="finite") as refusal:
+            call(web_map, bad)
+        assert argument in str(refusal.value), (
+            f"{keyword}'s refusal must name {argument}; got {refusal.value}"
+        )
+
+    @pytest.mark.parametrize("keyword", sorted(NON_FINITE_KEYWORDS))
+    def test_a_finite_value_still_builds(self, keyword):
+        """The guard must refuse only what JSON cannot carry.
+
+        Args:
+            keyword: Which entry of :data:`NON_FINITE_KEYWORDS` to call.
+        """
+        built = NON_FINITE_KEYWORDS[keyword](WebMap(), 1.0)
+        assert built.layer_ids, f"{keyword} with a finite value must still draw"

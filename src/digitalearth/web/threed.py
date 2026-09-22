@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.web.base import _require_layer_api, placed_features
+from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
@@ -100,13 +100,17 @@ class ThreeDMixin(_MixinBase):
             This map (chainable).
         """
         _require_layer_api()
-        gdf = self._display_gdf(features, method="extrusion")
         paint: dict = {
-            "fill-extrusion-opacity": float(opacity),
+            "fill-extrusion-opacity": as_finite(
+                opacity, "opacity", "WebMap.extrusion()"
+            ),
+            # A string names the column to read the height from and is carried as it is; a number is the
+            # height itself, and the figure has to be able to carry that too (review L1).
             "fill-extrusion-height": ["get", height]
             if isinstance(height, str)
-            else float(height),
+            else as_finite(height, "height", "WebMap.extrusion()"),
         }
+        gdf = self._display_gdf(features, method="extrusion")
         if column is not None:
             paint["fill-extrusion-color"] = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
