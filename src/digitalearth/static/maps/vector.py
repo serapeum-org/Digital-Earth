@@ -5,6 +5,7 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
+import os
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
@@ -25,7 +26,7 @@ from digitalearth.base.crs import reproject
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
-from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec import DataRef, LayerSpec, Symbology
 from digitalearth.base.symbology import (
     MISSING_COLOR,
     nulls_to_none,
@@ -610,6 +611,32 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def _opened_component(component: Any) -> Any:
+    """Open one half of a u/v pair when the caller named it by path or URL.
+
+    Every other data builder hands its argument straight to the figure's source table, which records a
+    path as a path and opens it for the drawer. A u/v field cannot: a layer names **one** source, and a
+    field is not drawable from either component alone, so the pair is recorded as one in-memory object and
+    the table never sees the two paths. The components are therefore opened here, with the same resolver
+    the table uses, rather than reaching the drawer as strings — which is where they met ``to_crs`` and
+    raised ``AttributeError: 'str' object has no attribute 'to_crs'`` from three frames inside pyramids.
+
+    Args:
+        component: A pyramids ``Dataset``, or a path or URL to one.
+
+    Returns:
+        The dataset. A component that is already an object is handed back untouched, so nothing is
+        registered for it and nothing has to be forgotten.
+
+    Note:
+        A u/v figure is still ``object:``-backed and so cannot be written down. That needs a layer to be
+        able to name two sources, which is the shared spec's to settle, not this tier's.
+    """
+    if isinstance(component, (str, os.PathLike)):
+        return DataRef.of(component).open()
+    return component
+
+
 def _described_agg(agg: Any) -> Tuple[Any, Any]:
     """Split a quadtree reducer into the name a description records and the callable held beside the layer.
 
@@ -1131,8 +1158,8 @@ class VectorMixin(_MixinBase):
         """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
             kind: ``"quiver"``, ``"barbs"`` or ``"streamplot"``.
             band: 1-based band index read from each dataset.
             **opts: The caller's own engine keywords, handed to ``VectorGlyph`` as passed and held beside
@@ -1150,8 +1177,10 @@ class VectorMixin(_MixinBase):
         """
         record = LayerRecord(
             _VECTOR_KINDS[kind],
-            # The pair is the source: a field is not drawable from either component alone.
-            source=(u_dataset, v_dataset),
+            # The pair is the source: a field is not drawable from either component alone. It is opened
+            # here rather than left to the figure's source table, because that table names **one** source
+            # per layer and so has no spelling for a pair — see `_opened_component` (round 2, L7).
+            source=(_opened_component(u_dataset), _opened_component(v_dataset)),
             symbology=Symbology(props={"via": kind, "band": band}),
             opts=opts,
         )
@@ -1165,8 +1194,8 @@ class VectorMixin(_MixinBase):
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
 
@@ -1184,8 +1213,8 @@ class VectorMixin(_MixinBase):
         """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``).
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
 
@@ -1203,8 +1232,8 @@ class VectorMixin(_MixinBase):
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
 

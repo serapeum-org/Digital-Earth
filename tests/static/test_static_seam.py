@@ -1221,6 +1221,66 @@ def _cell_values(artist):
     return sorted(round(float(value), 3) for value in artist.get_array())
 
 
+#: The three builders that take two rasters rather than one. A field is not drawable from either component
+#: alone, which is what makes their input shape different from every other data builder's.
+UV_BUILDERS = ("quiver", "barbs", "streamplot")
+
+
+class TestAUvFieldTakesAPathLikeEveryOtherBuilder:
+    """The u/v builders reached for ``to_crs`` on the caller's argument, so only an open object worked.
+
+    Every other static data builder takes a path or a URL and lets the figure's own source table open it.
+    These three raised ``AttributeError: 'str' object has no attribute 'to_crs'`` from three frames deep in
+    pyramids, which names neither the builder nor the argument (round 2, L7).
+    """
+
+    @pytest.mark.parametrize("builder", UV_BUILDERS)
+    def test_a_uv_builder_draws_from_a_path(self, builder):
+        """Args:
+        builder: The entry in :data:`UV_BUILDERS` under test.
+        """
+        canvas = Map(crs=32618)
+        getattr(canvas, builder)(RASTER_PATH, RASTER_PATH)
+        described = canvas.layer_ids
+        drawn = sorted(canvas._renderer.drawn)
+        canvas.close()
+        assert drawn == described, (drawn, described)
+
+    @pytest.mark.parametrize("builder", UV_BUILDERS)
+    def test_a_path_and_an_open_dataset_describe_the_same_layer(self, builder, dataset):
+        """Opening the path must not change what the layer *is*, only where its data came from.
+
+        Args:
+            builder: The entry in :data:`UV_BUILDERS` under test.
+            dataset: The same raster, already open.
+        """
+        by_path = Map(crs=dataset.epsg)
+        getattr(by_path, builder)(RASTER_PATH, RASTER_PATH)
+        from_path = by_path.figure_spec.layers.get(by_path.layer_ids[0])
+        by_path.close()
+        by_object = Map(crs=dataset.epsg)
+        getattr(by_object, builder)(dataset, dataset)
+        from_object = by_object.figure_spec.layers.get(by_object.layer_ids[0])
+        by_object.close()
+        assert from_path.kind == from_object.kind, (from_path.kind, from_object.kind)
+        assert from_path.symbology == from_object.symbology, from_path.symbology
+
+    def test_a_path_draws_the_same_arrows_an_open_dataset_does(self, dataset):
+        """The components have to be read, not merely accepted.
+
+        Args:
+            dataset: The same raster, already open.
+        """
+        by_path = Map(crs=dataset.epsg)
+        from_path = by_path.quiver(RASTER_PATH, RASTER_PATH)
+        eastward = np.asarray(from_path.U)
+        by_path.close()
+        by_object = Map(crs=dataset.epsg)
+        expected = np.asarray(by_object.quiver(dataset, dataset).U)
+        by_object.close()
+        assert np.array_equal(eastward, expected), (eastward[:3], expected[:3])
+
+
 class TestAQuadtreeRedrawsWithTheReducerItWasBuiltWith:
     """``agg`` decides the **values** a quadtree is coloured by, so a figure that loses it draws other data.
 
