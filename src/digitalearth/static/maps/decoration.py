@@ -363,16 +363,16 @@ def draw_natural_earth(
             # is exact and far cheaper than clipping the global ocean polygon.
             disc: Optional[DrawnLayer] = scene._fill_globe_polygons(
                 [np.asarray(scene._frame()[0])],
-                facecolor=style.get("color", "#cfe6f5"),
                 zorder=zorder,
+                **_to_feature_style("polygon", style),
             )
             return disc
         parts = natural_earth(name, props["resolution"])
         if props["polygon"]:
             filled: Optional[DrawnLayer] = scene._fill_globe_polygons(
                 scene._project_polygon_features(parts),
-                facecolor=style.get("facecolor", style.get("color", "#efefdb")),
                 zorder=zorder,
+                **_to_feature_style("polygon", style),
             )
             return filled
         style.pop("edgecolor", None)
@@ -611,19 +611,17 @@ class DecorationMixin(_MixinBase):
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
         with self._preserve_view():
-            # `draw_band="underlay"` is the description's half of the `zorder` below: a backdrop is the
-            # `raster` kind drawn somewhere other than where that kind normally goes.
+            # `draw_band="underlay"` is the description's half of `zorder`: one says where the
+            # backdrop sits among the figure's layers, the other where it sits on the axes. Both are
+            # recorded, so a backdrop drawn again from its description comes back behind the data.
             im = self.imshow(
                 dataset,
                 cmap=cmap,
                 default_cmap=STOCK_IMG_CMAP,
                 draw_band="underlay",
+                zorder=zorder,
                 **kwargs,
             )
-            # the backdrop is off-limb: there is nothing to push behind the data
-            if im is None:
-                return None
-            im.set_zorder(zorder)
         return im
 
     def _project_line_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
@@ -688,8 +686,8 @@ class DecorationMixin(_MixinBase):
         self,
         rings: List[np.ndarray],
         *,
-        facecolor: Any,
         zorder: float,
+        **style: Any,
     ) -> Optional[DrawnLayer]:
         """Fill projected rings with a solid colour on a globe (map-specific overlay; clipped at frame time).
 
@@ -700,8 +698,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             rings: Closed, finite projected fill rings (from :meth:`_project_polygon_features`).
-            facecolor: Solid fill colour.
             zorder: Draw order (ocean below land below data below coastlines).
+            **style: What the layer recorded, in the plural keys a collection takes (see
+                :func:`_to_feature_style`) — ``facecolors``, and whatever else the caller asked for:
+                ``edgecolors``, ``alpha``, ``linewidths``. A globe fill recorded ``alpha`` and
+                ``edgecolor`` and then drew neither, because only the fill colour reached here.
 
         Returns:
             What the fill produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` holding the
@@ -711,9 +712,9 @@ class DecorationMixin(_MixinBase):
         if not rings:
             return None
         with self._preserve_view():
-            pc = PolyCollection(
-                rings, facecolors=facecolor, edgecolors="none", zorder=zorder
-            )
+            # The edge is off unless the layer asks for one: a fill is a fill, and the Natural-Earth
+            # defaults spell that out for the layers that have an edge to speak of.
+            pc = PolyCollection(rings, zorder=zorder, **{"edgecolors": "none", **style})
             self.ax.add_collection(pc)
         self._register_artist(None, pc)
         return DrawnLayer(artist=pc, artists=(pc,))

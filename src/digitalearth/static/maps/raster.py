@@ -188,6 +188,11 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         label=style.get("units"),  # the Scene's colorbar labels itself with it (T6.2)
         **plot_style,
     )
+    zorder = props["zorder"]
+    if zorder is not None and drawn.artist is not None:
+        # Recorded rather than set by the builder afterwards: a backdrop drawn again from its
+        # description has to land behind the data again, and the builder is not there the second time.
+        drawn.artist.set_zorder(zorder)
     return drawn
 
 
@@ -308,6 +313,7 @@ class RasterMixin(_MixinBase):
         add_colorbar: bool = False,
         default_cmap: str = DEFAULT_FIELD_CMAP,
         draw_band: Optional[str] = None,
+        zorder: Optional[float] = None,
         **opts,
     ) -> Any:
         """Render a raster ``dataset`` on the shared axes via ``cleopatra.ArrayGlyph`` (the canonical recipe).
@@ -330,8 +336,12 @@ class RasterMixin(_MixinBase):
             draw_band: Where the layer is drawn in the figure's description, overriding the band its kind
                 declares — ``"underlay"`` for a backdrop, which is what
                 :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` draws. ``None``
-                (default) takes the kind's own band. It changes only the description; the matplotlib
-                ``zorder`` is set by the caller as it always was.
+                (default) takes the kind's own band.
+            zorder: The matplotlib draw order to give the render, or ``None`` (default) for whichever
+                one the glyph leaves it with. The companion of `draw_band` on the engine's side, and
+                recorded for the same reason: a backdrop drawn again from its description — a redraw, a
+                rollback, a figure read back — has to come back *behind* the data rather than at the
+                default 0.
             **opts: Extra styling kwargs; filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -354,6 +364,7 @@ class RasterMixin(_MixinBase):
                     "levels": levels,
                     "add_colorbar": add_colorbar,
                     "default_cmap": default_cmap,
+                    "zorder": zorder,
                 }
             ),
             # What the figure records is the call the caller made, not the call cleopatra receives:

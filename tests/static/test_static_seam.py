@@ -1075,6 +1075,51 @@ class TestADecorationLayerOwnsTheArtistsItAdded:
         assert left == 0, "the coastline is still on the axes"
 
 
+class TestADescriptionCarriesWhatTheDrawingNeeds:
+    """What the drawer needs to draw the same picture again has to be in the layer's own record."""
+
+    def test_a_backdrop_records_the_draw_order_it_was_given(self, dataset):
+        """``stock_img`` draws below the data, which is a property of the layer, not of the call.
+
+        Args:
+            dataset: The raster drawn as a backdrop.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.stock_img(dataset)
+        recorded = canvas.figure_spec.layers.get("raster-1").symbology.props["zorder"]
+        canvas.close()
+        assert recorded == -3.0, recorded
+
+    def test_a_backdrop_redrawn_from_its_description_stays_behind(self, dataset):
+        """The point of recording it: a redraw put the backdrop back at the default 0, over the data.
+
+        Args:
+            dataset: The raster drawn as a backdrop.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.stock_img(dataset)
+        canvas._renderer.remove("raster-1")
+        canvas._renderer.draw_layer(canvas.figure_spec, "raster-1")
+        redrawn = canvas._renderer.drawn["raster-1"].artist.get_zorder()
+        canvas.close()
+        assert redrawn == -3.0, redrawn
+
+    def test_a_globe_fill_is_drawn_with_the_keywords_it_records(self):
+        """A globe's land fill recorded ``alpha`` and ``edgecolor`` and then drew neither."""
+        from matplotlib.colors import to_rgba
+
+        from digitalearth.static import projections
+
+        canvas = Map(crs=projections.orthographic(0, 0), globe=True)
+        canvas.land(alpha=0.3, edgecolor="red")
+        fill = canvas._renderer.drawn["land-1"].artist
+        edge = to_rgba(fill.get_edgecolor()[0])
+        alpha = fill.get_alpha()
+        canvas.close()
+        assert alpha == 0.3, alpha
+        assert edge[:3] == to_rgba("red")[:3], edge
+
+
 class _FakeCollection:
     """A stand-in for a pyramids ``DatasetCollection``, which ``spaghetti`` reads one attribute of."""
 
