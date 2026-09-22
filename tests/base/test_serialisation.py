@@ -37,6 +37,7 @@ from digitalearth.base.spec._serial import (
     FrozenDict,
     crs_to_json,
     finite_number,
+    hashable_value,
     read_entry,
     to_json_value,
 )
@@ -1265,3 +1266,50 @@ class TestTheSharedRules:
         """A numpy number is returned as a Python float."""
         number = finite_number("Camera", "view_angle", np.float32(30.0))
         assert (number, type(number)) == (30.0, float), (number, type(number))
+
+
+class TestHashingAMappingThatDoesNotSort:
+    """`hashable_value` orders a mapping's items, and a mapping's keys need not compare (review L6)."""
+
+    @pytest.mark.parametrize(
+        "mapping",
+        [
+            {1: "a", "b": 2},
+            {(1, 2): "x", "a": 1},
+            {None: 1, "a": 2},
+            {"outer": {1: "a", "b": 2}},
+        ],
+    )
+    def test_a_mapping_whose_keys_do_not_compare_still_hashes(self, mapping):
+        """Sorting the items compares the keys, and two key types need not be ordered against each other.
+
+        Args:
+            mapping: The mapping under test.
+
+        Test scenario:
+            The documented `Raises:` named an unhashable *value* as the one cause. A mixed-key mapping is
+            perfectly hashable — it is the sort that fails — so `{1: 'a', 'b': 2}` raised
+            ``'<' not supported between instances of 'str' and 'int'`` from a helper whose whole job is to
+            make a value hashable.
+        """
+        assert hash(hashable_value(mapping)) is not None, (
+            f"{mapping!r} hashes; ordering its items must not be what refuses it"
+        )
+
+    def test_two_orderings_of_such_a_mapping_still_hash_alike(self):
+        """The fallback order has to be a function of the keys, not of the insertion order.
+
+        Test scenario:
+            Equal objects must hash equal. Two dicts built key-by-key in opposite orders are equal, so
+            whatever order the items are put in has to be derived from the keys themselves.
+        """
+        one = hashable_value({1: "a", "b": 2, None: 3})
+        other = hashable_value({None: 3, "b": 2, 1: "a"})
+        assert hash(one) == hash(other), (
+            f"two spellings of one mapping hashed apart: {one!r} vs {other!r}"
+        )
+
+    def test_a_symbology_holding_one_hashes_too(self):
+        """The helper exists for `Symbology.__hash__`, so the defect is reachable from a real style."""
+        mixed = Symbology(props={"lookup": {1: "a", "b": 2}})
+        assert hash(mixed) is not None, "a style holding a mixed-key mapping must hash"

@@ -539,12 +539,17 @@ def hashable_value(value: Any) -> Any:
         value: A stored property, or any part of one.
 
     Returns:
-        The value with each mapping as a tuple of its sorted ``(key, value)`` pairs, applied inside sequences
-        and mappings alike. Anything else is returned as it is — a value that is unhashable for its own
-        reasons still raises when it is hashed, which is the honest outcome.
+        The value with each mapping as a tuple of its ``(key, value)`` pairs in key order, applied inside
+        sequences and mappings alike. Anything else is returned as it is — a value that is unhashable for its
+        own reasons still raises when it is hashed, which is the honest outcome.
+
+        The order is the keys' own where they compare, and their `repr`\\ s where they do not. A mapping's
+        keys need not be orderable against each other — `{1: 'a', 'b': 2}` hashes perfectly well — so sorting
+        them was refusing values that this helper exists to accept (review L6). Either way the order is a
+        function of the keys alone, never of the insertion order, so two spellings of one mapping agree.
 
     Examples:
-        - Two mappings written in a different order hash alike, because the items are sorted:
+        - Two mappings written in a different order hash alike, because the items are ordered by key:
             ```python
             >>> from digitalearth.base.spec._serial import hashable_value
             >>> hashable_value({"b": 1, "a": 2}) == hashable_value({"a": 2, "b": 1})
@@ -558,9 +563,23 @@ def hashable_value(value: Any) -> Any:
             True
 
             ```
+        - Keys of two types are ordered by `repr` rather than refused:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hash(hashable_value({1: "a", "b": 2})) is not None
+            True
+
+            ```
     """
     if isinstance(value, Mapping):
-        return tuple(sorted((key, hashable_value(item)) for key, item in value.items()))
+        items = [(key, hashable_value(item)) for key, item in value.items()]
+        try:
+            return tuple(sorted(items))
+        except TypeError:
+            # Only the keys are ever compared — a mapping's keys are unique, so the second half of a pair is
+            # never reached — and two key types need not be ordered against each other. `repr` gives them one
+            # total order that still depends on nothing but the keys.
+            return tuple(sorted(items, key=lambda item: repr(item[0])))
     if isinstance(value, tuple):
         return tuple(hashable_value(item) for item in value)
     return value

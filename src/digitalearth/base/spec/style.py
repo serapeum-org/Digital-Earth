@@ -195,11 +195,14 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if any value in it is itself unhashable. Neither a list nor a dict is among them: a list
-                is stored as a tuple, so ``Symbology.of(color=[1, 0, 0])`` hashes, and a mapping is hashed as
-                its sorted items wherever it sits — which is what every tier needs, since each records one
-                (MapLibre's ``paint``, the resolved HoloViews style, a tile preset). Nor is a numpy array,
-                which is stored as nested tuples of its elements.
+            TypeError: if any value in it is itself unhashable — and that alone. Neither a list nor a dict is
+                among them: a list is stored as a tuple, so ``Symbology.of(color=[1, 0, 0])`` hashes, and a
+                mapping is hashed as its items in key order wherever it sits — which is what every tier
+                needs, since each records one (MapLibre's ``paint``, the resolved HoloViews style, a tile
+                preset). The mapping's *keys* need not compare with each other either: ordering them by
+                `repr` where they do not is what keeps the sort from raising where the values are fine
+                (review L6). Nor is a numpy array unhashable here, being stored as nested tuples of its
+                elements.
         """
         return hash(
             (
