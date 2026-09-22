@@ -312,3 +312,23 @@ class TestItStaysAValue:
         assert Encoding.constant("size", 6) == Encoding(channel="size", value=6), (
             "the builder and the constructor must produce equal bindings"
         )
+
+    def test_a_constant_that_holds_a_mapping_still_hashes(self):
+        """The hash fix reached a `Symbology`'s properties and not the constants beside them (review L5).
+
+        Test scenario:
+            A `Symbology` hashes a mapping property as its items, and its docstring says a mapping is hashed
+            that way *wherever it sits*. An encoding's constant is where else it can sit: the dataclass hash
+            reads the field as it is, so an encoding bound to a mapping raised `unhashable type: 'dict'` —
+            and so did every `Symbology` and `LayerSpec` holding it.
+        """
+        bound = Encoding.constant("color", {"high": "#f00", "low": "#00f"})
+        assert hash(bound) is not None, "an encoding must hash whatever it is bound to"
+
+    def test_two_spellings_of_such_a_constant_hash_alike(self):
+        """Equal encodings must hash equal, so the item order cannot follow the way the dict was written."""
+        written = Encoding.constant("color", {"high": "#f00", "low": "#00f"})
+        rewritten = Encoding.constant("color", {"low": "#00f", "high": "#f00"})
+        assert hash(written) == hash(rewritten), (
+            f"two equal encodings hashed apart: {written!r} vs {rewritten!r}"
+        )

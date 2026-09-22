@@ -7,7 +7,14 @@ replaces them.
 
 import pytest
 
-from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec import (
+    Encoding,
+    LayerSpec,
+    Scale,
+    StyleKey,
+    StyleSchema,
+    Symbology,
+)
 
 
 class TestSymbology:
@@ -305,4 +312,30 @@ class TestRouteAndResolveTogether:
         )
         assert merged.encoding("size").resolve() == 6, (
             "and the default size fill the gap"
+        )
+
+
+class TestAMappingBoundToAChannelHashesToo:
+    """The `props` half of the hash was made mapping-proof; the `encodings` half was not (review L5)."""
+
+    def test_a_symbology_holding_such_an_encoding_hashes(self):
+        """`Symbology.__hash__` says a mapping is hashed as its items wherever it sits — including here."""
+        bound = Symbology(
+            encodings={"color": Encoding.constant("color", {"high": "#f00"})}
+        )
+        assert hash(bound) is not None, (
+            "a style bound to a mapping constant must hash, as one holding a mapping property does"
+        )
+
+    def test_a_layer_holding_such_a_symbology_hashes(self):
+        """A `LayerSpec` hashes through its symbology, so the gap reached the layer as well."""
+        layer = LayerSpec(
+            "wells",
+            "points",
+            symbology=Symbology(
+                encodings={"color": Encoding.constant("color", {"high": "#f00"})}
+            ),
+        )
+        assert hash(layer) is not None, (
+            "a layer must hash whatever its style is bound to"
         )
