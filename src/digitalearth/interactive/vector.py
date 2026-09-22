@@ -672,15 +672,59 @@ class VectorMixin(_MixinBase):
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
                 ``big_data_threshold=``.
         """
-        from digitalearth.interactive.bigdata import _route_through_rasterize
-
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.polygons()"
         )
+        return self._polygon_layer(
+            features,
+            "polygons",
+            column=column,
+            cmap=cmap,
+            rasterize=rasterize,
+            threshold=threshold,
+            **opts,
+        )
+
+    def _polygon_layer(
+        self,
+        features: Any,
+        kind: str,
+        *,
+        column: Optional[str],
+        cmap: str,
+        rasterize: Any,
+        threshold: int,
+        **opts: Any,
+    ) -> Self:
+        """Draw polygons outlined or filled by a column, described under the kind the caller asked for.
+
+        The body `polygons()` and the continuous `choropleth()` share. It takes the kind as an argument
+        because the two draw the same element yet are different layers to a reader of the figure: the
+        continuous ramp used to reach here through `polygons()` and so was described as `polygons`, while
+        the categorical and graduated schemes said `choropleth` (review L6). The big-data cutoff arrives
+        resolved, since the deprecation warning for its old spelling has to be raised by the public builder
+        the caller wrote, a fixed number of frames above them.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries.
+            kind: The registered kind to describe the layer as — ``"polygons"`` or ``"choropleth"``.
+            column: Optional numeric column filling the polygons; ``None`` draws outlines.
+            cmap: Colormap used when ``column`` is given.
+            rasterize: ``"auto"``, ``True`` or ``False``, as the public builders take it.
+            threshold: The resolved row count above which ``"auto"`` routes through Datashader.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ImportError: when the layer routes through Datashader and ``spatialpandas`` is not installed.
+        """
+        from digitalearth.interactive.bigdata import _route_through_rasterize
+
         gdf = self._display_gdf(features)
         if rasterize is True or (
-            rasterize == "auto"
-            and _route_through_rasterize("polygons", len(gdf), threshold)
+            rasterize == "auto" and _route_through_rasterize(kind, len(gdf), threshold)
         ):
             from importlib.util import find_spec
 
@@ -710,7 +754,7 @@ class VectorMixin(_MixinBase):
             common.setdefault("fill_alpha", 0.0)
         return self.add_element(
             None,
-            kind="polygons",
+            kind=kind,
             source=features,
             symbology=_vector_symbology(
                 "Polygons", [column] if column else None, common
@@ -984,7 +1028,23 @@ class VectorMixin(_MixinBase):
         self.last_breaks = None
         if clim is not None:
             opts = {"clim": clim, **opts}
-        return self.polygons(features, column=column, cmap=cmap, **opts)
+        # Resolved here rather than by `polygons()`: this is the frame the deprecation warning for the old
+        # spelling is counted from, so a `rasterize_threshold=` written on `choropleth()` is attributed to the
+        # caller's line.
+        threshold = self._resolve_big_data_threshold(
+            opts.pop("big_data_threshold", None),
+            opts.pop("rasterize_threshold", None),
+            caller="InteractiveMap.choropleth()",
+        )
+        return self._polygon_layer(
+            features,
+            "choropleth",
+            column=column,
+            cmap=cmap,
+            rasterize=opts.pop("rasterize", "auto"),
+            threshold=threshold,
+            **opts,
+        )
 
     def _uv_arrays(self, u: Any, v: Any, *, band: int, density: float) -> tuple:
         """Extract subsampled ``(x, y, u, v)`` display-CRS arrays from two pyramids bands.

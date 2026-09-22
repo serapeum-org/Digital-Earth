@@ -122,6 +122,43 @@ class TestPolygonsAndChoropleth:
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["fill_alpha"] == 0.0, "no-column polygons must draw outlines only"
 
+    @pytest.mark.parametrize("scheme", [None, "categorical", "quantiles"])
+    def test_every_choropleth_scheme_is_described_as_a_choropleth(
+        self, polygon_fc, scheme
+    ):
+        """What a figure says a layer is must not depend on which colouring path drew it.
+
+        Args:
+            polygon_fc: Buffered points with a numeric `fid`.
+            scheme: The colouring path — the continuous ramp, distinct values, or classes.
+
+        Test scenario:
+            The continuous ramp delegated to `polygons()`, which records `polygons`, so the one
+            `choropleth()` call a caller makes most often was described as a plain polygon layer while the
+            categorical and graduated paths said `choropleth` (review L6).
+        """
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.choropleth(polygon_fc, "fid", scheme=scheme)
+            layer = interactive_map.figure_spec.layers.get(interactive_map.layer_ids[0])
+            assert layer.kind == "choropleth", layer.kind
+        finally:
+            interactive_map.close()
+
+    def test_polygons_with_a_column_is_still_described_as_polygons(self, polygon_fc):
+        """The other half: `polygons(column=)` fills by an attribute and stays a polygon layer.
+
+        Args:
+            polygon_fc: Buffered points with a numeric `fid`.
+        """
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.polygons(polygon_fc, column="fid")
+            layer = interactive_map.figure_spec.layers.get(interactive_map.layer_ids[0])
+            assert layer.kind == "polygons", layer.kind
+        finally:
+            interactive_map.close()
+
     def test_choropleth_colours_by_column(self, m, polygon_fc):
         m.choropleth(polygon_fc, "fid", cmap="plasma", clim=(0.0, 10.0))
         element = m.layers[0]
