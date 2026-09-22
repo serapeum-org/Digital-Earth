@@ -396,6 +396,26 @@ def _set_visible(artist: Any, visible: bool) -> None:
         logger.debug("%r cannot be shown or hidden; leaving it as it is", artist)
 
 
+def _is_visible(artist: Any) -> bool:
+    """Whether one matplotlib artist is currently drawn.
+
+    Args:
+        artist: The artist to ask.
+
+    Returns:
+        Its own flag, or ``True`` for something that has none — one that cannot be hidden is never hidden.
+
+    Note:
+        The ``AttributeError`` is caught rather than asked about with ``hasattr``, for the reason
+        :func:`_set_visible` gives: a property getter can have side effects, so call and answer the failure.
+    """
+    try:
+        return bool(artist.get_visible())
+    except AttributeError:  # pragma: no cover - every matplotlib artist has it
+        logger.debug("%r cannot say whether it is drawn; reporting it as drawn", artist)
+        return True
+
+
 def _detach(artist: Any, axes: Any) -> None:
     """Take one artist off the axes, and out of cleopatra's record of what it last rendered.
 
@@ -907,6 +927,33 @@ class Renderer:
             return
         for artist in drawn.artists:
             _set_visible(artist, visible)
+
+    def is_visible(self, layer_id: str) -> bool:
+        """Whether the axes is currently drawing what this renderer holds for a layer.
+
+        The read-back of :meth:`set_visible`. Every tier's renderer answers this, in its own terms, so the
+        question "is this layer drawn hidden?" can be asked of any of them — which is what the shared
+        renderer conformance suite does, and what no tier could be asked before (review M4).
+
+        Args:
+            layer_id: The layer to ask about.
+
+        Returns:
+            ``True`` when every artist the layer owns is on. A layer that left no addressable artist
+            behind — a graticule, a Natural-Earth overlay — answers ``True``: there is nothing that could
+            have been switched off.
+
+        Raises:
+            KeyError: when nothing was drawn for `layer_id`, naming it. A layer the axes does not hold has
+                no visibility to report, and :attr:`drawn` is what says which those are.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None:
+            raise KeyError(
+                f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the static "
+                f"tier holds {sorted(self._drawn)}"
+            )
+        return all(_is_visible(artist) for artist in drawn.artists)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.

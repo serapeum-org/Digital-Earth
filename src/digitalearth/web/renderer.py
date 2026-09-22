@@ -175,6 +175,41 @@ def _show(drawn: DrawnLayer, visible: bool) -> None:
             layer.layout = {**(layer.layout or {}), "visibility": value}
 
 
+def _layout_of(layer: Any) -> Mapping[str, Any]:
+    """Return the MapLibre `layout` one drawn layer carries, in whichever shape it was built.
+
+    Args:
+        layer: A `Layer`, a plain MapLibre spec dict, or a callable that wires its own layers.
+
+    Returns:
+        The layout, or an empty mapping for a layer that has none to read.
+    """
+    layout = (
+        layer.get("layout")
+        if isinstance(layer, dict)
+        else getattr(layer, "layout", None)
+    )
+    return layout or {}
+
+
+def _shown(drawn: DrawnLayer) -> bool:
+    """Whether every MapLibre layer one drawing holds is currently drawn.
+
+    Args:
+        drawn: What a drawer produced — its own layer and the extra layers the same description owns.
+
+    Returns:
+        `False` as soon as one of them carries ``layout.visibility == "none"``. A layer with no layout to
+        read — a callable ``apply(widget)`` wiring its own layers — cannot be hidden, so it is never
+        reported hidden, which is the same carve-out :func:`_show` makes when it writes.
+    """
+    return all(
+        _layout_of(layer).get("visibility") != "none"
+        for layer in (drawn.layer, *drawn.extra_layers)
+        if layer is not None
+    )
+
+
 def _custom_drawer() -> Any:
     """Return the drawer for a caller's own MapLibre layer.
 
@@ -425,10 +460,15 @@ class Renderer:
         drawn = drawer_for(layer.kind)(self._map, data, layer)
         if drawn is None:
             return None
-        if not layer.visible:
+        if not figure.layers.is_visible(layer_id):
             # Applied here rather than trusted to each drawer: the text, heatmap, cluster and extrusion
             # drawers built their layers visible whatever the description said, because their builders
             # never ask for a hidden one — but a figure read back, or reconciled by `apply`, can (M4).
+            #
+            # Asked of the tree rather than of `layer.visible`: the tree's answer is the layer's own flag
+            # *and* its group not being hidden, and a layer hidden by its group — a switcher's whole
+            # "Observations" row turned off — drew visible here while the static and 3-D tiers drew it
+            # hidden. Three tiers, three answers to one question (review M4).
             _show(drawn, False)
         self._drawn[layer_id] = drawn
         return drawn
@@ -578,6 +618,33 @@ class Renderer:
         drawn = self._drawn.get(layer_id)
         if drawn is not None:
             _show(drawn, visible)
+
+    def is_visible(self, layer_id: str) -> bool:
+        """Whether every MapLibre layer drawn for a layer is currently drawn.
+
+        The read-back of :meth:`set_visible`. Every tier's renderer answers this, in its own terms, so the
+        question "is this layer drawn hidden?" can be asked of any of them — which is what the shared
+        renderer conformance suite does (review M4).
+
+        Args:
+            layer_id: The layer to ask about.
+
+        Returns:
+            `True` when none of the MapLibre layers the description owns is switched off. A graticule's
+            lines and its degree labels are one layer to a viewer, so both have to be on for the answer to
+            be `True`.
+
+        Raises:
+            KeyError: when nothing was drawn for `layer_id`, naming it. A layer the widget does not hold
+                has no visibility to report, and :attr:`drawn` is what says which those are.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None:
+            raise KeyError(
+                f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the web "
+                f"tier holds {sorted(self._drawn)}"
+            )
+        return _shown(drawn)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.

@@ -37,6 +37,16 @@ A fifth check comes from the same round: the drawer table and the tier's `Capabi
 twice, and drift either way is a defect — bar the kinds a tier names in `UNDRAWN_KINDS`, each with the
 reason it declares a kind it has no drawer for.
 
+A sixth comes from round 2 of the web seam, and is the first found *because* four tiers were written against
+this contract rather than in spite of it. **A layer a figure describes hidden must be drawn hidden.** Asked
+of the four `draw_layer`s, that question had three answers: static and 3-D read `figure.layers.is_visible`,
+which is the layer's own flag *and* its group not being hidden; web read `layer.visible`, the flag alone, so
+a layer hidden by its group redrew visible; interactive read neither, so any hidden layer redrew visible.
+Nothing here asked — `drawn_is_in_view` is about the camera — and only the web tier had a local check, over
+the one of the three readings that was wrong. The check is asked in both forms, by the flag and by the
+group, and a third check pins that a layer described *visible* is not drawn hidden, so a tier cannot pass
+the first two by hiding everything.
+
 **Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
 updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
 the overlay from `layers` — and on none of the 2-D tiers does it move the figure the tier reports. That is
@@ -47,11 +57,47 @@ to the one thing every tier's `apply` does change, the renderer's own record, so
 """
 
 import importlib.util
+from dataclasses import replace as with_fields
 
 import pytest
 
 from digitalearth.base.registry import _OBJECTS
 from digitalearth.base.spec import LayerSpec
+
+#: The group the group-hidden check files a layer under. Named after this contract so it cannot collide with
+#: a group a tier put a layer in itself.
+_HIDDEN_GROUP = "conformance-hidden-group"
+
+
+def _hidden_by_its_own_flag(figure, layer_id: str):
+    """Return `figure` with one layer's own `visible` flag turned off.
+
+    Args:
+        figure: The figure to change.
+        layer_id: The layer to hide.
+
+    Returns:
+        The figure, with that layer described hidden and nothing else changed.
+    """
+    return with_fields(figure, layers=figure.layers.set_visible(layer_id, False))
+
+
+def _hidden_by_its_group(figure, layer_id: str):
+    """Return `figure` with one layer put in a group, and that group hidden.
+
+    The layer's own flag stays `True`, which is the point: `LayerTree.is_visible` is the only reading that
+    answers both, and a tier reading `layer.visible` alone draws this one visible.
+
+    Args:
+        figure: The figure to change.
+        layer_id: The layer to hide by its group.
+
+    Returns:
+        The figure, with that layer in a hidden group.
+    """
+    grouped = with_fields(figure.layers.get(layer_id), group=_HIDDEN_GROUP)
+    tree = figure.layers.replace(grouped).set_group_visible(_HIDDEN_GROUP, False)
+    return with_fields(figure, layers=tree)
 
 
 def _identities(record) -> dict:
@@ -227,6 +273,41 @@ class RendererContract:
             NotImplementedError: when the tier has not supplied one.
         """
         raise NotImplementedError
+
+    def draw_from(self, tier, figure, layer_id: str) -> None:
+        """Draw one of `figure`'s layers through the tier's renderer, the way a redraw reaches it.
+
+        Every tier's renderer is asked the same way — `draw_layer(figure, layer_id)` — which is the single
+        entry point a figure is drawn back through, so no adapter has to supply this.
+
+        Args:
+            tier: The object `make` returned.
+            figure: The figure to draw from: the tier's own, or one changed from it.
+            layer_id: The layer to draw.
+        """
+        tier._renderer.draw_layer(figure, layer_id)
+
+    def drawn_is_hidden(self, tier, layer_id: str) -> bool:
+        """Whether the engine is currently *not* drawing what the renderer holds for a layer.
+
+        Read from the engine rather than from the description, through the reader every renderer has:
+        `set_visible` writes it and `is_visible` reads it back, each tier in its own terms — a matplotlib
+        artist's flag, a VTK actor's visibility, MapLibre's `layout.visibility`, the HoloViews option the
+        element was drawn with. A tier that cannot answer has no way to honour a hidden layer either, so
+        this is deliberately not optional.
+
+        Args:
+            tier: The object `make` returned.
+            layer_id: The layer to ask about.
+
+        Returns:
+            `True` when the layer was drawn hidden.
+
+        Raises:
+            KeyError: when nothing has been drawn for that layer, which is a defect in the check rather
+                than an answer.
+        """
+        return not tier._renderer.is_visible(layer_id)
 
     def drawn_is_in_view(self, tier):
         """Whether what has been drawn is actually inside the view the engine will render.
@@ -507,6 +588,63 @@ class RendererConformance:
         assert stale == [], (
             f"UNDRAWN_KINDS names {stale} for the {self.contract.backend!r} tier, which it now draws or no "
             "longer declares; take them off the list"
+        )
+
+    def _redraw_hidden(self, tier, hide) -> str:
+        """Draw one layer, then draw it again from a figure that describes it hidden.
+
+        Args:
+            tier: The tier under test.
+            hide: What makes the figure describe the layer hidden — its own flag, or its group.
+
+        Returns:
+            The layer's id.
+        """
+        layer_id = self.contract.draw_one(tier)
+        self.contract.draw_from(tier, hide(tier.figure_spec, layer_id), layer_id)
+        return layer_id
+
+    def test_a_layer_described_hidden_is_drawn_hidden(self, tier):
+        """A figure says whether a layer is drawn; drawing it back must not turn it on.
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            Reachable the moment a figure is read back or reconciled, which is what this seam is for. The
+            tier's builders never ask for a hidden layer, so three of the four drawer sets built their
+            layers visible whatever the description said (review M4).
+        """
+        layer_id = self._redraw_hidden(tier, _hidden_by_its_own_flag)
+        assert self.contract.drawn_is_hidden(tier, layer_id) is True, (
+            f"{layer_id!r} is described hidden and the {self.contract.backend} tier drew it visible"
+        )
+
+    def test_a_layer_hidden_by_its_group_is_drawn_hidden(self, tier):
+        """A group hides its layers without touching their own flags, and only one reading sees that.
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            `LayerTree.is_visible` is the layer's flag **and** its group's; `layer.visible` is the flag
+            alone. A tier asking the second draws a layer hidden by its group — a switcher's whole
+            "Observations" group turned off — as if nothing had been hidden at all.
+        """
+        layer_id = self._redraw_hidden(tier, _hidden_by_its_group)
+        assert self.contract.drawn_is_hidden(tier, layer_id) is True, (
+            f"{layer_id!r} is in a hidden group and the {self.contract.backend} tier drew it visible"
+        )
+
+    def test_a_layer_described_visible_is_not_drawn_hidden(self, tier):
+        """The two checks above must not be passable by drawing everything hidden.
+
+        Args:
+            tier: The tier under test.
+        """
+        layer_id = self.contract.draw_one(tier)
+        assert self.contract.drawn_is_hidden(tier, layer_id) is False, (
+            f"{layer_id!r} is described visible and the {self.contract.backend} tier drew it hidden"
         )
 
     def test_every_drawable_kind_resolves_to_a_drawer(self):

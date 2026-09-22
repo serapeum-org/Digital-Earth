@@ -338,6 +338,31 @@ class Renderer3D:
         if drawn is not None:
             _set_visible(drawn[1], visible)
 
+    def is_visible(self, layer_id: str) -> bool:
+        """Whether the plotter is currently drawing the actor this renderer holds for a layer.
+
+        The read-back of :meth:`set_visible`. Every tier's renderer answers this, in its own terms, so the
+        question "is this layer drawn hidden?" can be asked of any of them — which is what the shared
+        renderer conformance suite does (review M4).
+
+        Args:
+            layer_id: The layer to ask about.
+
+        Returns:
+            `True` when the actor is visible.
+
+        Raises:
+            KeyError: when nothing was drawn for `layer_id`, naming it. A layer the plotter does not hold
+                has no visibility to report, and :attr:`drawn` is what says which those are.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None:
+            raise KeyError(
+                f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the 3-D "
+                f"tier holds {sorted(self._drawn)}"
+            )
+        return _is_visible(drawn[1])
+
 
 def _set_visible(actor: Any, visible: bool) -> None:
     """Set an actor's visibility, whichever PyVista version built it.
@@ -351,3 +376,19 @@ def _set_visible(actor: Any, visible: bool) -> None:
     # A volume actor, and older PyVista actors, expose only VTK's own setter.
     except AttributeError:  # pragma: no cover - depends on the installed PyVista
         actor.SetVisibility(bool(visible))
+
+
+def _is_visible(actor: Any) -> bool:
+    """Whether an actor is currently drawn, whichever PyVista version built it.
+
+    Args:
+        actor: The actor to ask.
+
+    Returns:
+        Its visibility.
+    """
+    try:
+        return bool(actor.visibility)
+    # The same pair of spellings :func:`_set_visible` writes through.
+    except AttributeError:  # pragma: no cover - depends on the installed PyVista
+        return bool(actor.GetVisibility())

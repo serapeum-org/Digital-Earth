@@ -21,6 +21,7 @@ Wiring `apply` into the map's public state is Wave 7 (order 23); until then a ca
 has moved the record and nothing a viewer sees.
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Tuple
 
@@ -81,6 +82,86 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "rivers",
     "lakes",
 )
+
+
+#: The Bokeh style keywords that mean "do not draw this". Nearly every element spells it `visible`; a
+#: graph-shaped one (`TriMesh`, `Graph`) splits the question into its edges and its nodes and has no single
+#: `visible` at all. Which of these an element actually takes is read from the engine's own option table
+#: rather than listed per element here, the way :mod:`digitalearth.interactive.style_fold` reads everything
+#: else it folds — so this cannot drift from what HoloViews accepts.
+_VISIBILITY_KEYWORDS: Tuple[str, ...] = ("visible", "edge_visible", "node_visible")
+
+
+def _visibility_keywords(element: Any) -> Tuple[str, ...]:
+    """Return the keywords this element spells "do not draw me" with, as its backend takes them.
+
+    Args:
+        element: The element (or `DynamicMap`) a drawer produced.
+
+    Returns:
+        The accepted keywords of :data:`_VISIBILITY_KEYWORDS`, in that order; empty for an element the
+        Bokeh backend gives no way to hide — `Tiles` and `WMTS`, whose image *is* the basemap.
+    """
+    from digitalearth.interactive.style_fold import allowed_options
+
+    element_type = type(element)
+    # A `DynamicMap` is a producer of elements rather than one itself, so the options are the element
+    # type's. `type` is `None` until the map has produced a frame, in which case there is nothing to ask.
+    if element_type.__name__ in ("DynamicMap", "HoloMap"):
+        element_type = getattr(element, "type", None) or element_type
+    try:
+        style = allowed_options(element_type.__name__)["style"]
+    except KeyError:
+        return ()
+    return tuple(keyword for keyword in _VISIBILITY_KEYWORDS if keyword in style)
+
+
+def _show(element: Any, layer_id: str, visible: bool) -> None:
+    """Draw or stop drawing one element, in place.
+
+    HoloViews' ``.opts()`` writes into its global option `Store` against the element it is called on and
+    returns that same element, so the object the map registered is the object this changes — no element has
+    to be swapped out of `InteractiveMap.layers`, and the style filed against it stays filed.
+
+    Args:
+        element: The element to show or hide.
+        layer_id: The layer it was drawn for, for the warning below.
+        visible: Whether it is drawn.
+
+    Warns:
+        UserWarning: when the element's type has no way to say it, which on Bokeh is `Tiles` and `WMTS`
+            alone. Saying nothing would leave a figure that describes a hidden basemap drawing it — the
+            silence review M4 reports on this tier, one kind narrower.
+    """
+    keywords = _visibility_keywords(element)
+    if not keywords:
+        warnings.warn(
+            f"layer {layer_id!r} is described hidden, but the interactive tier draws it as a "
+            f"{type(element).__name__}, which Bokeh gives no way to hide; it stays drawn",
+            UserWarning,
+            stacklevel=3,
+        )
+        return
+    element.opts(**{keyword: bool(visible) for keyword in keywords})
+
+
+def _is_shown(element: Any) -> bool:
+    """Whether HoloViews would currently draw one element.
+
+    Args:
+        element: The element to ask.
+
+    Returns:
+        The element's own visibility options, as the Bokeh backend resolved them. `True` for an element
+        with no such option, which is one that cannot be hidden and so is never hidden.
+    """
+    import holoviews as hv
+
+    keywords = _visibility_keywords(element)
+    if not keywords:
+        return True
+    applied = hv.Store.lookup_options("bokeh", element, "style").kwargs
+    return all(bool(applied.get(keyword, True)) for keyword in keywords)
 
 
 def _recipes() -> Dict[str, Dict[str, Any]]:
@@ -265,6 +346,12 @@ class Renderer:
         drawn: Optional[DrawnLayer] = drawer_for(layer.kind)(self._map, data, layer)
         if drawn is not None:
             self._drawn[layer_id] = drawn
+            if not figure.layers.is_visible(layer_id):
+                # This tier read neither the layer's flag nor its group, so a figure describing a hidden
+                # layer drew it visible — with the description carrying `visible: False` all the while
+                # (review M4). Asked of the tree, which is the flag *and* the group, so all four tiers now
+                # answer "is this layer drawn hidden?" the same way.
+                self.set_visible(layer_id, False)
         return drawn
 
     @staticmethod
@@ -333,6 +420,10 @@ class Renderer:
             self.draw_layer(after, layer_id)
         for layer_id in change.added:
             self.draw_layer(after, layer_id)
+        for layer_id in change.shown:
+            self.set_visible(layer_id, True)
+        for layer_id in change.hidden:
+            self.set_visible(layer_id, False)
 
     @staticmethod
     def _reaches_holoviews(
@@ -368,6 +459,47 @@ class Renderer:
                 a layer the tier declined to draw.
         """
         self._drawn.pop(layer_id, None)
+
+    def set_visible(self, layer_id: str, visible: bool) -> None:
+        """Draw or stop drawing the element recorded for a layer.
+
+        The element is changed in place — ``.opts()`` writes into HoloViews' option `Store` against the
+        object it is called on and hands that same object back — so what `InteractiveMap.layers` holds, and
+        the style filed against it, are the ones this changes.
+
+        Args:
+            layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
+                three tiers answer one too.
+            visible: Whether it is drawn.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is not None:
+            _show(drawn.element, layer_id, visible)
+
+    def is_visible(self, layer_id: str) -> bool:
+        """Whether HoloViews would currently draw the element recorded for a layer.
+
+        The read-back of :meth:`set_visible`. Every tier's renderer answers this, in its own terms, so the
+        question "is this layer drawn hidden?" can be asked of any of them — which is what the shared
+        renderer conformance suite does (review M4).
+
+        Args:
+            layer_id: The layer to ask about.
+
+        Returns:
+            `True` when the element carries no visibility option turned off, or has none to carry.
+
+        Raises:
+            KeyError: when nothing was drawn for `layer_id`, naming it. A layer the overlay does not hold
+                has no visibility to report, and :attr:`drawn` is what says which those are.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None:
+            raise KeyError(
+                f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the "
+                f"interactive tier holds {sorted(self._drawn)}"
+            )
+        return _is_shown(drawn.element)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.
