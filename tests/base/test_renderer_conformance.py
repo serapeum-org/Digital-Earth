@@ -34,7 +34,8 @@ The four defects this exists to prevent, each found the expensive way:
    notebook rendered blank — past both review rounds, caught only by CI.
 
 A fifth check comes from the same round: the drawer table and the tier's `Capabilities` are one list said
-twice, and drift either way is a defect.
+twice, and drift either way is a defect — bar the kinds a tier names in `UNDRAWN_KINDS`, each with the
+reason it declares a kind it has no drawer for.
 
 **Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
 updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
@@ -68,6 +69,39 @@ def _identities(record) -> dict:
         Layer id to `id()` of the recorded value.
     """
     return {layer_id: id(value) for layer_id, value in record.items()}
+
+
+#: The reason a declared kind is drawn but not from a description: its builder queues the drawing itself.
+_QUEUED = "still drawn through the queue"
+
+#: The kinds each tier declares but has no drawer for, each with the reason that is allowed.
+#:
+#: The drift guard lets `declared - drawn` through only by these names, and only while they are true: an
+#: entry that is drawn now, or no longer declared, fails it as surely as an unnamed gap does. So each list is
+#: exactly what is deferred today, and a kind converted to its drawer comes off here in the same change. They
+#: live here rather than on each adapter so the web adapter, which sits beside the web tier's own tests, is
+#: held to the same list.
+THREE_D_UNDRAWN_KINDS: dict[str, str] = {}
+WEB_UNDRAWN_KINDS: dict[str, str] = {
+    "basemap": f"{_QUEUED}: `tiles` queues an underlay and records no layer to draw it from",
+    "terrain": f"{_QUEUED}: `terrain_tiles` queues `set_terrain` and records no layer",
+    "point_cloud": f"{_QUEUED}: a deck.gl layer, added in one queued `add_deck_layers` call, records no layer",
+    "model": f"{_QUEUED}: `gltf` adds a deck.gl layer the way `point_cloud` does, and records no layer",
+}
+INTERACTIVE_UNDRAWN_KINDS: dict[str, str] = {
+    "custom:holoviews": (
+        "a caller's own element, drawn by being kept: `add_element` holds no description to rebuild it from"
+    ),
+}
+STATIC_UNDRAWN_KINDS: dict[str, str] = {}
+
+#: Each tier's list, by the name its `Capabilities` gives it.
+UNDRAWN_KINDS: dict[str, dict[str, str]] = {
+    "3d": THREE_D_UNDRAWN_KINDS,
+    "web": WEB_UNDRAWN_KINDS,
+    "interactive": INTERACTIVE_UNDRAWN_KINDS,
+    "matplotlib": STATIC_UNDRAWN_KINDS,
+}
 
 
 class RendererContract:
@@ -254,6 +288,15 @@ class RendererContract:
         """
         raise NotImplementedError
 
+    def undrawn_kinds(self) -> dict[str, str]:
+        """Return the kinds this tier declares but has no drawer for, each with the reason.
+
+        Returns:
+            Kind to reason, from :data:`UNDRAWN_KINDS` by `backend`. A tier with no entry there gets none,
+            so every kind it declares must be drawn.
+        """
+        return UNDRAWN_KINDS.get(self.backend, {})
+
 
 class RendererConformance:
     """The checks themselves. A tier inherits these by setting `contract`."""
@@ -437,12 +480,34 @@ class RendererConformance:
             "the drawn layer is outside the view the engine will render"
         )
 
-    def test_the_drawer_table_and_the_declaration_are_one_list(self):
-        """Drift either way is a defect: a false refusal, or a bare `KeyError` where a message belongs."""
-        declared = self.contract.declared_kinds()
-        drawn = self.contract.drawn_kinds()
-        undeclared = sorted(set(drawn) - set(declared))
+    def test_the_drawer_table_and_the_declaration_differ_only_by_the_named_undrawn_kinds(
+        self,
+    ):
+        """Drift either way is a defect: a false refusal, or a bare `KeyError` where a message belongs.
+
+        Test scenario:
+            A kind drawn but not declared is refused by the declaration before its drawer is asked. A kind
+            declared but not drawn reaches `drawer_for` and is refused there. That is right only when the
+            tier means it: a kind still drawn through the queue, or a caller's own object with nothing to
+            rebuild. Those are named per tier in :data:`UNDRAWN_KINDS`, with the reason, and nothing else
+            may be missing. This used to check the first direction only (review L1). A named kind that is
+            drawn now, or no longer declared, fails too, so the list cannot outlive what it excuses.
+        """
+        declared = set(self.contract.declared_kinds())
+        drawn = set(self.contract.drawn_kinds())
+        named = set(self.contract.undrawn_kinds())
+        undeclared = sorted(drawn - declared)
         assert undeclared == [], f"the tier draws {undeclared} without declaring them"
+        unexplained = sorted(declared - drawn - named)
+        assert unexplained == [], (
+            f"the tier declares {unexplained} but has no drawer for them; draw them, or name each in the "
+            f"{self.contract.backend!r} entry of UNDRAWN_KINDS with the reason"
+        )
+        stale = sorted(named - (declared - drawn))
+        assert stale == [], (
+            f"UNDRAWN_KINDS names {stale} for the {self.contract.backend!r} tier, which it now draws or no "
+            "longer declares; take them off the list"
+        )
 
     def test_every_drawable_kind_resolves_to_a_drawer(self):
         """A kind on the list with no drawer raises a bare `KeyError` far from the cause."""
