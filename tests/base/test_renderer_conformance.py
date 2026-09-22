@@ -35,6 +35,14 @@ The four defects this exists to prevent, each found the expensive way:
 
 A fifth check comes from the same round: the drawer table and the tier's `Capabilities` are one list said
 twice, and drift either way is a defect.
+
+**Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
+updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
+the overlay from `layers` — and on none of the 2-D tiers does it move the figure the tier reports. That is
+deliberate for now; wiring it through is later work (review M1). A check that reads what `apply` never
+touches passes whatever `apply` did, so each adapter declares what its `apply` reaches, and the checks that
+read the engine or the description run only where it does. The rollback and the redraw guard are also held
+to the one thing every tier's `apply` does change, the renderer's own record, so no tier goes unchecked.
 """
 
 import importlib.util
@@ -45,6 +53,23 @@ from digitalearth.base.registry import _OBJECTS
 from digitalearth.base.spec import LayerSpec
 
 
+def _identities(record) -> dict:
+    """Return layer id to the identity of what a renderer recorded for it.
+
+    A record's values compare by *value* on three tiers — a frozen dataclass of what was drawn — so a layer
+    drawn again from the same description would compare equal to the one it replaced. Identity is what a
+    redraw changes.
+
+    Args:
+        record: A renderer's record, as `RendererContract.renderer_record` returns it. The caller keeps it
+            referenced while comparing, so none of its values can be freed and its id handed on.
+
+    Returns:
+        Layer id to `id()` of the recorded value.
+    """
+    return {layer_id: id(value) for layer_id, value in record.items()}
+
+
 class RendererContract:
     """What a tier supplies so the shared checks can run against its renderer.
 
@@ -53,9 +78,17 @@ class RendererContract:
 
     Attributes:
         backend: The tier's name as its `Capabilities` spells it.
+        apply_reaches_engine: Whether `apply_figure` changes what `engine_holds` reads. Off by default, so a
+            tier has to *say* its engine follows `apply` before a check may rely on it: where it does not,
+            reading the engine after `apply` could not fail, and the checks that do skip rather than pass.
+        apply_reaches_description: Whether `apply_figure` moves the figure the tier reports along with what
+            it draws. Only an adapter that goes through the tier's own change path can; one that calls the
+            renderer directly never touches the description, so comparing it could not fail either.
     """
 
     backend: str = ""
+    apply_reaches_engine: bool = False
+    apply_reaches_description: bool = False
 
     def make(self):
         """Return an open tier object — a scene, a map — with nothing drawn on it yet.
@@ -114,16 +147,37 @@ class RendererContract:
     def engine_holds(self, tier):
         """Return what the engine currently shows, as something comparable across two readings.
 
+        The engine's own objects, not the renderer's record of them: a rollback that restored the record and
+        left an object on the engine reads clean from the record, and that is the first defect above. The
+        objects themselves rather than their ids, too. Every engine object here compares by identity, and a
+        snapshot holding them stops a freed object's address being reused by the one that replaced it —
+        which would make a redraw read as no change.
+
         Args:
             tier: The object `make` returned.
 
         Returns:
-            A set of layer ids, or an equivalent snapshot.
+            A snapshot of the engine's objects, equal to another only when it holds the same ones.
 
         Raises:
             NotImplementedError: when the tier has not supplied one.
         """
         raise NotImplementedError
+
+    def renderer_record(self, tier) -> dict:
+        """Return the renderer's own record of what it drew, by layer id.
+
+        Every tier's renderer keeps one: it is what `apply` reconciles and what a rollback restores. So it
+        is the one reading a refused or relabelled `apply` can change on every tier, whether or not the
+        engine follows.
+
+        Args:
+            tier: The object `make` returned.
+
+        Returns:
+            Layer id to what the renderer recorded for it.
+        """
+        return dict(tier._renderer.drawn)
 
     def relabel(self, tier, layer_id: str):
         """Return a figure identical to the tier's, with one layer's `label` changed and nothing else.
@@ -221,6 +275,23 @@ class RendererConformance:
         except Exception:  # pragma: no cover - a closed tier may refuse a second close
             pass
 
+    def _skip_unless(self, reaches: bool, what: str) -> None:
+        """Skip, saying why, when this tier's `apply` does not reach what a check reads.
+
+        Args:
+            reaches: The contract's own declaration.
+            what: What the check reads, for the message.
+        """
+        if not reaches:
+            pytest.skip(
+                f"`apply` on the {self.contract.backend} tier does not reach {what}, so reading it after "
+                "`apply` would pass whatever `apply` did"
+            )
+
+    def _skip_unless_apply_reaches_the_engine(self) -> None:
+        """Skip a check that reads the engine on a tier whose `apply` does not change it."""
+        self._skip_unless(self.contract.apply_reaches_engine, "its engine")
+
     def test_a_refused_figure_leaves_the_engine_as_it_found_it(self, tier):
         """`apply` draws layer by layer, so a refusal can come after something was already drawn.
 
@@ -232,6 +303,7 @@ class RendererConformance:
             `remove_layer` refuses an id the tier does not have — so there was no way to reach it again.
             The description and the engine have to roll back together.
         """
+        self._skip_unless_apply_reaches_the_engine()
         self.contract.draw_one(tier)
         before_engine = self.contract.engine_holds(tier)
         refused = self.contract.refused_figure(tier)
@@ -242,12 +314,43 @@ class RendererConformance:
             f"{self.contract.engine_holds(tier)} vs {before_engine}"
         )
 
+    def test_a_refused_figure_leaves_the_renderers_record_as_it_found_it(self, tier):
+        """The record rolls back with the engine, and it is the one thing every tier's `apply` changes.
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            On the web and interactive tiers `apply` reaches nothing but this record (review M1), so this is
+            the check a missing rollback fails on all four tiers. Identities rather than keys alone: a
+            rollback that re-drew a layer it had no reason to touch keeps the key and changes the value.
+        """
+        self.contract.draw_one(tier)
+        held = self.contract.renderer_record(tier)
+        refused = self.contract.refused_figure(tier)
+        with pytest.raises((KeyError, ValueError)):
+            self.contract.apply_figure(tier, refused)
+        kept = self.contract.renderer_record(tier)
+        # `held` is still referenced here, so none of its values has been freed and no id reused.
+        assert _identities(kept) == _identities(held), (
+            f"a refused change left the renderer recording {sorted(kept)}; it held {sorted(held)}"
+        )
+
     def test_a_refused_figure_is_not_the_one_the_tier_reports(self, tier):
         """The description must not advertise a figure the engine never drew.
 
         Args:
             tier: The tier under test.
+
+        Test scenario:
+            The 3-D scene once installed a figure before drawing it and kept it when `apply` raised, so
+            `figure_spec` named a layer that was never drawn and could not be. The check runs only where
+            `apply_figure` goes through the tier's change path: an adapter that calls the renderer directly
+            never touches `figure_spec`, and comparing it passed on three tiers with the rollback deleted.
         """
+        self._skip_unless(
+            self.contract.apply_reaches_description, "the figure it reports"
+        )
         self.contract.draw_one(tier)
         held = tier.figure_spec
         refused_figure = self.contract.refused_figure(tier)
@@ -284,11 +387,31 @@ class RendererConformance:
         Args:
             tier: The tier under test.
         """
+        self._skip_unless_apply_reaches_the_engine()
         layer_id = self.contract.draw_one(tier)
         before = self.contract.engine_holds(tier)
         self.contract.apply_figure(tier, self.contract.relabel(tier, layer_id))
         assert self.contract.engine_holds(tier) == before, (
             "renaming a layer redrew it; only what the engine draws should trigger a redraw"
+        )
+
+    def test_a_label_is_not_a_reason_to_redraw_the_renderers_record(self, tier):
+        """The redraw guard sits in the renderer, so the record shows a wrong redraw on every tier.
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            A redraw replaces what the renderer recorded for a layer under the same id. Where `apply` does
+            not reach the engine, the engine check above skips, and this is what still holds the guard.
+        """
+        layer_id = self.contract.draw_one(tier)
+        before = self.contract.renderer_record(tier)
+        self.contract.apply_figure(tier, self.contract.relabel(tier, layer_id))
+        after = self.contract.renderer_record(tier)
+        assert _identities(after) == _identities(before), (
+            f"renaming {layer_id!r} replaced what the renderer recorded for it; only what the engine draws "
+            "should trigger a redraw"
         )
 
     def test_what_was_drawn_is_inside_the_view(self, tier):
@@ -333,9 +456,15 @@ class RendererConformance:
 
 
 class ThreeDContract(RendererContract):
-    """The 3-D tier's adapter — the reference implementation every other seam copies."""
+    """The 3-D tier's adapter — the reference implementation every other seam copies.
+
+    The one tier whose `apply` reaches both halves: `apply_figure` goes through the scene's `_change`, which
+    moves the plotter and the figure the scene reports together, and rolls both back together.
+    """
 
     backend = "3d"
+    apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an off-screen scene.
@@ -405,22 +534,21 @@ class ThreeDContract(RendererContract):
         tier._change(figure)
 
     def engine_holds(self, tier):
-        """Return which layers have actors, *and which actors*, so a redraw is visible.
+        """Return every actor on the plotter, by the name PyVista filed it under.
 
-        A redraw removes a layer and adds it again under the same id, so a set of ids reads identically
-        before and after — which is how a redraw guard over the wrong collection went unnoticed. The
-        actor's identity changes, so that is what is compared.
+        The plotter, not the renderer's `drawn`: the defect this contract was written from was an actor
+        left on the plotter under an id no layer owned, which a record rolled back on its own does not
+        show. The actors themselves, not layer ids: a redraw removes a layer and adds it again under the
+        same id — which is how a redraw guard over the wrong collection went unnoticed — but the actor it
+        adds is a different object.
 
         Args:
             tier: The scene.
 
         Returns:
-            Layer id to the identity of whatever the renderer drew for it.
+            Actor name to actor, for everything the plotter renders — a layer's mesh and its scalar bar.
         """
-        return {
-            layer_id: tuple(id(part) for part in drawn)
-            for layer_id, drawn in tier._renderer.drawn.items()
-        }
+        return dict(tier.plotter.renderer.actors)
 
     def relabel(self, tier, layer_id: str):
         """Return the scene's figure with one layer's label changed.
@@ -511,9 +639,16 @@ class TestThreeDRendererConformance(RendererConformance):
 class InteractiveContract(RendererContract):
     """The interactive tier's adapter for the shared contract (#300).
 
-    The tier composes rather than mutates: HoloViews elements are immutable values overlaid on every
-    `render()`, so "what the engine holds" is the renderer's record of which element it built for which
-    layer — the same shape the web tier reports, and the reason all three tiers can sign one contract.
+    **`apply` does not reach this tier's engine.** What the tier renders is the overlay `render()` composes
+    from `InteractiveMap.layers`, and only the builders write that list. `Renderer.apply` builds elements
+    into its own record and stops there, so after a remove and an add, `render()` still overlays what the
+    builders put down (review M1). That stays so for this wave; wiring `apply` into the overlay is later
+    work. Until then `apply_reaches_engine` is `False`, and the engine checks skip here, because they would
+    pass whatever `apply` did. The rollback and the redraw guard are held to the renderer's record instead,
+    the one thing `apply` does change here, and those checks run on this tier as on every other.
+
+    `apply_reaches_description` stays `False` too: `apply_figure` calls the renderer, and the renderer never
+    touches the map's `figure_spec`.
     """
 
     backend = "interactive"
@@ -586,21 +721,20 @@ class InteractiveContract(RendererContract):
         tier._renderer.apply(tier.figure_spec, figure)
 
     def engine_holds(self, tier):
-        """Return which layers are drawn, *and what was drawn for them*.
+        """Return the elements `render()` overlays, bottom first.
 
-        A redraw replaces the element under the same id, so a set of ids reads identically before and
-        after; the identity of the HoloViews element does not.
+        No check reads this while `apply_reaches_engine` is `False` — `apply` never changes this list, which
+        is the point of the class docstring. It is still the honest answer to "what does the engine hold",
+        and it is what the engine checks will read once `apply` is wired into the overlay and the flag is
+        turned on. HoloViews elements compare by identity, so a redraw reads as a change.
 
         Args:
             tier: The map.
 
         Returns:
-            Layer id to the identity of the element drawn for it.
+            The elements, in the order `render()` overlays them.
         """
-        return {
-            layer_id: id(drawn.element)
-            for layer_id, drawn in tier._renderer.drawn.items()
-        }
+        return tuple(tier.layers)
 
     def relabel(self, tier, layer_id: str):
         """Return the map's figure with one layer's label changed and nothing else.
@@ -689,12 +823,14 @@ class StaticContract(RendererContract):
     """The matplotlib tier's adapter for the shared contract (#303).
 
     The last tier to sign it, and the one closest in shape to the 3-D reference: matplotlib hands out live
-    artists on a live axes, so "what the engine holds" is a real question about real objects rather than a
-    record of what the next render will rebuild. That is why `engine_holds` reads artist *identities* — a
-    redraw puts a different artist on the axes under the same layer id, and a set of ids cannot see that.
+    artists on a live axes, and `Renderer.apply` draws onto and takes off that axes, so the engine follows
+    `apply` and `engine_holds` reads the axes themselves. The figure the map reports does not follow it:
+    `apply_figure` calls the renderer, which never touches the scene's `figure_spec` (review M1), so
+    `apply_reaches_description` stays `False`.
     """
 
     backend = "matplotlib"
+    apply_reaches_engine = True
 
     def make(self):
         """Return an empty map in Web Mercator.
@@ -777,18 +913,20 @@ class StaticContract(RendererContract):
         tier._renderer.apply(tier.figure_spec, figure)
 
     def engine_holds(self, tier):
-        """Return which layers are drawn, *and which artists they put on the axes*.
+        """Return every artist on every axes of the map's figure, in the order matplotlib holds them.
+
+        The axes, not the renderer's `drawn`: a rollback that restored the record and left an artist on the
+        axes reads clean from the record, which is the 3-D tier's first defect in this tier's terms. Every
+        axes, so a layer that adds one of its own — a colorbar — is seen as well. matplotlib artists
+        compare by identity, so a redraw, a new artist for the same layer, reads as a change.
 
         Args:
             tier: The map.
 
         Returns:
-            Layer id to the identities of the artists drawn for it.
+            The artists.
         """
-        return {
-            layer_id: tuple(id(artist) for artist in drawn.artists)
-            for layer_id, drawn in tier._renderer.drawn.items()
-        }
+        return tuple(child for axes in tier.fig.axes for child in axes.get_children())
 
     def relabel(self, tier, layer_id: str):
         """Return the map's figure with one layer's label changed and nothing else.
