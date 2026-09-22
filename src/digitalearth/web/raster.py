@@ -320,7 +320,7 @@ class RasterMixin(_MixinBase):
         data: Any,
         *,
         band: int = 1,
-        cmap: Optional[str] = None,
+        cmap: Any = None,
         units: Optional[str] = None,
         opacity: float = 1.0,
         limits: Optional[Sequence[float]] = None,
@@ -339,7 +339,10 @@ class RasterMixin(_MixinBase):
         Args:
             data: A pyramids ``Dataset`` (or anything ``get_source`` accepts).
             band: 1-based band to draw.
-            cmap: matplotlib colormap name; ``None`` resolves the autostyle default for the variable.
+            cmap: A registered matplotlib colormap name, or a ``Colormap`` itself — the classified
+                builders take either and so does this one (#315, review H3). A colormap built on the spot
+                colours the image but has no name a figure read elsewhere could resolve. ``None`` resolves
+                the autostyle default for the variable.
             limits: The contract's name for the colour limits, as ``(vmin, vmax)`` — the one spelling every
                 tier answers to (#299). ``vmin``/``vmax`` remain, and naming both is refused rather than
                 silently resolved one way.
@@ -613,7 +616,7 @@ class RasterMixin(_MixinBase):
     @staticmethod
     def _rgba_png_datauri(
         values: Any,
-        cmap: str,
+        cmap: Any,
         *,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
@@ -625,7 +628,11 @@ class RasterMixin(_MixinBase):
 
         Args:
             values: A 2-D (possibly masked) array of band values, already oriented north-up.
-            cmap: matplotlib colormap name.
+            cmap: A registered matplotlib colormap name, or a ``Colormap`` itself. Resolved through
+                :func:`~digitalearth.base.symbology.as_colormap`, the one resolver every tier reads a
+                colormap through, so the unclassified raster path accepts the same object the classified
+                ones do: looking the argument up as a dict key raised ``TypeError: unhashable type`` for a
+                ``Colormap``, which defines ``__eq__`` and so has no hash (#315, review H3).
             vmin: Lower colour limit; ``None`` uses the finite minimum.
             vmax: Upper colour limit; ``None`` uses the finite maximum.
 
@@ -634,14 +641,17 @@ class RasterMixin(_MixinBase):
 
         Raises:
             ValueError: when the array has no finite values to colour.
+            KeyError: when ``cmap`` names a colormap matplotlib's registry does not hold, which is
+                matplotlib's own message naming it.
         """
         import base64
         import io
 
         import numpy as np
-        from matplotlib import colormaps
         from matplotlib import image as mpimage
         from matplotlib.colors import Normalize
+
+        from digitalearth.base.symbology import as_colormap
 
         array = np.ma.asarray(values).astype(float)
         data = (
@@ -657,7 +667,7 @@ class RasterMixin(_MixinBase):
         # this is the tier with the explicit inline-pixel budget.
         lo, hi = Scale.from_finite(data[valid], vmin=vmin, vmax=vmax).as_limits()
         norm = Normalize(vmin=lo, vmax=hi)
-        rgba = colormaps[cmap](norm(np.where(valid, data, lo)))
+        rgba = as_colormap(cmap)(norm(np.where(valid, data, lo)))
         rgba[~valid, 3] = 0.0  # NoData → transparent
         rgba8 = (rgba * 255).astype("uint8")
 
