@@ -29,6 +29,25 @@ pytest.importorskip(
 #: A credential that is not a real key, used to show one never reaches a written figure.
 FAKE_KEY = "FAKE-KEY-NOT-REAL"
 
+#: The description of a plain graticule, for the tests that add a layer by hand under a name they choose.
+_GRATICULE = Symbology(props={"via": "graticule", "step": 30, "opts": {}})
+
+
+def _registered_under(interactive_map):
+    """Return the object-registry entries a map registered, straight from the process-global table.
+
+    Args:
+        interactive_map: The map whose entries are wanted.
+
+    Returns:
+        The sorted registry keys under the map's own namespace. Read from the table rather than from
+        `figure_spec.sources`, which only lists the sources of layers the tree still holds.
+    """
+    from digitalearth.base import registry
+
+    prefix = f"{interactive_map._objects_ns}:"
+    return sorted(key for key in registry._OBJECTS if key.startswith(prefix))
+
 
 @pytest.fixture
 def point_fc():
@@ -280,9 +299,52 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
         assert interactive_map.layer_ids == [], interactive_map.layer_ids
         assert interactive_map.layers == [], interactive_map.layers
         assert interactive_map._renderer.drawn == {}, interactive_map._renderer.drawn
-        assert interactive_map.figure_spec.sources == {}, (
-            interactive_map.figure_spec.sources
+        # The registry itself, not `figure_spec.sources`: that view is filtered to the ids the tree still
+        # holds, so it reads empty whether or not the object was let go (review M6).
+        assert _registered_under(interactive_map) == [], _registered_under(
+            interactive_map
         )
+
+    def test_a_declined_layer_gives_its_name_back(self, new_map, monkeypatch):
+        """A caller who names a layer, watches it decline, and names it again gets the name they asked for.
+
+        Args:
+            new_map: The map factory.
+            monkeypatch: Used to make the drawer decline, and then to stop it declining.
+
+        Test scenario:
+            The declined layer's id stayed in the map's set of issued ids, so the retry was suffixed —
+            `grid-1` for a layer the caller called `grid`, naming a layer that never existed.
+        """
+        from digitalearth.interactive import projection
+
+        interactive_map = new_map()
+        monkeypatch.setattr(projection, "draw_graticule", lambda *args, **kwargs: None)
+        interactive_map.add_element(
+            None, kind="graticule", name="grid", symbology=_GRATICULE
+        )
+        monkeypatch.undo()
+        interactive_map.add_element(
+            None, kind="graticule", name="grid", symbology=_GRATICULE
+        )
+        assert interactive_map.layer_ids == ["grid"], interactive_map.layer_ids
+
+    def test_a_declined_keyed_basemap_does_not_keep_its_credential(
+        self, new_map, monkeypatch
+    ):
+        """A key held for a layer nothing draws is a secret held for nothing.
+
+        Args:
+            new_map: The map factory.
+            monkeypatch: Used to make the tile drawer decline.
+        """
+        from digitalearth.interactive import decoration
+
+        monkeypatch.setattr(decoration, "draw_tiles", lambda *args, **kwargs: None)
+        interactive_map = new_map().tiles(
+            "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
+        )
+        assert interactive_map._layer_keys == {}, interactive_map._layer_keys
 
     def test_the_builder_still_returns_the_map_when_its_drawer_declines(
         self, new_map, point_fc, monkeypatch
@@ -680,6 +742,22 @@ class TestClosingAMapLetsItsDataGo:
         interactive_map.close()
         with pytest.raises(KeyError):
             source.open()
+
+    def test_closing_a_map_lets_go_of_the_credentials_it_held(self):
+        """A closed map has no layer left to draw, so it has no reason to hold a key.
+
+        Test scenario:
+            `close()` forgot the map's data and kept `_layer_keys`, so a keyed basemap's API key lived on in
+            a map the caller had finished with (review M6).
+        """
+        interactive_map = InteractiveMap().tiles(
+            "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
+        )
+        assert FAKE_KEY in interactive_map._layer_keys.values(), (
+            "the key was never held"
+        )
+        interactive_map.close()
+        assert interactive_map._layer_keys == {}, interactive_map._layer_keys
 
     def test_closing_twice_is_quiet(self, point_fc):
         """A caller that closes a map a finalizer already closed must not see an error.

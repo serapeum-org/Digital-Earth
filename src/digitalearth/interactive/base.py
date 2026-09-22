@@ -36,7 +36,11 @@ from digitalearth.base.display import (
     needs_reproject,
     to_display_source,
 )
-from digitalearth.base.registry import forget_namespace, object_namespace
+from digitalearth.base.registry import (
+    forget_namespace,
+    forget_object,
+    object_namespace,
+)
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import (
@@ -631,8 +635,7 @@ class InteractiveMapBase:
             # and its drawer makes the real one, which is what "render from the description" means.
             drawn = self._renderer.draw_layer(self.figure_spec, layer_id)
             if drawn is None:
-                self._layer_tree = self._layer_tree.remove(layer_id)
-                self._sources.pop(layer_id, None)
+                self._forget_layer(layer_id)
                 return self
             element = drawn.element
         # Placed where the description puts it, not where the call happened to arrive. The tree orders by
@@ -641,6 +644,28 @@ class InteractiveMapBase:
         # reports, which is what it did when a builder had to remember to insert at the front itself.
         self.layers.insert(self._layer_tree.ids.index(layer_id), element)
         return self
+
+    def _forget_layer(self, layer_id: str) -> None:
+        """Drop a layer that was described but never drawn, and everything it registered.
+
+        What :meth:`add_element` calls for a layer its drawer declined. Taking the entry out of the tree is
+        not enough on its own: the source sits in the process-global object table, which holds a strong
+        reference for the life of the process, and `figure_spec.sources` is filtered to the tree's ids, so
+        nothing a caller reads would show it was still there. The id goes back to the pool too, so a caller
+        who names a layer, watches it decline, and names it again gets the name they asked for; and a
+        credential held for a layer nothing draws is a secret held for nothing.
+
+        Args:
+            layer_id: The layer to forget. A layer the tree no longer holds is ignored, so a caller can
+                forget one whose description was never finished.
+        """
+        if layer_id in self._layer_tree:
+            self._layer_tree = self._layer_tree.remove(layer_id)
+        self._issued_ids.discard(layer_id)
+        ref = self._sources.pop(layer_id, None)
+        if ref is not None:
+            forget_object(ref.uri)
+        self._layer_keys.pop(layer_id, None)
 
     def _needs_reproject(self, data: Any) -> bool:
         """Whether `data` must be reprojected (via pyramids) to the display CRS.
@@ -1203,6 +1228,9 @@ class InteractiveMapBase:
         what "closed" means for a figure whose data lived only in this process. Save the data and reference
         it by path to keep such a figure readable.
 
+        The credentials held for keyed basemaps go too: they are kept off the figure so it can be written
+        down without them, and a closed map has nothing left to draw with them.
+
         Examples:
             - A map that drew nothing closes quietly, with no engine installed:
                 ```python
@@ -1215,6 +1243,7 @@ class InteractiveMapBase:
             __exit__: calls this on the way out of a ``with`` block.
         """
         forget_namespace(self._objects_ns)
+        self._layer_keys.clear()
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the map.
