@@ -581,8 +581,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             layered_map: A map with a raster under a mesh.
         """
         figure = layered_map.figure_spec
+        refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):
-            layered_map._renderer.apply(figure, _refused_removal(figure, "raster-1"))
+            layered_map._renderer.apply(figure, refused)
         assert list(layered_map._renderer.drawn) == ["raster-1", "mesh-2"]
 
     def test_a_restored_layer_keeps_its_place_in_the_colorbar_registry(
@@ -594,8 +595,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             layered_map: A map with a raster under a mesh.
         """
         figure = layered_map.figure_spec
+        refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):
-            layered_map._renderer.apply(figure, _refused_removal(figure, "raster-1"))
+            layered_map._renderer.apply(figure, refused)
         drawn = layered_map._renderer.drawn
         assert [mappable for _, mappable in layered_map.layers] == [
             drawn["raster-1"].artist,
@@ -617,8 +619,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         canvas.imshow(dataset)
         canvas.imshow(dataset)
         figure = canvas.figure_spec
+        refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):
-            canvas._renderer.apply(figure, _refused_removal(figure, "raster-1"))
+            canvas._renderer.apply(figure, refused)
         owner = {
             id(artist): layer_id
             for layer_id, drawn in canvas._renderer.drawn.items()
