@@ -648,6 +648,88 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         canvas.close()
 
 
+class TestADrawerThatFailsPartWay:
+    """A drawer can put artists on the axes and then raise; nothing it left may outlive the refusal.
+
+    The description is already dropped again on a failure (`Scene._draw`), so anything the drawer left on
+    the axes or in the colorbar registry is an artist no layer owns — the first defect the shared renderer
+    contract names.
+    """
+
+    def test_a_glyph_that_raises_after_drawing_leaves_no_image(
+        self, drawn_map, dataset, monkeypatch
+    ):
+        """The review's own reproduction: ``ArrayGlyph.plot`` draws its image and then fails.
+
+        Args:
+            drawn_map: A map with one drawn raster.
+            dataset: The raster drawn a second time.
+            monkeypatch: Used to make the glyph fail after it has drawn.
+        """
+        from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
+
+        plot = ArrayGlyph.plot
+
+        def draws_then_fails(self, *args, **kwargs):
+            """Draw the image, then fail the way a glyph erroring on its colorbar would.
+
+            Args:
+                self: The glyph.
+                *args: Forwarded to the real ``plot``.
+                **kwargs: Forwarded to the real ``plot``.
+
+            Raises:
+                RuntimeError: always, after drawing.
+            """
+            plot(self, *args, **kwargs)
+            raise RuntimeError("failed after drawing")
+
+        monkeypatch.setattr(ArrayGlyph, "plot", draws_then_fails)
+        with pytest.raises(RuntimeError, match="after drawing"):
+            drawn_map.imshow(dataset)
+        painted = list(drawn_map.ax.images)
+        assert painted == [drawn_map._renderer.drawn["raster-1"].artist], painted
+
+    def test_a_drawer_that_raises_after_registering_leaves_no_colorbar_entry(
+        self, dataset, monkeypatch
+    ):
+        """A drawer that fails after `_render_glyph` registered its mappable must take the entry back.
+
+        Args:
+            dataset: The raster drawn twice.
+            monkeypatch: Used to make the field drawer fail once it has drawn.
+        """
+        from digitalearth.static.maps import raster
+
+        draw_field = raster.draw_field
+
+        def draws_then_fails(scene, data, layer):
+            """Draw the field completely, then fail.
+
+            Args:
+                scene: The map being drawn on.
+                data: The raster.
+                layer: The layer's description.
+
+            Raises:
+                RuntimeError: always, after drawing.
+            """
+            draw_field(scene, data, layer)
+            raise RuntimeError("failed after drawing")
+
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset)
+        monkeypatch.setattr(raster, "draw_field", draws_then_fails)
+        with pytest.raises(RuntimeError, match="after drawing"):
+            canvas.imshow(dataset)
+        kept = canvas._renderer.drawn["raster-1"].artist
+        registered = [mappable for _, mappable in canvas.layers]
+        painted = list(canvas.ax.images)
+        canvas.close()
+        assert registered == [kept], registered
+        assert painted == [kept], painted
+
+
 class TestRemovingALayer:
     """Removal is the one operation that has to reach three places at once."""
 

@@ -426,6 +426,44 @@ def _reinsert(
     painted[:] = [*rest[:at], *block, *rest[at:]]
 
 
+class _PartialDraw:
+    """What the axes and the scene held before one drawer ran, so a drawer that fails part-way is undone.
+
+    A drawer adds artists as it goes — a glyph's image, then its colorbar; a limb-split coastline, one
+    polyline at a time — and registers its mappable for the colorbar only once the glyph has drawn. When it
+    raises after any of that, the layer is never recorded, so nothing would take those artists off again.
+    """
+
+    def __init__(self, scene: Any) -> None:
+        """Note what is already there.
+
+        Args:
+            scene: The scene about to be drawn on.
+        """
+        self._scene = scene
+        self._existing = {id(artist) for artist in _painted(scene.ax) or ()}
+        self._registered = len(scene.layers)
+        self._composing = scene._drew_on_axes
+
+    def undo(self) -> None:
+        """Take off everything the drawer added since, and forget what it registered.
+
+        Only artists that were not there before are touched, so the layers under this one are left alone.
+        The compose flag goes back too: a layer that was never drawn is not the first render on the axes.
+        """
+        axes = self._scene.ax
+        added = [
+            artist
+            for artist in _painted(axes) or ()
+            if id(artist) not in self._existing
+        ]
+        for artist in added:
+            _detach(artist, axes)
+        del self._scene.layers[self._registered :]
+        del self._scene._layer_labels[self._registered :]
+        self._scene._drew_on_axes = self._composing
+
+
 @dataclass(frozen=True)
 class _Held:
     """What a refused :meth:`Renderer.apply` has to put back, captured before it starts.
@@ -489,11 +527,23 @@ class Renderer:
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
             OffLimbError: when the layer's data cannot be placed and the scene is ``strict``.
+
+        Note:
+            A drawer that raises — or declines — after it has already put something on the axes leaves
+            artists no layer owns: the layer is not recorded, so nothing would ever take them off. Whatever
+            it added to the axes and to the colorbar registry is taken back before the error carries on.
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
-        drawn: Optional[DrawnLayer] = drawer_for(layer.kind)(self._scene, data, layer)
+        draw = drawer_for(layer.kind)
+        partial = _PartialDraw(self._scene)
+        try:
+            drawn: Optional[DrawnLayer] = draw(self._scene, data, layer)
+        except BaseException:
+            partial.undo()
+            raise
         if drawn is None:
+            partial.undo()
             return None
         self._drawn[layer_id] = drawn
         if not figure.layers.is_visible(layer_id):
