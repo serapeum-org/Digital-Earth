@@ -326,8 +326,11 @@ def drawer_for(kind: str) -> Any:
         `LayerSpec`.
 
     Raises:
-        KeyError: when this tier does not draw `kind`, naming the kinds it does; or when the drawer table
-            and :data:`DRAWN_KINDS` disagree, which is a defect in this module rather than in the caller.
+        KeyError: when this tier does not draw `kind`. The message names the kinds it does draw, and — for
+            a kind this tier decided against rather than never had — appends the reason the declaration
+            gives (:meth:`~digitalearth.base.capabilities.Capabilities.reason`), which is the refusal every
+            tier's ``drawer_for`` makes (#294). Also when the drawer table and :data:`DRAWN_KINDS`
+            disagree, which is a defect in this module rather than in the caller.
 
     Examples:
         - Every kind the tier declares has a drawer:

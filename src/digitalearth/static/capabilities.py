@@ -21,13 +21,13 @@ Two fields are worth reading twice, because they are where this tier differs mos
   artist a caller hands to :meth:`~digitalearth.static.scene.Scene._add_layer` is described, held, and
   drawn back from that description. Drawing straight onto ``Map.ax`` is still the escape hatch, and is
   still outside the description by design (D-3) — the figure never hears about it.
+
 **Unlike the other three tiers, this module does not promise an engine-free import.** `three_d`,
 `web` and `interactive` keep their declaration readable without pyvista, maplibre or holoviews,
 because each of those is an optional extra and `api.py` has to answer for a backend nobody installed.
 matplotlib is a core dependency, and `digitalearth.static` imports `Map` eagerly, so importing this
 module loads it. There is nothing to defer: a caller who can import `digitalearth` at all already has
 matplotlib (#294).
-
 """
 
 from digitalearth.base.capabilities import Capabilities

@@ -947,7 +947,9 @@ class DecorationMixin(_MixinBase):
             options: The keywords forwarded to ``add_tiles``.
 
         Returns:
-            Whatever ``add_tiles`` returned, or ``None`` when the tiles could not be drawn.
+            Whatever ``add_tiles`` returned. Not ``None``: tiles that cannot be fetched raise, and the
+            layer is dropped from the description with them — :meth:`stock_img` is the one caller that
+            turns that into a quiet ``None``, because a backdrop is best-effort.
         """
         recorded, held = _described_tile_source(source)
         if held is not None:

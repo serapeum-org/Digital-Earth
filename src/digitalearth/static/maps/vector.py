@@ -105,13 +105,16 @@ def _draw_missing_neutral(artist: Any) -> None:
 def _skips_off_limb(builder: Callable) -> Callable:
     """Wrap a vector builder so data the display CRS cannot place skips the layer instead of raising (#257).
 
-    The raster builders answer an off-limb warp inline (``except OffLimbError: self._skipped_off_limb(kind)``)
-    because each of them reprojects at its own point in its own body. The validating vector builders all
-    reproject in one place — :meth:`VectorMixin._vector_input` — so the same answer is written once, here, and
-    covers the whole body: the warp that places no geometry, and the value/geometry work that follows it.
+    The builder itself no longer reprojects: it records the layer, and the drawer that replays the record
+    does the warp (in :meth:`VectorMixin._vector_input`) and the drawing. So the `OffLimbError` comes up
+    out of the drawer, through :meth:`~digitalearth.static.scene.Scene._draw` — which has already dropped
+    the layer from the description — and is answered here, one wrapper for the whole call. The raster
+    builders answer the same error inline (``except OffLimbError: self._skipped_off_limb(kind)``), because
+    each of them reaches its drawer at its own point in its own body.
 
     Args:
-        builder: A vector layer method whose body reprojects through :func:`~digitalearth.base.crs.reproject`.
+        builder: A vector layer method whose drawer reprojects through
+            :func:`~digitalearth.base.crs.reproject`.
 
     Returns:
         The same method, with an off-limb reprojection turned into a skipped layer (``None``) — or, under
@@ -778,9 +781,9 @@ class VectorMixin(_MixinBase):
     ) -> Any:
         """Reproject a ``FeatureCollection`` to the display CRS, reject empty, and validate its geometry type.
 
-        Consolidates the preamble shared by the validating vector methods. Reprojects ``features`` to
-        :attr:`crs`, raises on an empty collection, and — when ``geom_types`` is given — requires every
-        geometry to be one of those types.
+        Consolidates the preamble shared by the validating vector **drawers** — the builders record their
+        layer and this runs when it is drawn. Reprojects ``features`` to :attr:`crs`, raises on an empty
+        collection, and — when ``geom_types`` is given — requires every geometry to be one of those types.
 
         Reprojection goes through the shared :func:`~digitalearth.base.crs.reproject` helper rather than
         calling ``to_crs`` directly: a vector warp does not raise when it places nothing, it hands back
@@ -798,8 +801,10 @@ class VectorMixin(_MixinBase):
             The reprojected GeoDataFrame.
 
         Raises:
-            OffLimbError: when the warp places none of the geometry in the display CRS. The public builders
-                wrap it with :func:`_skips_off_limb`, so the layer is skipped (or raised under ``strict``).
+            OffLimbError: when the warp places none of the geometry in the display CRS. It travels out
+                through the drawer and `Scene._draw`, which drops the layer from the description; the
+                public builder is wrapped with :func:`_skips_off_limb`, so the caller sees a skipped layer
+                (or, under ``strict``, the error).
             ValueError: if the collection is empty, or a geometry is not one of ``geom_types``.
         """
         gdf = reproject(features, self.crs)
