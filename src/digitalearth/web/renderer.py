@@ -45,7 +45,11 @@ class DrawnLayer:
 
     Attributes:
         source_id: The MapLibre source id, or `None` for a layer that adds no source of its own.
-        source_spec: The source definition, or `None` alongside a `None` id.
+        source_spec: The source, in whatever shape the widget's `add_source` takes it: a MapLibre spec dict
+            for an image, a text anchor or a graticule; the display-CRS GeoDataFrame itself (a pyramids
+            `FeatureCollection` is one) for the vector kinds, which the widget serialises to GeoJSON; or a
+            `maplibre` `GeoJSONSource` for a cluster, which needs its clustering options. `None` alongside a
+            `None` id.
         layer: The layer that carries the layer's own id — the one a switcher toggles and `remove_layer`
             addresses.
         extra_layers: Further layers drawn from the same source and owned by the same description, such as
@@ -74,7 +78,7 @@ class DrawnLayer:
     """
 
     source_id: Optional[str]
-    source_spec: Optional[dict]
+    source_spec: Any
     layer: Any
     extra_layers: Tuple[Any, ...] = field(default=())
 
