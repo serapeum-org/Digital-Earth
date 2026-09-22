@@ -959,9 +959,10 @@ class WebMapBase:
         Note:
             This is a **compatibility view** of what is drawn, not the map's state. The map is described by
             :attr:`figure_spec`, and layers are addressed by id through :attr:`layer_ids`,
-            :meth:`remove_layer` and :meth:`set_visible`. It is kept because it is the shape callers and this
-            tier's own tests have always read — the same reason the 3-D tier kept its `(mesh, actor)` pairs
-            after its seam.
+            :meth:`get_layer` and :meth:`remove_layer`; a viewer shows and hides them with the switcher
+            :meth:`~digitalearth.web.decoration.DecorationMixin.layer_control` adds. It is kept because it is
+            the shape callers and this tier's own tests have always read — the same reason the 3-D tier kept
+            its `(mesh, actor)` pairs after its seam.
 
         Examples:
             - A layer the renderer drew is reported as the MapLibre layer itself, under the id it was
