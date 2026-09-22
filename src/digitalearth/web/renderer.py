@@ -316,7 +316,7 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
 
             ```
     """
-    props = thawed_value(dict(layer.symbology.props))
+    props: dict = thawed_value(dict(layer.symbology.props))
     missing = [name for name in names if name not in props]
     if missing:
         raise ValueError(
