@@ -740,3 +740,50 @@ class TestAClassifiedLayerTakesThePathEveryOtherBuilderTakes:
         """
         with pytest.raises(KeyError):
             m.choropleth(self.POINTS, "not_a_column", scheme="quantiles", k=3)
+
+
+class TestACallersFillAlphaReachesTheDrawnElement:
+    """What the engine is told, not what the figure says it was told (round 2, N9).
+
+    `2120eb7c` replaced the only render-side assertion on a caller's `fill_alpha` with a description-side
+    one. The replacement is the right check for the description — the builder's outline-only default must
+    be recorded only where it applies — but it left the tier with no check that a keyword a caller passed
+    ever reaches the element. That is the exact path the held-value split travels: a keyword kept beside
+    the layer instead of in the description draws correctly only while the drawer still merges it back, and
+    the whole suite was green with `cmap` already broken that way (round 2, H4).
+
+    `test_outline_only_when_no_column` covers the builder's own default. These two cover the caller's.
+    """
+
+    def test_an_outline_only_layer_draws_the_fill_the_caller_asked_for(
+        self, m, polygon_fc
+    ):
+        """`polygons()` defaults an unfilled layer to `fill_alpha = 0.0`; the caller's value must win.
+
+        Args:
+            m: The map under test.
+            polygon_fc: Buffered points with a numeric `fid`.
+        """
+        m.polygons(polygon_fc, fill_alpha=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style.get("fill_alpha") == 0.4, (
+            f"the caller's fill_alpha never reached the element: {style.get('fill_alpha')}"
+        )
+
+    def test_a_filled_layer_draws_the_fill_the_caller_asked_for(self, m, polygon_fc):
+        """The same keyword over a resolved style, which is where precedence could swallow it.
+
+        Args:
+            m: The map under test.
+            polygon_fc: Buffered points with a numeric `fid`.
+
+        Test scenario:
+            A coloured layer resolves `color`/`cmap`/`colorbar` of its own, and the caller's keywords are
+            merged *over* that. A merge in the other order would draw the builder's style and drop the
+            caller's, which the outline-only case above cannot tell apart — it has no resolved style.
+        """
+        m.polygons(polygon_fc, column="fid", fill_alpha=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style.get("fill_alpha") == 0.4, (
+            f"the caller's fill_alpha lost to the resolved style: {style.get('fill_alpha')}"
+        )
