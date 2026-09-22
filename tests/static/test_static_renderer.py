@@ -801,6 +801,29 @@ class TestAGraticuleOwnsTheLinesTheFramePutOnTheAxes:
         assert left == 0, left
         assert attached == 1, attached
 
+    def test_a_frame_after_a_reset_hands_the_lines_to_nobody(self):
+        """An animation frame drops the renderer's record while the remembered graticule id survives.
+
+        Test scenario:
+            ``_reset_layers`` replaces the renderer between frames — the artists went with the cleared
+            axes, so what it held is stale rather than removable — but ``_graticule_lines`` and
+            ``_graticule_id`` are scene state and outlive it. The next frame's projection frame therefore
+            draws the grid and then tries to hand it to a layer the new renderer never drew, which is a
+            ``KeyError`` on every frame of every animated globe if the handover assumes a record is there.
+        """
+        canvas = self._framed_globe()
+        canvas._reset_layers()
+        canvas._framed = False
+        patch = canvas._apply_frame()
+        drawn = sorted(canvas._renderer.drawn)
+        lines = len(canvas.ax.lines)
+        canvas.close()
+        assert patch is not None, "the frame itself must still be applied"
+        assert drawn == [], (
+            f"the reset renderer must be left holding nothing; got {drawn}"
+        )
+        assert lines > 0, "the grid must still be drawn, it is only unowned"
+
 
 class TestAFailingGraticuleLeavesNothingBehind:
     """``graticule()`` is the one builder outside ``Scene._draw``'s undo funnel, and needs the same undo.
@@ -1338,3 +1361,73 @@ class TestTheGuardsARollbackLeansOn:
         assert drawn_map.layers == [], (
             f"a layer that could not be restored must leave no entry behind; got {drawn_map.layers}"
         )
+
+
+class TestAskingWhetherALayerIsDrawn:
+    """Review M4 — `is_visible` is the read-back `set_visible` writes, and every tier answers it."""
+
+    def test_a_drawn_layer_reads_back_as_drawn(self, drawn_map):
+        """A reader that always said `False` would pass every hiding check on its own.
+
+        Args:
+            drawn_map: A map with one drawn raster layer.
+        """
+        assert drawn_map._renderer.is_visible("raster-1") is True, (
+            "a layer nothing hid must read back drawn"
+        )
+
+    def test_a_hidden_layer_reads_back_hidden(self, drawn_map):
+        """Every artist the layer owns carries the flag, and the answer comes from the artists.
+
+        Args:
+            drawn_map: A map with one drawn raster layer.
+        """
+        drawn_map._renderer.set_visible("raster-1", False)
+        assert drawn_map._renderer.is_visible("raster-1") is False, (
+            "set_visible must be readable back through is_visible"
+        )
+
+    def test_an_id_nothing_drew_is_refused_by_name(self, drawn_map):
+        """A layer the axes does not hold has no visibility, and guessing one would hide a defect.
+
+        Args:
+            drawn_map: A map with one drawn raster layer.
+
+        Test scenario:
+            The conformance suite asks this of every tier through `drawn_is_hidden`. Answering `True`
+            for an id nothing drew would let a check pass against a layer that was never drawn at all.
+        """
+        renderer = drawn_map._renderer
+        with pytest.raises(KeyError, match="nothing is drawn for layer 'nope'"):
+            renderer.is_visible("nope")
+
+    def test_the_refusal_says_what_the_tier_does_hold(self, drawn_map):
+        """Naming the ids that are there is what turns the refusal into a diagnosis.
+
+        Args:
+            drawn_map: A map with one drawn raster layer.
+        """
+        renderer = drawn_map._renderer
+        with pytest.raises(KeyError) as refused:
+            renderer.is_visible("nope")
+        assert "raster-1" in str(refused.value), (
+            f"the refusal must list the drawn ids; got {refused.value}"
+        )
+
+    def test_a_layer_with_no_addressable_artist_reads_back_drawn(self):
+        """A decoration that leaves nothing to switch off has nothing that could have been switched off.
+
+        Test scenario:
+            A graticule is described before the projection frame draws its lines, so between the two it
+            owns no artists at all. `all()` over nothing is `True`, which is the honest answer — a reader
+            that treated an empty record as hidden would report an unframed globe's grid as off.
+        """
+        canvas = Map(crs=projections.orthographic(-9, 39), globe=True)
+        canvas.graticule(lon_step=30.0, lat_step=30.0)
+        owned = canvas._renderer.drawn["graticule-1"].artists
+        answer = canvas._renderer.is_visible("graticule-1")
+        canvas.close()
+        assert owned == (), (
+            f"the frame has not run, so the layer owns nothing; got {owned}"
+        )
+        assert answer is True, "a layer with no artists must not read back hidden"

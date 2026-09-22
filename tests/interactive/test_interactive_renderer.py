@@ -17,7 +17,13 @@ import pytest
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.interactive import InteractiveMap
-from digitalearth.interactive.renderer import DRAWN_KINDS, Renderer, drawer_for
+from digitalearth.interactive.renderer import (
+    DRAWN_KINDS,
+    Renderer,
+    _is_shown,
+    _visibility_keywords,
+    drawer_for,
+)
 
 pytest.importorskip(
     "geoviews", reason="the interactive tier needs the interactive environment"
@@ -68,6 +74,22 @@ def _refused_figure(interactive_map):
     tree = figure.layers.add(with_fields(drawable, id="second")).add(
         LayerSpec("refused", "terrain", source_id=drawable.source_id)
     )
+    return with_fields(figure, layers=tree)
+
+
+def _all_hidden(figure):
+    """Return the same figure with every layer switched off.
+
+    Args:
+        figure: The figure to hide.
+
+    Returns:
+        A `FigureSpec` whose layers are all `visible=False`, which is what a layer switcher's toggle
+        hands `apply`.
+    """
+    tree = figure.layers
+    for layer in list(tree):
+        tree = tree.replace(with_fields(layer, visible=False))
     return with_fields(figure, layers=tree)
 
 
@@ -287,6 +309,38 @@ class TestReconcilingTwoFigures:
         )
         assert Renderer._reaches_holoviews(figure, added, "later") is True
 
+    def test_a_hidden_layer_is_hidden_on_the_element(self, drawn_map):
+        """The fifth arm: a figure that switches a layer off has to reach HoloViews' options.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            A layer switcher's toggle arrives as a changed description and is reconciled through `apply`.
+            `diff` groups it as neither rebuilt nor restyled, so nothing but the `hidden` arm carries it —
+            and a reconciliation that skipped that arm left the element drawn with the description saying
+            it was off.
+        """
+        figure = drawn_map.figure_spec
+        drawn_map._renderer.apply(figure, _all_hidden(figure))
+        assert drawn_map._renderer.is_visible("points-1") is False, (
+            "the reconciliation's hidden arm must reach the element"
+        )
+
+    def test_a_shown_layer_comes_back(self, drawn_map):
+        """The other direction, so a reconciliation that only ever hid could not pass.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        figure = drawn_map.figure_spec
+        hidden = _all_hidden(figure)
+        drawn_map._renderer.apply(figure, hidden)
+        drawn_map._renderer.apply(hidden, figure)
+        assert drawn_map._renderer.is_visible("points-1") is True, (
+            "the reconciliation's shown arm must reach the element too"
+        )
+
 
 class TestARefusalLeavesTheRecordAsItWas:
     """`apply` draws layer by layer, so a refusal can come after something was already drawn."""
@@ -435,3 +489,164 @@ class TestWhereTheRendererPutsALayer:
         asked = LayerSpec("x", "graticule", band="overlay")
         assert drawn_map._renderer.band_for(asked) == "overlay"
         assert band_of("graticule") != "overlay", band_of("graticule")
+
+
+class TestAskingWhetherALayerIsDrawn:
+    """Review M4 — `is_visible` is the read-back `set_visible` writes, and every tier answers it."""
+
+    def test_a_drawn_layer_reads_back_as_drawn(self, drawn_map):
+        """A reader that always said `False` would pass every hiding check on its own.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        assert drawn_map._renderer.is_visible("points-1") is True, (
+            "a layer nothing hid must read back drawn"
+        )
+
+    def test_a_hidden_layer_reads_back_hidden(self, drawn_map):
+        """The answer comes from the option the element was drawn with, so hiding must move it.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        drawn_map._renderer.set_visible("points-1", False)
+        assert drawn_map._renderer.is_visible("points-1") is False, (
+            "set_visible must be readable back through is_visible"
+        )
+
+    def test_hiding_an_id_nothing_drew_is_quiet(self, drawn_map):
+        """A caller may toggle a layer this tier declined to draw, as it may remove one.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The three other tiers ignore the id too, and a reconcile reaches `set_visible` for every id
+            the description switches — including one whose drawer returned nothing.
+        """
+        drawn_map._renderer.set_visible("nope", False)
+        assert sorted(drawn_map._renderer.drawn) == ["points-1"], (
+            f"toggling an unknown id must touch nothing; got {sorted(drawn_map._renderer.drawn)}"
+        )
+
+    def test_asking_about_an_id_nothing_drew_is_refused_by_name(self, drawn_map):
+        """A layer the overlay does not hold has no visibility, and guessing one would hide a defect.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The conformance suite asks this of every tier through `drawn_is_hidden`. Answering `True`
+            for an id nothing drew would let a check pass against a layer that was never drawn at all.
+        """
+        renderer = drawn_map._renderer
+        with pytest.raises(
+            KeyError, match="nothing is drawn for layer 'nope'"
+        ) as refused:
+            renderer.is_visible("nope")
+        assert "points-1" in str(refused.value), (
+            f"the refusal must list the drawn ids; got {refused.value}"
+        )
+
+
+class TestAnElementBokehGivesNoWayToHide:
+    """The tier says so rather than saying nothing — the silence review M4 reports, one kind narrower."""
+
+    def test_a_tile_element_declares_no_visibility_keyword(self):
+        """A `WMTS`' image *is* the basemap, and Bokeh's tile renderer takes no `visible` style.
+
+        Test scenario:
+            The keyword list is read off the backend's own option store rather than hard-coded, so a
+            HoloViews release that gave tiles a `visible` option would be picked up rather than missed.
+        """
+        interactive_map = InteractiveMap().tiles("OSM")
+        element = interactive_map._renderer.drawn["basemap-1"].element
+        keywords = _visibility_keywords(element)
+        interactive_map.close()
+        assert keywords == (), (
+            f"a tile element must offer no way to hide it; got {keywords}"
+        )
+
+    def test_hiding_one_warns_instead_of_failing_silently(self, recwarn):
+        """A figure that describes a hidden basemap would otherwise be drawn with it showing.
+
+        Args:
+            recwarn: pytest's warning recorder.
+
+        Test scenario:
+            `set_visible` returned without doing anything and without saying so, so a stored figure that
+            switched the basemap off drew it back on with nothing to tell the caller why.
+        """
+        interactive_map = InteractiveMap().tiles("OSM")
+        interactive_map._renderer.set_visible("basemap-1", False)
+        interactive_map.close()
+        warned = [
+            str(w.message) for w in recwarn.list if "no way to hide" in str(w.message)
+        ]
+        assert warned, (
+            f"hiding a tile layer must warn; got {[str(w.message) for w in recwarn.list]}"
+        )
+        assert "basemap-1" in warned[0], (
+            f"the warning must name the layer; got {warned[0]}"
+        )
+
+    def test_one_that_cannot_be_hidden_reads_back_drawn(self):
+        """An element with no such option is one that is never hidden, which is the honest answer.
+
+        Test scenario:
+            Reading `False` for it would make the conformance suite's "is this layer drawn hidden?"
+            answer yes for a basemap that is plainly on the screen.
+        """
+        interactive_map = InteractiveMap().tiles("OSM")
+        element = interactive_map._renderer.drawn["basemap-1"].element
+        answer = _is_shown(element)
+        interactive_map.close()
+        assert answer is True, "a layer that cannot be hidden must not read back hidden"
+
+    def test_a_dynamic_layer_with_no_frame_yet_has_no_element_type_to_ask(
+        self, dataset
+    ):
+        """A `DynamicMap` is a producer of elements, so the options belong to what it produces.
+
+        Args:
+            dataset: The raster fixture the dynamic layer reads.
+
+        Test scenario:
+            `large_image` draws a `DynamicMap`, and `DynamicMap` itself is not in the backend's option
+            store — looking its own name up there raises. Until it has produced a frame its `type` is
+            `None`, so there is nothing to ask and the honest answer is "no keyword".
+        """
+        interactive_map = InteractiveMap(crs=4326).large_image(dataset)
+        element = interactive_map._renderer.drawn["raster-1"].element
+        before_a_frame = _visibility_keywords(element)
+        produced = type(element).__name__
+        interactive_map.close()
+        assert produced == "DynamicMap", (
+            f"large_image must draw a DynamicMap; got {produced}"
+        )
+        assert before_a_frame == (), (
+            f"a producer with no frame yet has no element type to ask; got {before_a_frame}"
+        )
+
+    def test_a_dynamic_layer_that_has_produced_a_frame_is_asked_about_that_frame(
+        self, dataset
+    ):
+        """Once it has produced one, the keywords are the produced element's, not the producer's.
+
+        Args:
+            dataset: The raster fixture the dynamic layer reads.
+
+        Test scenario:
+            This is the arm the `DynamicMap` branch exists for: a `DynamicMap` over `Image` takes
+            `visible`, and reading the producer's own name off the store would answer "no keyword" for
+            a layer that can perfectly well be hidden.
+        """
+        interactive_map = InteractiveMap(crs=4326).large_image(dataset)
+        element = interactive_map._renderer.drawn["raster-1"].element
+        element[()]
+        after_a_frame = _visibility_keywords(element)
+        interactive_map.close()
+        assert after_a_frame == ("visible",), (
+            f"a realised dynamic layer must be asked about its element; got {after_a_frame}"
+        )

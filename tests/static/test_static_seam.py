@@ -862,6 +862,35 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         canvas.close()
         assert "alpha" not in dict(props.get("opts") or {}), dict(props)
 
+    @pytest.mark.parametrize("unwritable", [float("nan"), float("inf"), float("-inf")])
+    def test_a_number_json_has_no_spelling_for_stays_beside_the_layer(
+        self, dataset, unwritable
+    ):
+        """NaN and the infinities are numbers, and a description holding one cannot be written at all.
+
+        Args:
+            dataset: The raster drawn.
+            unwritable: The number JSON has no spelling for.
+
+        Test scenario:
+            The split reads "a plain value JSON reads back as the very same value", and a float passes
+            that on type alone. The guard is the figure writer itself, asked per value — without it a
+            single ``alpha=nan`` would be written into the symbology and ``to_dict`` would then refuse
+            the whole figure, for a keyword the caller passed to one layer.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow("examples/data/acc4000.tif", alpha=unwritable, vmin=1.0)
+        props = canvas.figure_spec.layers.get("raster-1").symbology.props
+        recorded = dict(props.get("opts") or {})
+        held = canvas._layer_opts["raster-1"]["alpha"]
+        written = json.dumps(canvas.figure_spec.to_dict(), allow_nan=False)
+        canvas.close()
+        assert recorded == {"vmin": 1.0}, recorded
+        assert repr(held) == repr(unwritable), (
+            f"the caller's own value must still be held beside the layer; got {held!r}"
+        )
+        assert "raster-1" in written, "the figure must still write with the value held"
+
     def test_a_figure_holding_engine_objects_writes_to_json(self, dataset):
         """``Normalize`` and ``FontProperties`` have no JSON form, so they must not be in the description.
 

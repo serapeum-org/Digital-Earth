@@ -551,3 +551,59 @@ class TestWhatTheRendererReports:
         assert drawn_map._renderer.band_for(LayerSpec("x", "graticule")) == band_of(
             "graticule"
         )
+
+
+class TestAskingWhetherALayerIsDrawn:
+    """Review M4 — `is_visible` is the read-back `set_visible` writes, and every tier answers it."""
+
+    def test_a_drawn_layer_reads_back_as_drawn(self, drawn_map):
+        """The reader must answer the engine, not a description, so the built case is the control.
+
+        Args:
+            drawn_map: A map with one drawn point layer.
+
+        Test scenario:
+            A reader that always said `False` would pass every hiding check on its own; this is the half
+            of the contract that fails when it does.
+        """
+        assert drawn_map._renderer.is_visible("obs") is True, (
+            "a layer nothing hid must read back drawn"
+        )
+
+    def test_a_hidden_layer_reads_back_hidden(self, drawn_map):
+        """MapLibre's `layout.visibility` is what the answer comes from, so hiding must move it.
+
+        Args:
+            drawn_map: A map with one drawn point layer.
+        """
+        drawn_map._renderer.set_visible("obs", False)
+        assert drawn_map._renderer.is_visible("obs") is False, (
+            "set_visible must be readable back through is_visible"
+        )
+
+    def test_an_id_nothing_drew_is_refused_by_name(self, drawn_map):
+        """A layer the widget does not hold has no visibility, and guessing one would hide a defect.
+
+        Args:
+            drawn_map: A map with one drawn point layer.
+
+        Test scenario:
+            The conformance suite asks this question of every tier through `drawn_is_hidden`. Answering
+            `True` for an unknown id would let a check pass against a layer that was never drawn at all.
+        """
+        renderer = drawn_map._renderer
+        with pytest.raises(KeyError, match="nothing is drawn for layer 'nope'"):
+            renderer.is_visible("nope")
+
+    def test_the_refusal_says_what_the_tier_does_hold(self, drawn_map):
+        """Naming the ids that are there is what turns the refusal into a diagnosis.
+
+        Args:
+            drawn_map: A map with one drawn point layer.
+        """
+        renderer = drawn_map._renderer
+        with pytest.raises(KeyError) as refused:
+            renderer.is_visible("nope")
+        assert "obs" in str(refused.value), (
+            f"the refusal must list the drawn ids; got {refused.value}"
+        )

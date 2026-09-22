@@ -1176,3 +1176,26 @@ class TestANonFiniteKeywordIsRefusedAtTheCall:
         """
         built = NON_FINITE_KEYWORDS[keyword](WebMap(), 1.0)
         assert built.layer_ids, f"{keyword} with a finite value must still draw"
+
+    @pytest.mark.parametrize("keyword", sorted(NON_FINITE_KEYWORDS))
+    def test_a_value_that_is_not_a_number_at_all_is_refused_the_same_way(self, keyword):
+        """`float()` fails on a list as surely as it succeeds on `nan`, and both end the same way.
+
+        Args:
+            keyword: Which entry of :data:`NON_FINITE_KEYWORDS` to call.
+
+        Test scenario:
+            Only the non-finite arm of the guard was exercised. A value `float()` cannot convert at all
+            took the other arm, whose whole job is to re-raise the conversion's own `TypeError` in the
+            builder's words — without it the caller saw a bare `float() argument must be...` several
+            frames below the keyword they wrote. A list is used rather than a string because
+            `extrusion(height=)` reads a string as a column name.
+        """
+        call = NON_FINITE_KEYWORDS[keyword]
+        argument = keyword.split("(")[1].rstrip("=)")
+        web_map = WebMap()
+        with pytest.raises(ValueError, match="finite number") as refusal:
+            call(web_map, [1.0])
+        assert argument in str(refusal.value), (
+            f"{keyword}'s refusal must name {argument}; got {refusal.value}"
+        )

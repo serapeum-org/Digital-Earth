@@ -446,6 +446,37 @@ class TestTheCompositeSizeWarning:
             logger.remove(sink_id)
         assert (after_building, after_redrawing) == (1, 1), records
 
+    def test_an_input_with_no_integer_grid_is_not_guessed_at(self, monkeypatch):
+        """A size that cannot be measured must produce no number and no warning.
+
+        Args:
+            monkeypatch: pytest's patcher, used to lower the ceiling to one pixel.
+
+        Test scenario:
+            The composite builder reads the grid rather than a band, because reading a band only to
+            measure it costs a whole band read. Anything that does not report `rows`/`columns` as plain
+            integers therefore has no measurable size — and a fallback that guessed one would warn about
+            a page weight nobody measured. With the ceiling at one pixel, any guess at all warns.
+        """
+        from loguru import logger
+
+        from digitalearth.web import raster as raster_module
+
+        monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        unmeasurable = type("Grid", (), {"rows": "many", "columns": 3})()
+        records, sink_id = self._capture()
+        try:
+            measured = raster_module._grid_pixels(unmeasurable)
+            raster_module._warn_if_large("rgb_composite", "composite", measured)
+        finally:
+            logger.remove(sink_id)
+        assert measured is None, (
+            f"an unmeasurable grid must answer None; got {measured}"
+        )
+        assert records == [], (
+            f"nothing measurable means nothing to warn about: {records}"
+        )
+
 
 class TestNorthUpOrientation:
     """PNG row 0 is the northern edge, so a source whose rows run south-first has to be flipped."""
