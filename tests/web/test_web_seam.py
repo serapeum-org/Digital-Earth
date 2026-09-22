@@ -928,10 +928,107 @@ needs_maplibre = pytest.mark.skipif(
 )
 
 
+class _Same:
+    """One engine object in a snapshot, compared by identity and kept alive while the snapshot is held.
+
+    A MapLibre `Layer` is a pydantic model and compares by value, so a layer drawn again from the same
+    description would read as unchanged; identity is what a redraw changes. Holding the object also stops a
+    freed object's `id()` being handed to the one that replaced it.
+
+    Attributes:
+        obj: The object.
+    """
+
+    __slots__ = ("obj",)
+
+    def __init__(self, obj):
+        """Hold one object.
+
+        Args:
+            obj: The object.
+        """
+        self.obj = obj
+
+    def __eq__(self, other):
+        """Whether `other` holds this same object.
+
+        Args:
+            other: Another snapshot entry.
+
+        Returns:
+            `True` only for the same object, not an equal one.
+        """
+        return isinstance(other, _Same) and other.obj is self.obj
+
+    def __hash__(self):
+        """Hash by identity, consistently with `__eq__`.
+
+        Returns:
+            The object's `id()`.
+        """
+        return id(self.obj)
+
+    def __repr__(self):
+        """Name the object's type and id, for a failure message.
+
+        Returns:
+            The representation.
+        """
+        return f"<{type(self.obj).__name__} {getattr(self.obj, 'id', '')!s}>".strip()
+
+
+class _RecordingWidget:
+    """Stands in for the MapLibre widget, recording every call the map's queue makes on it, in order."""
+
+    def __init__(self):
+        """Start with nothing recorded."""
+        self.calls = []
+
+    def __getattr__(self, method):
+        """Return a recorder for any widget method — `add_source`, `add_layer`, `add_control`, ….
+
+        Args:
+            method: The method a queue entry calls.
+
+        Returns:
+            A callable recording the method's name and each argument, by identity.
+        """
+
+        def record(*args, **kwargs):
+            """Record one call.
+
+            Args:
+                *args: The positional arguments, recorded by identity.
+                **kwargs: The keyword arguments, recorded by identity.
+            """
+            self.calls.append(
+                (
+                    method,
+                    *(_Same(arg) for arg in args),
+                    *((key, _Same(value)) for key, value in sorted(kwargs.items())),
+                )
+            )
+
+        return record
+
+
 class WebContract(RendererContract):
-    """The web tier's adapter for the shared renderer contract (#305)."""
+    """The web tier's adapter for the shared renderer contract (#305).
+
+    **`apply` does not reach this tier's engine, nor the figure it reports.** The widget is built from the
+    map's queue, `_queued`, which only the builders and `remove_layer` write. `Renderer.apply` reconciles the
+    renderer's own record and stops there: a layer it adds is never queued, so the widget never adds it, and
+    a layer it removes stays queued (review M1). That is the decision for this wave — the renderer's module
+    docstring says so — and wiring `apply` through the map's own state is later work. So
+    `apply_reaches_engine` is `False` and the engine checks skip here rather than pass whatever `apply` did;
+    `apply_reaches_description` is `False` because `apply_figure` calls the renderer, which never touches
+    `figure_spec`. The rollback and the redraw guard are held to the renderer's record instead, which is the
+    one thing `apply` changes here.
+    """
 
     backend = "web"
+    apply_reaches_engine = False
+    apply_reaches_description = False
 
     def make(self):
         """Return an empty map.
@@ -994,21 +1091,25 @@ class WebContract(RendererContract):
         tier._renderer.apply(tier.figure_spec, figure)
 
     def engine_holds(self, tier):
-        """Return which layers are drawn, *and what was drawn for them*.
+        """Return what the widget is built from: the queue, replayed the way the widget build replays it.
 
-        A redraw replaces a layer under the same id, so a set of ids reads identically before and after;
-        the identity of the MapLibre object does not.
+        `_build_map_widget` hands every queue entry to `_apply_layer`, so that is what this does, into a
+        widget that records each call. A described layer resolves through the renderer's record only because
+        its marker is in the queue — a layer the record holds and the queue does not is never added, which is
+        exactly what reading the record directly could not see. No check reads this while
+        `apply_reaches_engine` is `False`; it is what they will read once `apply` reaches the queue.
 
         Args:
             tier: The map.
 
         Returns:
-            Layer id to the identity of what was drawn for it.
+            Every widget call, in order, with its arguments compared by identity — so a layer drawn again from
+            the same description reads as a change.
         """
-        return {
-            layer_id: id(built.layer)
-            for layer_id, built in tier._renderer.drawn.items()
-        }
+        widget = _RecordingWidget()
+        for entry in tier._queued:
+            tier._apply_layer(widget, entry)
+        return tuple(widget.calls)
 
     def relabel(self, tier, layer_id: str):
         """Return the map's figure with one layer's label changed and nothing else.
