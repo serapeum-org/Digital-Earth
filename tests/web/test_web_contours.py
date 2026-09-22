@@ -98,6 +98,56 @@ class TestTracingIsPyramids:
         assert '"#ff0000"' in _payload(m.to_html())
 
 
+class TestTheUnitsNameTheLayerThatWasClassified:
+    """`units=` describes the contoured values, so it may only reach a key this call produced (#314)."""
+
+    @staticmethod
+    def _classifiable_points():
+        """Return points whose `value` column a scheme can cut into classes.
+
+        Returns:
+            A point `GeoDataFrame` with four distinct values, so `k=2` quantiles have something to split.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        return gpd.GeoDataFrame(
+            {"value": [1.0, 2.0, 3.0, 4.0]},
+            geometry=[Point(4.9 + index / 10, 52.4) for index in range(4)],
+            crs=4326,
+        )
+
+    def test_an_explicit_colour_leaves_an_earlier_layer_s_key_alone(self, dataset):
+        """A contour layer that classifies nothing must not annotate someone else's colour key.
+
+        Test scenario:
+            `contours` set `last_units` and then stamped it onto `last_legend` whenever one existed. With an
+            explicit `color=` the layer classifies nothing — `column` is `None` — so `last_legend` still
+            belonged to whichever layer classified before it, and that layer's key gained this raster's
+            units. The visible effect is one layer's classes labelled in another layer's units.
+        """
+        web_map = WebMap()
+        web_map.points(
+            self._classifiable_points(), column="value", scheme="quantiles", k=2
+        )
+        keyed = web_map.last_legend
+        web_map.contours(dataset, interval=10, color="#ff0000", units="m")
+        assert "units" not in keyed, (
+            f"the points key must keep its own units, got {keyed.get('units')!r}"
+        )
+
+    def test_a_classified_contour_layer_still_names_its_units(self, dataset):
+        """The guard must not cost the case it protects: a key this call made does take the units."""
+        web_map = WebMap()
+        web_map.contours(dataset, interval=10, units="m")
+        assert web_map.last_legend is not None, (
+            "a classified contour layer records a key"
+        )
+        assert web_map.last_legend.get("units") == "m", (
+            f"its own key names the units, got {web_map.last_legend.get('units')!r}"
+        )
+
+
 class TestTheIntervalCarriesItsAnchor:
     """``interval=`` reads as a plain spacing or as a :class:`ContourInterval` that anchors it."""
 

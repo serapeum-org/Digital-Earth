@@ -739,6 +739,8 @@ class VectorMixin(_MixinBase):
         # Lines carry `level`; filled bands carry `level_min`/`level_max` for the band's two edges, so
         # colour and label the lower edge — it is what orders the bands.
         attribute = "level_min" if filled else "level"
+        # Held by identity, to tell a key this call produces from the one already sitting in `last_legend`.
+        keyed_before = self.last_legend
         column = None if color else attribute
         self._draw_contour_features(
             features,
@@ -751,9 +753,16 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
         )
-        if self.last_units and self.last_legend is not None:
+        if (
+            self.last_units
+            and self.last_legend is not None
+            and self.last_legend is not keyed_before
+        ):
             # The classification the sub-builder just recorded describes this raster's values, so the key
             # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.
+            # Compared by identity, because with an explicit `color=` this layer classifies nothing —
+            # `column` is `None` above — and `last_legend` then still belongs to whichever layer classified
+            # before it. Stamping it there labelled one layer's classes in another layer's units (#314).
             self.last_legend["units"] = self.last_units
         if labels:
             # Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.
