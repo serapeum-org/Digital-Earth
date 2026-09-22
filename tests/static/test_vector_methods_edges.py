@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, box
 
-from digitalearth.static import Map
+from digitalearth.static import Map, OffLimbError
 
 ORTHO = "+proj=ortho +lat_0=0 +lon_0=0 +datum=WGS84"  # clips the far hemisphere -> non-finite coords
 
@@ -454,3 +454,105 @@ class TestVectorHelpers:
         f = Map._scale_factors(np.array([0.0, 5.0, 10.0]), limits)
         assert f[0] == pytest.approx(expected_first)
         assert f[-1] == pytest.approx(expected_last)
+
+
+class TestCoordinatesThatWereNonFiniteBeforeAnyWarp:
+    """``inf``/``nan`` that arrive already in the display CRS, where no reprojection guard sees them."""
+
+    @staticmethod
+    def _already_non_finite():
+        """Return two points whose coordinates are non-finite in the CRS they declare.
+
+        No warp runs for these — the frame's CRS is the display CRS — so the off-limb guard in
+        ``_vector_input`` never fires and the points reach the builder exactly as given.
+
+        Returns:
+            FeatureCollection: two point features carrying a numeric ``v``.
+        """
+        pts = [Point(np.inf, np.inf), Point(np.nan, 0.0)]
+        return _fc(gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=pts, crs="EPSG:32618"))
+
+    @pytest.mark.parametrize(
+        "method, kwargs",
+        [
+            ("voronoi", {"column": "v"}),
+            ("quadtree", {"column": "v"}),
+            ("kde", {}),
+        ],
+    )
+    def test_the_builder_refuses_by_name_instead_of_failing_inside_the_engine(
+        self, method, kwargs
+    ):
+        """The three point builders check what survived the finite filter before they use it.
+
+        Args:
+            method: The builder under test.
+            kwargs: The column it needs, where it needs one.
+
+        Test scenario:
+            The off-limb policy answers coordinates that *became* non-finite in the warp, and it is the
+            warp that raises. Data that was non-finite before any warp — a nodata-padded point layer
+            already in the display CRS — reaches the builder with an empty finite mask instead, and
+            handing that on lets GEOS, the quadtree binner or the KDE fail somewhere with a message that
+            names none of this.
+        """
+        canvas = Map(crs=32618)
+        data = self._already_non_finite()
+        draw = getattr(canvas, method)
+        try:
+            with pytest.raises(ValueError, match=f"{method}: no finite points"):
+                draw(data, **kwargs)
+        finally:
+            canvas.close()
+
+
+class TestTriangulatingPointsThatDoNotAllSurviveTheWarp:
+    """Enough points were supplied to triangulate; too few of them can be placed."""
+
+    @staticmethod
+    def _two_of_three_finite():
+        """Return three points, one of which carries a non-finite coordinate.
+
+        Returns:
+            FeatureCollection: three point features carrying a numeric ``v``.
+        """
+        pts = [Point(0, 0), Point(1, 1), Point(np.inf, np.inf)]
+        return _fc(
+            gpd.GeoDataFrame({"v": [1.0, 2.0, 3.0]}, geometry=pts, crs="EPSG:32618")
+        )
+
+    def test_it_is_off_limb_rather_than_a_caller_error_under_strict(self):
+        """Three points were supplied, so the accurate complaint is about the view, not the call.
+
+        Test scenario:
+            ``draw_tri`` tells the two apart by what was *supplied*: fewer than three points is a caller
+            error no projection can fix, while three that lose one to the warp is the ordinary off-limb
+            case every other layer answers with a skip. Without that split, matplotlib's own "x and y
+            arrays must have a length of at least 3" escapes as a `ValueError` and blames the caller for
+            the projection.
+        """
+        canvas = Map(crs=32618, strict=True)
+        data = self._two_of_three_finite()
+        try:
+            with pytest.raises(OffLimbError, match="tricontourf"):
+                canvas.tricontourf(data, column="v")
+        finally:
+            canvas.close()
+
+    def test_it_is_skipped_with_nothing_drawn_when_not_strict(self):
+        """The other half of the same policy, which is what a default map does.
+
+        Test scenario:
+            The skip only happens because the refusal is an `OffLimbError`; anything else — including
+            matplotlib's own length complaint — goes straight past ``_tri``'s handler and out to the
+            caller.
+        """
+        canvas = Map(crs=32618)
+        try:
+            drawn = canvas.tricontourf(self._two_of_three_finite(), column="v")
+            assert drawn is None, f"a layer that cannot be triangulated drew {drawn!r}"
+            assert canvas.layers == [], (
+                f"a skipped layer must register nothing; got {canvas.layers}"
+            )
+        finally:
+            canvas.close()
