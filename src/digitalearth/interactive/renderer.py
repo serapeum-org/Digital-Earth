@@ -8,6 +8,15 @@ be filed twice and the table trimmed by hand.
 This is the other half of that seam. A builder records what it drew — kind, source, visibility and
 symbology as values — and the drawer here rebuilds the element from that description.
 
+**Two things the description deliberately leaves out**, so "round-trips" is read for what it is. ``to_dict``
+refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
+one built from a `FeatureCollection` or a dataset already in memory is drawn from its description in this
+process and handed to a renderer directly. And a caller's keyword that JSON cannot carry — a colormap built
+on the spot, a callable hook — is held on the map beside the layer rather than in its description
+(:func:`~digitalearth.interactive.base.describe_opts`), so a figure read back elsewhere draws that layer
+with the engine's default in its place. The static tier's module docstring states the same two, for the same
+reasons; both tiers lose exactly what the writer refuses, and nothing else.
+
 **This tier composes rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
 place; HoloViews elements are immutable values composed into an overlay on every `render()`. So
 :meth:`Renderer.apply` reconciles the renderer's own *record* of what is drawn — :attr:`Renderer.drawn` —
@@ -42,6 +51,25 @@ class DrawnLayer:
         element: The HoloViews/GeoViews element, or a `DynamicMap` for a layer redrawn per frame.
         style: The options applied to it, as values. Kept beside the element because `.opts()` writes into
             HoloViews' global `Store` and returns nothing a caller can read back.
+
+    Examples:
+        - One builder call, one element, with the style it was drawn with beside it:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.interactive import InteractiveMap
+            >>> wells = gpd.GeoDataFrame(
+            ...     {"depth": [12.0, 31.0]},
+            ...     geometry=[Point(4.9, 52.4), Point(5.1, 52.1)],
+            ...     crs=4326,
+            ... )
+            >>> drawn = InteractiveMap().points(wells)._renderer.drawn["points-1"]
+            >>> type(drawn.element).__name__
+            'Points'
+            >>> sorted(drawn.style)
+            ['size']
+
+            ```
     """
 
     element: Any
@@ -281,6 +309,29 @@ def drawer_for(kind: str) -> Any:
         KeyError: when this tier does not draw `kind`, naming the kinds it does and, when the tier declared
             one, the reason it does not draw this one; or when the drawer table and `DRAWN_KINDS` disagree,
             which is a defect in this module rather than in the caller.
+
+    Examples:
+        - A kind this tier has no drawer for is refused with the kinds it does draw:
+            ```python
+            >>> from digitalearth.interactive.renderer import drawer_for
+            >>> drawer_for("model")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            KeyError: "the interactive tier does not draw 'model' layers; it draws [...]"
+
+            ```
+        - A kind it does draw comes back as a dispatcher, which reads the layer's own recipe — the `via` a
+          builder recorded — because one kind is drawn more than one way here:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec, Symbology
+            >>> from digitalearth.interactive.renderer import drawer_for
+            >>> invented = LayerSpec("wells", "points", symbology=Symbology(props={"via": "smoke"}))
+            >>> drawer_for("points")(None, None, invented)
+            Traceback (most recent call last):
+                ...
+            KeyError: "a 'points' layer records 'smoke' as how it was drawn; this tier draws one of [...]"
+
+            ```
     """
     if kind not in DRAWN_KINDS:
         # The reason is the tier's own, read from the declaration rather than written again here (#294).
@@ -306,6 +357,20 @@ class Renderer:
 
     Attributes:
         drawn: Layer id to what was drawn for it, in draw order.
+
+    Examples:
+        - A map's renderer holds what it drew, keyed by the same ids
+          :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` lists, in the order the
+          layers were drawn:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.interactive import InteractiveMap
+            >>> wells = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+            >>> list(InteractiveMap().points(wells).graticule()._renderer.drawn)
+            ['points-1', 'graticule-2']
+
+            ```
     """
 
     def __init__(self, interactive_map: Any) -> None:
@@ -340,6 +405,23 @@ class Renderer:
 
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
+
+        Examples:
+            - Drawing a layer again from a figure that describes it hidden draws it hidden:
+                ```python
+                >>> from dataclasses import replace
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> wells = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> m = InteractiveMap().points(wells)
+                >>> figure = m.figure_spec
+                >>> hidden = replace(figure, layers=figure.layers.set_visible("points-1", False))
+                >>> _ = m._renderer.draw_layer(hidden, "points-1")
+                >>> m._renderer.is_visible("points-1")
+                False
+
+                ```
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
@@ -474,6 +556,22 @@ class Renderer:
             layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
                 three tiers answer one too.
             visible: Whether it is drawn.
+
+        Examples:
+            - Hiding a layer and reading it back, off the element rather than off the description:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> wells = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> renderer = InteractiveMap().points(wells)._renderer
+                >>> renderer.is_visible("points-1")
+                True
+                >>> renderer.set_visible("points-1", False)
+                >>> renderer.is_visible("points-1")
+                False
+
+                ```
         """
         drawn = self._drawn.get(layer_id)
         if drawn is not None:
@@ -495,6 +593,20 @@ class Renderer:
         Raises:
             KeyError: when nothing was drawn for `layer_id`, naming it. A layer the overlay does not hold
                 has no visibility to report, and :attr:`drawn` is what says which those are.
+
+        Examples:
+            - An id nothing was drawn for is refused by name, with what the tier does hold:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> wells = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> InteractiveMap().points(wells)._renderer.is_visible("nope")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                KeyError: "nothing is drawn for layer 'nope', so it has no visibility to report; ..."
+
+                ```
         """
         drawn = self._drawn.get(layer_id)
         if drawn is None:
@@ -513,5 +625,18 @@ class Renderer:
         Returns:
             The layer's own band when it declares one — what a caller's `custom:holoviews` object needs,
             since the engine name says nothing about what it draws — else its kind's band.
+
+        Examples:
+            - A points layer that declares no band of its own is placed by its kind:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> renderer = InteractiveMap()._renderer
+                >>> renderer.band_for(LayerSpec("wells", "points"))
+                'data'
+                >>> renderer.band_for(LayerSpec("wells", "points", band="overlay"))
+                'overlay'
+
+                ```
         """
         return layer.band or band_of(layer.kind)
