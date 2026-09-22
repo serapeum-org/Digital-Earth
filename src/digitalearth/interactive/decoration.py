@@ -322,8 +322,8 @@ class DecorationMixin(_MixinBase):
             **opts: Extra HoloViews style options applied to the tile element.
 
         Returns:
-            The same map instance, so builder calls chain — the tile layer is inserted *beneath*
-            existing layers.
+            The same map instance, so builder calls chain — the tile layer is drawn *beneath* the data,
+            because the basemap band puts it there, whenever in the chain it was added.
 
         Examples:
             - Put a light Carto basemap beneath a raster:
@@ -627,8 +627,8 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Land is an **underlay**: it is inserted at the front of the registry, so a data layer
-              added before it still ends up drawn on top:
+            - Land is an **underlay**: its band draws it beneath the data, so a data layer added before
+              it still ends up drawn on top:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
@@ -681,12 +681,12 @@ class DecorationMixin(_MixinBase):
                 ['Ocean', 'Image']
 
                 ```
-            - The two underlays compose, each new one going in front of the last:
+            - The two underlays compose, in the order they were asked for, both beneath the data:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> m = InteractiveMap().ocean().land()                        # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
-                ['Land', 'Ocean']
+                ['Ocean', 'Land']
 
                 ```
         """
@@ -713,8 +713,8 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Lakes are an **overlay**: appended after the data, so inland water reads on top of
-              the raster instead of being hidden by it:
+            - Lakes are an **overlay**: their band draws them over the data, so inland water reads on top
+              of the raster instead of being hidden by it:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
@@ -755,8 +755,8 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Rivers are an **overlay**: appended after the data, so the centerlines are drawn over
-              the raster they describe:
+            - Rivers are an **overlay**: their band draws them over the data, so the centerlines are drawn
+              over the raster they describe:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP

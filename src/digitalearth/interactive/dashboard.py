@@ -418,7 +418,9 @@ class DashboardMixin(_MixinBase):
     ) -> Any:
         """Build a layer manager: per-layer visibility toggles, opacity slider, basemap switch (DI.13).
 
-        The toggle order follows add order. Drag-reorder is **not implemented**: reordering needs a stable
+        The toggle order follows **draw** order — the order `layers` is in, which is the band each layer's
+        kind declares and then the order they were built in within that band, so a basemap added last is
+        still the first toggle. Drag-reorder is **not implemented**: reordering needs a stable
         handle per layer (roadmap IN-1; the static twin is #216), which the registry does not yet give, so
         ``reorder=True`` is refused outright rather than accepted and ignored.
 
@@ -449,7 +451,7 @@ class DashboardMixin(_MixinBase):
                 twin is #216).
 
         Examples:
-            - One toggle per registered layer, labelled by index and element type, in add order:
+            - One toggle per registered layer, labelled by index and element type, in draw order:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
@@ -508,7 +510,8 @@ class DashboardMixin(_MixinBase):
             raise NotImplementedError(
                 "layer_control(reorder=True) is not implemented — reordering needs a stable per-layer "
                 "handle (roadmap IN-1; static twin #216) before draw order can be manipulated. Pass reorder=False "
-                "(the default); the toggles follow add order, which you control by the order you build in."
+                "(the default); the toggles follow draw order — each layer's band, then the order you "
+                "built in within that band."
             )
         if not self.layers:
             raise ValueError(
