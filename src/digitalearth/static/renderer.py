@@ -26,7 +26,7 @@ second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
@@ -462,27 +462,22 @@ class Renderer:
             the axes and drawing the old ones again.
         """
         held = dict(self._drawn)
-        dropped: List[str] = []
         try:
-            self._reconcile(before, after, dropped)
+            self._reconcile(before, after)
         except BaseException:
             self._rollback(held, before)
             raise
-        # The data a removed layer drew is forgotten only once the whole change has gone through: a
-        # rollback re-draws from `before`, and that needs the source it would otherwise have dropped.
-        for layer_id in dropped:
-            self._scene._forget_layer_data(layer_id)
+        # A removed layer's data is deliberately *not* forgotten here: `before` — and any figure captured
+        # before the change — still names it, and forgetting it made such a figure dangle and made undoing
+        # the change (`apply(after, before)`) fail. `close()` is where a map lets its data go, which is the
+        # caller saying they are finished with every figure it produced; the web tier settled on the same.
 
-    def _reconcile(
-        self, before: FigureSpec, after: FigureSpec, dropped: List[str]
-    ) -> None:
+    def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
         """Draw the difference between two figures, layer by layer.
 
         Args:
             before: The figure the axes currently shows.
             after: The figure it should show.
-            dropped: Collects the ids of layers `after` no longer draws, so their registered data can be
-                forgotten once the change has gone through.
 
         Raises:
             KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.
@@ -490,21 +485,20 @@ class Renderer:
         """
         change = before.diff(after)
         for layer_id in change.removed:
-            self.remove(layer_id, forget=False)
-            dropped.append(layer_id)
+            self.remove(layer_id)
         # A rebuilt layer is one whose *data* changed — its kind, source, slice, or the reference behind its
         # source id — and every one of those means new artists. Only a restyle is worth asking about,
         # because `diff` groups a change of `label` with a change of colormap and one of those never reaches
         # matplotlib.
         for layer_id in change.rebuilt:
-            self.remove(layer_id, forget=False)
+            self.remove(layer_id)
             self.draw_layer(after, layer_id)
         for layer_id in change.restyled:
             if not self._reaches_matplotlib(before, after, layer_id):
                 continue
             # A cleopatra glyph bakes its colormap and its class breaks into the artist it built, so a
             # restyle is the layer drawn again from its description rather than a property set on it.
-            self.remove(layer_id, forget=False)
+            self.remove(layer_id)
             self.draw_layer(after, layer_id)
         for layer_id in change.added:
             self.draw_layer(after, layer_id)
@@ -534,7 +528,7 @@ class Renderer:
             if drawn is not held.get(layer_id)
         ]
         for layer_id in partial:
-            self.remove(layer_id, forget=False)
+            self.remove(layer_id)
         for layer_id in [key for key in held if key not in self._drawn]:
             try:
                 self.draw_layer(before, layer_id)
@@ -584,27 +578,23 @@ class Renderer:
             now.group,
         )
 
-    def remove(self, layer_id: str, *, forget: bool = True) -> None:
+    def remove(self, layer_id: str) -> None:
         """Take a layer off the axes and forget what was drawn for it.
+
+        Only the *drawing* goes. The in-memory data the layer registered, and the key its drawer reads, stay
+        with the scene: a figure captured before the removal still names them, and drawing that figure again
+        — an undo, a rollback, a rebuild — needs them. ``Scene.close()`` is where they are let go.
 
         Args:
             layer_id: The layer to remove. One that was never drawn — skipped, or described but not yet
                 rendered — is ignored, so removing a layer twice is harmless.
-            forget: Whether the in-memory data the layer registered is dropped from the process-wide object
-                table as well. ``False`` is what :meth:`apply` passes while it reconciles, because a layer
-                it is about to draw again — or restore in a rollback — still needs its source; ``apply``
-                commits those forgets itself once the change has gone through.
         """
         drawn = self._drawn.pop(layer_id, None)
         if drawn is None:
-            if forget:
-                self._scene._forget_layer_data(layer_id)
             return
         self._scene._unregister_artist(drawn)
         for artist in drawn.artists:
             _detach(artist, self._scene.ax)
-        if forget:
-            self._scene._forget_layer_data(layer_id)
 
     def set_visible(self, layer_id: str, visible: bool) -> None:
         """Show or hide every artist drawn for a layer.

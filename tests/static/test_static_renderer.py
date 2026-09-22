@@ -98,6 +98,22 @@ def _refused_figure(canvas):
     return with_fields(figure, layers=tree)
 
 
+def _without_raster(figure):
+    """Return a figure with the fixture's one raster layer taken out of both the tree and the panel.
+
+    The panel lists the layers it shows, so dropping a layer drops it from both — a figure that names a
+    layer it no longer holds is refused by the spec.
+
+    Args:
+        figure: A figure holding ``raster-1``.
+
+    Returns:
+        The same figure without it.
+    """
+    panel = with_fields(figure.panels[0], layers=())
+    return with_fields(figure, layers=figure.layers.remove("raster-1"), panels=(panel,))
+
+
 def _artist_ids(canvas):
     """Return the identity of every artist the renderer holds, by layer id.
 
@@ -463,7 +479,7 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         figure = drawn_map.figure_spec
         refused = _refused_figure(drawn_map)
         with pytest.raises(KeyError):
-            drawn_map._renderer._reconcile(figure, refused, [])
+            drawn_map._renderer._reconcile(figure, refused)
         assert "also-drawn" in drawn_map._renderer.drawn, sorted(
             drawn_map._renderer.drawn
         )
@@ -558,17 +574,47 @@ class TestRemovingALayer:
         drawn_map._renderer.remove("raster-1")
         assert drawn_map._renderer.drawn == {}
 
-    def test_removing_a_layer_forgets_the_data_it_registered(self, drawn_map):
-        """The object table is process-global and holds strong references.
+    def test_removing_a_layer_keeps_the_data_a_captured_figure_names(self, drawn_map):
+        """A figure captured before the removal still names the source, so the source has to stay open.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The object table is process-global and holds strong references, but it is ``close()`` that
+            lets it go — the caller saying they are finished with every figure the map produced. Forgetting
+            on removal made each such figure dangle, which the web tier already fixed on purpose.
+        """
+        captured = drawn_map.figure_spec
+        drawn_map._renderer.remove("raster-1")
+        assert captured.sources["raster-1"].open() is not None
+
+    def test_a_captured_figure_still_opens_after_apply_removes_its_layer(
+        self, drawn_map
+    ):
+        """``apply`` removing a layer must not forget what the figure it came from still names.
 
         Args:
             drawn_map: A map with one drawn layer.
         """
-        uri = drawn_map.figure_spec.sources["raster-1"].uri
-        key = uri.split(":", 1)[1]
-        assert key in _OBJECTS, "the raster was never registered"
-        drawn_map._renderer.remove("raster-1")
-        assert key not in _OBJECTS, f"{key} is still registered"
+        figure = drawn_map.figure_spec
+        drawn_map._renderer.apply(figure, _without_raster(figure))
+        assert figure.sources["raster-1"].open() is not None
+
+    def test_re_applying_a_captured_figure_after_a_removal_draws_it_again(
+        self, drawn_map
+    ):
+        """Undo is the same ``apply`` the other way round, and it needs the source the removal dropped.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        figure = drawn_map.figure_spec
+        emptied = _without_raster(figure)
+        drawn_map._renderer.apply(figure, emptied)
+        drawn_map._renderer.apply(emptied, figure)
+        assert list(drawn_map._renderer.drawn) == ["raster-1"]
+        assert len(drawn_map.ax.images) == 1, len(drawn_map.ax.images)
 
     def test_a_reconcile_keeps_the_data_until_the_change_is_through(self, drawn_map):
         """A rollback redraws from the old figure, so its sources cannot be dropped as it goes.
@@ -669,15 +715,23 @@ class TestWhatADrawerNeedsThatAFigureCannotCarry:
         )
         canvas.close()
 
-    def test_forgetting_the_layer_forgets_its_key(self):
-        """The key is the layer's, so it goes when the layer does."""
+    def test_removing_the_layer_keeps_its_key(self):
+        """A captured figure re-applied after the removal redraws the layer, and its drawer reads the key."""
         features = FeatureCollection.read_file("tests/data/points.geojson")
         canvas = Map(crs=features.epsg)
         canvas.quadtree(features, nmax=1)
         layer_id = canvas.layer_ids[-1]
         canvas._renderer.remove(layer_id)
-        assert layer_id not in canvas._layer_keys, canvas._layer_keys
+        assert layer_id in canvas._layer_keys, canvas._layer_keys
         canvas.close()
+
+    def test_closing_forgets_the_key(self):
+        """``close()`` is where a map lets go of what it held for its layers, the key included."""
+        features = FeatureCollection.read_file("tests/data/points.geojson")
+        canvas = Map(crs=features.epsg)
+        canvas.quadtree(features, nmax=1)
+        canvas.close()
+        assert canvas._layer_keys == {}, canvas._layer_keys
 
 
 class TestWhereTheRendererPutsALayer:
