@@ -13,9 +13,11 @@ layer rather than a rebuild of the scene around it.
 
 **Two things the description deliberately leaves out**, so "round-trips" is read for what it is. ``to_dict``
 refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
-one built from data already in memory is handed to a renderer directly instead. And the caller's own engine
-keywords are held on the scene beside the layer (:func:`drawing_opts`) rather than in its description, so a
-figure read back elsewhere draws the same layers with the engine's defaults in their place.
+one built from data already in memory is handed to a renderer directly instead. And of the caller's own
+engine keywords only the plain half is described — a string, a boolean, a finite number or ``None``, which
+is what :func:`~digitalearth.static.scene.travels_in_a_figure` accepts. A container, an array or an engine
+object stays on the scene beside the layer (:func:`drawing_opts`) and nowhere else, so a figure read back
+elsewhere draws *those* with the engine's defaults in their place.
 
 **This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
 :meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
@@ -24,7 +26,10 @@ a figure is refused half-way — the web and interactive tiers rebuild their eng
 can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
 
 **:meth:`Renderer.apply` is record-only in this wave.** It reaches the axes and this module's record of what
-is on it; it does not reach the scene. Nothing in ``src/`` calls it — a builder draws through
+is on it; it does not reach the scene's **description** — the layer tree, the sources, and so what
+:attr:`~digitalearth.static.scene.Scene.figure_spec` reports. (It does touch the scene's colorbar registry,
+because a drawer registers its mappable there and a rollback has to put that back.) Nothing in ``src/``
+calls it — a builder draws through
 :meth:`Renderer.draw_layer` — so a map's description is written by its builders and never by a reconcile.
 Wave 7 (order 23) routes a map-level change through it, and the scene's own state follows then. Until it
 does, read every ``apply`` here as "the artists and the record", never as "what the map reports".
@@ -63,11 +68,14 @@ logger = logging.getLogger(__name__)
 def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     """Return the engine keywords a layer's caller passed, exactly as they passed them.
 
-    They are held on the scene beside the layer, never in its description (see
-    :attr:`~digitalearth.static.scene.LayerRecord.opts`). Round-tripping them through the description broke
-    them both ways: a dash pattern came back a list matplotlib refuses, and an object with no JSON form — a
-    ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — made the figure impossible to save.
-    Held as passed, matplotlib gets the caller's own objects.
+    This is the *held* half of the pair: every keyword the scene was given, as the very object it was given
+    (see :attr:`~digitalearth.static.scene.LayerRecord.opts`), so matplotlib gets the caller's own objects
+    and never a frozen copy. The layer's description carries the plain ones as well
+    (:func:`~digitalearth.static.scene.travels_in_a_figure`), and a drawer asks
+    :func:`~digitalearth.static.scene.drawing_style` for the two composed rather than calling this directly.
+    Round-tripping the rest broke them both ways: a dash pattern came back a list matplotlib refuses, and an
+    object with no JSON form — a ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — made the
+    figure impossible to save.
 
     Args:
         scene: The scene the layer is drawn on, which holds the keywords.
@@ -77,10 +85,11 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
         A fresh dict of the caller's keywords, so a drawer may pop and set keys the way a builder used to
         on the caller's own; each value is the very object passed. Empty for a layer the scene holds none
         for — one given none, or one described elsewhere and drawn here, such as a figure read back from
-        JSON — which then draws with the engine's defaults.
+        JSON — which then draws from the plain keywords its description carries, and with the engine's
+        defaults wherever it carries none.
 
     Examples:
-        - A scene that holds nothing for a layer hands its drawer nothing, and the layer draws with defaults:
+        - A scene that holds nothing for a layer hands its drawer nothing of its own:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -112,9 +121,29 @@ class DrawnLayer:
             tile basemap, a Natural-Earth overlay, a text label). Kept because a categorical fill's swatch
             legend is read off the glyph rather than off the artist.
         artists: Every matplotlib artist the layer owns, which is what :meth:`Renderer.remove` takes off the
-            axes and what :meth:`Renderer.set_visible` toggles. Empty for a layer that left nothing
-            addressable behind — ``cleopatra.basemap.reference.add_features`` draws onto the axes and hands
-            back the axes, so there is no per-layer artist to hold.
+            axes and what :meth:`Renderer.set_visible` toggles. A drawer that hands its caller something
+            else back still fills this: ``cleopatra.basemap.reference.add_features`` draws onto the axes and
+            returns the axes, so :func:`artists_added` watches the axes and collects whatever appeared while
+            it ran. Empty only for a layer with nothing on the axes yet — a graticule, whose lines are
+            computed when it is drawn and put on the axes afterwards, by the globe frame.
+
+    Examples:
+        - A text label owns the one ``Text`` it drew, and was drawn straight onto the axes rather than
+          through a glyph:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> m = Map()
+            >>> _ = m.text(4.9, 52.4, "Amsterdam")
+            >>> drawn = m._renderer.drawn["text-1"]
+            >>> len(drawn.artists), drawn.glyph
+            (1, None)
+            >>> drawn.artist.get_text()
+            'Amsterdam'
+            >>> m.close()
+
+            ```
     """
 
     artist: Any = None
@@ -615,6 +644,24 @@ class Renderer:
 
     Attributes:
         drawn: Layer id to the :class:`DrawnLayer` its drawer produced, in draw order.
+
+    Examples:
+        - A map's renderer holds what it drew, keyed by the same ids
+          :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, in the order the layers were drawn:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> m = Map()
+            >>> _ = m.text(4.9, 52.4, "Amsterdam")
+            >>> _ = m.text(2.35, 48.86, "Paris")
+            >>> list(m._renderer.drawn)
+            ['text-1', 'text-2']
+            >>> m.layer_ids
+            ['text-1', 'text-2']
+            >>> m.close()
+
+            ```
     """
 
     def __init__(self, scene: Any) -> None:
@@ -700,13 +747,18 @@ class Renderer:
         applied a figure still describes the one its builders made. Nothing in ``src/`` calls this yet —
         routing a map-level change through it is Wave 7 (order 23), and the description follows then.
 
-        **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
-        difference between two figures is read off their descriptions, and a keyword JSON cannot write
-        down — a callable, a colormap built on the spot — is held on the scene beside the layer rather than
-        described (:func:`drawing_opts`). Two layers differing only in one of those therefore compare
-        **equal**: ``diff`` reports no restyle and nothing is redrawn, although the two draw different
-        pictures. A plainly JSON-safe keyword is described and does reach here, so this is now exactly the
-        set the writer itself refuses, and no wider (review M3, M5).
+        **A restyle expressed only in a value the description does not carry is invisible to this path.**
+        The difference between two figures is read off their descriptions, and of a caller's engine
+        keywords only the plain half is described — a string, a boolean, a finite number or ``None``
+        (:func:`~digitalearth.static.scene.travels_in_a_figure`). A colormap built on the spot, a
+        ``Normalize``, a dash tuple, a per-pixel ``alpha`` array: each is held on the scene beside the
+        layer instead (:func:`drawing_opts`), and two layers differing only in one of them compare
+        **equal** — ``diff`` reports no restyle and nothing is redrawn, although the two draw different
+        pictures. The plain half is described and does reach here, which is the narrowing review M3 made.
+        What is left is still wider than what the writer itself refuses: ``to_json_value`` accepts a tuple
+        (as a list) and an array (as nested lists), and both are kept out of the description deliberately —
+        the first because matplotlib refuses what comes back, the second because it is the layer's data
+        (review M5).
 
         Args:
             before: The figure the axes currently shows.
@@ -947,13 +999,37 @@ class Renderer:
             layer_id: The layer to ask about.
 
         Returns:
-            ``True`` when every artist the layer owns is on. A layer that left no addressable artist
-            behind — a graticule, a Natural-Earth overlay — answers ``True``: there is nothing that could
-            have been switched off.
+            ``True`` when every artist the layer owns is on. A layer that owns no artist answers ``True``
+            as well: there is nothing that could have been switched off. A graticule is the one that does —
+            its lines reach the axes with the globe frame, so it owns none until
+            :meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` has run, and none at
+            all on a flat map.
 
         Raises:
             KeyError: when nothing was drawn for `layer_id`, naming it. A layer the axes does not hold has
                 no visibility to report, and :attr:`drawn` is what says which those are.
+
+        Examples:
+            - A layer the caller has just hidden reads back hidden, and one nothing was drawn for is
+              refused by name:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam")
+                >>> m._renderer.is_visible("text-1")
+                True
+                >>> m._renderer.set_visible("text-1", False)
+                >>> m._renderer.is_visible("text-1")
+                False
+                >>> m._renderer.is_visible("nope")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                KeyError: "nothing is drawn for layer 'nope', so it has no visibility to report; ..."
+                >>> m.close()
+
+                ```
         """
         drawn = self._drawn.get(layer_id)
         if drawn is None:

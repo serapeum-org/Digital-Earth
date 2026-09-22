@@ -245,12 +245,15 @@ class LayerRecord:
             all). It is held on the scene under the layer's id instead, and forgotten with the layer.
             ``None`` for every layer that needs none, which is nearly all of them.
         opts: The caller's **engine keywords** — whatever they passed through ``**opts`` to cleopatra or
-            matplotlib — held exactly as passed, beside the layer rather than in its description. A dash
-            pattern is a tuple matplotlib refuses as a list, and a ``Normalize``, a ``FontProperties`` or a
-            per-pixel ``alpha`` array has no JSON spelling at all: a description that froze them handed the
-            engine something else back, or could not be saved. The drawer reads them off the scene, so a
-            figure drawn on a scene that does not hold them — one read back from JSON — draws the layer with
-            the engine's defaults instead. ``None`` or empty for a layer given none.
+            matplotlib — held on the scene exactly as passed. All of them are held; the plain ones are
+            *also* written into the layer's description (:func:`travels_in_a_figure`), and
+            :func:`drawing_style` lets the held copy win, so the scene that built the layer draws it with
+            the very objects passed rather than with a frozen copy. What stays here alone is what a
+            description would have spoiled: a dash pattern is a tuple matplotlib refuses as a list, and a
+            ``Normalize``, a ``FontProperties`` or a per-pixel ``alpha`` array is the wrong thing to write
+            into a figure at all. A figure read back on a scene that holds nothing therefore draws the
+            plain keywords it carries, and the engine's defaults in place of the rest. ``None`` or empty
+            for a layer given none.
 
     Examples:
         - The record a raster builder writes, beside the drawing it made:
@@ -386,9 +389,10 @@ class Scene(WatermarkMixin):
         # by layer id. Deliberately not part of `symbology`: a figure is written to JSON and read back, and
         # neither a shapely geometry nor an API key belongs in one (see `LayerRecord.key`).
         self._layer_keys: Dict[str, Any] = {}
-        # The caller's engine keywords, exactly as passed, keyed by layer id (see `LayerRecord.opts`). Held
-        # here rather than in `symbology` for the same reason as the keys: a description is plain values,
-        # and a dash tuple, a `Normalize` or a colormap object is not one.
+        # The caller's engine keywords, exactly as passed, keyed by layer id (see `LayerRecord.opts`). The
+        # plain ones are described as well; these are the objects themselves, and for a dash tuple, a
+        # `Normalize` or a colormap object this is the only place they live — a description is plain values,
+        # and none of those is one.
         self._layer_opts: Dict[str, Dict[str, Any]] = {}
         # The caller's own objects, for the custom layers they handed in (see `LayerRecord.held`).
         self._held_objects: Dict[str, Any] = {}
@@ -587,9 +591,11 @@ class Scene(WatermarkMixin):
             A :class:`~digitalearth.base.spec.FigureSpec` with one panel, :data:`PANEL_ID`, whose layers are
             the tree in draw order and whose sources are what each builder was given.
 
-            It describes the layers, not the caller's styling: the engine keywords passed through ``**opts``
-            are held beside the layer (:attr:`LayerRecord.opts`) rather than in it, so a figure drawn on
-            another scene draws with the engine's defaults in their place.
+            It carries the plain half of the caller's styling and no more: a keyword passed through
+            ``**opts`` is described when :func:`travels_in_a_figure` accepts it, and held beside the layer
+            (:attr:`LayerRecord.opts`) when it does not — so a figure drawn on another scene draws the
+            described ``vmin``, ``alpha``, ``color`` or ``title``, and the engine's defaults in place of a
+            dash tuple, a per-pixel array or a ``Normalize``.
 
             A scene built from data already in memory can be handed straight to a renderer, but not written:
             ``to_dict()`` refuses an ``object:`` source, because a reference into this process's memory would

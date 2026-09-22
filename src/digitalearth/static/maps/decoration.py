@@ -802,7 +802,9 @@ class DecorationMixin(_MixinBase):
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
             zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
             **kwargs: Style overrides, laid over the layer's defaults (:data:`_NATURAL_EARTH_STYLE`) when it
-                is drawn, and held beside the layer exactly as passed.
+                is drawn. Held beside the layer exactly as passed, and the plain ones described as well, so
+                a figure read back elsewhere still draws them (see
+                :func:`~digitalearth.static.scene.described_opts`).
 
         Returns:
             Whatever the path that drew it returns — the ``PolyCollection`` of a globe fill, the list of
@@ -833,9 +835,10 @@ class DecorationMixin(_MixinBase):
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
-                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
-                than written into its description, so a figure drawn on another scene comes back with the
-                defaults alone.
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
@@ -849,9 +852,10 @@ class DecorationMixin(_MixinBase):
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
-                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
-                than written into its description, so a figure drawn on another scene comes back with the
-                defaults alone.
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
@@ -869,9 +873,10 @@ class DecorationMixin(_MixinBase):
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
-                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
-                than written into its description, so a figure drawn on another scene comes back with the
-                defaults alone.
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The land fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
@@ -891,9 +896,10 @@ class DecorationMixin(_MixinBase):
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
-                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
-                than written into its description, so a figure drawn on another scene comes back with the
-                defaults alone.
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The ocean fill layer (a ``PolyCollection`` disc on a globe; the reprojected plot artist on a flat
@@ -918,9 +924,10 @@ class DecorationMixin(_MixinBase):
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
-                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
-                than written into its description, so a figure drawn on another scene comes back with the
-                defaults alone.
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The lake fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
@@ -936,9 +943,10 @@ class DecorationMixin(_MixinBase):
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
-                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
-                than written into its description, so a figure drawn on another scene comes back with the
-                defaults alone.
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
@@ -1055,6 +1063,12 @@ class DecorationMixin(_MixinBase):
             Whatever ``add_tiles`` returned. Not ``None``: tiles that cannot be fetched raise, and the
             layer is dropped from the description with them — :meth:`stock_img` is the one caller that
             turns that into a quiet ``None``, because a backdrop is best-effort.
+
+        Raises:
+            ValueError: from :func:`draw_basemap` — a keyed preset whose credential is unavailable, an
+                extent entirely outside the provider's coverage, or neither an axes nor a description
+                carrying a frame to tile.
+            TypeError: from :func:`draw_basemap`, for a preset keyword that is missing or misspelled.
         """
         recorded, held = _described_tile_source(source)
         if held is not None:

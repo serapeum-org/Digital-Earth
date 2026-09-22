@@ -303,12 +303,14 @@ class RasterMixin(_MixinBase):
     """Raster field renders and composites for :class:`~digitalearth.static.map.Map`.
 
     Every builder here takes the caller's styling as ``**kwargs``/``**opts`` and passes it on to the
-    cleopatra glyph untouched. Those keywords are **held on the scene beside the layer, not written into
-    its description** (see :attr:`~digitalearth.static.scene.LayerRecord.opts`): a ``Normalize``, a
-    per-pixel ``alpha`` array or a dash tuple has no JSON spelling, and freezing one handed the engine
-    something else back. What the description records is the call the caller made — the band, the
-    colormap name, the levels, the draw order — so the same figure written out and drawn on another
-    scene comes back styled by the engine's defaults rather than by those keywords.
+    cleopatra glyph untouched. Those keywords **go two ways**
+    (see :attr:`~digitalearth.static.scene.LayerRecord.opts`). The plain ones — a string, a boolean, a
+    finite number, ``None`` — are written into the layer's description as well, so the same figure drawn
+    on another scene comes back with the ``vmin``, ``alpha`` or ``title`` the caller asked for. Everything
+    else is held on the scene and nowhere else: a ``Normalize``, a per-pixel ``alpha`` array or a dash
+    tuple is either unwritable or comes back as something matplotlib refuses, and a figure read elsewhere
+    draws those with the engine's defaults. What the description records besides them is the call the
+    caller made — the band, the colormap name, the levels, the draw order.
     """
 
     def _field(
@@ -334,7 +336,9 @@ class RasterMixin(_MixinBase):
         value always wins.
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). It is recorded as the layer's source as given, so only a path-backed layer can
+                be written down.
             kind: ArrayGlyph render kind (``auto``/``imshow``/``pcolormesh``/``contour``/``contourf``).
             band: 1-based band index.
             cmap: Colormap name, or ``None`` (default) to resolve one from the variable via ``auto_style``.
@@ -351,10 +355,10 @@ class RasterMixin(_MixinBase):
                 recorded for the same reason: a backdrop drawn again from its description — a redraw, a
                 rollback, a figure read back — has to come back *behind* the data rather than at the
                 default 0.
-            **opts: The caller's own engine keywords, handed to ``ArrayGlyph`` as passed. They are held
-                beside the layer rather than recorded in it (see the class docstring), so a figure drawn
-                on a scene that does not hold them draws with the engine's defaults. ``ArrayGlyph``
-                refuses a name it does not know rather than dropping it.
+            **opts: The caller's own engine keywords, handed to ``ArrayGlyph`` as passed. The plain ones
+                are described as well as held; the rest are held beside the layer alone (see the class
+                docstring), so a figure drawn on a scene that does not hold them draws those with the
+                engine's defaults. ``ArrayGlyph`` refuses a name it does not know rather than dropping it.
 
         Returns:
             The glyph's mappable (also registered as a Scene layer), or ``None`` when the data lies
@@ -403,8 +407,8 @@ class RasterMixin(_MixinBase):
                 first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
                 ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
-                left over is the caller's own engine styling, held beside the layer rather than
-                described (see the class docstring).
+                left over is the caller's own engine styling, split between the layer's description and
+                the scene (see the class docstring).
 
         Returns:
             The image mappable (registered as a Scene layer).
@@ -423,8 +427,8 @@ class RasterMixin(_MixinBase):
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
-                one this render reads. Anything left over is the caller's own engine styling, held
-                beside the layer rather than described (see the class docstring).
+                one this render reads. Anything left over is the caller's own engine styling, split
+                between the layer's description and the scene (see the class docstring).
 
         Returns:
             The filled-contour mappable (registered as a Scene layer).
@@ -443,8 +447,8 @@ class RasterMixin(_MixinBase):
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
-                one this render reads. Anything left over is the caller's own engine styling, held
-                beside the layer rather than described (see the class docstring).
+                one this render reads. Anything left over is the caller's own engine styling, split
+                between the layer's description and the scene (see the class docstring).
 
         Returns:
             The line-contour mappable (registered as a Scene layer).
@@ -463,8 +467,8 @@ class RasterMixin(_MixinBase):
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
-                the caller's own engine styling, held beside the layer rather than described (see the
-                class docstring).
+                the caller's own engine styling, split between the layer's description and the scene
+                (see the class docstring).
 
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
@@ -489,8 +493,8 @@ class RasterMixin(_MixinBase):
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
-                the caller's own engine styling, held beside the layer rather than described (see the
-                class docstring).
+                the caller's own engine styling, split between the layer's description and the scene
+                (see the class docstring).
 
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
@@ -630,11 +634,14 @@ class RasterMixin(_MixinBase):
 
         Args:
             via: The recipe the figure records, ``"rgb_composite"`` or ``"hsv_composite"``.
-            dataset: The multiband pyramids ``Dataset``.
+            dataset: The multiband pyramids ``Dataset``, or a path or URL to one. It is recorded as the
+                layer's source as given, so only a path-backed layer can be written down.
             bands: The three 1-based band indices.
             mask_nodata: Whether each band's nodata cells are excluded from the stretch.
             limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
-            opts: The caller's styling keywords, held beside the layer as they were written.
+            opts: The caller's styling keywords, as they were written — described where
+                :func:`~digitalearth.static.scene.travels_in_a_figure` accepts them, held beside the layer
+                otherwise.
 
         Returns:
             The image mappable, or ``None`` when the data lies outside what the display CRS shows.

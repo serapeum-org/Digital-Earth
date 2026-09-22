@@ -495,6 +495,10 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
+        KeyError: when the description carries no ``agg`` property — a layer built by hand, or a figure
+            written before the named reducer was recorded. The key is read outright rather than defaulted,
+            so a description that cannot say how it aggregates is refused instead of aggregating some
+            other way.
         OffLimbError: when the warp places none of the geometry in the display CRS.
         ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
     """
@@ -627,6 +631,12 @@ def _opened_component(component: Any) -> Any:
     Returns:
         The dataset. A component that is already an object is handed back untouched, so nothing is
         registered for it and nothing has to be forgotten.
+
+    Raises:
+        ValueError: when `component` is an empty string, which names nothing to open.
+        FileNotFoundError: when the path names nothing, which is the resolver's message naming it.
+        KeyError: when no resolver is registered for the URL's scheme, which is the resolver's message
+            listing the schemes there are.
 
     Note:
         A u/v figure is still ``object:``-backed and so cannot be written down. That needs a layer to be
@@ -823,11 +833,14 @@ class VectorMixin(_MixinBase):
     it was before the annotation.
 
     Every builder here takes the caller's styling as ``**opts``/``**kwargs`` and hands it to the cleopatra
-    glyph as passed. Those keywords are **held on the scene beside the layer, not written into its
-    description** (see :attr:`~digitalearth.static.scene.LayerRecord.opts`): a ``Normalize``, a per-point
-    ``alpha`` array or a dash tuple has no JSON spelling, and freezing one handed the engine something else
-    back. The description records the call the caller made — the band, the column, the scheme, the recipe —
-    so the same figure drawn on another scene comes back styled by the engine's defaults instead.
+    glyph as passed. Those keywords **go two ways**
+    (see :attr:`~digitalearth.static.scene.LayerRecord.opts`). The plain ones — a string, a boolean, a
+    finite number, ``None`` — are written into the layer's description as well, so the same figure drawn on
+    another scene comes back with the ``color``, ``alpha`` or ``linewidth`` the caller asked for.
+    Everything else is held on the scene and nowhere else: a ``Normalize``, a per-point ``alpha`` array or
+    a dash tuple is either unwritable or comes back as something matplotlib refuses, and a figure read
+    elsewhere draws those with the engine's defaults. The description records the call the caller made
+    besides them — the band, the column, the scheme, the recipe.
 
     See Also:
         digitalearth.static.map.Map: the composition that supplies the state these methods use.
@@ -1180,6 +1193,10 @@ class VectorMixin(_MixinBase):
         Raises:
             ValueError: from ``VectorGlyph`` for a keyword in ``**opts`` it does not accept, naming the
                 ones it does. The layer is dropped from the description again before it propagates.
+            FileNotFoundError: when a component's path names nothing, or KeyError when no resolver is
+                registered for its URL scheme (and ValueError for an empty one). Those come from
+                :func:`_opened_component`, which runs **before** the layer is described, so there is
+                nothing to drop.
         """
         record = LayerRecord(
             _VECTOR_KINDS[kind],
@@ -1205,7 +1222,8 @@ class VectorMixin(_MixinBase):
                 because a layer names one source and a field needs two.
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
-                caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
+                caller's own ``VectorGlyph`` styling, split between the layer's description and the scene
+                (see the class docstring).
 
         Returns:
             The ``Quiver`` mappable (registered as a Scene layer; carries the key for :meth:`quiverkey`).
@@ -1213,7 +1231,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
-            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept.
+            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept, or when a component
+                is named by an empty string.
+            FileNotFoundError: when a component's path names nothing.
+            KeyError: when no resolver is registered for a component's URL scheme.
         """
         return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
 
@@ -1226,7 +1247,8 @@ class VectorMixin(_MixinBase):
                 because a layer names one source and a field needs two.
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
-                caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
+                caller's own ``VectorGlyph`` styling, split between the layer's description and the scene
+                (see the class docstring).
 
         Returns:
             The ``Barbs`` mappable (registered as a Scene layer).
@@ -1234,7 +1256,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
-            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept.
+            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept, or when a component
+                is named by an empty string.
+            FileNotFoundError: when a component's path names nothing.
+            KeyError: when no resolver is registered for a component's URL scheme.
         """
         return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
 
@@ -1247,7 +1272,8 @@ class VectorMixin(_MixinBase):
                 because a layer names one source and a field needs two.
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
-                caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
+                caller's own ``VectorGlyph`` styling, split between the layer's description and the scene
+                (see the class docstring).
 
         Returns:
             The streamplot mappable (registered as a Scene layer).
@@ -1255,7 +1281,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
-            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept.
+            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept, or when a component
+                is named by an empty string.
+            FileNotFoundError: when a component's path names nothing.
+            KeyError: when no resolver is registered for a component's URL scheme.
         """
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
@@ -1327,7 +1356,9 @@ class VectorMixin(_MixinBase):
         """Triangulate scattered points and render via ``cleopatra.MeshGlyph``.
 
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a path
+                or URL to either. It is recorded as the layer's source as given, so only a path-backed
+                layer can be written down.
             kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
                 ``tripcolor``).
             **opts: The caller's own engine keywords, forwarded to the glyph as passed and held beside the
