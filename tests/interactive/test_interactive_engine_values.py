@@ -718,3 +718,98 @@ class TestAKeywordJsonCannotCarryIsStillHeld:
         interactive_map = new_map()
         interactive_map.contours(dataset, levels=3, cmap=self._homemade())
         assert _written(interactive_map), "the figure wrote nothing at all"
+
+
+class TestAContainerKeywordIsHeldRatherThanDescribed:
+    """A container travels no better than an engine object, so this tier holds it too (#322).
+
+    This tier used to ask its own oracle, which stopped at what the figure *writer* accepts — so a container
+    of plain values was described. A description freezes every sequence to a tuple, because JSON has no
+    tuple, and the drawer then splatted that tuple into `element.opts(...)`: the engine was handed a
+    spelling the caller had not written. The static tier had already measured the same trip the other way
+    round, where a `linestyle` of `(0, (5, 5))` comes back `[0, [5, 5]]` and matplotlib refuses it outright.
+    The rule is now the shared, narrower one.
+
+    The dangerous half is holding: a value kept out of the description and then never read leaves the engine
+    drawing its own default, silently — the defect that left four builders on this tier ignoring the
+    caller's colormap. So the last check here reads HoloViews, not the description.
+    """
+
+    #: The dash pattern the caller passes, as a **list** — the spelling a caller writes and the one Bokeh is
+    #: meant to receive. Described, it was frozen to the tuple `(4, 4)` on the way into `Symbology.props`.
+    DASH = [4, 4]
+
+    @staticmethod
+    def _drawn_dash(element):
+        """Return the dash pattern HoloViews will draw an element with.
+
+        Args:
+            element: A HoloViews element the map has drawn.
+
+        Returns:
+            The `line_dash` HoloViews holds for it in the Bokeh style options, which is what the renderer
+            builds the glyph from.
+        """
+        return hv.Store.lookup_options("bokeh", element, "style").kwargs.get(
+            "line_dash"
+        )
+
+    def _with_a_dash(self, new_map, point_fc):
+        """Return a map holding one line layer the caller styled with a dash pattern.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection, drawn as a path.
+
+        Returns:
+            The map. The pattern is passed as a **copy**, so nothing here can pass by identity alone.
+        """
+        return new_map().path(point_fc, line_dash=list(self.DASH))
+
+    def test_the_description_does_not_carry_it(self, new_map, point_fc):
+        """A figure written out names no dash pattern at all.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+        """
+        written = _written(self._with_a_dash(new_map, point_fc))
+        assert "line_dash" not in written, written
+
+    def test_the_map_holds_it_instead(self, new_map, point_fc):
+        """Kept out of the figure, but not thrown away — the map keeps the caller's own list.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+        """
+        interactive_map = self._with_a_dash(new_map, point_fc)
+        held = interactive_map._held_for(interactive_map.layer_ids[-1])
+        assert dict(held.get("opts") or {}).get("line_dash") == self.DASH, held
+
+    def test_the_engine_still_draws_the_caller_s_pattern(self, new_map, point_fc):
+        """The drawn object is unchanged: HoloViews holds the list the caller wrote.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+
+        Test scenario:
+            This is the half that cannot be checked against the description. Held and never read, the layer
+            draws Bokeh's default and the two checks above still pass. Described instead of held, HoloViews
+            is handed `(4, 4)` — equal by nothing the caller wrote — which is what this refuses.
+        """
+        interactive_map = self._with_a_dash(new_map, point_fc)
+        drawn = self._drawn_dash(interactive_map.layers[-1])
+        assert drawn == self.DASH, (
+            f"HoloViews was given {drawn!r}, not the dash pattern the caller passed"
+        )
+
+    def test_the_figure_still_writes(self, new_map, point_fc):
+        """Holding more must not stop a figure being written down.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+        """
+        assert _written(self._with_a_dash(new_map, point_fc)), "nothing was written"

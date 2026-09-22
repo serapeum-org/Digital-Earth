@@ -15,7 +15,7 @@ layer rather than a rebuild of the scene around it.
 refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
 one built from data already in memory is handed to a renderer directly instead. And of the caller's own
 engine keywords only the plain half is described — a string, a boolean, a finite number or ``None``, which
-is what :func:`~digitalearth.static.scene.travels_in_a_figure` accepts. A container, an array or an engine
+is what :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts. A container, an array or an engine
 object stays on the scene beside the layer (:func:`drawing_opts`) and nowhere else, so a figure read back
 elsewhere draws *those* with the engine's defaults in their place.
 
@@ -71,7 +71,7 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     This is the *held* half of the pair: every keyword the scene was given, as the very object it was given
     (see :attr:`~digitalearth.static.scene.LayerRecord.opts`), so matplotlib gets the caller's own objects
     and never a frozen copy. The layer's description carries the plain ones as well
-    (:func:`~digitalearth.static.scene.travels_in_a_figure`), and a drawer asks
+    (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`), and a drawer asks
     :func:`~digitalearth.static.scene.drawing_style` for the two composed rather than calling this directly.
     Round-tripping the rest broke them both ways: a dash pattern came back a list matplotlib refuses, and an
     object with no JSON form — a ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — made the
@@ -750,7 +750,7 @@ class Renderer:
         **A restyle expressed only in a value the description does not carry is invisible to this path.**
         The difference between two figures is read off their descriptions, and of a caller's engine
         keywords only the plain half is described — a string, a boolean, a finite number or ``None``
-        (:func:`~digitalearth.static.scene.travels_in_a_figure`). A colormap built on the spot, a
+        (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`). A colormap built on the spot, a
         ``Normalize``, a dash tuple, a per-pixel ``alpha`` array: each is held on the scene beside the
         layer instead (:func:`drawing_opts`), and two layers differing only in one of them compare
         **equal** — ``diff`` reports no restyle and nothing is redrawn, although the two draw different

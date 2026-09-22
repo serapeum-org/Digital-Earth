@@ -52,7 +52,7 @@ from digitalearth.base.spec import (
     Symbology,
     Viewport,
 )
-from digitalearth.base.spec._serial import to_json_value
+from digitalearth.base.spec._serial import travels_in_a_figure
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.capabilities import CAPABILITIES
 
@@ -178,26 +178,6 @@ def _skips_off_limb(builder: Callable) -> Callable:
     return guarded
 
 
-def is_json_value(value: Any) -> bool:
-    """Whether a figure holding `value` in its description can be written down.
-
-    The oracle is the writer itself — :func:`~digitalearth.base.spec._serial.to_json_value`, which
-    `Symbology.to_dict` applies — so this cannot drift from what a figure actually accepts. A colormap
-    object, a Datashader reduction, a `pandas.Timestamp` and a `nan` are all refused there.
-
-    Args:
-        value: A value a builder is about to record.
-
-    Returns:
-        `True` when the description can carry it as it is.
-    """
-    try:
-        to_json_value(value, "Symbology.props")
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
 def cmap_name(cmap: Any) -> Optional[str]:
     """Return the name a colormap object can be written down as, or `None` for one that cannot.
 
@@ -232,28 +212,28 @@ OPTS_KEY = "opts"
 def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, Any]:
     """Describe a builder's `**opts` bag, keeping what a figure can carry and holding the rest.
 
-    The bag that goes round the rule. :func:`describe` asks `is_json_value` per value, which is round 1's
-    decision — a figure keeps everything JSON can carry and the map holds only what it cannot — but every
-    builder recorded its `**opts` wholesale into `held`, untested. So which of the caller's keywords a
-    figure kept was decided by which ones the builder happened to name in its signature:
-    `image(alpha=0.25)` survived because `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not,
-    although both are plain floats and both are channels the shared vocabulary declares. A figure read back
-    elsewhere then drew the engine's defaults where the caller's styling had been, silently (review M3).
+    The bag that goes round the rule. :func:`describe` asks
+    :func:`~digitalearth.base.spec._serial.travels_in_a_figure` per value — but every builder used to record
+    its `**opts` wholesale into `held`, untested. So which of the caller's keywords a figure kept was decided
+    by which ones the builder happened to name in its signature: `image(alpha=0.25)` survived because
+    `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
+    channels the shared vocabulary declares. A figure read back elsewhere then drew the engine's defaults
+    where the caller's styling had been, silently (review M3).
 
-    The split is now by what JSON can carry, per value, exactly as everywhere else on this tier. A
+    The split is now per value, by the rule every tier shares, exactly as everywhere else on this tier. A
     colormap object is spelled by its registered name where it has one, as :func:`describe_style` spells
-    the builders' own; anything else with no JSON form is described as not given and handed to the drawer
+    the builders' own; anything that cannot travel is described as not given and handed to the drawer
     through the map, which is what keeps a figure writable and key-free.
 
     A held keyword is left **out** of the bag rather than recorded as `None`, which is where this differs
     from :func:`describe_style`. A style dict is read by a drawer, which knows a `None` means "not given";
     this bag is the caller's raw keywords and is splatted straight into `element.opts(**opts)`, where a
     `None` is a value the engine is handed — `hooks=None` is not the same as passing no `hooks` at all. So
-    a keyword with no JSON form simply is not in the figure, and a reader without the held object draws
+    a keyword that cannot travel simply is not in the figure, and a reader without the held object draws
     the layer without it, which is what such a reader could do anyway.
 
     Args:
-        held: The values being held beside this layer; the bag's unwritable half is added to it, under the
+        held: The values being held beside this layer; the half that cannot travel is added to it, under the
             same key the description writes, because that is the key :func:`held_props` merges back.
         opts: The caller's raw keywords.
 
@@ -265,8 +245,8 @@ def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, An
     for key, value in dict(opts or {}).items():
         spelling = cmap_name(value) if key == "cmap" else None
         recorded = describe(bucket, key, value, spelling)
-        # `key not in bucket` is how a JSON-safe value is told from a held one, rather than by testing the
-        # result: a caller who wrote `cmap=None` passed a value JSON carries, and it is recorded as given.
+        # `key not in bucket` is how a described value is told from a held one, rather than by testing the
+        # result: a caller who wrote `cmap=None` passed a value that travels, and it is recorded as given.
         if key not in bucket or recorded is not None:
             described[key] = recorded
     if bucket:
@@ -326,16 +306,22 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
 
 
 def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
-    """Record a builder argument if a figure can be written with it; otherwise hold it beside the layer.
+    """Record a builder argument if a figure can travel with it; otherwise hold it beside the layer.
 
     The tier's answer to engine values in a description (review C1/H2/H3/M9): a figure is written to JSON
-    and read back, so it carries **plain values only**. Anything else — a colormap object, an
-    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp —
-    is handed to the drawer through the map instead, keyed by layer id, and the description keeps the
-    JSON-safe rendering of it that `spelling` gives, or nothing.
+    and read back, so it carries **plain scalars only**. Anything else — a colormap object, an
+    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp, and
+    every container — is handed to the drawer through the map instead, keyed by layer id, and the
+    description keeps the JSON-safe rendering of it that `spelling` gives, or nothing.
+
+    The rule is :func:`~digitalearth.base.spec._serial.travels_in_a_figure`, which every tier asks (#322).
+    This tier used to ask its own `is_json_value`, which stopped at what the writer accepts and so described
+    containers: a caller's `line_dash=[4, 4]` was written down, frozen to `(4, 4)`, and handed to HoloViews
+    in the spelling the caller had not written. The shared rule is narrower on purpose — see its docstring
+    for the three measurements behind it.
 
     Args:
-        held: The values being held beside this layer; a value with no JSON form is added to it.
+        held: The values being held beside this layer; a value that cannot travel is added to it.
         name: The property's name, under which the drawer reads it back.
         value: The caller's value.
         spelling: What to describe a held value as — a registered colormap's name, a timestamp's ISO
@@ -344,7 +330,7 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
     Returns:
         The value to record in `Symbology.props`.
     """
-    if is_json_value(value):
+    if travels_in_a_figure(value):
         return value
     held[name] = value
     return spelling

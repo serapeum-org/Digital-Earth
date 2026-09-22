@@ -28,7 +28,6 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
-from numbers import Real
 from pathlib import Path
 from typing import (
     Any,
@@ -64,7 +63,7 @@ from digitalearth.base.spec import (
     Symbology,
     Viewport,
 )
-from digitalearth.base.spec._serial import to_json_value
+from digitalearth.base.spec._serial import travels_in_a_figure
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import DrawnLayer, Renderer, drawing_opts
 
@@ -82,59 +81,6 @@ ENGINE: str = "matplotlib"
 #: ``props``, so a caller's ``zorder=`` can never overwrite the one a builder recorded about the layer itself.
 DRAWING_OPTS_KEY: str = "opts"
 
-#: Where :func:`_writer_takes` says it is asking about, for the message a refusal would carry.
-_WRITER_FIELD: str = f"Symbology.props[{DRAWING_OPTS_KEY!r}]"
-
-
-def _writer_takes(value: Any) -> bool:
-    """Whether the figure writer accepts a value as it stands.
-
-    The oracle is :func:`~digitalearth.base.spec._serial.to_json_value`, which ``Symbology.to_dict`` itself
-    applies, so this cannot drift from what a figure accepts — it is what refuses ``nan`` and the infinities.
-
-    Args:
-        value: A value a layer is about to record.
-
-    Returns:
-        ``True`` when the description can carry it.
-    """
-    try:
-        to_json_value(value, _WRITER_FIELD)
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def travels_in_a_figure(value: Any) -> bool:
-    """Whether one of the caller's engine keywords belongs in the description rather than beside the layer.
-
-    The rule is **a plain value JSON reads back as the very same value**: a string, a boolean, a finite
-    number, or ``None``. That is what the shared vocabulary already models — ``vmin``/``vmax`` are a
-    ``Scale``'s bounds, ``color``, ``width``, ``size`` and ``opacity`` are declared channels — and it is
-    what a reader on another machine can act on.
-
-    Everything else stays beside the layer, and each exclusion is a defect this tier has already had:
-
-    * A **container** is not read back as itself. JSON has no tuple, so a dash pattern written as
-      ``(0, (5, 5))`` comes back ``[0, [5, 5]]``, which matplotlib refuses outright
-      (``ValueError: Unrecognized linestyle``) — describing it would trade a layer that redraws with the
-      engine's defaults for one that cannot redraw at all (round 1, H3).
-    * An **array** is the layer's data, not its description. Writing one costs a conversion per cell and
-      freezing one costs a copy per cell, which is what made a ``1000 x 1000`` per-pixel ``alpha`` take ten
-      times the render it belonged to (round 1, L6).
-    * An **engine object** — a ``Normalize``, a ``FontProperties``, a ``Colormap`` — has no JSON form at
-      all, and a figure holding one could not be saved.
-
-    Args:
-        value: The caller's value for one keyword.
-
-    Returns:
-        ``True`` when the layer's description carries it.
-    """
-    if value is None or isinstance(value, (bool, str, Real)):
-        return _writer_takes(value)
-    return False
-
 
 def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Return the half of a caller's engine keywords that a figure carries.
@@ -143,8 +89,9 @@ def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         opts: Everything the caller passed through ``**opts``, or ``None``.
 
     Returns:
-        The keywords :func:`travels_in_a_figure` accepts, in the order they were given. Empty for a layer
-        whose keywords are all engine objects, which records no ``opts`` property at all.
+        The keywords :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts, in the order they
+        were given. Empty for a layer whose keywords are all engine objects, which records no ``opts``
+        property at all.
     """
     return {
         key: value for key, value in (opts or {}).items() if travels_in_a_figure(value)
@@ -176,10 +123,11 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     """Return every engine keyword a layer is drawn with: the described half under the held half.
 
     The pair :func:`~digitalearth.static.renderer.drawing_opts` alone used to be. A description carries the
-    plain keywords (see :func:`travels_in_a_figure`) so a figure read back on another scene still draws the
-    caller's ``vmin``, ``alpha``, ``color`` and ``title`` rather than the engine's defaults; the scene that
-    built the layer holds all of them, as the very objects passed, and those win — so on the scene that
-    built it a layer is drawn with exactly what it always was, frozen copies included nowhere.
+    plain keywords (see :func:`~digitalearth.base.spec._serial.travels_in_a_figure`) so a figure read back on
+    another scene still draws the caller's ``vmin``, ``alpha``, ``color`` and ``title`` rather than the
+    engine's defaults; the scene that built the layer holds all of them, as the very objects passed, and
+    those win — so on the scene that built it a layer is drawn with exactly what it always was, frozen
+    copies included nowhere.
 
     Args:
         scene: The scene the layer is drawn on, which holds the caller's own objects.
@@ -246,7 +194,8 @@ class LayerRecord:
             ``None`` for every layer that needs none, which is nearly all of them.
         opts: The caller's **engine keywords** — whatever they passed through ``**opts`` to cleopatra or
             matplotlib — held on the scene exactly as passed. All of them are held; the plain ones are
-            *also* written into the layer's description (:func:`travels_in_a_figure`), and
+            *also* written into the layer's description
+            (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`), and
             :func:`drawing_style` lets the held copy win, so the scene that built the layer draws it with
             the very objects passed rather than with a frozen copy. What stays here alone is what a
             description would have spoiled: a dash pattern is a tuple matplotlib refuses as a list, and a
@@ -476,8 +425,9 @@ class Scene(WatermarkMixin):
         it.
 
         The caller's engine keywords go **both** ways, which is deliberate. The plain ones are written into
-        the layer's description (see :func:`travels_in_a_figure`), so a figure read back elsewhere draws the
-        ``vmin``, ``alpha``, ``color`` or ``title`` the caller asked for instead of the engine's defaults.
+        the layer's description (see :func:`~digitalearth.base.spec._serial.travels_in_a_figure`), so a figure
+        read back elsewhere draws the ``vmin``, ``alpha``, ``color`` or ``title`` the caller asked for
+        instead of the engine's defaults.
         All of them — plain or not — stay held on the scene as the very objects passed, and
         :func:`drawing_style` lets those win, so a layer on the scene that built it is drawn with exactly
         what it always was rather than with a frozen copy.
@@ -592,7 +542,8 @@ class Scene(WatermarkMixin):
             the tree in draw order and whose sources are what each builder was given.
 
             It carries the plain half of the caller's styling and no more: a keyword passed through
-            ``**opts`` is described when :func:`travels_in_a_figure` accepts it, and held beside the layer
+            ``**opts`` is described when :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts
+            it, and held beside the layer
             (:attr:`LayerRecord.opts`) when it does not — so a figure drawn on another scene draws the
             described ``vmin``, ``alpha``, ``color`` or ``title``, and the engine's defaults in place of a
             dash tuple, a per-pixel array or a ``Normalize``.

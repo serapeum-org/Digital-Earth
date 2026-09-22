@@ -44,6 +44,7 @@ __all__ = [
     "refuse_unknown",
     "require",
     "to_json_value",
+    "travels_in_a_figure",
     "true_or_false",
 ]
 
@@ -475,6 +476,90 @@ def _finite(value: Any, where: str) -> Any:
             f"{where} is {value!r}, which has no JSON form; strict JSON readers refuse NaN and Infinity"
         )
     return value
+
+
+#: What :func:`_has_a_json_form` tells the writer it is asking about. The refusal's message is thrown away —
+#: only the yes or no is used — but `to_json_value` names a field in every message it raises, and every caller
+#: of the oracle is asking on behalf of a layer's recorded properties.
+_ASKING_FOR: str = "Symbology.props"
+
+
+def _has_a_json_form(value: Any) -> bool:
+    """Whether the figure writer takes `value` as it stands.
+
+    The oracle is the writer itself — :func:`to_json_value`, which `Symbology.to_dict` applies — so the answer
+    cannot drift from what a figure actually accepts. It is what refuses `nan` and the infinities, a `datetime`,
+    a set, a mapping with a non-string key, and every live object.
+
+    Args:
+        value: A value a layer is about to record.
+
+    Returns:
+        `True` when the writer would take it.
+    """
+    try:
+        to_json_value(value, _ASKING_FOR)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def travels_in_a_figure(value: Any) -> bool:
+    """Whether a figure's description carries `value`, or the tier must hold it beside the layer.
+
+    The one rule every tier asks, so that "what can a figure carry?" has a single answer rather than one per
+    backend (#322). The rule is **a plain value JSON reads back as the very same value**: a string, a boolean, a
+    finite number, or `None`. That is what the shared vocabulary already models — `vmin`/`vmax` are a `Scale`'s
+    bounds, `color`, `width`, `size` and `opacity` are declared channels — and it is what a reader on another
+    machine can act on.
+
+    It is deliberately **narrower than the writer**: a container of plain values writes down perfectly well and
+    still does not travel. Three measurements are why, each one a defect a tier has already had:
+
+    * **A container is not read back as itself.** JSON has no tuple, so a matplotlib dash pattern written as
+      ``(0, (5, 5))`` comes back ``[0, [5, 5]]``, which matplotlib refuses outright
+      (``ValueError: Unrecognized linestyle``) — describing it would trade a layer that redraws with the engine's
+      defaults for one that cannot redraw at all. The trip the other way loses the same value on the scene that
+      drew it: a caller's ``line_dash=[4, 4]`` reaches HoloViews as the ``(4, 4)`` the description froze it to.
+      Held instead, the engine is handed the caller's own object and draws exactly what it was asked for.
+    * **A container can be arbitrarily large, and nothing bounds what a caller hands a builder.** A per-pixel
+      ``alpha`` on a ``1000 x 1000`` raster costs ~1.5 s to write and ~1.2 s to freeze and hash — many times the
+      render it belonged to. An array is the layer's *data*; a description is not the place to copy it to.
+    * **An engine object has no JSON form at all** — a ``Normalize``, a ``FontProperties``, a ``Colormap``, a
+      Datashader reduction — so a figure holding one could not be written down; and one that happens to *be* a
+      `dict`, such as a tile provider, would be written down with its API key in it.
+
+    The other half of the rule is the tier's to keep: a value this refuses must still reach the drawer, or the
+    engine silently draws its own default in its place. Every tier holds what is refused under the layer's id and
+    merges it back before drawing.
+
+    Args:
+        value: The caller's value for one keyword.
+
+    Returns:
+        `True` when the layer's description carries it; `False` when the tier must hold it beside the layer.
+
+    Examples:
+        - A scalar travels; the container around it does not:
+            ```python
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure(0.25), travels_in_a_figure("solid"), travels_in_a_figure(None)
+            (True, True, True)
+            >>> travels_in_a_figure((0, (5, 5))), travels_in_a_figure(["fid"])
+            (False, False)
+
+            ```
+        - A scalar the writer itself refuses does not travel either:
+            ```python
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure(float("nan"))
+            False
+
+            ```
+    """
+    if value is None or isinstance(value, (bool, str, Real)):
+        return _has_a_json_form(value)
+    return False
 
 
 def frozen_value(value: Any) -> Any:

@@ -40,6 +40,7 @@ from digitalearth.base.spec._serial import (
     hashable_value,
     read_entry,
     to_json_value,
+    travels_in_a_figure,
 )
 
 #: A minimal valid panel list, for the figure reads that fail on another field.
@@ -1422,3 +1423,107 @@ class TestAMappingHashesByItsItemsAndNothingElse:
             "so they must hash alike; a set keyed on style would otherwise hold both"
         )
         assert len({one_way, other_way}) == 1, "and a set must hold them once"
+
+
+#: A matplotlib dash pattern in its ``(offset, (on, off))`` form — the container the shared rule is argued from,
+#: and the one whose round trip the rule's docstring cites.
+_DASH_PATTERN = (0, (5, 5))
+
+
+class TestWhatTravelsInAFigure:
+    """One rule, in one place, for what a figure's description carries (#322).
+
+    Two tiers used to answer this separately: static asked `travels_in_a_figure` and kept plain scalars only,
+    while interactive asked its own `is_json_value` and kept everything the writer accepts — containers
+    included. The rule is now shared, and it is the narrower of the two. These pin both halves, including the
+    part that reads like an oversight until the round trip is looked at: a container the writer takes
+    perfectly well still does not travel.
+    """
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, True, False, "solid", 0.25, 7, np.float64(2.5), np.str_("solid")],
+        ids=["none", "true", "false", "text", "float", "int", "np-float", "np-str"],
+    )
+    def test_a_plain_scalar_travels(self, value):
+        """A string, a boolean, a finite number or `None` is what a reader on another machine can act on.
+
+        Args:
+            value: The scalar under test.
+        """
+        assert travels_in_a_figure(value), (
+            f"{value!r} is a plain scalar, so a figure's description carries it"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [[1, 2], _DASH_PATTERN, {"a": 1}, np.array([1.0, 2.0]), ["fid"]],
+        ids=["list", "dash-pattern", "mapping", "array", "columns"],
+    )
+    def test_a_container_does_not(self, value):
+        """A container is held beside the layer, however plain the values inside it are.
+
+        Args:
+            value: The container under test.
+        """
+        assert not travels_in_a_figure(value), (
+            f"{value!r} is a container, so the tier holds it beside the layer"
+        )
+
+    def test_the_rule_is_narrower_than_the_writer_on_purpose(self):
+        """The writer takes the dash pattern; the rule refuses it anyway.
+
+        Test scenario:
+            This is the one divergence between the two tiers' old oracles, so it is the assertion that would
+            have caught them disagreeing. Reading only the rule, refusing a value the writer accepts looks
+            like a bug — the round trip below is why it is not.
+        """
+        assert to_json_value(_DASH_PATTERN, "Symbology.props") == [0, [5, 5]], (
+            "the writer takes the dash pattern, so the rule is not simply asking the writer"
+        )
+
+    def test_the_container_it_refuses_would_not_read_back_as_itself(self):
+        """JSON has no tuple, so a described dash pattern comes back as nested lists.
+
+        Test scenario:
+            `(0, (5, 5))` read back is `[0, [5, 5]]`, which matplotlib refuses with
+            `ValueError: Unrecognized linestyle`. Describing the container would trade a layer that redraws
+            with the engine's defaults for one that cannot redraw at all, which is why the rule stops at
+            scalars rather than at whatever `json.dumps` will write.
+        """
+        read_back = json.loads(
+            json.dumps(to_json_value(_DASH_PATTERN, "Symbology.props"))
+        )
+        assert read_back != _DASH_PATTERN, (
+            "the round trip must lose the tuple, or holding the container would buy nothing"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "inf", "-inf"],
+    )
+    def test_a_number_json_cannot_spell_does_not_travel(self, value):
+        """A scalar still has to survive the writer, and JSON has no spelling for these three.
+
+        Args:
+            value: The non-finite number under test.
+        """
+        assert not travels_in_a_figure(value), (
+            f"{value!r} has no JSON form, so a figure holding it could not be written down"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [datetime.datetime(2024, 1, 1), {"a", "b"}, object()],
+        ids=["datetime", "set", "object"],
+    )
+    def test_a_live_object_does_not_travel(self, value):
+        """An engine value has no JSON form at all, so it is held rather than described.
+
+        Args:
+            value: The object under test.
+        """
+        assert not travels_in_a_figure(value), (
+            f"{value!r} has no JSON form, so the tier holds it beside the layer"
+        )

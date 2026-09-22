@@ -640,7 +640,7 @@ class RasterMixin(_MixinBase):
             mask_nodata: Whether each band's nodata cells are excluded from the stretch.
             limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
             opts: The caller's styling keywords, as they were written — described where
-                :func:`~digitalearth.static.scene.travels_in_a_figure` accepts them, held beside the layer
+                :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts them, held beside the layer
                 otherwise.
 
         Returns:
