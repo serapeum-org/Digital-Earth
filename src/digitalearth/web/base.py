@@ -1457,8 +1457,15 @@ class WebMapBase:
         drawn was never in a figure this map reported, so no captured `figure_spec` can name it.
 
         Args:
-            layer_id: The layer to forget. Parts it never recorded are skipped, so this is safe to call
-                however far `_index_layer` got.
+            layer_id: The layer to forget. Parts it never recorded are skipped, so this is total: any id
+                may be passed, and an id nothing recorded takes nothing back.
+
+        Note:
+            Both of `_index_layer`'s calls sit after the tree add, so today no caller in `src/` reaches the
+            skip below (review N4). It is kept because it is what makes the rollback safe to write as one
+            call that need not know how far the body it is undoing got — the alternative, removing from the
+            tree unconditionally, turns a cleanup into a `KeyError` that hides whatever made the build
+            stop. `tests/web/test_web_base.py` pins that, since `src/` cannot.
         """
         from digitalearth.web.renderer import derived_ids
 

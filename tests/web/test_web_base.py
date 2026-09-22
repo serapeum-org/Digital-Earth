@@ -1300,15 +1300,17 @@ class TestDisplayRasterReprojection:
 
 
 class TestForgettingALayerTheTreeNeverHeld:
-    """`_forget_layer` runs however far `_index_layer` got, so it cannot assume an entry exists."""
+    """`_forget_layer` is total: it takes back whatever was recorded and touches nothing else."""
 
-    def test_the_layers_that_are_there_are_left_alone(self):
-        """The builders call this for a layer whose description was abandoned part-way.
+    def test_forgetting_an_id_nothing_recorded_changes_nothing(self):
+        """`_index_layer`'s rollback calls this without knowing how far its own body got.
 
         Test scenario:
-            A layer that was never indexed still reserved its id and may have registered its object, so
-            the cleanup runs for it too. Removing from the tree unconditionally turns that into a
-            `KeyError` raised from the cleanup, hiding whatever made the build stop.
+            Both of today's call sites are past the tree add, so the skip is never taken from `src/`
+            (review N4) — which is exactly why it is worth pinning here rather than assuming. The
+            alternative, removing from the tree unconditionally, turns a cleanup into a `KeyError` that
+            hides whatever made the build stop; and a cleanup that reached further than the id it was
+            given would take another layer's record with it.
         """
         pytest.importorskip("maplibre")
         gpd = pytest.importorskip("geopandas")
@@ -1318,8 +1320,17 @@ class TestForgettingALayerTheTreeNeverHeld:
             {"value": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326
         )
         web_map = WebMap().points(features, name="obs")
-        held = list(web_map.figure_spec.layers.ids)
+        before = (
+            list(web_map.figure_spec.layers.ids),
+            sorted(web_map._sources),
+            sorted(web_map._issued_ids),
+        )
         web_map._forget_layer("never-indexed")
-        assert list(web_map.figure_spec.layers.ids) == held, (
-            f"forgetting an id the tree never held changed the tree: {web_map.figure_spec.layers.ids}"
+        after = (
+            list(web_map.figure_spec.layers.ids),
+            sorted(web_map._sources),
+            sorted(web_map._issued_ids),
+        )
+        assert after == before, (
+            f"forgetting an id nothing recorded changed the record: {before} -> {after}"
         )
