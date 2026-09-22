@@ -165,6 +165,50 @@ def _builder_calls(dataset, collection, point_fc, polygon_fc):
     }
 
 
+class TestAStyleDictDescribesItsColormapByName:
+    """A resolved style dict must spell a held colormap, whichever builder resolved it."""
+
+    def test_a_point_layer_describes_a_colormap_object_by_name(self, new_map, point_fc):
+        """A figure written from a point layer keeps the colormap, as every sibling builder's does.
+
+        Test scenario:
+            The builders that name each property one by one pass `cmap_name(cmap)` as the spelling, so a
+            colormap object is described as `'magma'`. The three that describe a whole resolved style dict
+            in one comprehension passed no spelling at all, so the same call through `points()` described
+            `None` — the layer still drew, because the object is held beside it, but a figure written out
+            and read back elsewhere lost the colormap for a point layer while keeping it for a polygon one.
+        """
+        from matplotlib import colormaps
+
+        interactive_map = new_map()
+        interactive_map.points(point_fc, value_column="fid", cmap=colormaps["magma"])
+        props = dict(
+            interactive_map.figure_spec.layers.get(
+                interactive_map.layer_ids[-1]
+            ).symbology.props
+        )
+        described = dict(props.get("common") or {})
+        assert described.get("cmap") == "magma", (
+            f"a held colormap must be described by name, got {described.get('cmap')!r}"
+        )
+
+    def test_a_polygon_layer_describes_it_the_same_way(self, new_map, polygon_fc):
+        """The two builders must agree: the same colormap object describes the same way."""
+        from matplotlib import colormaps
+
+        interactive_map = new_map()
+        interactive_map.polygons(polygon_fc, column="fid", cmap=colormaps["magma"])
+        props = dict(
+            interactive_map.figure_spec.layers.get(
+                interactive_map.layer_ids[-1]
+            ).symbology.props
+        )
+        described = dict(props.get("common") or {})
+        assert described.get("cmap") == "magma", (
+            f"a held colormap must be described by name, got {described.get('cmap')!r}"
+        )
+
+
 class TestEveryBuilderWritesAFigureThatCanBeSaved:
     """`figure_spec.to_dict()` is the seam's promise; a builder that breaks it breaks the seam."""
 

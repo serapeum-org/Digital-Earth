@@ -213,6 +213,28 @@ def cmap_name(cmap: Any) -> Optional[str]:
     return name if isinstance(name, str) and name in colormaps else None
 
 
+def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any]:
+    """Describe a whole resolved style dict, spelling a colormap by its name.
+
+    The builders that name each property one by one pass `cmap_name(cmap)` to :func:`describe`, so a
+    colormap object is described as `"magma"`. The ones that hand over a resolved style dict in one go had
+    no such spelling, so the same colormap described as nothing — the layer still drew, because the object
+    is held beside it, but a figure written out lost the colormap for those kinds and kept it for the
+    others. Going through one helper is what keeps the two from disagreeing again.
+
+    Args:
+        held: The values being held beside this layer; anything with no JSON form is added to it.
+        style: The resolved style, as the builder computed it.
+
+    Returns:
+        The style to record in `Symbology.props`, with each value described.
+    """
+    return {
+        key: describe(held, key, value, cmap_name(value) if key == "cmap" else None)
+        for key, value in style.items()
+    }
+
+
 def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
     """Record a builder argument if a figure can be written with it; otherwise hold it beside the layer.
 

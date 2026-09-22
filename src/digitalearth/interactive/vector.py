@@ -28,6 +28,7 @@ from digitalearth.interactive.base import (
     _skips_off_limb,
     cmap_name,
     describe,
+    describe_style,
     held_props,
 )
 
@@ -603,7 +604,7 @@ class VectorMixin(_MixinBase):
             symbology=_vector_symbology(
                 "Points",
                 [value_column] if value_column else None,
-                {key: describe(held, key, value) for key, value in common.items()},
+                describe_style(held, common),
                 labels,
             ),
         )
@@ -839,7 +840,7 @@ class VectorMixin(_MixinBase):
             symbology=_vector_symbology(
                 "Polygons",
                 [column],
-                {key: describe(held, key, value) for key, value in styling.items()},
+                describe_style(held, styling),
                 labels,
             ),
         )
@@ -999,7 +1000,7 @@ class VectorMixin(_MixinBase):
             symbology=_vector_symbology(
                 "Polygons",
                 [column],
-                {key: describe(held, key, value) for key, value in classified.items()},
+                describe_style(held, classified),
             ),
         )
 
