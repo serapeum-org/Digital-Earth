@@ -205,8 +205,8 @@ def draw_large_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     props = dict(layer.symbology.props)
-    element = interactive_map._draw_large_image(data, props)
-    return DrawnLayer(element=element, style=dict(props.get("opts") or {}))
+    element, style = interactive_map._draw_large_image(data, props)
+    return DrawnLayer(element=element, style=style)
 
 
 class RasterMixin(_MixinBase):
@@ -668,7 +668,7 @@ class RasterMixin(_MixinBase):
             ),
         )
 
-    def _draw_large_image(self, dataset: Any, props: dict) -> Any:
+    def _draw_large_image(self, dataset: Any, props: dict) -> Tuple[Any, dict]:
         """Build the windowed-read layer a `large_image` description asks for.
 
         Args:
@@ -676,7 +676,9 @@ class RasterMixin(_MixinBase):
             props: The layer's recorded properties.
 
         Returns:
-            The element — a single frame, or the `DynamicMap` that re-reads the window on pan and zoom.
+            ``(element, style)``: the element — a single frame, or the `DynamicMap` that re-reads the window
+            on pan and zoom — and the backend-agnostic options every frame is drawn with, which is what the
+            layer's `DrawnLayer.style` records.
         """
         _, hv = _require_holoviz()
         band = props["band"]
@@ -686,20 +688,36 @@ class RasterMixin(_MixinBase):
         # Resolved once, from the band's name only: reading the array to build a full Source would
         # defeat the whole point of a windowed reader.
         cmap = self._auto_cmap_for_band(ds, band, props.get("cmap"))
+        common = {"cmap": cmap, "colorbar": True, **opts}
+        frame_opts = {"tools": ["hover"]}
         target = RenderTarget(
             "window", width=self.width, height=self.height, budget=props["max_pixels"]
         )
-        view = SourceView.of(
-            ds,
-            ref=DataRef.to_object(ds),
-            selection=Selection.of(band),
-            request=target.view_request(Viewport(self.crs)),
-        )
-
         # Filled in below with the `DynamicMap` the frames belong to, so each frame's style is filed
         # against the layer a caller holds rather than against whichever layer happened to register last
-        # (review H3). It stays `None` for the static path, where the frame *is* the layer.
+        # (review H3). It stays `None` for the static path, where the frame *is* the layer. `held` carries
+        # the view between frames: the first read makes it, every later one re-reads through it.
         owner: Dict[str, Any] = {}
+        held: Dict[str, Any] = {}
+
+        def _read(request: Any) -> Any:
+            """Answer one read request, making the layer's view the first time it is asked.
+
+            Args:
+                request: What this frame wants — the region, the canvas and the budget.
+
+            Returns:
+                The view of that window.
+            """
+            if "view" not in held:
+                held["view"] = SourceView.of(
+                    ds,
+                    ref=DataRef.to_object(ds),
+                    selection=Selection.of(band),
+                    request=request,
+                )
+                return held["view"]
+            return held["view"].reread(request)
 
         def _frame(x_range: Any = None, y_range: Any = None) -> Any:
             """Read the window the viewport asks for, and draw it.
@@ -714,33 +732,33 @@ class RasterMixin(_MixinBase):
             if x_range is None or y_range is None:
                 # The first frame is the whole raster within the budget: a canvas with no region windows
                 # the source itself, which is what `preview` used to approximate.
-                shown = view
+                request = target.view_request(Viewport(self.crs))
             else:
-                shown = view.reread(
-                    target.view_request(
-                        Viewport(self.crs),
-                        bounds=Bounds(
-                            x_range[0], y_range[0], x_range[1], y_range[1], crs=self.crs
-                        ),
-                    )
+                request = target.view_request(
+                    Viewport(self.crs),
+                    bounds=Bounds(
+                        x_range[0], y_range[0], x_range[1], y_range[1], crs=self.crs
+                    ),
                 )
             return self._styled(
-                self._image_from_source(shown),
-                common={"cmap": cmap, "colorbar": True, **opts},
-                bokeh={"tools": ["hover"]},
+                self._image_from_source(_read(request)),
+                common=common,
+                bokeh=frame_opts,
                 owner=owner.get("layer"),
             )
 
         if not dynamic:
-            return _frame()
+            return _frame(), common
         from holoviews.streams import RangeXY
 
         dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
         owner["layer"] = dmap
-        # Drawn once here as well as on every range event: a `DynamicMap` is lazy, so without this the
-        # layer's first frame — and the style filed against it — would not exist until something rendered.
-        _frame()
-        return dmap
+        # The style every frame will be drawn with, filed against the layer a caller holds before any frame
+        # exists, so `style_of` answers for it at once (review M17). It used to be filed by drawing a first
+        # frame here and throwing it away, which is why the window was read at build time at all: a
+        # `DynamicMap` is lazy, and now so is its layer's first read (review M8).
+        self._record_style(dmap, self._style_record(common, frame_opts))
+        return dmap, common
 
     def _windowable(self, dataset: Any) -> Any:
         """Return the raster to read windows from, warped lazily when the display CRS asks for it.

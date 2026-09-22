@@ -990,20 +990,36 @@ class InteractiveMapBase:
             The styled element.
         """
         _require_holoviz()  # called for its actionable ImportError; no module name is needed here
-        common = {
+        style = self._style_record(common, bokeh)
+        if style["common"]:
+            element = element.opts(**style["common"])
+        element = element.opts(backend="bokeh", **style["bokeh"])
+        self._record_style(element, style, owner)
+        return element
+
+    def _style_record(
+        self, common: Optional[dict] = None, bokeh: Optional[dict] = None
+    ) -> dict:
+        """Return the style :meth:`_styled` applies for these options, without an element to apply it to.
+
+        Split out so a layer can file its style before it has drawn anything: a dynamic layer's frames are
+        drawn lazily, and drawing one only to read its style back cost a full window read per layer.
+
+        Args:
+            common: Backend-agnostic options; ``None``-valued entries are dropped.
+            bokeh: Extra Bokeh-only options merged over the default frame.
+
+        Returns:
+            dict: ``{"common": {...}, "bokeh": {...}}`` — the shape :meth:`style_of` reads back.
+        """
+        kept = {
             key: value for key, value in (common or {}).items() if value is not None
         }
-        if common:
-            element = element.opts(**common)
         frame: dict = {"width": self.width, "height": self.height}
         if self.title:
             frame["title"] = self.title
         frame.update(bokeh or {})
-        element = element.opts(backend="bokeh", **frame)
-        self._record_style(
-            element, {"common": dict(common), "bokeh": dict(frame)}, owner
-        )
-        return element
+        return {"common": kept, "bokeh": frame}
 
     def _record_style(self, element: Any, style: dict, owner: Any = None) -> None:
         """File the style of a just-drawn element, and of the layer it is a frame of.

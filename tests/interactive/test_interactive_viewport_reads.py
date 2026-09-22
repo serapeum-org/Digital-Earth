@@ -166,6 +166,24 @@ class TestTheReadRequest:
             f"the window must snap outward to the cell edge, got {(west, south)}"
         )
 
+    def test_a_dynamic_layer_reads_nothing_until_a_frame_is_drawn(self, cog):
+        """A `DynamicMap` is lazy, so building one must not pay for a read nobody looks at.
+
+        Args:
+            cog: The recording raster.
+
+        Test scenario:
+            The drawer called its frame function once before returning the `DynamicMap`, to file the style
+            against the layer, and threw the frame away — a full window read per dynamic layer, at build
+            time, of a raster this builder exists to avoid reading whole (review M8).
+        """
+        m = InteractiveMap(crs=3857)
+        try:
+            m.large_image(cog, dynamic=True, max_pixels=64 * 64)
+            assert cog.read_calls == [], cog.read_calls
+        finally:
+            m.close()
+
 
 class TestWhatTheFrameShows:
     """The frame is drawn the way `image()` draws one, and says what is missing."""
@@ -211,6 +229,43 @@ class TestWhatTheFrameShows:
         m.large_image(cog, cmap="magma")
         m.layers[0][()]  # draw the first frame, as a renderer would
         assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
+
+    def test_a_dynamic_layer_s_style_is_readable_before_any_frame_is_drawn(self, cog):
+        """The style is filed against the layer itself, so no frame has to be drawn to file it.
+
+        Args:
+            cog: The recording raster.
+
+        Test scenario:
+            Dropping the discarded build-time frame must not bring back review M17, where `style_of` answered
+            `{}` for a dynamic layer until something rendered it.
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        try:
+            m.large_image(cog, cmap="magma")
+            assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
+        finally:
+            m.close()
+
+    @pytest.mark.parametrize("dynamic", [False, True])
+    def test_the_drawn_record_carries_the_style_that_was_applied(self, cog, dynamic):
+        """`DrawnLayer.style` is what the drawer applied, as it is for every other drawer.
+
+        Args:
+            cog: The recording raster.
+            dynamic: Whether the layer is one frame or a `DynamicMap`.
+
+        Test scenario:
+            The record held only the caller's extra options — `{}` for a plain call — although the frames
+            were drawn with a colormap and a colorbar (review L8).
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        try:
+            m.large_image(cog, cmap="magma", dynamic=dynamic)
+            style = m._renderer.drawn[m.layer_ids[0]].style
+            assert style["cmap"] == "magma", style
+        finally:
+            m.close()
 
     def test_a_later_layer_does_not_overwrite_a_dynamic_layer_s_style(self, dataset):
         """A frame says which layer it belongs to; it used to be guessed from the last one registered.
