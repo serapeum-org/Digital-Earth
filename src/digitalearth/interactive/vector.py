@@ -376,9 +376,15 @@ def draw_trimesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     gv, _ = _require_holoviz()
     props = dict(layer.symbology.props)
-    nodes, simplices, vdims = interactive_map._mesh_inputs(
-        data, props.get("value_column")
-    )
+    value_column = props.get("value_column")
+    # The builder had to build this mesh to count its faces, and hands it over while its own call is still
+    # running. Taken only when it was built from this very object and column, so a figure drawn from its
+    # description alone — by the renderer, or on another map — builds its own.
+    handed = getattr(interactive_map, "_built_mesh", None)
+    if handed is not None and handed[0] is data and handed[1] == value_column:
+        nodes, simplices, vdims = handed[2]
+    else:
+        nodes, simplices, vdims = interactive_map._mesh_inputs(data, value_column)
     trimesh = gv.TriMesh(
         (simplices, nodes), crs=gv.util.process_crs(interactive_map.crs)
     )
@@ -1323,9 +1329,11 @@ class VectorMixin(_MixinBase):
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.trimesh()"
         )
-        # The mesh is built here as well as in the drawer, because the routing decision below is made on
-        # the face count — which only the built connectivity knows.
-        nodes, simplices, _ = self._mesh_inputs(data, value_column)
+        # The mesh is built here because the routing decision below is made on the face count, which only the
+        # built connectivity knows. The drawer would build the same one again from the same data, so the one
+        # built here is handed to it for the length of this call (review M8).
+        built = self._mesh_inputs(data, value_column)
+        nodes, simplices, _ = built
         n_faces = len(simplices)
         if rasterize is True or (rasterize == "auto" and n_faces > threshold):
             from loguru import logger
@@ -1337,19 +1345,25 @@ class VectorMixin(_MixinBase):
                 )
             trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
             return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
-        return self.add_element(
-            None,
-            kind="unstructured",
-            source=data,
-            symbology=Symbology(
-                props={
-                    "via": "trimesh",
-                    "value_column": value_column,
-                    "cmap": cmap,
-                    "opts": dict(opts),
-                }
-            ),
-        )
+        self._built_mesh = (data, value_column, built)
+        try:
+            return self.add_element(
+                None,
+                kind="unstructured",
+                source=data,
+                symbology=Symbology(
+                    props={
+                        "via": "trimesh",
+                        "value_column": value_column,
+                        "cmap": cmap,
+                        "opts": dict(opts),
+                    }
+                ),
+            )
+        finally:
+            # Released as soon as the layer is drawn: holding it would keep the mesh alive for as long as the
+            # map, and a later draw from the description must build its own.
+            self._built_mesh = None
 
     def _mesh_inputs(self, data: Any, value_column: Optional[str]) -> tuple:
         """Return ``(nodes_points, simplices, vdims)`` for :meth:`trimesh`.

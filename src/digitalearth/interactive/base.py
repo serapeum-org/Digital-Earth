@@ -288,6 +288,9 @@ class InteractiveMapBase:
         self._projection: Any = None
         # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
         self._draw_stream: Any = None
+        # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
+        # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
+        self._built_mesh: Optional[tuple] = None
         # Class breaks / categories from the most recent choropleth, for building a legend out-of-band
         # (web-tier parity). None until a categorical choropleth runs; the continuous ramp resets it to None.
         self.last_breaks: Optional[List[Any]] = None
