@@ -242,6 +242,35 @@ class TestReconcilingTwoFigures:
         )
 
 
+class TestApplyIsRecordOnly:
+    """Review M1: on this tier, for this wave, `apply` moves the renderer's record and nothing a viewer sees."""
+
+    def test_a_successful_apply_moves_the_record_and_not_the_map(self, drawn_map):
+        """What `apply` does here, stated as it is rather than as the module once promised.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The module said "the next build draws it". It does not: the widget is built from the map's queue
+            and `figure_spec` from its tree, and `apply` touches neither. This pins that, so wiring `apply`
+            into the map (Wave 7) has to change this test on purpose rather than slip past it.
+        """
+        figure = drawn_map.figure_spec
+        queued = list(drawn_map._queued)
+        panel = with_fields(figure.panels[0], layers=())
+        emptied = with_fields(
+            figure, layers=figure.layers.remove("obs"), panels=(panel,)
+        )
+        drawn_map._renderer.apply(figure, emptied)
+        reached = {
+            "record": sorted(drawn_map._renderer.drawn),
+            "figure_spec": list(drawn_map.figure_spec.layers.ids),
+            "queue": drawn_map._queued == queued,
+        }
+        assert reached == {"record": [], "figure_spec": ["obs"], "queue": True}, reached
+
+
 def _visibilities(drawn) -> list:
     """Return the `layout.visibility` of every MapLibre layer one drawing holds, its extra layers included.
 

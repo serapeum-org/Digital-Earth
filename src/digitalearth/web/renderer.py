@@ -13,10 +13,17 @@ real figure rather than a label for one.
 
 **This tier rebuilds rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
 place, so :mod:`digitalearth.three_d.renderer` reconciles a diff against it. MapLibre's widget is built
-fresh on every ``render()``, so there is no long-lived engine object to reconcile against: :meth:`Renderer.
-apply` reconciles the *description*, and the next build draws it. The observable contract is the same — a
-refused figure must change neither what the map reports nor what it next draws — which is why the shared
-renderer conformance suite fits both tiers without special-casing either.
+fresh on every ``render()``, from the map's queue, so there is no long-lived engine object to reconcile
+against: :meth:`Renderer.apply` reconciles the renderer's own *record* of what is drawn —
+:attr:`Renderer.drawn` — and the contract it signs is the one the shared renderer conformance suite states
+for all four tiers.
+
+**On this tier, for this wave, `apply` is record-only.** It does not change what `WebMap` queues, which is
+what the widget is built from, and it does not change what `figure_spec` reports, which is the map's own
+layer tree. A layer it adds is in the record and never reaches the widget; a layer it removes leaves the
+record and stays on the widget. Nothing in the tier calls it: every builder draws through
+:meth:`Renderer.draw_layer`, one layer at a time. Wiring `apply` into the map's public state is Wave 7
+(order 23); until then a caller who applies a figure has moved the record and nothing a viewer sees.
 """
 
 from dataclasses import dataclass, field
@@ -433,27 +440,32 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring what the map draws from one figure to another, or leave it as it was.
+        """Bring the renderer's record of what is drawn from one figure to another, or leave it as it was.
+
+        **Record-only on this tier, for this wave.** It reconciles :attr:`drawn` and nothing else: the queue
+        the widget is built from and the figure `figure_spec` reports are the map's own, and neither follows.
+        Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
 
         Reconciling is not atomic — the layers are drawn one after another — so a refusal partway has
         already drawn the ones before it. Everything drawn in the attempt is therefore rolled back before
-        the refusal is re-raised: a figure this declines changes neither what the map reports nor what it
-        next draws, which is the contract the shared renderer conformance suite states for all three tiers.
+        the refusal is re-raised: a figure this declines leaves the record as it found it, which is the
+        contract the shared renderer conformance suite states for all four tiers.
 
         Args:
-            before: The figure the map currently draws.
-            after: The figure it should draw.
+            before: The figure the record currently holds.
+            after: The figure it should hold.
 
         Raises:
-            KeyError: when a layer names a kind this tier does not draw.
+            KeyError: when a layer names a kind this tier does not draw. The record is rolled back first, as
+                it is for the two below.
             ValueError: when a layer's description does not carry what its drawer needs.
             OffLimbError: when the map is `strict` and a layer cannot be placed.
 
         Note:
             Unlike the 3-D tier, nothing is mutated in place: MapLibre's widget is rebuilt on every render,
-            so this reconciles the *record* of what is drawn and the next build reflects it. The failure
-            modes it must still avoid are the same, which is why the order below matches that tier's —
-            removals first, then data changes, then styling, then additions.
+            from the queue rather than from this record. The failure modes the record must still avoid are
+            the 3-D tier's, which is why the order below matches that tier's — removals first, then data
+            changes, then styling, then additions.
         """
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third layer has already
         # drawn the first two. Rolling back only the caller's description would leave this record holding
