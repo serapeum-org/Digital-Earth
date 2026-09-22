@@ -159,6 +159,83 @@ def _provider_description(provider: Any) -> Optional[str]:
     return None
 
 
+#: What `xyzservices` writes into a field the caller has to fill in — `'<insert your apiKey here>'`. It is
+#: the catalog's own marker for a credential, and `TileProvider.requires_token` reads it the same way.
+TOKEN_PLACEHOLDER = "<insert your"
+
+
+def _token_fields(provider: Any) -> list:
+    """Return the field names a provider needs a credential in before its URL can be built.
+
+    Args:
+        provider: An `xyzservices.TileProvider`.
+
+    Returns:
+        The names, in catalog order — usually one (`apiKey`, `accessToken`, `apikey`), and empty for a
+        service that needs none.
+    """
+    return [
+        field
+        for field, value in dict(provider).items()
+        if isinstance(value, str) and TOKEN_PLACEHOLDER in value
+    ]
+
+
+def _catalogued_tiles(name: str, api_key: Any, *, known: Any) -> Any:
+    """Resolve a provider name GeoViews' own catalog does not carry, through the `xyzservices` catalog.
+
+    The second half of :func:`_provider_description`: that one decides what a figure may write a provider
+    down as, and this one reads it back. A provider whose `url` repeats one of its own field values —
+    Esri's polar maps (`variant="Arctic_Imagery"`), HERE's styles (`variant="explore.day"`) — is described
+    by **name**, because the guard cannot tell such a template from one a key was substituted into. Only
+    32 of the 880 catalogued services are in GeoViews' catalog, and it spells them without the dot, so
+    those figures named a provider nothing here could resolve (review M9). The guard itself is unchanged:
+    it leaks no credential across the catalog, and what was wrong was the resolution, not the writing.
+
+    Args:
+        name: The provider name a description carries, as `xyzservices` spells it.
+        api_key: The credential held for this layer, or `None`.
+        known: The GeoViews catalog, named in the refusal when nothing resolves the name — a caller
+            reading it wants the names this tier offers, not all 880.
+
+    Returns:
+        The tile element. A keyed service is built from its filled-in template and carries its attribution
+        as a plot hook, as a keyed preset does; a keyless one is handed over as the provider object, which
+        is how GeoViews reads its attribution for itself.
+
+    Raises:
+        ValueError: when neither catalog knows the name — a typo must stay a refusal rather than become a
+            blank basemap.
+        ImportError: when the service needs a credential and none is held, matching the answer a keyed
+            preset and the Stadia catalog entry already give.
+    """
+    import xyzservices.providers as xyz
+
+    gv, _ = _require_holoviz()
+    try:
+        provider = xyz.query_name(name)
+    except ValueError:
+        # `xyzservices`' own message names its 880 services; this one names the catalog a caller chooses
+        # from, which is the answer the tier has always given for an unknown name.
+        raise ValueError(
+            f"unknown tile provider {name!r} — choose one of: {', '.join(sorted(known))}"
+        ) from None
+    secrets = _token_fields(provider)
+    if not secrets:
+        return gv.WMTS(provider)
+    if api_key is None:
+        raise ImportError(
+            f"tile provider {name!r} needs an api_key ({', '.join(secrets)}); pass "
+            "tiles(provider, api_key=...)"
+        )
+    # Built rather than handed over, because the credential has to reach the template; the attribution
+    # GeoViews would have read off the object is re-attached the way a keyed preset's is.
+    url = provider.build_url(**{field: api_key for field in secrets})
+    return gv.WMTS(_upper_placeholders(url)).opts(
+        hooks=[_attribution_hook(provider.attribution)]
+    )
+
+
 def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the tile basemap a description asks for.
 
@@ -433,8 +510,13 @@ class DecorationMixin(_MixinBase):
     def _build_tiles(self, provider: Any, api_key: Any, **preset: Any) -> Any:
         """Resolve ``provider`` to a ``gv.WMTS``/``gv.Tiles`` element (name, URL, or xyzservices).
 
+        A name is looked up in GeoViews' own catalog first and in the wider ``xyzservices`` one after it,
+        so every name a figure can be **described** by is a name that can be **drawn** — which is what a
+        provider written down as its name needs (review M9; see :func:`_catalogued_tiles`).
+
         Args:
-            provider: A catalog name, a keyed preset name, a raw ``{Z}/{X}/{Y}`` URL, or an
+            provider: A ``geoviews.tile_sources`` name, any ``xyzservices`` provider name
+                (``"Esri.ArcticImagery"``), a keyed preset name, a raw ``{Z}/{X}/{Y}`` URL, or an
                 ``xyzservices.TileProvider``.
             api_key: Credential for a keyed provider or preset.
             **preset: A keyed preset's own keywords, e.g. ``date`` / ``flavour``.
@@ -443,8 +525,8 @@ class DecorationMixin(_MixinBase):
             The tile element (a fresh clone for catalog names — the shared instance is never mutated).
 
         Raises:
-            ValueError: for an unknown provider name, or when preset keywords are passed with a provider
-                that is not a keyed preset.
+            ValueError: for a provider name neither catalog knows, or when preset keywords are passed with
+                a provider that is not a keyed preset.
             ImportError: when a keyed provider needs an ``api_key`` that was not supplied.
         """
         gv, _ = _require_holoviz()
@@ -479,10 +561,11 @@ class DecorationMixin(_MixinBase):
         if isinstance(provider, str):
             sources = gv.tile_sources.tile_sources
             if provider not in sources:
-                known = ", ".join(sorted(sources))
-                raise ValueError(
-                    f"unknown tile provider {provider!r} — choose one of: {known}"
-                )
+                # Not in GeoViews' own catalog, which spells `Esri.ArcticImagery` as `EsriArcticImagery`
+                # and carries 32 of the 880 services `xyzservices` does. A figure describes a provider by
+                # name whenever its URL is one the credential guard refuses, so a name this tier cannot
+                # resolve is a figure that writes cleanly and then raises when it is drawn back (review M9).
+                return _catalogued_tiles(provider, api_key, known=sources)
             if "stadia" in provider.lower() and api_key is None:
                 raise ImportError(
                     f"tile provider {provider!r} needs an api_key (Stadia/Stamen require a key for "

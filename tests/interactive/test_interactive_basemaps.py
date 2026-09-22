@@ -253,3 +253,148 @@ class TestAProviderWhoseOwnFieldsAreInItsTemplate:
         assert _provider_description(ordinary) == template, (
             "a provider whose template still holds its placeholder is describable"
         )
+
+
+class TestAProviderDescribedByItsNameDrawsBackFromTheFigure:
+    """The middle branch of `_provider_description`: a provider written down as its own name (round 2, M9).
+
+    The credential guard rejects a `url` in which any non-public field's value appears verbatim, because
+    such a template may be one a key was substituted into. Esri's polar maps carry `variant="Arctic_Imagery"`
+    and HERE's carry `variant="explore.day"`, both of which appear in their own templates, so 22 of the 880
+    catalogued providers fall through to being described by **name**. `_build_tiles` resolved only the
+    GeoViews catalog, which spells those names without the dot, so the written figure raised
+    `ValueError: unknown tile provider 'Esri.ArcticImagery'` when it was drawn back.
+
+    The guard is left as it is — it leaks no key across all 880 — and the resolution is what changed.
+    """
+
+    @staticmethod
+    def _described_by_name():
+        """Return the catalogued providers the description writes down as their own name.
+
+        Returns:
+            `{name: provider}` for every `xyzservices` provider whose `url` the credential guard rejects,
+            so that its name is what a figure carries.
+        """
+        import xyzservices
+        import xyzservices.providers as xyz
+
+        from digitalearth.interactive.decoration import _provider_description
+
+        found = {}
+
+        def walk(bunch):
+            """Collect the leaf providers of one `xyzservices` bunch.
+
+            Args:
+                bunch: A `xyzservices.Bunch`, which nests providers by service.
+            """
+            for value in bunch.values():
+                if isinstance(value, xyzservices.TileProvider):
+                    found[value.name] = value
+                else:
+                    walk(value)
+
+        walk(xyz)
+        return {
+            name: provider
+            for name, provider in found.items()
+            if _provider_description(provider) == name
+        }
+
+    def test_the_branch_is_reachable_at_all(self):
+        """The positive control: something really is described by name, or the rest proves nothing."""
+        by_name = self._described_by_name()
+        assert by_name, "no catalogued provider is described by its name any more"
+
+    def test_every_name_the_description_writes_can_be_resolved_back(self):
+        """A figure that writes cleanly must draw back; a name it cannot resolve breaks that promise.
+
+        Test scenario:
+            The whole catalog rather than one provider, because the failing set is decided by which
+            services happen to repeat a field value inside their own URL — a property of the catalog,
+            which moves with every `xyzservices` release. A credential is passed for all of them: 17 of
+            the 22 are HERE styles, which need one, and a figure never carries a key, so the key is the
+            map's to supply.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        refused = {}
+        try:
+            for name in self._described_by_name():
+                try:
+                    interactive_map._build_tiles(name, FAKE_KEY)
+                except Exception as err:  # the failure under test is the refusal itself
+                    refused[name] = f"{type(err).__name__}: {err}"
+        finally:
+            interactive_map.close()
+        assert not refused, f"{len(refused)} described names did not resolve: {refused}"
+
+    def test_a_keyless_polar_provider_keeps_its_own_tiles(self):
+        """Resolving by name must reach the same service, not a near-miss with a similar name.
+
+        Test scenario:
+            `Esri.ArcticImagery` is spelled `EsriArcticImagery` in the GeoViews catalog and
+            `Esri.AntarcticImagery` sits one letter away, so a fallback that matched loosely could hand
+            back the wrong pole without anything noticing.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        try:
+            element = interactive_map._build_tiles("Esri.ArcticImagery", None)
+        finally:
+            interactive_map.close()
+        assert "Arctic_Imagery" in str(element.data), element.data
+
+    def test_a_name_nothing_catalogues_is_still_refused_by_name(self):
+        """The fallback must not turn a typo into a silent blank basemap.
+
+        Test scenario:
+            The refusal is what tells a caller a provider name is wrong; widening resolution must not
+            widen it into accepting anything.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        try:
+            with pytest.raises(ValueError, match="unknown tile provider"):
+                interactive_map._build_tiles("NoSuchProviderAnywhere", None)
+        finally:
+            interactive_map.close()
+
+    def test_a_keyed_provider_resolved_by_name_says_so_when_no_key_is_held(self):
+        """Resolving a name must not draw a service's `{apiKey}` placeholder as if it were a URL.
+
+        Test scenario:
+            A figure carries no credential by design, so a HERE basemap read back on another machine has
+            none. Building its template unfilled would request tiles that 404 with nothing said; the
+            refusal names the field, as the keyed preset and the Stadia entry already do.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        try:
+            with pytest.raises(ImportError, match="needs an api_key"):
+                interactive_map._build_tiles("HERE.exploreDay", None)
+        finally:
+            interactive_map.close()
+
+    def test_a_key_that_is_held_reaches_the_template(self):
+        """The positive control for the refusal above: with a key, the same name draws.
+
+        Test scenario:
+            Without this, making `_build_tiles` refuse every keyed provider outright would pass the check
+            above while taking the basemap away from every caller who did supply a key.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        try:
+            element = interactive_map._build_tiles("HERE.exploreDay", FAKE_KEY)
+        finally:
+            interactive_map.close()
+        url = str(element.data)
+        assert FAKE_KEY in url, f"the credential never reached the template: {url}"
+        assert "{Z}/{X}/{Y}" in url, f"placeholders were not upper-cased: {url}"
