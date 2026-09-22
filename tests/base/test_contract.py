@@ -14,6 +14,7 @@ import pytest
 from digitalearth.base.contract import (
     CORE,
     PENDING,
+    TIER2,
     Method,
     alias_table,
     core_method,
@@ -23,6 +24,10 @@ from digitalearth.base.deprecation import renamed_method, renamed_parameter
 
 #: An issue reference inside a reason, as a reader would follow it.
 ISSUE_REFERENCE = re.compile(r"#(\d+)")
+
+#: A wave reference inside a reason. It is the form that rots: inserting one wave renumbers every wave after
+#: it, so the string keeps its number and loses its meaning, while an order keeps both (#317).
+WAVE_REFERENCE = re.compile(r"\bwave\s+\d+", re.IGNORECASE)
 
 #: The issues a :data:`~digitalearth.base.contract.PENDING` reason is allowed to name, with the title each
 #: carried when it was last checked against the tracker **by hand, on 2026-09-23**.
@@ -34,6 +39,7 @@ ISSUE_REFERENCE = re.compile(r"#(\d+)")
 #: the preferred form: orders outlive the issues that implement them.
 KNOWN_OPEN_ISSUES = MappingProxyType(
     {
+        201: "The 3-D tier cannot draw line geometries — no rivers, roads, tracks or trajectories",
         226: "feat(static): add Map.lines for plain line geometry, matching the web tier",
     }
 )
@@ -233,8 +239,14 @@ class TestAPendingReasonPointsAtLiveWork:
     before that (#317). Both were found by reading. This is what finds the next one.
 
     The rule is therefore: a reason may name a roadmap **order**, which needs no bookkeeping because orders
-    keep their numbers when the plan moves, or an issue listed in :data:`KNOWN_OPEN_ISSUES`. Anything else
-    fails, naming the tier, the method and the reason so the fix is a decision and not a search.
+    keep their numbers when the plan moves, or an issue listed in :data:`KNOWN_OPEN_ISSUES`. A **wave** number
+    is refused outright, with no allowlist to escape through, because a wave is the part that renumbers — the
+    reasoning `contract.py` already carries from #317, which the first version of this class did not enforce
+    and which let five 3-D reasons go on naming a closed Wave 5. Anything else fails, naming the tier, the
+    method and the reason so the fix is a decision and not a search.
+
+    A reason that points at neither is fine and is not what this checks: where nothing schedules the work, the
+    honest answer is to say so, which is why three 3-D rows read "unscheduled".
     """
 
     def test_no_reason_names_an_issue_outside_the_allowlist(self):
@@ -250,6 +262,44 @@ class TestAPendingReasonPointsAtLiveWork:
         assert unvouched == [], (
             f"a PENDING reason names an issue that is not in KNOWN_OPEN_ISSUES: {listed}. "
             "Name the roadmap order that builds it, or add the issue with its title if it is still open."
+        )
+
+    def test_no_reason_names_a_wave(self):
+        """A wave number is a fact with a shelf life, and five of these outlived theirs.
+
+        Test scenario:
+            Wave 5 closed having built none of what the 3-D rows said it would; the plan had a wave inserted
+            ahead of it and everything after renumbered. Unlike the issue check there is no allowlist here,
+            because an open wave becomes a closed one on its own — the form is what is wrong, not the number.
+        """
+        dated = [
+            (backend, name, reason)
+            for backend, table in PENDING.items()
+            for name, reason in table.items()
+            if WAVE_REFERENCE.search(reason)
+        ]
+        listed = "; ".join(
+            f"{backend}.{name} -> {reason!r}" for backend, name, reason in dated
+        )
+        assert dated == [], (
+            f"a PENDING reason names a wave, which renumbers when the plan moves: {listed}. "
+            "Name the roadmap order that builds it, the open issue that tracks it, or say it is unscheduled."
+        )
+
+    def test_no_declared_build_order_names_a_wave(self):
+        """`Method.builds_in` is read out by `core_method(...)`, so the same rule governs it.
+
+        Test scenario:
+            This is #317 itself: `builds_in` said "Wave 5, order 23" and was interpolated into nine `PENDING`
+            reasons. Both halves are checked, since a `TIER2` name may declare one too.
+        """
+        dated = [
+            (method.name, method.builds_in)
+            for method in CORE + TIER2
+            if method.builds_in and WAVE_REFERENCE.search(method.builds_in)
+        ]
+        assert dated == [], (
+            f"a declared build order names a wave, which renumbers when the plan moves: {dated}"
         )
 
     def test_the_allowlist_holds_nothing_the_reasons_stopped_naming(self):

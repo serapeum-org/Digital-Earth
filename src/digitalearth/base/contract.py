@@ -320,6 +320,13 @@ PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
 #: What a tier has not built yet, as `{backend: {name: why}}`. This is the honest half of the contract: a name
 #: absent because the tier cannot draw it at all reads differently from one absent because nobody has written
 #: it, and only the tier can say which. A contract test holds each facade against `CORE` minus its pending list.
+#:
+#: **What a reason may point at.** A roadmap **order**, or an issue that is open — and nothing else, because
+#: these strings are the one place in the package where a tracker reference is shown to a *user* rather than
+#: left as provenance in a comment. A closed issue answers "when?" with "already done" (#319), and a wave
+#: number rots the moment a wave is inserted ahead of it and the rest renumber (#317). Where neither exists,
+#: the reason says the work is **unscheduled** rather than naming a plan that does not hold it — three of the
+#: 3-D rows are in that position, and saying so is the whole point of the table.
 PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "web": MappingProxyType(
@@ -334,17 +341,17 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "field": "a raster becomes terrain, a volume or a globe here, each its own builder",
                 "points": (
                     "positioned 3-D points are point_cloud() here, which takes a z per point; a flat points "
-                    "builder is Wave 5"
+                    "builder is unscheduled"
                 ),
                 "add_layer": (
                     "a caller's own object is a PyVista mesh or volume, so it is added with add_mesh() or "
                     "add_volume(), each of which records a custom:pyvista layer"
                 ),
-                "lines": "line features in three dimensions — TD, Wave 5",
-                "polygons": "polygons are drawn extruded here; a flat fill is Wave 5",
-                "choropleth": "a classified fill follows polygons — Wave 5",
+                "lines": "line features in three dimensions — #201",
+                "polygons": "polygons are drawn extruded here; a flat fill is unscheduled",
+                "choropleth": "a classified fill follows polygons, and is unscheduled with them",
                 "colorbar": "the scalar bar is PyVista's, and becomes a guide on the encoding — order 24",
-                "legend": "a keyed list beside a scene — Wave 5, order 24",
+                "legend": "a keyed list beside a scene — order 24",
                 "set_bounds": "a scene is framed by its camera, not by an extent (see Capabilities.absent)",
             }
         ),
