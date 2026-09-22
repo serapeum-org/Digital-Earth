@@ -901,6 +901,124 @@ class TestANamedArgumentIsNormalisedForTheDescription:
         assert "rgb-1" in written
 
 
+#: A credential of the shape a keyed tile service takes. Long enough not to appear in a figure by accident.
+FAKE_TILE_KEY = "SECRET-TILE-KEY-0123456789"
+
+
+@pytest.fixture
+def served_tiles(monkeypatch):
+    """Serve every tile from memory, so a basemap really draws without reaching the network.
+
+    The fetch is replaced rather than ``add_tiles``: the real ``add_tiles`` then runs, and it is the real
+    one that asks the provider to build a URL — which is what a provider rebuilt as a plain dict cannot do.
+
+    Args:
+        monkeypatch: pytest's patcher, which restores the real fetch afterwards.
+
+    Returns:
+        The list of URLs the stand-in was asked for, one per tile.
+    """
+    import io
+
+    from cleopatra.basemap import tiles as cleo_tiles
+    from PIL import Image
+
+    requested = []
+    buffer = io.BytesIO()
+    Image.fromarray(np.full((256, 256, 4), 200, "uint8")).save(buffer, format="PNG")
+    payload = buffer.getvalue()
+
+    def serve(tile, provider, timeout, retries, user_agent=""):
+        """Answer one tile request from memory.
+
+        Args:
+            tile: The tile being fetched.
+            provider: The provider it is fetched from.
+            timeout: Ignored.
+            retries: Ignored.
+            user_agent: Ignored.
+
+        Returns:
+            The tile and one opaque PNG.
+        """
+        requested.append(provider.build_url(x=tile.x, y=tile.y, z=tile.z))
+        return tile, payload
+
+    monkeypatch.setattr(cleo_tiles, "fetch_single_tile", serve)
+    return requested
+
+
+def _framed_map():
+    """Return a Web-Mercator map with an extent set, which is what cleopatra needs before it tiles.
+
+    Returns:
+        The map.
+    """
+    canvas = Map(crs=3857)
+    canvas.ax.set_xlim(-6.0e6, -5.0e6)
+    canvas.ax.set_ylim(-1.0e6, 0.0)
+    return canvas
+
+
+class TestATileProviderIsHeldRatherThanDescribed:
+    """A provider object is an engine object that carries a credential: it may not enter a figure."""
+
+    def test_a_provider_object_still_draws(self, served_tiles):
+        """``xyzservices`` providers are the documented way to name a basemap, and they must render.
+
+        Args:
+            served_tiles: The in-memory tile service.
+
+        Test scenario:
+            Recording the provider rebuilt it as a plain dict, and cleopatra asks a provider to build each
+            tile URL — so the draw died on ``'dict' object has no attribute 'build_url'``.
+        """
+        xyzservices = pytest.importorskip("xyzservices")
+
+        canvas = _framed_map()
+        canvas.basemap(xyzservices.providers.CartoDB.Positron)
+        painted = len(canvas.ax.images)
+        canvas.close()
+        assert served_tiles, "no tile was requested"
+        assert painted == 1, painted
+
+    def test_the_description_names_the_provider(self, served_tiles):
+        """The name resolves to the same tiles anywhere, which is what a saved figure needs.
+
+        Args:
+            served_tiles: The in-memory tile service.
+        """
+        xyzservices = pytest.importorskip("xyzservices")
+
+        canvas = _framed_map()
+        canvas.basemap(xyzservices.providers.CartoDB.Positron)
+        recorded = canvas.figure_spec.layers.get("basemap-1").symbology.props["source"]
+        canvas.close()
+        assert recorded == "CartoDB.Positron", recorded
+        assert served_tiles, "no tile was requested"
+
+    def test_a_providers_credential_never_reaches_the_figure(self, served_tiles):
+        """An ``xyzservices`` provider is a dict, and its fields include the caller's key.
+
+        Args:
+            served_tiles: The in-memory tile service.
+        """
+        xyzservices = pytest.importorskip("xyzservices")
+
+        provider = xyzservices.TileProvider(
+            name="Thunderforest.OpenCycleMap",
+            url="https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey={apikey}",
+            apikey=FAKE_TILE_KEY,
+            attribution="(C) Thunderforest",
+        )
+        canvas = _framed_map()
+        canvas.basemap(provider)
+        written = json.dumps(canvas.figure_spec.layers.to_dict(), allow_nan=False)
+        canvas.close()
+        assert FAKE_TILE_KEY in served_tiles[0], "the key never reached the engine"
+        assert FAKE_TILE_KEY not in written, "the key was written into the figure"
+
+
 class _FakeCollection:
     """A stand-in for a pyramids ``DatasetCollection``, which ``spaghetti`` reads one attribute of."""
 

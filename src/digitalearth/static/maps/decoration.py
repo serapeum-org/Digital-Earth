@@ -227,6 +227,29 @@ def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> An
     )
 
 
+def _described_tile_source(source: Any) -> Tuple[Any, Any]:
+    """Split a basemap source into the name a description records and the object held beside the layer.
+
+    An ``xyzservices.TileProvider`` is a ``dict`` subclass whose fields include the caller's ``apikey``, so
+    recording it wrote that credential into every figure the map produced — and rebuilding it from the
+    description handed cleopatra a plain ``dict``, which has no ``build_url`` and cannot be tiled from. Its
+    **name** is what a description carries: it names the same tiles wherever the figure is read, and it
+    carries no secret.
+
+    Args:
+        source: The ``source`` a caller passed to :meth:`DecorationMixin.basemap`.
+
+    Returns:
+        ``(recorded, held)``. A name or ``None`` passes through and is held nowhere. A provider object is
+        recorded by its own ``name`` — or as ``None``, the shared default, when it has none — and held beside
+        the layer, which is what this map tiles from.
+    """
+    if source is None or isinstance(source, str):
+        return source, None
+    name = getattr(source, "name", None)
+    return (name if isinstance(name, str) else None), source
+
+
 def _resolve_tile_source(source: Any) -> Any:
     """Resolve an unnamed or cross-tier-named basemap into the provider ``add_tiles`` understands.
 
@@ -396,8 +419,9 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
         scene: The map being drawn on.
         _data: The source slot every drawer takes, unread here — a tile set is named by its provider, which
             is a style property, not data this process holds.
-        layer: The layer's description. The credential, which must never be written into a figure, is held
-            on the scene under the layer's id.
+        layer: The layer's description. The credential, and a provider object the caller built (which
+            carries one of its own), are held on the scene under the layer's id — never written into a
+            figure.
 
     Returns:
         A :class:`~digitalearth.static.renderer.DrawnLayer` holding whatever ``add_tiles`` returned.
@@ -408,8 +432,10 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
         TypeError: when a preset keyword is missing or misspelled.
     """
     props = dict(layer.symbology.props)
-    source = props["source"]
     opts = drawing_opts(scene, layer)
+    # The provider object, when the caller passed one: held beside the layer, because it is an engine object
+    # and carries their credential. A figure read back elsewhere has only the name the description records.
+    source = opts.pop("source", props["source"])
     if not is_keyed_basemap(source):
         tiles = add_tiles(
             scene.ax, source=_resolve_tile_source(source), crs=scene.crs, **opts
@@ -905,7 +931,9 @@ class DecorationMixin(_MixinBase):
         The credential is deliberately absent from the *record*. A figure is written to JSON and read back,
         and an API key written into one leaks with it; the keyed presets read theirs from the environment,
         so a reloaded figure asks for the same basemap and authenticates itself. An explicit ``api_key``
-        travels with the scene instead, under this layer's id, and is forgotten with the layer.
+        travels with the scene instead, under this layer's id, and is forgotten with the layer. A provider
+        **object** travels the same way, and for both reasons at once (see :func:`_described_tile_source`):
+        it is an engine object, and an ``xyzservices.TileProvider`` holds the caller's key among its fields.
 
         Args:
             source: The provider as the caller named it, or ``None`` for the shared default.
@@ -916,13 +944,16 @@ class DecorationMixin(_MixinBase):
         Returns:
             Whatever ``add_tiles`` returned, or ``None`` when the tiles could not be drawn.
         """
+        recorded, held = _described_tile_source(source)
+        if held is not None:
+            options = {**options, "source": held}
         return self._draw(
             LayerRecord(
                 "basemap",
                 symbology=Symbology(
                     props={
                         "via": "basemap",
-                        "source": source,
+                        "source": recorded,
                         "preset": dict(preset or {}),
                     }
                 ),
