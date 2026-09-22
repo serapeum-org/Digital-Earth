@@ -11,6 +11,12 @@ is built once, from the description. What follows from that is the same everywhe
 through ``to_dict``/``from_dict`` and renders the same picture, and a change to one layer is a change to one
 layer rather than a rebuild of the scene around it.
 
+**Two things the description deliberately leaves out**, so "round-trips" is read for what it is. ``to_dict``
+refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
+one built from data already in memory is handed to a renderer directly instead. And the caller's own engine
+keywords are held on the scene beside the layer (:func:`drawing_opts`) rather than in its description, so a
+figure read back elsewhere draws the same layers with the engine's defaults in their place.
+
 **This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
 :meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
 drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as well as its own record when

@@ -766,6 +766,13 @@ class VectorMixin(_MixinBase):
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
     it was before the annotation.
 
+    Every builder here takes the caller's styling as ``**opts``/``**kwargs`` and hands it to the cleopatra
+    glyph as passed. Those keywords are **held on the scene beside the layer, not written into its
+    description** (see :attr:`~digitalearth.static.scene.LayerRecord.opts`): a ``Normalize``, a per-point
+    ``alpha`` array or a dash tuple has no JSON spelling, and freezing one handed the engine something else
+    back. The description records the call the caller made — the band, the column, the scheme, the recipe —
+    so the same figure drawn on another scene comes back styled by the engine's defaults instead.
+
     See Also:
         digitalearth.static.map.Map: the composition that supplies the state these methods use.
         digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
@@ -1044,7 +1051,9 @@ class VectorMixin(_MixinBase):
         Args:
             dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
             band: 1-based band whose values colour the cells.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options. A ``scheme`` (including
+            **opts: The caller's own engine keywords, handed to ``PolygonGlyph`` as passed and held beside
+                the layer rather than recorded in it (see the class docstring). ``PolygonGlyph`` refuses a
+                name it does not know rather than dropping it. A ``scheme`` (including
                 ``scheme="categorical"``, keyed by a swatch legend) is honoured the same way :meth:`choropleth`
                 describes — see ``_polygon_layer``.
 
@@ -1052,6 +1061,10 @@ class VectorMixin(_MixinBase):
             The ``PolyCollection`` (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``PolygonGlyph`` for a keyword in ``**opts`` it does not accept, naming the
+                ones it does. The layer is dropped from the description again before it propagates.
 
         Examples:
             - Draw one polygon per raster cell and confirm the count equals rows*columns:
@@ -1093,12 +1106,18 @@ class VectorMixin(_MixinBase):
             v_dataset: pyramids ``Dataset`` of the v (northward) component.
             kind: ``"quiver"``, ``"barbs"`` or ``"streamplot"``.
             band: 1-based band index read from each dataset.
-            **opts: Styling kwargs, filtered to ``VectorGlyph``'s accepted options.
+            **opts: The caller's own engine keywords, handed to ``VectorGlyph`` as passed and held beside
+                the layer rather than recorded in it (see the class docstring). ``VectorGlyph`` refuses a
+                name it does not know rather than dropping it.
 
         Returns:
             The vector mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``VectorGlyph`` for a keyword in ``**opts`` it does not accept, naming the
+                ones it does. The layer is dropped from the description again before it propagates.
         """
         record = LayerRecord(
             _VECTOR_KINDS[kind],
@@ -1116,30 +1135,57 @@ class VectorMixin(_MixinBase):
     def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
 
+        Args:
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
+                caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
+
         Returns:
             The ``Quiver`` mappable (registered as a Scene layer; carries the key for :meth:`quiverkey`).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept.
         """
         return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
 
     def barbs(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``).
 
+        Args:
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
+                caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
+
         Returns:
             The ``Barbs`` mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept.
         """
         return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
 
     def streamplot(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
 
+        Args:
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
+                caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
+
         Returns:
             The streamplot mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``VectorGlyph`` for a styling keyword it does not accept.
         """
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
@@ -1181,7 +1227,20 @@ class VectorMixin(_MixinBase):
         return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
 
     def _scattered(self, data: Any) -> tuple:
-        """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection)."""
+        """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection).
+
+        Args:
+            data: A pyramids ``Dataset``, whose cells become points through ``to_xyz``, or a
+                ``FeatureCollection`` of points. Either is reprojected to the display CRS first.
+
+        Returns:
+            Three parallel 1-D arrays — the x coordinates, the y coordinates and the value at each point —
+            in the display CRS.
+
+        Raises:
+            ValueError: when a ``FeatureCollection`` carries no numeric column to take the value from,
+                since there is nothing to contour.
+        """
         if isinstance(data, Dataset):
             xyz = self._reproject(data).to_xyz()
             return (
@@ -1201,7 +1260,8 @@ class VectorMixin(_MixinBase):
             data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
             kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
                 ``tripcolor``).
-            **opts: Styling kwargs forwarded to the glyph.
+            **opts: The caller's own engine keywords, forwarded to the glyph as passed and held beside the
+                layer rather than recorded in it (see the class docstring).
 
         Returns:
             The mappable (registered as a Scene layer), or ``None`` when three points were supplied
@@ -1212,6 +1272,10 @@ class VectorMixin(_MixinBase):
         Raises:
             ValueError: when fewer than three points were supplied in the first place, which no
                 projection can fix.
+            AttributeError: from matplotlib for a keyword in ``**opts`` no artist property answers to —
+                these renders reach the artist rather than a cleopatra option table, so an unknown name
+                is refused there and by its message. The layer is dropped from the description again
+                before either propagates.
         """
         # All three triangulated renders describe one thing — a mesh built from scattered points — which is
         # what the registry calls `unstructured`; the render itself is the `via` property.
@@ -1230,30 +1294,60 @@ class VectorMixin(_MixinBase):
     def tricontourf(self, data: Any, **kwargs) -> Any:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
+        Args:
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
+                held beside the layer rather than described.
+
         Returns:
             The tricontourf mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
+                numeric column to contour.
+            AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         return self._tri(data, kind="tricontourf", **kwargs)
 
     def tricontour(self, data: Any, **kwargs) -> Any:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
+        Args:
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
+                held beside the layer rather than described.
+
         Returns:
             The tricontour mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
+                numeric column to contour.
+            AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         return self._tri(data, kind="tricontour", **kwargs)
 
     def tripcolor(self, data: Any, **kwargs) -> Any:
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
+        Args:
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
+                held beside the layer rather than described.
+
         Returns:
             The tripcolor mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
+                numeric column to contour.
+            AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         return self._tri(data, kind="tripcolor", **kwargs)
 
@@ -1264,6 +1358,15 @@ class VectorMixin(_MixinBase):
         Polygons contribute their exterior ring; MultiPolygons contribute one ring per part (so a single
         feature can map to several drawn polygons). The repeat count per feature lets callers expand a
         per-feature value array to per-polygon.
+
+        Args:
+            geometry: An iterable of shapely ``Polygon``/``MultiPolygon`` geometries — a geopandas
+                geometry series, already in the display CRS.
+
+        Returns:
+            ``(polygons, repeats)``: one ``(n, 2)`` array of exterior-ring coordinates per drawn polygon,
+            and one count per input feature saying how many of those polygons it contributed — ``1`` for a
+            ``Polygon``, the number of parts for a ``MultiPolygon``.
         """
         polygons: List[np.ndarray] = []
         repeats: List[int] = []

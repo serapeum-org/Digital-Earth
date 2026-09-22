@@ -773,6 +773,13 @@ class DecorationMixin(_MixinBase):
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
 
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
+                than written into its description, so a figure drawn on another scene comes back with the
+                defaults alone.
+
         Returns:
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
             on a flat map).
@@ -781,6 +788,13 @@ class DecorationMixin(_MixinBase):
 
     def borders(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth country borders.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
+                than written into its description, so a figure drawn on another scene comes back with the
+                defaults alone.
 
         Returns:
             The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
@@ -794,6 +808,13 @@ class DecorationMixin(_MixinBase):
         On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
         re-closed at the projection limb into finite rings and filled as a map-specific overlay (drawn below
         data and coastlines, clipped to the boundary). Interior rings (holes) are dropped in v1 — see #43.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
+                than written into its description, so a figure drawn on another scene comes back with the
+                defaults alone.
 
         Returns:
             The land fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
@@ -809,6 +830,13 @@ class DecorationMixin(_MixinBase):
         On a **globe** map, ``ocean`` fills the whole projection disc (the boundary ring) with the ocean
         colour and lets land overlay it — exact and far cheaper than clipping the global ocean polygon. On a
         **flat** map, the Natural-Earth ocean polygons are reprojected and filled directly.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
+                than written into its description, so a figure drawn on another scene comes back with the
+                defaults alone.
 
         Returns:
             The ocean fill layer (a ``PolyCollection`` disc on a globe; the reprojected plot artist on a flat
@@ -830,6 +858,13 @@ class DecorationMixin(_MixinBase):
         Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
         still below data and coastlines. On a globe the polygons are re-closed at the projection limb.
 
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
+                than written into its description, so a figure drawn on another scene comes back with the
+                defaults alone.
+
         Returns:
             The lake fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
             the reprojected plot artist on a flat map).
@@ -840,6 +875,13 @@ class DecorationMixin(_MixinBase):
 
     def rivers(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). They are held beside the layer exactly as passed rather
+                than written into its description, so a figure drawn on another scene comes back with the
+                defaults alone.
 
         Returns:
             The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a

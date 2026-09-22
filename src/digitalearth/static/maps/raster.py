@@ -300,7 +300,16 @@ def draw_hsv_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 class RasterMixin(_MixinBase):
-    """Raster field renders and composites for :class:`~digitalearth.static.map.Map`."""
+    """Raster field renders and composites for :class:`~digitalearth.static.map.Map`.
+
+    Every builder here takes the caller's styling as ``**kwargs``/``**opts`` and passes it on to the
+    cleopatra glyph untouched. Those keywords are **held on the scene beside the layer, not written into
+    its description** (see :attr:`~digitalearth.static.scene.LayerRecord.opts`): a ``Normalize``, a
+    per-pixel ``alpha`` array or a dash tuple has no JSON spelling, and freezing one handed the engine
+    something else back. What the description records is the call the caller made — the band, the
+    colormap name, the levels, the draw order — so the same figure written out and drawn on another
+    scene comes back styled by the engine's defaults rather than by those keywords.
+    """
 
     def _field(
         self,
@@ -342,12 +351,20 @@ class RasterMixin(_MixinBase):
                 recorded for the same reason: a backdrop drawn again from its description — a redraw, a
                 rollback, a figure read back — has to come back *behind* the data rather than at the
                 default 0.
-            **opts: Extra styling kwargs; filtered to ``ArrayGlyph``'s accepted options.
+            **opts: The caller's own engine keywords, handed to ``ArrayGlyph`` as passed. They are held
+                beside the layer rather than recorded in it (see the class docstring), so a figure drawn
+                on a scene that does not hold them draws with the engine's defaults. ``ArrayGlyph``
+                refuses a name it does not know rather than dropping it.
 
         Returns:
             The glyph's mappable (also registered as a Scene layer), or ``None`` when the data lies
             entirely outside what the display CRS shows — an off-limb frame draws nothing rather than
             raising, so a rotation past the far side of a globe still renders.
+
+        Raises:
+            ValueError: from ``ArrayGlyph`` for a keyword in ``**opts`` it does not accept, naming the
+                ones it does. The layer is dropped from the description again before it propagates, so a
+                refused call leaves the scene exactly as it found it.
         """
         recorded_cmap, held_cmap = _described_cmap(cmap)
         if held_cmap is not None:
@@ -381,40 +398,77 @@ class RasterMixin(_MixinBase):
     def imshow(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
+                ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
+                left over is the caller's own engine styling, held beside the layer rather than
+                described (see the class docstring).
+
         Returns:
             The image mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         return self._field(dataset, kind="imshow", **kwargs)
 
     def contourf(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``).
 
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
+                one this render reads. Anything left over is the caller's own engine styling, held
+                beside the layer rather than described (see the class docstring).
+
         Returns:
             The filled-contour mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         return self._field(dataset, kind="contourf", **kwargs)
 
     def contour(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``).
 
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
+                one this render reads. Anything left over is the caller's own engine styling, held
+                beside the layer rather than described (see the class docstring).
+
         Returns:
             The line-contour mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         return self._field(dataset, kind="contour", **kwargs)
 
     def pcolormesh(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
 
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
+                the caller's own engine styling, held beside the layer rather than described (see the
+                class docstring).
+
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
@@ -427,10 +481,19 @@ class RasterMixin(_MixinBase):
         draws the same filled mesh as :meth:`pcolormesh`. It is kept as a distinct, stable entry point so
         callers and examples can switch to true blocks transparently once cleopatra supports them.
 
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
+                the caller's own engine styling, held beside the layer rather than described (see the
+                class docstring).
+
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 

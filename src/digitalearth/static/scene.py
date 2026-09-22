@@ -448,6 +448,14 @@ class Scene(WatermarkMixin):
         Returns:
             A :class:`~digitalearth.base.spec.FigureSpec` with one panel, :data:`PANEL_ID`, whose layers are
             the tree in draw order and whose sources are what each builder was given.
+
+            It describes the layers, not the caller's styling: the engine keywords passed through ``**opts``
+            are held beside the layer (:attr:`LayerRecord.opts`) rather than in it, so a figure drawn on
+            another scene draws with the engine's defaults in their place.
+
+            A scene built from data already in memory can be handed straight to a renderer, but not written:
+            ``to_dict()`` refuses an ``object:`` source, because a reference into this process's memory would
+            be unreadable everywhere else. Give a builder a path or a URL to get a figure that can be stored.
         """
         tree = self._layer_tree
         panel = PanelSpec(PANEL_ID, self.viewport, layers=tuple(tree.ids))
@@ -726,7 +734,15 @@ class Scene(WatermarkMixin):
         return disjoint_legend(self.ax, colors, labels, **kwargs)
 
     def set_title(self, title: str, **kwargs) -> None:
-        """Set the axes title."""
+        """Set the axes title.
+
+        Figure-level decoration rather than a layer: it draws straight onto :attr:`ax` and is not described,
+        so :attr:`figure_spec` neither carries it nor loses it when a layer is removed.
+
+        Args:
+            title: The text to place above the axes.
+            **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …).
+        """
         self.ax.set_title(title, **kwargs)
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
