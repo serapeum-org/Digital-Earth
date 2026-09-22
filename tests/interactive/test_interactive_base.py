@@ -458,3 +458,31 @@ def test_reimport_is_stable():
     """The package re-imports cleanly (no import-time engine side effects)."""
     mod = importlib.reload(importlib.import_module("digitalearth.interactive"))
     assert hasattr(mod, "InteractiveMap")
+
+
+class TestForgettingALayerTheTreeNeverHeld:
+    """`_forget_layer` is called however far `add_element` got, so it cannot assume an entry exists."""
+
+    def test_the_layers_that_are_there_are_left_alone(self):
+        """A description that was never finished still has an id and a source to let go of.
+
+        Test scenario:
+            `add_element` forgets the layer when its drawer declines or raises — and the drawer can raise
+            before the tree entry is made. Removing unconditionally turns that into a `KeyError` from the
+            cleanup path, which replaces the drawer's own refusal with one about the cleanup.
+        """
+        pytest.importorskip("geoviews")
+        from pyramids.feature import FeatureCollection
+
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.points(
+                FeatureCollection.read_file("tests/data/points.geojson")
+            )
+            held = list(interactive_map.figure_spec.layers.ids)
+            interactive_map._forget_layer("never-described")
+            assert list(interactive_map.figure_spec.layers.ids) == held, (
+                f"forgetting an id the tree never held changed the tree: {interactive_map.figure_spec.layers.ids}"
+            )
+        finally:
+            interactive_map.close()

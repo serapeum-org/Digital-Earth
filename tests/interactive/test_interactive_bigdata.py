@@ -314,3 +314,25 @@ class TestTrajectory:
             height=60,
         )
         assert isinstance(m.layers[0], hv.RGB)
+
+
+class TestAFigureThatCarriesNoReduction:
+    """A Datashader reduction has no JSON form, so a figure read back from a dict describes none."""
+
+    def test_no_aggregator_at_all_becomes_the_tier_s_default_count(self):
+        """The drawer is handed `None`, and `None` is not something Datashader can aggregate with.
+
+        Test scenario:
+            A reduction object is held on the map, never written into the description — so a figure
+            saved and read back elsewhere reaches this resolver with nothing. Passing that `None`
+            straight through hands Datashader a null reduction and fails inside the engine, where the
+            builder's own default is what the figure meant.
+        """
+        import datashader as ds
+
+        from digitalearth.interactive.bigdata import _resolve_aggregator
+
+        resolved = _resolve_aggregator(None, None)
+        assert isinstance(resolved, type(ds.count())), (
+            f"a description carrying no reduction must default to count(); got {resolved!r}"
+        )

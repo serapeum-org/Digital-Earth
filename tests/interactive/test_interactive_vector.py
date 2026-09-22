@@ -616,3 +616,25 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
         m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3, cmap=colours)
         style = m.style_of(m.layers[0])["common"]
         assert style["cmap"] == colours, style["cmap"]
+
+
+class TestAnOutlineAlphaTheCallerChose:
+    """The outline-only default is a default, so an explicit value has to survive it."""
+
+    def test_a_caller_s_own_fill_alpha_is_kept(self, m, polygon_fc):
+        """Polygons with no column are drawn as outlines *unless* the caller asked for a fill.
+
+        Args:
+            m: The map under test.
+            polygon_fc: Buffered points with a numeric `fid`.
+
+        Test scenario:
+            The companion check above pins the default at ``fill_alpha=0.0``. Setting it unconditionally
+            would pass that check and silently discard a translucent fill the caller asked for, which is
+            the only way to draw semi-transparent polygons without colouring them by a column.
+        """
+        m.polygons(polygon_fc, fill_alpha=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style["fill_alpha"] == pytest.approx(0.4), (
+            f"the caller's own fill_alpha was overwritten: {style['fill_alpha']}"
+        )

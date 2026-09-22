@@ -163,3 +163,54 @@ class TestLargeImage:
         assert recorded["band"] == 0, (
             f"1-based band=1 must reach pyramids as 0-based 0, got {recorded['band']}"
         )
+
+
+class TestTheWindowIsReReadThroughOneView:
+    """Every frame of a dynamic `large_image` shares the view the first frame made."""
+
+    def test_a_second_window_goes_through_the_view_the_first_one_made(
+        self, m, monkeypatch
+    ):
+        """The view is what holds the overview level and the pixel grid the window snaps to.
+
+        Args:
+            m: The map under test.
+            monkeypatch: Used to count the re-reads the second frame issues.
+
+        Test scenario:
+            `held` carries the `SourceView` between frames precisely so a pan does not rebuild it. Making
+            a new view per frame re-registers the dataset in the process-global object table on every
+            mouse move and throws away the decimation state the view resolved, so a long pan is a slow
+            leak rather than a re-read.
+        """
+        from holoviews.streams import RangeXY
+
+        from digitalearth.base.sources.view import SourceView
+
+        rereads = []
+        made_view = SourceView.reread
+
+        def counting_reread(self, request):
+            """Record one re-read and pass it on.
+
+            Args:
+                self: The view being re-read.
+                request: The window this frame wants.
+
+            Returns:
+                What the real re-read answered.
+            """
+            rereads.append(request)
+            return made_view(self, request)
+
+        monkeypatch.setattr(SourceView, "reread", counting_reread)
+        m.large_image(_FakeCOG(), dynamic=True, max_pixels=100 * 100)
+        dmap = m.layers[0]
+        stream = next(s for s in dmap.streams if isinstance(s, RangeXY))
+        stream.event(x_range=(-5.0e5, 5.0e5), y_range=(-4.0e5, 4.0e5))
+        dmap[()]
+        stream.event(x_range=(-2.0e5, 2.0e5), y_range=(-1.0e5, 1.0e5))
+        dmap[()]
+        assert len(rereads) == 1, (
+            f"the second window must be a re-read of the first view; got {len(rereads)} re-reads"
+        )

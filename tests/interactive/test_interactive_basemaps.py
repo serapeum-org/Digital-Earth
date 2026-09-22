@@ -196,3 +196,60 @@ class TestTheAttributionHookLeavesOtherRenderersAlone:
         assert not hasattr(glyphs, "tile_source"), (
             "the hook invented an attribute on a glyph renderer"
         )
+
+
+class TestAProviderWhoseOwnFieldsAreInItsTemplate:
+    """A provider built with the key already substituted in cannot be written down at all."""
+
+    @staticmethod
+    def _leaky_provider():
+        """Return a provider whose `url` *and* `name` both carry its credential verbatim.
+
+        Returns:
+            An `xyzservices.TileProvider` with no spelling left that a figure could hold.
+        """
+        import xyzservices
+
+        return xyzservices.TileProvider(
+            name=f"Example {FAKE_KEY}",
+            url=f"https://tiles.example/{FAKE_KEY}/{{z}}/{{x}}/{{y}}.png",
+            attribution="(c) Example",
+            apikey=FAKE_KEY,
+        )
+
+    def test_it_is_described_as_nothing(self):
+        """A figure carries a description, and a description is shared — so it carries no credential.
+
+        Test scenario:
+            The loop tries `url` and then `name`, and both are rejected here because the key appears in
+            them verbatim. Falling out of that loop with no answer is the case that must be `None`:
+            returning the last spelling tried, or the provider itself, writes the credential into every
+            saved figure and every notebook that holds one.
+        """
+        from digitalearth.interactive.decoration import _provider_description
+
+        assert _provider_description(self._leaky_provider()) is None, (
+            "a provider with no credential-free spelling must be described as nothing"
+        )
+
+    def test_a_template_that_still_holds_its_placeholder_is_described_by_url(self):
+        """The positive control: the ordinary provider, whose key is still a ``{apikey}`` token.
+
+        Test scenario:
+            Without this, a guard that answered `None` for every provider would pass the check above and
+            silently drop every basemap from every figure.
+        """
+        import xyzservices
+
+        from digitalearth.interactive.decoration import _provider_description
+
+        template = "https://tiles.example/{z}/{x}/{y}.png?k={apikey}"
+        ordinary = xyzservices.TileProvider(
+            name="Example",
+            url=template,
+            attribution="(c) Example",
+            apikey=FAKE_KEY,
+        )
+        assert _provider_description(ordinary) == template, (
+            "a provider whose template still holds its placeholder is describable"
+        )
