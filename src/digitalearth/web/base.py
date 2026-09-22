@@ -11,8 +11,10 @@ mixins (raster, vector, big-data, 3-D, temporal, decoration, export) live in sib
 MapLibre + deck.gl are a **renderer, not a GIS engine**: every layer is built from pyramids-sourced numpy /
 GeoDataFrames (never xarray/rasterio/cartopy — see the tier's HARD RULE, enforced by
 ``tests/test_no_competitor_imports.py``). All CRS/reproject work happens upstream in pyramids
-(``Dataset.to_crs``) *before* a layer is built, so layers are already in the display CRS — MapLibre and tile
-basemaps render in EPSG:3857 / lon-lat (EPSG:4326) only.
+(``Dataset.to_crs``), and MapLibre and tile basemaps render in EPSG:3857 / lon-lat (EPSG:4326) only. A
+builder places its data before it describes the layer, so the first draw is handed a frame already in the
+display CRS; a layer drawn *back* from a description has nothing placed for it, so its drawer places it
+then (:func:`placed_features`). Either way the warp happens once, and in pyramids.
 
 The engine import is **lazy**: ``import digitalearth.web`` works without the ``web`` extra installed; only
 calling a builder/render method raises an actionable ``ImportError`` (``pip install 'digitalearth[web]'``).
@@ -776,6 +778,9 @@ class WebMapBase:
 
         Raises:
             OffLimbError: when the data lies outside the display CRS and the map is ``strict``.
+            FileNotFoundError: when the input is a path that names nothing, and KeyError when no
+                resolver is registered for its URL scheme. Only ``OffLimbError`` is turned into a skip
+                here; a reference that cannot be opened is the caller's mistake and is raised.
         """
         try:
             return self._to_display_source(data, band=band)
@@ -787,7 +792,8 @@ class WebMapBase:
         """Return :meth:`_to_display_raster`'s result, or ``None`` when the data cannot be placed.
 
         Args:
-            dataset: A pyramids ``Dataset``.
+            dataset: A pyramids ``Dataset``, or a path / URL naming one, which :meth:`_to_display_raster`
+                opens through :meth:`_opened` first.
             layer: The calling builder's name, quoted in the warning.
 
         Returns:
@@ -795,6 +801,9 @@ class WebMapBase:
 
         Raises:
             OffLimbError: when the data lies outside the display CRS and the map is ``strict``.
+            FileNotFoundError: when the input is a path that names nothing, and KeyError when no
+                resolver is registered for its URL scheme. Only ``OffLimbError`` is turned into a skip
+                here; a reference that cannot be opened is the caller's mistake and is raised.
         """
         try:
             return self._to_display_raster(dataset)
@@ -1350,9 +1359,11 @@ class WebMapBase:
                 `"choropleth"` or `"points"` (:func:`~digitalearth.base.registry.kinds`), not the MapLibre layer
                 type — so the tree describes the layer rather than only naming it.
             visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
-                tree says what the MapLibre layout says; the builders without one always build visible. It is
-                recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
-                and records one.
+                tree says what the MapLibre layout says; a builder without one builds visible, except
+                :meth:`add_layer`, which reads the flag off the caller's own object — a layer handed in with
+                ``layout={"visibility": "none"}`` is registered hidden (review L10). It is recorded by
+                truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer and
+                records one.
             band: Where the layer is drawn, when its kind does not say — what a caller's own object needs,
                 since `custom:maplibre` names the engine rather than what it draws. `None` takes the kind's band.
             source: What the layer draws, recorded in the figure's sources under the layer's id — a path, a
@@ -1819,7 +1830,9 @@ class WebMapBase:
         This is where a caller's own MapLibre layer or ``apply(widget)`` callable joins the map. It is recorded
         in the layer tree as a custom layer — kind ``custom:maplibre`` — so it can be addressed like any other:
         `layer_ids` lists it and :meth:`remove_layer` takes it off. What is kept in the figure is the
-        *description* (id, kind, label, band, visibility); the object itself is held by this map and is never
+        *description* (id, kind, label, band, visibility) — and the visibility is read off the object the
+        caller handed in, so a MapLibre layer built with ``layout={"visibility": "none"}`` is registered
+        hidden and describes itself as it was built (review L10); the object itself is held by this map and is never
         written to a figure, because a MapLibre layer has no description to write. A figure loaded from a dict
         therefore names the layer but cannot rebuild it (see :mod:`digitalearth.base.custom`).
 
@@ -2036,6 +2049,10 @@ class WebMapBase:
 
         Returns:
             Source: the display-CRS view (``z``/``x``/``y``/``crs``/``metadata``).
+
+        Raises:
+            FileNotFoundError: when ``data`` is a path that names nothing.
+            KeyError: when no resolver is registered for ``data``'s URL scheme.
         """
         return to_display_source(self._opened(data), self.crs, band=band)
 
@@ -2050,6 +2067,11 @@ class WebMapBase:
 
         Returns:
             The dataset in the display CRS.
+
+        Raises:
+            FileNotFoundError: when ``dataset`` is a path that names nothing.
+            KeyError: when no resolver is registered for ``dataset``'s URL scheme.
+            OffLimbError: when the dataset cannot be warped into the display CRS.
         """
         dataset = self._opened(dataset)
         if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
@@ -2311,6 +2333,8 @@ class WebMapBase:
         Raises:
             TypeError: when ``features`` is not a vector layer.
             OffLimbError: when the warp places none of the geometry and the map is ``strict``.
+            FileNotFoundError: when ``features`` is a path that names nothing, and KeyError when no
+                resolver is registered for its URL scheme — both from :meth:`_opened`, which runs first.
 
         See Also:
             digitalearth.web.base.WebMapBase._require_vector: the input guard applied first.
@@ -2466,7 +2490,11 @@ class WebMapBase:
             cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
 
         Returns:
-            The colormap name to use.
+            The colormap the layer should record. A name for every resolved case; the caller's own
+            argument back when they gave one, which since ``field(cmap=)`` was widened may be a
+            ``matplotlib.colors.Colormap`` rather than a name — it colours this render (the raster path
+            reads it through :func:`~digitalearth.base.symbology.as_colormap`) but resolves nowhere else,
+            so a figure carrying it is read elsewhere with no colormap it can look up.
         """
         return auto_cmap(source, cmap, lookup=self._style_for)
 

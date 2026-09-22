@@ -862,6 +862,9 @@ class DecorationMixin(_MixinBase):
         Raises:
             TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one
                 parameter, so preferring either would silently drop the other.
+            ValueError: when ``lon``, ``lat``, ``text_size`` or ``halo_width`` is not a finite number —
+                refused at this call, because a figure holding NaN or infinity could not be written
+                down.
 
         Examples:
             - Mark a place:
@@ -997,16 +1000,21 @@ class DecorationMixin(_MixinBase):
             width: Line width in pixels.
             opacity: Line opacity in ``[0, 1]``; a graticule is reference, so it should sit under the data
                 visually as well as in the stack.
-            labels: Whether to label each line with its degree value at the map's edge.
-            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            labels: Whether to label each line with its degree value at the map's edge. It also decides
+                whether the ``"<id>-label"`` id its drawer would derive is reserved: a graticule without
+                labels derives none, so a later layer may take that name (review L2).
+            name: What a layer switcher calls this layer; ``None`` names it ``"Graticule"``, suffixed if
+                that is taken.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when a step is not positive, or is wider than the 180° of latitude there is
-                to divide — either produces a grid with no lines and no hint as to why.
+            ValueError: when ``lon_step``, ``lat_step``, ``width`` or ``opacity`` is not a finite number —
+                checked first, because a figure holding NaN or infinity could not be written down — or
+                when a step is not positive, or is wider than the 180° of latitude there is to divide,
+                either of which produces a grid with no lines and no hint as to why.
 
         Examples:
             - A 10° grid under the data:

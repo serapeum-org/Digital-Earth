@@ -1,7 +1,8 @@
 """VectorMixin — web-tier vector builders (DW.2, recipe W2).
 
-``points`` / ``lines`` / ``polygons`` turn a pyramids ``FeatureCollection`` (reprojected to lon/lat through
-pyramids) into MapLibre circle / line / fill layers over a GeoJSON source; ``choropleth`` is the thematic
+``points`` / ``lines`` / ``polygons`` turn a pyramids ``FeatureCollection`` — or a path or URL naming one,
+which is what lets the figure be written down — (reprojected to lon/lat through pyramids) into MapLibre
+circle / line / fill layers over a GeoJSON source; ``choropleth`` is the thematic
 polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expression**:
 
 * graduated (``scheme`` set) → a ``["step", ["get", col], …]`` expression whose breaks come from
@@ -140,6 +141,9 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Raises:
         ValueError: when the description records no MapLibre type or no paint for the layer, naming the
             layer rather than the missing MapLibre key.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
@@ -433,7 +437,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` or GeoDataFrame; points label at the point, lines
-                and polygons at a placement MapLibre picks.
+                and polygons at a placement MapLibre picks. A path or URL to one is taken too, and is the
+                only input this layer can be written down with — a pyramids object does not know where it
+                came from. The reference is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what the
+                figure records.
             column: The property to read the text from.
             text_size: Text size in pixels (``12.0`` when omitted — the signature's ``None`` is the
                 "not passed" sentinel the deprecated spelling is resolved against). Named for the text
@@ -457,7 +465,11 @@ class VectorMixin(_MixinBase):
             TypeError: when ``features`` is not a vector layer, or when both ``text_size`` and the
                 deprecated ``size`` are passed — they name one parameter.
             KeyError: when ``column`` is not one of its properties — a MapLibre expression reading a
-                missing property renders nothing at all, with no error to explain the empty map.
+                missing property renders nothing at all, with no error to explain the empty map — or when
+                ``features`` is a URL with no resolver registered for its scheme.
+            ValueError: when ``text_size`` or ``halo_width`` is not a finite number, refused at this call
+                because a figure holding NaN or infinity could not be written down.
+            FileNotFoundError: when ``features`` is a path that names nothing.
 
         Examples:
             - Name each feature:
@@ -665,6 +677,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset``.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             interval: Spacing between levels — a number for "one every N", or a
                 :class:`ContourInterval` when the spacing has to be anchored somewhere other than zero.
                 Give at most one of this or ``levels``.
@@ -679,7 +696,9 @@ class VectorMixin(_MixinBase):
             cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the
                 band's variable.
             units: What the contoured values are measured in, which the key names in parentheses after the
-                column. ``None`` (the default) takes the variable's units from
+                column — when this layer makes a key at all. An explicit ``color=`` colours every level
+                alike, so there is no classification to key and the units are recorded nowhere the reader
+                sees (review #314). ``None`` (the default) takes the variable's units from
                 :func:`~digitalearth.base.autostyle.auto_style`, and leaves the heading bare when it
                 carries none — a unit is never guessed. Pass one to correct a band the library
                 mis-identifies, or to name the units of a variable it does not know.
@@ -697,9 +716,13 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: when both ``interval`` and ``levels`` are given — pyramids takes exactly one, and
-                saying so here names the argument the caller actually wrote — or when neither is given
-                and the variable is not one ``auto_style`` knows levels for.
+                saying so here names the argument the caller actually wrote — when neither is given and
+                the variable is not one ``auto_style`` knows levels for, or when ``width`` or ``opacity``
+                is not a finite number, refused at this call because a figure holding NaN or infinity
+                could not be written down.
             TypeError: when ``interval`` is neither a number nor a :class:`ContourInterval`.
+            FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
+                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
 
         Examples:
             - Contour a DEM every 100 m:
@@ -883,6 +906,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: Optional value column; when given, circles are coloured by it (graduated if ``scheme``
                 is set, else a continuous ramp).
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
@@ -912,8 +940,12 @@ class VectorMixin(_MixinBase):
                 and the deprecated ``radius`` are passed — they name one parameter.
             KeyError: when ``column`` names no feature attribute — a MapLibre expression
                 reading a property that is not there colours nothing, with no error to explain
-                the blank layer.
-            ValueError: when the layer routes to a GPU deck.gl overlay — through ``big=True``,
+                the blank layer — or when ``features`` is a URL with no resolver registered for
+                its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
+            ValueError: when ``size`` or ``opacity`` is not a finite number, refused at this call
+                because a figure holding NaN or infinity could not be written down; and when the
+                layer routes to a GPU deck.gl overlay — through ``big=True``,
                 or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
                 as well. A deck overlay is not a MapLibre style layer, so the registry cannot
                 address it to rename or hide it, and honouring those arguments silently would
@@ -1033,6 +1065,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids line ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: Optional value column to colour the lines by.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
                 ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
@@ -1049,7 +1086,11 @@ class VectorMixin(_MixinBase):
 
         Raises:
             TypeError: when ``features`` is a raster rather than a vector layer.
-            KeyError: when ``column`` names no feature attribute.
+            KeyError: when ``column`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            ValueError: when ``width`` or ``opacity`` is not a finite number, refused at this call because
+                a figure holding NaN or infinity could not be written down.
+            FileNotFoundError: when ``features`` is a path that names nothing.
 
         Examples:
             - A fixed-colour network (needs the ``web`` extra, so the block is skipped without it):
@@ -1129,6 +1170,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: Optional value column to colour the polygons by (graduated if ``scheme`` is set, else a
                 continuous ramp). For full thematic symbology prefer :meth:`choropleth`.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
@@ -1151,8 +1197,12 @@ class VectorMixin(_MixinBase):
 
         Raises:
             TypeError: when ``features`` is a raster rather than a vector layer.
-            KeyError: when ``column`` names no feature attribute.
-            ValueError: when the layer routes to a GPU deck.gl overlay — through ``big=True``,
+            KeyError: when ``column`` names no feature attribute, or when ``features`` is a URL with
+                no resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
+            ValueError: when ``opacity`` is not a finite number, refused at this call because a figure
+                holding NaN or infinity could not be written down; and when the
+                layer routes to a GPU deck.gl overlay — through ``big=True``,
                 or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
                 as well. A deck overlay is not a MapLibre style layer, so the registry cannot
                 address it to rename or hide it, and honouring those arguments silently would
@@ -1271,6 +1321,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: The attribute that colours the polygons (numeric for graduated/continuous; any hashable
                 value for ``scheme="categorical"``). Required.
             scheme: A cleopatra classification scheme (``"quantiles"``, ``"equal_interval"``,
@@ -1291,8 +1346,12 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            KeyError: when ``column`` is not a feature attribute.
-            ValueError: propagated from the classifier (unknown scheme, constant data, …).
+            KeyError: when ``column`` is not a feature attribute, when ``cmap`` names no registered
+                colormap, or when ``features`` is a URL with no resolver registered for its scheme.
+            ValueError: when ``opacity`` is not a finite number — refused before the classifier runs,
+                because a figure holding NaN or infinity could not be written down — and propagated from
+                the classifier itself (unknown scheme, constant data, …).
+            FileNotFoundError: when ``features`` is a path that names nothing.
 
         Examples:
             - The default is a **continuous** ramp: no ``scheme``, no classes, and ``last_breaks``

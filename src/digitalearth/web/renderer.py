@@ -448,6 +448,11 @@ class Renderer:
             unplaceable raster, a custom object this process does not hold. A declined layer is not
             recorded in :attr:`drawn`.
 
+            A layer the figure describes as not drawn is drawn **hidden** rather than skipped, so it is in
+            :attr:`drawn` and :meth:`set_visible` can bring it back. "Not drawn" is the tree's answer, not
+            the layer's own flag: a layer switched on inside a group that is hidden is hidden too (review
+            M4).
+
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
             ValueError: when the layer's description does not carry the props its drawer reads (see
@@ -496,10 +501,12 @@ class Renderer:
         the widget is built from and the figure `figure_spec` reports are the map's own, and neither follows.
         Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
 
-        Reconciling is not atomic — the layers are drawn one after another — so a refusal partway has
-        already drawn the ones before it. Everything drawn in the attempt is therefore rolled back before
-        the refusal is re-raised: a figure this declines leaves the record as it found it, which is the
-        contract the shared renderer conformance suite states for all four tiers.
+        Reconciling is not atomic — the layers are drawn one after another — so anything that stops it
+        partway has already drawn the ones before it. Everything drawn in the attempt is therefore rolled
+        back before it is re-raised: a figure this declines leaves the record as it found it, which is the
+        contract the shared renderer conformance suite states for all four tiers. "Anything" is meant —
+        the rollback catches ``BaseException``, so a ``KeyboardInterrupt`` mid-reconcile puts the record
+        back exactly as an error does (review N2).
 
         Args:
             before: The figure the record currently holds.

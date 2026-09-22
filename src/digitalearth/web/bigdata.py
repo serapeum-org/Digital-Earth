@@ -52,6 +52,9 @@ def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Raises:
         ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind
             and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
@@ -90,6 +93,9 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         ValueError: when the description records none of the values the clustering is built from —
             its colours, its radius or the zoom it stops clustering at — naming the layer, its kind and
             what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
     """
     from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
@@ -189,6 +195,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             weight: Optional value column; cells are weighted by it (normalised to ``[0, 1]``). ``None``
                 weights every point equally.
             radius: Heat kernel radius in pixels.
@@ -197,6 +208,14 @@ class BigDataMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``radius``, ``intensity`` or ``opacity`` is not a finite number — refused at
+                this call, because a figure holding NaN or infinity could not be written down.
+            TypeError: when ``features`` is not a point layer.
+            KeyError: when ``weight`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
         """
         import numpy as np
 
@@ -256,6 +275,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             radius: Cluster radius in pixels (MapLibre ``clusterRadius``).
             max_zoom: Zoom at/after which points stop clustering (``clusterMaxZoom``).
             color: Fill colour for cluster bubbles and unclustered points.
@@ -263,6 +287,11 @@ class BigDataMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is not a point layer.
+            KeyError: when ``features`` is a URL with no resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
         """
 
         _require_layer_api()
@@ -335,6 +364,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             size: Point radius in pixels (``5.0`` when omitted — the signature's ``None`` is the "not
                 passed" sentinel the deprecated spelling is resolved against). The same ``size`` that
@@ -430,6 +464,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             line_color: RGBA outline colour (0-255 per channel).
 

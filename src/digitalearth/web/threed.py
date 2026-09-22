@@ -51,6 +51,9 @@ def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Raises:
         ValueError: when the description records no `paint` for the extrusion, naming the layer, its kind
             and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
@@ -87,6 +90,11 @@ class ThreeDMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             height: Extrusion height — a column name (read with ``["get", name]``) or a constant in metres.
             column: Optional value column colouring the extrusions (graduated if ``scheme`` is set, else a
                 continuous ramp). ``None`` uses the flat ``color``.
@@ -98,6 +106,15 @@ class ThreeDMixin(_MixinBase):
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: when ``opacity`` is not a finite number, or when ``height`` is a number that is
+                not finite — refused at this call, because a figure holding NaN or infinity could not be
+                written down.
+            TypeError: when ``features`` is not a polygon layer.
+            KeyError: when ``column`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
         """
         _require_layer_api()
         paint: dict = {

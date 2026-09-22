@@ -374,6 +374,11 @@ class RasterMixin(_MixinBase):
 
         Args:
             data: A pyramids ``Dataset`` (or anything ``get_source`` accepts).
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             band: 1-based band to draw.
             cmap: A registered matplotlib colormap name, or a ``Colormap`` itself — the classified
                 builders take either and so does this one (#315, review H3). A colormap built on the spot
@@ -403,7 +408,11 @@ class RasterMixin(_MixinBase):
 
         Raises:
             ValueError: when `limits` is given alongside `vmin`/`vmax` — they name the same thing — or is
-                not a `(vmin, vmax)` pair of numbers.
+                not a `(vmin, vmax)` pair of numbers; and when ``opacity`` is not a finite number, refused
+                at this call because a figure holding NaN or infinity could not be written down.
+            KeyError: when `cmap` names no registered colormap, or `dataset` is a URL with no resolver.
+            TypeError: when `cmap` is neither a name, a ``Colormap``, nor a sequence of colours.
+            FileNotFoundError: when `data` is a path that names nothing.
             OffLimbError: only when the map was built with ``strict=True`` and the band cannot be
                 placed; by default that layer is skipped with a warning instead, so one unplaceable
                 raster does not cost the map the layers around it.
@@ -506,6 +515,11 @@ class RasterMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             bands: The three 1-based band numbers, in red-green-blue order.
             mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.
             limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this
@@ -520,8 +534,11 @@ class RasterMixin(_MixinBase):
             warning instead, unless the map was built with ``strict=True``.
 
         Raises:
-            ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when
-                the composite has no finite pixels to draw.
+            ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the
+                composite has no finite pixels to draw, or when ``opacity`` is not a finite number —
+                refused at this call, because a figure holding NaN or infinity could not be written down.
+            FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
+                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
 
         Examples:
             - A true-colour composite from a Landsat-ordered dataset:
@@ -676,8 +693,10 @@ class RasterMixin(_MixinBase):
 
         Raises:
             ValueError: when the array has no finite values to colour.
-            KeyError: when ``cmap`` names a colormap matplotlib's registry does not hold, which is
-                matplotlib's own message naming it.
+            KeyError: when ``cmap`` is hashable but names no colormap matplotlib's registry holds, which
+                is matplotlib's own message naming it.
+            TypeError: when ``cmap`` is unhashable — a list of colours, say — which
+                :func:`~digitalearth.base.symbology.as_colormap` reports as ``unhashable type: 'list'``.
         """
         import base64
         import io
