@@ -737,7 +737,7 @@ class DecorationMixin(_MixinBase):
         return self.features(ocean=True, resolution=resolution, **opts)
 
     def lakes(self, resolution: str = "110m", **opts: Any) -> Self:
-        """Overlay Natural-Earth lake polygons (one of the six named layers, #253).
+        """Fill Natural-Earth lake polygons beneath the data (one of the six named layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
@@ -757,15 +757,17 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Lakes are an **overlay**: their band draws them over the data, so inland water reads on top
-              of the raster instead of being hidden by it:
+            - Lakes are an **underlay**, like land and ocean: the registry files all three as ground
+              cover, so a lake polygon is drawn beneath a data layer added before it rather than over it.
+              Inland water that must read on top of an opaque raster is :meth:`rivers` — the line
+              geography is the half of the pair drawn above the data:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
                 >>> m = InteractiveMap().image(dem).lakes()                    # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
-                ['Image', 'Lakes']
+                ['Lakes', 'Image']
 
                 ```
             - Chain the named layers to build the hydrography context in one line:

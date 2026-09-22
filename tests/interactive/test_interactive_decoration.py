@@ -278,3 +278,45 @@ class TestTogglesAndCompose:
         assert issubclass(kinds[2], gv.element.Feature), (
             "coastline must be the top layer"
         )
+
+
+class TestANamedLayerSaysWhereItIsDrawn:
+    """A named builder's prose must name the band the registry files its kind in (round 2, M7).
+
+    The six named Natural-Earth builders each delegate to `features()`, so which band they land in is the
+    registry's answer, not theirs. Four of the six explain that answer in their own words, and the prose is
+    what a caller reads — `lakes()` said "overlay" for a kind the registry files under `underlay`, which is
+    the opposite of what the tier draws. The examples that would have shown it are `# doctest: +SKIP`
+    blocks, so nothing executed them.
+    """
+
+    #: The named builders, each with the registered kind whose band decides where it draws.
+    NAMED_LAYERS = [
+        ("land", "land"),
+        ("ocean", "ocean"),
+        ("lakes", "lakes"),
+        ("rivers", "rivers"),
+        ("coastlines", "coastlines"),
+        ("borders", "borders"),
+    ]
+
+    @pytest.mark.parametrize("builder, kind", NAMED_LAYERS)
+    def test_the_prose_names_the_band_the_registry_files_it_in(self, builder, kind):
+        """A docstring either says nothing about the band or says the one the kind is drawn in.
+
+        Args:
+            builder: The `InteractiveMap` method a caller reads.
+            kind: The registered kind that builder adds, whose band the registry owns.
+
+        Test scenario:
+            Both band words are looked for, so a docstring cannot pass by naming neither the right one nor
+            the wrong one while still claiming the opposite elsewhere in the same text.
+        """
+        from digitalearth.base.registry import band_of
+
+        doc = (getattr(InteractiveMap, builder).__doc__ or "").lower()
+        stated = tuple(word for word in ("underlay", "overlay") if word in doc)
+        assert stated in ((), (band_of(kind),)), (
+            f"{builder}() reads as {stated or 'nothing'}, but the registry draws {kind!r} "
+            f"in the {band_of(kind)} band"
+        )
