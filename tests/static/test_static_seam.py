@@ -292,6 +292,39 @@ class TestEveryBuilderDescribesWhatItDrew:
         assert offline_tiles != [], "the stand-in was never reached"
         assert canvas.layer_ids == ["basemap-1"], canvas.layer_ids
 
+    def test_a_basemap_the_tiles_never_arrived_for_is_not_described(self, monkeypatch):
+        """The other half of "the record follows the draw", and the only half that can fail.
+
+        Args:
+            monkeypatch: Used to fail the tile call the way an unreachable service does.
+
+        Test scenario:
+            A stand-in that always succeeds cannot tell a record written *after* the draw from one written
+            before it. This one raises, as a tile service that is down does, and the figure must come out
+            of it naming no basemap at all.
+        """
+        from digitalearth.static.maps import decoration
+
+        def unreachable(ax, source=None, crs=None, **kwargs):
+            """Fail the way an unreachable tile service does.
+
+            Args:
+                ax: The axes tiles would be drawn on, unread.
+                source: The resolved provider, unread.
+                crs: The display CRS, unread.
+                **kwargs: Whatever else the drawer forwarded, unread.
+
+            Raises:
+                ConnectionError: always.
+            """
+            raise ConnectionError("the tile service is unreachable")
+
+        monkeypatch.setattr(decoration, "add_tiles", unreachable)
+        canvas = Map()
+        with pytest.raises(ConnectionError):
+            canvas.basemap()
+        assert canvas.layer_ids == [], canvas.layer_ids
+
     def test_an_ensemble_describes_one_layer_per_member(self, dataset):
         """``spaghetti`` is the one builder that draws several layers from one call.
 

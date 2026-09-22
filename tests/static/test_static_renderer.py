@@ -560,12 +560,17 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
                 LayerSpec("refused", "terrain")
             ),
         )
+        held = drawn_map._renderer.drawn["raster-1"].artist
         with pytest.raises(KeyError):
             drawn_map._renderer.apply(figure, refused)
         assert "raster-1" in drawn_map._renderer.drawn, sorted(
             drawn_map._renderer.drawn
         )
         assert len(drawn_map.ax.images) == 1, len(drawn_map.ax.images)
+        # The artist matplotlib unlinked is gone for good, so a restored layer is a *new* one. Without
+        # this the check passed for a rollback that re-attached the old artist, which matplotlib does not
+        # support and which leaves the layer's transform stack behind.
+        assert drawn_map._renderer.drawn["raster-1"].artist is not held
 
     def test_a_restored_layer_keeps_its_place_in_the_record(self, layered_map):
         """The renderer's record is in draw order, so a restored layer goes back where it was, not last.
@@ -1014,8 +1019,25 @@ class TestWhatADrawerHandsBack:
         drawn_map._renderer.set_visible("empty", False)
         assert "empty" in drawn_map._renderer.drawn
 
-    def test_an_artist_that_is_not_on_the_axes_is_removed_quietly(self, drawn_map):
-        """Matplotlib answers a double removal with `ValueError`; a reconcile must survive it.
+    def test_an_artist_already_off_the_axes_is_removed_quietly(self, drawn_map):
+        """Matplotlib answers a **second** removal with `ValueError`; a reconcile must survive it.
+
+        Args:
+            drawn_map: A map whose renderer is under test.
+
+        Test scenario:
+            A real artist, taken off the axes behind the renderer's back — which is what a caller calling
+            ``artist.remove()`` themselves, or a cleopatra render that cleared the axes, leaves behind.
+            An object that was never an artist raises `AttributeError` instead, so a test using one cannot
+            reach the `ValueError` branch at all.
+        """
+        held = drawn_map._renderer.drawn["raster-1"].artist
+        held.remove()
+        drawn_map._renderer.remove("raster-1")
+        assert "raster-1" not in drawn_map._renderer.drawn
+
+    def test_an_object_that_was_never_an_artist_is_removed_quietly_too(self, drawn_map):
+        """The other branch: a mappable a glyph built but never added has no ``remove`` at all.
 
         Args:
             drawn_map: A map whose renderer is under test.
