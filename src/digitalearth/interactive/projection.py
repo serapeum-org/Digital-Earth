@@ -13,7 +13,7 @@ basemaps auto-disable under a non-Mercator projection (a tile call raises via th
 from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.base import _require_holoviz, held_props
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -27,14 +27,14 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 _GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
 
 
-def draw_graticule(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_graticule(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the GeoViews graticule element for a described grid.
 
     A graticule draws from no data: GeoViews cuts it from Natural Earth's pre-made line layers, chosen by
     the step the caller asked for, which is why `_data` is unused.
 
     Args:
-        _interactive_map: Unused — every drawer takes the map, and this one draws without it.
+        interactive_map: The map being drawn, whose held values carry the caller's own keywords.
         _data: Unused — a graticule has no source.
         layer: The layer's description.
 
@@ -44,7 +44,7 @@ def draw_graticule(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     step = int(props["step"])
     element = gv.feature.grid.clone()
     if step != 30:
@@ -189,9 +189,8 @@ class ProjectionMixin(_MixinBase):
         return self.add_element(
             None,
             kind="graticule",
-            symbology=Symbology(
-                props={"via": "graticule", "step": int(step), "opts": dict(opts or {})}
-            ),
+            held={"opts": dict(opts or {})},
+            symbology=Symbology(props={"via": "graticule", "step": int(step)}),
         )
 
     @staticmethod

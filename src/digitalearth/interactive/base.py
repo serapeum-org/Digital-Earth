@@ -20,7 +20,7 @@ Unlike the 3-D tier, the engine import is **lazy**: ``import digitalearth.intera
 from functools import reduce, wraps
 from operator import mul
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Self
+from typing import Any, Callable, Dict, List, Mapping, Optional, Self
 
 from loguru import logger
 
@@ -52,6 +52,7 @@ from digitalearth.base.spec import (
     Symbology,
     Viewport,
 )
+from digitalearth.base.spec._serial import to_json_value
 from digitalearth.base.spec.bounds import same_crs
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
@@ -168,6 +169,93 @@ def _skips_off_limb(builder: Callable) -> Callable:
             return self._skip_off_limb(builder.__name__, error)
 
     return guarded
+
+
+def is_json_value(value: Any) -> bool:
+    """Whether a figure holding `value` in its description can be written down.
+
+    The oracle is the writer itself — :func:`~digitalearth.base.spec._serial.to_json_value`, which
+    `Symbology.to_dict` applies — so this cannot drift from what a figure actually accepts. A colormap
+    object, a Datashader reduction, a `pandas.Timestamp` and a `nan` are all refused there.
+
+    Args:
+        value: A value a builder is about to record.
+
+    Returns:
+        `True` when the description can carry it as it is.
+    """
+    try:
+        to_json_value(value, "Symbology.props")
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def cmap_name(cmap: Any) -> Optional[str]:
+    """Return the name a colormap object can be written down as, or `None` for one that cannot.
+
+    A colormap that matplotlib's registry knows — `colormaps["viridis"]`, or any name a figure read on
+    another machine can resolve — is written as its name, so a figure drawn elsewhere is coloured the same
+    way. One built on the spot (`ListedColormap([...])`) has no name anything else could resolve, and
+    writing its `"from_list"` would describe a colormap that does not exist; such a layer is described
+    with no colormap and drawn with the tier's default, while the object itself is held beside the layer.
+
+    Args:
+        cmap: The caller's `cmap` argument.
+
+    Returns:
+        The registered name, or `None`.
+    """
+    # matplotlib is the colour registry here, not a renderer: only the name lookup is used.
+    from matplotlib import colormaps
+
+    name = getattr(cmap, "name", None)
+    return name if isinstance(name, str) and name in colormaps else None
+
+
+def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
+    """Record a builder argument if a figure can be written with it; otherwise hold it beside the layer.
+
+    The tier's answer to engine values in a description (review C1/H2/H3/M9): a figure is written to JSON
+    and read back, so it carries **plain values only**. Anything else — a colormap object, an
+    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp —
+    is handed to the drawer through the map instead, keyed by layer id, and the description keeps the
+    JSON-safe rendering of it that `spelling` gives, or nothing.
+
+    Args:
+        held: The values being held beside this layer; a value with no JSON form is added to it.
+        name: The property's name, under which the drawer reads it back.
+        value: The caller's value.
+        spelling: What to describe a held value as — a registered colormap's name, a timestamp's ISO
+            string. `None` describes it as not given, which is what a reader with no held value draws by.
+
+    Returns:
+        The value to record in `Symbology.props`.
+    """
+    if is_json_value(value):
+        return value
+    held[name] = value
+    return spelling
+
+
+def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
+    """Return a layer's recorded properties with the values held beside it merged back in.
+
+    What every drawer reads instead of `layer.symbology.props`: the description carries the JSON-safe
+    half, the map carries the engine values :func:`describe` kept out of it, and a drawer wants both. A
+    figure loaded from disk — or drawn on another map — has nothing held, so the drawer sees the
+    description alone and draws the layer with what it can.
+
+    Args:
+        interactive_map: The map being drawn, which holds the engine values.
+        layer: The layer's description.
+
+    Returns:
+        The merged properties.
+    """
+    props = dict(layer.symbology.props)
+    props.update(interactive_map._held_for(layer.id))
+    return props
 
 
 class InteractiveMapBase:
@@ -314,6 +402,11 @@ class InteractiveMapBase:
         # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
         # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
         self._layer_keys: Dict[str, Any] = {}
+        # The engine values a layer's drawer needs that a description cannot carry, by layer id: the
+        # caller's raw HoloViews keywords, a colormap object, a tile provider, a Datashader reduction
+        # (review C1/H2/H3/M9). Held here for the same reason the credentials are — a figure written to
+        # JSON holds plain values — and let go with the layer and on `close()`.
+        self._layer_held: Dict[str, Dict[str, Any]] = {}
         # The layer the caller added last — what `colorbar`, `legend`, `hover` and `on_tap` act on by
         # default. Tracked by id because `layers` is in draw order, so its last entry is whatever sits in the
         # highest band, not the layer the caller just added (review H5). The web tier's `_last_layer_id`.
@@ -546,6 +639,7 @@ class InteractiveMapBase:
         source: Any = None,
         symbology: Any = None,
         key: Any = None,
+        held: Optional[Mapping[str, Any]] = None,
     ) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
@@ -575,6 +669,10 @@ class InteractiveMapBase:
             symbology: How it looks, as values — the description its drawer reads.
             key: A credential the layer's drawer needs, held on the map rather than in ``symbology`` so a
                 figure written to JSON carries no API key. ``None`` for every layer that needs none.
+            held: The engine values this layer's drawer needs that a description cannot carry — the
+                caller's raw HoloViews keywords, a colormap object, a tile provider — by the name the
+                drawer reads them under. Held on the map for the same reason ``key`` is; see
+                :func:`describe`. ``None`` for a layer whose description says everything about it.
 
         Returns:
             The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer
@@ -638,6 +736,8 @@ class InteractiveMapBase:
         try:
             if key is not None:
                 self._layer_keys[layer_id] = key
+            if held:
+                self._layer_held[layer_id] = dict(held)
             self._index_layer(
                 layer_id,
                 name,
@@ -740,6 +840,19 @@ class InteractiveMapBase:
         if ref is not None:
             forget_object(ref.uri)
         self._layer_keys.pop(layer_id, None)
+        self._layer_held.pop(layer_id, None)
+
+    def _held_for(self, layer_id: str) -> Dict[str, Any]:
+        """Return the engine values held beside one layer.
+
+        Args:
+            layer_id: The layer being drawn.
+
+        Returns:
+            A copy of what its builder handed over, or an empty dict — which is what a figure read from
+            disk, or drawn on another map, gives every layer.
+        """
+        return dict(self._layer_held.get(layer_id) or {})
 
     def _needs_reproject(self, data: Any) -> bool:
         """Whether `data` must be reprojected (via pyramids) to the display CRS.
@@ -1318,8 +1431,9 @@ class InteractiveMapBase:
         what "closed" means for a figure whose data lived only in this process. Save the data and reference
         it by path to keep such a figure readable.
 
-        The credentials held for keyed basemaps go too: they are kept off the figure so it can be written
-        down without them, and a closed map has nothing left to draw with them.
+        The credentials held for keyed basemaps go too, and with them the engine values held beside each
+        layer: they are kept off the figure so it can be written down without them, and a closed map has
+        nothing left to draw with them.
 
         Examples:
             - A map that drew nothing closes quietly, with no engine installed:
@@ -1334,6 +1448,7 @@ class InteractiveMapBase:
         """
         forget_namespace(self._objects_ns)
         self._layer_keys.clear()
+        self._layer_held.clear()
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the map.

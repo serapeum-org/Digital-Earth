@@ -15,7 +15,12 @@ from typing import TYPE_CHECKING, Any, Mapping, Optional, Self
 from loguru import logger
 
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.base import (
+    _require_holoviz,
+    cmap_name,
+    describe,
+    held_props,
+)
 
 #: Datashader reduction names accepted as ``aggregator=`` strings. ``count`` needs no column; the rest
 #: aggregate the ``column=`` argument; ``count_cat`` blends per-category counts (DI.2a).
@@ -38,6 +43,10 @@ def _resolve_aggregator(aggregator: Any, column: Optional[str]) -> Any:
     """
     import datashader as ds
 
+    if aggregator is None:
+        # A reduction object has no JSON form, so a figure read back without the held object describes
+        # none. Counting is what this tier's builders default to, and what such a figure draws.
+        return ds.count()
     if not isinstance(aggregator, str):
         return aggregator
     if aggregator not in _AGGREGATORS:
@@ -133,7 +142,7 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     column = props.get("column")
     element = interactive_map._as_element(data, vdims=[column] if column else None)
     rasterized = _rasterize(
@@ -142,7 +151,9 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         dynamic=props.get("dynamic", True),
         **dict(props.get("canvas") or {}),
     )
-    common = dict(props.get("common") or {})
+    # The builder's own style, then the caller's raw keywords over it: the two halves the description
+    # and the map hold between them (C1/H3/M9).
+    common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     rasterized = interactive_map._styled(
         rasterized, common=common, bokeh={"tools": ["hover"]}
     )
@@ -169,7 +180,7 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     column = props.get("column")
     element = interactive_map._as_element(data, vdims=[column] if column else None)
     op_kwargs: dict = dict(props.get("canvas") or {})
@@ -184,7 +195,7 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         dynamic=props.get("dynamic", True),
         **op_kwargs,
     )
-    common = dict(props.get("common") or {})
+    common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     return DrawnLayer(
         element=interactive_map._styled(shaded, common=common or None), style=common
     )
@@ -207,7 +218,7 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     by = props.get("by")
     path = _track_path(
         hv, interactive_map._display_gdf(data), props.get("track_column"), by
@@ -225,7 +236,7 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     shaded = _datashade(path, dynamic=props.get("dynamic", True), **op_kwargs)
     if props.get("dynspread"):
         shaded = _dynspread(shaded)
-    common = dict(props.get("common") or {})
+    common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     return DrawnLayer(
         element=interactive_map._styled(shaded, common=common or None), style=common
     )
@@ -296,18 +307,25 @@ class BigDataMixin(_MixinBase):
         """
         _require_holoviz()
         canvas = {key: opts.pop(key) for key in ("width", "height") if key in opts}
+        held: dict = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="raster",
             source=layer,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "rasterize",
-                    "aggregator": aggregator,
+                    # A Datashader reduction is a live object; held beside the layer, and described as
+                    # nothing, which is the `"count"` every reader without it aggregates by.
+                    "aggregator": describe(held, "aggregator", aggregator),
                     "column": column,
                     "dynamic": dynamic,
                     "canvas": canvas,
-                    "common": {"cmap": cmap, "colorbar": True, **opts},
+                    "common": {
+                        "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                        "colorbar": True,
+                    },
                 }
             ),
         )
@@ -354,20 +372,22 @@ class BigDataMixin(_MixinBase):
         canvas: dict = {
             key: opts.pop(key) for key in ("width", "height") if key in opts
         }
+        held: dict = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="points",
             source=layer,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "datashade",
-                    "aggregator": aggregator,
+                    "aggregator": describe(held, "aggregator", aggregator),
                     "column": column,
                     "dynamic": dynamic,
                     "canvas": canvas,
-                    "color_key": color_key,
-                    "cmap": cmap,
-                    "common": dict(opts),
+                    "color_key": describe(held, "color_key", color_key),
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "common": {},
                 }
             ),
         )
@@ -409,21 +429,23 @@ class BigDataMixin(_MixinBase):
         canvas: dict = {
             key: opts.pop(key) for key in ("width", "height") if key in opts
         }
+        held: dict = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="lines",
             source=features,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "trajectory",
                     "track_column": track_column,
                     "by": by,
                     "dynspread": dynspread,
-                    "cmap": cmap,
-                    "color_key": color_key,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "color_key": describe(held, "color_key", color_key),
                     "dynamic": dynamic,
                     "canvas": canvas,
-                    "common": dict(opts),
+                    "common": {},
                 }
             ),
         )

@@ -40,6 +40,9 @@ from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
+    cmap_name,
+    describe,
+    held_props,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -61,7 +64,7 @@ def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.interactive.renderer import DrawnLayer
 
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     src = interactive_map._to_display_source(data, band=props["band"])
     common = {
         "cmap": interactive_map._auto_cmap(src, props.get("cmap")),
@@ -99,7 +102,7 @@ def draw_rgb(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     bands = list(props["bands"])
     # Reproject once into a local handle, then feed both the coordinate extraction (get_source, via
     # _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
@@ -137,7 +140,7 @@ def draw_quadmesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     src = interactive_map._to_display_source(data, band=props["band"])
     arr = _masked_to_nan(src.z.values)
     element = hv.QuadMesh(
@@ -174,7 +177,7 @@ def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     _require_holoviz()
     from holoviews.operation import contours as contour_op
 
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     src = interactive_map._to_display_source(data, band=props["band"])
     # A caller's `levels` always wins; `None` consults autostyle for the variable's canonical contour
     # levels (#230) before falling back to the tier's 10.
@@ -204,7 +207,7 @@ def draw_large_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.interactive.renderer import DrawnLayer
 
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     element, style = interactive_map._draw_large_image(data, props)
     return DrawnLayer(element=element, style=style)
 
@@ -287,20 +290,23 @@ class RasterMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
+        # The caller's raw HoloViews keywords, and a colormap object, are held beside the layer rather than
+        # written into its description: a figure is saved as JSON, and neither has a JSON form (C1/H3/M9).
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="raster",
             source=data,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "image",
                     "band": band,
-                    "cmap": cmap,
-                    "clim": clim,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "clim": describe(held, "clim", clim),
                     "alpha": alpha,
                     "colorbar": colorbar,
                     "clabel": clabel,
-                    "opts": dict(opts),
                 }
             ),
         )
@@ -345,16 +351,20 @@ class RasterMixin(_MixinBase):
         _require_holoviz()
         # Refused here rather than in the drawer, because the message names the argument the caller wrote.
         require_three_bands("rgb", bands)
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="rgb",
             source=data,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "rgb",
                     "bands": tuple(bands),
-                    "limits": limits,
-                    "opts": dict(opts),
+                    # A frozen stretch whose channel had no finite cell holds `(nan, nan)`, which JSON has
+                    # no spelling for. Such limits are held beside the layer and described as not given,
+                    # which is what a reader without them derives per frame.
+                    "limits": describe(held, "limits", limits),
                 }
             ),
         )
@@ -398,17 +408,18 @@ class RasterMixin(_MixinBase):
             This map (chainable).
         """
         _require_holoviz()
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="mesh",
             source=data,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "quadmesh",
                     "band": band,
-                    "cmap": cmap,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "clabel": clabel,
-                    "opts": dict(opts),
                 }
             ),
         )
@@ -495,17 +506,18 @@ class RasterMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="filled_contours" if filled else "contours",
             source=data,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "contours",
                     "band": band,
-                    "levels": levels,
+                    "levels": describe(held, "levels", levels),
                     "filled": filled,
-                    "opts": dict(opts),
                 }
             ),
         )
@@ -652,18 +664,19 @@ class RasterMixin(_MixinBase):
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
                 ".preview); upgrade pyramids or use image() for a small raster"
             )
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="raster",
             source=dataset,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "large_image",
                     "band": band,
                     "max_pixels": max_pixels,
                     "dynamic": dynamic,
-                    "cmap": cmap,
-                    "opts": dict(opts),
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                 }
             ),
         )

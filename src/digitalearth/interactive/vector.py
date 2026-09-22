@@ -15,7 +15,7 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
@@ -26,6 +26,9 @@ from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
+    cmap_name,
+    describe,
+    held_props,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -34,11 +37,13 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-#: The style options HoloViews takes as a `list` and refuses as a tuple. A symbology stores every sequence
-#: as a tuple, so a colour ramp read back from one is spelled `("#440154", ...)` — which `color_levels`
-#: rejects outright (`ClassSelector` of `(int, list, range)`) and which makes a palette harder to read
-#: wherever a style is printed. Everything else keeps the spelling it was stored in, `clim` included: that
-#: one *is* a pair, and HoloViews reads it as one.
+#: The style options HoloViews takes as a `list` and refuses as a tuple. These are the builder's **own**
+#: resolved values — a sampled colour ramp, a classifier's edges — which the description carries and so
+#: stores as tuples: a ramp read back from one is spelled `("#440154", ...)`, which `color_levels` rejects
+#: outright (`ClassSelector` of `(int, list, range)`) and which makes a palette harder to read wherever a
+#: style is printed. Everything else keeps the spelling it was stored in, `clim` included: that one *is* a
+#: pair, and HoloViews reads it as one. The caller's own keywords never go through the freeze at all now —
+#: they are held beside the layer, exactly as passed (C1/H3/M9) — so nothing in `opts` needs thawing.
 _AS_LISTS: Tuple[str, ...] = ("cmap", "color_levels")
 
 
@@ -73,7 +78,8 @@ def _vector_symbology(
             Recorded under `via` as `"geometry"`: these five draw a frame of geometry, which is what tells
             them apart from the aggregating builders that draw the same kinds.
         vdims: The value dimensions the element carries, or `None`.
-        common: The resolved style options, as values.
+        common: The resolved style options, as values — the builder's own half. The caller's raw
+            keywords are held beside the layer and merged over this by the drawer.
         labels: For a layer coloured by category, the column drawn as labels and the label missing rows
             take — what :func:`_as_labels` needs. `None` for every other layer, which draws its column as
             it is.
@@ -110,7 +116,7 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.interactive.renderer import DrawnLayer
 
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     gdf = interactive_map._display_gdf(data)
     labels = props.get("labels")
     if labels:
@@ -118,15 +124,18 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     element = interactive_map._vector_element(
         props["hv_type"],
         gdf,
-        # Thawed, because a symbology stores every sequence as a tuple and HoloViews reads a tuple of
+        # Thawed, because the description stores every sequence as a tuple and HoloViews reads a tuple of
         # dimensions as a `(name, label)` pair — the stored `("fid",)` is refused where `["fid"]` is not.
         # Only this property: a `clim` is a pair, and reaches Bokeh as the pair it was written as.
         vdims=thawed_value(props.get("vdims")),
     )
+    # The builder's own resolved style, then the caller's raw keywords over it — the precedence the
+    # builder applied before the two were split (the description carries the first, the map the second).
     common = {
         key: thawed_value(value) if key in _AS_LISTS else value
         for key, value in dict(props.get("common") or {}).items()
     }
+    common.update(dict(props.get("opts") or {}))
     element = interactive_map._styled(
         element, common=common or None, bokeh={"tools": ["hover"]}
     )
@@ -153,7 +162,7 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     gdf = interactive_map._display_gdf(data)
     # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
     # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
@@ -212,7 +221,7 @@ def draw_kde(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     gdf = interactive_map._display_gdf(data)
     element = hv.Bivariate((gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy()))
     common = {"cmap": props.get("cmap"), **dict(props.get("opts") or {})}
@@ -245,7 +254,7 @@ def draw_uv_field(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     via = props.get("via")
     u, v = data
     arrays = interactive_map._uv_arrays(
@@ -334,7 +343,7 @@ def draw_graph(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.interactive.renderer import DrawnLayer
 
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     nodes, edges = data
     graph = _graph_element(interactive_map, nodes, edges, props)
     opts = dict(props.get("opts") or {})
@@ -375,7 +384,7 @@ def draw_trimesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     value_column = props.get("value_column")
     # The builder had to build this mesh to count its faces, and hands it over while its own call is still
     # running. Taken only when it was built from this very object and column, so a figure drawn from its
@@ -581,15 +590,21 @@ class VectorMixin(_MixinBase):
             self.last_breaks = list(styling["color_levels"])
         elif value_column:
             styling = {"color": value_column, "cmap": cmap, "colorbar": True}
-        # `**opts` last: an explicit style the caller wrote outranks the one classification derived, the
-        # same precedence `_graduated_polygons` applies, so one scheme cannot mean two things (review M4).
-        common: dict = {"size": size, **styling, **opts}
+        # The caller's `**opts` are held beside the layer rather than recorded (C1/H3/M9) and merged over
+        # this by the drawer, which keeps the precedence: an explicit style the caller wrote outranks the
+        # one classification derived, so one scheme cannot mean two things (review M4).
+        held: Dict[str, Any] = {"opts": dict(opts)}
+        common: dict = {"size": size, **styling}
         return self.add_element(
             None,
             kind="points",
             source=features,
+            held=held,
             symbology=_vector_symbology(
-                "Points", [value_column] if value_column else None, common, labels
+                "Points",
+                [value_column] if value_column else None,
+                {key: describe(held, key, value) for key, value in common.items()},
+                labels,
             ),
         )
 
@@ -620,7 +635,8 @@ class VectorMixin(_MixinBase):
             None,
             kind="lines",
             source=features,
-            symbology=_vector_symbology("Path", None, dict(opts or {})),
+            held={"opts": dict(opts or {})},
+            symbology=_vector_symbology("Path", None, {}),
         )
 
     @_skips_off_limb
@@ -760,15 +776,23 @@ class VectorMixin(_MixinBase):
                 cmap=cmap,
                 **opts,
             )
-        common: dict = dict(opts)
+        held: Dict[str, Any] = {"opts": dict(opts)}
+        common: dict = {}
         if column:
-            common.update({"color": column, "cmap": cmap, "colorbar": True})
-        else:
-            common.setdefault("fill_alpha", 0.0)
+            common.update(
+                {
+                    "color": column,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "colorbar": True,
+                }
+            )
+        elif "fill_alpha" not in opts:
+            common["fill_alpha"] = 0.0
         return self.add_element(
             None,
             kind=kind,
             source=features,
+            held=held,
             symbology=_vector_symbology(
                 "Polygons", [column] if column else None, common
             ),
@@ -806,12 +830,17 @@ class VectorMixin(_MixinBase):
             features, column, cmap=cmap
         )
         self.last_breaks = categories
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="choropleth",
             source=features,
+            held=held,
             symbology=_vector_symbology(
-                "Polygons", [column], {**styling, **opts}, labels
+                "Polygons",
+                [column],
+                {key: describe(held, key, value) for key, value in styling.items()},
+                labels,
             ),
         )
 
@@ -961,11 +990,17 @@ class VectorMixin(_MixinBase):
             features, column, scheme=scheme, k=k, cmap=cmap
         )
         self.last_breaks = list(classified["color_levels"])
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="choropleth",
             source=features,
-            symbology=_vector_symbology("Polygons", [column], {**classified, **opts}),
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons",
+                [column],
+                {key: describe(held, key, value) for key, value in classified.items()},
+            ),
         )
 
     @_skips_off_limb
@@ -1119,19 +1154,20 @@ class VectorMixin(_MixinBase):
             ValueError: when ``density`` is not in ``(0, 1]``.
         """
         _require_holoviz()
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="vectors",
             # The pair is the source: a field is not drawable from either component alone.
             source=(u, v),
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "vectorfield",
                     "band": band,
                     "density": density,
                     "color_by": color_by,
-                    "cmap": cmap,
-                    "opts": dict(opts),
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                 }
             ),
         )
@@ -1171,12 +1207,12 @@ class VectorMixin(_MixinBase):
             None,
             kind="streamlines",
             source=(u, v),
+            held={"opts": dict(opts)},
             symbology=Symbology(
                 props={
                     "via": "streamlines",
                     "band": band,
                     "density": density,
-                    "opts": dict(opts),
                 }
             ),
         )
@@ -1221,12 +1257,12 @@ class VectorMixin(_MixinBase):
             None,
             kind="vectors",
             source=(u, v),
+            held={"opts": dict(opts)},
             symbology=Symbology(
                 props={
                     "via": "barbs",
                     "band": band,
                     "density": density,
-                    "opts": dict(opts),
                 }
             ),
         )
@@ -1347,16 +1383,17 @@ class VectorMixin(_MixinBase):
             return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
         self._built_mesh = (data, value_column, built)
         try:
+            held: Dict[str, Any] = {"opts": dict(opts)}
             return self.add_element(
                 None,
                 kind="unstructured",
                 source=data,
+                held=held,
                 symbology=Symbology(
                     props={
                         "via": "trimesh",
                         "value_column": value_column,
-                        "cmap": cmap,
-                        "opts": dict(opts),
+                        "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     }
                 ),
             )
@@ -1433,18 +1470,19 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="heatmap",
             source=features,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "hexbin",
                     "gridsize": gridsize,
                     "aggregator": aggregator,
                     "column": column,
-                    "cmap": cmap,
-                    "opts": dict(opts),
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                 }
             ),
         )
@@ -1470,16 +1508,17 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="heatmap",
             source=features,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "kde",
                     "filled": filled,
-                    "cmap": cmap,
-                    "opts": dict(opts),
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                 }
             ),
         )
@@ -1515,20 +1554,21 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
+        held: Dict[str, Any] = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="flow",
             # One source, because the layer draws the join of the two: neither the node table nor the
             # edge table describes it on its own.
             source=(nodes, edges),
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "graph",
                     "weight": weight,
                     "bundle": bundle,
                     "node_id": node_id,
-                    "cmap": cmap,
-                    "opts": dict(opts),
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                 }
             ),
         )

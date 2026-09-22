@@ -24,7 +24,11 @@ from digitalearth.base.basemaps import (
 )
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.interactive.base import _require_holoviz, _skips_off_limb
+from digitalearth.interactive.base import (
+    _require_holoviz,
+    _skips_off_limb,
+    held_props,
+)
 
 # Note (#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
 # `provider=` argument. Splitting that collision (a `tiles(url=...)` vs `basemap(provider=...)` rename)
@@ -122,6 +126,39 @@ def _upper_placeholders(url: str) -> str:
     return url
 
 
+def _provider_description(provider: Any) -> Optional[str]:
+    """Return a tile provider in a spelling a figure can be written with, carrying no credential.
+
+    A provider name is already one. An `xyzservices.TileProvider` is a `dict` whose fields include the
+    service's API key, so the object itself is never written down: its `url` **template** is, which still
+    names the service and which `_build_tiles` draws through the raw-URL path. A provider whose own fields
+    appear verbatim in that template — one built with the key substituted in — is described as nothing,
+    and a reader without the held object draws the tier's default basemap.
+
+    Args:
+        provider: The caller's `provider` argument.
+
+    Returns:
+        The name, the URL template, or `None`.
+    """
+    if isinstance(provider, str):
+        return provider
+    # Every string field but the four public ones is treated as a credential: `apikey`, `accessToken`,
+    # whatever a service calls it. What is written must not depend on knowing each service's spelling.
+    public = {"url", "name", "attribution", "html_attribution"}
+    secrets = [
+        value
+        for key, value in dict(provider).items()
+        if key not in public and isinstance(value, str) and value
+    ]
+    for spelling in (getattr(provider, "url", None), getattr(provider, "name", None)):
+        if isinstance(spelling, str) and not any(
+            secret in spelling for secret in secrets
+        ):
+            return spelling
+    return None
+
+
 def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the tile basemap a description asks for.
 
@@ -141,9 +178,11 @@ def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     element = interactive_map._build_tiles(
-        props["provider"],
+        # `None` is a figure whose provider had no JSON spelling and whose reader holds no object: the
+        # shared default basemap is what such a layer draws.
+        props.get("provider") or DEFAULT_BASEMAP_PROVIDER,
         # The credential is the map's, not the figure's: a description that carried it would write it
         # out with the figure.
         interactive_map._layer_keys.get(layer.id),
@@ -156,11 +195,11 @@ def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     return DrawnLayer(element=element, style=opts)
 
 
-def draw_natural_earth(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build one piece of Natural-Earth reference geography at the described resolution.
 
     Args:
-        _interactive_map: Unused — every drawer takes the map, and this one draws without it.
+        interactive_map: The map being drawn, whose held values carry the caller's own keywords.
         _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
         layer: The layer's description.
 
@@ -170,7 +209,7 @@ def draw_natural_earth(_interactive_map: Any, _data: Any, layer: LayerSpec) -> A
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     # clone: .opts() would otherwise restyle the shared gv.feature singleton
     element = (
         getattr(gv.feature, props["feature"]).clone().opts(scale=props["resolution"])
@@ -200,7 +239,7 @@ def draw_labels(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     column = props["column"]
     gdf = interactive_map._display_gdf(data)
     # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
@@ -233,7 +272,7 @@ def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     element = gv.Text(
         props["x"],
         props["y"],
@@ -246,11 +285,11 @@ def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     return DrawnLayer(element=element, style=opts)
 
 
-def draw_coastlines(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_coastlines(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the GeoViews coastline feature at the described resolution.
 
     Args:
-        _interactive_map: Unused — every drawer takes the map, and this one draws without it.
+        interactive_map: The map being drawn, whose held values carry the caller's own keywords.
         _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
         layer: The layer's description.
 
@@ -260,7 +299,7 @@ def draw_coastlines(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     # clone: .opts() would otherwise restyle the shared gv.feature.coastline singleton
     element = gv.feature.coastline.clone().opts(scale=props["resolution"])
     opts = dict(props.get("opts") or {})
@@ -368,6 +407,11 @@ class DecorationMixin(_MixinBase):
         # An explicit tiles() call supersedes any provider passed to the constructor, so render()'s
         # one-shot hook does not also prepend a second basemap (L2).
         self._tiles_provider = None
+        # A provider object is an `xyzservices.TileProvider`: a `dict` subclass whose fields include the
+        # service's API key, so freezing it into the description wrote the key into every saved figure
+        # (review C1) and thawed it back as a plain dict the engine cannot draw from (review H2). It is
+        # held beside the layer, and described by its key-free URL template.
+        held: dict = {"opts": dict(opts), "provider": provider}
         return self.add_element(
             None,
             kind="basemap",
@@ -375,13 +419,13 @@ class DecorationMixin(_MixinBase):
             # of imagery, say — so it declares the band that overrides its kind's.
             band="overlay" if level == "overlay" else None,
             key=api_key,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "tiles",
-                    "provider": provider,
+                    "provider": _provider_description(provider),
                     "level": level,
                     "preset": dict(preset or {}),
-                    "opts": dict(opts),
                 }
             ),
         )
@@ -503,11 +547,11 @@ class DecorationMixin(_MixinBase):
         return self.add_element(
             None,
             kind="coastlines",
+            held={"opts": dict(opts or {})},
             symbology=Symbology(
                 props={
                     "via": "coastlines",
                     "resolution": resolution,
-                    "opts": dict(opts or {}),
                 }
             ),
         )
@@ -571,12 +615,12 @@ class DecorationMixin(_MixinBase):
                 self.add_element(
                     None,
                     kind=name,
+                    held={"opts": dict(opts)},
                     symbology=Symbology(
                         props={
                             "via": "natural_earth",
                             "feature": name,
                             "resolution": resolution,
-                            "opts": dict(opts),
                         }
                     ),
                 )
@@ -823,13 +867,13 @@ class DecorationMixin(_MixinBase):
         return self.add_element(
             None,
             kind="text",
+            held={"opts": dict(opts or {})},
             symbology=Symbology(
                 props={
                     "via": "text",
                     "x": float(x),
                     "y": float(y),
                     "s": s,
-                    "opts": dict(opts or {}),
                 }
             ),
         )
@@ -864,9 +908,8 @@ class DecorationMixin(_MixinBase):
             None,
             kind="labels",
             source=features,
-            symbology=Symbology(
-                props={"via": "labels", "column": column, "opts": dict(opts)}
-            ),
+            held={"opts": dict(opts)},
+            symbology=Symbology(props={"via": "labels", "column": column}),
         )
 
     def colorbar(self, show: bool = True) -> Self:

@@ -19,7 +19,32 @@ from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
+    cmap_name,
+    describe,
+    held_props,
 )
+
+
+def _iso_labels(labels: Optional[Sequence]) -> Optional[list]:
+    """Return slider labels in a spelling a figure can be written with.
+
+    A time slider is normally labelled with timestamps, and JSON has no spelling for one — the writer says
+    so by name and refuses the figure (review M9). Each label that knows its own ISO form is written as
+    that string; anything else is written as it is and refused by the writer as before, which keeps a
+    label a reader cannot make sense of out of the description rather than inventing one.
+
+    Args:
+        labels: The caller's labels, or `None`.
+
+    Returns:
+        The labels as JSON-safe values, or `None`.
+    """
+    if labels is None:
+        return None
+    return [
+        label.isoformat() if hasattr(label, "isoformat") else label for label in labels
+    ]
+
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -41,7 +66,7 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
-    props = dict(layer.symbology.props)
+    props = held_props(interactive_map, layer)
     band = props["band"]
     members = data.datasets
     # One colour range and one colormap for the whole cube, resolved from the collection and its first
@@ -213,20 +238,25 @@ class TemporalMixin(_MixinBase):
                     "timecube labels must be unique — duplicate labels collapse the slider and "
                     "make the matching frames unreachable"
                 )
+        kept = None if labels is None else list(labels)
+        held: dict = {"opts": dict(opts)}
         return self.add_element(
             None,
             kind="raster",
             source=collection,
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "timecube",
                     "kdim": kdim,
-                    "labels": None if labels is None else list(labels),
+                    # A slider's labels are usually timestamps, which JSON has no spelling for: the
+                    # originals are held beside the layer and the description keeps them as ISO strings,
+                    # which is what a reader without the objects slides through (review M9).
+                    "labels": describe(held, "labels", kept, _iso_labels(kept)),
                     "band": band,
-                    "cmap": cmap,
-                    "clim": clim,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "clim": describe(held, "clim", clim),
                     "colorbar": colorbar,
-                    "opts": dict(opts),
                 }
             ),
         )
