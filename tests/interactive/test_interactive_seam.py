@@ -176,18 +176,27 @@ class TestAFigureNamesEveryLayerItDrew:
             new_map: The map factory.
             point_fc: A small point collection.
             dataset: A small raster.
+
+        Test scenario:
+            "Exactly once" is counted on the drawing. It used to be counted on the ids, which cannot repeat —
+            `LayerTree` refuses a second layer under an id it holds — so that check passed with every element
+            composed twice (review L7).
         """
         interactive_map = (
             new_map().tiles("CartoLight").graticule().points(point_fc).image(dataset)
         )
         described = list(interactive_map.figure_spec.layers.ids)
         assert len(described) == 4, described
-        assert len(set(described)) == len(described), (
-            f"a layer is described twice: {described}"
+        drawn = interactive_map._renderer.drawn
+        assert set(drawn) == set(described), (
+            f"drawn {sorted(drawn)} but described {sorted(described)}"
         )
-        assert set(interactive_map._renderer.drawn) == set(described), (
-            f"drawn {sorted(interactive_map._renderer.drawn)} but described {sorted(described)}"
-        )
+        composed = [id(element) for element in interactive_map.layers]
+        times_composed = {
+            layer_id: composed.count(id(drawn[layer_id].element))
+            for layer_id in described
+        }
+        assert times_composed == dict.fromkeys(described, 1), times_composed
 
     def test_the_element_list_holds_one_element_per_described_layer(
         self, new_map, point_fc, dataset

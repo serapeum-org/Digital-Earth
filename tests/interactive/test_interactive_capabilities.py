@@ -10,6 +10,7 @@ something nothing implements is worse than no row (`planning/refactor/backends/a
 HoloViews option, and the schemes are the shared classifier's (contract C4).
 """
 
+import re
 import subprocess
 import sys
 
@@ -98,11 +99,17 @@ class TestTheDeclaration:
         ], BACKEND_CAPABILITIES["interactive"]
 
     def test_a_refusal_carries_the_declared_reason(self):
-        """A caller is told what the tier does instead of what they asked for."""
+        """A caller is told what the tier does instead of what they asked for.
+
+        Test scenario:
+            Matched on the whole of the `domain` reason, read from the declaration. It used to match
+            "pans and zooms", which the `navigation` reason says too — so a refusal carrying the wrong
+            capability's reason passed (review L7).
+        """
         from digitalearth import quickmap
 
         dem = _dem()
-        with pytest.raises(ValueError, match="pans and zooms"):
+        with pytest.raises(ValueError, match=re.escape(CAPABILITIES.reason("domain"))):
             quickmap(dem, backend="interactive", domain="europe")
 
     def test_the_declaration_is_a_capabilities_value(self):
