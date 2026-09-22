@@ -1310,7 +1310,8 @@ class TestForgettingALayerTheTreeNeverHeld:
             the cleanup runs for it too. Removing from the tree unconditionally turns that into a
             `KeyError` raised from the cleanup, hiding whatever made the build stop.
         """
-        import geopandas as gpd
+        pytest.importorskip("maplibre")
+        gpd = pytest.importorskip("geopandas")
         from shapely.geometry import Point
 
         features = gpd.GeoDataFrame(
