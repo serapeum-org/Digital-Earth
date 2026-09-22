@@ -10,12 +10,16 @@ So they are written down once, here, as a contract a tier signs rather than a se
 A tier supplies a :class:`RendererContract` — how to build itself, how to draw one layer, what a figure it
 must refuse looks like, and how to read what its engine currently shows — and inherits every check below.
 
-**Adding a tier is a subclass and an adapter, nothing else:**
+**Adding a tier is a subclass and an adapter, nothing else** — this one is at the foot of this module:
 
 ```python
-class TestWebRendererConformance(RendererConformance):
-    contract = WebContract()
+class TestStaticRendererConformance(RendererConformance):
+    contract = StaticContract()
 ```
+
+Three of the four live here. The web tier's pair, `WebContract` and `TestWebRendererConformance`, lives in
+`tests/web/test_web_seam.py` instead, because the `test-web` job collects `tests/web` and nothing else — the
+same gap the other two tiers had until their jobs collected this module as well (review M6, N6).
 
 The four defects this exists to prevent, each found the expensive way:
 
@@ -127,6 +131,13 @@ _QUEUED = "still drawn through the queue"
 #: exactly what is deferred today, and a kind converted to its drawer comes off here in the same change. They
 #: live here rather than on each adapter so the web adapter, which sits beside the web tier's own tests, is
 #: held to the same list.
+#:
+#: **The web tier's four kinds are named in a second place**, as `DRAWN_BUT_NOT_DESCRIBED` in
+#: `tests/web/test_web_capabilities.py`, which holds a builder call per kind where this holds the reason —
+#: two payloads over one set, because neither job collects the other's module (review M6). They cannot drift
+#: silently: a kind that starts recording a layer fails the guard below until it is taken off here, and fails
+#: the capability test there until it is taken off that list, so the two are corrected together or not at all.
+#: A reader changing either has to know both exist, which is what this note is for (review N6).
 THREE_D_UNDRAWN_KINDS: dict[str, str] = {}
 WEB_UNDRAWN_KINDS: dict[str, str] = {
     "basemap": f"{_QUEUED}: `tiles` queues an underlay and records no layer to draw it from",
