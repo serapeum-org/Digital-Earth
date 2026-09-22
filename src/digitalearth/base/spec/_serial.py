@@ -534,66 +534,59 @@ _MAPPING_TAG: Any = object()
 
 
 def hashable_value(value: Any) -> Any:
-    """Return `value` in a form that hashes, with every mapping in it as a tagged tuple of its items.
+    """Return `value` in a form that hashes, with every mapping in it reduced to its items.
 
     The vocabulary freezes a list to a tuple so a spec holding one still hashes, but it leaves a mapping a
     mapping — and every tier records at least one: MapLibre's `paint`, the resolved HoloViews style, a tile
     preset. So almost every real `Symbology` raised `unhashable type: 'dict'`, while `Bounds`, `Scale`,
-    `Selection` and `Encoding` all hashed. :meth:`~digitalearth.base.spec.FigureSpec.__hash__` met the same
-    wall with its `sources` and answered it this way; this is that answer, reaching wherever a mapping is.
+    `Selection` and `Encoding` all hashed.
+
+    A mapping becomes a **frozenset** of its ``(key, value)`` pairs, applied inside a mapping and inside a
+    **tuple**. A frozenset is order-independent by construction, which is what makes two spellings of one
+    mapping agree: the keys need neither to be orderable against each other — ``{1: 'a', 'b': 2}`` hashes
+    perfectly well — nor to have distinct reprs. It carries a tag, so a mapping never hashes as the plain
+    collection of pairs that a caller might have written instead.
 
     Args:
         value: A stored property, or any part of one.
 
     Returns:
-        The value with each mapping as :data:`_MAPPING_TAG` followed by a tuple of its ``(key, value)`` pairs
-        in key order, applied inside a mapping and inside a **tuple**; any other sequence, and anything else,
-        is returned as it is — a value that is unhashable for its own reasons still raises when it is hashed,
-        which is the honest outcome. (A list does not need reaching into: the vocabulary froze it to a tuple
-        long before this runs.) The tag is what keeps a mapping from hashing as the plain tuple of pairs a
-        caller could have written instead (review N1); it is a surrogate for hashing, never something to read
-        back.
-
-        The order is the keys' own where they compare, and their `repr`\\ s where they do not. A mapping's
-        keys need not be orderable against each other — `{1: 'a', 'b': 2}` hashes perfectly well — so sorting
-        them was refusing values that this helper exists to accept (review L6). Where the keys compare, the
-        order is a function of the keys alone and two spellings of one mapping agree. The `repr` fallback is
-        a **stable** sort, so it settles that for keys whose `repr`\\ s differ and leaves the insertion order
-        standing for keys that share one — two objects of a class with a constant `repr`, say, which is the
-        one shape where two equal mappings can still reach two hashes.
+        The value with each mapping as a tagged frozenset of its items, reached inside mappings and tuples
+        alike. Anything else is returned as it is — a value that is unhashable for its own reasons still
+        raises when it is hashed, which is the honest outcome.
 
     Examples:
-        - Two mappings written in a different order hash alike, because the items are ordered by key:
+        - Two mappings written in a different order reduce to the same value, so they hash alike:
             ```python
             >>> from digitalearth.base.spec._serial import hashable_value
             >>> hashable_value({"b": 1, "a": 2}) == hashable_value({"a": 2, "b": 1})
             True
 
             ```
-        - It reaches a mapping held inside a sequence:
-            ```python
-            >>> from digitalearth.base.spec._serial import hashable_value
-            >>> hash(hashable_value(({"at": 0.0}, {"at": 1.0}))) is not None
-            True
-
-            ```
-        - Keys of two types are ordered by `repr` rather than refused:
+        - Keys that cannot be ordered against each other are no obstacle, because nothing is ordered:
             ```python
             >>> from digitalearth.base.spec._serial import hashable_value
             >>> hash(hashable_value({1: "a", "b": 2})) is not None
             True
 
             ```
+        - A mapping does not hash as the pairs it is made of:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hashable_value({"x": 1}) == hashable_value((("x", 1),))
+            False
+
+            ```
     """
     if isinstance(value, Mapping):
-        items = [(key, hashable_value(item)) for key, item in value.items()]
-        try:
-            return (_MAPPING_TAG, tuple(sorted(items)))
-        except TypeError:
-            # Only the keys are ever compared — a mapping's keys are unique, so the second half of a pair is
-            # never reached — and two key types need not be ordered against each other. `repr` gives them one
-            # total order that still depends on nothing but the keys.
-            return (_MAPPING_TAG, tuple(sorted(items, key=lambda item: repr(item[0]))))
+        # A frozenset rather than a sorted tuple: it is order-independent by construction, so it needs the
+        # keys neither to be orderable against each other nor to have distinct reprs. Sorting by `repr` as a
+        # fallback quietly required the second — a stable sort keeps insertion order for keys that share one,
+        # so two mappings that compared equal hashed differently, which is the invariant this exists to hold.
+        return (
+            _MAPPING_TAG,
+            frozenset((key, hashable_value(item)) for key, item in value.items()),
+        )
     if isinstance(value, tuple):
         return tuple(hashable_value(item) for item in value)
     return value

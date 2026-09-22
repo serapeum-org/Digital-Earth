@@ -1344,3 +1344,81 @@ class TestAMappingDoesNotHashAsTheItemsItBecomes:
         written = Symbology(props={"paint": {"a": 1, "b": 2}})
         rewritten = Symbology(props={"paint": {"b": 2, "a": 1}})
         assert len({written, rewritten}) == 1, "two equal styles must hold one slot"
+
+
+class TestAMappingHashesByItsItemsAndNothingElse:
+    """Equal mappings must hash alike however they were spelled (round 2 `/docstring`)."""
+
+    class _SameRepr:
+        """A key whose `repr` tells it nothing apart from its siblings.
+
+        Attributes:
+            tag: What actually distinguishes one key from another.
+        """
+
+        def __init__(self, tag):
+            """Store the tag.
+
+            Args:
+                tag: What distinguishes this key.
+            """
+            self.tag = tag
+
+        def __repr__(self):
+            """Return a repr every instance shares.
+
+            Returns:
+                The same string for every key, which is the point.
+            """
+            return "<key>"
+
+        def __eq__(self, other):
+            """Compare by tag.
+
+            Args:
+                other: The other key.
+
+            Returns:
+                Whether both are keys with the same tag.
+            """
+            return isinstance(
+                other, TestAMappingHashesByItsItemsAndNothingElse._SameRepr
+            ) and (other.tag == self.tag)
+
+        def __hash__(self):
+            """Hash by tag.
+
+            Returns:
+                The tag's hash.
+            """
+            return hash(self.tag)
+
+    def test_two_spellings_of_one_mapping_hash_alike_when_the_keys_share_a_repr(self):
+        """The order the keys were written in must not reach the hash.
+
+        Test scenario:
+            Unorderable keys fell back to `sorted(..., key=repr)`, and a stable sort keeps insertion order
+            for keys whose `repr` matches — so two mappings that compare equal produced different hashes,
+            breaking the invariant the hashing work exists to hold. The keys here share one `repr` and
+            differ by tag, which is exactly the case the fallback could not order.
+        """
+        first, second = self._SameRepr("one"), self._SameRepr("two")
+        written_one_way = hashable_value({first: "a", second: "b"})
+        written_the_other = hashable_value({second: "b", first: "a"})
+        assert written_one_way == written_the_other, (
+            "two spellings of one mapping must reduce to the same value"
+        )
+        assert hash(written_one_way) == hash(written_the_other), (
+            "and equal values must hash alike, or a set holds one object twice"
+        )
+
+    def test_the_same_holds_through_a_symbology(self):
+        """The invariant has to survive the type that made it necessary."""
+        first, second = self._SameRepr("one"), self._SameRepr("two")
+        one_way = Symbology(props={"paint": {first: "a", second: "b"}})
+        other_way = Symbology(props={"paint": {second: "b", first: "a"}})
+        assert one_way == other_way, "the two symbologies are equal by value"
+        assert hash(one_way) == hash(other_way), (
+            "so they must hash alike; a set keyed on style would otherwise hold both"
+        )
+        assert len({one_way, other_way}) == 1, "and a set must hold them once"
