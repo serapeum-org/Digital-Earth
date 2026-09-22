@@ -599,20 +599,22 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
         types = [type(element) for element in interactive_map.layers]
         assert types.index(gv.element.WMTS) < types.index(hv.Image), types
 
-    def test_the_basemap_is_described_under_the_data_too(self, new_map, dataset):
+    def test_the_basemap_is_drawn_where_the_description_puts_it(self, new_map, dataset):
         """The description has to agree with the drawing about which one is on top.
 
         Args:
             new_map: The map factory.
             dataset: A small raster.
+
+        Test scenario:
+            The basemap is added after the raster, against band order. This read `layer_ids`, which the
+            `LayerTree` sorts by band by construction, so it passed with the elements appended in call order
+            and the tiles drawn over the raster (review M13). It reads the drawing now.
         """
         interactive_map = new_map().image(dataset).tiles("CartoLight")
-        figure = interactive_map.figure_spec
-        placed = {
-            figure.layers.get(layer_id).kind: index
-            for index, layer_id in enumerate(interactive_map.layer_ids)
-        }
-        assert placed["basemap"] < placed["raster"], interactive_map.layer_ids
+        assert _composed_kinds(interactive_map) == ["basemap", "raster"], (
+            _composed_kinds(interactive_map)
+        )
 
     def test_each_natural_earth_layer_records_its_own_kind(self, new_map):
         """Rivers recorded as borders is a figure that cannot be read back as what was drawn.
@@ -647,23 +649,25 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
         types = [type(element) for element in interactive_map.layers]
         assert types.index(hv.Image) == len(types) - 1, types
 
-    def test_land_and_ocean_are_described_under_the_data(self, new_map, dataset):
-        """And the description says the same, through the band their kinds declare.
+    def test_land_and_ocean_are_drawn_in_the_order_the_description_gives(
+        self, new_map, dataset
+    ):
+        """Under the data, and in the order they were asked for — the band the kinds declare, then call order.
 
         Args:
             new_map: The map factory.
             dataset: A small raster.
+
+        Test scenario:
+            This read where the raster sat in `layer_ids`, the band-sorted tree, so it could not fail. Read
+            off the drawing it catches both ways of getting it wrong: appending in call order puts the fills
+            over the raster, and inserting every underlay at the front — what the tier did before the tree —
+            draws ocean beneath land, the reverse of the order the figure reports (review M13).
         """
         interactive_map = new_map().image(dataset)
         interactive_map.features(land=True, ocean=True)
-        figure = interactive_map.figure_spec
-        raster_at = next(
-            index
-            for index, layer_id in enumerate(interactive_map.layer_ids)
-            if figure.layers.get(layer_id).kind == "raster"
-        )
-        assert raster_at == len(interactive_map.layer_ids) - 1, (
-            interactive_map.layer_ids
+        assert _composed_kinds(interactive_map) == ["land", "ocean", "raster"], (
+            _composed_kinds(interactive_map)
         )
 
 
@@ -744,7 +748,7 @@ class TestTheBandOfALayerIsItsKinds:
         renderer = new_map()._renderer
         assert renderer.band_for(LayerSpec("x", kind)) == band_of(kind), kind
 
-    def test_reference_geography_is_described_over_the_basemap_and_under_the_data(
+    def test_reference_geography_is_drawn_over_the_basemap_and_under_the_data(
         self, new_map, point_fc
     ):
         """A graticule beneath an opaque basemap is invisible; over the data it obscures it.
@@ -752,11 +756,18 @@ class TestTheBandOfALayerIsItsKinds:
         Args:
             new_map: The map factory.
             point_fc: A small point collection.
+
+        Test scenario:
+            The three are added in exactly the reverse of their band order, and the drawing is read rather
+            than `layer_ids`. The old form added them almost in band order and read the tree, which the
+            `LayerTree` sorts by construction, so it passed with the elements appended in call order and with
+            only the underlays moved to the front (review M13).
         """
-        interactive_map = new_map().tiles("CartoLight").points(point_fc).graticule()
-        placed = interactive_map.layer_ids
+        interactive_map = new_map().points(point_fc).graticule().tiles("CartoLight")
         assert band_of("graticule") == "reference", band_of("graticule")
-        assert placed.index("graticule-3") < placed.index("points-2"), placed
+        assert _composed_kinds(interactive_map) == ["basemap", "graticule", "points"], (
+            _composed_kinds(interactive_map)
+        )
 
 
 class TestTheDescribedOrderIsTheDrawnOrder:
@@ -784,18 +795,25 @@ class TestTheDescribedOrderIsTheDrawnOrder:
             f"composed {composed} but described {interactive_map.layer_ids}"
         )
 
-    def test_the_graticule_is_described_beneath_the_points_it_annotates(
+    def test_the_graticule_is_drawn_beneath_the_points_it_annotates(
         self, new_map, point_fc
     ):
-        """The order itself, spelled out: a reference layer belongs under the data."""
+        """The order itself, spelled out: a reference layer belongs under the data.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A small point collection.
+
+        Test scenario:
+            Spelled out on the drawing. Spelled out on `layer_ids` it could not fail: the tree sorts by band
+            whatever order the elements were composed in (review M13).
+        """
         interactive_map = new_map()
         interactive_map.points(point_fc)
         interactive_map.graticule()
-        ordered = [
-            interactive_map.figure_spec.layers.get(layer_id).kind
-            for layer_id in interactive_map.layer_ids
-        ]
-        assert ordered == ["graticule", "points"], ordered
+        assert _composed_kinds(interactive_map) == ["graticule", "points"], (
+            _composed_kinds(interactive_map)
+        )
 
     def test_reference_geography_is_composed_over_the_basemap_not_under_it(
         self, new_map
