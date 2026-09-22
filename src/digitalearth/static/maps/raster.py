@@ -4,10 +4,12 @@ Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into c
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
+from math import isfinite
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
+from matplotlib import colormaps
 
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
@@ -54,6 +56,71 @@ FIELD_KINDS = {
 _CONTOUR_KINDS = frozenset({"contour", "contourf"})
 
 
+def _described_cmap(cmap: Any) -> Tuple[Any, Any]:
+    """Split a colormap argument into the name a description records and the object held beside the layer.
+
+    Args:
+        cmap: What the caller asked for — a name, a ``Colormap``, or ``None`` to resolve one from the data.
+
+    Returns:
+        ``(recorded, held)``. A registered colormap is recorded by **name**: the name resolves to the same
+        colours wherever the figure is read, and a `Colormap` object has no JSON form. One the caller built
+        themselves resolves nowhere, so it is recorded as ``None`` — a figure read back elsewhere draws with
+        the variable's own colormap — and held beside the layer, which is what colours this drawing.
+    """
+    if cmap is None or isinstance(cmap, str):
+        return cmap, None
+    name = getattr(cmap, "name", None)
+    registered = (
+        colormaps[name] if isinstance(name, str) and name in colormaps else None
+    )
+    if registered is not None and registered == cmap:
+        return name, None
+    return None, cmap
+
+
+def _described_limits(limits: Optional[ChannelLimits]) -> Any:
+    """Return stretch limits in the spelling a description carries: an unmeasurable bound as ``None``.
+
+    :func:`~digitalearth.base.stretch.channel_limits` documents ``(nan, nan)`` for a channel it could not
+    measure, and JSON has no spelling for ``nan`` — so a composite frozen on such a stack could not be
+    written at all. ``None`` says the same thing in a form the description carries.
+
+    Args:
+        limits: The caller's per-channel ``(lo, hi)`` pairs, or ``None`` for a per-call scan.
+
+    Returns:
+        The pairs with every non-finite bound as ``None``, or ``None``.
+    """
+    if limits is None:
+        return None
+    return tuple(
+        tuple(
+            None if value is None or not isfinite(float(value)) else float(value)
+            for value in pair
+        )
+        for pair in limits
+    )
+
+
+def _drawing_limits(limits: Any) -> Any:
+    """Return recorded limits in the spelling ``stretch_to_unit`` reads, ``None`` back as ``nan``.
+
+    Args:
+        limits: The recorded pairs, or ``None``.
+
+    Returns:
+        The pairs as floats, a recorded ``None`` bound back as ``nan`` — which is what tells the stretch to
+        fall back to this frame's own percentile for that channel.
+    """
+    if limits is None:
+        return None
+    return [
+        tuple(float("nan") if value is None else float(value) for value in pair)
+        for pair in limits
+    ]
+
+
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -84,8 +151,11 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that label a
     # colorbar the caller did not label itself.
     style = auto_style(src)
+    # A colormap the caller built themselves has no name a description can carry, so it is held beside the
+    # layer; a named one was recorded. Either way the caller's choice wins over the variable's own.
+    requested = opts.pop("cmap", props["cmap"])
     opts["cmap"] = auto_cmap(
-        src, props["cmap"], props["default_cmap"], lookup=lambda _: style
+        src, requested, props["default_cmap"], lookup=lambda _: style
     )
     levels = thawed_value(props["levels"])
     if levels is None and kind in _CONTOUR_KINDS:
@@ -142,7 +212,7 @@ def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
     ds = scene._reproject(data)
     # (rows, cols, n); nodata -> NaN unless mask_nodata=False
     stack = get_stack(ds, bands, mask=props["mask_nodata"])
-    return ds, stretch_to_unit(stack, thawed_value(props["limits"]))
+    return ds, stretch_to_unit(stack, _drawing_limits(props["limits"]))
 
 
 def _composite_glyph(scene: Any, ds: Any, band_first: Any, opts: Dict[str, Any]) -> Any:
@@ -269,6 +339,9 @@ class RasterMixin(_MixinBase):
             entirely outside what the display CRS shows — an off-limb frame draws nothing rather than
             raising, so a rotation past the far side of a globe still renders.
         """
+        recorded_cmap, held_cmap = _described_cmap(cmap)
+        if held_cmap is not None:
+            opts["cmap"] = held_cmap
         record = LayerRecord(
             FIELD_KINDS[kind],
             source=dataset,
@@ -277,7 +350,7 @@ class RasterMixin(_MixinBase):
                 props={
                     "via": kind,
                     "band": band,
-                    "cmap": cmap,
+                    "cmap": recorded_cmap,
                     "levels": levels,
                     "add_colorbar": add_colorbar,
                     "default_cmap": default_cmap,
@@ -494,7 +567,7 @@ class RasterMixin(_MixinBase):
                     "via": via,
                     "bands": tuple(bands),
                     "mask_nodata": mask_nodata,
-                    "limits": limits,
+                    "limits": _described_limits(limits),
                 }
             ),
             opts=opts,

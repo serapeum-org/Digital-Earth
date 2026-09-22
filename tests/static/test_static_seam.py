@@ -814,6 +814,93 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         assert sorted(target._renderer.drawn) == sorted(figure.layers.ids)
 
 
+class TestANamedArgumentIsNormalisedForTheDescription:
+    """A builder's own arguments are part of what the layer *is*, so they are recorded — as plain values.
+
+    Each of these reached the description as an object with no JSON form, and took the whole figure with it.
+    One that has a plain spelling is written in it; one that has none is held beside the layer like any
+    other engine object.
+    """
+
+    def test_a_registered_colormap_is_recorded_by_name(self, dataset):
+        """``colormaps["viridis"]`` and ``"viridis"`` name one colormap, and the description says so.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        from matplotlib import colormaps
+
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, cmap=colormaps["viridis"])
+        recorded = canvas.figure_spec.layers.get("raster-1").symbology.props["cmap"]
+        drawn = canvas.ax.images[-1].get_cmap().name
+        canvas.close()
+        assert recorded == "viridis", recorded
+        assert drawn == "viridis", drawn
+
+    def test_a_colormap_of_the_callers_own_is_held_and_still_colours_the_layer(
+        self, dataset
+    ):
+        """A hand-built colormap has no name to write down, so it travels beside the layer instead.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        from matplotlib.colors import ListedColormap
+
+        theirs = ListedColormap(["red", "blue"], name="two-tone")
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, cmap=theirs)
+        written = json.dumps(
+            canvas.figure_spec.layers.to_dict(), allow_nan=False
+        )  # the figure is storable
+        drawn = canvas.ax.images[-1].get_cmap()
+        canvas.close()
+        assert drawn is theirs, drawn
+        assert "raster-1" in written
+
+    def test_a_crs_object_is_recorded_in_a_spelling_json_carries(self, dataset):
+        """A label's CRS is what places it, so it is described — through the shared CRS spelling.
+
+        Args:
+            dataset: The raster whose CRS the map is drawn in.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        canvas = Map(crs=dataset.epsg)
+        placed = canvas.text(4.9, 52.4, "Amsterdam", crs=crs_from_user_input(4326))
+        by_code = Map(crs=dataset.epsg).text(4.9, 52.4, "Amsterdam", crs=4326)
+        recorded = canvas.figure_spec.layers.get("text-1").symbology.props["crs"]
+        json.dumps(canvas.figure_spec.layers.to_dict(), allow_nan=False)
+        canvas.close()
+        assert recorded == "EPSG:4326", recorded
+        assert placed.get_position() == by_code.get_position()
+
+    def test_a_channel_with_no_limits_to_freeze_is_recorded_as_none(self, dataset):
+        """``channel_limits`` documents ``(nan, nan)`` for an unmeasurable channel; JSON has no nan.
+
+        Args:
+            dataset: The raster whose grid and CRS the composite is built on.
+
+        Test scenario:
+            The drawer reads ``None`` back as "no frozen bound for this channel", which is what a ``nan``
+            pair meant, so the image is the one the caller's own limits draw.
+        """
+        base = np.nan_to_num(dataset.read_array(band=0).astype("float32"))
+        stack = Dataset.from_array(
+            arr=np.stack([base, base * 0.5, np.full(base.shape, np.nan, "float32")]),
+            geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg),
+        )
+        limits = [(0.0, 1.0), (0.0, 1.0), (float("nan"), float("nan"))]
+        canvas = Map(crs=dataset.epsg)
+        canvas.rgb_composite(stack, limits=limits)
+        recorded = canvas.figure_spec.layers.get("rgb-1").symbology.props["limits"]
+        written = json.dumps(canvas.figure_spec.layers.to_dict(), allow_nan=False)
+        canvas.close()
+        assert recorded[-1] == (None, None), recorded
+        assert "rgb-1" in written
+
+
 class _FakeCollection:
     """A stand-in for a pyramids ``DatasetCollection``, which ``spaghetti`` reads one attribute of."""
 

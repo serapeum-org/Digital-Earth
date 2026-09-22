@@ -28,6 +28,7 @@ from digitalearth.base.basemaps import (
 )
 from digitalearth.base.domains import resolve_domain
 from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
 from digitalearth.static.renderer import DrawnLayer, drawing_opts
@@ -487,7 +488,9 @@ class DecorationMixin(_MixinBase):
                         "lon": float(lon),
                         "lat": float(lat),
                         "s": s,
-                        "crs": crs,
+                        # In the shared CRS spelling: a caller may hand in a CRS object, which a figure
+                        # written to JSON has no form for, and this is how every other spec field holds one.
+                        "crs": crs_to_json(crs, "Map.text(crs=)"),
                     }
                 ),
                 opts=kwargs,
@@ -532,7 +535,7 @@ class DecorationMixin(_MixinBase):
                         "lat": float(lat),
                         "s": s,
                         "xytext": xytext,
-                        "crs": crs,
+                        "crs": crs_to_json(crs, "Map.annotate(crs=)"),
                     }
                 ),
                 opts=kwargs,
