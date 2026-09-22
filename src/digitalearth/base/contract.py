@@ -62,7 +62,7 @@ class Method:
             ```python
             >>> from digitalearth.base.contract import core_method
             >>> core_method("move_layer").builds_in
-            'Wave 5, order 23'
+            'order 23'
 
             ```
     """
@@ -74,15 +74,21 @@ class Method:
     builds_in: Optional[str] = None
 
 
-#: When the three live layer-management methods are built. Named once because it is one decision — the wave
+#: When the three live layer-management methods are built. Named once because it is one decision — the order
 #: that adds toggle, reorder and replace to every tier — rather than nine independent notes that happen to
 #: agree today.
-_LAYER_MANAGEMENT_WAVE = "Wave 5, order 23"
+#:
+#: It names the **order** and not the wave. This said "Wave 5, order 23" until a wave was inserted ahead of it
+#: and every later wave renumbered, after which it told callers their methods were coming in a wave that had
+#: already shipped without them (#317). Orders keep their numbers when the plan moves; waves do not, so a wave
+#: number in a message a user reads is a fact with a shelf life. The per-tier issues are #216 (static) and
+#: #188 (web); the 3-D and interactive halves are unfiled.
+_LAYER_MANAGEMENT_ORDER = "order 23"
 
 #: Why a tier has none of them yet. The two spellings differ in what "layer management" means on that tier:
 #: on a live page the layers are there to be toggled while the viewer watches, which is the harder half.
-_PENDING_LAYERS = f"layer management — {_LAYER_MANAGEMENT_WAVE}"
-_PENDING_LIVE_LAYERS = f"layer management on a live page — {_LAYER_MANAGEMENT_WAVE}"
+_PENDING_LAYERS = f"layer management — {_LAYER_MANAGEMENT_ORDER}"
+_PENDING_LIVE_LAYERS = f"layer management on a live page — {_LAYER_MANAGEMENT_ORDER}"
 
 #: Why a tier answers to less of the Core than it will: its renderer seam has not landed. One string per tier,
 #: so the issue number is corrected in one place when the seam does land.
@@ -149,13 +155,13 @@ CORE: Tuple[Method, ...] = (
         "set_visible",
         "Show or hide a layer, by id.",
         frozenset({"visible"}),
-        builds_in=_LAYER_MANAGEMENT_WAVE,
+        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "move_layer",
         "Move a layer in draw order, by id.",
         frozenset({"index"}),
-        builds_in=_LAYER_MANAGEMENT_WAVE,
+        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "replace_layer",
@@ -165,7 +171,7 @@ CORE: Tuple[Method, ...] = (
             "belongs to, as adding it there would."
         ),
         frozenset(),
-        builds_in=_LAYER_MANAGEMENT_WAVE,
+        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "layer_ids",
