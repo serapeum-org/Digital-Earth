@@ -49,6 +49,26 @@ def _registered_under(interactive_map):
     return sorted(key for key in registry._OBJECTS if key.startswith(prefix))
 
 
+def _composed_kinds(interactive_map):
+    """Return the kind of each element the map composes, in the order `render()` overlays them.
+
+    Args:
+        interactive_map: The map whose drawing is read.
+
+    Returns:
+        One kind per entry of `interactive_map.layers`, found by matching the element to the layer it was
+        drawn for. Read from the drawing, not from `layer_ids`: the tree sorts by band by construction, so
+        an order check against it passes however the elements were actually placed (review M13).
+    """
+    figure = interactive_map.figure_spec
+    kind_of = {
+        id(record.element): figure.layers.get(layer_id).kind
+        for layer_id, record in interactive_map._renderer.drawn.items()
+        if layer_id in figure.layers
+    }
+    return [kind_of.get(id(element), "?") for element in interactive_map.layers]
+
+
 @pytest.fixture
 def point_fc():
     """Return a small point collection read through pyramids.
@@ -361,6 +381,88 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
         monkeypatch.setattr(vector, "draw_vector", lambda *args, **kwargs: None)
         interactive_map = new_map()
         assert interactive_map.points(point_fc) is interactive_map
+
+
+def _off_limb(*_args, **_kwargs):
+    """Stand in for a drawer whose reprojection places none of the data.
+
+    Args:
+        *_args: The drawer's arguments, unused.
+        **_kwargs: Its keyword arguments, unused.
+
+    Raises:
+        OffLimbError: always, as a warp that lands nowhere in the display CRS does.
+    """
+    from digitalearth.base.crs import OffLimbError
+
+    raise OffLimbError("none of the data lands in the display CRS")
+
+
+class TestADrawerThatRaisesLeavesNothingBehind:
+    """A drawer runs after the layer is described, so its failure has to take the description with it."""
+
+    def test_a_refused_column_leaves_no_layer_and_no_object(self, new_map, point_fc):
+        """The error reaches the caller, and the map is as it was before the call.
+
+        Args:
+            new_map: The map factory.
+            point_fc: The collection the builder is given.
+
+        Test scenario:
+            `hexbin` reads its value column only in the drawer, so a name that matches nothing raises
+            there — after `add_element` had described the layer and registered its source. The layer
+            stayed in `layer_ids` with no element drawn for it, and its data stayed registered (review H4).
+        """
+        interactive_map = new_map()
+        with pytest.raises(KeyError, match="nope"):
+            interactive_map.hexbin(point_fc, column="nope")
+        assert interactive_map.layer_ids == [], interactive_map.layer_ids
+        assert _registered_under(interactive_map) == [], _registered_under(
+            interactive_map
+        )
+
+    def test_a_strict_map_raises_and_describes_nothing(
+        self, new_map, dataset, monkeypatch
+    ):
+        """Under `strict=True` an off-limb layer raises — and must not stay described.
+
+        Args:
+            new_map: The map factory.
+            dataset: A small raster.
+            monkeypatch: Used to make the raster drawer land nowhere.
+        """
+        from digitalearth.base.crs import OffLimbError
+        from digitalearth.interactive import raster
+
+        monkeypatch.setattr(raster, "draw_image", _off_limb)
+        interactive_map = new_map(strict=True)
+        with pytest.raises(OffLimbError):
+            interactive_map.image(dataset)
+        assert interactive_map.layer_ids == [], interactive_map.layer_ids
+
+    def test_a_skipped_layer_does_not_move_the_layers_after_it(
+        self, new_map, dataset, point_fc, monkeypatch
+    ):
+        """Later layers are placed by the tree's index, so a ghost in the tree misplaces every one of them.
+
+        Args:
+            new_map: The map factory.
+            dataset: A small raster, which the patched drawer cannot place.
+            point_fc: A small point collection.
+            monkeypatch: Used to make the raster drawer land nowhere.
+
+        Test scenario:
+            The skipped raster stayed in the tree as `raster-1`. Coastlines were then inserted at the index
+            the tree gave them — one past the ghost — and the points at the ghost's side, so the drawing
+            came out coastlines-then-points: the coastlines under the data the figure said they sat over.
+        """
+        from digitalearth.interactive import raster
+
+        monkeypatch.setattr(raster, "draw_image", _off_limb)
+        interactive_map = new_map().image(dataset).coastlines().points(point_fc)
+        assert _composed_kinds(interactive_map) == ["points", "coastlines"], (
+            _composed_kinds(interactive_map)
+        )
 
 
 class TestTheDrawingUsesTheRecordedValues:

@@ -571,13 +571,18 @@ class InteractiveMapBase:
 
         Returns:
             The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer
-            that declined to draw the layer leaves the map exactly as it was — the description is dropped
-            again, so nothing names a layer that was never drawn.
+            that declined to draw the layer leaves the map as it was — the description, the registered
+            source, the held key and the id are all let go again, so nothing names a layer that was never
+            drawn.
 
         Raises:
             KeyError: when ``kind`` is one this tier draws but ``symbology`` records no ``via`` it has a
                 recipe for — a builder routed to a kind without saying how it drew it. The refusal names
                 the recipes that kind is drawn by.
+            Exception: whatever the layer's drawer raises — an
+                :class:`~digitalearth.base.crs.OffLimbError` from a warp that places nothing, a ``KeyError``
+                for a column the data does not have — re-raised after the layer is let go exactly as a
+                declined one is.
 
         Examples:
             - Two layers of one band register in call order and return the map for chaining (any object
@@ -619,25 +624,33 @@ class InteractiveMapBase:
 
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
-        if key is not None:
-            self._layer_keys[layer_id] = key
-        self._index_layer(
-            layer_id,
-            name,
-            kind=resolved,
-            visible=visible,
-            band=band,
-            source=source,
-            symbology=symbology,
-        )
-        if resolved in DRAWN_KINDS:
-            # The element is built from the description rather than handed in: the builder passed `None`
-            # and its drawer makes the real one, which is what "render from the description" means.
-            drawn = self._renderer.draw_layer(self.figure_spec, layer_id)
-            if drawn is None:
-                self._forget_layer(layer_id)
-                return self
-            element = drawn.element
+        # Everything from here to the draw is undone together if any of it raises. The layer is described
+        # before its drawer runs, so a drawer that refuses — an off-limb warp, `strict=True`, a column that
+        # is not there — would otherwise leave the figure naming a layer nothing drew, its data registered
+        # for the life of the process, and every later layer inserted at an index counted past the ghost.
+        try:
+            if key is not None:
+                self._layer_keys[layer_id] = key
+            self._index_layer(
+                layer_id,
+                name,
+                kind=resolved,
+                visible=visible,
+                band=band,
+                source=source,
+                symbology=symbology,
+            )
+            if resolved in DRAWN_KINDS:
+                # The element is built from the description rather than handed in: the builder passed `None`
+                # and its drawer makes the real one, which is what "render from the description" means.
+                drawn = self._renderer.draw_layer(self.figure_spec, layer_id)
+                if drawn is None:
+                    self._forget_layer(layer_id)
+                    return self
+                element = drawn.element
+        except BaseException:
+            self._forget_layer(layer_id)
+            raise
         # Placed where the description puts it, not where the call happened to arrive. The tree orders by
         # draw-order band, so a basemap added last still goes under the data and a graticule added first
         # still goes over it — and the list `_compose` overlays cannot disagree with the figure the map
@@ -648,7 +661,7 @@ class InteractiveMapBase:
     def _forget_layer(self, layer_id: str) -> None:
         """Drop a layer that was described but never drawn, and everything it registered.
 
-        What :meth:`add_element` calls for a layer its drawer declined. Taking the entry out of the tree is
+        What :meth:`add_element` calls for a layer its drawer declined or refused. Taking the entry out of the tree is
         not enough on its own: the source sits in the process-global object table, which holds a strong
         reference for the life of the process, and `figure_spec.sources` is filtered to the tree's ids, so
         nothing a caller reads would show it was still there. The id goes back to the pool too, so a caller
