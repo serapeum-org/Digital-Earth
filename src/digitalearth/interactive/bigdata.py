@@ -19,6 +19,7 @@ from digitalearth.interactive.base import (
     _require_holoviz,
     cmap_name,
     describe,
+    describe_opts,
     held_props,
     style_value,
 )
@@ -308,7 +309,8 @@ class BigDataMixin(_MixinBase):
         """
         _require_holoviz()
         canvas = {key: opts.pop(key) for key in ("width", "height") if key in opts}
-        held: dict = {"opts": dict(opts)}
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="raster",
@@ -327,6 +329,7 @@ class BigDataMixin(_MixinBase):
                         "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
                         "colorbar": True,
                     },
+                    "opts": described_opts,
                 }
             ),
         )
@@ -373,7 +376,8 @@ class BigDataMixin(_MixinBase):
         canvas: dict = {
             key: opts.pop(key) for key in ("width", "height") if key in opts
         }
-        held: dict = {"opts": dict(opts)}
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="points",
@@ -389,6 +393,7 @@ class BigDataMixin(_MixinBase):
                     "color_key": describe(held, "color_key", color_key),
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "common": {},
+                    "opts": described_opts,
                 }
             ),
         )
@@ -430,7 +435,8 @@ class BigDataMixin(_MixinBase):
         canvas: dict = {
             key: opts.pop(key) for key in ("width", "height") if key in opts
         }
-        held: dict = {"opts": dict(opts)}
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="lines",
@@ -447,6 +453,7 @@ class BigDataMixin(_MixinBase):
                     "dynamic": dynamic,
                     "canvas": canvas,
                     "common": {},
+                    "opts": described_opts,
                 }
             ),
         )

@@ -224,6 +224,58 @@ def cmap_name(cmap: Any) -> Optional[str]:
 STYLE_KEY = "common"
 
 
+#: The property every builder records the caller's own `**opts` under, and every drawer merges back over
+#: its resolved style. Named for the same reason :data:`STYLE_KEY` is: two dozen builders write it.
+OPTS_KEY = "opts"
+
+
+def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, Any]:
+    """Describe a builder's `**opts` bag, keeping what a figure can carry and holding the rest.
+
+    The bag that goes round the rule. :func:`describe` asks `is_json_value` per value, which is round 1's
+    decision — a figure keeps everything JSON can carry and the map holds only what it cannot — but every
+    builder recorded its `**opts` wholesale into `held`, untested. So which of the caller's keywords a
+    figure kept was decided by which ones the builder happened to name in its signature:
+    `image(alpha=0.25)` survived because `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not,
+    although both are plain floats and both are channels the shared vocabulary declares. A figure read back
+    elsewhere then drew the engine's defaults where the caller's styling had been, silently (review M3).
+
+    The split is now by what JSON can carry, per value, exactly as everywhere else on this tier. A
+    colormap object is spelled by its registered name where it has one, as :func:`describe_style` spells
+    the builders' own; anything else with no JSON form is described as not given and handed to the drawer
+    through the map, which is what keeps a figure writable and key-free.
+
+    A held keyword is left **out** of the bag rather than recorded as `None`, which is where this differs
+    from :func:`describe_style`. A style dict is read by a drawer, which knows a `None` means "not given";
+    this bag is the caller's raw keywords and is splatted straight into `element.opts(**opts)`, where a
+    `None` is a value the engine is handed — `hooks=None` is not the same as passing no `hooks` at all. So
+    a keyword with no JSON form simply is not in the figure, and a reader without the held object draws
+    the layer without it, which is what such a reader could do anyway.
+
+    Args:
+        held: The values being held beside this layer; the bag's unwritable half is added to it, under the
+            same key the description writes, because that is the key :func:`held_props` merges back.
+        opts: The caller's raw keywords.
+
+    Returns:
+        The keywords to record in `Symbology.props` under :data:`OPTS_KEY`.
+    """
+    bucket: Dict[str, Any] = {}
+    described: Dict[str, Any] = {}
+    for key, value in dict(opts or {}).items():
+        spelling = cmap_name(value) if key == "cmap" else None
+        recorded = describe(bucket, key, value, spelling)
+        # `key not in bucket` is how a JSON-safe value is told from a held one, rather than by testing the
+        # result: a caller who wrote `cmap=None` passed a value JSON carries, and it is recorded as given.
+        if key not in bucket or recorded is not None:
+            described[key] = recorded
+    if bucket:
+        # Only when something really has to be held: an empty bag beside every layer would say a layer
+        # carries engine values when it carries none.
+        held[OPTS_KEY] = bucket
+    return described
+
+
 def style_value(
     held: Dict[str, Any], name: str, value: Any, spelling: Any = None
 ) -> Any:

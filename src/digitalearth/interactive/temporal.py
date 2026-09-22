@@ -21,6 +21,7 @@ from digitalearth.interactive.base import (
     _skips_off_limb,
     cmap_name,
     describe,
+    describe_opts,
     held_props,
 )
 
@@ -239,7 +240,8 @@ class TemporalMixin(_MixinBase):
                     "make the matching frames unreachable"
                 )
         kept = None if labels is None else list(labels)
-        held: dict = {"opts": dict(opts)}
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="raster",
@@ -257,6 +259,7 @@ class TemporalMixin(_MixinBase):
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "clim": describe(held, "clim", clim),
                     "colorbar": colorbar,
+                    "opts": described_opts,
                 }
             ),
         )

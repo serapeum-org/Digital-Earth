@@ -27,6 +27,7 @@ from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import (
     _require_holoviz,
     _skips_off_limb,
+    describe_opts,
     held_props,
 )
 
@@ -488,7 +489,8 @@ class DecorationMixin(_MixinBase):
         # service's API key, so freezing it into the description wrote the key into every saved figure
         # (review C1) and thawed it back as a plain dict the engine cannot draw from (review H2). It is
         # held beside the layer, and described by its key-free URL template.
-        held: dict = {"opts": dict(opts), "provider": provider}
+        held: dict = {"provider": provider}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="basemap",
@@ -503,6 +505,7 @@ class DecorationMixin(_MixinBase):
                     "provider": _provider_description(provider),
                     "level": level,
                     "preset": dict(preset or {}),
+                    "opts": described_opts,
                 }
             ),
         )
@@ -627,14 +630,17 @@ class DecorationMixin(_MixinBase):
         _require_holoviz()
         # Refused here, because the message names the builder the caller called.
         self._require_web_mercator("coastlines")
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="coastlines",
-            held={"opts": dict(opts or {})},
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "coastlines",
                     "resolution": resolution,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -685,6 +691,8 @@ class DecorationMixin(_MixinBase):
         """
         _require_holoviz()
         self._require_web_mercator("features")
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         for name, requested in (
             ("land", land),
             ("ocean", ocean),
@@ -698,12 +706,13 @@ class DecorationMixin(_MixinBase):
                 self.add_element(
                     None,
                     kind=name,
-                    held={"opts": dict(opts)},
+                    held=held,
                     symbology=Symbology(
                         props={
                             "via": "natural_earth",
                             "feature": name,
                             "resolution": resolution,
+                            "opts": described_opts,
                         }
                     ),
                 )
@@ -949,16 +958,19 @@ class DecorationMixin(_MixinBase):
         # Reprojected here, because `crs=` is the caller's own argument and this is where it is answered;
         # the element itself is built by `draw_text` from the display coordinates this records.
         (x,), (y,) = self._to_display_xy(lon, lat, crs)
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="text",
-            held={"opts": dict(opts or {})},
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "text",
                     "x": float(x),
                     "y": float(y),
                     "s": s,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -989,12 +1001,16 @@ class DecorationMixin(_MixinBase):
             raise KeyError(
                 f"labels column {column!r} not found in the feature attributes"
             )
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="labels",
             source=features,
-            held={"opts": dict(opts)},
-            symbology=Symbology(props={"via": "labels", "column": column}),
+            held=held,
+            symbology=Symbology(
+                props={"via": "labels", "column": column, "opts": described_opts}
+            ),
         )
 
     def colorbar(self, show: bool = True) -> Self:

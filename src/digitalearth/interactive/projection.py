@@ -13,7 +13,11 @@ basemaps auto-disable under a non-Mercator projection (a tile call raises via th
 from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.interactive.base import _require_holoviz, held_props
+from digitalearth.interactive.base import (
+    _require_holoviz,
+    describe_opts,
+    held_props,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -186,11 +190,19 @@ class ProjectionMixin(_MixinBase):
         # `draw_graticule` from exactly what this records, so the figure describes the graticule rather
         # than holding one somebody else built.
         step = self._graticule_step(lon_step, lat_step)
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="graticule",
-            held={"opts": dict(opts or {})},
-            symbology=Symbology(props={"via": "graticule", "step": int(step)}),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "graticule",
+                    "step": int(step),
+                    "opts": described_opts,
+                }
+            ),
         )
 
     @staticmethod

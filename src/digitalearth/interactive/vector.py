@@ -29,6 +29,7 @@ from digitalearth.interactive.base import (
     _skips_off_limb,
     cmap_name,
     describe,
+    describe_opts,
     describe_style,
     held_props,
     style_value,
@@ -100,7 +101,11 @@ def _as_labels(gdf: Any, column: str, missing: str) -> Any:
 
 
 def _vector_symbology(
-    hv_type: str, vdims: Any, common: dict, labels: Optional[dict] = None
+    hv_type: str,
+    vdims: Any,
+    common: dict,
+    labels: Optional[dict] = None,
+    opts: Optional[dict] = None,
 ) -> Symbology:
     """Return the description a vector layer is drawn from.
 
@@ -109,11 +114,12 @@ def _vector_symbology(
             Recorded under `via` as `"geometry"`: these five draw a frame of geometry, which is what tells
             them apart from the aggregating builders that draw the same kinds.
         vdims: The value dimensions the element carries, or `None`.
-        common: The resolved style options, as values — the builder's own half. The caller's raw
-            keywords are held beside the layer and merged over this by the drawer.
+        common: The resolved style options, as values — the builder's own half, already described.
         labels: For a layer coloured by category, the column drawn as labels and the label missing rows
             take — what :func:`_as_labels` needs. `None` for every other layer, which draws its column as
             it is.
+        opts: The caller's own keywords, already through :func:`describe_opts` — the half a figure can
+            carry. The drawer merges these over `common`, which is the precedence the builder applied.
 
     Returns:
         The symbology. Written by a helper rather than inline at five call sites, so the five kinds cannot
@@ -126,6 +132,7 @@ def _vector_symbology(
             "vdims": list(vdims) if vdims else None,
             "common": dict(common),
             "labels": dict(labels) if labels else None,
+            "opts": dict(opts or {}),
         }
     )
 
@@ -624,7 +631,8 @@ class VectorMixin(_MixinBase):
         # The caller's `**opts` are held beside the layer rather than recorded (C1/H3/M9) and merged over
         # this by the drawer, which keeps the precedence: an explicit style the caller wrote outranks the
         # one classification derived, so one scheme cannot mean two things (review M4).
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         common: dict = {"size": size, **styling}
         return self.add_element(
             None,
@@ -636,6 +644,7 @@ class VectorMixin(_MixinBase):
                 [value_column] if value_column else None,
                 describe_style(held, common),
                 labels,
+                described_opts,
             ),
         )
 
@@ -662,12 +671,14 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="lines",
             source=features,
-            held={"opts": dict(opts or {})},
-            symbology=_vector_symbology("Path", None, {}),
+            held=held,
+            symbology=_vector_symbology("Path", None, {}, None, described_opts),
         )
 
     @_skips_off_limb
@@ -807,7 +818,8 @@ class VectorMixin(_MixinBase):
                 cmap=cmap,
                 **opts,
             )
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         common: dict = {}
         if column:
             common.update(
@@ -825,7 +837,7 @@ class VectorMixin(_MixinBase):
             source=features,
             held=held,
             symbology=_vector_symbology(
-                "Polygons", [column] if column else None, common
+                "Polygons", [column] if column else None, common, None, described_opts
             ),
         )
 
@@ -861,7 +873,8 @@ class VectorMixin(_MixinBase):
             features, column, cmap=cmap
         )
         self.last_breaks = categories
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="choropleth",
@@ -872,6 +885,7 @@ class VectorMixin(_MixinBase):
                 [column],
                 describe_style(held, styling),
                 labels,
+                described_opts,
             ),
         )
 
@@ -1026,7 +1040,8 @@ class VectorMixin(_MixinBase):
             features, column, scheme=scheme, k=k, cmap=cmap
         )
         self.last_breaks = list(classified["color_levels"])
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="choropleth",
@@ -1036,6 +1051,8 @@ class VectorMixin(_MixinBase):
                 "Polygons",
                 [column],
                 describe_style(held, classified),
+                None,
+                described_opts,
             ),
         )
 
@@ -1190,7 +1207,8 @@ class VectorMixin(_MixinBase):
             ValueError: when ``density`` is not in ``(0, 1]``.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="vectors",
@@ -1204,6 +1222,7 @@ class VectorMixin(_MixinBase):
                     "density": density,
                     "color_by": color_by,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
                 }
             ),
         )
@@ -1239,16 +1258,19 @@ class VectorMixin(_MixinBase):
             "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
             "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="streamlines",
             source=(u, v),
-            held={"opts": dict(opts)},
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "streamlines",
                     "band": band,
                     "density": density,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -1289,16 +1311,19 @@ class VectorMixin(_MixinBase):
             "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
             "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="vectors",
             source=(u, v),
-            held={"opts": dict(opts)},
+            held=held,
             symbology=Symbology(
                 props={
                     "via": "barbs",
                     "band": band,
                     "density": density,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -1419,7 +1444,8 @@ class VectorMixin(_MixinBase):
             return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
         self._built_mesh = (data, value_column, built)
         try:
-            held: Dict[str, Any] = {"opts": dict(opts)}
+            held: Dict[str, Any] = {}
+            described_opts = describe_opts(held, opts)
             return self.add_element(
                 None,
                 kind="unstructured",
@@ -1430,6 +1456,7 @@ class VectorMixin(_MixinBase):
                         "via": "trimesh",
                         "value_column": value_column,
                         "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                        "opts": described_opts,
                     }
                 ),
             )
@@ -1506,7 +1533,8 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="heatmap",
@@ -1519,6 +1547,7 @@ class VectorMixin(_MixinBase):
                     "aggregator": aggregator,
                     "column": column,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
                 }
             ),
         )
@@ -1544,7 +1573,8 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="heatmap",
@@ -1555,6 +1585,7 @@ class VectorMixin(_MixinBase):
                     "via": "kde",
                     "filled": filled,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
                 }
             ),
         )
@@ -1590,7 +1621,8 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="flow",
@@ -1605,6 +1637,7 @@ class VectorMixin(_MixinBase):
                     "bundle": bundle,
                     "node_id": node_id,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
                 }
             ),
         )

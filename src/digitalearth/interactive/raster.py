@@ -42,6 +42,7 @@ from digitalearth.interactive.base import (
     _skips_off_limb,
     cmap_name,
     describe,
+    describe_opts,
     held_props,
 )
 
@@ -292,7 +293,8 @@ class RasterMixin(_MixinBase):
         """
         # The caller's raw HoloViews keywords, and a colormap object, are held beside the layer rather than
         # written into its description: a figure is saved as JSON, and neither has a JSON form (C1/H3/M9).
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="raster",
@@ -307,6 +309,7 @@ class RasterMixin(_MixinBase):
                     "alpha": alpha,
                     "colorbar": colorbar,
                     "clabel": clabel,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -351,7 +354,8 @@ class RasterMixin(_MixinBase):
         _require_holoviz()
         # Refused here rather than in the drawer, because the message names the argument the caller wrote.
         require_three_bands("rgb", bands)
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="rgb",
@@ -365,6 +369,7 @@ class RasterMixin(_MixinBase):
                     # no spelling for. Such limits are held beside the layer and described as not given,
                     # which is what a reader without them derives per frame.
                     "limits": describe(held, "limits", limits),
+                    "opts": described_opts,
                 }
             ),
         )
@@ -408,7 +413,8 @@ class RasterMixin(_MixinBase):
             This map (chainable).
         """
         _require_holoviz()
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="mesh",
@@ -420,6 +426,7 @@ class RasterMixin(_MixinBase):
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "clabel": clabel,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -506,7 +513,8 @@ class RasterMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="filled_contours" if filled else "contours",
@@ -518,6 +526,7 @@ class RasterMixin(_MixinBase):
                     "band": band,
                     "levels": describe(held, "levels", levels),
                     "filled": filled,
+                    "opts": described_opts,
                 }
             ),
         )
@@ -664,7 +673,8 @@ class RasterMixin(_MixinBase):
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
                 ".preview); upgrade pyramids or use image() for a small raster"
             )
-        held: Dict[str, Any] = {"opts": dict(opts)}
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
             kind="raster",
@@ -677,6 +687,7 @@ class RasterMixin(_MixinBase):
                     "max_pixels": max_pixels,
                     "dynamic": dynamic,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
                 }
             ),
         )
