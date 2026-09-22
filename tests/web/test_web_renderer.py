@@ -13,6 +13,8 @@ import pytest
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.renderer import DRAWN_KINDS, Renderer, drawer_for, required_props
 
+from .test_web_capabilities import DESCRIBED_AND_DRAWN
+
 pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
 
@@ -238,6 +240,110 @@ class TestReconcilingTwoFigures:
         assert drawn_map._renderer.drawn == held, (
             "removing an unknown id touched something"
         )
+
+
+def _visibilities(drawn) -> list:
+    """Return the `layout.visibility` of every MapLibre layer one drawing holds, its extra layers included.
+
+    Args:
+        drawn: A `DrawnLayer`.
+
+    Returns:
+        One entry per layer — the drawing's own, then its extra layers — reading `None` where the layout
+        says nothing, which MapLibre draws as visible. A caller's own layer may be a plain dict spec, so
+        that shape is read too.
+    """
+    visibilities = []
+    for layer in (drawn.layer, *drawn.extra_layers):
+        layout = layer.get("layout") if isinstance(layer, dict) else layer.layout
+        visibilities.append((layout or {}).get("visibility"))
+    return visibilities
+
+
+def _all_hidden(figure):
+    """Return `figure` with every layer described as hidden, and nothing else changed.
+
+    Args:
+        figure: The figure to hide.
+
+    Returns:
+        The figure.
+    """
+    tree = figure.layers
+    for layer in list(tree):
+        tree = tree.replace(with_fields(layer, visible=False))
+    return with_fields(figure, layers=tree)
+
+
+class TestVisibilityReachesEveryLayerADescriptionDraws:
+    """Review M4: a description that draws several MapLibre layers is shown and hidden as one."""
+
+    def test_hiding_a_labelled_graticule_hides_its_labels(self):
+        """`draw_graticule` promises "a hidden graticule hides its labels too"; that held only at build time.
+
+        Test scenario:
+            A layer switcher's toggle is a change to the description, reconciled through `apply`, which
+            reaches `set_visible`. That set the primary layer's visibility and left the degree labels
+            floating over a map with no grid.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="grid")
+        figure = m.figure_spec
+        m._renderer.apply(figure, _all_hidden(figure))
+        assert _visibilities(m._renderer.drawn["grid"]) == ["none", "none"]
+
+    def test_showing_it_again_shows_its_labels_too(self):
+        """The other direction, so a fix that only ever hid could not pass."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="grid")
+        figure = m.figure_spec
+        hidden = _all_hidden(figure)
+        m._renderer.apply(figure, hidden)
+        m._renderer.apply(hidden, figure)
+        assert _visibilities(m._renderer.drawn["grid"]) == ["visible", "visible"]
+
+    def test_hiding_a_cluster_hides_its_counts_and_loose_points(self, points_gdf):
+        """The other drawer with extra layers: its counts and its unclustered points go with the bubbles.
+
+        Args:
+            points_gdf: A small point collection.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().cluster(points_gdf)
+        layer_id = m.layer_ids[0]
+        m._renderer.set_visible(layer_id, False)
+        assert _visibilities(m._renderer.drawn[layer_id]) == ["none"] * 3
+
+    @pytest.mark.parametrize("kind", sorted(DESCRIBED_AND_DRAWN))
+    def test_a_hidden_description_is_drawn_hidden(self, kind):
+        """Every drawer honours the description's visibility, not only those whose builder takes `visible=`.
+
+        Args:
+            kind: The drawn kind under test.
+
+        Test scenario:
+            A figure read back from a file, or reconciled by `apply`, can describe any layer as hidden.
+            The text, heatmap, cluster and extrusion drawers built their layers visible whatever the
+            description said, because their builders never pass `visible=False`.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        DESCRIBED_AND_DRAWN[kind](m)
+        hidden = _all_hidden(m.figure_spec)
+        drawn = {
+            layer_id: _visibilities(m._renderer.draw_layer(hidden, layer_id))
+            for layer_id in hidden.layers.ids
+        }
+        shown = {
+            layer_id: visibilities
+            for layer_id, visibilities in drawn.items()
+            if set(visibilities) != {"none"}
+        }
+        assert shown == {}, f"{kind}: these are drawn visible though described hidden"
 
 
 class TestWhatTheRendererReports:

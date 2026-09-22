@@ -132,6 +132,26 @@ def derived_ids(kind: str, layer_id: str) -> Tuple[str, ...]:
     return tuple(f"{layer_id}{suffix}" for suffix in DERIVED_SUFFIXES.get(kind, ()))
 
 
+def _show(drawn: DrawnLayer, visible: bool) -> None:
+    """Set `layout.visibility` on every MapLibre layer one drawing holds.
+
+    Args:
+        drawn: What a drawer produced — its own layer and the extra layers the same description owns.
+        visible: Whether they are drawn.
+
+    Note:
+        A caller's own layer may be a plain MapLibre spec dict rather than a `Layer`, so both shapes are
+        set; a callable ``apply(widget)`` wires its own layers, has no layout to reach, and is left alone.
+        The layout is replaced rather than edited in place, so a recorded mapping is never written through.
+    """
+    value = "visible" if visible else "none"
+    for layer in (drawn.layer, *drawn.extra_layers):
+        if isinstance(layer, dict):
+            layer["layout"] = {**(layer.get("layout") or {}), "visibility": value}
+        elif layer is not None and hasattr(layer, "layout"):
+            layer.layout = {**(layer.layout or {}), "visibility": value}
+
+
 def _custom_drawer() -> Any:
     """Return the drawer for a caller's own MapLibre layer.
 
@@ -371,8 +391,14 @@ class Renderer:
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer) if opened is None else opened
         drawn = drawer_for(layer.kind)(self._map, data, layer)
-        if drawn is not None:
-            self._drawn[layer_id] = drawn
+        if drawn is None:
+            return None
+        if not layer.visible:
+            # Applied here rather than trusted to each drawer: the text, heatmap, cluster and extrusion
+            # drawers built their layers visible whatever the description said, because their builders
+            # never ask for a hidden one — but a figure read back, or reconciled by `apply`, can (M4).
+            _show(drawn, False)
+        self._drawn[layer_id] = drawn
         return drawn
 
     @staticmethod
@@ -501,21 +527,20 @@ class Renderer:
         self._drawn.pop(layer_id, None)
 
     def set_visible(self, layer_id: str, visible: bool) -> None:
-        """Record a visibility change for a layer already drawn.
+        """Record a visibility change for a layer already drawn — every MapLibre layer it drew.
+
+        A description can draw more than one MapLibre layer: a graticule's lines and its degree labels, a
+        cluster's bubbles, counts and loose points. They are one layer to a viewer, so they are shown and
+        hidden together. Setting only the first left a hidden graticule's labels floating over the map
+        (review M4).
 
         Args:
-            layer_id: The layer to show or hide.
+            layer_id: The layer to show or hide. One nothing was drawn for is ignored.
             visible: Whether it should be drawn.
         """
         drawn = self._drawn.get(layer_id)
-        if drawn is None:
-            return
-        layer = getattr(drawn, "layer", None)
-        if layer is None:
-            return
-        layout = dict(getattr(layer, "layout", None) or {})
-        layout["visibility"] = "visible" if visible else "none"
-        layer.layout = layout
+        if drawn is not None:
+            _show(drawn, visible)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.
