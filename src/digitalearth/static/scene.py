@@ -28,7 +28,18 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import matplotlib.pyplot as plt
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
@@ -97,6 +108,13 @@ class LayerRecord:
             symbologies uncomparable) or a basemap credential (which must never be written into a figure at
             all). It is held on the scene under the layer's id instead, and forgotten with the layer.
             ``None`` for every layer that needs none, which is nearly all of them.
+        opts: The caller's **engine keywords** — whatever they passed through ``**opts`` to cleopatra or
+            matplotlib — held exactly as passed, beside the layer rather than in its description. A dash
+            pattern is a tuple matplotlib refuses as a list, and a ``Normalize``, a ``FontProperties`` or a
+            per-pixel ``alpha`` array has no JSON spelling at all: a description that froze them handed the
+            engine something else back, or could not be saved. The drawer reads them off the scene, so a
+            figure drawn on a scene that does not hold them — one read back from JSON — draws the layer with
+            the engine's defaults instead. ``None`` or empty for a layer given none.
 
     Examples:
         - The record a raster builder writes, beside the drawing it made:
@@ -124,6 +142,7 @@ class LayerRecord:
     visible: bool = True
     symbology: Optional[Symbology] = None
     key: Any = None
+    opts: Optional[Mapping[str, Any]] = None
 
 
 class Scene(WatermarkMixin):
@@ -221,6 +240,10 @@ class Scene(WatermarkMixin):
         # by layer id. Deliberately not part of `symbology`: a figure is written to JSON and read back, and
         # neither a shapely geometry nor an API key belongs in one (see `LayerRecord.key`).
         self._layer_keys: Dict[str, Any] = {}
+        # The caller's engine keywords, exactly as passed, keyed by layer id (see `LayerRecord.opts`). Held
+        # here rather than in `symbology` for the same reason as the keys: a description is plain values,
+        # and a dash tuple, a `Normalize` or a colormap object is not one.
+        self._layer_opts: Dict[str, Dict[str, Any]] = {}
         # Whether this scene has already drawn a glyph onto `ax` (#313). A cleopatra glyph clears every
         # glyph's artists off its axes unless it is told to compose, so from the *second* layer onwards a
         # render has to compose or it takes the layer below it off again. Only from the second: the first
@@ -311,6 +334,10 @@ class Scene(WatermarkMixin):
         layer_id = self._layer_id(record.kind.split(":")[0], record.name)
         if record.key is not None:
             self._layer_keys[layer_id] = record.key
+        if record.opts:
+            # A shallow copy: the dict is this layer's, so a caller reusing theirs cannot re-style it later,
+            # while each value stays the very object they passed.
+            self._layer_opts[layer_id] = dict(record.opts)
         self._index_layer(
             layer_id,
             record.name,
@@ -369,19 +396,20 @@ class Scene(WatermarkMixin):
         self._forget_layer_data(layer_id)
 
     def _forget_layer_data(self, layer_id: str) -> None:
-        """Let go of the in-memory data and the drawer key one layer held.
+        """Let go of the in-memory data, the drawer key and the engine keywords one layer held.
 
         The object table is process-global and holds strong references, so a layer that is removed and
         never forgotten keeps its dataset alive for the life of the process.
 
         Args:
-            layer_id: The layer whose source and key are dropped. A layer that registered neither — a
-                graticule, a text label — is ignored.
+            layer_id: The layer whose source, key and keywords are dropped. A layer that registered none of
+                them — a graticule, a text label — is ignored.
         """
         ref = self._sources.pop(layer_id, None)
         if ref is not None:
             forget_object(ref.uri)
         self._layer_keys.pop(layer_id, None)
+        self._layer_opts.pop(layer_id, None)
 
     @property
     def layer_ids(self) -> List[str]:
@@ -506,6 +534,7 @@ class Scene(WatermarkMixin):
         self._layer_tree = LayerTree()
         self._sources = {}
         self._layer_keys = {}
+        self._layer_opts = {}
         self._id_counter = 0
         self._issued_ids = set()
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
@@ -788,6 +817,7 @@ class Scene(WatermarkMixin):
         """
         forget_namespace(self._objects_ns)
         self._layer_keys = {}
+        self._layer_opts = {}
         plt.close(self.fig)
 
     def __enter__(self) -> "Scene":

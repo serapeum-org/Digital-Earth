@@ -282,27 +282,45 @@ class TestARecipeThisKindDoesNotHave:
 
 
 class TestTheOptionsADrawerReads:
-    """A symbology freezes what it is given; a drawer has to hand cleopatra back what the caller wrote."""
+    """A drawer hands matplotlib the caller's own keywords, held beside the layer rather than in it."""
 
-    def test_a_recorded_list_is_a_list_again(self):
-        """HoloViews is not the only engine that reads a tuple as something else than a list."""
-        layer = LayerSpec(
-            "x", "raster", symbology=Symbology(props={"opts": {"levels": [1, 2, 3]}})
-        )
-        assert drawing_opts(layer) == {"levels": [1, 2, 3]}
+    def test_a_held_keyword_comes_back_as_the_object_passed(self, dataset):
+        """Not a copy and not a thawed look-alike: the object matplotlib reads is the caller's.
 
-    def test_a_layer_that_recorded_none_reads_as_empty(self):
-        """A decoration layer records no styling at all, and a drawer must not have to check."""
-        assert drawing_opts(LayerSpec("x", "graticule")) == {}
+        Args:
+            dataset: The raster drawn.
+        """
+        from matplotlib.colors import Normalize
 
-    def test_what_comes_back_is_a_copy(self):
-        """A drawer mutates its options the way a builder used to mutate the caller's keywords."""
-        layer = LayerSpec(
-            "x", "raster", symbology=Symbology(props={"opts": {"cmap": "viridis"}})
-        )
-        first = drawing_opts(layer)
-        first["cmap"] = "plasma"
-        assert drawing_opts(layer)["cmap"] == "viridis", "the description was mutated"
+        norm = Normalize(0.0, 10.0)
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, norm=norm)
+        layer = canvas.figure_spec.layers.get("raster-1")
+        held = drawing_opts(canvas, layer)["norm"]
+        canvas.close()
+        assert held is norm, held
+
+    def test_a_layer_the_scene_holds_nothing_for_reads_as_empty(self, drawn_map):
+        """A decoration layer, or one described elsewhere, has no keywords here, and draws with defaults.
+
+        Args:
+            drawn_map: A map whose scene holds nothing for the layer asked about.
+        """
+        assert drawing_opts(drawn_map, LayerSpec("x", "graticule")) == {}
+
+    def test_what_comes_back_is_a_copy(self, dataset):
+        """A drawer pops and sets keys the way a builder used to on the caller's own keywords.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, vmin=0.0)
+        layer = canvas.figure_spec.layers.get("raster-1")
+        drawing_opts(canvas, layer)["vmin"] = 99.0
+        again = drawing_opts(canvas, layer)["vmin"]
+        canvas.close()
+        assert again == 0.0, "the held keywords were mutated"
 
 
 class TestReconcilingTwoFigures:

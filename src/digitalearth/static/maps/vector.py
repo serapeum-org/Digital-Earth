@@ -157,7 +157,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the warp places none of the geometry in the display CRS.
         ValueError: when the collection is empty.
     """
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     # empty-guard; any geometry (centroid fallback) OK
     fc = scene._vector_input(data, name="scatter")
     src = get_source(fc)
@@ -194,7 +194,7 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
     """
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     xyz = scene._reproject(data).to_xyz()
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
     # The deprecated `point_size=` spelling was already resolved by the builder, so nothing here warns;
@@ -225,7 +225,7 @@ def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
     """
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     ds = scene._reproject(data)
     if ds.epsg is None:
         # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
@@ -259,7 +259,7 @@ def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     props = dict(layer.symbology.props)
     kind = props["via"]
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     u_dataset, v_dataset = data
     su = scene._prepare(u_dataset, props["band"])
     sv = scene._prepare(v_dataset, props["band"])
@@ -302,7 +302,7 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     from matplotlib.tri import Triangulation
 
     kind = layer.symbology.props["via"]
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     x, y, z = scene._scattered(data)
     # drop far-side points on a globe (Triangulation needs finite)
     finite = np.isfinite(x) & np.isfinite(y)
@@ -353,7 +353,7 @@ def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         ValueError: when the collection is empty or holds non-polygon geometry.
     """
     props = dict(layer.symbology.props)
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     gdf = scene._vector_input(
         data,
         geom_types=("Polygon", "MultiPolygon"),
@@ -394,7 +394,7 @@ def draw_shapes(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     polygons, _ = scene._polygon_vertices(gdf.geometry)
     # drop far-side polygons on a globe
     polygons, _ = scene._finite_polygons(polygons)
-    return scene._polygon_layer(polygons, **drawing_opts(layer))
+    return scene._polygon_layer(polygons, **drawing_opts(scene, layer))
 
 
 def draw_voronoi(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -430,7 +430,7 @@ def draw_voronoi(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     values_arr = np.asarray(values) if values is not None else None
     # drop far-side cells on a globe
     polygons, values_arr = scene._finite_polygons(polygons, values_arr)
-    return scene._polygon_layer(polygons, values_arr, **drawing_opts(layer))
+    return scene._polygon_layer(polygons, values_arr, **drawing_opts(scene, layer))
 
 
 def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -449,7 +449,7 @@ def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         ValueError: when the collection is empty or holds non-polygon geometry.
     """
     props = dict(layer.symbology.props)
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     gdf = scene._vector_input(
         data,
         geom_types=("Polygon", "MultiPolygon"),
@@ -505,7 +505,7 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     polygons, values = _clipped_cell_boxes(cells, scene._clip_geometry(clip))
     values_arr = np.asarray(values, dtype=float)
     polygons, values_arr = scene._finite_polygons(polygons, values_arr)
-    return scene._polygon_layer(polygons, values_arr, **drawing_opts(layer))
+    return scene._polygon_layer(polygons, values_arr, **drawing_opts(scene, layer))
 
 
 def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -524,7 +524,7 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the warp places none of the geometry in the display CRS.
         ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
     """
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     gdf = scene._vector_input(
         data, geom_types=("Point",), name="kde", geom_label="point"
     )
@@ -562,7 +562,7 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         ValueError: when the collection is empty or holds non-line geometry.
     """
     props = dict(layer.symbology.props)
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     gdf = scene._vector_input(
         data,
         geom_types=("LineString", "MultiLineString"),
@@ -946,9 +946,9 @@ class VectorMixin(_MixinBase):
                     props={
                         "via": "scatter",
                         "size_column": size_column,
-                        "opts": dict(opts),
                     }
                 ),
+                opts=opts,
             )
         )
 
@@ -1001,7 +1001,8 @@ class VectorMixin(_MixinBase):
         record = LayerRecord(
             "points",
             source=dataset,
-            symbology=Symbology(props={"via": "grid_points", "opts": dict(opts)}),
+            symbology=Symbology(props={"via": "grid_points"}),
+            opts=opts,
         )
         try:
             return self._draw(record)
@@ -1068,9 +1069,8 @@ class VectorMixin(_MixinBase):
             # polygon layer one kind or the other is whether its polygons are filled by a value.
             _polygon_kind(band),
             source=dataset,
-            symbology=Symbology(
-                props={"via": "grid_cells", "band": band, "opts": dict(opts)}
-            ),
+            symbology=Symbology(props={"via": "grid_cells", "band": band}),
+            opts=opts,
         )
         try:
             return self._draw(record)
@@ -1099,7 +1099,8 @@ class VectorMixin(_MixinBase):
             _VECTOR_KINDS[kind],
             # The pair is the source: a field is not drawable from either component alone.
             source=(u_dataset, v_dataset),
-            symbology=Symbology(props={"via": kind, "band": band, "opts": dict(opts)}),
+            symbology=Symbology(props={"via": kind, "band": band}),
+            opts=opts,
         )
         try:
             return self._draw(record)
@@ -1212,7 +1213,8 @@ class VectorMixin(_MixinBase):
         record = LayerRecord(
             "unstructured",
             source=data,
-            symbology=Symbology(props={"via": kind, "opts": dict(opts)}),
+            symbology=Symbology(props={"via": kind}),
+            opts=opts,
         )
         try:
             return self._draw(record)
@@ -1400,11 +1402,11 @@ class VectorMixin(_MixinBase):
                         "column": column,
                         "scheme": scheme,
                         "k": k,
-                        # The classification is folded into the glyph's keywords by the drawer, so what
-                        # the figure records is the call the caller made.
-                        "opts": dict(opts),
                     }
                 ),
+                # The classification is folded into the glyph's keywords by the drawer, so what the figure
+                # records is the call the caller made; their own engine keywords travel beside it.
+                opts=opts,
             )
         )
 
@@ -1425,7 +1427,8 @@ class VectorMixin(_MixinBase):
             LayerRecord(
                 _polygon_kind(None),  # outlines only, whatever the collection carries
                 source=features,
-                symbology=Symbology(props={"via": "shapes", "opts": dict(opts)}),
+                symbology=Symbology(props={"via": "shapes"}),
+                opts=opts,
             )
         )
 
@@ -1524,9 +1527,8 @@ class VectorMixin(_MixinBase):
                 # drawn — the same recipe, two kinds, decided by the argument rather than by the drawing.
                 _polygon_kind(column),
                 source=features,
-                symbology=Symbology(
-                    props={"via": "voronoi", "column": column, "opts": dict(opts)}
-                ),
+                symbology=Symbology(props={"via": "voronoi", "column": column}),
+                opts=opts,
                 # The boundary is a shapely geometry or a feature collection: a figure written to JSON has
                 # no spelling for either, and two symbologies holding a GeoDataFrame cannot be compared at
                 # all. It travels with the scene instead, and is forgotten with the layer.
@@ -1613,9 +1615,9 @@ class VectorMixin(_MixinBase):
                         "scale": scale,
                         "column": column,
                         "limits": tuple(limits),
-                        "opts": dict(opts),
                     }
                 ),
+                opts=opts,
             )
         )
 
@@ -1739,9 +1741,9 @@ class VectorMixin(_MixinBase):
                         "column": column,
                         "nmax": nmax,
                         "nmin": nmin,
-                        "opts": dict(opts),
                     }
                 ),
+                opts=opts,
                 # Neither travels in a figure: `agg` may be a callable, and `clip` is a geometry (see
                 # `voronoi`). They are held on the scene under this layer's id instead.
                 key=(agg, clip),
@@ -1839,7 +1841,8 @@ class VectorMixin(_MixinBase):
             LayerRecord(
                 "heatmap",
                 source=features,
-                symbology=Symbology(props={"via": "kde", "opts": dict(opts)}),
+                symbology=Symbology(props={"via": "kde"}),
+                opts=opts,
                 key=clip,  # a geometry, which a figure cannot carry — see `voronoi`
             )
         )
@@ -1903,8 +1906,8 @@ class VectorMixin(_MixinBase):
                         "via": "sankey",
                         "column": column,
                         "scale": scale,
-                        "opts": dict(opts),
                     }
                 ),
+                opts=opts,
             )
         )

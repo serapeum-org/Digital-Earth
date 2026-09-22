@@ -11,7 +11,7 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 import contextlib
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
@@ -34,6 +34,18 @@ from digitalearth.static.renderer import DrawnLayer, drawing_opts
 from digitalearth.static.scene import LayerRecord
 
 logger = logging.getLogger(__name__)
+
+#: How each Natural-Earth layer looks when the caller asks for nothing else — this package's own defaults, in
+#: the singular matplotlib keys. The drawer lays whatever the caller passed over them, so a layer drawn on a
+#: scene that holds none of the caller's keywords (a figure read back from JSON) still looks like itself.
+_NATURAL_EARTH_STYLE: Dict[str, Dict[str, Any]] = {
+    "coastline": {"color": "black", "linewidth": 0.5},
+    "borders": {"color": "gray", "linewidth": 0.4},
+    "land": {"color": "#efefdb", "edgecolor": "none"},
+    "ocean": {"color": "#cfe6f5", "edgecolor": "none"},
+    "lakes": {"color": "#cfe6f5", "edgecolor": "none"},
+    "rivers": {"color": "#5a8fcf", "linewidth": 0.4},
+}
 
 #: Natural-Earth layers that ``cleopatra.basemap.reference`` renders as filled polygons (vs. line layers); used to
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
@@ -271,7 +283,7 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
     if xy is None:
         return None
-    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_opts(layer))
+    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_opts(scene, layer))
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
@@ -292,7 +304,7 @@ def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLay
     if xy is None:
         return None
     drawn = scene.ax.annotate(
-        props["s"], xy=xy, xytext=props["xytext"], **drawing_opts(layer)
+        props["s"], xy=xy, xytext=props["xytext"], **drawing_opts(scene, layer)
     )
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
@@ -320,7 +332,7 @@ def draw_natural_earth(
     """
     props = dict(layer.symbology.props)
     name, zorder = props["via"], props["zorder"]
-    style = drawing_opts(layer)
+    style = {**_NATURAL_EARTH_STYLE[name], **drawing_opts(scene, layer)}
     if scene.globe:
         if name == "ocean":
             # The disc *is* the ocean: filling the whole projection boundary and letting land overlay it
@@ -396,7 +408,7 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     props = dict(layer.symbology.props)
     source = props["source"]
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     if not is_keyed_basemap(source):
         tiles = add_tiles(
             scene.ax, source=_resolve_tile_source(source), crs=scene.crs, **opts
@@ -476,9 +488,9 @@ class DecorationMixin(_MixinBase):
                         "lat": float(lat),
                         "s": s,
                         "crs": crs,
-                        "opts": dict(kwargs),
                     }
                 ),
+                opts=kwargs,
             )
         )
 
@@ -521,9 +533,9 @@ class DecorationMixin(_MixinBase):
                         "s": s,
                         "xytext": xytext,
                         "crs": crs,
-                        "opts": dict(kwargs),
                     }
                 ),
+                opts=kwargs,
             )
         )
 
@@ -677,7 +689,6 @@ class DecorationMixin(_MixinBase):
         self,
         layer: str,
         resolution: str,
-        defaults: dict,
         *,
         polygon: bool = False,
         zorder: float = 0.5,
@@ -697,10 +708,10 @@ class DecorationMixin(_MixinBase):
         Args:
             layer: Natural-Earth layer name (e.g. ``"coastline"``, ``"land"``).
             resolution: Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
-            defaults: Base style; ``color``/``facecolor`` is the fill colour for polygon layers.
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
             zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
-            **kwargs: Style overrides merged over ``defaults``.
+            **kwargs: Style overrides, laid over the layer's defaults (:data:`_NATURAL_EARTH_STYLE`) when it
+                is drawn, and held beside the layer exactly as passed.
 
         Returns:
             Whatever the path that drew it returns — the ``PolyCollection`` of a globe fill, the list of
@@ -719,9 +730,9 @@ class DecorationMixin(_MixinBase):
                         # and splits lines at the limb, a flat map hands both to `add_features`.
                         "polygon": polygon,
                         "zorder": zorder,
-                        "opts": {**defaults, **kwargs},
                     }
                 ),
+                opts=kwargs,
             )
         )
 
@@ -732,13 +743,7 @@ class DecorationMixin(_MixinBase):
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
             on a flat map).
         """
-        return self._natural_earth(
-            "coastline",
-            resolution,
-            {"color": "black", "linewidth": 0.5},
-            zorder=2.5,
-            **kwargs,
-        )
+        return self._natural_earth("coastline", resolution, zorder=2.5, **kwargs)
 
     def borders(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth country borders.
@@ -747,13 +752,7 @@ class DecorationMixin(_MixinBase):
             The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth(
-            "borders",
-            resolution,
-            {"color": "gray", "linewidth": 0.4},
-            zorder=2.5,
-            **kwargs,
-        )
+        return self._natural_earth("borders", resolution, zorder=2.5, **kwargs)
 
     def land(self, resolution: str = "110m", **kwargs) -> Any:
         """Fill Natural-Earth land polygons.
@@ -767,12 +766,7 @@ class DecorationMixin(_MixinBase):
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "land",
-            resolution,
-            {"color": "#efefdb", "edgecolor": "none"},
-            polygon=True,
-            zorder=-1.5,
-            **kwargs,
+            "land", resolution, polygon=True, zorder=-1.5, **kwargs
         )
 
     def ocean(self, resolution: str = "110m", **kwargs) -> Any:
@@ -786,23 +780,15 @@ class DecorationMixin(_MixinBase):
             The ocean fill layer (a ``PolyCollection`` disc on a globe; the reprojected plot artist on a flat
             map).
         """
-        color = kwargs.pop("color", "#cfe6f5")
         if self.globe:
             # The disc is the ocean: filling the whole projection boundary and letting land overlay it is
             # exact and far cheaper than clipping the global ocean polygon, and it is still `ocean`. The
-            # drawer reads the globe flag off the scene, so what differs here is only the style and the
-            # draw order this layer is recorded with.
+            # drawer reads the globe flag off the scene, so what differs here is only the draw order this
+            # layer is recorded with.
             return self._natural_earth(
-                "ocean",
-                resolution,
-                {"color": color},
-                polygon=True,
-                zorder=-2.0,
-                **kwargs,
+                "ocean", resolution, polygon=True, zorder=-2.0, **kwargs
             )
-        return self._natural_earth(
-            "ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs
-        )
+        return self._natural_earth("ocean", resolution, **kwargs)
 
     def lakes(self, resolution: str = "110m", **kwargs) -> Any:
         """Fill Natural-Earth lake polygons.
@@ -815,12 +801,7 @@ class DecorationMixin(_MixinBase):
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "lakes",
-            resolution,
-            {"color": "#cfe6f5", "edgecolor": "none"},
-            polygon=True,
-            zorder=-1.4,
-            **kwargs,
+            "lakes", resolution, polygon=True, zorder=-1.4, **kwargs
         )
 
     def rivers(self, resolution: str = "110m", **kwargs) -> Any:
@@ -830,13 +811,7 @@ class DecorationMixin(_MixinBase):
             The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth(
-            "rivers",
-            resolution,
-            {"color": "#5a8fcf", "linewidth": 0.4},
-            zorder=2.4,
-            **kwargs,
-        )
+        return self._natural_earth("rivers", resolution, zorder=2.4, **kwargs)
 
     def basemap(
         self,
@@ -946,10 +921,10 @@ class DecorationMixin(_MixinBase):
                         "via": "basemap",
                         "source": source,
                         "preset": dict(preset or {}),
-                        "opts": dict(options),
                     }
                 ),
                 key=api_key,
+                opts=options,
             )
         )
 

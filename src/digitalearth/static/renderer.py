@@ -30,7 +30,6 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
-from digitalearth.base.spec._serial import thawed_value
 from digitalearth.static.capabilities import CAPABILITIES
 
 __all__ = ["DRAWN_KINDS", "DrawnLayer", "Renderer", "drawer_for", "drawing_opts"]
@@ -38,37 +37,39 @@ __all__ = ["DRAWN_KINDS", "DrawnLayer", "Renderer", "drawer_for", "drawing_opts"
 logger = logging.getLogger(__name__)
 
 
-def drawing_opts(layer: LayerSpec) -> Dict[str, Any]:
-    """Return the styling keywords a layer recorded, back in the shape its caller wrote them.
+def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
+    """Return the engine keywords a layer's caller passed, exactly as they passed them.
 
-    A `Symbology` stores every sequence as a tuple, so a figure written to JSON and read back compares
-    equal to the one it came from. A drawer hands those values to cleopatra and matplotlib again, and some
-    of them read the two spellings as two different requests — a tuple of contour levels is not a sequence
-    of edges everywhere — so the freeze is undone on the way out.
+    They are held on the scene beside the layer, never in its description (see
+    :attr:`~digitalearth.static.scene.LayerRecord.opts`). Round-tripping them through the description broke
+    them both ways: a dash pattern came back a list matplotlib refuses, and an object with no JSON form — a
+    ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — made the figure impossible to save.
+    Held as passed, matplotlib gets the caller's own objects.
 
     Args:
+        scene: The scene the layer is drawn on, which holds the keywords.
         layer: The layer being drawn.
 
     Returns:
-        The recorded ``opts`` as a fresh dict with its tuples back as lists, or an empty dict for a layer
-        that recorded none. It is a copy, so a drawer may mutate it the way a builder used to mutate the
-        caller's own keywords.
+        A fresh dict of the caller's keywords, so a drawer may pop and set keys the way a builder used to
+        on the caller's own; each value is the very object passed. Empty for a layer the scene holds none
+        for — one given none, or one described elsewhere and drawn here, such as a figure read back from
+        JSON — which then draws with the engine's defaults.
 
     Examples:
-        - A list survives the round trip through the description:
+        - A scene that holds nothing for a layer hands its drawer nothing, and the layer draws with defaults:
             ```python
-            >>> from digitalearth.base.spec import LayerSpec, Symbology
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.static import Scene
             >>> from digitalearth.static.renderer import drawing_opts
-            >>> layer = LayerSpec("a", "raster", symbology=Symbology(props={"opts": {"levels": [1, 2]}}))
-            >>> drawing_opts(layer)
-            {'levels': [1, 2]}
+            >>> drawing_opts(Scene(), LayerSpec("a", "raster"))
+            {}
 
             ```
     """
-    # Annotated rather than returned straight: `thawed_value` takes and gives a free-form value, so
-    # the shape a drawer can rely on is stated here.
-    opts: Dict[str, Any] = thawed_value(dict(layer.symbology.props.get("opts") or {}))
-    return opts
+    return dict(scene._layer_opts.get(layer.id) or {})
 
 
 @dataclass(frozen=True)

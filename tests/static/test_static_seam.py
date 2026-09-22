@@ -11,6 +11,8 @@ the registry's engine-neutral kind, the source it was given and its style as val
 from a figure would be asserting against code that is not written yet.
 """
 
+import json
+
 import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
@@ -656,6 +658,160 @@ class TestTheFigureIsOneWholeThing:
         canvas.contourf(dataset)
         props = canvas.figure_spec.layers.get("filled_contours-1").symbology.props
         assert props["via"] == "contourf", dict(props)
+
+
+#: A matplotlib dash pattern. Its type carries meaning: matplotlib reads the tuple as ``(offset, on-off)``
+#: and refuses the list a JSON-shaped round trip turns it into.
+DASHED = (0, (5, 5))
+
+#: The calls the review found broken by freezing the caller's keywords into the description (H3). Each
+#: worked before, and each passes a dash tuple somewhere matplotlib reads its type.
+TYPED_KEYWORD_CALLS = {
+    "coastlines(linestyle=)": lambda canvas: canvas.coastlines(linestyle=DASHED),
+    "borders(linestyle=)": lambda canvas: canvas.borders(linestyle=DASHED),
+    "text(bbox=)": lambda canvas: canvas.text(
+        4.9, 52.4, "Amsterdam", bbox={"linestyle": DASHED}
+    ),
+    "annotate(arrowprops=)": lambda canvas: canvas.annotate(
+        4.9,
+        52.4,
+        "Amsterdam",
+        xytext=(6.0, 53.0),
+        arrowprops={"arrowstyle": "->", "linestyle": DASHED},
+    ),
+}
+
+
+#: The file the ``dataset`` fixture reads, which is what a saved figure references its raster by.
+RASTER_PATH = "examples/data/acc4000.tif"
+
+
+def _saved(figure):
+    """Return the figure with each in-memory source referenced by the path it was read from instead.
+
+    ``FigureSpec.to_dict`` refuses an ``object:`` source by design — it names memory in this process — so
+    a figure is saved by referencing its data by path. Every source in these tests is the fixture raster.
+
+    Args:
+        figure: The figure a map reports.
+
+    Returns:
+        The same figure, storable.
+    """
+    from dataclasses import replace as with_fields
+
+    from digitalearth.base.spec import DataRef
+
+    return with_fields(
+        figure, sources={key: DataRef(RASTER_PATH) for key in figure.sources}
+    )
+
+
+def _written_and_read_back(figure):
+    """Return a figure after a real JSON round trip, the way a saved figure comes back.
+
+    Args:
+        figure: The figure to write; its sources must already be storable (see :func:`_saved`).
+
+    Returns:
+        The figure read back from the JSON text.
+    """
+    from digitalearth.base.spec import FigureSpec
+
+    return FigureSpec.from_dict(
+        json.loads(json.dumps(figure.to_dict(), allow_nan=False))
+    )
+
+
+class TestEngineKeywordsAreHeldBesideTheLayer:
+    """The description records plain values; the caller's own engine keywords stay as they were passed.
+
+    Freezing every keyword into the description turned a dash tuple into a list on the way back out, and
+    wrote objects JSON cannot carry — a ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — into
+    a figure that then could not be saved.
+    """
+
+    @pytest.mark.parametrize("call", sorted(TYPED_KEYWORD_CALLS))
+    def test_a_keyword_whose_type_matters_reaches_matplotlib_intact(self, call):
+        """Each of these raised once the dash tuple came back from the description as a list.
+
+        Args:
+            call: The entry in :data:`TYPED_KEYWORD_CALLS` under test.
+
+        Test scenario:
+            The map is lon/lat and framed on the whole world before drawing, so every label lands on the
+            canvas: FreeType overflows rendering text millions of pixels off it, whatever its style.
+        """
+        canvas = Map(crs=4326)
+        TYPED_KEYWORD_CALLS[call](canvas)
+        canvas.ax.set_xlim(-180.0, 180.0)
+        canvas.ax.set_ylim(-90.0, 90.0)
+        canvas.fig.canvas.draw()
+        assert canvas.layer_ids != [], canvas.layer_ids
+
+    def test_a_keyword_object_is_held_as_the_object_passed(self, dataset):
+        """A per-pixel ``alpha`` array is held, not copied into nested tuples of its cells.
+
+        Args:
+            dataset: The raster drawn.
+
+        Test scenario:
+            Freezing a ``1000 x 1000`` array cell by cell took ten times the render it belonged to (L6);
+            held as passed, it costs nothing.
+        """
+        alpha = np.full(dataset.shape[-2:], 0.5)
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, alpha=alpha)
+        assert canvas._layer_opts["raster-1"]["alpha"] is alpha
+
+    def test_the_description_records_no_engine_keywords(self, dataset):
+        """What the caller passed through to matplotlib is not part of what the layer is.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, vmin=0.0)
+        props = canvas.figure_spec.layers.get("raster-1").symbology.props
+        assert "opts" not in props, dict(props)
+
+    def test_a_figure_holding_engine_objects_writes_to_json(self, dataset):
+        """``Normalize`` and ``FontProperties`` have no JSON form, so they must not be in the description.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        from matplotlib.colors import Normalize
+        from matplotlib.font_manager import FontProperties
+
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, norm=Normalize(0.0, 10.0))
+        canvas.text(
+            4.9, 52.4, "Amsterdam", crs=dataset.epsg, fontproperties=FontProperties()
+        )
+        written = json.dumps(_saved(canvas.figure_spec).to_dict(), allow_nan=False)
+        assert "raster-1" in written
+
+    def test_a_figure_read_back_from_json_still_draws_with_defaults(self, dataset):
+        """Another scene holds none of the caller's keywords, and must draw the layers anyway.
+
+        Args:
+            dataset: The raster drawn.
+
+        Test scenario:
+            A figure written to JSON keeps what the layers are and loses the engine keywords held beside
+            them. Drawn on a scene that never held those, each layer draws with its defaults rather than
+            failing on a keyword it cannot find.
+        """
+        from matplotlib.colors import Normalize
+
+        drawn_from = Map(crs=dataset.epsg)
+        drawn_from.imshow(dataset, norm=Normalize(0.0, 10.0))
+        drawn_from.coastlines(linestyle=DASHED)
+        figure = _written_and_read_back(_saved(drawn_from.figure_spec))
+        target = Map(crs=dataset.epsg)
+        target._renderer.apply(target.figure_spec, figure)
+        assert sorted(target._renderer.drawn) == sorted(figure.layers.ids)
 
 
 class _FakeCollection:

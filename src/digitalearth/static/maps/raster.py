@@ -74,7 +74,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     props = dict(layer.symbology.props)
     kind = props["via"]
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     src = scene._prepare(data, props["band"])
     z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
     if opts.pop(
@@ -183,7 +183,7 @@ def draw_rgb_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
     """
     props = dict(layer.symbology.props)
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
     # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
@@ -212,7 +212,7 @@ def draw_hsv_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     from matplotlib.colors import hsv_to_rgb
 
     props = dict(layer.symbology.props)
-    opts = drawing_opts(layer)
+    opts = drawing_opts(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     rgb = hsv_to_rgb(stretched)  # (rows, cols, 3) RGB
     # band-FIRST for cleopatra's RgbBands path (see draw_rgb_composite); it transposes back to band-last.
@@ -281,12 +281,12 @@ class RasterMixin(_MixinBase):
                     "levels": levels,
                     "add_colorbar": add_colorbar,
                     "default_cmap": default_cmap,
-                    # What the figure records is the call the caller made, not the call cleopatra
-                    # receives: `draw_field` resolves the colormap and the levels from it and hands
-                    # cleopatra the result.
-                    "opts": dict(opts),
                 }
             ),
+            # What the figure records is the call the caller made, not the call cleopatra receives:
+            # `draw_field` resolves the colormap and the levels from it and hands cleopatra the result. The
+            # caller's own engine keywords travel beside the description, exactly as passed.
+            opts=opts,
         )
         try:
             return self._draw(record)
@@ -481,7 +481,7 @@ class RasterMixin(_MixinBase):
             bands: The three 1-based band indices.
             mask_nodata: Whether each band's nodata cells are excluded from the stretch.
             limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
-            opts: The caller's styling keywords, recorded as they were written.
+            opts: The caller's styling keywords, held beside the layer as they were written.
 
         Returns:
             The image mappable, or ``None`` when the data lies outside what the display CRS shows.
@@ -495,9 +495,9 @@ class RasterMixin(_MixinBase):
                     "bands": tuple(bands),
                     "mask_nodata": mask_nodata,
                     "limits": limits,
-                    "opts": dict(opts),
                 }
             ),
+            opts=opts,
         )
         try:
             return self._draw(record)
