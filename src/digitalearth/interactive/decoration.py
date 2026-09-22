@@ -231,7 +231,7 @@ def _catalogued_tiles(name: str, api_key: Any, *, known: Any) -> Any:
         )
     # Built rather than handed over, because the credential has to reach the template; the attribution
     # GeoViews would have read off the object is re-attached the way a keyed preset's is.
-    url = provider.build_url(**{field: api_key for field in secrets})
+    url = provider.build_url(**dict.fromkeys(secrets, api_key))
     return gv.WMTS(_upper_placeholders(url)).opts(
         hooks=[_attribution_hook(provider.attribution)]
     )

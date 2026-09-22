@@ -217,13 +217,15 @@ class BigDataMixin(_MixinBase):
                 resolver registered for its scheme.
             FileNotFoundError: when ``features`` is a path that names nothing.
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.heatmap()"
         import numpy as np
 
         _require_layer_api()
         paint: dict = {
-            "heatmap-radius": as_finite(radius, "radius", "WebMap.heatmap()"),
-            "heatmap-intensity": as_finite(intensity, "intensity", "WebMap.heatmap()"),
-            "heatmap-opacity": as_finite(opacity, "opacity", "WebMap.heatmap()"),
+            "heatmap-radius": as_finite(radius, "radius", call),
+            "heatmap-intensity": as_finite(intensity, "intensity", call),
+            "heatmap-opacity": as_finite(opacity, "opacity", call),
         }
         gdf = self._display_gdf(features, method="heatmap")
         self._require_points(gdf, "heatmap")

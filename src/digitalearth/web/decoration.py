@@ -877,20 +877,22 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.labels: label many features from a column.
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.text()"
         s = renamed_parameter(
             new="s",
             value=s,
             old="string",
             alias=string,
-            caller="WebMap.text()",
+            caller=call,
         )
         if s is None:
             raise TypeError(
                 "text() needs the string to draw; pass it as the third argument"
             )
         lon, lat = self._as_display_point(
-            as_finite(lon, "lon", "WebMap.text()"),
-            as_finite(lat, "lat", "WebMap.text()"),
+            as_finite(lon, "lon", call),
+            as_finite(lat, "lat", call),
             crs,
         )
         _require_layer_api()
@@ -900,13 +902,13 @@ class DecorationMixin(_MixinBase):
                 value=text_size,
                 old="size",
                 alias=size,
-                caller="WebMap.text()",
+                caller=call,
                 default=14.0,
             ),
             "text_size",
-            "WebMap.text()",
+            call,
         )
-        halo_width = as_finite(halo_width, "halo_width", "WebMap.text()")
+        halo_width = as_finite(halo_width, "halo_width", call)
         layer_id = self._layer_id("text", name)
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
         # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
@@ -1024,6 +1026,8 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.graticule()"
         _require_layer_api()
         # One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square
         # grid; the two steps are what every other tier takes, and what a reader of a world map usually wants
@@ -1034,10 +1038,10 @@ class DecorationMixin(_MixinBase):
             lon_step = lat_step = spacing
         # Finite first: a NaN step passes the range check below (every comparison against NaN is false) and
         # was written into the description, where it made the whole figure unwritable (review L1).
-        lon_step = as_finite(lon_step, "lon_step", "WebMap.graticule()")
-        lat_step = as_finite(lat_step, "lat_step", "WebMap.graticule()")
-        width = as_finite(width, "width", "WebMap.graticule()")
-        opacity = as_finite(opacity, "opacity", "WebMap.graticule()")
+        lon_step = as_finite(lon_step, "lon_step", call)
+        lat_step = as_finite(lat_step, "lat_step", call)
+        width = as_finite(width, "width", call)
+        opacity = as_finite(opacity, "opacity", call)
         for name_of, step in (("lon_step", lon_step), ("lat_step", lat_step)):
             if step <= 0 or step > 180:
                 # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,

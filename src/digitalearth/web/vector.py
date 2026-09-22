@@ -482,17 +482,19 @@ class VectorMixin(_MixinBase):
         See Also:
             digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.labels()"
         _, layer_types = _require_layer_api()
         text_size = renamed_parameter(
             new="text_size",
             value=text_size,
             old="size",
             alias=size,
-            caller="WebMap.labels()",
+            caller=call,
             default=12.0,
         )
-        text_size = as_finite(text_size, "text_size", "WebMap.labels()")
-        halo_width = as_finite(halo_width, "halo_width", "WebMap.labels()")
+        text_size = as_finite(text_size, "text_size", call)
+        halo_width = as_finite(halo_width, "halo_width", call)
         gdf = self._display_gdf(features, method="labels")
         if column not in getattr(gdf, "columns", []):
             raise KeyError(
@@ -993,17 +995,19 @@ class VectorMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
             digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.points()"
         _, layer_types = _require_layer_api()
         size = renamed_parameter(
             new="size",
             value=size,
             old="radius",
             alias=radius,
-            caller="WebMap.points()",
+            caller=call,
             default=5.0,
         )
-        size = as_finite(size, "size", "WebMap.points()")
-        opacity = as_finite(opacity, "opacity", "WebMap.points()")
+        size = as_finite(size, "size", call)
+        opacity = as_finite(opacity, "opacity", call)
         gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).
