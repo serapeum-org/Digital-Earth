@@ -648,7 +648,8 @@ class DecorationMixin(_MixinBase):
         separately. For a raster backdrop today, supply your own ``Dataset``.
 
         Args:
-            dataset: A pyramids ``Dataset`` to use as the backdrop, or ``None`` to try a tile basemap.
+            dataset: A pyramids ``Dataset`` to use as the backdrop, or a path or URL to one, or
+                ``None`` to try a tile basemap. Only a path-backed layer can be written down.
             zorder: Draw order for the backdrop (default ``-3.0``, below data/coastlines).
             cmap: Colormap for a raster backdrop (ignored for the tile path). ``None`` (default) resolves
                 one from the backdrop's own variable via

@@ -399,7 +399,8 @@ class RasterMixin(_MixinBase):
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
                 ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
                 left over is the caller's own engine styling, held beside the layer rather than
@@ -419,7 +420,8 @@ class RasterMixin(_MixinBase):
         """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``).
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
                 one this render reads. Anything left over is the caller's own engine styling, held
                 beside the layer rather than described (see the class docstring).
@@ -438,7 +440,8 @@ class RasterMixin(_MixinBase):
         """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``).
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
                 one this render reads. Anything left over is the caller's own engine styling, held
                 beside the layer rather than described (see the class docstring).
@@ -457,7 +460,8 @@ class RasterMixin(_MixinBase):
         """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
                 the caller's own engine styling, held beside the layer rather than described (see the
                 class docstring).
@@ -482,7 +486,8 @@ class RasterMixin(_MixinBase):
         callers and examples can switch to true blocks transparently once cleopatra supports them.
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). Only a path-backed layer can be written down.
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
                 the caller's own engine styling, held beside the layer rather than described (see the
                 class docstring).
@@ -543,7 +548,8 @@ class RasterMixin(_MixinBase):
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
         Args:
-            dataset: A multiband pyramids ``Dataset`` (reprojected to the display CRS first).
+            dataset: A multiband pyramids ``Dataset``, or a path or URL to one (reprojected to the
+                display CRS first). Only a path-backed layer can be written down.
             bands: Three 1-based band indices mapped to R, G, B. Defaults to ``(1, 2, 3)``.
             mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
                 percentile stretch (and render transparent). Pass ``False`` for the raw values (the
@@ -664,7 +670,8 @@ class RasterMixin(_MixinBase):
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
         Args:
-            dataset: A multiband pyramids ``Dataset`` (reprojected to the display CRS first).
+            dataset: A multiband pyramids ``Dataset``, or a path or URL to one (reprojected to the
+                display CRS first). Only a path-backed layer can be written down.
             bands: Three 1-based band indices mapped to H, S, V. Defaults to ``(1, 2, 3)``.
             mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
                 percentile stretch (and render transparent). Pass ``False`` for the raw pre-mask behaviour.
@@ -730,7 +737,9 @@ class RasterMixin(_MixinBase):
         """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).
 
         Args:
-            collection: A pyramids ``DatasetCollection`` whose members share a grid.
+            collection: A pyramids ``DatasetCollection`` whose members share a grid. Unlike the
+                single-raster builders this takes no path: a collection is a set of rasters rather
+                than one file.
             band: 1-based band read from each member.
             **opts: Styling kwargs forwarded to the per-member contour call.
 

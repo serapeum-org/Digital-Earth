@@ -13,6 +13,7 @@ has a failing test to delete rather than a silent behaviour change to discover.
 
 import inspect
 import logging
+import re
 import warnings
 
 import numpy as np
@@ -769,3 +770,81 @@ def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
     assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)], (
         "the modern spellings must not warn"
     )
+
+
+#: Every public data builder on `Map` and the argument that names what it draws. A path or URL is accepted
+#: wherever a pyramids object is — and a path-backed layer is the only kind a figure can be written from —
+#: so the argument's own documentation has to say so (round 2, L8). `spaghetti` is deliberately absent: it
+#: takes a `DatasetCollection`, which is a set of rasters rather than one file, and refuses a path.
+PATH_TAKING_BUILDERS = {
+    "imshow": "dataset",
+    "contour": "dataset",
+    "contourf": "dataset",
+    "pcolormesh": "dataset",
+    "block": "dataset",
+    "rgb_composite": "dataset",
+    "hsv_composite": "dataset",
+    "grid_points": "dataset",
+    "point_cloud": "dataset",
+    "grid_cells": "dataset",
+    "stock_img": "dataset",
+    "quiver": "u_dataset",
+    "barbs": "u_dataset",
+    "streamplot": "u_dataset",
+    "tricontour": "data",
+    "tricontourf": "data",
+    "tripcolor": "data",
+    "scatter": "features",
+    "shapes": "features",
+    "choropleth": "features",
+    "voronoi": "features",
+    "cartogram": "features",
+    "quadtree": "features",
+    "kde": "features",
+    "sankey": "features",
+}
+
+
+def _argument_paragraph(builder: str, argument: str) -> str:
+    """Return the ``Args:`` entry one builder writes for one argument.
+
+    Args:
+        builder: The method name on `Map`.
+        argument: The argument whose entry is wanted.
+
+    Returns:
+        The entry's text as one line, from its name up to the next entry, or ``""`` when the builder
+        documents no such argument. Continuation lines are joined, so a phrase the wrapping broke across
+        two lines still reads as one.
+    """
+    doc = inspect.getdoc(getattr(Map, builder)) or ""
+    block = re.split(r"\n(?=\S)", doc.split("Args:", 1)[-1])[0]
+    for entry in re.split(r"\n(?=    \S)", block):
+        if entry.strip().startswith(f"{argument}:"):
+            return " ".join(entry.split())
+    return ""
+
+
+class TestEveryDataBuilderDocumentsThePathItTakes:
+    """A caller following the per-builder documentation could never produce a figure that writes.
+
+    Every data builder takes a path or a URL as readily as a pyramids object, and only a path-backed layer
+    can be written down — an in-memory one is an ``object:`` reference `FigureSpec.to_dict` refuses. None of
+    the builders said so, and the module docstrings that did are not what a caller reads (round 2, L8).
+    """
+
+    @pytest.mark.parametrize("builder", sorted(PATH_TAKING_BUILDERS))
+    def test_the_data_argument_says_a_path_is_accepted(self, builder):
+        """Args:
+        builder: The entry in :data:`PATH_TAKING_BUILDERS` under test.
+        """
+        entry = _argument_paragraph(builder, PATH_TAKING_BUILDERS[builder])
+        assert "path or URL" in entry, entry
+
+    @pytest.mark.parametrize("builder", sorted(PATH_TAKING_BUILDERS))
+    def test_the_data_argument_says_why_that_matters(self, builder):
+        """Args:
+        builder: The entry in :data:`PATH_TAKING_BUILDERS` under test.
+        """
+        entry = _argument_paragraph(builder, PATH_TAKING_BUILDERS[builder])
+        assert "written down" in entry, entry

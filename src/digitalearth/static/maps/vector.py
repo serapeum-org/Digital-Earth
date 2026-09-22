@@ -963,7 +963,8 @@ class VectorMixin(_MixinBase):
         """Plot a pyramids ``FeatureCollection`` of points, sized by a column (``ScatterGlyph``).
 
         Args:
-            features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
+            features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one;
+                reprojected to the display CRS. Only a path-backed layer can be written down.
             size_column: Optional column name whose values set the per-point marker size. Pair it with
                 ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
                 legend. ``None`` (default) uses a single uniform marker size — set that size with
@@ -1031,7 +1032,8 @@ class VectorMixin(_MixinBase):
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
+                first). Only a path-backed layer can be written down.
             _alias_caller: Which method a ``DeprecationWarning`` raised on the way through names.
                 Defaults to ``"Map.grid_points()"``; :meth:`point_cloud` passes its own name, so the
                 warning blames the method the caller actually wrote.
@@ -1086,7 +1088,8 @@ class VectorMixin(_MixinBase):
         method this delegates to.
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
+                first). Only a path-backed layer can be written down.
             **opts: Styling kwargs, forwarded to :meth:`grid_points` unchanged.
 
         Returns:
@@ -1105,7 +1108,8 @@ class VectorMixin(_MixinBase):
         """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
 
         Args:
-            dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
+                first). Only a path-backed layer can be written down.
             band: 1-based band whose values colour the cells.
             **opts: The caller's own engine keywords, handed to ``PolygonGlyph`` as passed and held beside
                 the layer rather than recorded in it (see the class docstring). ``PolygonGlyph`` refuses a
@@ -1158,8 +1162,10 @@ class VectorMixin(_MixinBase):
         """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path or URL to one.
+                Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
+                because a layer names one source and a field needs two.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             kind: ``"quiver"``, ``"barbs"`` or ``"streamplot"``.
             band: 1-based band index read from each dataset.
             **opts: The caller's own engine keywords, handed to ``VectorGlyph`` as passed and held beside
@@ -1194,8 +1200,10 @@ class VectorMixin(_MixinBase):
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path or URL to one.
+                Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
+                because a layer names one source and a field needs two.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
 
@@ -1213,8 +1221,10 @@ class VectorMixin(_MixinBase):
         """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``).
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path or URL to one.
+                Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
+                because a layer names one source and a field needs two.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
 
@@ -1232,8 +1242,10 @@ class VectorMixin(_MixinBase):
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
 
         Args:
-            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path/URL to one.
-            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path/URL to one.
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component, or a path or URL to one.
+                Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
+                because a layer names one source and a field needs two.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, held beside the layer rather than described.
 
@@ -1353,7 +1365,8 @@ class VectorMixin(_MixinBase):
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
+                path or URL to either. Only a path-backed layer can be written down.
             **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
                 held beside the layer rather than described.
 
@@ -1373,7 +1386,8 @@ class VectorMixin(_MixinBase):
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
+                path or URL to either. Only a path-backed layer can be written down.
             **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
                 held beside the layer rather than described.
 
@@ -1393,7 +1407,8 @@ class VectorMixin(_MixinBase):
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
+                path or URL to either. Only a path-backed layer can be written down.
             **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
                 held beside the layer rather than described.
 
@@ -1499,7 +1514,8 @@ class VectorMixin(_MixinBase):
         """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
 
         Args:
-            features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
             column: Name of the column whose values colour the polygons — numeric for a continuous or
                 graduated scale, or any nominal labels (strings, region codes, …) under
                 ``scheme="categorical"``.
@@ -1581,7 +1597,8 @@ class VectorMixin(_MixinBase):
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
 
         Args:
-            features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
             **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
 
         Returns:
@@ -1654,7 +1671,8 @@ class VectorMixin(_MixinBase):
         display CRS), and duplicate points, produce no cell and are silently skipped.
 
         Args:
-            features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
             column: Name of the numeric column whose value colours each cell, or ``None`` for outlines only.
             clip: Optional boundary the cells are clipped to — a ``FeatureCollection``/``GeoDataFrame`` (reprojected
                 to the display CRS) or a shapely geometry already in the display CRS. ``None`` leaves shapely's
@@ -1737,7 +1755,8 @@ class VectorMixin(_MixinBase):
         without it only the outlines are drawn (like :meth:`shapes`).
 
         Args:
-            features: A pyramids ``FeatureCollection`` of polygon geometries (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of polygon geometries, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
             scale: Name of the numeric column whose value sets each feature's size (normalised to ``limits``).
             column: Optional column whose value colours each scaled polygon, or ``None`` for outlines only.
             limits: ``(min, max)`` scale factors mapped to the smallest/largest ``scale`` value.
@@ -1860,7 +1879,8 @@ class VectorMixin(_MixinBase):
         ``None``). The cells are always filled (a quadtree is a choropleth).
 
         Args:
-            features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
             column: Numeric column aggregated per cell, or ``None`` to colour by point count (density).
             agg: Per-cell reducer — one of ``"mean"``/``"sum"``/``"median"``/``"min"``/``"max"``/``"std"``/
                 ``"count"`` or a callable taking a 1-D array. Ignored when ``column`` is ``None`` (count).
@@ -1981,7 +2001,8 @@ class VectorMixin(_MixinBase):
         through the shared scalar-mapping pipeline. The KDE is numpy-only (cleopatra ``KDEGlyph``).
 
         Args:
-            features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
             clip: Optional boundary the density is clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` draws the full grid.
             **opts: Styling kwargs forwarded to ``KDEGlyph`` (``levels``, ``shade``, ``gridsize``,
@@ -2034,8 +2055,8 @@ class VectorMixin(_MixinBase):
         (each optional). MultiLineStrings contribute one path per part.
 
         Args:
-            features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries
-                (reprojected to the display CRS).
+            features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries,
+                or a path or URL to one (reprojected to the display CRS). Only a path-backed layer can be written down.
             column: Numeric column whose value colours each path, or ``None`` for a single colour.
             scale: Numeric column whose value sets each path's line width, or ``None`` for a uniform width.
             **opts: Styling kwargs forwarded to ``FlowGlyph`` (``width_limits``, ``width_scale``, ``cmap``,
