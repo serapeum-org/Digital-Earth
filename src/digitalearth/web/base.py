@@ -19,6 +19,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 """
 
 import math
+import os
 import pathlib
 from dataclasses import dataclass
 from dataclasses import replace as replace_fields
@@ -402,6 +403,36 @@ def _require_layer_api() -> tuple:
     from maplibre import Layer, LayerType
 
     return Layer, LayerType
+
+
+def placed_features(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Return a vector drawer's source placed in the display CRS, ready to serve as GeoJSON.
+
+    Every vector drawer hands its source straight to MapLibre, which reads coordinates as lon/lat and
+    reprojects nothing. While a layer recorded the warped frame the builder already held, that was safe by
+    construction. Since a layer records the caller's own **path** instead — the one reference a figure can
+    be written down with (review H1) — a layer drawn back from its description arrives in whatever CRS the
+    file is stored in, and placing it is the drawer's job.
+
+    Args:
+        web_map: The map being drawn, whose `crs` the geometry is placed in. `None` leaves `data` alone,
+            for a drawer exercised without a map.
+        data: The layer's source as the renderer handed it over — already placed on the builder's own
+            first draw, freshly opened from the figure's reference on any later one.
+        layer: The layer's description, whose kind names the caller in a refusal or a skip warning.
+
+    Returns:
+        The frame in the display CRS. One already in it is handed back as it is, so the builder's own
+        draw neither warps nor copies anything twice.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry and the map is `strict`.
+        TypeError: when the reference opened to something that is not a vector layer — a raster path
+            recorded as a vector layer's source.
+    """
+    if web_map is None:
+        return data
+    return web_map._display_gdf(data, method=layer.kind)
 
 
 def _resolve_style(style: Any) -> Any:
@@ -1886,6 +1917,34 @@ class WebMapBase:
         """
         return needs_reproject(data, self.crs)
 
+    @staticmethod
+    def _opened(data: Any) -> Any:
+        """Open what a builder was handed, when it names data rather than being the data.
+
+        A path or a URL is the only input a figure can be written down with: a pyramids object does not
+        know where it came from, so the only honest reference to one is ``object:``, which resolves in the
+        process that made it and nowhere else. The static and interactive tiers take a path because their
+        builders never touch the argument — it goes straight into ``DataRef.of`` and the renderer opens it
+        at draw time. This tier's builders read the data *before* they record it (to warp it, to resolve a
+        colormap from its variable, to frame the map on its extent), so the reference is opened here, at
+        the three display choke points, and the builder still records the caller's own path (review H1).
+
+        Args:
+            data: Whatever the caller passed — a path, a URL, a :class:`~digitalearth.base.spec.DataRef`,
+                or the data itself.
+
+        Returns:
+            The opened data for a reference; `data` itself for anything else, which is what a drawer
+            re-entering a choke point with an already-opened source hands over.
+
+        Raises:
+            FileNotFoundError: when the path names nothing, which is the resolver's message naming it.
+            KeyError: when no resolver is registered for the URL's scheme.
+        """
+        if isinstance(data, (str, os.PathLike, DataRef)):
+            return DataRef.of(data).open()
+        return data
+
     def _to_display_source(self, data: Any, *, band: int = 1) -> Source:
         """Reproject ``data`` to the display CRS through pyramids and wrap it as a :class:`Source`.
 
@@ -1896,14 +1955,16 @@ class WebMapBase:
         EPSG:3857 / 4326, so ``crs`` should be one of those.
 
         Args:
-            data: A pyramids ``Dataset`` / ``FeatureCollection`` (anything ``get_source`` accepts). Bare
-                numpy arrays / :class:`Source` objects pass straight through to extraction.
+            data: A pyramids ``Dataset`` / ``FeatureCollection`` (anything ``get_source`` accepts), or a
+                path / URL / :class:`~digitalearth.base.spec.DataRef` naming one, which :meth:`_opened`
+                reads first. Bare numpy arrays / :class:`Source` objects pass straight through to
+                extraction.
             band: 1-based band to extract for raster inputs.
 
         Returns:
             Source: the display-CRS view (``z``/``x``/``y``/``crs``/``metadata``).
         """
-        return to_display_source(data, self.crs, band=band)
+        return to_display_source(self._opened(data), self.crs, band=band)
 
     def _to_display_raster(self, dataset: Any) -> Any:
         """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
@@ -1912,11 +1973,12 @@ class WebMapBase:
         read three from it.
 
         Args:
-            dataset: A pyramids ``Dataset``.
+            dataset: A pyramids ``Dataset``, or a path / URL naming one (see :meth:`_opened`).
 
         Returns:
             The dataset in the display CRS.
         """
+        dataset = self._opened(dataset)
         if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
             # Through the tier's own helper, so a dataset that cannot be warped into the display CRS
             # raises the OffLimbError every other builder raises rather than GDAL's raw RuntimeError.
@@ -2163,7 +2225,9 @@ class WebMapBase:
         instead of quietly producing a frame of ``inf`` coordinates.
 
         Args:
-            features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
+            features: A pyramids ``FeatureCollection`` or a GeoDataFrame, or a path / URL naming one,
+                which :meth:`_opened` reads first — the only input the layer can then be written down
+                with (review H1).
             method: The calling builder's name, quoted in the guard's error message. Required, so a
                 new builder cannot silently inherit a generic label.
 
@@ -2180,6 +2244,7 @@ class WebMapBase:
             digitalearth.web.base.WebMapBase._placed: the reprojection, and the off-limb report.
             digitalearth.web.base.WebMapBase._json_safe: the date encoding applied to the result.
         """
+        features = self._opened(features)
         self._require_vector(features, method)
         if hasattr(features, "epsg") and hasattr(
             features, "to_crs"

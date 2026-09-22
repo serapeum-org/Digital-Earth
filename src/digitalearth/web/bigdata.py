@@ -23,7 +23,7 @@ from loguru import logger
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Scale, Symbology
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, placed_features
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -37,12 +37,13 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 DECK_TYPE_KEY = "@@type"
 
 
-def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre heatmap layer over a point collection.
 
     Args:
-        _web_map: Unused — every drawer takes the map, and this one draws without it.
-        data: The layer's source — the display-CRS point GeoDataFrame.
+        web_map: The map being drawn, whose display CRS the points are placed in.
+        data: The layer's source — the point frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
         layer: The layer's description.
 
     Returns:
@@ -59,7 +60,7 @@ def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
-        source_spec=data,
+        source_spec=placed_features(web_map, data, layer),
         layer=layer_cls(
             id=layer.id,
             type=layer_types.HEATMAP,
@@ -69,15 +70,16 @@ def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     )
 
 
-def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the clustered source and its three layers: bubbles, counts and loose points.
 
     One description carries all three because they are one thing to a viewer — removing the layer takes
     the counts and the loose points with it.
 
     Args:
-        _web_map: Unused — every drawer takes the map, and this one draws without it.
-        data: The layer's source — the display-CRS point GeoDataFrame.
+        web_map: The map being drawn, whose display CRS the points are placed in.
+        data: The layer's source — the point frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
         layer: The layer's description.
 
     Returns:
@@ -101,7 +103,7 @@ def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     return DrawnLayer(
         source_id=source_id,
         source_spec=GeoJSONSource(
-            data=geopandas_to_geojson(data),
+            data=geopandas_to_geojson(placed_features(web_map, data, layer)),
             cluster=True,
             cluster_radius=int(props["radius"]),
             cluster_max_zoom=int(props["max_zoom"]),
@@ -226,7 +228,10 @@ class BigDataMixin(_MixinBase):
             layer_id,
             None,
             kind="heatmap",
-            source=gdf,
+            # The caller's own reference is what a figure can be written down with; the warped frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
             symbology=Symbology(props={"paint": dict(paint)}),
         )
         self._last_layer_id = layer_id
@@ -274,7 +279,10 @@ class BigDataMixin(_MixinBase):
             layer_id,
             None,
             kind="clusters",
-            source=gdf,
+            # As `heatmap` above: the figure records what the caller named, the first draw takes the
+            # frame already warped here (review H1).
+            source=features,
+            placed=gdf,
             symbology=Symbology(
                 props={
                     "color": color,

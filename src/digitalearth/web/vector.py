@@ -20,7 +20,7 @@ from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, LegendSpec, Scale, Symbology
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, placed_features
 
 
 @dataclass(frozen=True)
@@ -119,7 +119,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre source and typed layer for any of the vector kinds.
 
     All seven — points, lines, polygons, choropleth, labels, and the two contour kinds — are a GeoJSON
@@ -127,8 +127,10 @@ def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     share a drawer for the same reason they share a registration funnel.
 
     Args:
-        _web_map: Unused — every drawer takes the map, and this one draws without it.
-        data: The layer's source — the display-CRS GeoDataFrame served as GeoJSON.
+        web_map: The map being drawn, whose display CRS the geometry is placed in.
+        data: The layer's source, served as GeoJSON — the display-CRS frame the builder already holds, or
+            whatever the figure's reference opened to when the layer is being drawn back from a
+            description.
         layer: The layer's description.
 
     Returns:
@@ -149,7 +151,7 @@ def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
-        source_spec=data,
+        source_spec=placed_features(web_map, data, layer),
         layer=layer_cls(
             id=layer.id,
             type=props[
@@ -504,6 +506,7 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
             layout=layout,
+            source=features,
         )
 
     def _contour_levels(
@@ -778,6 +781,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         layout: Optional[dict] = None,
+        source: Any = None,
     ) -> Self:
         """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
 
@@ -798,6 +802,10 @@ class VectorMixin(_MixinBase):
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             layout: MapLibre layout properties for the layer (a symbol layer's `text-field` and its
                 placement live here rather than in `paint`). Merged with the visibility flag.
+            source: What the *figure* records the layer as drawing — the caller's own path or URL, which is
+                the only reference that survives leaving the process. `features` is what the first draw is
+                handed, so nothing is warped twice; `None` records `features` itself, which a builder that
+                derived its geometry (`contours` traces its own) has nothing better than (review H1).
 
         Returns:
             The same map instance, so builder calls chain.
@@ -815,7 +823,8 @@ class VectorMixin(_MixinBase):
             name,
             kind=kind,
             visible=visible,
-            source=features,
+            source=features if source is None else source,
+            placed=features,
             symbology=Symbology(
                 props={
                     # The enum's value, not the member: a description holds plain values, so a figure
@@ -997,6 +1006,7 @@ class VectorMixin(_MixinBase):
             kind="points",
             name=name,
             visible=visible,
+            source=features,
         )
 
     def lines(
@@ -1088,6 +1098,7 @@ class VectorMixin(_MixinBase):
             kind="lines",
             name=name,
             visible=visible,
+            source=features,
         )
 
     def polygons(
@@ -1223,6 +1234,7 @@ class VectorMixin(_MixinBase):
             kind="polygons",
             name=name,
             visible=visible,
+            source=features,
         )
 
     def choropleth(
@@ -1334,4 +1346,5 @@ class VectorMixin(_MixinBase):
             kind="choropleth",
             name=name,
             visible=visible,
+            source=features,
         )

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
@@ -36,12 +36,13 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def draw_extruded_polygons(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre extruded-fill layer for a polygon collection.
 
     Args:
-        _web_map: Unused — every drawer takes the map, and this one draws without it.
-        data: The layer's source — the display-CRS polygon GeoDataFrame.
+        web_map: The map being drawn, whose display CRS the polygons are placed in.
+        data: The layer's source — the polygon frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
         layer: The layer's description.
 
     Returns:
@@ -57,7 +58,7 @@ def draw_extruded_polygons(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
-        source_spec=data,
+        source_spec=placed_features(web_map, data, layer),
         layer=layer_cls(
             id=layer.id,
             type=layer_types.FILL_EXTRUSION,
@@ -118,7 +119,10 @@ class ThreeDMixin(_MixinBase):
             layer_id,
             None,
             kind="extrusion",
-            source=gdf,
+            # The caller's own reference is what a figure can be written down with; the warped frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
             symbology=Symbology(props={"paint": dict(paint)}),
         )
         self._last_layer_id = layer_id

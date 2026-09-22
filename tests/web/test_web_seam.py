@@ -331,6 +331,101 @@ class TestAFigureSurvivesBeingWrittenDown:
             m.figure_spec.to_dict()
 
 
+#: The raster every path-backed check below reads, relative to the repo root the suite runs from.
+RASTER_PATH = "examples/data/acc4000.tif"
+
+#: The vector collection the same checks read.
+VECTOR_PATH = "tests/data/points.geojson"
+
+#: One call per web builder that takes data, each given a **path** rather than an opened object. Each call
+#: builds exactly one layer on a fresh map, so the checks below address it as the figure's only layer —
+#: `heatmap` mints its own id and takes no `name=`.
+PATH_BACKED_BUILDERS = {
+    "field": (RASTER_PATH, lambda m, path: m.field(path)),
+    "rgb_composite": (
+        RASTER_PATH,
+        lambda m, path: m.rgb_composite(path, bands=(1, 1, 1)),
+    ),
+    "points": (VECTOR_PATH, lambda m, path: m.points(path)),
+    "lines": (VECTOR_PATH, lambda m, path: m.lines(path)),
+    "polygons": (VECTOR_PATH, lambda m, path: m.polygons(path)),
+    "choropleth": (VECTOR_PATH, lambda m, path: m.choropleth(path, column="fid")),
+    "labels": (VECTOR_PATH, lambda m, path: m.labels(path, "fid")),
+    "heatmap": (VECTOR_PATH, lambda m, path: m.heatmap(path)),
+}
+
+
+def _built_from_a_path(builder: str):
+    """Build one layer from a path and return the figure that describes it.
+
+    Args:
+        builder: Which entry of :data:`PATH_BACKED_BUILDERS` to call.
+
+    Returns:
+        `(path, figure, layer_id)` — the path the builder was given, the figure it produced, and the id of
+        the single layer it registered.
+    """
+    from digitalearth.web import WebMap
+
+    path, call = PATH_BACKED_BUILDERS[builder]
+    figure = call(WebMap(), path).figure_spec
+    return path, figure, figure.layers.ids[0]
+
+
+class TestABuilderTakesAPathAndTheFigureCarriesIt:
+    """Review H1 — the tier's own docstrings promise a path; without one no web figure with data writes."""
+
+    @pytest.mark.parametrize("builder", sorted(PATH_BACKED_BUILDERS))
+    def test_the_layer_is_described_by_the_path_it_was_given(self, builder):
+        """A path reaches the builder, and the figure references it by that path.
+
+        Args:
+            builder: Which entry of :data:`PATH_BACKED_BUILDERS` to call.
+
+        Test scenario:
+            An object a builder was handed can only be referenced as `object:`, which resolves in the
+            process that made it and nowhere else. A path is the one input that survives leaving the
+            process, which is why `web/base.py` and `web/renderer.py` tell a caller to pass one.
+        """
+        path, figure, layer_id = _built_from_a_path(builder)
+        described = figure.layers.get(layer_id)
+        assert described.source_id is not None, f"{builder} recorded no source"
+        assert figure.sources[described.source_id].uri == path, (
+            f"{builder} must reference the path it was given, not an object"
+        )
+
+    @pytest.mark.parametrize("builder", sorted(PATH_BACKED_BUILDERS))
+    def test_the_figure_is_written_down_as_json(self, builder):
+        """The promise in full: a path-backed web figure serialises.
+
+        Args:
+            builder: Which entry of :data:`PATH_BACKED_BUILDERS` to call.
+        """
+        import json
+
+        path, figure, _layer_id = _built_from_a_path(builder)
+        written = json.dumps(figure.to_dict())
+        assert path in written, (
+            f"{builder}'s figure must carry the path it was built from"
+        )
+
+    @pytest.mark.parametrize("builder", sorted(PATH_BACKED_BUILDERS))
+    def test_the_written_figure_draws_on_a_map_that_never_saw_the_call(self, builder):
+        """A reference is only worth writing if reading it back draws the layer again.
+
+        Args:
+            builder: Which entry of :data:`PATH_BACKED_BUILDERS` to call.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.web import WebMap
+
+        _path, figure, layer_id = _built_from_a_path(builder)
+        reloaded = FigureSpec.from_dict(figure.to_dict())
+        drawn = WebMap()._renderer.draw_layer(reloaded, layer_id)
+        assert drawn is not None, f"{builder}'s reloaded layer must draw"
+        assert drawn.layer.id == layer_id, drawn.layer.id
+
+
 class TestADrawerThatDeclinesLeavesNothingBehind:
     """A described layer nothing draws is exactly the drift this seam removes."""
 
