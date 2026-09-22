@@ -311,6 +311,10 @@ class InteractiveMapBase:
         # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
         # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
         self._layer_keys: Dict[str, Any] = {}
+        # The layer the caller added last — what `colorbar`, `legend`, `hover` and `on_tap` act on by
+        # default. Tracked by id because `layers` is in draw order, so its last entry is whatever sits in the
+        # highest band, not the layer the caller just added (review H5). The web tier's `_last_layer_id`.
+        self._last_layer_id: Optional[str] = None
 
     def _raster_element(
         self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
@@ -656,7 +660,61 @@ class InteractiveMapBase:
         # still goes over it — and the list `_compose` overlays cannot disagree with the figure the map
         # reports, which is what it did when a builder had to remember to insert at the front itself.
         self.layers.insert(self._layer_tree.ids.index(layer_id), element)
+        self._note_last_layer(layer_id)
         return self
+
+    def _note_last_layer(self, layer_id: str) -> None:
+        """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
+
+        A basemap, land or ocean is drawn beneath the data and carries no colorbar, legend or hover of its
+        own, so `image(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
+        inserted at the front of `layers` and so never became the layer these acted on; the web tier's
+        `_last_layer_id` likewise counts data layers only. An underlay still takes the slot while nothing
+        above the underlay band has been added, so a map of tiles alone can be configured at all.
+
+        Args:
+            layer_id: The layer just added.
+        """
+        held = self._last_layer_id
+        if (
+            held is not None
+            and held in self._layer_tree
+            and self._band_of(layer_id) == "underlay"
+            and self._band_of(held) != "underlay"
+        ):
+            return
+        self._last_layer_id = layer_id
+
+    def _band_of(self, layer_id: str) -> str:
+        """Return the draw-order band one of the map's layers sits in.
+
+        Args:
+            layer_id: A layer the tree holds.
+
+        Returns:
+            The band, as the renderer places it: the layer's own when it declared one, else its kind's.
+        """
+        band: str = self._renderer.band_for(self._layer_tree.get(layer_id))
+        return band
+
+    def _last_layer_index(self, method: str) -> int:
+        """Return where in :attr:`layers` the layer the caller added last is drawn.
+
+        Args:
+            method: The public method asking, named in the refusal.
+
+        Returns:
+            The index of that layer's element. `layers` is kept in the tree's order — each element is
+            inserted at its layer's tree index — so the tree index is the element's index too.
+
+        Raises:
+            ValueError: when the map has no layer yet.
+        """
+        if self._last_layer_id is None:
+            raise ValueError(
+                f"{method}() needs at least one layer — add a builder call first"
+            )
+        return self._layer_tree.ids.index(self._last_layer_id)
 
     def _forget_layer(self, layer_id: str) -> None:
         """Drop a layer that was described but never drawn, and everything it registered.

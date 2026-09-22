@@ -870,10 +870,14 @@ class DecorationMixin(_MixinBase):
         )
 
     def colorbar(self, show: bool = True) -> Self:
-        """Toggle the colorbar on the most recently added layer.
+        """Toggle the colorbar on the layer the caller added last.
+
+        That is the layer the last builder call added, not the one drawn on top: a raster added after a
+        coastline is drawn beneath it, and still is the layer this toggles. An underlay — a basemap, land,
+        ocean — added after data does not take it over, since it has no colorbar to toggle.
 
         Args:
-            show: Whether the last layer draws a colorbar.
+            show: Whether that layer draws a colorbar.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -893,18 +897,17 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when no layer has been added yet.
         """
-        if not self.layers:
-            raise ValueError(
-                "colorbar() needs at least one layer — add a builder call first"
-            )
-        self.layers[-1] = self.layers[-1].opts(colorbar=show)
+        index = self._last_layer_index("colorbar")
+        self.layers[index] = self.layers[index].opts(colorbar=show)
         return self
 
     def legend(self, show: bool = True) -> Self:
-        """Toggle the Bokeh legend on the most recently added layer.
+        """Toggle the Bokeh legend on the layer the caller added last.
+
+        The layer the last builder call added, as :meth:`colorbar` reads it — not the one drawn on top.
 
         Args:
-            show: Whether the last layer contributes to the legend.
+            show: Whether that layer contributes to the legend.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -928,9 +931,6 @@ class DecorationMixin(_MixinBase):
         # Called for its actionable ImportError: `show_legend` is applied for the Bokeh backend, which
         # `_require_holoviz` is what registers.
         _require_holoviz()
-        if not self.layers:
-            raise ValueError(
-                "legend() needs at least one layer — add a builder call first"
-            )
-        self.layers[-1] = self.layers[-1].opts(show_legend=show, backend="bokeh")
+        index = self._last_layer_index("legend")
+        self.layers[index] = self.layers[index].opts(show_legend=show, backend="bokeh")
         return self

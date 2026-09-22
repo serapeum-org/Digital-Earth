@@ -28,6 +28,24 @@ def m():
     interactive_map.close()
 
 
+def _element_of(interactive_map, element_type):
+    """Return the one element of a type the map composes.
+
+    Args:
+        interactive_map: The map.
+        element_type: The HoloViews element type wanted.
+
+    Returns:
+        The element — found by type rather than by position, because position is band order and that is
+        exactly what the tests using this must not assume.
+    """
+    return next(
+        element
+        for element in interactive_map.layers
+        if isinstance(element, element_type)
+    )
+
+
 class TestTiles:
     """``tiles`` — web-tile basemaps."""
 
@@ -159,6 +177,69 @@ class TestTogglesAndCompose:
         m.image(dataset).colorbar(False)
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
         assert plot["colorbar"] is False
+
+    def test_colorbar_acts_on_the_layer_just_added_when_it_is_not_on_top(
+        self, m, dataset
+    ):
+        """A text label sits in the band over the data, so the raster added after it is drawn beneath it.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+
+        Test scenario:
+            `colorbar()` read `self.layers[-1]`, and `layers` follows band order, so the toggle reached the
+            label instead and HoloViews refused it: `Unexpected option 'colorbar' for Text type` (review H5).
+        """
+        m.text(4.0, 52.0, "label").image(dataset).colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
+        assert plot.kwargs["colorbar"] is False, plot.kwargs
+
+    def test_colorbar_does_not_restyle_a_layer_drawn_over_the_one_just_added(
+        self, m, dataset
+    ):
+        """The quieter half of the same defect: an overlay accepts the option, so nothing raised.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+
+        Test scenario:
+            `coastlines().image(dem).colorbar(False)` applied the option to the coastlines and left the
+            raster's colorbar on — the call the caller made did nothing they could see.
+        """
+        m.coastlines().image(dataset).colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
+        assert plot.kwargs["colorbar"] is False, plot.kwargs
+
+    def test_an_underlay_added_after_the_data_does_not_take_the_toggle(
+        self, m, dataset
+    ):
+        """A basemap is drawn beneath the data and has no colorbar, so the toggle stays with the raster.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+
+        Test scenario:
+            Before the layer tree, an underlay was inserted at the front and never became the layer these
+            toggles acted on; the web tier's `_last_layer_id` likewise counts data layers only. Tracking
+            "the last layer added" without that exception would send this call to the tiles.
+        """
+        m.image(dataset).tiles("CartoLight").colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
+        assert plot.kwargs["colorbar"] is False, plot.kwargs
+
+    def test_legend_acts_on_the_layer_just_added(self, m, dataset):
+        """`legend()` read the top-drawn layer too, so a contour under an overlay was never reached.
+
+        Args:
+            m: The map.
+            dataset: A small raster to contour.
+        """
+        m.coastlines().contours(dataset, levels=4).legend(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Contours), "plot")
+        assert plot.kwargs["show_legend"] is False, plot.kwargs
 
     def test_colorbar_without_layers_raises(self, m):
         with pytest.raises(ValueError, match="at least one layer"):
