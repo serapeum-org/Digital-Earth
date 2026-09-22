@@ -739,8 +739,6 @@ class VectorMixin(_MixinBase):
         # Lines carry `level`; filled bands carry `level_min`/`level_max` for the band's two edges, so
         # colour and label the lower edge — it is what orders the bands.
         attribute = "level_min" if filled else "level"
-        # Held by identity, to tell a key this call produces from the one already sitting in `last_legend`.
-        keyed_before = self.last_legend
         column = None if color else attribute
         self._draw_contour_features(
             features,
@@ -753,17 +751,17 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
         )
-        if (
-            self.last_units
-            and self.last_legend is not None
-            and self.last_legend is not keyed_before
-        ):
-            # The classification the sub-builder just recorded describes this raster's values, so the key
-            # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.
-            # Compared by identity, because with an explicit `color=` this layer classifies nothing —
-            # `column` is `None` above — and `last_legend` then still belongs to whichever layer classified
-            # before it. Stamping it there labelled one layer's classes in another layer's units (#314).
-            self.last_legend["units"] = self.last_units
+        # The units describe *this* layer's values, so they are written on *this* layer's key — looked up
+        # by the id the sub-builder just drew under, not on `last_legend`. `last_legend` answers "the most
+        # recent classification", so with an explicit `color=` (where `column` is `None` and this layer
+        # classifies nothing) it still pointed at whichever layer classified before, and that layer's
+        # classes ended up labelled in this raster's units (#314). Asking the layer also means a draw the
+        # tier declined — which leaves no key behind — writes nothing at all.
+        drawn_id = self._last_layer_id
+        keyed = self._legends.get(drawn_id) if drawn_id is not None else None
+        if self.last_units and keyed is not None:
+            # Never guessed: `last_units` is only set when auto_style supplied one.
+            keyed["units"] = self.last_units
         if labels:
             # Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.
             return self.labels(features, attribute, visible=visible)

@@ -136,6 +136,30 @@ class TestTheUnitsNameTheLayerThatWasClassified:
             f"the points key must keep its own units, got {keyed.get('units')!r}"
         )
 
+    def test_the_units_land_on_the_contour_layer_s_own_key(self, dataset):
+        """The units are attributed by layer id, not by whichever key was most recent.
+
+        Test scenario:
+            Asking the layer is what makes the attribution right rather than merely non-wrong: the key is
+            read back through `_legend_of(layer_id)`, which is the same per-layer store `legend(layer_id=)`
+            reads. A fix that only checked whether `last_legend` had moved would pass this too — but it
+            would also write the units onto a key whose layer the tier declined to draw, because that key
+            is still the most recent one. Reading the layer's own entry cannot.
+        """
+        web_map = WebMap()
+        web_map.points(
+            self._classifiable_points(), column="value", scheme="quantiles", k=2
+        )
+        points_id = web_map.layer_ids[-1]
+        web_map.contours(dataset, interval=10, units="m")
+        contour_id = web_map.layer_ids[-1]
+        assert web_map._legend_of(contour_id).get("units") == "m", (
+            "the contour layer's own key names the units"
+        )
+        assert "units" not in web_map._legend_of(points_id), (
+            "the points layer keeps its own key, and it is not measured in the raster's units"
+        )
+
     def test_a_classified_contour_layer_still_names_its_units(self, dataset):
         """The guard must not cost the case it protects: a key this call made does take the units."""
         web_map = WebMap()
