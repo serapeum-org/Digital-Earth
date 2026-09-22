@@ -8,6 +8,7 @@ is asserted to be the *same* one the static tier applies, which is the point of 
 
 import base64
 import io
+import json
 
 import numpy as np
 import pytest
@@ -232,6 +233,80 @@ class TestACompositeTheWarpReshapes:
         assert redrawn["url"] == built["url"], "the redraw encoded a different image"
         assert redrawn["coordinates"] == built["coordinates"], (
             "the redraw placed the image elsewhere"
+        )
+
+
+class TestFrozenLimitsAChannelCouldNotMeasure:
+    """A description holds only what a figure can be written as, and NaN has no JSON form."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _frozen_limits():
+        """Return per-channel limits whose third channel could not be measured.
+
+        Returns:
+            What `channel_limits` answers for a stack whose third channel is all nodata — `(nan, nan)`,
+            which it documents as "this channel contributes no bound". A caller freezing a composite series
+            on its first frame gets exactly this, and passes it to every later frame.
+        """
+        from digitalearth.base.stretch import channel_limits
+
+        measured = np.arange(16.0).reshape(4, 4)
+        return channel_limits(
+            np.dstack([measured, measured * 2, np.full((4, 4), np.nan)])
+        )
+
+    def test_the_fixture_is_a_channel_with_no_bound(self):
+        """The limits under test have to carry the NaN pair, or the checks below ask nothing."""
+        assert np.isnan(self._frozen_limits()[2]).all(), self._frozen_limits()
+
+    def test_the_figure_can_be_written(self, mercator_rgb):
+        """A composite drawn with frozen limits must still produce a figure that can be saved.
+
+        Args:
+            mercator_rgb: A three-band raster.
+
+        Test scenario:
+            Freezing the stretch is the documented way to keep a series comparable, and a channel the
+            freeze could not measure is a documented, normal result. Recorded as NaN, the whole figure
+            stopped being writable — `Symbology.to_dict()` refuses it — which is the property the seam
+            exists to provide.
+        """
+        m = WebMap().rgb_composite(
+            mercator_rgb, bands=(1, 2, 3), limits=self._frozen_limits(), name="rgb"
+        )
+        written = m.figure_spec.layers.get("rgb").symbology.to_dict()
+        json.dumps(written)
+        assert written["props"]["limits"][2] == [None, None], written["props"]["limits"]
+
+    def test_the_unmeasured_channel_still_falls_back_to_this_frame(self, mercator_rgb):
+        """What is drawn must not change: an unmeasured bound still means "use this frame's own".
+
+        Args:
+            mercator_rgb: A three-band raster.
+        """
+        from digitalearth.base.sources import get_source, get_stack
+        from digitalearth.base.stretch import stretch_to_unit
+
+        m = WebMap()
+        warped = m._to_display_raster(mercator_rgb)
+        stack = stretch_to_unit(
+            get_stack(warped, (1, 2, 3), mask=True), self._frozen_limits()
+        )
+        y = np.asarray(get_source(warped).y.values, dtype=float)
+        if y.size > 1 and y[0] < y[-1]:
+            stack = stack[::-1]
+        expected = m._composite_png_datauri(stack)
+
+        m.rgb_composite(
+            mercator_rgb, bands=(1, 2, 3), limits=self._frozen_limits(), name="rgb"
+        )
+        assert m._renderer.drawn["rgb"].source_spec["url"] == expected, (
+            "the recorded limits no longer draw the stretch they were given"
         )
 
 

@@ -10,6 +10,7 @@ matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazil
 the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
+import math
 from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
@@ -71,6 +72,70 @@ def _colour_limits(
         raise ValueError(
             f"{caller} limits must be a (vmin, vmax) pair of numbers; got {limits!r}"
         ) from None
+
+
+def _recorded_limits(limits: Any) -> Any:
+    """Return per-channel stretch limits in the spelling a figure can be written in.
+
+    :func:`~digitalearth.base.stretch.channel_limits` answers `(nan, nan)` for a channel it could not
+    measure — a normal result, and the one a caller freezing a series on its first frame passes to every
+    later frame. NaN has no JSON form, so a description holding one cannot be written at all: `to_dict`
+    refuses the whole figure. A bound the freeze does not carry is recorded as `None` instead, which says
+    the same thing, and :func:`_stretch_limits` reads it back as the NaN the stretch expects.
+
+    Args:
+        limits: The caller's `limits=`, or `None`.
+
+    Returns:
+        The limits with every non-finite bound as `None` and every finite one as a plain `float`; `None`
+        unchanged; and anything not shaped as a sequence of pairs unchanged, so that
+        :func:`~digitalearth.base.stretch.stretch_to_unit` refuses it in its own words rather than this
+        failing on it first.
+    """
+    if limits is None:
+        return None
+    try:
+        pairs = [tuple(pair) for pair in limits]
+    except TypeError:
+        return limits
+    if any(len(pair) != 2 for pair in pairs):
+        return limits
+    try:
+        return tuple(
+            tuple(
+                None
+                if value is None or not math.isfinite(float(value))
+                else float(value)
+                for value in pair
+            )
+            for pair in pairs
+        )
+    except (TypeError, ValueError):
+        return limits
+
+
+def _stretch_limits(limits: Any) -> Any:
+    """Return recorded limits as :func:`~digitalearth.base.stretch.stretch_to_unit` takes them.
+
+    Args:
+        limits: The recorded `limits` prop.
+
+    Returns:
+        The limits with every `None` bound back as `nan`, which is how the stretch spells "no frozen bound
+        for this channel"; anything else unchanged.
+    """
+    if limits is None:
+        return None
+    try:
+        pairs = [tuple(pair) for pair in limits]
+    except TypeError:
+        return limits
+    if any(len(pair) != 2 for pair in pairs):
+        return limits
+    return [
+        tuple(float("nan") if value is None else value for value in pair)
+        for pair in pairs
+    ]
 
 
 def _placed_corners(web_map: Any, source: Any, caller: str) -> Any:
@@ -237,7 +302,9 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         stack = stack[::-1]
     from digitalearth.base.stretch import stretch_to_unit
 
-    url = web_map._composite_png_datauri(stretch_to_unit(stack, props["limits"]))
+    url = web_map._composite_png_datauri(
+        stretch_to_unit(stack, _stretch_limits(props["limits"]))
+    )
     coordinates = _placed_corners(web_map, source, "rgb_composite")
     if coordinates is None:
         return None
@@ -455,7 +522,10 @@ class RasterMixin(_MixinBase):
             symbology=Symbology(
                 props={
                     "bands": tuple(int(band) for band in bands),
-                    "limits": limits,
+                    # A bound the caller's freeze could not measure is recorded as `None`, not as the NaN
+                    # `channel_limits` answers with: a description holds only what a figure can be written
+                    # as, and NaN has no JSON form (review M9's web instance).
+                    "limits": _recorded_limits(limits),
                     "opacity": float(opacity),
                     "mask_nodata": bool(mask_nodata),
                 }
