@@ -89,10 +89,11 @@ def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
 
     layer_cls, layer_types = _require_layer_api()
     props = required_props(layer, "color", "text_color", "radius", "max_zoom")
+    count_id, loose_id = derived_ids("clusters", layer.id)
     source_id = f"{layer.id}-src"
     color, text_color = props["color"], props["text_color"]
     return DrawnLayer(
@@ -115,7 +116,7 @@ def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
         ),
         extra_layers=(
             layer_cls(
-                id=f"{layer.id}-count",
+                id=count_id,
                 type=layer_types.SYMBOL,
                 source=source_id,
                 filter=["has", "point_count"],
@@ -126,7 +127,7 @@ def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
                 paint={"text-color": text_color},
             ),
             layer_cls(
-                id=f"{layer.id}-unclustered",
+                id=loose_id,
                 type=layer_types.CIRCLE,
                 source=source_id,
                 filter=["!", ["has", "point_count"]],
@@ -260,7 +261,11 @@ class BigDataMixin(_MixinBase):
         _require_layer_api()
         gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
-        layer_id = self._uid("clusters")
+        from digitalearth.web.renderer import derived_ids
+
+        # The counts and the loose points are drawn under ids derived from this one, so the allocation
+        # reserves those too — a caller's `name=` can no longer take one of them (review M5).
+        layer_id = self._uid("clusters", kind="clusters")
         # One description covers the bubbles, their counts and the loose points, so removing it removes
         # all three together — they are one thing to a viewer.
         registered = self._index_layer(
@@ -282,7 +287,7 @@ class BigDataMixin(_MixinBase):
             # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
             # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
             # description is skipped — which is what the guard in `_record_tooltip` is for.
-            self._last_layer_id = f"{layer_id}-unclustered"
+            self._last_layer_id = derived_ids("clusters", layer_id)[-1]
         return self
 
     def _add_deck_layer(self, layer: dict) -> Self:

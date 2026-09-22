@@ -20,6 +20,7 @@ renderer conformance suite fits both tiers without special-casing either.
 """
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
@@ -93,6 +94,42 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "extrusion",
     "custom:maplibre",
 )
+
+
+#: The MapLibre layer ids a kind's drawer adds beside the layer's own, as suffixes of that id — a graticule's
+#: degree labels, a cluster's counts and its loose points. MapLibre keeps one layer per id and drops the rest
+#: with only a console error, so these ids are as taken as the layer's own: the map reserves them when it
+#: allocates the id (review M5), and the drawers read their names from here rather than spelling them again.
+DERIVED_SUFFIXES: Mapping[str, Tuple[str, ...]] = MappingProxyType(
+    {
+        "graticule": ("-label",),
+        "clusters": ("-count", "-unclustered"),
+    }
+)
+
+
+def derived_ids(kind: str, layer_id: str) -> Tuple[str, ...]:
+    """Return the ids of the extra MapLibre layers a kind's drawer adds for one layer.
+
+    Args:
+        kind: The layer's kind.
+        layer_id: The layer's own id.
+
+    Returns:
+        One id per extra layer, in the order the drawer adds them; empty for a kind that draws one layer.
+
+    Examples:
+        - A graticule labels its lines in a second layer, named after the first:
+            ```python
+            >>> from digitalearth.web.renderer import derived_ids
+            >>> derived_ids("graticule", "grid")
+            ('grid-label',)
+            >>> derived_ids("points", "wells")
+            ()
+
+            ```
+    """
+    return tuple(f"{layer_id}{suffix}" for suffix in DERIVED_SUFFIXES.get(kind, ()))
 
 
 def _custom_drawer() -> Any:

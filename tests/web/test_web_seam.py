@@ -14,9 +14,10 @@ import pytest
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import LayerSpec
 from digitalearth.web.capabilities import CAPABILITIES
-from digitalearth.web.renderer import DRAWN_KINDS, drawer_for
+from digitalearth.web.renderer import DRAWN_KINDS, derived_ids, drawer_for
 
 from ..base.test_renderer_conformance import RendererConformance, RendererContract
+from .test_web_capabilities import DESCRIBED_AND_DRAWN
 
 pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
@@ -709,6 +710,165 @@ def _refusing_drawer(web_map, data, layer):
         ValueError: always.
     """
     raise ValueError("this description cannot be drawn")
+
+
+def _widget_layer_ids(web_map) -> list:
+    """Return every MapLibre layer id the widget would be given, in the order it is given them.
+
+    Args:
+        web_map: The map whose queue is replayed.
+
+    Returns:
+        The id of each layer added — a description's own layer, the extra layers it owns (a graticule's
+        labels, a cluster's counts and loose points), and whatever a queued closure adds.
+    """
+    added = []
+
+    class Recorder:
+        """Stands in for the widget, recording the id of every layer added to it."""
+
+        def add_source(self, source_id, spec):
+            """Ignore the source; MapLibre keeps sources in a namespace of their own.
+
+            Args:
+                source_id: Unused.
+                spec: Unused.
+            """
+
+        def add_layer(self, layer):
+            """Record one added layer's id.
+
+            Args:
+                layer: The layer reaching the widget.
+            """
+            added.append(getattr(layer, "id", layer))
+
+    for entry in web_map._queued:
+        web_map._apply_layer(Recorder(), entry)
+    return added
+
+
+def _duplicates(ids: list) -> list:
+    """Return the ids that appear more than once.
+
+    Args:
+        ids: MapLibre layer ids.
+
+    Returns:
+        Each repeated id once, sorted — MapLibre keeps the first layer with an id and drops the rest.
+    """
+    return sorted({layer_id for layer_id in ids if ids.count(layer_id) > 1})
+
+
+class TestADerivedIdIsReserved:
+    """Review M5: an id a drawer derives from a layer's own is as taken as the layer's own id."""
+
+    def test_a_caller_name_after_a_graticule_does_not_take_its_label_id(self):
+        """`g` draws its degree labels as `g-label`, so a later `name="g-label"` must go elsewhere."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="g").text(4.9, 52.4, "here", name="g-label")
+        assert _duplicates(_widget_layer_ids(m)) == [], _widget_layer_ids(m)
+
+    def test_a_graticule_after_a_caller_name_does_not_take_it_either(self):
+        """The other order: the name is taken first, so the graticule's own id has to move."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "here", name="g-label").graticule(name="g")
+        assert _duplicates(_widget_layer_ids(m)) == [], _widget_layer_ids(m)
+
+    @pytest.mark.parametrize("suffix", ["count", "unclustered"])
+    def test_a_caller_name_after_a_cluster_does_not_take_its_derived_ids(
+        self, points_gdf, suffix
+    ):
+        """A cluster draws its counts and its loose points under its own id, suffixed.
+
+        Args:
+            points_gdf: A small point collection.
+            suffix: Which of the two derived layers the caller's name collides with.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().cluster(points_gdf)
+        clusters = m.layer_ids[0]
+        m.text(4.9, 52.4, "here", name=f"{clusters}-{suffix}")
+        assert _duplicates(_widget_layer_ids(m)) == [], _widget_layer_ids(m)
+
+    def test_a_cluster_after_a_caller_name_does_not_take_it_either(self, points_gdf):
+        """`cluster` numbers itself, so the name it would derive from is taken by the caller first.
+
+        Args:
+            points_gdf: A small point collection.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .text(4.9, 52.4, "here", name="clusters-1-count")
+            .cluster(points_gdf)
+        )
+        assert _duplicates(_widget_layer_ids(m)) == [], _widget_layer_ids(m)
+
+    def test_a_caller_s_own_layer_under_a_derived_id_is_refused(self):
+        """`add_layer` draws an object under the id it carries, so it cannot be moved — only refused.
+
+        Test scenario:
+            The id check covered the tree's ids, and a derived id is not in the tree, so the object was
+            accepted and MapLibre dropped one of the two layers with only a console error.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="g")
+        own = _fake_layer("g-label")
+        with pytest.raises(ValueError, match="already on this map"):
+            m.add_layer(own)
+
+    def test_a_graticule_after_a_caller_s_own_layer_moves_around_it(self):
+        """The object's id is reserved when it is added, so a later derived id steps around it."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(_fake_layer("Graticule-label")).graticule()
+        assert _duplicates(_widget_layer_ids(m)) == [], _widget_layer_ids(m)
+
+    def test_a_declined_layer_gives_its_derived_ids_back(self, monkeypatch, points_gdf):
+        """A cluster nothing drew holds no ids, derived ones included.
+
+        Args:
+            monkeypatch: Used to make the cluster drawer decline.
+            points_gdf: A small point collection.
+        """
+        from digitalearth.web import WebMap, bigdata
+
+        monkeypatch.setattr(bigdata, "draw_clusters", lambda web_map, data, layer: None)
+        m = WebMap().cluster(points_gdf)
+        m.text(4.9, 52.4, "here", name="clusters-1-count")
+        assert m.layer_ids == ["clusters-1-count"], m.layer_ids
+
+    @pytest.mark.parametrize("kind", sorted(DESCRIBED_AND_DRAWN))
+    def test_the_table_names_every_extra_layer_a_drawer_adds(self, kind):
+        """The reservation is only as good as the table it reads, so the table is held to the drawers.
+
+        Args:
+            kind: The drawn kind under test.
+
+        Test scenario:
+            A drawer that grew an extra layer without a row in `DERIVED_SUFFIXES` would add an id nothing
+            reserved — the defect this class exists for. Every drawn kind is built, and the ids of the
+            extra layers its drawer produced must be exactly the ones the table derives.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        DESCRIBED_AND_DRAWN[kind](m)
+        added = {
+            layer_id: [extra.id for extra in built.extra_layers]
+            for layer_id, built in m._renderer.drawn.items()
+        }
+        derived = {
+            layer.id: list(derived_ids(layer.kind, layer.id))
+            for layer in m.figure_spec.layers
+        }
+        assert added == derived, (added, derived)
 
 
 class TestTheBandOfALayerIsItsKinds:

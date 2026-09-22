@@ -385,12 +385,13 @@ def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         ValueError: when the description carries none of the values the grid is generated from — its
             two steps, its colour, width and opacity, or whether it is labelled — naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
 
     layer_cls, layer_types = _require_layer_api()
     props = required_props(
         layer, "lon_step", "lat_step", "color", "width", "opacity", "labels"
     )
+    (label_id,) = derived_ids("graticule", layer.id)
     features = _graticule_features(float(props["lon_step"]), float(props["lat_step"]))
     source_id = f"{layer.id}-src"
     color = props["color"]
@@ -418,7 +419,7 @@ def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
             label_layout["visibility"] = "none"
         extra.append(
             layer_cls(
-                id=f"{layer.id}-label",
+                id=label_id,
                 type=layer_types.SYMBOL,
                 source=source_id,
                 layout=label_layout,
@@ -1020,7 +1021,9 @@ class DecorationMixin(_MixinBase):
                 raise ValueError(
                     f"graticule({name_of}={step!r}) must be greater than 0 and at most 180 degrees"
                 )
-        layer_id = self._layer_id("graticule", name or "Graticule")
+        # The degree labels are drawn under an id derived from this one, which the allocation reserves too,
+        # so a caller's `name=` can no longer take it (review M5).
+        layer_id = self._layer_id("graticule", name or "Graticule", kind="graticule")
         # What was asked for, as values. The lines themselves are built by `draw_graticule` from exactly
         # this, so the figure describes the grid rather than naming one that a closure drew elsewhere.
         self._index_layer(

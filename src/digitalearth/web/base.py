@@ -1362,14 +1362,19 @@ class WebMapBase:
             layer_id: The layer to forget. Parts it never recorded are skipped, so this is safe to call
                 however far `_index_layer` got.
         """
+        from digitalearth.web.renderer import derived_ids
+
+        derived: tuple = ()
         if layer_id in self._layer_tree.ids:
+            derived = derived_ids(self._layer_tree.get(layer_id).kind, layer_id)
             self._layer_tree = self._layer_tree.remove(layer_id)
         self._sources.pop(layer_id, None)
         # The key `_index_layer` registered under, rather than whatever reference the builder was given:
         # a path, or a `DataRef` the caller registered themselves, is not this map's to forget.
         forget_object(f"{self._objects_ns}:{layer_id}")
         self._custom.pop(layer_id, None)
-        self._issued_ids.discard(layer_id)
+        # The ids its drawer would have derived were reserved with it (review M5), and go back with it.
+        self._issued_ids.difference_update((layer_id, *derived))
         self._forget_legend(layer_id)
 
     def _forget_legend(self, layer_id: str) -> None:
@@ -1652,7 +1657,9 @@ class WebMapBase:
         if len(config["layer_ids"]) < 2:
             self._temporal = None  # one step is not a series
 
-    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+    def _layer_id(
+        self, prefix: str, name: Optional[str] = None, *, kind: Optional[str] = None
+    ) -> str:
         """Return the id a new layer should take, preferring the caller's own name.
 
         py-maplibregl's ``LayerSwitcherControl`` has no label channel: its JS captions each row with
@@ -1663,42 +1670,58 @@ class WebMapBase:
         Args:
             prefix: The kind tag used when there is no name (``"circle"``, ``"raster"``, …).
             name: The caller's name for the layer, if any.
+            kind: The layer's kind, when its drawer adds MapLibre layers under ids derived from this one
+                (:data:`~digitalearth.web.renderer.DERIVED_SUFFIXES`). Those ids are reserved with it, and a
+                candidate one of whose derived ids is taken is passed over like a taken id (review M5).
 
         Returns:
-            The name (suffixed ``-2``, ``-3``, … if that name is already on the map), or a generated
-            ``"<prefix>-<n>"`` when unnamed.
+            The name (suffixed ``-2``, ``-3``, … if that name, or an id derived from it, is already on the
+            map), or a generated ``"<prefix>-<n>"`` when unnamed.
         """
         if not name:
-            return self._uid(prefix)
-        if name not in self._issued_ids:
-            self._issued_ids.add(name)
-            return name
-        suffix = 2
-        while f"{name}-{suffix}" in self._issued_ids:
+            return self._uid(prefix, kind=kind)
+        candidate, suffix = name, 2
+        while not self._reserve(candidate, kind):
+            candidate = f"{name}-{suffix}"
             suffix += 1
-        candidate = f"{name}-{suffix}"
-        self._issued_ids.add(candidate)
         return candidate
 
-    def _uid(self, prefix: str) -> str:
+    def _uid(self, prefix: str, *, kind: Optional[str] = None) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
 
         Args:
             prefix: A short kind tag (``"fill"``, ``"circle"``, ``"raster"``, …).
+            kind: The layer's kind, when its drawer derives further MapLibre ids from this one; they are
+                reserved with it, as :meth:`_layer_id` does.
 
         Returns:
             ``f"{prefix}-{n}"`` with a counter that increments on every call, so two builders never
             collide on a MapLibre source/layer id.
         """
         self._id_counter += 1
-        candidate = f"{prefix}-{self._id_counter}"
-        while candidate in self._issued_ids:
-            # A caller name can look exactly like a generated id, and two layers sharing a MapLibre id
-            # makes addLayer drop the second one with only a console error.
+        # A caller name can look exactly like a generated id, and two layers sharing a MapLibre id makes
+        # addLayer drop the second one with only a console error.
+        while not self._reserve(f"{prefix}-{self._id_counter}", kind):
             self._id_counter += 1
-            candidate = f"{prefix}-{self._id_counter}"
-        self._issued_ids.add(candidate)
-        return candidate
+        return f"{prefix}-{self._id_counter}"
+
+    def _reserve(self, candidate: str, kind: Optional[str]) -> bool:
+        """Reserve an id and every id its drawer derives from it, when none of them is taken.
+
+        Args:
+            candidate: The id to reserve.
+            kind: The layer's kind, which says which ids are derived from `candidate`; `None` for none.
+
+        Returns:
+            `True` when all of them were free and are now issued; `False`, reserving nothing, otherwise.
+        """
+        from digitalearth.web.renderer import derived_ids
+
+        wanted = (candidate, *(derived_ids(kind, candidate) if kind else ()))
+        if any(layer_id in self._issued_ids for layer_id in wanted):
+            return False
+        self._issued_ids.update(wanted)
+        return True
 
     def add_layer(
         self, layer: Any, *, name: Optional[str] = None, band: str = "data"
@@ -1792,11 +1815,24 @@ class WebMapBase:
                     f"add_layer draws this layer under the id it carries, {layer_id!r}, so name={name!r} "
                     f"would name something the page never adds; drop name=, or build the layer with that id"
                 )
-            if layer_id in self._layer_tree.ids:
+            # The ids the drawn layers' own extra layers carry count too — a graticule's labels, a
+            # cluster's counts — since the widget adds those beside the layer under their own ids (M5).
+            in_use = [
+                *self.layer_ids,
+                *(
+                    extra.id
+                    for built in self._renderer.drawn.values()
+                    for extra in built.extra_layers
+                ),
+            ]
+            if layer_id in in_use:
                 raise ValueError(
                     f"layer id {layer_id!r} is already on this map; MapLibre drops the second layer with "
-                    f"that id, so build this one with a free id (the ids in use are {self.layer_ids})"
+                    f"that id, so build this one with a free id (the ids in use are {in_use})"
                 )
+            # Reserved like an allocated id, so a later `name=` — or an id a later drawer derives — steps
+            # around it rather than drawing a second layer under it.
+            self._issued_ids.add(layer_id)
         # Held before the description is recorded: `draw_custom` reads the object from here, so it has
         # to be in place by the time `_index_layer` draws.
         self._custom[layer_id] = layer
