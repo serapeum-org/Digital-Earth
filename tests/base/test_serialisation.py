@@ -1313,3 +1313,34 @@ class TestHashingAMappingThatDoesNotSort:
         """The helper exists for `Symbology.__hash__`, so the defect is reachable from a real style."""
         mixed = Symbology(props={"lookup": {1: "a", "b": 2}})
         assert hash(mixed) is not None, "a style holding a mixed-key mapping must hash"
+
+
+class TestAMappingDoesNotHashAsTheItemsItBecomes:
+    """A mapping is hashed as a tuple of pairs, and a tuple of pairs is a value in its own right (review N1).
+
+    The `__eq__`/`__hash__` contract was never broken — equal objects hash equal — but two properties that
+    are *not* equal landed on the same hash, so a cache or a set keyed on a style paid for a collision it
+    could avoid.
+    """
+
+    def test_a_mapping_and_the_pairs_it_becomes_are_different_keys(self):
+        """The surrogate for a mapping has to say that a mapping is what it came from."""
+        as_mapping = hashable_value({"x": 1})
+        as_pairs = hashable_value((("x", 1),))
+        assert as_mapping != as_pairs, (
+            f"a mapping and a tuple of its pairs both hashed as {as_pairs!r}"
+        )
+
+    def test_two_styles_that_differ_only_in_that_do_not_collide(self):
+        """The reachable form: one property spelled as a mapping, and the same property spelled as pairs."""
+        mapping = Symbology(props={"p": {"x": 1}})
+        pairs = Symbology(props={"p": (("x", 1),)})
+        assert hash(mapping) != hash(pairs), (
+            f"two unequal styles ({mapping.props!r} and {pairs.props!r}) hash alike"
+        )
+
+    def test_a_tagged_surrogate_still_hashes_two_spellings_of_one_mapping_alike(self):
+        """Tagging must not cost what the helper is for: equal mappings still collapse to one entry."""
+        written = Symbology(props={"paint": {"a": 1, "b": 2}})
+        rewritten = Symbology(props={"paint": {"b": 2, "a": 1}})
+        assert len({written, rewritten}) == 1, "two equal styles must hold one slot"

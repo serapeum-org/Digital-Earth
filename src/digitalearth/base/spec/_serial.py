@@ -526,6 +526,13 @@ def frozen_value(value: Any) -> Any:
     return value
 
 
+#: Heads a mapping's hash surrogate, so a mapping never hashes as the tuple of pairs it is turned into.
+#: `Symbology(props={"p": {"x": 1}})` and `Symbology(props={"p": (("x", 1),)})` are unequal properties that
+#: landed on one hash without it (review N1). A fresh object rather than a string or a tuple: a property can
+#: hold any value this module could spell, and colliding with one is what the tag exists to prevent.
+_MAPPING_TAG: Any = object()
+
+
 def hashable_value(value: Any) -> Any:
     """Return `value` in a form that hashes, with every mapping in it as its sorted items.
 
@@ -539,9 +546,11 @@ def hashable_value(value: Any) -> Any:
         value: A stored property, or any part of one.
 
     Returns:
-        The value with each mapping as a tuple of its ``(key, value)`` pairs in key order, applied inside
-        sequences and mappings alike. Anything else is returned as it is — a value that is unhashable for its
-        own reasons still raises when it is hashed, which is the honest outcome.
+        The value with each mapping as :data:`_MAPPING_TAG` followed by a tuple of its ``(key, value)`` pairs
+        in key order, applied inside sequences and mappings alike. Anything else is returned as it is — a
+        value that is unhashable for its own reasons still raises when it is hashed, which is the honest
+        outcome. The tag is what keeps a mapping from hashing as the plain tuple of pairs a caller could have
+        written instead (review N1); it is a surrogate for hashing, never something to read back.
 
         The order is the keys' own where they compare, and their `repr`\\ s where they do not. A mapping's
         keys need not be orderable against each other — `{1: 'a', 'b': 2}` hashes perfectly well — so sorting
@@ -574,12 +583,12 @@ def hashable_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         items = [(key, hashable_value(item)) for key, item in value.items()]
         try:
-            return tuple(sorted(items))
+            return (_MAPPING_TAG, tuple(sorted(items)))
         except TypeError:
             # Only the keys are ever compared — a mapping's keys are unique, so the second half of a pair is
             # never reached — and two key types need not be ordered against each other. `repr` gives them one
             # total order that still depends on nothing but the keys.
-            return tuple(sorted(items, key=lambda item: repr(item[0])))
+            return (_MAPPING_TAG, tuple(sorted(items, key=lambda item: repr(item[0]))))
     if isinstance(value, tuple):
         return tuple(hashable_value(item) for item in value)
     return value
