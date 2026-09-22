@@ -541,18 +541,6 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             drawn_map._renderer.drawn
         )
 
-    def test_the_map_still_reports_the_figure_it_can_draw(self, drawn_map):
-        """A refused change must not leave the map advertising a figure it never drew.
-
-        Args:
-            drawn_map: A map with one drawn layer.
-        """
-        held = drawn_map.figure_spec
-        refused = _refused_figure(drawn_map)
-        with pytest.raises(KeyError):
-            drawn_map._renderer.apply(held, refused)
-        assert drawn_map.figure_spec == held, "the map kept a figure it could not draw"
-
     def test_a_restored_layer_is_drawn_again_rather_than_re_attached(self, drawn_map):
         """Matplotlib unlinks a removed artist, so a rollback of a *removal* has to redraw it.
 
@@ -746,6 +734,35 @@ class TestADrawerThatFailsPartWay:
         canvas.close()
         assert registered == [kept], registered
         assert painted == [kept], painted
+
+
+class TestApplyIsRecordOnlyOnThisTier:
+    """``apply`` reconciles this renderer's record and the axes — and nothing else, in this wave.
+
+    Nothing in ``src/`` calls it yet: the scene's own state (its layer tree, its sources, what
+    :attr:`Map.figure_spec` reports) is not routed through it, and will be in Wave 7 (order 23). Pinning
+    that here is what keeps the checks around it honest — a test that asserted the map "still reports the
+    figure it can draw" after a *refused* change passed whatever ``apply`` did, because ``apply`` cannot
+    change what the map reports either way.
+    """
+
+    def test_a_successful_apply_does_not_change_what_the_map_reports(self, drawn_map):
+        """The layer is drawn and recorded; the map's own description stays as it was.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            When Wave 7 wires a map-level change through ``apply``, this fails — which is the point: the
+            contract it pins is a limitation, and it has to be re-stated deliberately rather than drift.
+        """
+        figure = drawn_map.figure_spec
+        added = with_fields(
+            figure, layers=figure.layers.add(_text_layer("label", drawn_map.crs))
+        )
+        drawn_map._renderer.apply(figure, added)
+        assert "label" in drawn_map._renderer.drawn, sorted(drawn_map._renderer.drawn)
+        assert drawn_map.figure_spec == figure, "the map's description followed `apply`"
 
 
 class TestRemovingALayer:

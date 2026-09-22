@@ -17,6 +17,12 @@ drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as
 a figure is refused half-way — the web and interactive tiers rebuild their engine object on every render and
 can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
 
+**:meth:`Renderer.apply` is record-only in this wave.** It reaches the axes and this module's record of what
+is on it; it does not reach the scene. Nothing in ``src/`` calls it — a builder draws through
+:meth:`Renderer.draw_layer` — so a map's description is written by its builders and never by a reconcile.
+Wave 7 (order 23) routes a map-level change through it, and the scene's own state follows then. Until it
+does, read every ``apply`` here as "the artists and the record", never as "what the map reports".
+
 **The drawer table is keyed by kind and then by recipe.** Several builders draw one kind: ``imshow`` and
 ``block`` are both a field render, and ``choropleth``, ``voronoi``, ``cartogram``, ``quadtree`` and
 ``grid_cells`` are all a ``choropleth``. The kind vocabulary is shared with every other tier and names *what*
@@ -659,6 +665,12 @@ class Renderer:
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
         """Bring what the axes shows from one figure to another.
 
+        **Record-only, in this wave.** It reconciles the artists on the axes and this renderer's own
+        record of them, and nothing else: the scene's layer tree, its sources and what
+        :attr:`~digitalearth.static.scene.Scene.figure_spec` reports are untouched, so a map that has
+        applied a figure still describes the one its builders made. Nothing in ``src/`` calls this yet —
+        routing a map-level change through it is Wave 7 (order 23), and the description follows then.
+
         Args:
             before: The figure the axes currently shows.
             after: The figure it should show.
@@ -666,6 +678,8 @@ class Renderer:
         Raises:
             KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.
             ValueError: when a layer's description does not carry what its drawer needs.
+            OffLimbError: when a layer's data cannot be placed and the scene is ``strict`` — one of the
+                drawers' own refusals, re-raised by the rollback rather than swallowed.
 
         Note:
             ``apply`` is **not atomic**: it draws layer by layer, so a refusal on the third layer has
