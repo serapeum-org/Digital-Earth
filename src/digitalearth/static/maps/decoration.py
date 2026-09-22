@@ -31,8 +31,8 @@ from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
-from digitalearth.static.renderer import DrawnLayer, artists_added, drawing_opts
-from digitalearth.static.scene import LayerRecord
+from digitalearth.static.renderer import DrawnLayer, artists_added
+from digitalearth.static.scene import LayerRecord, drawing_style
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +307,7 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
     if xy is None:
         return None
-    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_opts(scene, layer))
+    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_style(scene, layer))
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
@@ -328,7 +328,7 @@ def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLay
     if xy is None:
         return None
     drawn = scene.ax.annotate(
-        props["s"], xy=xy, xytext=props["xytext"], **drawing_opts(scene, layer)
+        props["s"], xy=xy, xytext=props["xytext"], **drawing_style(scene, layer)
     )
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
@@ -356,7 +356,7 @@ def draw_natural_earth(
     """
     props = dict(layer.symbology.props)
     name, zorder = props["via"], props["zorder"]
-    style = {**_NATURAL_EARTH_STYLE[name], **drawing_opts(scene, layer)}
+    style = {**_NATURAL_EARTH_STYLE[name], **drawing_style(scene, layer)}
     if scene.globe:
         if name == "ocean":
             # The disc *is* the ocean: filling the whole projection boundary and letting land overlay it
@@ -491,7 +491,7 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     props = dict(layer.symbology.props)
     _frame_from(scene, props.get("extent"))
-    opts = drawing_opts(scene, layer)
+    opts = drawing_style(scene, layer)
     # The provider object, when the caller passed one: held beside the layer, because it is an engine object
     # and carries their credential. A figure read back elsewhere has only the name the description records.
     source = opts.pop("source", props["source"])

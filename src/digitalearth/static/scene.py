@@ -27,6 +27,8 @@ of a globe) is dropped from the description again, so a figure never names somet
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass
+from dataclasses import replace as with_fields
+from numbers import Real
 from pathlib import Path
 from typing import (
     Any,
@@ -62,8 +64,9 @@ from digitalearth.base.spec import (
     Symbology,
     Viewport,
 )
+from digitalearth.base.spec._serial import to_json_value
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
-from digitalearth.static.renderer import DrawnLayer, Renderer
+from digitalearth.static.renderer import DrawnLayer, Renderer, drawing_opts
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
 #: the constant is named — and spelled the same as every other tier's — so a reader of :attr:`Scene.figure_spec`
@@ -74,6 +77,134 @@ PANEL_ID: str = "main"
 #: artist registered without a kind was built by the caller, not by a builder here, and matplotlib is the only
 #: engine it can have come from.
 ENGINE: str = "matplotlib"
+
+#: The property a layer's plain engine keywords are described under. Nested rather than merged flat into
+#: ``props``, so a caller's ``zorder=`` can never overwrite the one a builder recorded about the layer itself.
+DRAWING_OPTS_KEY: str = "opts"
+
+#: Where :func:`_writer_takes` says it is asking about, for the message a refusal would carry.
+_WRITER_FIELD: str = f"Symbology.props[{DRAWING_OPTS_KEY!r}]"
+
+
+def _writer_takes(value: Any) -> bool:
+    """Whether the figure writer accepts a value as it stands.
+
+    The oracle is :func:`~digitalearth.base.spec._serial.to_json_value`, which ``Symbology.to_dict`` itself
+    applies, so this cannot drift from what a figure accepts — it is what refuses ``nan`` and the infinities.
+
+    Args:
+        value: A value a layer is about to record.
+
+    Returns:
+        ``True`` when the description can carry it.
+    """
+    try:
+        to_json_value(value, _WRITER_FIELD)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def travels_in_a_figure(value: Any) -> bool:
+    """Whether one of the caller's engine keywords belongs in the description rather than beside the layer.
+
+    The rule is **a plain value JSON reads back as the very same value**: a string, a boolean, a finite
+    number, or ``None``. That is what the shared vocabulary already models — ``vmin``/``vmax`` are a
+    ``Scale``'s bounds, ``color``, ``width``, ``size`` and ``opacity`` are declared channels — and it is
+    what a reader on another machine can act on.
+
+    Everything else stays beside the layer, and each exclusion is a defect this tier has already had:
+
+    * A **container** is not read back as itself. JSON has no tuple, so a dash pattern written as
+      ``(0, (5, 5))`` comes back ``[0, [5, 5]]``, which matplotlib refuses outright
+      (``ValueError: Unrecognized linestyle``) — describing it would trade a layer that redraws with the
+      engine's defaults for one that cannot redraw at all (round 1, H3).
+    * An **array** is the layer's data, not its description. Writing one costs a conversion per cell and
+      freezing one costs a copy per cell, which is what made a ``1000 x 1000`` per-pixel ``alpha`` take ten
+      times the render it belonged to (round 1, L6).
+    * An **engine object** — a ``Normalize``, a ``FontProperties``, a ``Colormap`` — has no JSON form at
+      all, and a figure holding one could not be saved.
+
+    Args:
+        value: The caller's value for one keyword.
+
+    Returns:
+        ``True`` when the layer's description carries it.
+    """
+    if value is None or isinstance(value, (bool, str, Real)):
+        return _writer_takes(value)
+    return False
+
+
+def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Return the half of a caller's engine keywords that a figure carries.
+
+    Args:
+        opts: Everything the caller passed through ``**opts``, or ``None``.
+
+    Returns:
+        The keywords :func:`travels_in_a_figure` accepts, in the order they were given. Empty for a layer
+        whose keywords are all engine objects, which records no ``opts`` property at all.
+    """
+    return {
+        key: value for key, value in (opts or {}).items() if travels_in_a_figure(value)
+    }
+
+
+def _with_described_opts(
+    symbology: Optional[Symbology], opts: Optional[Mapping[str, Any]]
+) -> Symbology:
+    """Return a layer's symbology with the plain half of the caller's engine keywords written into it.
+
+    Args:
+        symbology: What the builder recorded about the layer, or ``None`` for one that recorded nothing.
+        opts: Everything the caller passed through ``**opts``, or ``None``.
+
+    Returns:
+        The symbology, with a :data:`DRAWING_OPTS_KEY` property when there is anything to put in it and
+        unchanged when there is not — so a layer whose caller passed nothing plain describes no such
+        property at all rather than an empty one.
+    """
+    described = described_opts(opts)
+    recorded = Symbology() if symbology is None else symbology
+    if not described:
+        return recorded
+    return with_fields(recorded, props={**recorded.props, DRAWING_OPTS_KEY: described})
+
+
+def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
+    """Return every engine keyword a layer is drawn with: the described half under the held half.
+
+    The pair :func:`~digitalearth.static.renderer.drawing_opts` alone used to be. A description carries the
+    plain keywords (see :func:`travels_in_a_figure`) so a figure read back on another scene still draws the
+    caller's ``vmin``, ``alpha``, ``color`` and ``title`` rather than the engine's defaults; the scene that
+    built the layer holds all of them, as the very objects passed, and those win — so on the scene that
+    built it a layer is drawn with exactly what it always was, frozen copies included nowhere.
+
+    Args:
+        scene: The scene the layer is drawn on, which holds the caller's own objects.
+        layer: The layer being drawn.
+
+    Returns:
+        A fresh dict a drawer may pop and set keys on, holding the description's keywords overlaid with
+        whatever the scene holds.
+
+    Examples:
+        - A scene that holds nothing draws a described layer with what its figure carries:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.base.spec import LayerSpec, Symbology
+            >>> from digitalearth.static import Scene
+            >>> from digitalearth.static.scene import drawing_style
+            >>> layer = LayerSpec("a", "raster", symbology=Symbology(props={"opts": {"vmin": 1.0}}))
+            >>> drawing_style(Scene(), layer)
+            {'vmin': 1.0}
+
+            ```
+    """
+    described = dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {})
+    return {**described, **drawing_opts(scene, layer)}
 
 
 @dataclass(frozen=True)
@@ -340,6 +471,13 @@ class Scene(WatermarkMixin):
         layer is recorded under an engine-neutral noun rather than whichever cleopatra glyph happened to draw
         it.
 
+        The caller's engine keywords go **both** ways, which is deliberate. The plain ones are written into
+        the layer's description (see :func:`travels_in_a_figure`), so a figure read back elsewhere draws the
+        ``vmin``, ``alpha``, ``color`` or ``title`` the caller asked for instead of the engine's defaults.
+        All of them — plain or not — stay held on the scene as the very objects passed, and
+        :func:`drawing_style` lets those win, so a layer on the scene that built it is drawn with exactly
+        what it always was rather than with a frozen copy.
+
         Args:
             record: What the builder drew, as :class:`LayerRecord` describes it.
 
@@ -364,7 +502,7 @@ class Scene(WatermarkMixin):
             visible=record.visible,
             band=record.band,
             source=record.source,
-            symbology=record.symbology,
+            symbology=_with_described_opts(record.symbology, record.opts),
         )
         return layer_id
 

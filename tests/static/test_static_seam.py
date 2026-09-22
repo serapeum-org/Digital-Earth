@@ -790,11 +790,12 @@ def _written_and_read_back(figure):
 
 
 class TestEngineKeywordsAreHeldBesideTheLayer:
-    """The description records plain values; the caller's own engine keywords stay as they were passed.
+    """The keywords a description cannot carry stay as they were passed, beside the layer.
 
     Freezing every keyword into the description turned a dash tuple into a list on the way back out, and
     wrote objects JSON cannot carry — a ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — into
-    a figure that then could not be saved.
+    a figure that then could not be saved. What is under test here is the half that is still held; the half
+    the figure now carries is :class:`TestAPlainKeywordTravelsInTheFigure`.
     """
 
     @pytest.mark.parametrize("call", sorted(TYPED_KEYWORD_CALLS))
@@ -830,16 +831,36 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         canvas.imshow(dataset, alpha=alpha)
         assert canvas._layer_opts["raster-1"]["alpha"] is alpha
 
-    def test_the_description_records_no_engine_keywords(self, dataset):
-        """What the caller passed through to matplotlib is not part of what the layer is.
+    def test_a_keyword_whose_type_matters_is_not_written_into_the_description(self):
+        """A dash tuple reads back from JSON as a list, which matplotlib refuses outright.
+
+        Test scenario:
+            ``linestyle=[0, [5, 5]]`` raises ``ValueError: Unrecognized linestyle``, so describing the
+            tuple would trade a layer that redraws with the engine's defaults for one that cannot redraw
+            at all.
+        """
+        canvas = Map(crs=4326)
+        canvas.coastlines(linestyle=DASHED)
+        props = canvas.figure_spec.layers.get("coastlines-1").symbology.props
+        held = canvas._layer_opts["coastlines-1"]["linestyle"]
+        canvas.close()
+        assert dict(props.get("opts") or {}) == {}, dict(props)
+        assert held is DASHED, held
+
+    def test_a_keyword_that_is_an_array_is_not_written_into_the_description(
+        self, dataset
+    ):
+        """An array is the layer's data, not its description, and writing one costs a pass per cell.
 
         Args:
             dataset: The raster drawn.
         """
+        alpha = np.full(dataset.shape[-2:], 0.5)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, vmin=0.0)
+        canvas.imshow(dataset, alpha=alpha)
         props = canvas.figure_spec.layers.get("raster-1").symbology.props
-        assert "opts" not in props, dict(props)
+        canvas.close()
+        assert "alpha" not in dict(props.get("opts") or {}), dict(props)
 
     def test_a_figure_holding_engine_objects_writes_to_json(self, dataset):
         """``Normalize`` and ``FontProperties`` have no JSON form, so they must not be in the description.
@@ -878,6 +899,104 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         target = Map(crs=dataset.epsg)
         target._renderer.apply(target.figure_spec, figure)
         assert sorted(target._renderer.drawn) == sorted(figure.layers.ids)
+
+
+class TestAPlainKeywordTravelsInTheFigure:
+    """A keyword JSON carries unchanged belongs *in* the description, not only beside the layer.
+
+    The split was by builder signature rather than by what a figure can hold: every keyword that arrived
+    through ``**opts`` was kept out, including plain numbers and strings the shared vocabulary already
+    models. A reloaded figure then drew the engine's defaults where the caller's ``vmin``, ``alpha``,
+    ``color`` or ``title`` had been, with no warning and nothing in the JSON to mark the omission
+    (round 2, M3).
+    """
+
+    def test_a_plain_number_reaches_the_description(self, dataset):
+        """``vmin``/``vmax``/``alpha`` are numbers; a figure that cannot say them redraws differently.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, vmin=1.0, vmax=9.0, alpha=0.5)
+        recorded = dict(
+            canvas.figure_spec.layers.get("raster-1").symbology.props["opts"]
+        )
+        canvas.close()
+        assert recorded == {"vmin": 1.0, "vmax": 9.0, "alpha": 0.5}, recorded
+
+    def test_a_keyword_the_builder_never_named_still_reaches_the_drawing(self):
+        """The review's own reproduction: a red 4-point coastline came back black and hairline.
+
+        Test scenario:
+            ``coastlines`` names ``resolution`` in its signature and takes everything else through
+            ``**kwargs``, so ``color`` and ``linewidth`` fell through the split that keeps ``**opts`` out.
+        """
+        drawn_from = Map(crs=4326)
+        drawn_from.coastlines(color="red", linewidth=4.0)
+        first = drawn_from.ax.collections[-1]
+        was = (first.get_color().tolist(), first.get_linewidth().tolist())
+        figure = _written_and_read_back(drawn_from.figure_spec)
+        drawn_from.close()
+        target = Map(crs=4326)
+        target._renderer.apply(target.figure_spec, figure)
+        again = target.ax.collections[-1]
+        now = (again.get_color().tolist(), again.get_linewidth().tolist())
+        target.close()
+        assert now == was, (now, was)
+
+    def test_two_layers_styled_differently_no_longer_compare_equal(self):
+        """A figure's equality is a statement about the picture, which it stopped being (round 2, M5).
+
+        Test scenario:
+            Both coastlines describe the same resolution, band and z-order; only the caller's keywords
+            differ, so with those outside the description the two layers were indistinguishable.
+        """
+        red = Map(crs=4326)
+        red.coastlines(color="red", linewidth=4.0)
+        blue = Map(crs=4326)
+        blue.coastlines(color="blue", linewidth=0.5)
+        same = red.figure_spec.layers.get(
+            "coastlines-1"
+        ) == blue.figure_spec.layers.get("coastlines-1")
+        red.close()
+        blue.close()
+        assert not same, "two layers that draw differently still compare equal"
+
+    def test_a_held_object_and_a_described_number_both_reach_the_drawer(self, dataset):
+        """One layer carries both halves, and what a drawer is handed has to be the two merged.
+
+        Args:
+            dataset: The raster drawn.
+
+        Test scenario:
+            The described half is frozen into the symbology and the held half is the caller's own
+            objects, so the held half has to win wherever the two name the same keyword.
+        """
+        from matplotlib.colors import Normalize
+
+        from digitalearth.static.scene import drawing_style
+
+        norm = Normalize(0.0, 10.0)
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, alpha=0.5, norm=norm)
+        style = drawing_style(canvas, canvas.figure_spec.layers.get("raster-1"))
+        canvas.close()
+        assert style["norm"] is norm, style
+        assert style["alpha"] == 0.5, style
+
+    def test_a_described_keyword_survives_a_real_json_round_trip(self, dataset):
+        """What the figure carries has to come back out of the text, not only out of the object.
+
+        Args:
+            dataset: The raster drawn.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset, vmin=1.0, title="Accumulation")
+        figure = _written_and_read_back(_saved(canvas.figure_spec))
+        canvas.close()
+        recorded = dict(figure.layers.get("raster-1").symbology.props["opts"])
+        assert recorded == {"vmin": 1.0, "title": "Accumulation"}, recorded
 
 
 class TestEveryBuilderWritesAFigureJsonCanCarry:

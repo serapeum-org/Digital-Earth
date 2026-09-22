@@ -25,8 +25,8 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
-from digitalearth.static.renderer import DrawnLayer, drawing_opts
-from digitalearth.static.scene import LayerRecord
+from digitalearth.static.renderer import DrawnLayer
+from digitalearth.static.scene import LayerRecord, drawing_style
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -141,7 +141,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     props = dict(layer.symbology.props)
     kind = props["via"]
-    opts = drawing_opts(scene, layer)
+    opts = drawing_style(scene, layer)
     src = scene._prepare(data, props["band"])
     z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
     if opts.pop(
@@ -258,7 +258,7 @@ def draw_rgb_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
     """
     props = dict(layer.symbology.props)
-    opts = drawing_opts(scene, layer)
+    opts = drawing_style(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
     # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
@@ -287,7 +287,7 @@ def draw_hsv_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     from matplotlib.colors import hsv_to_rgb
 
     props = dict(layer.symbology.props)
-    opts = drawing_opts(scene, layer)
+    opts = drawing_style(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     rgb = hsv_to_rgb(stretched)  # (rows, cols, 3) RGB
     # band-FIRST for cleopatra's RgbBands path (see draw_rgb_composite); it transposes back to band-last.
