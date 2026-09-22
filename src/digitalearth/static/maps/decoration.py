@@ -31,7 +31,7 @@ from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
-from digitalearth.static.renderer import DrawnLayer, drawing_opts
+from digitalearth.static.renderer import DrawnLayer, artists_added, drawing_opts
 from digitalearth.static.scene import LayerRecord
 
 logger = logging.getLogger(__name__)
@@ -391,21 +391,22 @@ def draw_natural_earth(
         or bool(scene.ax.collections)
         or bool(scene.ax.lines)
     )
-    add_features(
-        scene.ax,
-        name,
-        props["resolution"],
-        crs=scene.crs,
-        zorder=zorder,
-        **_to_feature_style(kind, style),
-    )
+    with artists_added(scene.ax) as drawn_features:
+        add_features(
+            scene.ax,
+            name,
+            props["resolution"],
+            crs=scene.crs,
+            zorder=zorder,
+            **_to_feature_style(kind, style),
+        )
     if (
         not had_data
     ):  # add_features pinned the (empty) view; fit it to the layer just drawn
         scene.ax.autoscale()
-    # `add_features` draws onto the axes and hands the axes back, so there is no per-layer artist to hold:
-    # the layer is recorded, and removing it is a question for whoever gives `add_features` a handle.
-    return DrawnLayer(artist=scene.ax)
+    # `add_features` hands the axes back rather than what it drew, so the artists the layer owns are the
+    # ones that appeared on the axes while it ran. The public return stays the axes, as it always was.
+    return DrawnLayer(artist=scene.ax, artists=tuple(drawn_features))
 
 
 def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -424,7 +425,9 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
             figure.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding whatever ``add_tiles`` returned.
+        A :class:`~digitalearth.static.renderer.DrawnLayer` whose ``artist`` is whatever ``add_tiles``
+        returned — the axes, which is this builder's public return — and whose ``artists`` are the tile
+        images it actually added, which is what hiding and removing the layer reach.
 
     Raises:
         ValueError: when a keyed preset's credential is unavailable, or the extent being drawn lies
@@ -437,17 +440,18 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
     # and carries their credential. A figure read back elsewhere has only the name the description records.
     source = opts.pop("source", props["source"])
     if not is_keyed_basemap(source):
-        tiles = add_tiles(
-            scene.ax, source=_resolve_tile_source(source), crs=scene.crs, **opts
-        )
-        return DrawnLayer(artist=tiles, artists=(tiles,))
+        with artists_added(scene.ax) as drawn_tiles:
+            tiles = add_tiles(
+                scene.ax, source=_resolve_tile_source(source), crs=scene.crs, **opts
+            )
+        return DrawnLayer(artist=tiles, artists=tuple(drawn_tiles))
     keyed = get_keyed_basemap(str(source), **dict(props["preset"]))
     keyed.check_bounds(scene._coverage_extent())
     provider = _keyed_tile_provider(keyed, scene._layer_keys.get(layer.id))
     opts.setdefault("attribution", keyed.attribution)
-    with _quiet_tile_urls():
+    with _quiet_tile_urls(), artists_added(scene.ax) as drawn_tiles:
         tiles = add_tiles(scene.ax, source=provider, crs=scene.crs, **opts)
-    return DrawnLayer(artist=tiles, artists=(tiles,))
+    return DrawnLayer(artist=tiles, artists=tuple(drawn_tiles))
 
 
 class DecorationMixin(_MixinBase):

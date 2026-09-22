@@ -1019,6 +1019,62 @@ class TestATileProviderIsHeldRatherThanDescribed:
         assert FAKE_TILE_KEY not in written, "the key was written into the figure"
 
 
+class TestADecorationLayerOwnsTheArtistsItAdded:
+    """Hiding or removing a layer must reach what that layer drew — and nothing else on the axes.
+
+    ``add_tiles`` and ``add_features`` both draw onto the axes and hand the *axes* back. Recorded as the
+    layer's artist, hiding a basemap hid the whole map and removing one detached the axes from the figure;
+    recorded as no artists at all, a Natural-Earth layer could not be hidden or removed in the first place.
+    """
+
+    def test_hiding_a_basemap_hides_its_tiles_rather_than_the_map(self, served_tiles):
+        """``set_visible`` toggles the artists the layer owns, which is the tile image.
+
+        Args:
+            served_tiles: The in-memory tile service.
+        """
+        canvas = _framed_map()
+        canvas.basemap()
+        canvas._renderer.set_visible("basemap-1", False)
+        tiles_shown = canvas.ax.images[-1].get_visible()
+        axes_shown = canvas.ax.get_visible()
+        canvas.close()
+        assert served_tiles, "no tile was requested"
+        assert tiles_shown is False, "the tiles are still drawn"
+        assert axes_shown is True, "hiding the basemap hid the whole map"
+
+    def test_removing_a_basemap_leaves_the_axes_on_the_figure(self, served_tiles):
+        """``remove`` takes the layer's artists off; the axes is not one of them.
+
+        Args:
+            served_tiles: The in-memory tile service.
+        """
+        canvas = _framed_map()
+        canvas.basemap()
+        canvas._renderer.remove("basemap-1")
+        painted = len(canvas.ax.images)
+        attached = canvas.ax in canvas.fig.axes
+        canvas.close()
+        assert painted == 0, "the tiles are still on the axes"
+        assert attached, "removing the basemap detached the axes"
+
+    def test_removing_a_reference_layer_takes_its_features_off(self, dataset):
+        """The same for the flat Natural-Earth path, which also draws onto the axes and returns it.
+
+        Args:
+            dataset: The raster the map is framed on, so the reference layer has a view to draw in.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset)
+        canvas.coastlines()
+        drawn_features = len(canvas.ax.collections)
+        canvas._renderer.remove("coastlines-2")
+        left = len(canvas.ax.collections)
+        canvas.close()
+        assert drawn_features == 1, drawn_features
+        assert left == 0, "the coastline is still on the axes"
+
+
 class _FakeCollection:
     """A stand-in for a pyramids ``DatasetCollection``, which ``spaghetti`` reads one attribute of."""
 

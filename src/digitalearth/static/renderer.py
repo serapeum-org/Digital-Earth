@@ -25,14 +25,22 @@ second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
 """
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
 from digitalearth.static.capabilities import CAPABILITIES
 
-__all__ = ["DRAWN_KINDS", "DrawnLayer", "Renderer", "drawer_for", "drawing_opts"]
+__all__ = [
+    "DRAWN_KINDS",
+    "DrawnLayer",
+    "Renderer",
+    "artists_added",
+    "drawer_for",
+    "drawing_opts",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +403,33 @@ def _painted(axes: Any) -> Optional[List[Any]]:
     """
     children = getattr(axes, "_children", None)
     return children if isinstance(children, list) else None
+
+
+@contextmanager
+def artists_added(axes: Any) -> Iterator[List[Any]]:
+    """Collect the artists a block puts on the axes, for a drawer that cannot name them itself.
+
+    ``cleopatra.basemap.tiles.add_tiles`` and ``cleopatra.basemap.reference.add_features`` both draw onto
+    the axes and hand the *axes* back, so a drawer calling them has no handle on what it drew. Recording
+    the axes as the layer's artist made :meth:`Renderer.set_visible` hide the whole map and
+    :meth:`Renderer.remove` detach it from the figure; recording nothing left the layer undrawable-off.
+    What they added is the difference between the axes before and after.
+
+    Args:
+        axes: The axes being drawn on.
+
+    Yields:
+        The list the artists are collected into — empty inside the block, filled on the way out. It stays
+        empty when the axes keeps no list of its own, which leaves the layer with no artists to toggle
+        rather than with the wrong ones.
+    """
+    painted = _painted(axes)
+    existing = {id(artist) for artist in painted or ()}
+    added: List[Any] = []
+    yield added
+    added.extend(
+        artist for artist in _painted(axes) or () if id(artist) not in existing
+    )
 
 
 def _reinsert(
