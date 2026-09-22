@@ -103,6 +103,11 @@ class LayerRecord:
             and says nothing about what it draws. ``None`` takes the kind's band.
         visible: Whether the layer was built visible.
         symbology: How it looks, as values. ``None`` records an empty symbology.
+        held: The caller's **own engine object**, for a ``custom:matplotlib`` layer: the artist they
+            built and handed to :meth:`Scene._add_layer`, with the glyph that made it and its
+            colorbar label. A description cannot rebuild it — that is what makes the layer custom —
+            so the scene keeps it under the layer's id and the drawer puts it back from there, the
+            way every other tier holds its own engine's custom layers.
         key: Something the layer's drawer needs that a **description cannot carry** — a clip boundary (a
             shapely geometry, which a figure written to JSON has no spelling for, and which would make two
             symbologies uncomparable) or a basemap credential (which must never be written into a figure at
@@ -143,6 +148,7 @@ class LayerRecord:
     symbology: Optional[Symbology] = None
     key: Any = None
     opts: Optional[Mapping[str, Any]] = None
+    held: Any = None
 
 
 class Scene(WatermarkMixin):
@@ -244,6 +250,8 @@ class Scene(WatermarkMixin):
         # here rather than in `symbology` for the same reason as the keys: a description is plain values,
         # and a dash tuple, a `Normalize` or a colormap object is not one.
         self._layer_opts: Dict[str, Dict[str, Any]] = {}
+        # The caller's own objects, for the custom layers they handed in (see `LayerRecord.held`).
+        self._held_objects: Dict[str, Any] = {}
         # Whether this scene has already drawn a glyph onto `ax` (#313). A cleopatra glyph clears every
         # glyph's artists off its axes unless it is told to compose, so from the *second* layer onwards a
         # render has to compose or it takes the layer below it off again. Only from the second: the first
@@ -334,6 +342,8 @@ class Scene(WatermarkMixin):
         layer_id = self._layer_id(record.kind.split(":")[0], record.name)
         if record.key is not None:
             self._layer_keys[layer_id] = record.key
+        if record.held is not None:
+            self._held_objects[layer_id] = record.held
         if record.opts:
             # A shallow copy: the dict is this layer's, so a caller reusing theirs cannot re-style it later,
             # while each value stays the very object they passed.
@@ -410,6 +420,7 @@ class Scene(WatermarkMixin):
             forget_object(ref.uri)
         self._layer_keys.pop(layer_id, None)
         self._layer_opts.pop(layer_id, None)
+        self._held_objects.pop(layer_id, None)
 
     @property
     def layer_ids(self) -> List[str]:
@@ -500,10 +511,14 @@ class Scene(WatermarkMixin):
     def _add_layer(self, glyph: Any, mappable: Any, label: Optional[str] = None) -> Any:
         """Register an artist the caller built themselves, and describe it as a custom layer.
 
-        The escape hatch, not the builders' path: an artist somebody built by hand has no source to
-        reference and no symbology to read back, so it is recorded as ``custom:matplotlib`` and described by
-        id, kind and label alone. A figure can name it, hide it and reorder it, but never rebuild it — which
-        is what :mod:`digitalearth.base.custom` says a reader of such a layer is looking at.
+        Not the builders' path: an artist somebody built by hand has no source to reference and no
+        symbology to read back, so it is recorded as ``custom:matplotlib`` and described by id, kind and
+        label alone. A figure can name it, hide it, reorder it and take it off — but never *rebuild* it,
+        which is what :mod:`digitalearth.base.custom` says a reader of such a layer is looking at. So the
+        artist itself is held on the scene under the layer's id, and the tier's own custom drawer puts it
+        back from there; a figure read back somewhere else describes the layer and skips it.
+
+        Drawing straight onto :attr:`ax` is still the escape hatch, and still invisible to the figure.
 
         Args:
             glyph: The cleopatra glyph instance that was drawn on :attr:`ax`, or ``None``.
@@ -513,8 +528,13 @@ class Scene(WatermarkMixin):
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
         """
-        self._describe_layer(LayerRecord(custom_kind(ENGINE)))
-        return self._register_artist(glyph, mappable, label)
+        return self._draw(
+            LayerRecord(
+                custom_kind(ENGINE),
+                symbology=Symbology(props={"via": "custom"}),
+                held=(glyph, mappable, label),
+            )
+        )
 
     def _reset_layers(self) -> None:
         """Forget every registered layer — its default label and its description — e.g. between frames.
@@ -535,6 +555,7 @@ class Scene(WatermarkMixin):
         self._sources = {}
         self._layer_keys = {}
         self._layer_opts = {}
+        self._held_objects = {}
         self._id_counter = 0
         self._issued_ids = set()
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
@@ -818,6 +839,7 @@ class Scene(WatermarkMixin):
         forget_namespace(self._objects_ns)
         self._layer_keys = {}
         self._layer_opts = {}
+        self._held_objects = {}
         plt.close(self.fig)
 
     def __enter__(self) -> "Scene":

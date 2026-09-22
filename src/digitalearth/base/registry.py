@@ -1305,6 +1305,12 @@ _BUILT_IN_KINDS = (
         "data",
     ),
     (
+        "custom:matplotlib",
+        "none",
+        "an artist the caller built with matplotlib and handed to the scene — static _add_layer",
+        "data",
+    ),
+    (
         "custom:pyvista",
         "none",
         "an object the caller built with PyVista and handed to the scene — add_mesh, add_volume",

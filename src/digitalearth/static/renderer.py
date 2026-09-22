@@ -29,6 +29,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from matplotlib.artist import Artist
+
+from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
 from digitalearth.static.capabilities import CAPABILITIES
@@ -138,6 +141,9 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "ocean",
     "lakes",
     "rivers",
+    # The caller's own artist. Declared and drawn like any other kind, as each other tier declares
+    # its engine's custom layers — what it cannot do is be *rebuilt*, which is why the object is held.
+    "custom:matplotlib",
 )
 
 
@@ -212,7 +218,55 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
         "lakes": {"lakes": decoration.draw_natural_earth},
         "rivers": {"rivers": decoration.draw_natural_earth},
         "basemap": {"basemap": decoration.draw_basemap},
+        "custom:matplotlib": {"custom": draw_custom},
     }
+
+
+def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional["DrawnLayer"]:
+    """Put back an artist the caller built themselves and handed to the scene.
+
+    A custom layer is the one kind a description cannot rebuild: the object is the caller's, and a
+    figure holds no spelling for it. The scene keeps it under the layer's id instead, so the layer is
+    still addressable — it can be hidden, taken off the axes and drawn again — which is exactly what
+    the other three tiers do with theirs.
+
+    Args:
+        scene: The scene holding the object.
+        _data: The source slot every drawer takes, unread here — a custom layer has no source.
+        layer: The layer's description.
+
+    Returns:
+        What the layer holds, as a :class:`DrawnLayer` — or ``None`` when the scene does not hold the
+        object, which is a layer that was not drawn rather than an error: a figure read back from
+        elsewhere carries the description and not the artist.
+
+    Raises:
+        MissingObject: when the object is not here and the scene is ``strict``, which is the same
+            skip-or-raise answer every other layer gives for data it cannot draw.
+    """
+    try:
+        glyph, artist, label = held_object(
+            layer.id,
+            layer.kind,
+            scene._held_objects,
+            engine="matplotlib",
+            backend="matplotlib",
+        )
+    except MissingObject as error:
+        if scene.strict:
+            raise
+        logger.warning("%s; the layer is skipped", error)
+        return None
+    # Only an artist can go back on an axes, and only one that is not already there: `_add_layer`
+    # describes an artist the caller has *just* drawn, and adding it again would file it twice.
+    if isinstance(artist, Artist) and artist.axes is not scene.ax:
+        scene.ax.add_artist(artist)
+    scene._register_artist(glyph, artist, label)
+    return DrawnLayer(
+        artist=artist,
+        glyph=glyph,
+        artists=() if artist is None else (artist,),
+    )
 
 
 def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:

@@ -1120,6 +1120,54 @@ class TestADescriptionCarriesWhatTheDrawingNeeds:
         assert edge[:3] == to_rgba("red")[:3], edge
 
 
+class TestACustomLayerIsDrawnLikeAnyOther:
+    """An artist the caller built is a layer of this tier's own custom kind, held rather than rebuilt.
+
+    The other three tiers each declare a ``custom:<engine>`` kind and keep the object the caller handed
+    them. This tier described one and declared it *absent*, so a layer it had just recorded could not be
+    drawn from its own description.
+    """
+
+    def test_the_tier_declares_the_kind_it_describes(self):
+        """Describing a kind the tier says it cannot draw is a refusal nobody can predict."""
+        from digitalearth.static.capabilities import CAPABILITIES
+
+        assert CAPABILITIES.supports(custom_kind("matplotlib"))
+
+    def test_a_custom_layer_can_be_taken_off_and_drawn_again(self, dataset):
+        """Which is what "drawable from its description" means for an object nothing can rebuild.
+
+        Args:
+            dataset: The raster the map is framed on.
+        """
+        canvas = Map(crs=dataset.epsg)
+        (line,) = canvas.ax.plot([0.0, 1.0], [0.0, 1.0])
+        canvas._add_layer(None, line)
+        canvas._renderer.remove("custom-1")
+        taken_off = line in canvas.ax.lines
+        canvas._renderer.draw_layer(canvas.figure_spec, "custom-1")
+        drawn_again = line in canvas.ax.lines
+        canvas.close()
+        assert taken_off is False, "the caller's artist stayed on the axes"
+        assert drawn_again is True, "the caller's artist was not put back"
+
+    def test_a_custom_layer_whose_object_is_not_here_is_skipped(self, dataset):
+        """A figure read back carries the description; the caller's artist stayed in their session.
+
+        Args:
+            dataset: The raster the maps are framed on.
+        """
+        canvas = Map(crs=dataset.epsg)
+        (line,) = canvas.ax.plot([0.0, 1.0], [0.0, 1.0])
+        canvas._add_layer(None, line)
+        figure = canvas.figure_spec
+        elsewhere = Map(crs=dataset.epsg)
+        drawn = elsewhere._renderer.draw_layer(figure, "custom-1")
+        canvas.close()
+        elsewhere.close()
+        assert drawn is None, drawn
+
+
 class _FakeCollection:
     """A stand-in for a pyramids ``DatasetCollection``, which ``spaghetti`` reads one attribute of."""
 
