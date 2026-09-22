@@ -498,6 +498,12 @@ notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvis
 test-interactive = { cmd = "pytest -vvv tests/interactive tests/base/test_renderer_conformance.py tests/base/test_map_conformance.py --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`). The two shared contracts under tests/base are collected here too: the renderer contract (tests/base/test_renderer_conformance.py) and the map conformance suite (tests/base/test_map_conformance.py). Both gate their interactive class on geoviews, and this is the only job with it, so leaving them to the `main` matrix skipped every check the interactive tier signs (review M6)" }
 notebooks-interactive = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/interactive", description = "check the interactive (HoloViz) notebooks — run in the interactive env (`pixi run -e interactive notebooks-interactive`). Notebooks 01/06/07 guard their WorldClim cells (in the gitignored examples/data/global/) — they render locally when present and skip otherwise." }
 test-web = { cmd = "pytest -vvv tests/web tests/base/test_map_conformance.py --cov=src/digitalearth --cov-report=xml", description = "Run the web (MapLibre + deck.gl) tier tests — run in the web env (`pixi run -e web test-web`). The map conformance suite (tests/base/test_map_conformance.py) is collected here too: its web class is gated on maplibre, and this is the only job with it, so leaving it to the `main` matrix would skip every behavioural check the web tier signs (review M6). The renderer contract needs no such line — the web tier hosts its adapter in tests/web/test_web_seam.py instead" }
+test-backends = { cmd = "pytest -vvv tests/base/test_backends_coexist.py tests/base/test_map_conformance.py --cov=src/digitalearth --cov-report=xml", description = """
+    Run the cross-backend checks in the `all` env (`pixi run -e all test-backends`) — the only env that
+    carries MapLibre, HoloViz and PyVista at once. It proves the three engines load together (a solve
+    only proves their versions are compatible), and it runs the map conformance suite with BOTH 2-D tier
+    classes live in one process, where every other job can collect only one of them
+""" }
 notebooks-web = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/web", description = "check the web (MapLibre + deck.gl) notebooks — run in the web env (`pixi run -e web notebooks-web`)" }
 jupyter = { cmd = "jupyter lab --no-browser --IdentityProvider.token='' --ServerApp.password='' --port=8889", description = "launch jupyter lab" }
 build-dist = { cmd = "python -m build", description = "Build sdist and wheel for PyPI" }
@@ -538,6 +544,10 @@ interactive = { features = ["dev", "interactive", "numba-numpy"], solve-group = 
 # Web tier (MapLibre + deck.gl). Uses the `web` feature pixi derives from the `[web]` extra. Separate solve-group
 # so maplibre stays out of default/dev. Run: pixi run -e web test-web
 web = { features = ["dev", "web"], solve-group = "web" }
+# Every backend in one environment, so a test can build the same figure on two tiers and compare them
+# live. Deliberately its own solve-group: it is the only env where VTK, the HoloViz stack and MapLibre
+# are resolved together, and it must not be able to move the single-backend envs' versions.
+all = { features = ["dev", "3d", "interactive", "web", "numba-numpy"], solve-group = "all" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }
 py313 = { features = ["py313", "dev"], solve-group = "py313" }
