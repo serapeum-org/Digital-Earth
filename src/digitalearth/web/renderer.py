@@ -76,9 +76,12 @@ class DrawnLayer:
 #: `drawer_for` resolves them to functions and is checked against this tuple, which keeps the two from
 #: drifting.
 #:
-#: This is a growing subset while the seam is opened (#296). A kind here is built by its drawer and must not
-#: also be queued by its builder; a kind not here is still replayed from the queue. Listing a kind before its
-#: builder stops queuing would draw it twice, so the two move together, one kind per step.
+#: Every kind a builder records is here: the seam is closed (#296), and contours — the last kinds still
+#: replayed from the queue — joined when they started recording under their own kind (review L3). A kind here
+#: is built by its drawer and must not also be queued by its builder. The kinds the tier declares and does
+#: not list — a basemap, a point cloud, terrain and a glTF model — are drawn straight onto the widget without
+#: a description, because they are the map's style or deck.gl/terrain objects rather than MapLibre layers a
+#: description can rebuild.
 DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",
     "text",
@@ -89,6 +92,8 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "polygons",
     "choropleth",
     "labels",
+    "contours",
+    "filled_contours",
     "heatmap",
     "clusters",
     "extrusion",
@@ -240,6 +245,10 @@ def drawer_for(kind: str) -> Any:
         "polygons": vector.draw_vector,
         "choropleth": vector.draw_vector,
         "labels": vector.draw_vector,
+        # A traced contour is a GeoJSON source and one line or fill layer, recorded with its paint like
+        # the vector kinds above, so the same drawer rebuilds it.
+        "contours": vector.draw_vector,
+        "filled_contours": vector.draw_vector,
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
         "extrusion": threed.draw_extruded_polygons,

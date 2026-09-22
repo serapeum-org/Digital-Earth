@@ -14,7 +14,7 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 from loguru import logger
 
@@ -109,6 +109,10 @@ def _as_interval(
 #: the internals use when they have to supply it themselves.
 CONTOUR_COLOR = "#3388ff"
 
+#: Outline of a filled contour band — `polygons()`'s own default outline, which is what filled contours were
+#: drawn with while they were drawn through it.
+CONTOUR_OUTLINE_COLOR = "#ffffff"
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
@@ -116,11 +120,11 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
-    """Build the MapLibre source and typed layer for any of the five vector kinds.
+    """Build the MapLibre source and typed layer for any of the vector kinds.
 
-    All five — points, lines, polygons, choropleth and labels — are a GeoJSON source plus one typed layer,
-    differing only in the MapLibre type and the paint the builder resolved. They share a drawer for the same
-    reason they shared a registration funnel.
+    All seven — points, lines, polygons, choropleth, labels, and the two contour kinds — are a GeoJSON
+    source plus one typed layer, differing only in the MapLibre type and the paint the builder resolved. They
+    share a drawer for the same reason they share a registration funnel.
 
     Args:
         _web_map: Unused — every drawer takes the map, and this one draws without it.
@@ -128,7 +132,7 @@ def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`. It never declines: any of the five kinds either
+        A :class:`~digitalearth.web.renderer.DrawnLayer`. It never declines: any of these kinds either
         draws or refuses by raising, which is why their builders do not ask whether the layer survived.
 
     Raises:
@@ -547,43 +551,80 @@ class VectorMixin(_MixinBase):
         name: Optional[str],
         visible: bool,
     ) -> None:
-        """Hand the traced features to the polygon or line builder, whichever `filled` asked for.
+        """Describe the traced features as one contour layer: the levels as lines, or the bands between as fills.
+
+        The layer is recorded under its own kind — `contours` or `filled_contours` — when it is drawn, and
+        :func:`draw_vector` draws it back from that description like any other vector kind (review L3). It
+        used to be drawn through `lines`/`polygons` and relabelled afterwards, which reached for whatever
+        `_last_layer_id` named: a flat fill over the big-data threshold routed to a deck.gl overlay that
+        records no layer, so the relabelling found none, or renamed an earlier layer. A contour layer is
+        therefore always the MapLibre layer it describes, whatever the threshold.
 
         Args:
             features: The `FeatureCollection` pyramids traced.
             filled: Draw the bands between levels as polygons rather than the levels as lines.
             column: Attribute to colour by, or `None` when an explicit `color` was given.
-            cmap: Colormap for the classified attribute, already resolved by `_auto_cmap`.
+            cmap: Colormap for the continuous ramp over the attribute, already resolved by `_auto_cmap`.
             color: A single flat colour; `None` takes the tier's default contour blue.
             width: Line width, used only by the line branch.
             opacity: Layer opacity in `[0, 1]`.
             name: What a layer switcher calls the layer.
             visible: Whether the layer starts visible.
         """
-        flat = color or CONTOUR_COLOR
-        if filled:
-            self.polygons(
-                features,
-                column=column,
-                scheme=None,
-                cmap=cmap,
-                color=flat,
-                opacity=opacity,
-                name=name,
-                visible=visible,
-            )
-            return
-        self.lines(
-            features,
-            column=column,
-            scheme=None,
-            cmap=cmap,
-            color=flat,
-            width=width,
-            opacity=opacity,
-            name=name,
-            visible=visible,
+        _, layer_types = _require_layer_api()
+        gdf = self._display_gdf(features, method="contours")
+        # The level colours each contour along a continuous ramp, as `lines`/`polygons` do with no scheme;
+        # a caller's `color=` pins every contour to one colour instead.
+        colour = (
+            color or CONTOUR_COLOR
+            if column is None
+            else self._ramp_color_expr(self._require_column(gdf, column), column, cmap)
         )
+        if filled:
+            paint = self._fill_paint(opacity, CONTOUR_OUTLINE_COLOR, colour)
+            prefix, layer_type, kind = "fill", layer_types.FILL, "filled_contours"
+        else:
+            paint = self._line_paint(width, opacity, colour)
+            prefix, layer_type, kind = "line", layer_types.LINE, "contours"
+        self._vector_layer(
+            gdf, prefix, layer_type, paint, kind=kind, name=name, visible=visible
+        )
+
+    @staticmethod
+    def _line_paint(width: float, opacity: float, colour: Any) -> dict:
+        """Return a MapLibre line layer's paint.
+
+        Args:
+            width: Line width in pixels.
+            opacity: Line opacity in `[0, 1]`.
+            colour: A colour, or a data-driven colour expression.
+
+        Returns:
+            The paint dict `lines` and `contours` both draw with.
+        """
+        return {
+            "line-width": float(width),
+            "line-opacity": float(opacity),
+            "line-color": colour,
+        }
+
+    @staticmethod
+    def _fill_paint(opacity: float, outline_color: str, colour: Any) -> dict:
+        """Return a MapLibre fill layer's paint.
+
+        Args:
+            opacity: Fill opacity in `[0, 1]`.
+            outline_color: The polygon outline colour.
+            colour: A colour, or a data-driven colour expression.
+
+        Returns:
+            The paint dict `polygons` and filled `contours` both draw with.
+        """
+        return {
+            "fill-opacity": float(opacity),
+            "fill-outline-color": outline_color,
+            "fill-color": colour,
+        }
 
     def contours(
         self,
@@ -703,12 +744,6 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
         )
-        # Drawn through `lines` or `polygons`, which record their own kind; the layer is contours. Both builders
-        # set `_last_layer_id` to the layer they add, so it names that layer here.
-        self._rekind_layer(
-            cast(str, self._last_layer_id),
-            "filled_contours" if filled else "contours",
-        )
         if self.last_units and self.last_legend is not None:
             # The classification the sub-builder just recorded describes this raster's values, so the key
             # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.
@@ -732,7 +767,7 @@ class VectorMixin(_MixinBase):
     ) -> Self:
         """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
 
-        The single funnel the five vector builders register through. It does not build the MapLibre
+        The single funnel the vector builders and `contours` register through. It does not build the MapLibre
         objects: it records what they should be — the type, the paint, the layout — as values on the
         layer's symbology, and :func:`draw_vector` rebuilds the source and the layer from exactly that.
 
@@ -1012,18 +1047,18 @@ class VectorMixin(_MixinBase):
         """
         _, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="lines")
-        paint: dict = {"line-width": float(width), "line-opacity": float(opacity)}
-        if column is not None:
-            paint["line-color"] = self._color_expr(
+        colour = (
+            color
+            if column is None
+            else self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
-        else:
-            paint["line-color"] = color
+        )
         return self._vector_layer(
             gdf,
             "line",
             layer_types.LINE,
-            paint,
+            self._line_paint(width, opacity, colour),
             kind="lines",
             name=name,
             visible=visible,
@@ -1147,21 +1182,18 @@ class VectorMixin(_MixinBase):
                     "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
             return self.deck_polygons(gdf)
-        paint: dict = {
-            "fill-opacity": float(opacity),
-            "fill-outline-color": outline_color,
-        }
-        if column is not None:
-            paint["fill-color"] = self._color_expr(
+        colour = (
+            color
+            if column is None
+            else self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
-        else:
-            paint["fill-color"] = color
+        )
         return self._vector_layer(
             gdf,
             "fill",
             layer_types.FILL,
-            paint,
+            self._fill_paint(opacity, outline_color, colour),
             kind="polygons",
             name=name,
             visible=visible,

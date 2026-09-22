@@ -7,9 +7,9 @@ claims a kind nothing draws, or a channel nothing carries, is worse than no row 
 
 These are the three questions that keep this tier's row honest:
 
-* **every declared kind is drawn** — by the renderer from its description, by a builder that records it, or
-  by a builder that draws it straight onto the widget. The three buckets below are exhaustive and disjoint,
-  so a kind added to the declaration with nothing behind it lands outside all of them and fails here.
+* **every declared kind is drawn** — by the renderer from its description, or by a builder that draws it
+  straight onto the widget. The two buckets below are exhaustive and disjoint, so a kind added to the
+  declaration with nothing behind it lands outside both of them and fails here.
 * **every declared channel reaches the layer** — each one is given to a builder and read back off the
   recorded symbology, and the `data_driven` ones are read back as MapLibre *expressions* over a column
   rather than as constants.
@@ -113,24 +113,17 @@ DESCRIBED_AND_DRAWN = {
     "heatmap": lambda m: m.heatmap(_points()),
     "clusters": lambda m: m.cluster(_points()),
     "extrusion": lambda m: m.extrusion(_polygons(), height=30.0),
-    "custom:maplibre": lambda m: m.add_layer({"id": "own", "type": "background"}),
-}
-
-#: Kinds a builder records as a layer while the *drawing* is still replayed from the queue — the half of the
-#: seam #296 has not reached. They are declared because the tier draws them; they are not in `DRAWN_KINDS`
-#: because the renderer does not own them yet, and listing one there before its builder stopped queuing
-#: would draw it twice.
-DESCRIBED_AND_QUEUED = {
     "contours": lambda m: m.contours(_dem(), interval=CONTOUR_INTERVAL),
     "filled_contours": lambda m: m.contours(
         _dem(), interval=CONTOUR_INTERVAL, filled=True
     ),
+    "custom:maplibre": lambda m: m.add_layer({"id": "own", "type": "background"}),
 }
 
 #: Kinds a builder draws straight onto the widget without recording a layer at all: a basemap is the map's
 #: style, and a point cloud, a terrain source and a glTF model are deck.gl/terrain objects the widget takes
 #: rather than MapLibre layers the description can rebuild. They are declared because the tier draws them,
-#: and they are separated here because "declared, drawn, not described" is a different answer from the two
+#: and they are separated here because "declared, drawn, not described" is a different answer from the one
 #: above — and the one a reader of the declaration is most likely to get wrong.
 DRAWN_BUT_NOT_DESCRIBED = {
     "basemap": lambda m: m.basemap("CartoDark"),
@@ -257,17 +250,16 @@ class TestTheDeclaration:
 class TestEveryDeclaredKindIsDrawn:
     """Hold `CAPABILITIES.kinds` against what the tier actually draws and describes."""
 
-    def test_the_three_ways_a_kind_is_drawn_account_for_every_declared_one(self):
+    def test_the_two_ways_a_kind_is_drawn_account_for_every_declared_one(self):
         """A declared kind with nothing behind it is the capability lie this file exists to catch.
 
         Test scenario:
-            The buckets are exhaustive: drawn from a description, described but replayed from the queue,
-            or drawn onto the widget with no description. Adding a kind to the declaration puts it in none
-            of them, and removing one that is drawn leaves it in a bucket with nothing to declare it.
+            The buckets are exhaustive: drawn from a description, or drawn onto the widget with no
+            description. Adding a kind to the declaration puts it in neither, and removing one that is drawn
+            leaves it in a bucket with nothing to declare it. There is no third bucket of kinds described but
+            replayed from the queue: contours were the last, and are drawn from their description now (L3).
         """
-        accounted = (
-            set(DRAWN_KINDS) | set(DESCRIBED_AND_QUEUED) | set(DRAWN_BUT_NOT_DESCRIBED)
-        )
+        accounted = set(DRAWN_KINDS) | set(DRAWN_BUT_NOT_DESCRIBED)
         difference = sorted(accounted.symmetric_difference(CAPABILITIES.kinds))
         assert difference == [], (
             f"{difference} are declared with nothing drawing them, or drawn without being declared"
@@ -275,11 +267,7 @@ class TestEveryDeclaredKindIsDrawn:
 
     def test_no_kind_is_counted_two_ways(self):
         """A kind both described and queued would be drawn twice; the buckets have to be disjoint."""
-        seen = (
-            list(DRAWN_KINDS)
-            + list(DESCRIBED_AND_QUEUED)
-            + list(DRAWN_BUT_NOT_DESCRIBED)
-        )
+        seen = list(DRAWN_KINDS) + list(DRAWN_BUT_NOT_DESCRIBED)
         repeated = sorted({kind for kind in seen if seen.count(kind) > 1})
         assert repeated == [], f"{repeated} are claimed by more than one drawing path"
 
@@ -300,15 +288,6 @@ class TestEveryDeclaredKindIsDrawn:
             recording its kind — or records another tier's spelling — fails here.
         """
         assert kind in _kinds_recorded(DESCRIBED_AND_DRAWN[kind]), kind
-
-    @pytest.mark.parametrize("kind", sorted(DESCRIBED_AND_QUEUED))
-    def test_a_queued_builder_still_records_its_kind(self, kind):
-        """A contour layer is described even though its drawing is replayed rather than rebuilt.
-
-        Args:
-            kind: The declared kind under test.
-        """
-        assert kind in _kinds_recorded(DESCRIBED_AND_QUEUED[kind]), kind
 
     @pytest.mark.parametrize("kind", sorted(DRAWN_BUT_NOT_DESCRIBED))
     def test_a_widget_builder_draws_without_describing_a_layer(self, kind):

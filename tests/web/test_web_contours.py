@@ -293,3 +293,69 @@ class TestHiddenContoursHideTheirLabels:
         assert payload.count('"visibility": "none"') == 2, (
             "the contours are hidden but their labels are not"
         )
+
+
+class TestAContourLayerIsDrawnFromItsDescription:
+    """Review L3: `contours` and `filled_contours` are drawn from what the figure records."""
+
+    @pytest.mark.parametrize(
+        ("filled", "kind", "maplibre_type"),
+        [(False, "contours", "line"), (True, "filled_contours", "fill")],
+        ids=["contours", "filled_contours"],
+    )
+    def test_a_contour_layer_redraws_from_the_figure(
+        self, dataset, filled, kind, maplibre_type
+    ):
+        """A figure holding a contour layer is drawable: the renderer has a drawer for its kind.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            filled: Whether the bands between levels are drawn rather than the levels.
+            kind: The kind the builder records.
+            maplibre_type: The MapLibre layer type the description draws.
+
+        Test scenario:
+            Both kinds were declared, but `drawer_for("contours")` refused them, so a figure written with a
+            contour layer in it could be read back and never drawn. The redraw here goes through the figure
+            alone, and draws what the build drew.
+        """
+        m = WebMap().contours(dataset, interval=10, filled=filled, name="iso")
+        assert m.get_layer("iso").kind == kind, m.get_layer("iso")
+        redrawn = m._renderer.draw_layer(m.figure_spec, "iso")
+        assert redrawn.layer.type == maplibre_type, redrawn.layer.type
+        assert redrawn.layer.paint == m._renderer.drawn["iso"].layer.paint, (
+            "the redraw did not draw the recorded paint"
+        )
+
+    def test_a_filled_contour_layer_is_drawn_whatever_the_big_data_threshold(
+        self, dataset
+    ):
+        """A contour layer is recorded under its own kind when it is drawn, not relabelled afterwards.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            `contours` drew through `polygons` and relabelled whatever `_last_layer_id` named. A flat-colour
+            fill over the big-data threshold routed to a deck.gl overlay that records no layer, so the
+            relabelling reached for a layer that was not there — or, on a map with layers already, renamed
+            the wrong one. Drawn under its own kind, a contour layer is always the MapLibre layer it
+            describes.
+        """
+        m = WebMap().points(_one_point(), name="obs")
+        m.big_data_threshold = 1
+        m.contours(dataset, interval=10, filled=True, color="#cc4444", name="bands")
+        kinds = {layer.id: layer.kind for layer in m.figure_spec.layers}
+        assert kinds == {"obs": "points", "bands": "filled_contours"}, kinds
+
+
+def _one_point():
+    """Return one point in EPSG:4326.
+
+    Returns:
+        A one-row GeoDataFrame.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    return gpd.GeoDataFrame({"value": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326)

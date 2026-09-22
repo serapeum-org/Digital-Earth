@@ -1403,23 +1403,6 @@ class WebMapBase:
         if not surviving:
             self.last_breaks = None
 
-    def _rekind_layer(self, layer_id: str, kind: str) -> None:
-        """Record a different kind for a layer already in the tree, keeping its id, label, visibility and place.
-
-        A builder that draws through another one — `contours` through `lines` or `polygons` — gets the kind of the
-        builder it called. This corrects the record to what was actually drawn.
-
-        Args:
-            layer_id: The layer to re-describe.
-            kind: The registered kind it is.
-
-        Raises:
-            KeyError: when `kind` is not registered, or no layer has `layer_id`.
-        """
-        kind_info(kind)
-        held = self._layer_tree.get(layer_id)
-        self._layer_tree = self._layer_tree.replace(replace_fields(held, kind=kind))
-
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
 
