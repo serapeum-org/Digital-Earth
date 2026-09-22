@@ -23,8 +23,12 @@ place; HoloViews elements are immutable values composed into an overlay on every
 and the observable contract it signs is the one the shared renderer conformance suite states, which is why
 all four tiers can sign it.
 
-**On this tier, for this wave, `apply` is record-only.** It does not change what `render()` overlays, which
-is the map's `layers`, and it does not change what `figure_spec` reports, which is the map's own layer tree.
+**On this tier, for this wave, `apply` is record-only** — with one exception a caller can see. It does not
+change *which* elements `render()` overlays, which is the map's `layers`, and it does not change what
+`figure_spec` reports, which is the map's own layer tree. The exception is visibility: a layer `diff`
+reports as shown or hidden is toggled on the very element the map registered, because `.opts()` writes into
+HoloViews' global `Store` against that object. So a figure applied with a hidden layer draws it hidden
+while `figure_spec` still describes it visible.
 Nothing in the tier calls it: every builder draws through :meth:`Renderer.draw_layer`, one layer at a time.
 Wiring `apply` into the map's public state is Wave 7 (order 23); until then a caller who applies a figure
 has moved the record and nothing a viewer sees.
@@ -128,7 +132,11 @@ def _visibility_keywords(element: Any) -> Tuple[str, ...]:
 
     Returns:
         The accepted keywords of :data:`_VISIBILITY_KEYWORDS`, in that order; empty for an element the
-        Bokeh backend gives no way to hide — `Tiles` and `WMTS`, whose image *is* the basemap.
+        Bokeh backend gives no way to hide. Two shapes answer that way: an element whose type has no
+        visibility option — `Tiles` and `WMTS`, whose image *is* the basemap — and any type the Bokeh
+        option tree does not hold at all, which includes a `DynamicMap` or `HoloMap` that has not yet
+        produced a frame, so every `dynamic=True` rasterize, datashade, trajectory or `large_image`
+        layer.
     """
     from digitalearth.interactive.style_fold import allowed_options
 
@@ -157,9 +165,12 @@ def _show(element: Any, layer_id: str, visible: bool) -> None:
         visible: Whether it is drawn.
 
     Warns:
-        UserWarning: when the element's type has no way to say it, which on Bokeh is `Tiles` and `WMTS`
-            alone. Saying nothing would leave a figure that describes a hidden basemap drawing it — the
-            silence review M4 reports on this tier, one kind narrower.
+        UserWarning: when the element has no keyword to say it with — a `Tiles`/`WMTS` basemap, or a
+            `DynamicMap` that has not produced a frame, which is what every `dynamic=True` layer is at
+            build time (see :func:`_visibility_keywords`). Saying nothing would leave a figure that
+            describes a hidden layer drawing it — the silence review M4 reports on this tier. The warning
+            is worded for the hide direction because that is the case it costs something; it is emitted
+            before `visible` is read, so `set_visible(id, True)` on such an element warns too.
     """
     keywords = _visibility_keywords(element)
     if not keywords:
@@ -406,6 +417,11 @@ class Renderer:
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
 
+        Warns:
+            UserWarning: when the figure describes the layer as not drawn and the element has no keyword
+                to say so with — a basemap, or a `dynamic=True` layer, whose `DynamicMap` has produced no
+                frame yet (see :func:`_show`). The layer is drawn, visible, and the warning says so.
+
         Examples:
             - Drawing a layer again from a figure that describes it hidden draws it hidden:
                 ```python
@@ -454,9 +470,12 @@ class Renderer:
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
         """Bring the renderer's record of what is drawn from one figure to another.
 
-        **Record-only on this tier, for this wave.** It reconciles :attr:`drawn` and nothing else: the
-        elements the map's `render()` overlays and the figure its `figure_spec` reports are the map's own,
-        and neither follows. Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
+        **Record-only on this tier, for this wave** — with one exception. It reconciles :attr:`drawn`
+        and nothing else: *which* elements the map's `render()` overlays, and the figure its `figure_spec`
+        reports, are the map's own and neither follows. The exception is visibility: a layer `diff` reports
+        as shown or hidden is toggled on the very element the map holds, so applying a figure that hides a
+        layer draws it hidden while `figure_spec` still describes it visible. Nothing in the tier calls
+        this yet; wiring it into the map is Wave 7 (order 23).
 
         **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
         difference between two figures is read off their descriptions, and a keyword JSON cannot write
@@ -491,12 +510,20 @@ class Renderer:
     def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
         """Draw the difference between two figures, layer by layer.
 
+        Removed, rebuilt, restyled and added layers pass through this renderer's record; shown and hidden
+        ones do not — they are toggled on the elements themselves, which is the one way this tier's
+        `apply` is not record-only (see :meth:`apply`).
+
         Args:
             before: The figure the map currently draws.
             after: The figure it should draw.
 
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
+
+        Warns:
+            UserWarning: for a shown or hidden layer whose element has no way to say it — see
+                :func:`_show`.
         """
         change = before.diff(after)
         for layer_id in change.removed:
@@ -565,6 +592,10 @@ class Renderer:
             layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
                 three tiers answer one too.
             visible: Whether it is drawn.
+
+        Warns:
+            UserWarning: when the element has no keyword to say it with, in either direction — see
+                :func:`_show`, which this delegates to.
 
         Examples:
             - Hiding a layer and reading it back, off the element rather than off the description:

@@ -363,7 +363,10 @@ def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
         layer: The layer's description.
 
     Returns:
-        The merged properties.
+        The merged properties. A held value replaces the described one under the same key, **except**
+        where both are mappings: those are merged one level deep, described first, so a held style value
+        joins the ones the builder described rather than replacing the whole dict they sit in. Nesting
+        deeper than one level is not merged — the inner mapping is taken from the held side whole.
     """
     props = dict(layer.symbology.props)
     for key, value in interactive_map._held_for(layer.id).items():
@@ -792,17 +795,22 @@ class InteractiveMapBase:
                 listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its
                 description; ``None`` makes it a custom layer (``custom:holoviews``).
             name: The caller's own name for the layer, used as its id when it is free and as its label.
-            visible: Whether the layer is described as visible.
+            visible: Whether the layer is described as visible — and, for a kind this tier draws, applied:
+                the drawer is asked for it and the element is hidden when the tree says the layer is not
+                drawn (its own flag, and its group's).
             band: The draw-order band, for a kind that does not imply one — what a custom layer needs,
                 since the engine name says nothing about what it draws.
             source: What the layer draws, recorded under its id; ``None`` for a layer drawn from no data.
             symbology: How it looks, as values — the description its drawer reads.
             key: A credential the layer's drawer needs, held on the map rather than in ``symbology`` so a
                 figure written to JSON carries no API key. ``None`` for every layer that needs none.
-            held: The engine values this layer's drawer needs that a description cannot carry — the
-                caller's raw HoloViews keywords, a colormap object, a tile provider — by the name the
-                drawer reads them under. Held on the map for the same reason ``key`` is; see
-                :func:`describe`. ``None`` for a layer whose description says everything about it.
+            held: The engine values this layer's drawer needs that a description cannot carry — a colormap
+                object, a tile provider, and the half of the caller's own keywords JSON cannot spell (the
+                rest is described, since M3). A value the drawer reads by name is filed by that name; the
+                keyword and style buckets are filed *nested*, under their own keys, and
+                :func:`held_props` merges each into the described mapping of the same name. Held on the
+                map for the same reason ``key`` is; see :func:`describe`. ``None`` for a layer whose
+                description says everything about it.
 
         Returns:
             The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer

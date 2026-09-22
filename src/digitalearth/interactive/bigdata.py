@@ -153,8 +153,8 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         dynamic=props.get("dynamic", True),
         **dict(props.get("canvas") or {}),
     )
-    # The builder's own style, then the caller's raw keywords over it: the two halves the description
-    # and the map hold between them (C1/H3/M9).
+    # The builder's own style, then the caller's keywords over it. Both halves are read off the
+    # description here; what the map holds beside the layer is merged in earlier, by `held_props`.
     common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     rasterized = interactive_map._styled(
         rasterized, common=common, bokeh={"tools": ["hover"]}

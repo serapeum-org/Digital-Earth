@@ -277,7 +277,8 @@ def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> An
     """Build one piece of Natural-Earth reference geography at the described resolution.
 
     Args:
-        interactive_map: The map being drawn, whose held values carry the caller's own keywords.
+        interactive_map: The map being drawn, whose held values carry the half of the caller's own
+            keywords a description cannot spell; the plain half is read off the description itself.
         _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
         layer: The layer's description.
 
@@ -367,7 +368,8 @@ def draw_coastlines(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the GeoViews coastline feature at the described resolution.
 
     Args:
-        interactive_map: The map being drawn, whose held values carry the caller's own keywords.
+        interactive_map: The map being drawn, whose held values carry the half of the caller's own
+            keywords a description cannot spell; the plain half is read off the description itself.
         _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
         layer: The layer's description.
 
@@ -428,12 +430,16 @@ class DecorationMixin(_MixinBase):
                 a **keyed** preset name such as ``"Planet.NICFI"`` (see
                 :mod:`digitalearth.base.basemaps`), whose credential is read from the environment; a raw
                 XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``); or an
-                ``xyzservices.TileProvider``.
+                ``xyzservices.TileProvider``. A name GeoViews does not hold falls back to the
+                `xyzservices` catalog, which is why :meth:`list_tile_providers` lists fewer names than
+                this accepts — 32 against 880, measured.
             level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
                 them on top (rare — e.g. a labels overlay).
             api_key: Credential for a keyed provider. For a keyed **preset** (``"Planet.NICFI"``) it is the
-                service's API key and ``None`` reads the preset's environment variable; for a catalog
-                provider that needs one (Stadia) it is only checked for presence.
+                service's API key and ``None`` reads the preset's environment variable; for a provider in
+                GeoViews' own catalog that needs one (Stadia) it is only checked for presence, while one
+                resolved from the `xyzservices` catalog has it substituted into the URL template, under
+                whichever field that provider declares.
             preset: A keyed preset's own keywords, e.g. ``{"date": "2024-01", "flavour": "visual"}``. A
                 dict rather than ``**kwargs`` so it cannot collide with a HoloViews style option.
             **opts: Extra HoloViews style options applied to the tile element.
@@ -599,7 +605,11 @@ class DecorationMixin(_MixinBase):
         """Return the sorted catalog of named ``geoviews.tile_sources`` providers.
 
         Returns:
-            The provider names accepted by :meth:`tiles`.
+            GeoViews' own catalog — 32 names, measured against the installed version. It is a *subset* of
+            what :meth:`tiles` accepts, not the whole of it: a name GeoViews does not hold falls back to
+            the `xyzservices` catalog, which carries 880. The narrower list is deliberate — a caller
+            reading it wants the names this tier offers rather than every service in the world — so read
+            it as "the catalogued names", not as "the accepted names".
         """
         gv, _ = _require_holoviz()
         return sorted(gv.tile_sources.tile_sources)
@@ -656,7 +666,7 @@ class DecorationMixin(_MixinBase):
         resolution: str = "110m",
         **opts: Any,
     ) -> Self:
-        """Add Natural-Earth context layers (land/ocean beneath the data, borders/rivers on top).
+        """Add Natural-Earth context layers (land/ocean/lakes beneath the data, borders/rivers on top).
 
         The flag-per-layer form, kept as the way to request several layers in one call. The six named
         methods (:meth:`coastlines`, :meth:`borders`, :meth:`land`, :meth:`ocean`, :meth:`lakes`,
@@ -667,7 +677,8 @@ class DecorationMixin(_MixinBase):
             ocean: Draw the ocean polygons (underlay).
             borders: Draw country borders (overlay).
             rivers: Draw river centerlines (overlay).
-            lakes: Draw lake polygons (overlay).
+            lakes: Draw lake polygons (underlay — the band the registry files ``lakes`` under, which is
+                where :meth:`lakes` draws them: beneath the data, with land and ocean).
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **opts: Extra HoloViews style options applied to every requested feature element.
 

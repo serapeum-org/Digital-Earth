@@ -291,8 +291,9 @@ class RasterMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        # The caller's raw HoloViews keywords, and a colormap object, are held beside the layer rather than
-        # written into its description: a figure is saved as JSON, and neither has a JSON form (C1/H3/M9).
+        # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
+        # into the description, and what has no JSON form — a colormap object, a callable — is held beside
+        # the layer, because a figure is saved as JSON.
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_element(

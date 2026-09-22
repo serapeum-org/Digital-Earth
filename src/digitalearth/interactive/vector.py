@@ -46,8 +46,10 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: stores as tuples: a ramp read back from one is spelled `("#440154", ...)`, which `color_levels` rejects
 #: outright (`ClassSelector` of `(int, list, range)`) and which makes a palette harder to read wherever a
 #: style is printed. Everything else keeps the spelling it was stored in, `clim` included: that one *is* a
-#: pair, and HoloViews reads it as one. The caller's own keywords never go through the freeze at all now —
-#: they are held beside the layer, exactly as passed (C1/H3/M9) — so nothing in `opts` needs thawing.
+#: pair, and HoloViews reads it as one. The caller's own keywords go through the freeze too, since M3 began
+#: describing the JSON-safe half of them: a `cmap=["#ff0000", "#00ff00"]` is stored, and handed to
+#: HoloViews, as `("#ff0000", "#00ff00")`. Only the builder's own resolved values are thawed back here —
+#: the keys this names — so a caller's tuple-spelled list reaches the engine as a tuple.
 _AS_LISTS: Tuple[str, ...] = ("cmap", "color_levels")
 
 
@@ -534,7 +536,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
-                display CRS through pyramids when needed.
+                display CRS through pyramids when needed. A path or URL naming one is taken too, and is
+                the only input a figure carrying this layer can be written down with.
             value_column: Optional numeric column colouring the points (also shown on hover).
             scheme: Optional classification scheme for ``value_column`` — ``None`` (the default) is a
                 continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
@@ -628,9 +631,10 @@ class VectorMixin(_MixinBase):
             self.last_breaks = list(styling["color_levels"])
         elif value_column:
             styling = {"color": value_column, "cmap": cmap, "colorbar": True}
-        # The caller's `**opts` are held beside the layer rather than recorded (C1/H3/M9) and merged over
-        # this by the drawer, which keeps the precedence: an explicit style the caller wrote outranks the
-        # one classification derived, so one scheme cannot mean two things (review M4).
+        # The caller's `**opts` are split per value: `describe_opts` writes the JSON-safe half into the
+        # description and puts the rest in `held` (review M3). Either way the drawer merges them over
+        # this, which keeps the precedence: an explicit style the caller wrote outranks the one
+        # classification derived, so one scheme cannot mean two things (review M4).
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         common: dict = {"size": size, **styling}
@@ -697,7 +701,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
-                pyramids when needed.
+                pyramids when needed. A path or URL naming one is taken too, and is the only input a
+                figure carrying this layer can be written down with.
             column: Optional numeric column filling the polygons (also shown on hover); ``None``
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
@@ -1084,7 +1089,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
-                pyramids when needed.
+                pyramids when needed. A path or URL naming one is taken too, and is the only input a
+                figure carrying this layer can be written down with.
             column: The column driving the fill colour (required); numeric for the continuous ramp, or any
                 hashable value for ``scheme="categorical"``.
             scheme: ``"categorical"`` for distinct-value colouring; a graduated scheme name (or an explicit
