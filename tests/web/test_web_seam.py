@@ -1144,6 +1144,69 @@ class _RecordingWidget:
         return record
 
 
+class TestTheAdaptersQueueReplayIsExercised:
+    """Review L4 — no contract check reads `engine_holds` while `apply_reaches_engine` is `False`.
+
+    The adapter's queue replay and the recording widget it drives are the only machinery in this file with
+    no reader: both engine checks in the shared contract skip here, so those lines could break today and
+    Wave 7 — when `apply` reaches the queue — would be the one to find out. These checks read it, read-only,
+    so it cannot rot in the meantime.
+    """
+
+    @staticmethod
+    def _layers_added(held) -> list:
+        """Return the ids of the MapLibre layers a queue replay added, in the order it added them.
+
+        Args:
+            held: What :meth:`WebContract.engine_holds` returned.
+
+        Returns:
+            One id per `add_layer` call.
+        """
+        return [call[1].obj.id for call in held if call[0] == "add_layer"]
+
+    def test_the_replay_reports_every_layer_the_widget_would_add(self):
+        """The queue is what the widget is built from, extra layers included.
+
+        Test scenario:
+            A graticule adds its degree labels beside itself, under a derived id — which is exactly the
+            case reading the renderer's record instead of the queue cannot see.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="grid").text(4.9, 52.4, "here", name="lbl")
+        added = self._layers_added(WebContract().engine_holds(m))
+        assert added == ["grid", "grid-label", "lbl"], added
+
+    def test_the_replay_follows_the_queue_rather_than_the_record(self):
+        """A layer taken off the map is gone from the widget, which is the distinction this exists to make.
+
+        Test scenario:
+            `remove_layer` writes the queue. Reading the renderer's record instead would still report the
+            layer, since the record is what `apply` reconciles and the queue is what the page is built from.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="grid").text(4.9, 52.4, "here", name="lbl")
+        m.remove_layer("grid")
+        added = self._layers_added(WebContract().engine_holds(m))
+        assert added == ["lbl"], added
+
+    def test_the_replay_hands_the_widget_each_source_before_its_layer(self):
+        """MapLibre refuses a layer whose source it has not been given, so the order is the contract.
+
+        Test scenario:
+            The replay is only a faithful stand-in for the widget build if it makes the same calls in the
+            same order — which is what the contract's engine checks will compare once `apply` reaches the
+            queue.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().graticule(name="grid")
+        methods = [call[0] for call in WebContract().engine_holds(m)]
+        assert methods == ["add_source", "add_layer", "add_layer"], methods
+
+
 class WebContract(RendererContract):
     """The web tier's adapter for the shared renderer contract (#305).
 
@@ -1228,8 +1291,10 @@ class WebContract(RendererContract):
         `_build_map_widget` hands every queue entry to `_apply_layer`, so that is what this does, into a
         widget that records each call. A described layer resolves through the renderer's record only because
         its marker is in the queue — a layer the record holds and the queue does not is never added, which is
-        exactly what reading the record directly could not see. No check reads this while
-        `apply_reaches_engine` is `False`; it is what they will read once `apply` reaches the queue.
+        exactly what reading the record directly could not see. **No shared contract check reads this
+        while `apply_reaches_engine` is `False`**; it is what they will read once `apply` reaches the
+        queue. So that it cannot rot in the meantime, `TestTheAdaptersQueueReplayIsExercised` above
+        reads it here, read-only (review L4).
 
         Args:
             tier: The map.
