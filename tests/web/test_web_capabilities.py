@@ -225,8 +225,9 @@ class TestTheDeclaration:
         """A caller is told what the tier does instead of what they asked for."""
         from digitalearth import quickmap
 
+        dem = _dem()
         with pytest.raises(ValueError, match="pans and zooms"):
-            quickmap(_dem(), backend="web", domain="europe")
+            quickmap(dem, backend="web", domain="europe")
 
     def test_a_kind_refusal_carries_the_declared_reason(self):
         """The renderer refuses an unsupported kind with the tier's own sentence, not a new one.

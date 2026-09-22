@@ -497,8 +497,10 @@ class Scene(WatermarkMixin):
         replaced rather than accumulated. Whatever the dropped layers referenced is forgotten too, so a long
         run does not hold every frame's dataset alive through the process-wide object table.
         """
-        for layer_id in list(self._sources):
-            self._forget_layer_data(layer_id)
+        # Every source goes and both tables are replaced below, so each object is forgotten directly rather
+        # than popped one layer at a time — which is what made the loop need a copy of the table it emptied.
+        for ref in self._sources.values():
+            forget_object(ref.uri)
         self.layers = []
         self._layer_labels = []
         self._layer_tree = LayerTree()

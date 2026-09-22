@@ -221,8 +221,9 @@ class TestARecipeThisKindDoesNotHave:
             drawn_map: A map whose renderer is under test.
         """
         draw = drawer_for("raster")
+        layer = LayerSpec("x", "raster")
         with pytest.raises(KeyError, match="records None as how it was drawn"):
-            draw(drawn_map, None, LayerSpec("x", "raster"))
+            draw(drawn_map, None, layer)
 
 
 class TestTheOptionsADrawerReads:
@@ -421,8 +422,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         """
         held = _artist_ids(drawn_map)
         figure = drawn_map.figure_spec
+        refused = _refused_figure(drawn_map)
         with pytest.raises(KeyError):
-            drawn_map._renderer.apply(figure, _refused_figure(drawn_map))
+            drawn_map._renderer.apply(figure, refused)
         after = _artist_ids(drawn_map)
         assert after == held, (
             f"a refused change left {sorted(after)} behind, was {sorted(held)}"
@@ -440,8 +442,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         """
         held = len(drawn_map.ax.texts)
         figure = drawn_map.figure_spec
+        refused = _refused_figure(drawn_map)
         with pytest.raises(KeyError):
-            drawn_map._renderer.apply(figure, _refused_figure(drawn_map))
+            drawn_map._renderer.apply(figure, refused)
         assert len(drawn_map.ax.texts) == held, (
             f"{len(drawn_map.ax.texts)} labels on the axes, {held} before the refusal"
         )
@@ -458,8 +461,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             the half-drawn state exists, so restoring the wrapper is what makes it go away.
         """
         figure = drawn_map.figure_spec
+        refused = _refused_figure(drawn_map)
         with pytest.raises(KeyError):
-            drawn_map._renderer._reconcile(figure, _refused_figure(drawn_map), [])
+            drawn_map._renderer._reconcile(figure, refused, [])
         assert "also-drawn" in drawn_map._renderer.drawn, sorted(
             drawn_map._renderer.drawn
         )
@@ -471,8 +475,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             drawn_map: A map with one drawn layer.
         """
         held = drawn_map.figure_spec
+        refused = _refused_figure(drawn_map)
         with pytest.raises(KeyError):
-            drawn_map._renderer.apply(held, _refused_figure(drawn_map))
+            drawn_map._renderer.apply(held, refused)
         assert drawn_map.figure_spec == held, "the map kept a figure it could not draw"
 
     def test_a_restored_layer_is_drawn_again_rather_than_re_attached(self, drawn_map):

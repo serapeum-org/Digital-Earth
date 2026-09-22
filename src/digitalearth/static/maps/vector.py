@@ -44,6 +44,10 @@ _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 #: a vector field — while a streamplot integrates that field into flow lines, which is a different layer.
 _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streamlines"}
 
+#: How a scatter layer names itself in a warning or refusal. The builder, the drawer that replays it and the
+#: deprecated-alias resolution all speak for the same public call, so they share the one spelling.
+_SCATTER_CALLER = "Map.scatter()"
+
 
 def _polygon_kind(fill: Any) -> str:
     """Return the kind a polygon layer is recorded under, given what colours it.
@@ -157,7 +161,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
     # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
-    plot_style = relocate_flat_style(opts, marker_size_for="Map.scatter()")
+    plot_style = relocate_flat_style(opts, marker_size_for=_SCATTER_CALLER)
     glyph = ScatterGlyph(
         src.x.values,
         src.y.values,
@@ -920,11 +924,11 @@ class VectorMixin(_MixinBase):
             value=size_column,
             old="scale",
             alias=scale,
-            caller="Map.scatter()",
+            caller=_SCATTER_CALLER,
         )
         # Resolved here rather than in the drawer so the deprecation warning lands on the caller's own
         # line: the drawer sits four frames further down, and a `stacklevel` counted that deep is brittle.
-        resolve_marker_size(opts, caller="Map.scatter()")
+        resolve_marker_size(opts, caller=_SCATTER_CALLER)
         return self._draw(
             LayerRecord(
                 "points",

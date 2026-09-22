@@ -362,16 +362,15 @@ def _forget_render_artist(axes: Any, artist: Any) -> None:
     registry = getattr(axes, "_cleo_render_artists", None)
     if not isinstance(registry, dict):
         return
-    for token, artists in list(registry.items()):
+    # Built as a new table rather than edited in place: the old one is being read while it is decided what
+    # stays, and a dict cannot lose an entry mid-iteration. cleopatra reads the attribute afresh on every
+    # render, so replacing it is the same to it as editing it.
+    pruned = {}
+    for token, artists in registry.items():
         kept = [held for held in artists if held is not artist]
-        if len(kept) == len(artists):
-            continue
         if kept:
-            registry[token] = kept
-        else:
-            del registry[token]
-    if not registry:
-        axes._cleo_render_artists = None
+            pruned[token] = kept
+    axes._cleo_render_artists = pruned or None
 
 
 class Renderer:
@@ -527,9 +526,15 @@ class Renderer:
             from its axes and from the transform stack, and adding the same object back is not supported.
             Drawing it again from `before` is, and it is the same call that drew it the first time.
         """
-        for layer_id in list(self._drawn):
-            if self._drawn[layer_id] is not held.get(layer_id):
-                self.remove(layer_id, forget=False)
+        # Decided first, removed after: `remove` takes each layer out of `_drawn`, which cannot shrink while
+        # it is being read.
+        partial = [
+            layer_id
+            for layer_id, drawn in self._drawn.items()
+            if drawn is not held.get(layer_id)
+        ]
+        for layer_id in partial:
+            self.remove(layer_id, forget=False)
         for layer_id in [key for key in held if key not in self._drawn]:
             try:
                 self.draw_layer(before, layer_id)
