@@ -526,6 +526,110 @@ def frozen_value(value: Any) -> Any:
     return value
 
 
+#: Heads a mapping's hash surrogate, so a mapping never hashes as the tuple of pairs it is turned into.
+#: `Symbology(props={"p": {"x": 1}})` and `Symbology(props={"p": (("x", 1),)})` are unequal properties that
+#: landed on one hash without it (review N1). A fresh object rather than a string or a tuple: a property can
+#: hold any value this module could spell, and colliding with one is what the tag exists to prevent.
+_MAPPING_TAG: Any = object()
+
+
+def hashable_value(value: Any) -> Any:
+    """Return `value` in a form that hashes, with every mapping in it reduced to its items.
+
+    The vocabulary freezes a list to a tuple so a spec holding one still hashes, but it leaves a mapping a
+    mapping — and every tier records at least one: MapLibre's `paint`, the resolved HoloViews style, a tile
+    preset. So almost every real `Symbology` raised `unhashable type: 'dict'`, while `Bounds`, `Scale`,
+    `Selection` and `Encoding` all hashed.
+
+    A mapping becomes a **frozenset** of its ``(key, value)`` pairs, applied inside a mapping and inside a
+    **tuple**. A frozenset is order-independent by construction, which is what makes two spellings of one
+    mapping agree: the keys need neither to be orderable against each other — ``{1: 'a', 'b': 2}`` hashes
+    perfectly well — nor to have distinct reprs. It carries a tag, so a mapping never hashes as the plain
+    collection of pairs that a caller might have written instead.
+
+    Args:
+        value: A stored property, or any part of one.
+
+    Returns:
+        The value with each mapping as a tagged frozenset of its items, reached inside mappings and tuples
+        alike. Anything else is returned as it is — a value that is unhashable for its own reasons still
+        raises when it is hashed, which is the honest outcome.
+
+    Examples:
+        - Two mappings written in a different order reduce to the same value, so they hash alike:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hashable_value({"b": 1, "a": 2}) == hashable_value({"a": 2, "b": 1})
+            True
+
+            ```
+        - Keys that cannot be ordered against each other are no obstacle, because nothing is ordered:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hash(hashable_value({1: "a", "b": 2})) is not None
+            True
+
+            ```
+        - A mapping does not hash as the pairs it is made of:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hashable_value({"x": 1}) == hashable_value((("x", 1),))
+            False
+
+            ```
+    """
+    if isinstance(value, Mapping):
+        # A frozenset rather than a sorted tuple: it is order-independent by construction, so it needs the
+        # keys neither to be orderable against each other nor to have distinct reprs. Sorting by `repr` as a
+        # fallback quietly required the second — a stable sort keeps insertion order for keys that share one,
+        # so two mappings that compared equal hashed differently, which is the invariant this exists to hold.
+        return (
+            _MAPPING_TAG,
+            frozenset((key, hashable_value(item)) for key, item in value.items()),
+        )
+    if isinstance(value, tuple):
+        return tuple(hashable_value(item) for item in value)
+    return value
+
+
+def thawed_value(value: Any) -> Any:
+    """Return `value` with every tuple in it, however nested, as a list.
+
+    The inverse of :func:`frozen_value`, for a renderer handing a stored property to an engine that reads the
+    two spellings as two different requests. HoloViews is the one that forced it: it reads a tuple of
+    dimensions as a ``(name, label)`` pair, so the `("fid",)` a symbology stores is refused where the
+    `["fid"]` it was built from is accepted.
+
+    Args:
+        value: A stored property, or any part of one.
+
+    Returns:
+        The value with every tuple as a list and the values inside a dict thawed the same way (the dict
+        itself is a fresh dict). Anything else — a scalar, a string, an object — is returned as it is.
+
+    Examples:
+        - Tuples become lists, inside dicts too:
+            ```python
+            >>> from digitalearth.base.spec._serial import thawed_value
+            >>> thawed_value((1, (2, 3))), thawed_value({"levels": (1, 2)})
+            ([1, [2, 3]], {'levels': [1, 2]})
+
+            ```
+        - It undoes a freeze, which is the round trip a drawer depends on:
+            ```python
+            >>> from digitalearth.base.spec._serial import frozen_value, thawed_value
+            >>> thawed_value(frozen_value({"cmap": ["#f00", "#00f"]}))
+            {'cmap': ['#f00', '#00f']}
+
+            ```
+    """
+    if isinstance(value, tuple):
+        return [thawed_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: thawed_value(item) for key, item in value.items()}
+    return value
+
+
 def as_list(owner: str, key: str, value: Any) -> Tuple[Any, ...]:
     """Return a stored list as a tuple, refusing a value of another shape by the key it was stored under.
 

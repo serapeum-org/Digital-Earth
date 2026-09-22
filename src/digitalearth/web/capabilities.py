@@ -9,6 +9,13 @@ The `absent` half is where the web tier differs most from the others. It pans an
 to set; its colour key is a builder that takes content rather than a toggle; and the field and mesh renderings
 the matplotlib tier offers have no MapLibre equivalent, which is a decision about what this tier is for rather
 than a gap somebody has yet to fill.
+
+**One capability here is conditional, and stays a tier check.** `display_crs` is declared — every layer is
+drawn in one CRS the caller may name — but the only value this tier accepts is EPSG:4326
+(:data:`~digitalearth.web.base.DISPLAY_CRS`), because MapLibre places a GeoJSON source and an image source
+by lon/lat degrees and reads anything else as degrees anyway. A `Capabilities` answers by name, not by value,
+so it cannot say "yes, but only 4326"; :meth:`~digitalearth.web.base.WebMapBase._validate_display_crs` says
+it instead, and is named here so the two are read together.
 """
 
 from digitalearth.base.capabilities import Capabilities

@@ -44,8 +44,8 @@ def _first_raster_source(web_map):
         def add_layer(self, layer):
             """Ignore the layer; only the source is under test."""
 
-    for apply in web_map.layers:
-        apply(Recorder())
+    for entry in web_map.layers:
+        web_map._apply_layer(Recorder(), entry)
     assert recorded, "no source was registered"
     return next(iter(recorded.values()))
 
@@ -72,8 +72,8 @@ class TestWebTierDispatch:
                 pass
 
         m = WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
-        for apply in m.layers:
-            apply(Recorder())
+        for entry in m.layers:
+            m._apply_layer(Recorder(), entry)
         assert recorded, "no source was registered"
         source = next(iter(recorded.values()))
         assert source["type"] == "raster", (

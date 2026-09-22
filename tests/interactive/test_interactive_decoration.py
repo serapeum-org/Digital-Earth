@@ -14,9 +14,36 @@ gv = pytest.importorskip("geoviews")
 
 
 @pytest.fixture
-def m() -> InteractiveMap:
-    """A fresh Web-Mercator map for each test."""
-    return InteractiveMap()
+def m():
+    """Yield a fresh Web-Mercator map for each test, closing it on the way out.
+
+    The object registry is process-global and holds strong references, so a map that is never closed
+    keeps the data it drew for the rest of the session.
+
+    Yields:
+        The map.
+    """
+    interactive_map = InteractiveMap()
+    yield interactive_map
+    interactive_map.close()
+
+
+def _element_of(interactive_map, element_type):
+    """Return the one element of a type the map composes.
+
+    Args:
+        interactive_map: The map.
+        element_type: The HoloViews element type wanted.
+
+    Returns:
+        The element — found by type rather than by position, because position is band order and that is
+        exactly what the tests using this must not assume.
+    """
+    return next(
+        element
+        for element in interactive_map.layers
+        if isinstance(element, element_type)
+    )
 
 
 class TestTiles:
@@ -117,6 +144,26 @@ class TestCoastlinesAndFeatures:
         m.features()
         assert m.layers == []
 
+    def test_feature_style_opts_reach_the_natural_earth_element(self, m):
+        """A style recorded for a Natural-Earth layer has to end up on the element that is drawn.
+
+        Args:
+            m: A fresh Web-Mercator map.
+
+        Test scenario:
+            The five Natural-Earth kinds are now drawn from their description rather than built in the
+            `features` loop, and `draw_natural_earth` clones the shared `gv.feature` singleton before
+            styling it. A drawer that built the clone and dropped the recorded options would still
+            register an element of the right type in the right band, so every other check in this class
+            would pass while the caller's styling silently vanished. Read off the element, because that
+            — not the record — is what a viewer sees.
+        """
+        m.features(land=True, alpha=0.3)
+        style = hv.Store.lookup_options("bokeh", m.layers[-1], "style").kwargs
+        assert style.get("alpha") == 0.3, (
+            f"feature opts not applied: {style.get('alpha')}"
+        )
+
     def test_non_mercator_features_raise(self):
         interactiveMap = InteractiveMap(crs=4326)
         with pytest.raises(ValueError, match="crs=3857"):
@@ -130,6 +177,69 @@ class TestTogglesAndCompose:
         m.image(dataset).colorbar(False)
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
         assert plot["colorbar"] is False
+
+    def test_colorbar_acts_on_the_layer_just_added_when_it_is_not_on_top(
+        self, m, dataset
+    ):
+        """A text label sits in the band over the data, so the raster added after it is drawn beneath it.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+
+        Test scenario:
+            `colorbar()` read `self.layers[-1]`, and `layers` follows band order, so the toggle reached the
+            label instead and HoloViews refused it: `Unexpected option 'colorbar' for Text type` (review H5).
+        """
+        m.text(4.0, 52.0, "label").image(dataset).colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
+        assert plot.kwargs["colorbar"] is False, plot.kwargs
+
+    def test_colorbar_does_not_restyle_a_layer_drawn_over_the_one_just_added(
+        self, m, dataset
+    ):
+        """The quieter half of the same defect: an overlay accepts the option, so nothing raised.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+
+        Test scenario:
+            `coastlines().image(dem).colorbar(False)` applied the option to the coastlines and left the
+            raster's colorbar on — the call the caller made did nothing they could see.
+        """
+        m.coastlines().image(dataset).colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
+        assert plot.kwargs["colorbar"] is False, plot.kwargs
+
+    def test_an_underlay_added_after_the_data_does_not_take_the_toggle(
+        self, m, dataset
+    ):
+        """A basemap is drawn beneath the data and has no colorbar, so the toggle stays with the raster.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+
+        Test scenario:
+            Before the layer tree, an underlay was inserted at the front and never became the layer these
+            toggles acted on; the web tier's `_last_layer_id` likewise counts data layers only. Tracking
+            "the last layer added" without that exception would send this call to the tiles.
+        """
+        m.image(dataset).tiles("CartoLight").colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
+        assert plot.kwargs["colorbar"] is False, plot.kwargs
+
+    def test_legend_acts_on_the_layer_just_added(self, m, dataset):
+        """`legend()` read the top-drawn layer too, so a contour under an overlay was never reached.
+
+        Args:
+            m: The map.
+            dataset: A small raster to contour.
+        """
+        m.coastlines().contours(dataset, levels=4).legend(False)
+        plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Contours), "plot")
+        assert plot.kwargs["show_legend"] is False, plot.kwargs
 
     def test_colorbar_without_layers_raises(self, m):
         with pytest.raises(ValueError, match="at least one layer"):
@@ -167,4 +277,46 @@ class TestTogglesAndCompose:
         assert issubclass(kinds[0], gv.element.WMTS), "tiles must be the bottom layer"
         assert issubclass(kinds[2], gv.element.Feature), (
             "coastline must be the top layer"
+        )
+
+
+class TestANamedLayerSaysWhereItIsDrawn:
+    """A named builder's prose must name the band the registry files its kind in (round 2, M7).
+
+    The six named Natural-Earth builders each delegate to `features()`, so which band they land in is the
+    registry's answer, not theirs. Four of the six explain that answer in their own words, and the prose is
+    what a caller reads — `lakes()` said "overlay" for a kind the registry files under `underlay`, which is
+    the opposite of what the tier draws. The examples that would have shown it are `# doctest: +SKIP`
+    blocks, so nothing executed them.
+    """
+
+    #: The named builders, each with the registered kind whose band decides where it draws.
+    NAMED_LAYERS = [
+        ("land", "land"),
+        ("ocean", "ocean"),
+        ("lakes", "lakes"),
+        ("rivers", "rivers"),
+        ("coastlines", "coastlines"),
+        ("borders", "borders"),
+    ]
+
+    @pytest.mark.parametrize("builder, kind", NAMED_LAYERS)
+    def test_the_prose_names_the_band_the_registry_files_it_in(self, builder, kind):
+        """A docstring either says nothing about the band or says the one the kind is drawn in.
+
+        Args:
+            builder: The `InteractiveMap` method a caller reads.
+            kind: The registered kind that builder adds, whose band the registry owns.
+
+        Test scenario:
+            Both band words are looked for, so a docstring cannot pass by naming neither the right one nor
+            the wrong one while still claiming the opposite elsewhere in the same text.
+        """
+        from digitalearth.base.registry import band_of
+
+        doc = (getattr(InteractiveMap, builder).__doc__ or "").lower()
+        stated = tuple(word for word in ("underlay", "overlay") if word in doc)
+        assert stated in ((), (band_of(kind),)), (
+            f"{builder}() reads as {stated or 'nothing'}, but the registry draws {kind!r} "
+            f"in the {band_of(kind)} band"
         )

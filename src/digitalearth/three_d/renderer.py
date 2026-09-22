@@ -12,9 +12,10 @@ a layer can be removed, hidden or re-described without rebuilding the scene arou
 
 **Changes go through the diff.** When the scene's figure changes, the renderer is handed the old and the new one
 and applies :meth:`~digitalearth.base.spec.FigureSpec.diff` (#289): added layers are drawn, removed ones taken
-off the plotter, rebuilt and restyled ones drawn again — VTK has no cheap restyle, so a colour change is a
-rebuild of that one layer — and shown/hidden ones toggled on their actor. Draw order is recorded but not
-applied: VTK composites by depth, not by the order actors were added.
+off the plotter, rebuilt ones drawn again, and shown/hidden ones toggled on their actor. A restyle is drawn
+again **only when it reaches the engine** — VTK has no cheap restyle, so a colour change is a rebuild of that
+one layer, while a change of `label` alone is not (see :meth:`Renderer3D._reaches_pyvista`). Draw order is
+recorded but not applied: VTK composites by depth, not by the order actors were added.
 """
 
 import logging
@@ -22,6 +23,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.three_d.capabilities import CAPABILITIES
 
 __all__ = ["Renderer3D", "drawer_for"]
 
@@ -57,8 +59,9 @@ def drawer_for(kind: str) -> Any:
         for a layer that had nothing to draw and was skipped.
 
     Raises:
-        KeyError: for a kind this tier does not draw, naming the kinds it does — the check a figure written
-            for another backend runs into.
+        KeyError: for a kind this tier does not draw, naming the kinds it does and, when the tier declared
+            one, the reason it does not draw this one — the check a figure written for another backend runs
+            into.
 
     Examples:
         - Every kind the tier declares has a drawer:
@@ -82,8 +85,15 @@ def drawer_for(kind: str) -> Any:
     # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
     # without loading every builder behind them (review L4).
     if kind not in DRAWN_KINDS:
+        # The reason is the tier's own, read from the declaration rather than written again here (#294).
+        # This tier declares no layer kind absent today — its `absent` names features, not kinds — so the
+        # clause is usually empty; the rule is the same on all four tiers, and a kind it later decides
+        # against explains itself for free.
+        reason = CAPABILITIES.reason(kind)
         raise KeyError(
-            f"the 3-D tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+            f"the 3-D tier does not draw {kind!r} layers"
+            + (f" — {reason}" if reason else "")
+            + f"; it draws {sorted(DRAWN_KINDS)}"
         )
     # Imported here rather than at module level: every builder module imports the scene, so a module-level
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
@@ -322,12 +332,39 @@ class Renderer3D:
         """Show or hide what was drawn for a layer.
 
         Args:
-            layer_id: The layer to toggle.
+            layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
+                three tiers answer one too — note its neighbour :meth:`is_visible` **raises** for the same
+                id, because there is no visibility to report where there is nothing to toggle.
             visible: Whether it is drawn.
         """
         drawn = self._drawn.get(layer_id)
         if drawn is not None:
             _set_visible(drawn[1], visible)
+
+    def is_visible(self, layer_id: str) -> bool:
+        """Whether the plotter is currently drawing the actor this renderer holds for a layer.
+
+        The read-back of :meth:`set_visible`. Every tier's renderer answers this, in its own terms, so the
+        question "is this layer drawn hidden?" can be asked of any of them — which is what the shared
+        renderer conformance suite does (review M4).
+
+        Args:
+            layer_id: The layer to ask about.
+
+        Returns:
+            `True` when the actor is visible.
+
+        Raises:
+            KeyError: when nothing was drawn for `layer_id`, naming it. A layer the plotter does not hold
+                has no visibility to report, and :attr:`drawn` is what says which those are.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None:
+            raise KeyError(
+                f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the 3-D "
+                f"tier holds {sorted(self._drawn)}"
+            )
+        return _is_visible(drawn[1])
 
 
 def _set_visible(actor: Any, visible: bool) -> None:
@@ -342,3 +379,19 @@ def _set_visible(actor: Any, visible: bool) -> None:
     # A volume actor, and older PyVista actors, expose only VTK's own setter.
     except AttributeError:  # pragma: no cover - depends on the installed PyVista
         actor.SetVisibility(bool(visible))
+
+
+def _is_visible(actor: Any) -> bool:
+    """Whether an actor is currently drawn, whichever PyVista version built it.
+
+    Args:
+        actor: The actor to ask.
+
+    Returns:
+        Its visibility.
+    """
+    try:
+        return bool(actor.visibility)
+    # The same pair of spellings :func:`_set_visible` writes through.
+    except AttributeError:  # pragma: no cover - depends on the installed PyVista
+        return bool(actor.GetVisibility())

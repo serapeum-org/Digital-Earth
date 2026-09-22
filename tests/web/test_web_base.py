@@ -1297,3 +1297,67 @@ class TestDisplayRasterReprojection:
 
         marker = object()
         assert WebMap()._to_display_raster(marker) is marker
+
+
+class TestForgettingALayerTheTreeNeverHeld:
+    """`_forget_layer` is total: it takes back whatever was recorded and touches nothing else."""
+
+    def test_forgetting_an_id_nothing_recorded_changes_nothing(self):
+        """`_index_layer`'s rollback calls this without knowing how far its own body got.
+
+        Test scenario:
+            Both of today's call sites are past the tree add, so the skip is never taken from `src/`
+            (review N4) — which is exactly why it is worth pinning here rather than assuming. The
+            alternative, removing from the tree unconditionally, turns a cleanup into a `KeyError` that
+            hides whatever made the build stop; and a cleanup that reached further than the id it was
+            given would take another layer's record with it.
+        """
+        pytest.importorskip("maplibre")
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        features = gpd.GeoDataFrame(
+            {"value": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326
+        )
+        web_map = WebMap().points(features, name="obs")
+        before = (
+            list(web_map.figure_spec.layers.ids),
+            sorted(web_map._sources),
+            sorted(web_map._issued_ids),
+        )
+        web_map._forget_layer("never-indexed")
+        after = (
+            list(web_map.figure_spec.layers.ids),
+            sorted(web_map._sources),
+            sorted(web_map._issued_ids),
+        )
+        assert after == before, (
+            f"forgetting an id nothing recorded changed the record: {before} -> {after}"
+        )
+
+
+class TestPlacingAVectorDrawersSource:
+    """`placed_features` is the one line each of the four vector drawers calls (review H1)."""
+
+    def test_a_drawer_without_a_map_gets_its_source_back_untouched(self):
+        """A drawer exercised on its own has no map to place geometry in, and must not be given one.
+
+        Test scenario:
+            Since a vector layer records the caller's own path rather than the warped frame, the drawers
+            place their geometry themselves. The renderer conformance checks and the drawer-level tests
+            call a drawer with `web_map=None`; reprojecting against `None` there would raise inside the
+            guard instead of handing the frame straight back.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        from digitalearth.base.spec import LayerSpec
+        from digitalearth.web.base import placed_features
+
+        features = gpd.GeoDataFrame(
+            {"value": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326
+        )
+        placed = placed_features(None, features, LayerSpec("obs", "points"))
+        assert placed is features, (
+            "a drawer with no map must be handed the very frame it passed in"
+        )

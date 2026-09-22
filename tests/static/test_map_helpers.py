@@ -212,12 +212,15 @@ class TestPolygonLayer:
         """_polygon_layer with values draws a filled layer and registers exactly one Scene layer.
 
         Test scenario:
-            Passing per-polygon values produces one PolyCollection layer with all paths drawn.
+            Passing per-polygon values produces one PolyCollection layer with all paths drawn. The helper
+            now answers in the shape every drawer answers in (a ``DrawnLayer``), because its callers are
+            drawers and what they hand back is what the renderer records.
         """
         m = Map(crs=4326)
-        pc = m._polygon_layer(squares, np.array([1.0, 2.0]))
+        drawn = m._polygon_layer(squares, np.array([1.0, 2.0]))
         assert len(m.layers) == 1, f"expected one layer, got {len(m.layers)}"
-        assert len(pc.get_paths()) == 2, f"expected 2 paths, got {len(pc.get_paths())}"
+        paths = drawn.artist.get_paths()
+        assert len(paths) == 2, f"expected 2 paths, got {len(paths)}"
 
     def test_outline_mode_registers_one_layer(self, squares):
         """_polygon_layer without values draws outline-only and registers exactly one Scene layer.
@@ -226,9 +229,10 @@ class TestPolygonLayer:
             Omitting values produces a single outline PolyCollection layer.
         """
         m = Map(crs=4326)
-        pc = m._polygon_layer(squares)
+        drawn = m._polygon_layer(squares)
         assert len(m.layers) == 1, f"expected one layer, got {len(m.layers)}"
-        assert len(pc.get_paths()) == 2, f"expected 2 paths, got {len(pc.get_paths())}"
+        paths = drawn.artist.get_paths()
+        assert len(paths) == 2, f"expected 2 paths, got {len(paths)}"
 
     def test_respects_explicit_add_colorbar(self, squares):
         """_polygon_layer honours an explicit add_colorbar instead of forcing the default.

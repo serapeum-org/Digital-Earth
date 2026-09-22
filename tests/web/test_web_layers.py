@@ -120,12 +120,31 @@ def _drawn(web_map):
     Returns:
         Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none. A
         caller's own object carries no marker either, so it is looked up in the map's custom table by identity.
+
+    Note:
+        A layer drawn from its description (#296) is a MapLibre ``Layer``, which carries its id as ``.id``
+        rather than as the marker a queued closure is tagged with. That form is read too, guarded by the
+        map's own registry so an unregistered layer cannot be mistaken for one.
     """
     held = {id(obj): layer_id for layer_id, obj in web_map._custom.items()}
-    ids = [
-        getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
-        for layer in web_map.layers
-    ]
+    registered = set(web_map.layer_ids)
+
+    def identify(layer):
+        """Return the layer id an entry stands for.
+
+        Args:
+            layer: One entry of the map's `layers`.
+
+        Returns:
+            Its layer id, or `None` when it carries none — a basemap or a control.
+        """
+        marker = getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
+        if marker is not None:
+            return marker
+        own = getattr(layer, "id", None)
+        return own if own in registered else None
+
+    ids = [identify(layer) for layer in web_map.layers]
     return [layer_id for layer_id in ids if layer_id is not None]
 
 
@@ -252,27 +271,6 @@ class TestTheRegistryIsAddressable:
         with pytest.raises(KeyError, match="no layer kind 'fill' is registered"):
             m._index_layer("fill-0", None, kind="fill")
         assert m._layer_tree.ids == (), m._layer_tree.ids
-
-    def test_rekinding_to_an_unregistered_kind_keeps_the_recorded_kind(self, points):
-        """`_rekind_layer` checks the kind first, so a refused name leaves the layer described as it was."""
-        from digitalearth.web import WebMap
-
-        m = WebMap().points(points)
-        layer_id = m.layer_ids[0]
-        with pytest.raises(KeyError, match="no layer kind 'dots' is registered"):
-            m._rekind_layer(layer_id, "dots")
-        assert m._layer_tree.get(layer_id).kind == "points", m._layer_tree.get(layer_id)
-
-    def test_rekinding_keeps_the_label_visibility_and_place(self, points, polygons):
-        """Only the kind changes: the layer keeps its label, visibility and position in draw order."""
-        from digitalearth.web import WebMap
-
-        m = WebMap().polygons(polygons, name="Areas", visible=False).points(points)
-        first = m.layer_ids[0]
-        m._rekind_layer(first, "choropleth")
-        held = m._layer_tree.get(first)
-        described = (held.kind, held.display_label, held.visible, m.layer_ids[0])
-        assert described == ("choropleth", "Areas", False, first), described
 
     def test_every_kind_the_tree_records_is_registered(self, points, polygons, raster):
         """No builder writes a kind the registry cannot look up (#288)."""
@@ -991,7 +989,10 @@ class TestAPopupOverAnUndescribedLayer:
 
         m = WebMap().cluster(points)
         assert m.popup(["v"]) is not None, "a clustered map must take a popup"
-        assert m.layer_ids == ["clusters-2"], m.layer_ids
+        assert len(m.layer_ids) == 1, (
+            "a cluster is one entry in the tree, whatever its three MapLibre layers are called"
+        )
+        assert m.layer_ids[0].startswith("clusters"), m.layer_ids
 
     def test_a_popup_naming_a_layer_this_map_has_not_drawn_is_refused(self, points):
         """An id a caller wrote is checked; skipping it accepted a typo in silence.
@@ -1068,7 +1069,13 @@ class TestAPopupOverAnUndescribedLayer:
             )
             if "layer_id" in held
         ]
-        assert bound == ["unclustered-4"], bound
+        assert len(bound) == 1, bound
+        assert bound[0].endswith("unclustered"), (
+            f"the popup must bind to the loose points, which carry the columns; got {bound}"
+        )
+        assert bound[0].startswith(m.layer_ids[0]), (
+            f"and to this cluster's own loose points; got {bound} for {m.layer_ids}"
+        )
 
     def test_a_described_layer_still_records_what_pops_up(self, points):
         """The guard skips the description, and must not skip it for a layer that has one.
@@ -1529,6 +1536,56 @@ class TestACallersOwnLayer:
         from maplibre import Layer, LayerType
 
         return Layer(id=layer_id, type=LayerType.CIRCLE, source=f"{layer_id}-src")
+
+    def test_a_layer_built_hidden_is_described_hidden(self):
+        """Review L10 — the description is what decides the drawing now, so it has to read the object.
+
+        Test scenario:
+            `add_layer` indexed every caller's layer as visible, whatever the object said. That was only
+            drift while nothing read `layer.visible`; this branch made it drive the drawing, so a layer the
+            caller built hidden is now described visible and a later `set_visible(..., True)` "restores" it
+            to a state it was never in.
+        """
+        from maplibre import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        hidden = Layer(
+            id="mine",
+            type=LayerType.CIRCLE,
+            source="mine-src",
+            layout={"visibility": "none"},
+        )
+        described = WebMap().add_layer(hidden).figure_spec.layers.get("mine")
+        assert described.visible is False, (
+            "a layer built hidden must be described hidden"
+        )
+
+    def test_a_layer_built_visible_is_described_visible(self):
+        """The guard must read the object rather than simply answering hidden."""
+        from maplibre import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        shown = Layer(
+            id="mine",
+            type=LayerType.CIRCLE,
+            source="mine-src",
+            layout={"visibility": "visible"},
+        )
+        described = WebMap().add_layer(shown).figure_spec.layers.get("mine")
+        assert described.visible is True, (
+            "a layer built visible must be described visible"
+        )
+
+    def test_a_layer_that_says_nothing_about_visibility_is_described_visible(self):
+        """MapLibre's own default is visible, and most callers never write the property at all."""
+        from digitalearth.web import WebMap
+
+        described = (
+            WebMap().add_layer(self._layer("quiet")).figure_spec.layers.get("quiet")
+        )
+        assert described.visible is True, "no layout means MapLibre's own default"
 
     def test_a_layer_the_caller_built_is_addressable(self):
         """The reproduction from the issue: `layer_ids` listed nothing and `remove_layer` raised.

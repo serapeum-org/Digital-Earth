@@ -92,6 +92,73 @@ class TestTrimesh:
         )
 
 
+class TestAMeshIsBuiltOnce:
+    """The builder needs the face count to route; the drawer needs the mesh. One build serves both."""
+
+    @pytest.mark.parametrize("source", ["points", "ugrid"])
+    def test_one_trimesh_call_builds_its_mesh_once(self, source, point_fc, monkeypatch):
+        """Triangulating the same points twice is the cost the auto-routing was there to avoid.
+
+        Args:
+            source: Scattered points, triangulated locally, or a UGRID mesh with its own connectivity.
+            point_fc: The point fixture.
+            monkeypatch: Used to count calls to the mesh builder.
+
+        Test scenario:
+            The builder built the mesh to count its faces, and the drawer built it again from the same
+            data to draw it — a second reprojection and Delaunay triangulation for every mesh under the
+            big-data cutoff (review M8).
+        """
+        builds = []
+        real = InteractiveMap._mesh_inputs
+
+        def counting(self, data, value_column):
+            """Count the call and build as the tier would.
+
+            Args:
+                self: The map.
+                data: The mesh source.
+                value_column: The node-value column.
+
+            Returns:
+                What the real builder returns.
+            """
+            builds.append(value_column)
+            return real(self, data, value_column)
+
+        monkeypatch.setattr(InteractiveMap, "_mesh_inputs", counting)
+        interactive_map = InteractiveMap()
+        try:
+            if source == "points":
+                interactive_map.trimesh(point_fc, value_column="fid")
+            else:
+                interactive_map.trimesh(_FakeMesh())
+            assert isinstance(interactive_map.layers[0], gv.TriMesh), "not drawn"
+            assert len(builds) == 1, f"the mesh was built {len(builds)} times"
+        finally:
+            interactive_map.close()
+
+    def test_the_drawer_still_builds_a_mesh_from_the_description_alone(self, point_fc):
+        """Handing the builder's mesh to the drawer must not make the drawer depend on it.
+
+        Args:
+            point_fc: The point fixture.
+
+        Test scenario:
+            A figure is redrawn from its description — by the renderer, or on another map — with no builder
+            call in flight, so the drawer has to build the mesh itself.
+        """
+        interactive_map = InteractiveMap().trimesh(point_fc, value_column="fid")
+        try:
+            layer_id = interactive_map.layer_ids[0]
+            redrawn = interactive_map._renderer.draw_layer(
+                interactive_map.figure_spec, layer_id
+            )
+            assert len(redrawn.element.nodes) == len(interactive_map.layers[0].nodes)
+        finally:
+            interactive_map.close()
+
+
 class TestHexbin:
     """``hexbin`` — equal-area hex density binning."""
 

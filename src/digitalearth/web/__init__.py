@@ -17,7 +17,8 @@ MapLibre GL JS + deck.gl (via the ``maplibre`` py-maplibregl anywidget, which dr
 for the big-data path) are a **renderer, not a GIS engine**: every layer is built from
 pyramids-sourced numpy / GeoDataFrames — **never** ``xarray``/``rasterio``/``cartopy`` or any GIS competitor
 (enforced by ``tests/test_no_competitor_imports.py``). All CRS/reproject work happens upstream in pyramids
-(``Dataset.to_crs``) before a layer is built; MapLibre renders EPSG:3857 / 4326 only.
+(``Dataset.to_crs``) — by the builder before it describes the layer, or by the drawer when a layer is drawn
+back from a description and nothing was placed for it; MapLibre renders EPSG:3857 / 4326 only.
 
 The engine import is **lazy**: this package imports without the optional ``web`` extra; calling a
 builder/render method without it raises an actionable ``ImportError`` (``pip install 'digitalearth[web]'``).

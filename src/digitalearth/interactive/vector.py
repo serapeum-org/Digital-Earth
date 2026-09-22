@@ -15,22 +15,436 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
+import os
+from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.spec import Scale
+from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
+from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
+    cmap_name,
+    describe,
+    describe_opts,
+    describe_style,
+    held_props,
+    style_value,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+#: The style options HoloViews takes as a `list` and refuses as a tuple. These are the builder's **own**
+#: resolved values — a sampled colour ramp, a classifier's edges — which the description carries and so
+#: stores as tuples: a ramp read back from one is spelled `("#440154", ...)`, which `color_levels` rejects
+#: outright (`ClassSelector` of `(int, list, range)`) and which makes a palette harder to read wherever a
+#: style is printed. Everything else keeps the spelling it was stored in, `clim` included: that one *is* a
+#: pair, and HoloViews reads it as one. The caller's own keywords go through the freeze too, since M3 began
+#: describing the JSON-safe half of them: a `cmap=["#ff0000", "#00ff00"]` is stored, and handed to
+#: HoloViews, as `("#ff0000", "#00ff00")`. Only the builder's own resolved values are thawed back here —
+#: the keys this names — so a caller's tuple-spelled list reaches the engine as a tuple.
+_AS_LISTS: Tuple[str, ...] = ("cmap", "color_levels")
+
+
+def _classifiable(features: Any) -> Any:
+    """Return the frame a column is classified from, opening a path the way the drawer opens one.
+
+    Every builder on this tier takes a path as well as an opened object, and a path is the only input a
+    figure can be *written* with: `DataRef.of` records a path as a path and anything else as an `object:`
+    reference, which `FigureSpec.to_dict` refuses. The unclassified branches never had to read the data
+    themselves — they hand the caller's argument to `add_element` and the renderer opens it at draw time —
+    but classifying is different: the class edges or the distinct values have to be known before the layer
+    is described, because they are part of the description. Indexing the argument itself answered
+    `TypeError: string indices must be integers` for the one input that yields a storable figure
+    (review M8).
+
+    Opened through the same reference the layer is registered under, so a path is read by exactly the
+    resolver that will read it again at draw time. Only the classification reads this frame; the caller's
+    own argument stays the layer's source, so the figure still records the path rather than an object.
+
+    Args:
+        features: The caller's argument — a `FeatureCollection`, a GeoDataFrame, or a path or URL to one.
+
+    Returns:
+        A frame whose columns can be read. An object is handed back untouched, so the common case opens
+        nothing.
+    """
+    if isinstance(features, (str, os.PathLike)):
+        return DataRef.of(features).open()
+    return features
+
+
+def _as_labels(gdf: Any, column: str, missing: str) -> Any:
+    """Return a copy of `gdf` with one column read as discrete labels.
+
+    Bokeh colours a numeric column by interpolating the palette; a categorical layer wants one colour per
+    value, which it gets by the column arriving as strings. Missing rows take a label of their own so the
+    palette can give them the neutral colour rather than a category's.
+
+    Args:
+        gdf: The frame to relabel.
+        column: The column drawn as categories.
+        missing: The label missing rows take.
+
+    Returns:
+        A copy of the frame with `column` as strings.
+    """
+    gdf = gdf.copy()
+    absent = gdf[column].isna()
+    gdf[column] = gdf[column].astype(str).mask(absent, missing)
+    return gdf
+
+
+def _vector_symbology(
+    hv_type: str,
+    vdims: Any,
+    common: dict,
+    labels: Optional[dict] = None,
+    opts: Optional[dict] = None,
+) -> Symbology:
+    """Return the description a vector layer is drawn from.
+
+    Args:
+        hv_type: The HoloViews element type the layer is built as — `"Points"`, `"Path"`, `"Polygons"`.
+            Recorded under `via` as `"geometry"`: these five draw a frame of geometry, which is what tells
+            them apart from the aggregating builders that draw the same kinds.
+        vdims: The value dimensions the element carries, or `None`.
+        common: The resolved style options, as values — the builder's own half, already described.
+        labels: For a layer coloured by category, the column drawn as labels and the label missing rows
+            take — what :func:`_as_labels` needs. `None` for every other layer, which draws its column as
+            it is.
+        opts: The caller's own keywords, already through :func:`describe_opts` — the half a figure can
+            carry. The drawer merges these over `common`, which is the precedence the builder applied.
+
+    Returns:
+        The symbology. Written by a helper rather than inline at five call sites, so the five kinds cannot
+        drift in what they record.
+    """
+    return Symbology(
+        props={
+            "via": "geometry",
+            "hv_type": hv_type,
+            "vdims": list(vdims) if vdims else None,
+            "common": dict(common),
+            "labels": dict(labels) if labels else None,
+            "opts": dict(opts or {}),
+        }
+    )
+
+
+def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the HoloViews element for any of the kinds that share the vector shape.
+
+    Points, lines, polygons and both choropleth paths are one GeoDataFrame turned into one typed element
+    and styled, differing only in the type, the value dimensions and the resolved style — which is why they
+    share a drawer as well as a registration funnel.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the feature collection it draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    props = held_props(interactive_map, layer)
+    gdf = interactive_map._display_gdf(data)
+    labels = props.get("labels")
+    if labels:
+        gdf = _as_labels(gdf, labels["column"], labels["missing"])
+    element = interactive_map._vector_element(
+        props["hv_type"],
+        gdf,
+        # Thawed, because the description stores every sequence as a tuple and HoloViews reads a tuple of
+        # dimensions as a `(name, label)` pair — the stored `("fid",)` is refused where `["fid"]` is not.
+        # Only this property: a `clim` is a pair, and reaches Bokeh as the pair it was written as.
+        vdims=thawed_value(props.get("vdims")),
+    )
+    # The builder's own resolved style, then the caller's raw keywords over it — the precedence the
+    # builder applied before the two were split (the description carries the first, the map the second).
+    common = {
+        key: thawed_value(value) if key in _AS_LISTS else value
+        for key, value in dict(props.get("common") or {}).items()
+    }
+    common.update(dict(props.get("opts") or {}))
+    element = interactive_map._styled(
+        element, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Bin a layer's points into hexagons and colour them by the described reduction.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the points to bin.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        KeyError: when the recorded ``column`` is absent from the reprojected frame — the value column a
+            hex is coloured by is only read here, so a name that matches nothing is refused here.
+    """
+    import numpy as np
+
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    gdf = interactive_map._display_gdf(data)
+    # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
+    # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
+    # also needs the reducer as a numpy callable (np.size = count), not a string.
+    x = gdf.geometry.x.to_numpy()
+    y = gdf.geometry.y.to_numpy()
+    reducers = {
+        "count": np.size,
+        "mean": np.mean,
+        "sum": np.sum,
+        "min": np.min,
+        "max": np.max,
+        "std": np.std,
+    }
+    crs = gv.util.process_crs(interactive_map.crs)
+    column = props.get("column")
+    if column:
+        reducer = reducers.get(props.get("aggregator", "mean"), np.mean)
+        element = gv.HexTiles(
+            (x, y, gdf[column].to_numpy()),
+            kdims=["x", "y"],
+            vdims=[column],
+            crs=crs,
+        )
+    else:  # no value column -> count points per hex (np.size), no value dimension
+        reducer = np.size
+        element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)
+    common = {
+        "cmap": props.get("cmap"),
+        "colorbar": True,
+        **dict(props.get("opts") or {}),
+    }
+    element = interactive_map._styled(
+        element,
+        common=common,
+        bokeh={
+            "gridsize": props.get("gridsize"),
+            "aggregator": reducer,
+            "tools": ["hover"],
+        },
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_kde(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Estimate the density of a layer's points as a bivariate surface.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the points whose density is drawn.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _, hv = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    gdf = interactive_map._display_gdf(data)
+    element = hv.Bivariate((gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy()))
+    common = {"cmap": props.get("cmap"), **dict(props.get("opts") or {})}
+    element = interactive_map._styled(
+        element,
+        common=common,
+        bokeh={"filled": props.get("filled"), "colorbar": True},
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_uv_field(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the arrow, barb or streamline field a described u/v layer asks for.
+
+    The three share this drawer because they share their data: one decimated u/v grid, differing only in
+    the glyph GeoViews draws it with and in which backend renders it.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the ``(u, v)`` pair it draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded ``density`` is not in ``(0, 1]`` — the field is decimated by
+            ``round(1 / density)``, which nothing outside that range names.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    via = props.get("via")
+    u, v = data
+    arrays = interactive_map._uv_arrays(
+        u, v, band=props.get("band"), density=props.get("density")
+    )
+    crs = gv.util.process_crs(interactive_map.crs)
+    opts = dict(props.get("opts") or {})
+    if via == "barbs":
+        element = gv.WindBarbs.from_uv(arrays, crs=crs)
+    else:
+        # Streamlines carry the same data as an arrow field; the matplotlib backend is what draws them
+        # as streamlines rather than as arrows.
+        element = gv.VectorField.from_uv(arrays, crs=crs)
+    if via == "vectorfield":
+        common: dict = dict(opts)
+        if props.get("color_by") == "magnitude":
+            common.update(
+                {"color": "Magnitude", "cmap": props.get("cmap"), "colorbar": True}
+            )
+        element = interactive_map._styled(
+            element, common=common, bokeh={"tools": ["hover"]}
+        )
+        return DrawnLayer(element=element, style=common)
+    element = element.opts(backend="matplotlib", **opts) if opts else element
+    return DrawnLayer(element=element, style=opts)
+
+
+def _graph_element(interactive_map: Any, nodes: Any, edges: Any, props: dict) -> Any:
+    """Build the GeoViews graph a described graph layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        nodes: The node table — point geometries carrying the ids the edges name.
+        edges: The edge table, or an iterable of ``(source, target[, weight])`` rows.
+        props: The layer's recorded properties.
+
+    Returns:
+        The ``gv.Graph``.
+    """
+    import numpy as np
+    import pandas as pd
+
+    gv, _ = _require_holoviz()
+    weight = props.get("weight")
+    node_id = props.get("node_id")
+    gdf = interactive_map._display_gdf(nodes)
+    crs = gv.util.process_crs(interactive_map.crs)
+    ids = (
+        gdf[node_id].to_numpy()
+        if node_id in getattr(gdf, "columns", [])
+        else np.arange(len(gdf))
+    )
+    gv_nodes = gv.Nodes(
+        (gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy(), ids), crs=crs
+    )
+    # Normalise edges to a DataFrame with named columns - a 3-tuple (src, dst, weight) list with
+    # vdims trips gv.Graph's source/target merge, so build the frame explicitly.
+    edge_df = edges if isinstance(edges, pd.DataFrame) else pd.DataFrame(list(edges))
+    ncols = edge_df.shape[1]
+    names = ["source", "target"] + ([weight] if weight and ncols > 2 else [])
+    edge_df = edge_df.iloc[:, : len(names)]
+    edge_df.columns = names
+    vdims = [weight] if (weight and weight in edge_df.columns) else []
+    if (
+        weight and not vdims
+    ):  # weight requested but the edges carry no weight column - say so
+        from loguru import logger
+
+        logger.info(
+            f"graph: weight={weight!r} requested but the edges have no weight column "
+            "(2-tuple edges) - drawing unweighted; pass (src, dst, weight) tuples to weight them"
+        )
+    return gv.Graph((edge_df, gv_nodes), vdims=vdims, crs=crs)
+
+
+def draw_graph(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the graph layer a description asks for, bundled or as drawn edges.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the ``(nodes, edges)`` pair it draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    props = held_props(interactive_map, layer)
+    nodes, edges = data
+    graph = _graph_element(interactive_map, nodes, edges, props)
+    opts = dict(props.get("opts") or {})
+    if props.get("bundle"):
+        # Datashade the straight edge paths into a density image (the cheap path; the heavy
+        # hammer_bundle is intentionally avoided - see the plan's DI.15 note).
+        from holoviews.operation.datashader import datashade
+
+        return DrawnLayer(
+            element=interactive_map._styled(
+                datashade(graph.edgepaths), common=opts or None
+            ),
+            style=opts,
+        )
+    weight = props.get("weight")
+    common: dict = dict(opts)
+    if weight:
+        common.update(
+            {"edge_color": weight, "edge_cmap": props.get("cmap"), "colorbar": True}
+        )
+    element = interactive_map._styled(
+        graph, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_trimesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the triangular mesh a described mesh layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — a UGRID mesh, or the points to triangulate.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    value_column = props.get("value_column")
+    # The builder had to build this mesh to count its faces, and hands it over while its own call is still
+    # running. Taken only when it was built from this very object and column, so a figure drawn from its
+    # description alone — by the renderer, or on another map — builds its own.
+    handed = getattr(interactive_map, "_built_mesh", None)
+    if handed is not None and handed[0] is data and handed[1] == value_column:
+        nodes, simplices, vdims = handed[2]
+    else:
+        nodes, simplices, vdims = interactive_map._mesh_inputs(data, value_column)
+    trimesh = gv.TriMesh(
+        (simplices, nodes), crs=gv.util.process_crs(interactive_map.crs)
+    )
+    opts = dict(props.get("opts") or {})
+    # The colormap is only meaningful when the mesh carries a value to colour by; an unvalued mesh draws
+    # its wireframe, and a `cmap` on it would be a style nothing reads.
+    common = {"cmap": props.get("cmap"), **opts} if vdims else opts
+    element = interactive_map._styled(
+        trimesh, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
 
 
 class VectorMixin(_MixinBase):
@@ -92,7 +506,7 @@ class VectorMixin(_MixinBase):
         Returns:
             The GeoViews element.
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         crs = gv.util.process_crs(self.crs)
         factory = getattr(gv, kind)
         # geodataframe first so the GeoPandas interface wins at construction; the rest keep
@@ -122,7 +536,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
-                display CRS through pyramids when needed.
+                display CRS through pyramids when needed. A path or URL naming one is taken too, and is
+                the only input a figure carrying this layer can be written down with.
             value_column: Optional numeric column colouring the points (also shown on hover).
             scheme: Optional classification scheme for ``value_column`` — ``None`` (the default) is a
                 continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
@@ -187,39 +602,55 @@ class VectorMixin(_MixinBase):
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.points()"
         )
-        gdf = self._display_gdf(features)
+        # Nothing here is reprojected: the drawer warps what it draws, and what the description needs — the
+        # row count and a column's values — is the same before a warp as after it. Warping here as well did
+        # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
+        # still refused, by the drawer, and `_skips_off_limb` answers it as before.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("points", len(gdf), threshold)
+            and _route_through_rasterize("points", len(features), threshold)
         ):
             aggregator = "mean" if value_column else "count"
             return self.rasterize(
-                gdf, aggregator=aggregator, column=value_column, cmap=cmap, **opts
+                features, aggregator=aggregator, column=value_column, cmap=cmap, **opts
             )
         styling: dict = {}
+        labels: Optional[dict] = None
         if value_column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
             # a point layer and a polygon layer key an unordered column identically (review M3).
-            gdf, styling, categories = self._categorical_style(
-                gdf, value_column, cmap=cmap
+            styling, categories, labels = self._categorical_style(
+                features, value_column, cmap=cmap
             )
             self.last_breaks = categories
         elif value_column and scheme is not None:
             styling = self._graduated_style(
-                gdf, value_column, scheme=scheme, k=k, cmap=cmap
+                features, value_column, scheme=scheme, k=k, cmap=cmap
             )
             self.last_breaks = list(styling["color_levels"])
         elif value_column:
             styling = {"color": value_column, "cmap": cmap, "colorbar": True}
-        element = self._vector_element(
-            "Points", gdf, vdims=[value_column] if value_column else None
+        # The caller's `**opts` are split per value: `describe_opts` writes the JSON-safe half into the
+        # description and puts the rest in `held` (review M3). Either way the drawer merges them over
+        # this, which keeps the precedence: an explicit style the caller wrote outranks the one
+        # classification derived, so one scheme cannot mean two things (review M4).
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        common: dict = {"size": size, **styling}
+        return self.add_element(
+            None,
+            kind="points",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Points",
+                [value_column] if value_column else None,
+                describe_style(held, common),
+                labels,
+                described_opts,
+            ),
         )
-        # `**opts` last: an explicit style the caller wrote outranks the one classification derived, the same
-        # precedence `_graduated_polygons` applies, so one scheme cannot mean two things (review M4).
-        common: dict = {"size": size, **styling, **opts}
-        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
 
     @_skips_off_limb
     def path(self, features: Any, **opts: Any) -> Self:
@@ -244,10 +675,15 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gdf = self._display_gdf(features)
-        element = self._vector_element("Path", gdf)
-        element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="lines",
+            source=features,
+            held=held,
+            symbology=_vector_symbology("Path", None, {}, None, described_opts),
+        )
 
     @_skips_off_limb
     def polygons(
@@ -265,7 +701,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
-                pyramids when needed.
+                pyramids when needed. A path or URL naming one is taken too, and is the only input a
+                figure carrying this layer can be written down with.
             column: Optional numeric column filling the polygons (also shown on hover); ``None``
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
@@ -307,15 +744,61 @@ class VectorMixin(_MixinBase):
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
                 ``big_data_threshold=``.
         """
-        from digitalearth.interactive.bigdata import _route_through_rasterize
-
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.polygons()"
         )
-        gdf = self._display_gdf(features)
+        return self._polygon_layer(
+            features,
+            "polygons",
+            column=column,
+            cmap=cmap,
+            rasterize=rasterize,
+            threshold=threshold,
+            **opts,
+        )
+
+    def _polygon_layer(
+        self,
+        features: Any,
+        kind: str,
+        *,
+        column: Optional[str],
+        cmap: str,
+        rasterize: Any,
+        threshold: int,
+        **opts: Any,
+    ) -> Self:
+        """Draw polygons outlined or filled by a column, described under the kind the caller asked for.
+
+        The body `polygons()` and the continuous `choropleth()` share. It takes the kind as an argument
+        because the two draw the same element yet are different layers to a reader of the figure: the
+        continuous ramp used to reach here through `polygons()` and so was described as `polygons`, while
+        the categorical and graduated schemes said `choropleth` (review L6). The big-data cutoff arrives
+        resolved, since the deprecation warning for its old spelling has to be raised by the public builder
+        the caller wrote, a fixed number of frames above them.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries.
+            kind: The registered kind to describe the layer as — ``"polygons"`` or ``"choropleth"``.
+            column: Optional numeric column filling the polygons; ``None`` draws outlines.
+            cmap: Colormap used when ``column`` is given.
+            rasterize: ``"auto"``, ``True`` or ``False``, as the public builders take it.
+            threshold: The resolved row count above which ``"auto"`` routes through Datashader.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ImportError: when the layer routes through Datashader and ``spatialpandas`` is not installed.
+        """
+        from digitalearth.interactive.bigdata import _route_through_rasterize
+
+        # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
+        # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("polygons", len(gdf), threshold)
+            and _route_through_rasterize(kind, len(features), threshold)
         ):
             from importlib.util import find_spec
 
@@ -328,7 +811,9 @@ class VectorMixin(_MixinBase):
                 )
             element = (
                 self._vector_element(  # pragma: no cover - needs optional spatialpandas
-                    "Polygons", gdf, vdims=[column] if column else None
+                    "Polygons",
+                    self._display_gdf(features),
+                    vdims=[column] if column else None,
                 )
             )
             return self.rasterize(  # pragma: no cover - needs optional spatialpandas
@@ -338,16 +823,28 @@ class VectorMixin(_MixinBase):
                 cmap=cmap,
                 **opts,
             )
-        element = self._vector_element(
-            "Polygons", gdf, vdims=[column] if column else None
-        )
-        common: dict = dict(opts)
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        common: dict = {}
         if column:
-            common.update({"color": column, "cmap": cmap, "colorbar": True})
-        else:
-            common.setdefault("fill_alpha", 0.0)
-        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+            common.update(
+                {
+                    "color": column,
+                    "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
+                    "colorbar": True,
+                }
+            )
+        elif "fill_alpha" not in opts:
+            common["fill_alpha"] = 0.0
+        return self.add_element(
+            None,
+            kind=kind,
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons", [column] if column else None, common, None, described_opts
+            ),
+        )
 
     def _categorical_polygons(
         self, features: Any, column: str, *, cmap: str = "viridis", **opts: Any
@@ -377,15 +874,25 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gdf, styling, categories = self._categorical_style(
-            self._display_gdf(features), column, cmap=cmap
-        )
-        element = self._vector_element("Polygons", gdf, vdims=[column])
-        element = self._styled(
-            element, common={**styling, **opts}, bokeh={"tools": ["hover"]}
+        styling, categories, labels = self._categorical_style(
+            features, column, cmap=cmap
         )
         self.last_breaks = categories
-        return self.add_element(element)
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="choropleth",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons",
+                [column],
+                describe_style(held, styling),
+                labels,
+                described_opts,
+            ),
+        )
 
     def _categorical_style(self, gdf: Any, column: str, *, cmap: str) -> tuple:
         """Relabel ``column`` as discrete strings and return the options that colour one per value.
@@ -398,16 +905,19 @@ class VectorMixin(_MixinBase):
         (review M3).
 
         Args:
-            gdf: The already-reprojected GeoDataFrame carrying ``column`` (never mutated — a copy is
-                relabelled and returned).
+            gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
+                in any CRS, so the drawer's warp is the only one the layer needs (never mutated — a copy is
+                relabelled and returned). A path or URL is opened first, by :func:`_classifiable`, because
+                a path is the only input a figure can be written with (review M8).
             column: The attribute to colour by (any hashable value; assumed single-dtype — see
                 :meth:`_categorical_polygons` on the string-keyed collapse).
             cmap: A qualitative colormap name, already resolved by the caller's default.
 
         Returns:
-            tuple: ``(gdf, options, categories)`` — the relabelled frame, the ``color``/``cmap``/
-            ``colorbar`` options for the element, and the original values in classifier order (what
-            ``last_breaks`` records).
+            tuple: ``(options, categories, labels)`` — the ``color``/``cmap``/``colorbar`` options for the
+            element, the original values in classifier order (what ``last_breaks`` records), and the
+            relabelling the drawer applies: the column to read as discrete strings and the sentinel label
+            missing rows take, as :func:`_as_labels` reads them.
         """
         from digitalearth.base.symbology import (
             MISSING_COLOR,
@@ -415,27 +925,28 @@ class VectorMixin(_MixinBase):
             resolve_categorical_cmap,
         )
 
+        gdf = _classifiable(gdf)
         categories, colors = categorical_colors(
             gdf[column], resolve_categorical_cmap(cmap)
         )
         cmap_by_label = {
             str(category): color for category, color in zip(categories, colors)
         }
-        # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
-        # categorically (a numeric column would map continuously and interpolate the palette).
-        gdf = gdf.copy()
+        # The column is drawn as discrete labels, each mapped to its own colour, so Bokeh colours it
+        # categorically (a numeric column would map continuously and interpolate the palette). The
+        # relabelling itself belongs to the drawer — :func:`_as_labels` — because a frame built here would
+        # not survive into the description the layer is rebuilt from.
         missing = gdf[column].isna()
         # A sentinel label for missing rows that is guaranteed not to collide with a real category (which
         # could itself stringify to "n/a"/"nan"), so a genuine category is never overwritten by the fallback.
         sentinel = "n/a"
         while sentinel in cmap_by_label:
             sentinel += "_"
-        gdf[column] = gdf[column].astype(str).mask(missing, sentinel)
         if missing.any():
             # Missing values get an explicit neutral fallback, shared with the web and static tiers.
             cmap_by_label[sentinel] = MISSING_COLOR
         options = {"color": column, "cmap": cmap_by_label, "colorbar": False}
-        return gdf, options, list(categories)
+        return options, list(categories), {"column": column, "missing": sentinel}
 
     def _graduated_style(
         self, gdf: Any, column: str, *, scheme: Any, k: int, cmap: str
@@ -450,7 +961,10 @@ class VectorMixin(_MixinBase):
         instead of interpolating the ramp.
 
         Args:
-            gdf: The already-reprojected GeoDataFrame carrying ``column``.
+            gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
+                in any CRS, so the drawer's warp is the only one the layer needs. A path or URL is opened
+                first, by :func:`_classifiable`, because a path is the only input a figure can be written
+                with (review M8).
             column: The numeric attribute to classify and colour by.
             scheme: A named scheme or an explicit sequence of class edges.
             k: Number of classes for a named scheme.
@@ -468,6 +982,7 @@ class VectorMixin(_MixinBase):
                 and when an explicit ``cmap`` sequence carries a different number of colours than the
                 scheme produced classes — see the note above.
         """
+        gdf = _classifiable(gdf)
         try:
             edges = Scale.breaks_of(gdf[column].to_numpy(), scheme, k)
         except ValueError as err:  # constant column, unknown scheme, k < 1, …
@@ -526,14 +1041,25 @@ class VectorMixin(_MixinBase):
             ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
                 wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
         """
-        gdf = self._display_gdf(features)
-        classified = self._graduated_style(gdf, column, scheme=scheme, k=k, cmap=cmap)
-        element = self._vector_element("Polygons", gdf, vdims=[column])
-        element = self._styled(
-            element, common={**classified, **opts}, bokeh={"tools": ["hover"]}
+        classified = self._graduated_style(
+            features, column, scheme=scheme, k=k, cmap=cmap
         )
         self.last_breaks = list(classified["color_levels"])
-        return self.add_element(element)
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="choropleth",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons",
+                [column],
+                describe_style(held, classified),
+                None,
+                described_opts,
+            ),
+        )
 
     @_skips_off_limb
     def choropleth(
@@ -563,7 +1089,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
-                pyramids when needed.
+                pyramids when needed. A path or URL naming one is taken too, and is the only input a
+                figure carrying this layer can be written down with.
             column: The column driving the fill colour (required); numeric for the continuous ramp, or any
                 hashable value for ``scheme="categorical"``.
             scheme: ``"categorical"`` for distinct-value colouring; a graduated scheme name (or an explicit
@@ -611,7 +1138,23 @@ class VectorMixin(_MixinBase):
         self.last_breaks = None
         if clim is not None:
             opts = {"clim": clim, **opts}
-        return self.polygons(features, column=column, cmap=cmap, **opts)
+        # Resolved here rather than by `polygons()`: this is the frame the deprecation warning for the old
+        # spelling is counted from, so a `rasterize_threshold=` written on `choropleth()` is attributed to the
+        # caller's line.
+        threshold = self._resolve_big_data_threshold(
+            opts.pop("big_data_threshold", None),
+            opts.pop("rasterize_threshold", None),
+            caller="InteractiveMap.choropleth()",
+        )
+        return self._polygon_layer(
+            features,
+            "choropleth",
+            column=column,
+            cmap=cmap,
+            rasterize=opts.pop("rasterize", "auto"),
+            threshold=threshold,
+            **opts,
+        )
 
     def _uv_arrays(self, u: Any, v: Any, *, band: int, density: float) -> tuple:
         """Extract subsampled ``(x, y, u, v)`` display-CRS arrays from two pyramids bands.
@@ -665,17 +1208,30 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
         """
-        gv, hv = _require_holoviz()
-        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
-        element = gv.VectorField.from_uv(
-            (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
+        _require_holoviz()
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="vectors",
+            # The pair is the source: a field is not drawable from either component alone.
+            source=(u, v),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "vectorfield",
+                    "band": band,
+                    "density": density,
+                    "color_by": color_by,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
         )
-        common: dict = dict(opts)
-        if color_by == "magnitude":
-            common.update({"color": "Magnitude", "cmap": cmap, "colorbar": True})
-        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
 
     @_skips_off_limb
     def streamlines(
@@ -697,21 +1253,33 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
         """
         from loguru import logger
 
-        gv, hv = _require_holoviz()
-        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
-        # VectorField carries the data; the matplotlib backend renders it as streamlines.
-        element = gv.VectorField.from_uv(
-            (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
-        )
-        element = element.opts(backend="matplotlib", **opts) if opts else element
+        _require_holoviz()
         logger.info(
             "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
-            "save to a .png/.svg, not interactive .html"
+            "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
-        return self.add_element(element)
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="streamlines",
+            source=(u, v),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "streamlines",
+                    "band": band,
+                    "density": density,
+                    "opts": described_opts,
+                }
+            ),
+        )
 
     def barbs(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
@@ -738,22 +1306,33 @@ class VectorMixin(_MixinBase):
         """
         from loguru import logger
 
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
+        # Refused here, because the message answers the builder the caller called.
         if not hasattr(gv, "WindBarbs"):
             raise ImportError(
                 "barbs need gv.WindBarbs (GeoViews ≥1.11 with the matplotlib backend); it is "
                 "absent in this GeoViews build"
             )
-        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
-        element = gv.WindBarbs.from_uv(
-            (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
-        )
-        element = element.opts(backend="matplotlib", **opts) if opts else element
         logger.info(
             "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
-            "save to a .png/.svg, not interactive .html"
+            "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
-        return self.add_element(element)
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="vectors",
+            source=(u, v),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "barbs",
+                    "band": band,
+                    "density": density,
+                    "opts": described_opts,
+                }
+            ),
+        )
 
     @_skips_off_limb
     def trimesh(
@@ -849,12 +1428,15 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.trimesh()"
         )
-        nodes, simplices, vdims = self._mesh_inputs(data, value_column)
-        trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
+        # The mesh is built here because the routing decision below is made on the face count, which only the
+        # built connectivity knows. The drawer would build the same one again from the same data, so the one
+        # built here is handed to it for the length of this call (review M8).
+        built = self._mesh_inputs(data, value_column)
+        nodes, simplices, _ = built
         n_faces = len(simplices)
         if rasterize is True or (rasterize == "auto" and n_faces > threshold):
             from loguru import logger
@@ -864,12 +1446,30 @@ class VectorMixin(_MixinBase):
                     f"trimesh: {n_faces:,} faces exceed big_data_threshold={threshold:,}"
                     " — rasterizing the mesh to a density image"
                 )
+            trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
             return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
-        common = {"cmap": cmap, **opts} if vdims else dict(opts)
-        element = self._styled(
-            trimesh, common=common or None, bokeh={"tools": ["hover"]}
-        )
-        return self.add_element(element)
+        self._built_mesh = (data, value_column, built)
+        try:
+            held: Dict[str, Any] = {}
+            described_opts = describe_opts(held, opts)
+            return self.add_element(
+                None,
+                kind="unstructured",
+                source=data,
+                held=held,
+                symbology=Symbology(
+                    props={
+                        "via": "trimesh",
+                        "value_column": value_column,
+                        "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                        "opts": described_opts,
+                    }
+                ),
+            )
+        finally:
+            # Released as soon as the layer is drawn: holding it would keep the mesh alive for as long as the
+            # map, and a later draw from the description must build its own.
+            self._built_mesh = None
 
     def _mesh_inputs(self, data: Any, value_column: Optional[str]) -> tuple:
         """Return ``(nodes_points, simplices, vdims)`` for :meth:`trimesh`.
@@ -884,7 +1484,7 @@ class VectorMixin(_MixinBase):
         """
         import numpy as np
 
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         crs = gv.util.process_crs(self.crs)
         if all(hasattr(data, attr) for attr in ("node_x", "node_y", "fan_triangles")):
             x = np.asarray(data.node_x)
@@ -938,41 +1538,25 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        import numpy as np
-
-        gv, hv = _require_holoviz()
-        gdf = self._display_gdf(features)
-        # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
-        # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
-        # also needs the reducer as a numpy callable (np.size = count), not a string.
-        x = gdf.geometry.x.to_numpy()
-        y = gdf.geometry.y.to_numpy()
-        reducers = {
-            "count": np.size,
-            "mean": np.mean,
-            "sum": np.sum,
-            "min": np.min,
-            "max": np.max,
-            "std": np.std,
-        }
-        crs = gv.util.process_crs(self.crs)
-        if column:
-            reducer = reducers.get(aggregator, np.mean)
-            element = gv.HexTiles(
-                (x, y, gdf[column].to_numpy()),
-                kdims=["x", "y"],
-                vdims=[column],
-                crs=crs,
-            )
-        else:  # no value column -> count points per hex (np.size), no value dimension
-            reducer = np.size
-            element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)
-        element = self._styled(
-            element,
-            common={"cmap": cmap, "colorbar": True, **opts},
-            bokeh={"gridsize": gridsize, "aggregator": reducer, "tools": ["hover"]},
+        _require_holoviz()
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="heatmap",
+            source=features,
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "hexbin",
+                    "gridsize": gridsize,
+                    "aggregator": aggregator,
+                    "column": column,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
         )
-        return self.add_element(element)
 
     @_skips_off_limb
     def kde(
@@ -994,17 +1578,23 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gv, hv = _require_holoviz()
-        gdf = self._display_gdf(features)
-        x = gdf.geometry.x.to_numpy()
-        y = gdf.geometry.y.to_numpy()
-        element = hv.Bivariate((x, y))
-        element = self._styled(
-            element,
-            common={"cmap": cmap, **opts},
-            bokeh={"filled": filled, "colorbar": True},
+        _require_holoviz()
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="heatmap",
+            source=features,
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "kde",
+                    "filled": filled,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
         )
-        return self.add_element(element)
 
     @_skips_off_limb
     def graph(
@@ -1036,53 +1626,27 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        import numpy as np
-        import pandas as pd
-
-        gv, hv = _require_holoviz()
-        gdf = self._display_gdf(nodes)
-        crs = gv.util.process_crs(self.crs)
-        ids = (
-            gdf[node_id].to_numpy()
-            if node_id in getattr(gdf, "columns", [])
-            else np.arange(len(gdf))
+        _require_holoviz()
+        held: Dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="flow",
+            # One source, because the layer draws the join of the two: neither the node table nor the
+            # edge table describes it on its own.
+            source=(nodes, edges),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "graph",
+                    "weight": weight,
+                    "bundle": bundle,
+                    "node_id": node_id,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
         )
-        gv_nodes = gv.Nodes(
-            (gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy(), ids), crs=crs
-        )
-        # Normalise edges to a DataFrame with named columns — a 3-tuple (src, dst, weight) list with
-        # vdims trips gv.Graph's source/target merge, so build the frame explicitly.
-        edge_df = (
-            edges if isinstance(edges, pd.DataFrame) else pd.DataFrame(list(edges))
-        )
-        ncols = edge_df.shape[1]
-        names = ["source", "target"] + ([weight] if weight and ncols > 2 else [])
-        edge_df = edge_df.iloc[:, : len(names)]
-        edge_df.columns = names
-        vdims = [weight] if (weight and weight in edge_df.columns) else []
-        if (
-            weight and not vdims
-        ):  # weight requested but the edges carry no weight column — say so
-            from loguru import logger
-
-            logger.info(
-                f"graph: weight={weight!r} requested but the edges have no weight column "
-                "(2-tuple edges) — drawing unweighted; pass (src, dst, weight) tuples to weight them"
-            )
-        graph = gv.Graph((edge_df, gv_nodes), vdims=vdims, crs=crs)
-        if bundle:
-            # Datashade the straight edge paths into a density image (the cheap path; the heavy
-            # hammer_bundle is intentionally avoided — see the plan's DI.15 note).
-            from holoviews.operation.datashader import datashade
-
-            return self.add_element(
-                self._styled(datashade(graph.edgepaths), common=opts or None)
-            )
-        common: dict = dict(opts)
-        if weight:
-            common.update({"edge_color": weight, "edge_cmap": cmap, "colorbar": True})
-        element = self._styled(graph, common=common or None, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
 
     def flow(
         self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any

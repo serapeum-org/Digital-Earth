@@ -60,6 +60,7 @@ __all__ = [
     "fold_color_scaling",
     "fold_symbology",
     "group_render_kwargs",
+    "plot_takes",
     "prepare_plot_kwargs",
     "relocate_flat_style",
     "route_flat_style",
@@ -321,6 +322,55 @@ def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]
     return flat, unsupported
 
 
+def resolve_marker_size(opts: Dict[str, Any], *, caller: str, depth: int = 4) -> None:
+    """Normalise the deprecated ``point_size=`` spelling to ``size=`` in a point builder's kwargs, in place.
+
+    This runs in the **builder**, not in the drawer, and that is the whole point of it existing. The
+    deprecation warning has to land on the user's own line, and ``stacklevel`` is a hand-counted number of
+    frames: a builder that records its layer and lets a drawer build it puts four more frames between the
+    two, and a count that deep is one refactor away from blaming a line inside this package. Resolving the
+    spelling where the caller's keywords arrive keeps the count short and stable — and leaves
+    :func:`_fold_marker_size` nothing deprecated to warn about when the drawer folds the resolved ``size``
+    onto cleopatra's constructor spelling.
+
+    Args:
+        opts: The caller's styling keywords, mutated in place: ``point_size`` is removed and its value
+            becomes ``size``.
+        caller: The layer method the keywords were written on, named in the warning and the error.
+        depth: Frames between :func:`~digitalearth.base.deprecation.renamed_parameter` and the user's call
+            — ``4`` for a builder that calls this directly (helper -> here -> builder -> user); an alias
+            that delegates to another builder adds one more and passes ``5``.
+
+    Raises:
+        TypeError: if both ``size`` and ``point_size`` are passed. They name one parameter, so preferring
+            either silently would drop the other.
+
+    Warns:
+        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
+
+    Examples:
+        - The current spelling passes through untouched:
+            ```python
+            >>> from digitalearth.static.render_compat import resolve_marker_size
+            >>> opts = {"size": 12, "cmap": "viridis"}
+            >>> resolve_marker_size(opts, caller="Map.scatter()")
+            >>> sorted(opts.items())
+            [('cmap', 'viridis'), ('size', 12)]
+
+            ```
+    """
+    size = renamed_parameter(
+        new=MARKER_SIZE_KEY,
+        value=opts.pop(MARKER_SIZE_KEY, None),
+        old="point_size",
+        alias=opts.pop("point_size", None),
+        caller=caller,
+        stacklevel=depth,
+    )
+    if size is not None:
+        opts[MARKER_SIZE_KEY] = size
+
+
 def _fold_marker_size(
     opts: Dict[str, Any], plot_style: Dict[str, Any], caller: str, depth: int
 ) -> None:
@@ -429,7 +479,18 @@ _POINT_OVERLAY_KEYS = frozenset({"points", *_POINT_FIELDS})
 
 
 def _fold_points(out: Dict[str, Any]) -> None:
-    """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place)."""
+    """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place).
+
+    Args:
+        out: The keyword dict being prepared, mutated in place: ``points`` and every ``point_*`` key are
+            taken out of it and one built ``points`` overlay put back. A dict whose ``points`` is already
+            a ``PointOverlay`` is left alone, stray ``point_*`` keys included, so nothing is dropped in
+            silence; one carrying neither an array nor any styling is a no-op.
+
+    Raises:
+        ValueError: when ``point_*`` styling was written with no ``points=`` array to attach it to,
+            naming the key the caller actually spelled.
+    """
     if isinstance(out.get("points"), PointOverlay):
         return  # already a built overlay; leave any stray point_* keys in place, don't silently drop them
     points = out.pop("points", None)
@@ -522,8 +583,51 @@ def group_render_kwargs(
 
 @lru_cache(maxsize=None)
 def _plot_params(glyph_cls: type) -> frozenset:
-    """The parameter names of a glyph class's ``plot`` method (cached per class)."""
+    """The parameter names of a glyph class's ``plot`` method (cached per class).
+
+    Args:
+        glyph_cls: The glyph class — not an instance, since the signature is the class's and the cache is
+            keyed on it.
+
+    Returns:
+        Every named parameter of ``glyph_cls.plot``, ``self`` and the trailing ``**kwargs`` name included.
+        The membership test is what callers want it for, so the names are returned as a frozenset.
+    """
     return frozenset(inspect.signature(glyph_cls.plot).parameters)
+
+
+def plot_takes(glyph: Any, param: str) -> bool:
+    """Whether ``glyph``'s ``plot`` declares `param` as a named parameter of its own.
+
+    The same question :func:`prepare_plot_kwargs` asks of the style groups, asked of one keyword: cleopatra's
+    glyphs do not all take the same ones, and every one of them ends in ``**kwargs``, so a keyword the glyph
+    has no parameter for is not refused — it is forwarded to matplotlib, where it fails as something else
+    entirely. Asking first is what keeps a keyword meant for the glyphs that understand it from reaching the
+    ones that do not.
+
+    Args:
+        glyph: The cleopatra glyph about to be drawn.
+        param: The parameter name to look for.
+
+    Returns:
+        ``True`` when `param` is an explicit parameter of ``type(glyph).plot``.
+
+    Examples:
+        - ``ArrayGlyph`` can compose over an existing axes; ``ScatterGlyph`` has no such parameter (it never
+          clears anything, so it has no need of one):
+            ```python
+            >>> import numpy as np
+            >>> from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
+            >>> from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+            >>> from digitalearth.static.render_compat import plot_takes
+            >>> plot_takes(ArrayGlyph(np.zeros((2, 2))), "compose")
+            True
+            >>> plot_takes(ScatterGlyph(np.zeros(2), np.zeros(2)), "compose")
+            False
+
+            ```
+    """
+    return param in _plot_params(type(glyph))
 
 
 def prepare_plot_kwargs(

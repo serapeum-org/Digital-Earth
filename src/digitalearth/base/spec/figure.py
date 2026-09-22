@@ -515,8 +515,10 @@ class FigureSpec:
             `LayerTree`, `PanelSpec` and `Viewport` all hash.
 
         Raises:
-            TypeError: if a part holds an unhashable value — a dict in a layer's `Symbology` properties, say. A
-                list or a numpy array is not among them: the vocabulary stores both as tuples.
+            TypeError: if a part holds a value that is unhashable for its own reasons. A mapping is not among
+                them wherever a layer's style puts one — a property or a channel's constant, however deeply
+                nested — since `Symbology` and `Encoding` each hash one as its items; nor is a list or a
+                numpy array, which the vocabulary stores as tuples.
 
         Examples:
             - Two figures built alike hash alike, so a figure can key a cache:

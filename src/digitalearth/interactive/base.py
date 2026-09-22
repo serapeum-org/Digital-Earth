@@ -1,6 +1,7 @@
 """InteractiveMapBase — the core HoloViz plumbing the interactive capability mixins build on.
 
-``InteractiveMapBase`` owns the layer registry (HoloViews elements in add order), the display-CRS
+``InteractiveMapBase`` owns the layer registry — what the map draws, described as layers, sources and a view
+(``figure_spec``), and the HoloViews elements those descriptions were drawn into, in draw order — the display-CRS
 reproject-through-pyramids plumbing, and the render/save/show lifecycle. Capability mixins (raster, vector,
 big-data, temporal, decoration, interaction, projection, animation, dashboard) live in sibling modules and add
 ``image()`` / ``points()`` / … builder methods that call ``self.add_element(...)``; the public
@@ -19,7 +20,7 @@ Unlike the 3-D tier, the engine import is **lazy**: ``import digitalearth.intera
 from functools import reduce, wraps
 from operator import mul
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Self
+from typing import Any, Callable, Dict, List, Mapping, Optional, Self
 
 from loguru import logger
 
@@ -28,15 +29,32 @@ from digitalearth.base.bigdata import (
     validate_big_data_threshold,
 )
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.custom import custom_kind
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
     to_display_source,
 )
+from digitalearth.base.registry import (
+    forget_namespace,
+    forget_object,
+    object_namespace,
+)
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import (
+    DataRef,
+    FigureSpec,
+    LayerSpec,
+    LayerTree,
+    PanelSpec,
+    Symbology,
+    Viewport,
+)
+from digitalearth.base.spec._serial import to_json_value
 from digitalearth.base.spec.bounds import same_crs
+from digitalearth.interactive.capabilities import CAPABILITIES
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
 # vector builder auto-routes to its tier's big-data renderer (#250) lives in `digitalearth.base.bigdata`, so
@@ -45,12 +63,40 @@ from digitalearth.base.spec.bounds import same_crs
 # configured once keeps the setting for every later layer. It stays importable from this module because that
 # is where this tier's callers and tests already reach for it.
 
+#: The id of the one panel this tier draws into. A map is a single view; the constant is named so a
+#: reader of `figure_spec` sees the same panel id every tier writes.
+PANEL_ID: str = "main"
+
+#: The file suffixes matplotlib writes as vector art. `save()` refuses them, because this tier declares
+#: `export_vector` absent and the static tier declares it as its own alone — and HoloViews' matplotlib
+#: fallback, which the raster suffixes ride, would otherwise write all three (review L3). `.eps` and `.ps`
+#: are not here: HoloViews' matplotlib renderer refuses those itself, naming the formats it takes.
+VECTOR_SUFFIXES: frozenset = frozenset({".svg", ".pdf", ".pgf"})
+
 #: The pip extra / pixi env that provides the HoloViz engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
     "the interactive tier needs the HoloViz stack (geoviews/holoviews/datashader/panel). "
     "Install it with `pip install 'digitalearth[interactive]'` "
     "(or, in this repo, `pixi install -e interactive`)."
 )
+
+
+def _new_renderer(interactive_map: Any) -> Any:
+    """Return the renderer a map draws through.
+
+    Imported here rather than at module scope: :mod:`digitalearth.interactive.renderer` resolves its
+    drawers from the builder modules, and every one of those imports this module, so a top-level import
+    would close a cycle.
+
+    Args:
+        interactive_map: The map the renderer serves.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.Renderer` bound to it.
+    """
+    from digitalearth.interactive.renderer import Renderer
+
+    return Renderer(interactive_map)
 
 
 def _require_holoviz() -> tuple:
@@ -132,6 +178,210 @@ def _skips_off_limb(builder: Callable) -> Callable:
     return guarded
 
 
+def is_json_value(value: Any) -> bool:
+    """Whether a figure holding `value` in its description can be written down.
+
+    The oracle is the writer itself — :func:`~digitalearth.base.spec._serial.to_json_value`, which
+    `Symbology.to_dict` applies — so this cannot drift from what a figure actually accepts. A colormap
+    object, a Datashader reduction, a `pandas.Timestamp` and a `nan` are all refused there.
+
+    Args:
+        value: A value a builder is about to record.
+
+    Returns:
+        `True` when the description can carry it as it is.
+    """
+    try:
+        to_json_value(value, "Symbology.props")
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def cmap_name(cmap: Any) -> Optional[str]:
+    """Return the name a colormap object can be written down as, or `None` for one that cannot.
+
+    A colormap that matplotlib's registry knows — `colormaps["viridis"]`, or any name a figure read on
+    another machine can resolve — is written as its name, so a figure drawn elsewhere is coloured the same
+    way. One built on the spot (`ListedColormap([...])`) has no name anything else could resolve, and
+    writing its `"from_list"` would describe a colormap that does not exist; such a layer is described
+    with no colormap and drawn with the tier's default, while the object itself is held beside the layer.
+
+    Args:
+        cmap: The caller's `cmap` argument.
+
+    Returns:
+        The registered name, or `None`.
+    """
+    # matplotlib is the colour registry here, not a renderer: only the name lookup is used.
+    from matplotlib import colormaps
+
+    name = getattr(cmap, "name", None)
+    return name if isinstance(name, str) and name in colormaps else None
+
+
+#: The property every builder records its resolved style under, and every drawer reads it back from.
+STYLE_KEY = "common"
+
+
+#: The property every builder records the caller's own `**opts` under, and every drawer merges back over
+#: its resolved style. Named for the same reason :data:`STYLE_KEY` is: two dozen builders write it.
+OPTS_KEY = "opts"
+
+
+def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, Any]:
+    """Describe a builder's `**opts` bag, keeping what a figure can carry and holding the rest.
+
+    The bag that goes round the rule. :func:`describe` asks `is_json_value` per value, which is round 1's
+    decision — a figure keeps everything JSON can carry and the map holds only what it cannot — but every
+    builder recorded its `**opts` wholesale into `held`, untested. So which of the caller's keywords a
+    figure kept was decided by which ones the builder happened to name in its signature:
+    `image(alpha=0.25)` survived because `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not,
+    although both are plain floats and both are channels the shared vocabulary declares. A figure read back
+    elsewhere then drew the engine's defaults where the caller's styling had been, silently (review M3).
+
+    The split is now by what JSON can carry, per value, exactly as everywhere else on this tier. A
+    colormap object is spelled by its registered name where it has one, as :func:`describe_style` spells
+    the builders' own; anything else with no JSON form is described as not given and handed to the drawer
+    through the map, which is what keeps a figure writable and key-free.
+
+    A held keyword is left **out** of the bag rather than recorded as `None`, which is where this differs
+    from :func:`describe_style`. A style dict is read by a drawer, which knows a `None` means "not given";
+    this bag is the caller's raw keywords and is splatted straight into `element.opts(**opts)`, where a
+    `None` is a value the engine is handed — `hooks=None` is not the same as passing no `hooks` at all. So
+    a keyword with no JSON form simply is not in the figure, and a reader without the held object draws
+    the layer without it, which is what such a reader could do anyway.
+
+    Args:
+        held: The values being held beside this layer; the bag's unwritable half is added to it, under the
+            same key the description writes, because that is the key :func:`held_props` merges back.
+        opts: The caller's raw keywords.
+
+    Returns:
+        The keywords to record in `Symbology.props` under :data:`OPTS_KEY`.
+    """
+    bucket: Dict[str, Any] = {}
+    described: Dict[str, Any] = {}
+    for key, value in dict(opts or {}).items():
+        spelling = cmap_name(value) if key == "cmap" else None
+        recorded = describe(bucket, key, value, spelling)
+        # `key not in bucket` is how a JSON-safe value is told from a held one, rather than by testing the
+        # result: a caller who wrote `cmap=None` passed a value JSON carries, and it is recorded as given.
+        if key not in bucket or recorded is not None:
+            described[key] = recorded
+    if bucket:
+        # Only when something really has to be held: an empty bag beside every layer would say a layer
+        # carries engine values when it carries none.
+        held[OPTS_KEY] = bucket
+    return described
+
+
+def style_value(
+    held: Dict[str, Any], name: str, value: Any, spelling: Any = None
+) -> Any:
+    """Describe one value that belongs inside a layer's recorded style.
+
+    The sibling of :func:`describe` for a property written inside the `common` dict rather than beside it.
+    Which one a builder wants is decided by where it records the value, because that is where its drawer
+    reads it back: a value held at the top level while the drawer reads `props["common"]` is held and never
+    used, and the engine quietly draws its own default instead (round 2, H4).
+
+    Args:
+        held: The values held beside this layer.
+        name: The property's name, under which the drawer reads it back.
+        value: The caller's value.
+        spelling: What to describe a held value as — a colormap's registered name, say.
+
+    Returns:
+        The value to record inside the style.
+    """
+    return describe(held.setdefault(STYLE_KEY, {}), name, value, spelling)
+
+
+def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any]:
+    """Describe a whole resolved style dict, spelling a colormap by its name.
+
+    The builders that name each property one by one pass `cmap_name(cmap)` to :func:`describe`, so a
+    colormap object is described as `"magma"`. The ones that hand over a resolved style dict in one go had
+    no such spelling, so the same colormap described as nothing — the layer still drew, because the object
+    is held beside it, but a figure written out lost the colormap for those kinds and kept it for the
+    others. Going through one helper is what keeps the two from disagreeing again.
+
+    Args:
+        held: The values being held beside this layer; anything with no JSON form is added to it.
+        style: The resolved style, as the builder computed it.
+
+    Returns:
+        The style to record in `Symbology.props`, with each value described.
+    """
+    # Held under the same key the description writes, because that is the key the drawers read: a style
+    # value kept at the top level of `held` was merged back at the top level of `props`, while every drawer
+    # builds its style from `props["common"]`. So the caller's colormap was held and never used, and the
+    # engine drew its own default (round 2, H4).
+    bucket = held.setdefault(STYLE_KEY, {})
+    return {
+        key: describe(bucket, key, value, cmap_name(value) if key == "cmap" else None)
+        for key, value in style.items()
+    }
+
+
+def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
+    """Record a builder argument if a figure can be written with it; otherwise hold it beside the layer.
+
+    The tier's answer to engine values in a description (review C1/H2/H3/M9): a figure is written to JSON
+    and read back, so it carries **plain values only**. Anything else — a colormap object, an
+    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp —
+    is handed to the drawer through the map instead, keyed by layer id, and the description keeps the
+    JSON-safe rendering of it that `spelling` gives, or nothing.
+
+    Args:
+        held: The values being held beside this layer; a value with no JSON form is added to it.
+        name: The property's name, under which the drawer reads it back.
+        value: The caller's value.
+        spelling: What to describe a held value as — a registered colormap's name, a timestamp's ISO
+            string. `None` describes it as not given, which is what a reader with no held value draws by.
+
+    Returns:
+        The value to record in `Symbology.props`.
+    """
+    if is_json_value(value):
+        return value
+    held[name] = value
+    return spelling
+
+
+def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
+    """Return a layer's recorded properties with the values held beside it merged back in.
+
+    What every drawer reads instead of `layer.symbology.props`: the description carries the JSON-safe
+    half, the map carries the engine values :func:`describe` kept out of it, and a drawer wants both. A
+    figure loaded from disk — or drawn on another map — has nothing held, so the drawer sees the
+    description alone and draws the layer with what it can.
+
+    Args:
+        interactive_map: The map being drawn, which holds the engine values.
+        layer: The layer's description.
+
+    Returns:
+        The merged properties. A held value replaces the described one under the same key, **except**
+        where both are mappings: those are merged one level deep, described first, so a held style value
+        joins the ones the builder described rather than replacing the whole dict they sit in. Nesting
+        deeper than one level is not merged — the inner mapping is taken from the held side whole.
+    """
+    props = dict(layer.symbology.props)
+    for key, value in interactive_map._held_for(layer.id).items():
+        described = props.get(key)
+        if isinstance(value, Mapping) and isinstance(described, Mapping):
+            # One level deep, so a held style value joins the described ones under the same key rather
+            # than replacing the whole dict the builder recorded.
+            merged = dict(described)
+            merged.update(value)
+            props[key] = merged
+        else:
+            props[key] = value
+    return props
+
+
 class InteractiveMapBase:
     """Core host: ordered HoloViews-element registry + display CRS + render/save lifecycle.
 
@@ -151,7 +401,12 @@ class InteractiveMapBase:
             a per-call ``big_data_threshold=`` override.
 
     Attributes:
-        layers: Registered HoloViews/GeoViews elements, in add (= overlay) order.
+        layers: The HoloViews/GeoViews elements this map overlays, in **draw** order rather than call
+            order: each is placed where its layer's band puts it, so a basemap added last still sits
+            under the data and a graticule added first still sits over it. This is a view of what is
+            drawn, not the map's state — the map is described by :attr:`figure_spec`, and its layers are
+            addressed by id through :attr:`layer_ids`. It is kept because it is the shape this tier's
+            callers and its own tests have always read.
 
     Examples:
         - Construct and inspect the display configuration (needs no HoloViz engine):
@@ -245,6 +500,9 @@ class InteractiveMapBase:
         self._projection: Any = None
         # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
         self._draw_stream: Any = None
+        # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
+        # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
+        self._built_mesh: Optional[tuple] = None
         # Class breaks / categories from the most recent choropleth, for building a legend out-of-band
         # (web-tier parity). None until a categorical choropleth runs; the continuous ramp resets it to None.
         self.last_breaks: Optional[List[Any]] = None
@@ -254,6 +512,29 @@ class InteractiveMapBase:
         # public `style_of` / `layer_styles` accessors — the tier owns its styling state instead of
         # delegating it to HoloViews' global option Store.
         self._styles: Dict[int, dict] = {}
+        # What the map draws, as data. `self.layers` holds the built HoloViews elements — the drawing —
+        # and this holds the description each was built from, which is what a figure can be written to and
+        # read back from (#300).
+        self._layer_tree = LayerTree()
+        # Created once and kept: what it holds is what a converted kind composes into, so a layer drawn
+        # when its builder ran is still there at render time.
+        self._renderer = _new_renderer(self)
+        self._sources: Dict[str, DataRef] = {}
+        self._objects_ns: str = object_namespace()
+        self._id_counter: int = 0
+        self._issued_ids: set = set()
+        # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
+        # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
+        self._layer_keys: Dict[str, Any] = {}
+        # The engine values a layer's drawer needs that a description cannot carry, by layer id: the
+        # caller's raw HoloViews keywords, a colormap object, a tile provider, a Datashader reduction
+        # (review C1/H2/H3/M9). Held here for the same reason the credentials are — a figure written to
+        # JSON holds plain values — and let go with the layer and on `close()`.
+        self._layer_held: Dict[str, Dict[str, Any]] = {}
+        # The layer the caller added last — what `colorbar`, `legend`, `hover` and `on_tap` act on by
+        # default. Tracked by id because `layers` is in draw order, so its last entry is whatever sits in the
+        # highest band, not the layer the caller just added (review H5). The web tier's `_last_layer_id`.
+        self._last_layer_id: Optional[str] = None
 
     def _raster_element(
         self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
@@ -300,27 +581,255 @@ class InteractiveMapBase:
             **placement,
         )
 
-    def add_element(self, element: Any) -> Self:
+    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+        """Return a unique layer id: the caller's name when they gave one, else a generated one.
+
+        Args:
+            prefix: What a generated id counts — the kind, usually.
+            name: The caller's own name for the layer, used as its id when it is free.
+
+        Returns:
+            The id. A caller's name that collides with one already issued is suffixed, because two layers
+            sharing an id makes the second unaddressable.
+        """
+        candidate = name or ""
+        while not candidate or candidate in self._issued_ids:
+            self._id_counter += 1
+            candidate = (
+                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
+            )
+        self._issued_ids.add(candidate)
+        return candidate
+
+    def _index_layer(
+        self,
+        layer_id: str,
+        label: Optional[str],
+        *,
+        kind: str,
+        visible: bool = True,
+        band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
+    ) -> None:
+        """Record a layer so the figure describes it rather than only holding its element.
+
+        Args:
+            layer_id: The layer's id, as `layer_ids` reports it.
+            label: What a layer switcher should call it; `None` falls back to the id.
+            kind: The registered, engine-neutral kind — `"raster"`, `"points"`, `"choropleth"` — not the
+                HoloViews element type, which cannot tell a choropleth from a plain polygon draw.
+            visible: Whether the layer was built visible.
+            band: Where it is drawn, when its kind does not say — what a caller's own object needs, since
+                `custom:holoviews` names the engine rather than what it draws.
+            source: What the layer draws, recorded under its id. `None` for a layer drawn from no data.
+            symbology: How it looks, as values rather than as the applied HoloViews options.
+        """
+        if source is not None:
+            self._sources[layer_id] = DataRef.of(
+                source, name=f"{self._objects_ns}:{layer_id}"
+            )
+        self._layer_tree = self._layer_tree.add(
+            LayerSpec(
+                layer_id,
+                kind,
+                source_id=layer_id if source is not None else None,
+                symbology=Symbology() if symbology is None else symbology,
+                label=label or layer_id,
+                visible=bool(visible),
+                band=band,
+            )
+        )
+
+    @property
+    def layer_ids(self) -> List[str]:
+        """The ids of the layers this map draws, in draw order, bottom first.
+
+        Returns:
+            One id per described layer. A layer the caller named carries that name; an unnamed one gets a
+            generated id counting the layers of its kind.
+
+        Examples:
+            - A named layer keeps its name; an unnamed one is numbered after what it is:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().add_element("dem", name="elevation").add_element("obs").layer_ids
+                ['elevation', 'holoviews-1']
+
+                ```
+            - Draw order, not call order: a layer in the reference band added second is listed first,
+              because that is where it is drawn:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_element("obs", name="obs")
+                >>> m.add_element("grid", name="grid", band="reference").layer_ids
+                ['grid', 'obs']
+
+                ```
+            - A map that has drawn nothing has no ids:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().layer_ids
+                []
+
+                ```
+        """
+        return list(self._layer_tree.ids)
+
+    @property
+    def figure_spec(self) -> FigureSpec:
+        """What the map draws, as data: its layers, their sources and the view.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`, whose layers are the
+            tree in draw order and whose sources are what each builder was given.
+
+            It carries the JSON-safe half of the styling only. A colormap object, a Datashader reduction,
+            a tile provider and a timestamp are held beside the layer instead (:func:`describe`), so a
+            figure read back elsewhere draws each layer with what the description alone can say.
+
+            A map built from a GeoDataFrame or a dataset already in memory can be handed straight to a
+            renderer, but not written: `to_dict()` refuses an `object:` source, since a reference into this
+            process's memory would be unreadable everywhere else. Give a builder a path or a URL to get a
+            figure that can be stored.
+
+        Examples:
+            - The panel names the layers it draws, and each layer says what it is:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> figure = InteractiveMap().add_element("dem", name="elevation").figure_spec
+                >>> figure.panels[0].id, figure.panels[0].layers
+                ('main', ('elevation',))
+                >>> figure.layers.get("elevation").kind
+                'custom:holoviews'
+
+                ```
+            - A builder describes its layer by the engine-neutral kind and the recipe it drew by, and
+              files what it drew as the layer's source:
+                ```python
+                >>> import geopandas as gpd                                       # doctest: +SKIP
+                >>> from shapely.geometry import Point                            # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326) # doctest: +SKIP
+                >>> figure = InteractiveMap().points(gdf).figure_spec             # doctest: +SKIP
+                >>> layer = figure.layers.get("points-1")                         # doctest: +SKIP
+                >>> layer.kind, layer.symbology.props["via"], layer.source_id     # doctest: +SKIP
+                ('points', 'geometry', 'points-1')
+
+                ```
+        """
+        tree = self._layer_tree
+        panel = PanelSpec(
+            PANEL_ID,
+            self.viewport,
+            layers=tuple(tree.ids),
+        )
+        return FigureSpec(
+            panels=(panel,),
+            layers=tree,
+            sources={
+                key: ref for key, ref in self._sources.items() if key in set(tree.ids)
+            },
+        )
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Viewport` in the CRS this tier places data in. It carries no
+            centre, zoom or bounds: a Bokeh figure is framed by what the viewer pans and zooms to rather
+            than by a region set before it is drawn, which is what
+            :data:`~digitalearth.interactive.capabilities.CAPABILITIES` records under `absent["domain"]`.
+
+        Examples:
+            - The view reports the CRS the map places data in, Web Mercator by default:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> view = InteractiveMap().viewport
+                >>> view.crs, view.center, view.zoom
+                (3857, None, None)
+
+                ```
+            - A map built in another display CRS says so:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap(crs=4326).viewport.crs
+                4326
+
+                ```
+        """
+        return Viewport(crs=self.crs)
+
+    def add_element(
+        self,
+        element: Any,
+        *,
+        kind: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
+        key: Any = None,
+        held: Optional[Mapping[str, Any]] = None,
+    ) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here.
+
+        A builder of a drawn kind passes ``element=None`` and a ``symbology``: the layer is described first
+        and its drawer builds the element from that description, which is what "render from the description"
+        means here.
 
         An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
         kind `custom:holoviews`, a label, a band and whether it is visible — and never the object, which has no
         description to write. The object stays with the scene that was handed it, so a figure saved and loaded
         again names the layer but cannot rebuild it, and another backend cannot draw it at all
-        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
-        layer tree as its seam lands (#300); until then the object is drawn and nothing else is kept.
+        (:mod:`digitalearth.base.custom` says which case a reader is in).
 
         Args:
-            element: Any HoloViews/GeoViews element (or overlay-able object).
+            element: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
+                kind this tier draws — that one is built by its drawer from ``symbology``.
+            kind: The registered, engine-neutral kind the layer is — ``"raster"``, ``"points"``, … A kind
+                listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its
+                description; ``None`` makes it a custom layer (``custom:holoviews``).
+            name: The caller's own name for the layer, used as its id when it is free and as its label.
+            visible: Whether the layer is described as visible — and, for a kind this tier draws, applied:
+                the drawer is asked for it and the element is hidden when the tree says the layer is not
+                drawn (its own flag, and its group's).
+            band: The draw-order band, for a kind that does not imply one — what a custom layer needs,
+                since the engine name says nothing about what it draws.
+            source: What the layer draws, recorded under its id; ``None`` for a layer drawn from no data.
+            symbology: How it looks, as values — the description its drawer reads.
+            key: A credential the layer's drawer needs, held on the map rather than in ``symbology`` so a
+                figure written to JSON carries no API key. ``None`` for every layer that needs none.
+            held: The engine values this layer's drawer needs that a description cannot carry — a colormap
+                object, a tile provider, and the half of the caller's own keywords JSON cannot spell (the
+                rest is described, since M3). A value the drawer reads by name is filed by that name; the
+                keyword and style buckets are filed *nested*, under their own keys, and
+                :func:`held_props` merges each into the described mapping of the same name. Held on the
+                map for the same reason ``key`` is; see :func:`describe`. ``None`` for a layer whose
+                description says everything about it.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
+            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer
+            that declined to draw the layer leaves the map as it was — the description, the registered
+            source, the held key and the id are all let go again, so nothing names a layer that was never
+            drawn.
+
+        Raises:
+            KeyError: when ``kind`` is one this tier draws but ``symbology`` records no ``via`` it has a
+                recipe for — a builder routed to a kind without saying how it drew it. The refusal names
+                the recipes that kind is drawn by.
+            Exception: whatever the layer's drawer raises — an
+                :class:`~digitalearth.base.crs.OffLimbError` from a warp that places nothing, a ``KeyError``
+                for a column the data does not have — re-raised after the layer is let go exactly as a
+                declined one is.
 
         Examples:
-            - Registration appends in order and returns the map for chaining (any object can
-              stand in for a HoloViews element here — the registry does not inspect it):
+            - Two layers of one band register in call order and return the map for chaining (any object
+              can stand in for a HoloViews element here — the registry does not inspect it):
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
                 >>> m = InteractiveMap()
@@ -328,6 +837,18 @@ class InteractiveMapBase:
                 True
                 >>> m.layers
                 ['raster-layer', 'vector-layer']
+
+                ```
+            - A ``band`` decides where the element lands, not the order it was added in: a reference layer
+              registered second is drawn beneath the data layer registered first:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_element("observations")
+                >>> m = m.add_element("grid", name="grid", band="reference")
+                >>> m.layers
+                ['grid', 'observations']
+                >>> m.layer_ids
+                ['grid', 'holoviews-1']
 
                 ```
             - With the engine installed, real elements register the same way:
@@ -339,8 +860,146 @@ class InteractiveMapBase:
 
                 ```
         """
-        self.layers.append(element)
+        # A builder that says what it drew is described; one that does not is a caller's own object,
+        # which has no description to write beyond the fact that it exists
+        # (:mod:`digitalearth.base.custom`).
+        from digitalearth.interactive.renderer import DRAWN_KINDS
+
+        resolved = kind or custom_kind("holoviews")
+        layer_id = self._layer_id(resolved.split(":")[-1], name)
+        # Everything from here to the draw is undone together if any of it raises. The layer is described
+        # before its drawer runs, so a drawer that refuses — an off-limb warp, `strict=True`, a column that
+        # is not there — would otherwise leave the figure naming a layer nothing drew, its data registered
+        # for the life of the process, and every later layer inserted at an index counted past the ghost.
+        try:
+            if key is not None:
+                self._layer_keys[layer_id] = key
+            if held:
+                self._layer_held[layer_id] = dict(held)
+            self._index_layer(
+                layer_id,
+                name,
+                kind=resolved,
+                visible=visible,
+                band=band,
+                source=source,
+                symbology=symbology,
+            )
+            if resolved in DRAWN_KINDS:
+                # The element is built from the description rather than handed in: the builder passed `None`
+                # and its drawer makes the real one, which is what "render from the description" means.
+                drawn = self._renderer.draw_layer(self.figure_spec, layer_id)
+                if drawn is None:
+                    self._forget_layer(layer_id)
+                    return self
+                element = drawn.element
+        except BaseException:
+            self._forget_layer(layer_id)
+            raise
+        # Placed where the description puts it, not where the call happened to arrive. The tree orders by
+        # draw-order band, so a basemap added last still goes under the data and a graticule added first
+        # still goes over it — and the list `_compose` overlays cannot disagree with the figure the map
+        # reports, which is what it did when a builder had to remember to insert at the front itself.
+        self.layers.insert(self._layer_tree.ids.index(layer_id), element)
+        self._note_last_layer(layer_id)
         return self
+
+    def _note_last_layer(self, layer_id: str) -> None:
+        """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
+
+        A basemap, land or ocean is drawn beneath the data and carries no colorbar, legend or hover of its
+        own, so `image(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
+        inserted at the front of `layers` and so never became the layer these acted on; the web tier's
+        `_last_layer_id` likewise counts data layers only. An underlay still takes the slot while nothing
+        above the underlay band has been added, so a map of tiles alone can be configured at all.
+
+        Args:
+            layer_id: The layer just added.
+        """
+        held = self._last_layer_id
+        if (
+            held is not None
+            and held in self._layer_tree
+            and self._band_of(layer_id) == "underlay"
+            and self._band_of(held) != "underlay"
+        ):
+            return
+        self._last_layer_id = layer_id
+
+    def _band_of(self, layer_id: str) -> str:
+        """Return the draw-order band one of the map's layers sits in.
+
+        Args:
+            layer_id: A layer the tree holds.
+
+        Returns:
+            The band, as the renderer places it: the layer's own when it declared one, else its kind's.
+        """
+        band: str = self._renderer.band_for(self._layer_tree.get(layer_id))
+        return band
+
+    def _last_layer_index(self, method: str) -> int:
+        """Return where in :attr:`layers` the layer the caller added last is drawn.
+
+        Args:
+            method: The public method asking, named in the refusal.
+
+        Returns:
+            The index of that layer's element. `layers` is kept in the tree's order — each element is
+            inserted at its layer's tree index — so the tree index is the element's index too.
+
+        Raises:
+            ValueError: when the map has no layer yet.
+        """
+        if self._last_layer_id is None:
+            raise ValueError(
+                f"{method}() needs at least one layer — add a builder call first"
+            )
+        return self._layer_tree.ids.index(self._last_layer_id)
+
+    def _forget_layer(self, layer_id: str) -> None:
+        """Drop a layer that was described but never drawn, and everything it registered.
+
+        What :meth:`add_element` calls for a layer its drawer declined or refused. Taking the entry out of the tree is
+        not enough on its own: the source sits in the process-global object table, which holds a strong
+        reference for the life of the process, and `figure_spec.sources` is filtered to the tree's ids, so
+        nothing a caller reads would show it was still there. The id goes back to the pool too, so a caller
+        who names a layer, watches it decline, and names it again gets the name they asked for; and a
+        credential held for a layer nothing draws is a secret held for nothing.
+
+        The pointer :meth:`_note_last_layer` keeps goes too, when it named this layer. It is resolved by
+        looking the id up in the tree, so leaving it behind made the next :meth:`colorbar` or
+        :meth:`legend` answer `ValueError: tuple.index(x): x not in tuple` where those methods document a
+        refusal naming themselves (review N8). It moves to the layer still drawn last rather than being
+        cleared, because a map with layers left has a layer to toggle; only a map left with none refuses.
+
+        Args:
+            layer_id: The layer to forget. A layer the tree no longer holds is ignored, so a caller can
+                forget one whose description was never finished.
+        """
+        if layer_id in self._layer_tree:
+            self._layer_tree = self._layer_tree.remove(layer_id)
+        self._issued_ids.discard(layer_id)
+        ref = self._sources.pop(layer_id, None)
+        if ref is not None:
+            forget_object(ref.uri)
+        self._layer_keys.pop(layer_id, None)
+        self._layer_held.pop(layer_id, None)
+        if self._last_layer_id == layer_id:
+            remaining = self._layer_tree.ids
+            self._last_layer_id = remaining[-1] if remaining else None
+
+    def _held_for(self, layer_id: str) -> Dict[str, Any]:
+        """Return the engine values held beside one layer.
+
+        Args:
+            layer_id: The layer being drawn.
+
+        Returns:
+            A copy of what its builder handed over, or an empty dict — which is what a figure read from
+            disk, or drawn on another map, gives every layer.
+        """
+        return dict(self._layer_held.get(layer_id) or {})
 
     def _needs_reproject(self, data: Any) -> bool:
         """Whether `data` must be reprojected (via pyramids) to the display CRS.
@@ -591,20 +1250,36 @@ class InteractiveMapBase:
             The styled element.
         """
         _require_holoviz()  # called for its actionable ImportError; no module name is needed here
-        common = {
+        style = self._style_record(common, bokeh)
+        if style["common"]:
+            element = element.opts(**style["common"])
+        element = element.opts(backend="bokeh", **style["bokeh"])
+        self._record_style(element, style, owner)
+        return element
+
+    def _style_record(
+        self, common: Optional[dict] = None, bokeh: Optional[dict] = None
+    ) -> dict:
+        """Return the style :meth:`_styled` applies for these options, without an element to apply it to.
+
+        Split out so a layer can file its style before it has drawn anything: a dynamic layer's frames are
+        drawn lazily, and drawing one only to read its style back cost a full window read per layer.
+
+        Args:
+            common: Backend-agnostic options; ``None``-valued entries are dropped.
+            bokeh: Extra Bokeh-only options merged over the default frame.
+
+        Returns:
+            dict: ``{"common": {...}, "bokeh": {...}}`` — the shape :meth:`style_of` reads back.
+        """
+        kept = {
             key: value for key, value in (common or {}).items() if value is not None
         }
-        if common:
-            element = element.opts(**common)
         frame: dict = {"width": self.width, "height": self.height}
         if self.title:
             frame["title"] = self.title
         frame.update(bokeh or {})
-        element = element.opts(backend="bokeh", **frame)
-        self._record_style(
-            element, {"common": dict(common), "bokeh": dict(frame)}, owner
-        )
-        return element
+        return {"common": kept, "bokeh": frame}
 
     def _record_style(self, element: Any, style: dict, owner: Any = None) -> None:
         """File the style of a just-drawn element, and of the layer it is a frame of.
@@ -678,7 +1353,7 @@ class InteractiveMapBase:
 
     @property
     def layer_styles(self) -> List[dict]:
-        """The recorded style of every registered layer, in add (= overlay) order.
+        """The recorded style of every registered layer, in draw order.
 
         The whole-map view of :meth:`style_of`: one entry per layer, positionally aligned with
         :attr:`layers`, so the styling a builder *requested* can be read back off the map
@@ -708,7 +1383,7 @@ class InteractiveMapBase:
                 []
 
                 ```
-            - With the engine installed, each builder's requested options show up in add order:
+            - With the engine installed, each builder's requested options show up in draw order:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
@@ -769,14 +1444,16 @@ class InteractiveMapBase:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
 
         Returns:
-            The single element when one layer is registered, an ``hv.Overlay`` of all layers in add
-            order otherwise (an empty map renders as a blank ``hv.Overlay``).
+            The single element when one layer is registered, an ``hv.Overlay`` of all layers in draw
+            order otherwise (an empty map renders as a blank ``hv.Overlay``). The overlay's order is the
+            order :attr:`figure_spec` describes, because each element was placed where its layer's band
+            put it rather than where the builder call happened to arrive.
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
 
         Examples:
-            - Two registered layers compose into an overlay in add order (needs the engine):
+            - Two registered layers compose into an overlay in draw order (needs the engine):
                 ```python
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
@@ -839,8 +1516,9 @@ class InteractiveMapBase:
 
         Args:
             path: Output file (``str`` or ``pathlib.Path``). ``*.html`` writes a self-contained
-                interactive Bokeh page; any other suffix (``.png``/``.svg``/…) renders through
-                HoloViews' matplotlib backend (headless, no browser/selenium needed).
+                interactive Bokeh page; ``.png`` and the other raster suffixes render through HoloViews'
+                matplotlib backend (headless, no browser/selenium needed). A vector suffix is refused —
+                see below.
             **kwargs: Forwarded to :func:`holoviews.save` (e.g. ``fmt``, ``dpi``).
 
         Returns:
@@ -849,6 +1527,13 @@ class InteractiveMapBase:
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
+            ValueError: for a vector suffix (``.svg``/``.pdf``/``.pgf``). This tier declares
+                ``export_vector`` absent, because its figure is a Bokeh canvas and a vector export is the
+                static tier's — and the static tier declares that capability as its own alone. The
+                matplotlib fallback the raster suffixes use would write those three too, so a caller asking
+                for one got a file the declaration says the tier cannot produce, drawn by a renderer that
+                is not this tier's (review L3). Build the same map with ``digitalearth.Map`` for a vector
+                file.
 
         Examples:
             - The suffix picks the backend — ``.html`` is interactive Bokeh, ``.png`` renders
@@ -863,8 +1548,28 @@ class InteractiveMapBase:
                 '.png'
 
                 ```
+            - A vector file is the static tier's, and the refusal says so rather than writing one (it
+              needs no engine: nothing is rendered for a call that cannot be honoured):
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().save("map.svg")           # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: InteractiveMap.save('map.svg') cannot write a vector file: ...
+
+                ```
         """
-        gv, hv = _require_holoviz()
+        suffix = Path(str(path)).suffix.lower()
+        if suffix in VECTOR_SUFFIXES:
+            # Refused before the figure is rendered, so nothing is drawn and nothing is written for a call
+            # that cannot be honoured. The reason is read from the declaration rather than repeated, so the
+            # two cannot say different things (review L3).
+            raise ValueError(
+                f"InteractiveMap.save({str(path)!r}) cannot write a vector file: the interactive tier "
+                f"declares export_vector absent - {CAPABILITIES.reason('export_vector')}. Build the map "
+                f"with digitalearth.Map for {suffix}, or save .png or .html here."
+            )
+        _, hv = _require_holoviz()
         obj = self.render()
         backend = "bokeh" if str(path).lower().endswith(".html") else "matplotlib"
         hv.save(obj, path, backend=backend, **kwargs)
@@ -890,8 +1595,65 @@ class InteractiveMapBase:
             pass
         return obj
 
+    def close(self) -> None:
+        """Let go of the in-memory data this map registered.
+
+        The object registry is process-global and holds strong references, so a session that builds maps
+        keeps every dataset they drew until something says otherwise. This is the caller saying so. Closing
+        twice is harmless, and a map that registered nothing has nothing to forget.
+
+        An `object:` source in a `figure_spec` captured from this map cannot be opened afterwards — which is
+        what "closed" means for a figure whose data lived only in this process. Save the data and reference
+        it by path to keep such a figure readable.
+
+        The credentials held for keyed basemaps go too, and with them the engine values held beside each
+        layer: they are kept off the figure so it can be written down without them, and a closed map has
+        nothing left to draw with them.
+
+        What does **not** go is the figure: the layer tree, the elements already built and the pointer the
+        toggles follow all survive, so a closed map still renders, saves and can have its colorbar or
+        legend switched. Closing lets go of the *data*, not of the picture — a `colorbar()` after `close()`
+        acts on a layer that is still there, which is why the pointer is not cleared here as it is in
+        :meth:`_forget_layer` (review N8). Only a layer that was forgotten takes the pointer with it.
+
+        Examples:
+            - A map that drew nothing closes quietly, with no engine installed:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().close()
+
+                ```
+
+        See Also:
+            __exit__: calls this on the way out of a ``with`` block.
+        """
+        forget_namespace(self._objects_ns)
+        self._layer_keys.clear()
+        self._layer_held.clear()
+
+    def __enter__(self) -> Self:
+        """Enter the runtime context, returning the map.
+
+        Returns:
+            The same map, so ``with InteractiveMap() as m:`` binds this object and :meth:`close` runs on
+            the way out.
+        """
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        """Let the map's in-memory data go on the way out of a ``with`` block.
+
+        Args:
+            *exc: The exception triple, ignored — closing is unconditional, as it is for a file.
+        """
+        self.close()
+
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
         """Render the map inline in notebooks by delegating to the composed HoloViews object.
+
+        Args:
+            include: The mime types Jupyter asks for, passed through untouched.
+            exclude: The mime types Jupyter asks to be left out, passed through untouched.
 
         Returns:
             The mimebundle of the rendered object, or an empty dict when the engine is missing

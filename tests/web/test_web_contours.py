@@ -98,6 +98,80 @@ class TestTracingIsPyramids:
         assert '"#ff0000"' in _payload(m.to_html())
 
 
+class TestTheUnitsNameTheLayerThatWasClassified:
+    """`units=` describes the contoured values, so it may only reach a key this call produced (#314)."""
+
+    @staticmethod
+    def _classifiable_points():
+        """Return points whose `value` column a scheme can cut into classes.
+
+        Returns:
+            A point `GeoDataFrame` with four distinct values, so `k=2` quantiles have something to split.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        return gpd.GeoDataFrame(
+            {"value": [1.0, 2.0, 3.0, 4.0]},
+            geometry=[Point(4.9 + index / 10, 52.4) for index in range(4)],
+            crs=4326,
+        )
+
+    def test_an_explicit_colour_leaves_an_earlier_layer_s_key_alone(self, dataset):
+        """A contour layer that classifies nothing must not annotate someone else's colour key.
+
+        Test scenario:
+            `contours` set `last_units` and then stamped it onto `last_legend` whenever one existed. With an
+            explicit `color=` the layer classifies nothing — `column` is `None` — so `last_legend` still
+            belonged to whichever layer classified before it, and that layer's key gained this raster's
+            units. The visible effect is one layer's classes labelled in another layer's units.
+        """
+        web_map = WebMap()
+        web_map.points(
+            self._classifiable_points(), column="value", scheme="quantiles", k=2
+        )
+        keyed = web_map.last_legend
+        web_map.contours(dataset, interval=10, color="#ff0000", units="m")
+        assert "units" not in keyed, (
+            f"the points key must keep its own units, got {keyed.get('units')!r}"
+        )
+
+    def test_the_units_land_on_the_contour_layer_s_own_key(self, dataset):
+        """The units are attributed by layer id, not by whichever key was most recent.
+
+        Test scenario:
+            Asking the layer is what makes the attribution right rather than merely non-wrong: the key is
+            read back through `_legend_of(layer_id)`, which is the same per-layer store `legend(layer_id=)`
+            reads. A fix that only checked whether `last_legend` had moved would pass this too — but it
+            would also write the units onto a key whose layer the tier declined to draw, because that key
+            is still the most recent one. Reading the layer's own entry cannot.
+        """
+        web_map = WebMap()
+        web_map.points(
+            self._classifiable_points(), column="value", scheme="quantiles", k=2
+        )
+        points_id = web_map.layer_ids[-1]
+        web_map.contours(dataset, interval=10, units="m")
+        contour_id = web_map.layer_ids[-1]
+        assert web_map._legend_of(contour_id).get("units") == "m", (
+            "the contour layer's own key names the units"
+        )
+        assert "units" not in web_map._legend_of(points_id), (
+            "the points layer keeps its own key, and it is not measured in the raster's units"
+        )
+
+    def test_a_classified_contour_layer_still_names_its_units(self, dataset):
+        """The guard must not cost the case it protects: a key this call made does take the units."""
+        web_map = WebMap()
+        web_map.contours(dataset, interval=10, units="m")
+        assert web_map.last_legend is not None, (
+            "a classified contour layer records a key"
+        )
+        assert web_map.last_legend.get("units") == "m", (
+            f"its own key names the units, got {web_map.last_legend.get('units')!r}"
+        )
+
+
 class TestTheIntervalCarriesItsAnchor:
     """``interval=`` reads as a plain spacing or as a :class:`ContourInterval` that anchors it."""
 
@@ -293,3 +367,69 @@ class TestHiddenContoursHideTheirLabels:
         assert payload.count('"visibility": "none"') == 2, (
             "the contours are hidden but their labels are not"
         )
+
+
+class TestAContourLayerIsDrawnFromItsDescription:
+    """Review L3: `contours` and `filled_contours` are drawn from what the figure records."""
+
+    @pytest.mark.parametrize(
+        ("filled", "kind", "maplibre_type"),
+        [(False, "contours", "line"), (True, "filled_contours", "fill")],
+        ids=["contours", "filled_contours"],
+    )
+    def test_a_contour_layer_redraws_from_the_figure(
+        self, dataset, filled, kind, maplibre_type
+    ):
+        """A figure holding a contour layer is drawable: the renderer has a drawer for its kind.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            filled: Whether the bands between levels are drawn rather than the levels.
+            kind: The kind the builder records.
+            maplibre_type: The MapLibre layer type the description draws.
+
+        Test scenario:
+            Both kinds were declared, but `drawer_for("contours")` refused them, so a figure written with a
+            contour layer in it could be read back and never drawn. The redraw here goes through the figure
+            alone, and draws what the build drew.
+        """
+        m = WebMap().contours(dataset, interval=10, filled=filled, name="iso")
+        assert m.get_layer("iso").kind == kind, m.get_layer("iso")
+        redrawn = m._renderer.draw_layer(m.figure_spec, "iso")
+        assert redrawn.layer.type == maplibre_type, redrawn.layer.type
+        assert redrawn.layer.paint == m._renderer.drawn["iso"].layer.paint, (
+            "the redraw did not draw the recorded paint"
+        )
+
+    def test_a_filled_contour_layer_is_drawn_whatever_the_big_data_threshold(
+        self, dataset
+    ):
+        """A contour layer is recorded under its own kind when it is drawn, not relabelled afterwards.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            `contours` drew through `polygons` and relabelled whatever `_last_layer_id` named. A flat-colour
+            fill over the big-data threshold routed to a deck.gl overlay that records no layer, so the
+            relabelling reached for a layer that was not there — or, on a map with layers already, renamed
+            the wrong one. Drawn under its own kind, a contour layer is always the MapLibre layer it
+            describes.
+        """
+        m = WebMap().points(_one_point(), name="obs")
+        m.big_data_threshold = 1
+        m.contours(dataset, interval=10, filled=True, color="#cc4444", name="bands")
+        kinds = {layer.id: layer.kind for layer in m.figure_spec.layers}
+        assert kinds == {"obs": "points", "bands": "filled_contours"}, kinds
+
+
+def _one_point():
+    """Return one point in EPSG:4326.
+
+    Returns:
+        A one-row GeoDataFrame.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    return gpd.GeoDataFrame({"value": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326)

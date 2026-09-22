@@ -865,6 +865,46 @@ class TestTheRemainingArms:
         with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
             scene.set_visible("nope", False)
 
+    def test_the_renderer_reads_an_actors_visibility_back(self, scene):
+        """Review M4 — `is_visible` is the read-back of `set_visible`, in this tier's own terms.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The shared conformance suite asks every tier "is this layer drawn hidden?" through the
+            renderer, and answers it off the engine rather than off the description. Both directions are
+            checked, so a reader wired to a constant could not pass.
+        """
+        scene.terrain(get_source(_dem()))
+        while_shown = scene._renderer.is_visible("terrain-1")
+        scene.set_visible("terrain-1", False)
+        assert while_shown is True, "a layer nothing hid must read back drawn"
+        assert scene._renderer.is_visible("terrain-1") is False, (
+            "set_visible must be readable back through is_visible"
+        )
+
+    def test_the_renderer_refuses_an_id_nothing_drew(self, scene):
+        """A layer the plotter does not hold has no visibility, and guessing one would hide a defect.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Answering `True` for an id nothing drew would let the conformance check pass against a layer
+            that was never drawn at all — which is the failure mode the refusal exists to prevent. The
+            message names the ids the plotter does hold, so the id is diagnosable.
+        """
+        scene.terrain(get_source(_dem()))
+        renderer = scene._renderer
+        with pytest.raises(
+            KeyError, match="nothing is drawn for layer 'nope'"
+        ) as refused:
+            renderer.is_visible("nope")
+        assert "terrain-1" in str(refused.value), (
+            f"the refusal must list the drawn ids; got {refused.value}"
+        )
+
     def test_a_hidden_layer_is_drawn_hidden(self, scene):
         """A figure that says a layer is off is drawn with it off, not drawn and then hidden.
 

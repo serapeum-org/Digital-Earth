@@ -122,6 +122,43 @@ class TestPolygonsAndChoropleth:
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["fill_alpha"] == 0.0, "no-column polygons must draw outlines only"
 
+    @pytest.mark.parametrize("scheme", [None, "categorical", "quantiles"])
+    def test_every_choropleth_scheme_is_described_as_a_choropleth(
+        self, polygon_fc, scheme
+    ):
+        """What a figure says a layer is must not depend on which colouring path drew it.
+
+        Args:
+            polygon_fc: Buffered points with a numeric `fid`.
+            scheme: The colouring path — the continuous ramp, distinct values, or classes.
+
+        Test scenario:
+            The continuous ramp delegated to `polygons()`, which records `polygons`, so the one
+            `choropleth()` call a caller makes most often was described as a plain polygon layer while the
+            categorical and graduated paths said `choropleth` (review L6).
+        """
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.choropleth(polygon_fc, "fid", scheme=scheme)
+            layer = interactive_map.figure_spec.layers.get(interactive_map.layer_ids[0])
+            assert layer.kind == "choropleth", layer.kind
+        finally:
+            interactive_map.close()
+
+    def test_polygons_with_a_column_is_still_described_as_polygons(self, polygon_fc):
+        """The other half: `polygons(column=)` fills by an attribute and stays a polygon layer.
+
+        Args:
+            polygon_fc: Buffered points with a numeric `fid`.
+        """
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.polygons(polygon_fc, column="fid")
+            layer = interactive_map.figure_spec.layers.get(interactive_map.layer_ids[0])
+            assert layer.kind == "polygons", layer.kind
+        finally:
+            interactive_map.close()
+
     def test_choropleth_colours_by_column(self, m, polygon_fc):
         m.choropleth(polygon_fc, "fid", cmap="plasma", clim=(0.0, 10.0))
         element = m.layers[0]
@@ -205,6 +242,85 @@ class TestPolygonsAndChoropleth:
         out = tmp_path / "choropleth.png"
         m.choropleth(polygon_fc, "fid").save(str(out))
         assert out.exists() and out.stat().st_size > 0
+
+
+#: Each vector builder call, by the name a failure reports it under, as `(builder, geometry, kwargs)`.
+_ONE_WARP_CALLS = {
+    "points": ("points", "point", {}),
+    "points-graduated": (
+        "points",
+        "point",
+        {"value_column": "fid", "scheme": "quantiles", "k": 3},
+    ),
+    "points-categorical": (
+        "points",
+        "point",
+        {"value_column": "fid", "scheme": "categorical"},
+    ),
+    "polygons": ("polygons", "polygon", {}),
+    "polygons-column": ("polygons", "polygon", {"column": "fid"}),
+    "choropleth": ("choropleth", "polygon", {"column": "fid"}),
+    "choropleth-categorical": (
+        "choropleth",
+        "polygon",
+        {"column": "fid", "scheme": "categorical"},
+    ),
+    "choropleth-graduated": (
+        "choropleth",
+        "polygon",
+        {"column": "fid", "scheme": "quantiles", "k": 3},
+    ),
+}
+
+
+class TestAVectorLayerIsReprojectedOnce:
+    """The drawer reprojects what it draws, so the builder must not warp the same frame first."""
+
+    @pytest.mark.parametrize("call", sorted(_ONE_WARP_CALLS))
+    def test_one_builder_call_warps_its_features_once(
+        self, call, point_fc, polygon_fc, monkeypatch
+    ):
+        """A builder that describes its layer needs the attribute values and the row count, not a warp.
+
+        Args:
+            call: Which builder call to count, a key of `_ONE_WARP_CALLS`.
+            point_fc: The point fixture, in EPSG:32618 so the Web-Mercator map has to reproject it.
+            polygon_fc: The same points buffered into polygons.
+            monkeypatch: Used to count calls to the tier's vector reprojection.
+
+        Test scenario:
+            Since the seam, the drawer reprojects what it draws. The builders kept their own
+            `_display_gdf` too — for a row count and a column's values, which a warp does not change — and
+            discarded the result, so every one of these warped the frame twice (review M8).
+        """
+        from digitalearth.interactive import vector
+
+        warps = []
+        real = vector.reproject
+
+        def counting(dataset, crs):
+            """Count the call and warp as the tier would.
+
+            Args:
+                dataset: What is being warped.
+                crs: Where to.
+
+            Returns:
+                The warped dataset.
+            """
+            warps.append(crs)
+            return real(dataset, crs)
+
+        monkeypatch.setattr(vector, "reproject", counting)
+        builder, geometry, kwargs = _ONE_WARP_CALLS[call]
+        features = point_fc if geometry == "point" else polygon_fc
+        interactive_map = InteractiveMap()
+        try:
+            getattr(interactive_map, builder)(features, **kwargs)
+            assert len(interactive_map.layers) == 1, "the layer was not drawn"
+            assert len(warps) == 1, f"{call} warped its features {len(warps)} times"
+        finally:
+            interactive_map.close()
 
 
 class TestRasterVectorCompose:
@@ -500,3 +616,174 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
         m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3, cmap=colours)
         style = m.style_of(m.layers[0])["common"]
         assert style["cmap"] == colours, style["cmap"]
+
+
+class TestAnOutlineAlphaTheCallerChose:
+    """The outline-only default is the builder's, so it is described only where it applies."""
+
+    @pytest.mark.parametrize(
+        "opts, expected",
+        [
+            pytest.param({}, {"fill_alpha": 0.0}, id="no-fill-was-asked-for"),
+            pytest.param({"fill_alpha": 0.4}, {}, id="the-caller-asked-for-a-fill"),
+        ],
+    )
+    def test_the_description_carries_the_default_only_when_it_applies(
+        self, m, polygon_fc, opts, expected
+    ):
+        """A figure holds the resolved style; the caller's own keywords are held beside the layer.
+
+        Args:
+            m: The map under test.
+            polygon_fc: Buffered points with a numeric `fid`.
+            opts: The styling keywords the caller passes.
+            expected: The resolved style the layer must be described with.
+
+        Test scenario:
+            The drawer merges the caller's keywords *over* the resolved style, so recording
+            ``fill_alpha = 0.0`` unconditionally still draws the fill they asked for on this map — the
+            check above, which reads the rendered style, cannot tell the two apart. What it changes is
+            the description: a figure written from it and read back elsewhere, without the held
+            keywords, then says "outlines only" for a layer the caller asked to fill.
+        """
+        m.polygons(polygon_fc, **opts)
+        described = m.figure_spec.layers.get(
+            list(m.figure_spec.layers.ids)[0]
+        ).symbology.props["common"]
+        assert described == expected, (
+            f"polygons(**{opts}) was described with the resolved style {described}"
+        )
+
+
+class TestAClassifiedLayerTakesThePathEveryOtherBuilderTakes:
+    """A path is the only input that yields a storable figure, so a classified layer has to take one.
+
+    `DataRef.of` records a path as a path and anything else as an `object:` reference, and
+    `FigureSpec.to_dict` refuses an `object:`-backed figure by name. So on this tier a classified layer was
+    either drawable (from a `FeatureCollection`) or storable (from a path), never both: the two classifying
+    helpers indexed the caller's argument rather than the frame it names, and a string answered
+    `TypeError: string indices must be integers` from inside the classifier (round 2, M8). The unclassified
+    branch never had the problem, because it hands the argument to the drawer and the renderer opens it.
+    """
+
+    #: The point fixture as the path a storable figure records, rather than as an opened object.
+    POINTS = "tests/data/points.geojson"
+
+    @staticmethod
+    def _stored(interactive_map):
+        """Return the sources a figure built from this map would be written with.
+
+        Args:
+            interactive_map: The map whose figure is written.
+
+        Returns:
+            `{layer_id: uri}` — a path for a layer a figure can carry, an `object:` reference for one it
+            cannot.
+        """
+        figure = interactive_map.figure_spec
+        return {layer_id: ref.uri for layer_id, ref in sorted(figure.sources.items())}
+
+    @pytest.mark.parametrize("scheme", ["categorical", "quantiles"])
+    def test_a_classified_choropleth_builds_from_a_path(self, m, scheme):
+        """Both classifying branches of `choropleth` must read the named file, not the name.
+
+        Args:
+            m: The map under test.
+            scheme: The classifying branch — distinct values, or classes.
+        """
+        m.choropleth(self.POINTS, "fid", scheme=scheme, k=3)
+        assert self._stored(m) == {"choropleth-1": self.POINTS}, self._stored(m)
+
+    @pytest.mark.parametrize("scheme", ["categorical", "quantiles"])
+    def test_a_classified_point_layer_builds_from_a_path(self, m, scheme):
+        """The sibling call site: `points` classifies through the same two helpers.
+
+        Args:
+            m: The map under test.
+            scheme: The classifying branch — distinct values, or classes.
+
+        Test scenario:
+            Reported against `choropleth`, but the two helpers are shared with `points`, which fails the
+            same way. Fixing only the reported builder would leave half the class.
+        """
+        m.points(self.POINTS, value_column="fid", scheme=scheme, k=3)
+        assert self._stored(m) == {"points-1": self.POINTS}, self._stored(m)
+
+    def test_the_classes_are_the_ones_the_opened_frame_yields(self, m, point_fc):
+        """Opening the path must classify the file's own values, not merely stop raising.
+
+        Args:
+            m: The map under test.
+            point_fc: The same features, already opened.
+
+        Test scenario:
+            A fix that classified an empty or placeholder frame would build a layer and store a path while
+            colouring it by breaks that belong to nothing; the two inputs have to agree on the edges.
+        """
+        opened = InteractiveMap()
+        try:
+            opened.choropleth(point_fc, "fid", scheme="quantiles", k=3)
+            expected = list(opened.last_breaks)
+        finally:
+            opened.close()
+        m.choropleth(self.POINTS, "fid", scheme="quantiles", k=3)
+        assert list(m.last_breaks) == expected, (
+            f"a path classified to {m.last_breaks}, the opened frame to {expected}"
+        )
+
+    def test_a_path_the_column_is_not_in_is_still_refused(self, m):
+        """Opening the frame must not swallow the refusal a wrong column earns.
+
+        Test scenario:
+            `choropleth` checks the column against `features.columns`, which a string does not have, so a
+            path has always deferred that refusal to the draw. It must still arrive.
+        """
+        with pytest.raises(KeyError):
+            m.choropleth(self.POINTS, "not_a_column", scheme="quantiles", k=3)
+
+
+class TestACallersFillAlphaReachesTheDrawnElement:
+    """What the engine is told, not what the figure says it was told (round 2, N9).
+
+    `2120eb7c` replaced the only render-side assertion on a caller's `fill_alpha` with a description-side
+    one. The replacement is the right check for the description — the builder's outline-only default must
+    be recorded only where it applies — but it left the tier with no check that a keyword a caller passed
+    ever reaches the element. That is the exact path the held-value split travels: a keyword kept beside
+    the layer instead of in the description draws correctly only while the drawer still merges it back, and
+    the whole suite was green with `cmap` already broken that way (round 2, H4).
+
+    `test_outline_only_when_no_column` covers the builder's own default. These two cover the caller's.
+    """
+
+    def test_an_outline_only_layer_draws_the_fill_the_caller_asked_for(
+        self, m, polygon_fc
+    ):
+        """`polygons()` defaults an unfilled layer to `fill_alpha = 0.0`; the caller's value must win.
+
+        Args:
+            m: The map under test.
+            polygon_fc: Buffered points with a numeric `fid`.
+        """
+        m.polygons(polygon_fc, fill_alpha=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style.get("fill_alpha") == 0.4, (
+            f"the caller's fill_alpha never reached the element: {style.get('fill_alpha')}"
+        )
+
+    def test_a_filled_layer_draws_the_fill_the_caller_asked_for(self, m, polygon_fc):
+        """The same keyword over a resolved style, which is where precedence could swallow it.
+
+        Args:
+            m: The map under test.
+            polygon_fc: Buffered points with a numeric `fid`.
+
+        Test scenario:
+            A coloured layer resolves `color`/`cmap`/`colorbar` of its own, and the caller's keywords are
+            merged *over* that. A merge in the other order would draw the builder's style and drop the
+            caller's, which the outline-only case above cannot tell apart — it has no resolved style.
+        """
+        m.polygons(polygon_fc, column="fid", fill_alpha=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style.get("fill_alpha") == 0.4, (
+            f"the caller's fill_alpha lost to the resolved style: {style.get('fill_alpha')}"
+        )

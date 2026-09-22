@@ -7,7 +7,14 @@ replaces them.
 
 import pytest
 
-from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec import (
+    Encoding,
+    LayerSpec,
+    Scale,
+    StyleKey,
+    StyleSchema,
+    Symbology,
+)
 
 
 class TestSymbology:
@@ -76,6 +83,34 @@ class TestSymbology:
         """
         assert len({Symbology.of(color="#f00"), Symbology.of(color="#f00")}) == 1, (
             "two equal symbologies must collapse to one entry"
+        )
+
+    def test_a_nested_mapping_property_still_lets_the_symbology_hash(self):
+        """A property that holds a mapping must not make the style the one part of a figure that cannot hash.
+
+        Test scenario:
+            Every tier records a mapping as a property — MapLibre's `paint`, HoloViews' resolved style, a tile
+            preset — so a dict held one level down made almost every real symbology raise
+            `unhashable type: 'dict'`, while `Bounds`, `Scale`, `Selection` and `Encoding` all hash.
+            `FigureSpec.__hash__` had already met the same wall with `sources` and answered it by hashing a
+            mapping as its sorted items; this is that answer applied where the mappings actually are.
+        """
+        paint = Symbology(props={"paint": {"circle-color": "#f00", "circle-radius": 4}})
+        same = Symbology(props={"paint": {"circle-radius": 4, "circle-color": "#f00"}})
+        assert hash(paint) == hash(same), "two equal symbologies must hash alike"
+        assert len({paint, same}) == 1, "and a set must hold them once"
+
+    def test_a_nested_mapping_that_differs_is_a_different_key(self):
+        """Hashing a mapping by its items must still tell two different styles apart."""
+        red = Symbology(props={"paint": {"circle-color": "#f00"}})
+        blue = Symbology(props={"paint": {"circle-color": "#00f"}})
+        assert len({red, blue}) == 2, "two different styles must keep two entries"
+
+    def test_a_mapping_inside_a_sequence_property_hashes_too(self):
+        """The recursion has to reach a mapping wherever the description puts one."""
+        stops = Symbology(props={"stops": ({"at": 0.0}, {"at": 1.0})})
+        assert hash(stops) is not None, (
+            "a mapping inside a tuple must not break the hash"
         )
 
     def test_a_list_property_is_copied_to_a_tuple(self):
@@ -277,4 +312,30 @@ class TestRouteAndResolveTogether:
         )
         assert merged.encoding("size").resolve() == 6, (
             "and the default size fill the gap"
+        )
+
+
+class TestAMappingBoundToAChannelHashesToo:
+    """The `props` half of the hash was made mapping-proof; the `encodings` half was not (review L5)."""
+
+    def test_a_symbology_holding_such_an_encoding_hashes(self):
+        """`Symbology.__hash__` says a mapping is hashed as its items wherever it sits — including here."""
+        bound = Symbology(
+            encodings={"color": Encoding.constant("color", {"high": "#f00"})}
+        )
+        assert hash(bound) is not None, (
+            "a style bound to a mapping constant must hash, as one holding a mapping property does"
+        )
+
+    def test_a_layer_holding_such_a_symbology_hashes(self):
+        """A `LayerSpec` hashes through its symbology, so the gap reached the layer as well."""
+        layer = LayerSpec(
+            "wells",
+            "points",
+            symbology=Symbology(
+                encodings={"color": Encoding.constant("color", {"high": "#f00"})}
+            ),
+        )
+        assert hash(layer) is not None, (
+            "a layer must hash whatever its style is bound to"
         )

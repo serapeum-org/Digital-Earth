@@ -378,6 +378,8 @@ jobs:
           sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
 
       - name: Run 3-D tier tests
+        # `test-3d` also collects tests/base/test_renderer_conformance.py: this is the only job with
+        # pyvista, so the 3-D half of the shared renderer contract ran nowhere before (review M6).
         run: |
           xvfb-run -a pixi run -e viz3d test-3d
 
@@ -426,8 +428,10 @@ jobs:
           version: v0.73.0
 
       - name: Run interactive tier tests
-        # `test-interactive` = pytest tests/test_interactive_*.py --cov=src/digitalearth --cov-report=xml.
-        # The default py311/312/313 matrix skips these tests, so this is the only coverage for interactive/.
+        # `test-interactive` = pytest tests/interactive tests/base/test_renderer_conformance.py
+        # --cov=src/digitalearth --cov-report=xml. The default py311/312/313 matrix skips these tests, so
+        # this is the only coverage for interactive/ — and the only job that can run the interactive half of
+        # the shared renderer contract, which is why that module is collected here as well (review M6).
         run: |
           pixi run -e interactive test-interactive
 

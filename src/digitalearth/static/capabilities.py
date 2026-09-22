@@ -17,6 +17,17 @@ Two fields are worth reading twice, because they are where this tier differs mos
   unsupported rather than pretends to do.
 - **`export_vector` is this tier's alone.** A matplotlib figure is written as PDF, SVG or EPS; the other
   three draw onto a canvas and say so in their own `absent`.
+- **`custom:matplotlib` is declared**, as each other tier declares its own engine's custom kind: an
+  artist a caller hands to :meth:`~digitalearth.static.scene.Scene._add_layer` is described, held, and
+  drawn back from that description. Drawing straight onto ``Map.ax`` is still the escape hatch, and is
+  still outside the description by design (D-3) — the figure never hears about it.
+
+**Unlike the other three tiers, this module does not promise an engine-free import.** `three_d`,
+`web` and `interactive` keep their declaration readable without pyvista, maplibre or holoviews,
+because each of those is an optional extra and `api.py` has to answer for a backend nobody installed.
+matplotlib is a core dependency, and `digitalearth.static` imports `Map` eagerly, so importing this
+module loads it. There is nothing to defer: a caller who can import `digitalearth` at all already has
+matplotlib (#294).
 """
 
 from digitalearth.base.capabilities import Capabilities
@@ -54,6 +65,7 @@ CAPABILITIES = Capabilities(
             "ocean",
             "lakes",
             "rivers",
+            "custom:matplotlib",
         }
     ),
     channels=frozenset({"opacity", "size"}),
@@ -106,10 +118,6 @@ CAPABILITIES = Capabilities(
         "measure": "there is no pointer to measure with; a distance is drawn as a layer of its own",
         "attribution": (
             "a credit is text placed on the figure — `text` or `stamp` — rather than a control the tier draws"
-        ),
-        "custom:matplotlib": (
-            "a caller who wants their own matplotlib on this figure draws it on `Map.ax` directly, which is "
-            "outside the figure description by design (D-3): it is the escape hatch, not a layer kind"
         ),
     },
 )

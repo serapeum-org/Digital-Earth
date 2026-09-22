@@ -19,7 +19,7 @@ channel with an `output_range` resolves to real units, because ``(4, 20)`` pixel
 everywhere.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from math import isfinite
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
@@ -28,6 +28,7 @@ from digitalearth.base.registry import FURNITURE_ANCHORS
 from digitalearth.base.spec._serial import (
     as_list,
     frozen_value,
+    hashable_value,
     plain_text,
     read_entry,
     refuse_unknown,
@@ -264,7 +265,9 @@ class Encoding:
     Attributes:
         channel: Which channel this drives — a key of :data:`CHANNELS`.
         value: The constant, when the channel does not vary with the data. A list in it, however nested, is stored
-            as a tuple, so `[1, 0, 0]` and `(1, 0, 0)` are one constant.
+            as a tuple, so `[1, 0, 0]` and `(1, 0, 0)` are one constant. A **mapping** is a constant like any
+            other — it is stored with its values frozen the same way, round-trips through `to_dict`, and hashes
+            (review L5).
         field: The column or band name the channel varies with. Exactly one of `value` and `field` is set.
         scale: How a field's values map onto the channel. ``None`` passes the values through untouched, which
             is what a renderer wants when it holds its own mapping.
@@ -278,8 +281,9 @@ class Encoding:
     Raises:
         ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, if `field` is
             not a non-empty string, if a scale or an output range is attached to a constant — a constant that
-            carries a mapping is a caller who expected the mapping to apply, and silently ignoring it would draw one
-            colour — or if `guide` is not a :class:`Guide`.
+            carries a *scale* is a caller who expected that scale to apply, and silently ignoring it would draw one
+            colour — or if `guide` is not a :class:`Guide`. Note this is about the `scale`/`output_range` fields,
+            not about a `value` that happens to be a mapping, which is accepted.
 
     Examples:
         - A constant, which is what a plain ``color="#f00"`` means:
@@ -391,6 +395,40 @@ class Encoding:
                 f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
                 f"{self.output_range!r}"
             )
+
+    def __hash__(self) -> int:
+        """Hash by what drives the channel, with a mapping in the constant hashed as its items.
+
+        A frozen dataclass hashes its fields as they are, and `value` is free-form: a constant that holds a
+        mapping raised `unhashable type: 'dict'`, and took every `Symbology` and `LayerSpec` holding it down
+        with it. :meth:`~digitalearth.base.spec.style.Symbology.__hash__` had already answered that for its
+        properties, and says a mapping is hashed as its items *wherever it sits* — the constant beside them
+        is where else it sits (review L5).
+
+        Returns:
+            A hash over every field, each put through
+            :func:`~digitalearth.base.spec._serial.hashable_value` first. Read from the dataclass's own
+            fields rather than named here, so a channel binding that gains a field is covered by it too.
+
+        Raises:
+            TypeError: if a field holds a value that is unhashable for its own reasons. Neither a list, a
+                numpy array nor a mapping is among them: the first two are stored as tuples, and the third
+                is hashed as its items, however deeply it sits.
+
+        Examples:
+            - A constant bound to a mapping hashes, and two spellings of it hash alike:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> written = Encoding.constant("color", {"high": "#f00", "low": "#00f"})
+                >>> rewritten = Encoding.constant("color", {"low": "#00f", "high": "#f00"})
+                >>> hash(written) == hash(rewritten), len({written, rewritten})
+                (True, 1)
+
+                ```
+        """
+        return hash(
+            tuple(hashable_value(getattr(self, field.name)) for field in fields(self))
+        )
 
     # ------------------------------------------------------------------ builders
 

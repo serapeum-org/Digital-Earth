@@ -12,7 +12,12 @@ basemaps auto-disable under a non-Mercator projection (a tile call raises via th
 
 from typing import TYPE_CHECKING, Any, Self
 
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.interactive.base import (
+    _require_holoviz,
+    describe_opts,
+    held_props,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -24,6 +29,39 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: **symmetric** (the same spacing in longitude and latitude) — so anything else is refused rather than
 #: silently rounded to the nearest shipped layer.
 _GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
+
+
+def draw_graticule(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the GeoViews graticule element for a described grid.
+
+    A graticule draws from no data: GeoViews cuts it from Natural Earth's pre-made line layers, chosen by
+    the step the caller asked for, which is why `_data` is unused.
+
+    Args:
+        interactive_map: The map being drawn, whose held values carry the caller's own keywords.
+        _data: Unused — a graticule has no source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer` holding the element.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    step = int(props["step"])
+    element = gv.feature.grid.clone()
+    if step != 30:
+        # cartopy's NaturalEarthFeature, reached through the element GeoViews already built rather
+        # than through an `import cartopy` (DX.3 — the tier never imports cartopy itself).
+        source = element.data
+        element = element.clone(
+            type(source)(source.category, f"graticules_{step}", source.scale)
+        )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
 
 
 class ProjectionMixin(_MixinBase):
@@ -59,8 +97,11 @@ class ProjectionMixin(_MixinBase):
         Raises:
             ValueError: when a tile basemap was already requested (tiles are Web-Mercator only and
                 cannot compose with a non-Mercator projection).
+            ImportError: when the ``interactive`` extra is not installed.
         """
-        gv, hv = _require_holoviz()
+        # Called for its actionable ImportError; the cartopy projection itself is resolved through the
+        # modules GeoViews already imported (`_resolve_projection`).
+        _require_holoviz()
         if name is None:
             self._projection = None
             return self
@@ -144,19 +185,25 @@ class ProjectionMixin(_MixinBase):
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Validated here, because the message names the caller's own arguments. The grid itself is built by
+        # `draw_graticule` from exactly what this records, so the figure describes the graticule rather
+        # than holding one somebody else built.
         step = self._graticule_step(lon_step, lat_step)
-        element = gv.feature.grid.clone()
-        if step != 30:
-            # cartopy's NaturalEarthFeature, reached through the element GeoViews already built rather
-            # than through an `import cartopy` (DX.3 — the tier never imports cartopy itself).
-            source = element.data
-            element = element.clone(
-                type(source)(source.category, f"graticules_{step}", source.scale)
-            )
-        if opts:
-            element = element.opts(**opts)
-        return self.add_element(element)
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="graticule",
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "graticule",
+                    "step": int(step),
+                    "opts": described_opts,
+                }
+            ),
+        )
 
     @staticmethod
     def _graticule_step(lon_step: float, lat_step: float) -> int:

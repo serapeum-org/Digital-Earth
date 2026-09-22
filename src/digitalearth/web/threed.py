@@ -18,7 +18,8 @@ import warnings
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
-from digitalearth.web.base import _require_layer_api
+from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
@@ -33,6 +34,41 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.web.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre extruded-fill layer for a polygon collection.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the polygons are placed in.
+        data: The layer's source — the polygon frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the description records no `paint` for the extrusion, naming the layer, its kind
+            and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=placed_features(web_map, data, layer),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.FILL_EXTRUSION,
+            source=source_id,
+            paint=dict(required_props(layer, "paint")["paint"]),
+        ),
+    )
 
 
 class ThreeDMixin(_MixinBase):
@@ -54,6 +90,11 @@ class ThreeDMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             height: Extrusion height — a column name (read with ``["get", name]``) or a constant in metres.
             column: Optional value column colouring the extrusions (graduated if ``scheme`` is set, else a
                 continuous ramp). ``None`` uses the flat ``color``.
@@ -65,15 +106,28 @@ class ThreeDMixin(_MixinBase):
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: when ``opacity`` is not a finite number, or when ``height`` is a number that is
+                not finite — refused at this call, because a figure holding NaN or infinity could not be
+                written down.
+            TypeError: when ``features`` is not a polygon layer.
+            KeyError: when ``column`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
         """
-        Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features, method="extrusion")
+        _require_layer_api()
         paint: dict = {
-            "fill-extrusion-opacity": float(opacity),
+            "fill-extrusion-opacity": as_finite(
+                opacity, "opacity", "WebMap.extrusion()"
+            ),
+            # A string names the column to read the height from and is carried as it is; a number is the
+            # height itself, and the figure has to be able to carry that too (review L1).
             "fill-extrusion-height": ["get", height]
             if isinstance(height, str)
-            else float(height),
+            else as_finite(height, "height", "WebMap.extrusion()"),
         }
+        gdf = self._display_gdf(features, method="extrusion")
         if column is not None:
             paint["fill-extrusion-color"] = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -81,19 +135,19 @@ class ThreeDMixin(_MixinBase):
         else:
             paint["fill-extrusion-color"] = color
 
-        src_id, layer_id = self._uid("ext-src"), self._uid("extrusion")
-        layer = Layer(
-            id=layer_id, type=LayerType.FILL_EXTRUSION, source=src_id, paint=paint
+        layer_id = self._uid("extrusion")
+        self._index_layer(
+            layer_id,
+            None,
+            kind="extrusion",
+            # The caller's own reference is what a figure can be written down with; the warped frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"paint": dict(paint)}),
         )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, gdf)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, None, kind="extrusion", source=gdf)
-        return self._queue(apply)
+        return self
 
     def terrain_tiles(
         self,

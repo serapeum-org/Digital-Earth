@@ -22,8 +22,8 @@ from loguru import logger
 
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.deprecation import renamed_parameter
-from digitalearth.base.spec import Scale
-from digitalearth.web.base import _require_layer_api
+from digitalearth.base.spec import LayerSpec, Scale, Symbology
+from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -35,6 +35,116 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: converter's marker for "interpret this value, do not pass it through", so it is protocol rather
 #: than a label — worth naming once so a typo cannot silently produce a layer deck.gl ignores.
 DECK_TYPE_KEY = "@@type"
+
+
+def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre heatmap layer over a point collection.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the points are placed in.
+        data: The layer's source — the point frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind
+            and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    paint = required_props(layer, "paint")["paint"]
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=placed_features(web_map, data, layer),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.HEATMAP,
+            source=source_id,
+            paint=dict(paint),
+        ),
+    )
+
+
+def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the clustered source and its three layers: bubbles, counts and loose points.
+
+    One description carries all three because they are one thing to a viewer — removing the layer takes
+    the counts and the loose points with it.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the points are placed in.
+        data: The layer's source — the point frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
+        unclustered points, drawn under the layer's own id suffixed ``-count`` and ``-unclustered``.
+
+    Raises:
+        ValueError: when the description records none of the values the clustering is built from —
+            its colours, its radius or the zoom it stops clustering at — naming the layer, its kind and
+            what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
+    """
+    from maplibre.sources import GeoJSONSource, geopandas_to_geojson
+
+    from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    props = required_props(layer, "color", "text_color", "radius", "max_zoom")
+    count_id, loose_id = derived_ids("clusters", layer.id)
+    source_id = f"{layer.id}-src"
+    color, text_color = props["color"], props["text_color"]
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=GeoJSONSource(
+            data=geopandas_to_geojson(placed_features(web_map, data, layer)),
+            cluster=True,
+            cluster_radius=int(props["radius"]),
+            cluster_max_zoom=int(props["max_zoom"]),
+        ),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.CIRCLE,
+            source=source_id,
+            filter=["has", "point_count"],
+            paint={
+                "circle-color": color,
+                "circle-radius": ["step", ["get", "point_count"], 15, 50, 20, 200, 25],
+            },
+        ),
+        extra_layers=(
+            layer_cls(
+                id=count_id,
+                type=layer_types.SYMBOL,
+                source=source_id,
+                filter=["has", "point_count"],
+                layout={
+                    "text-field": ["get", "point_count_abbreviated"],
+                    "text-size": 12,
+                },
+                paint={"text-color": text_color},
+            ),
+            layer_cls(
+                id=loose_id,
+                type=layer_types.CIRCLE,
+                source=source_id,
+                filter=["!", ["has", "point_count"]],
+                paint={"circle-color": color, "circle-radius": 5},
+            ),
+        ),
+    )
 
 
 class BigDataMixin(_MixinBase):
@@ -85,6 +195,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             weight: Optional value column; cells are weighted by it (normalised to ``[0, 1]``). ``None``
                 weights every point equally.
             radius: Heat kernel radius in pixels.
@@ -93,17 +208,27 @@ class BigDataMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``radius``, ``intensity`` or ``opacity`` is not a finite number — refused at
+                this call, because a figure holding NaN or infinity could not be written down.
+            TypeError: when ``features`` is not a point layer.
+            KeyError: when ``weight`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.heatmap()"
         import numpy as np
 
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
+        paint: dict = {
+            "heatmap-radius": as_finite(radius, "radius", call),
+            "heatmap-intensity": as_finite(intensity, "intensity", call),
+            "heatmap-opacity": as_finite(opacity, "opacity", call),
+        }
         gdf = self._display_gdf(features, method="heatmap")
         self._require_points(gdf, "heatmap")
-        paint: dict = {
-            "heatmap-radius": float(radius),
-            "heatmap-intensity": float(intensity),
-            "heatmap-opacity": float(opacity),
-        }
         if weight is not None:
             values = np.asarray(self._require_column(gdf, weight), dtype=float)
             finite = values[np.isfinite(values)]
@@ -119,17 +244,19 @@ class BigDataMixin(_MixinBase):
                 1.0,
             ]
 
-        src_id, layer_id = self._uid("heat-src"), self._uid("heatmap")
-        layer = Layer(id=layer_id, type=LayerType.HEATMAP, source=src_id, paint=paint)
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, gdf)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        layer_id = self._uid("heatmap")
+        self._index_layer(
+            layer_id,
+            None,
+            kind="heatmap",
+            # The caller's own reference is what a figure can be written down with; the warped frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"paint": dict(paint)}),
+        )
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, None, kind="heatmap", source=gdf)
-        return self._queue(apply)
+        return self
 
     def cluster(
         self,
@@ -143,10 +270,18 @@ class BigDataMixin(_MixinBase):
         """Render a point ``FeatureCollection`` as MapLibre clustered circles + count labels (recipe W4).
 
         Builds a clustered GeoJSON source and three layers: cluster bubbles (sized by point count), the count
-        label, and the unclustered points.
+        label, and the unclustered points. All three are **one description** under one id — the bubbles'
+        — so a layer switcher lists them once and :meth:`~digitalearth.web.base.WebMapBase.remove_layer`
+        takes all three off together. The count and the loose points are drawn beside it, under that id
+        suffixed ``-count`` and ``-unclustered``.
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             radius: Cluster radius in pixels (MapLibre ``clusterRadius``).
             max_zoom: Zoom at/after which points stop clustering (``clusterMaxZoom``).
             color: Fill colour for cluster bubbles and unclustered points.
@@ -154,61 +289,47 @@ class BigDataMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
-        """
-        from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
-        Layer, LayerType = _require_layer_api()
+        Raises:
+            TypeError: when ``features`` is not a point layer.
+            KeyError: when ``features`` is a URL with no resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
+        """
+
+        _require_layer_api()
         gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
-        src_id = self._uid("cluster-src")
-        source = GeoJSONSource(
-            data=geopandas_to_geojson(gdf),
-            cluster=True,
-            cluster_radius=int(radius),
-            cluster_max_zoom=int(max_zoom),
-        )
-        clusters = Layer(
-            id=self._uid("clusters"),
-            type=LayerType.CIRCLE,
-            source=src_id,
-            filter=["has", "point_count"],
-            paint={
-                "circle-color": color,
-                "circle-radius": ["step", ["get", "point_count"], 15, 50, 20, 200, 25],
-            },
-        )
-        count = Layer(
-            id=self._uid("cluster-count"),
-            type=LayerType.SYMBOL,
-            source=src_id,
-            filter=["has", "point_count"],
-            layout={"text-field": ["get", "point_count_abbreviated"], "text-size": 12},
-            paint={"text-color": text_color},
-        )
-        unclustered = Layer(
-            id=self._uid("unclustered"),
-            type=LayerType.CIRCLE,
-            source=src_id,
-            filter=["!", ["has", "point_count"]],
-            paint={"circle-color": color, "circle-radius": 5},
-        )
+        from digitalearth.web.renderer import derived_ids
 
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(clusters)
-            widget.add_layer(count)
-            widget.add_layer(unclustered)
-
-        # One closure adds the bubbles, their counts and the loose points, so tagging it with the
-        # indexed id removes all three together — they are one thing to a viewer.
-        apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
-        # The loose points, which are the layer carrying the caller's own columns: the bubbles are
-        # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
-        # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
-        # description is skipped — which is what the guard in `_record_tooltip` is for.
-        self._last_layer_id = unclustered.id
-        self._index_layer(clusters.id, None, kind="clusters", source=gdf)
-        return self._queue(apply)
+        # The counts and the loose points are drawn under ids derived from this one, so the allocation
+        # reserves those too — a caller's `name=` can no longer take one of them (review M5).
+        layer_id = self._uid("clusters", kind="clusters")
+        # One description covers the bubbles, their counts and the loose points, so removing it removes
+        # all three together — they are one thing to a viewer.
+        registered = self._index_layer(
+            layer_id,
+            None,
+            kind="clusters",
+            # As `heatmap` above: the figure records what the caller named, the first draw takes the
+            # frame already warped here (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(
+                props={
+                    "color": color,
+                    "text_color": text_color,
+                    "radius": int(radius),
+                    "max_zoom": int(max_zoom),
+                }
+            ),
+        )
+        if registered:
+            # The loose points, which are the layer carrying the caller's own columns: the bubbles are
+            # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
+            # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
+            # description is skipped — which is what the guard in `_record_tooltip` is for.
+            self._last_layer_id = derived_ids("clusters", layer_id)[-1]
+        return self
 
     def _add_deck_layer(self, layer: dict) -> Self:
         """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.
@@ -245,6 +366,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             size: Point radius in pixels (``5.0`` when omitted — the signature's ``None`` is the "not
                 passed" sentinel the deprecated spelling is resolved against). The same ``size`` that
@@ -340,6 +466,11 @@ class BigDataMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             line_color: RGBA outline colour (0-255 per channel).
 

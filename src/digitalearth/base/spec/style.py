@@ -33,6 +33,7 @@ from digitalearth.base.spec._serial import (
     FrozenDict,
     as_mapping,
     frozen_value,
+    hashable_value,
     plain_text,
     read_entry,
     refuse_unknown,
@@ -136,14 +137,17 @@ class Symbology:
 
         The dataclass is frozen, but a plain ``dict`` field is not — a caller holding the dict it passed in
         could still re-key the symbology afterwards. Holding both as a read-only
-        :class:`~digitalearth.base.spec._serial.FrozenDict` closes that, and still copies, pickles and converts
-        under `dataclasses.asdict`.
+        :class:`~digitalearth.base.spec._serial.FrozenDict` closes that at the **top level**, and still copies,
+        pickles and converts under `dataclasses.asdict`. A mapping stored *inside* a property is a plain dict,
+        so a caller who kept a reference to it can still write through it — and, since a property holding a
+        mapping is hashed (review L5/N1), change this symbology's hash under whoever is holding it.
 
         Property values are stored in their canonical form: every list and tuple in them, however nested,
         becomes a tuple (see :func:`~digitalearth.base.spec._serial.frozen_value`). That copies a caller's list —
         appending to it afterwards no longer changes the symbology — and it is what lets a symbology written with
         `to_dict`, where tuples become JSON lists, read back equal and hashable. A numpy array is stored as nested
-        tuples too; any other mutable value, a custom object say, is held as given.
+        tuples too, and a dict is rebuilt with each of its values frozen the same way — so the mapping stored is
+        never the mapping passed. Any other value, a custom object say, is held as given.
 
         Raises:
             ValueError: if a key does not match its encoding's channel.
@@ -194,14 +198,19 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if any value in it is itself unhashable — a dict held as a property,
-                say. A list is not among them: lists are stored as tuples, so ``Symbology.of(color=[1, 0, 0])``
-                hashes. Nor is a numpy array, which is stored as nested tuples of its elements.
+            TypeError: if any value in it is itself unhashable — and that alone. Neither a list nor a dict is
+                among them: a list is stored as a tuple, so ``Symbology.of(color=[1, 0, 0])`` hashes, and a
+                mapping is hashed as its items in key order wherever it sits — which is what every tier
+                needs, since each records one (MapLibre's ``paint``, the resolved HoloViews style, a tile
+                preset). The mapping's *keys* need not compare with each other either: ordering them by
+                `repr` where they do not is what keeps the sort from raising where the values are fine
+                (review L6). Nor is a numpy array unhashable here, being stored as nested tuples of its
+                elements.
         """
         return hash(
             (
                 tuple(sorted(self.encodings.items(), key=lambda item: item[0])),
-                tuple(sorted(self.props.items(), key=lambda item: item[0])),
+                hashable_value(dict(self.props)),
             )
         )
 

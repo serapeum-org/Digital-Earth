@@ -20,6 +20,12 @@ that did not apply, so ``quickmap(ds, backend="web", domain="europe")`` returned
 the domain had been ignored. Now each such parameter is checked against
 :data:`BACKEND_CAPABILITIES` and refused by name — see :func:`_reject_unsupported`. Everything a backend *does*
 support is forwarded to it.
+
+**The refusal is the declared one.** Both gates — :func:`_reject_unsupported` and the renderer wrappers
+:func:`imshow`/:func:`contourf`/:func:`contour`/:func:`pcolormesh` — decide from the tier's own
+:class:`~digitalearth.base.capabilities.Capabilities`, carry the reason that declaration gave, and raise its
+:class:`~digitalearth.base.capabilities.CapabilityError`. It subclasses ``ValueError``, so a caller catching
+``ValueError`` around ``quickmap`` keeps catching it, and one that wants only this refusal can now name it.
 """
 
 import logging
@@ -28,7 +34,7 @@ from typing import Any
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
-from digitalearth.base.capabilities import Capabilities
+from digitalearth.base.capabilities import Capabilities, CapabilityError
 from digitalearth.base.types import PlottableData
 from digitalearth.interactive.capabilities import (
     CAPABILITIES as CAPABILITIES_INTERACTIVE,
@@ -227,8 +233,10 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             named.
 
     Raises:
-        ValueError: for the first parameter that was actually requested and that ``backend`` cannot honour.
-            The message names both, so the caller learns which half to change.
+        CapabilityError: for the first parameter that was actually requested and that ``backend`` cannot
+            honour — a ``ValueError``, so a caller catching that keeps catching this. The message names both
+            halves, so the caller learns which one to change, and carries the tier's own reason when it
+            declared one.
 
     Examples:
         - A domain means nothing to the web tier, and saying so beats returning a world map:
@@ -282,7 +290,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             if name in BACKEND_CAPABILITIES[other]
         )
         reason = _refusal_reason(backend, name)
-        raise ValueError(
+        raise CapabilityError(
             f"{name}= is not supported by backend={backend!r}; "
             + (f"{reason}. " if reason else "")
             + f"It is honoured by {honoured} — drop the argument, or pick one of those backends"
@@ -496,11 +504,12 @@ def quickmap(
         :class:`Scene3D` when ``backend="3d"``, or a :class:`WebMap` when ``backend="web"``.
 
     Raises:
-        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``basemap``/``coastlines`` the
-            chosen backend cannot honour — the message names both the parameter and the backend. Also for a
-            ``kind`` naming a renderer the chosen backend does not have, for ``column`` on point input, and
-            for an empty ``FeatureCollection``, which would otherwise draw nothing in silence.
-            ``colorbar`` is never refused, since every backend honours it.
+        CapabilityError: for a ``crs``/``domain``/``basemap``/``coastlines``/``kind`` the chosen backend
+            cannot honour — the message names both the parameter and the backend, and adds the reason that
+            tier's own declaration gave. It subclasses ``ValueError``, so existing handlers still catch it.
+        ValueError: for an unknown ``backend``, for ``column`` on point input, and for an empty
+            ``FeatureCollection``, which would otherwise draw nothing in silence. ``colorbar`` is never
+            refused, since every backend honours it.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
             ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
 
@@ -668,7 +677,24 @@ def _basemap_source(basemap: Any) -> Any:
 
 
 def quickplot(data: PlottableData, **kwargs) -> Any:
-    """Alias of :func:`quickmap` — build a finished map from ``data`` in one call."""
+    """Alias of :func:`quickmap` — build a finished map from ``data`` in one call.
+
+    Args:
+        data: A pyramids ``Dataset`` or ``FeatureCollection`` to draw.
+        **kwargs: Forwarded to :func:`quickmap` unchanged — ``crs``, ``domain``, ``basemap``,
+            ``coastlines``, ``colorbar``, ``kind``, ``backend`` and the styling kwargs the chosen
+            builder takes.
+
+    Returns:
+        Whatever :func:`quickmap` built for the chosen backend: a :class:`Map` by default, else an
+        ``InteractiveMap``, a ``Scene3D`` or a ``WebMap``.
+
+    Raises:
+        CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
+        ValueError: as :func:`quickmap` raises it, for an unknown ``backend`` or an empty collection.
+        TypeError: as :func:`quickmap` raises it, for input that is neither a ``Dataset`` nor a
+            ``FeatureCollection``.
+    """
     return quickmap(data, **kwargs)
 
 
@@ -1030,6 +1056,11 @@ def _method(name: str):
     keyword the caller never typed (review L5). The wrapper answers for its own injection instead, naming
     itself and the call that does work.
 
+    Its refusal is the declared one, like :func:`_reject_unsupported`'s: the tier that has no
+    ``raster_renderer`` said why in its own `absent`, and that sentence is carried here rather than
+    rewritten. A wrapper is the one gate a caller reaches without naming ``kind=``, so without the reason
+    they were told a renderer is missing and never what the tier does instead.
+
     Args:
         name: The ``Map`` renderer the wrapper draws with, also the wrapper's own name.
 
@@ -1046,9 +1077,11 @@ def _method(name: str):
                 for other in sorted(BACKEND_CAPABILITIES)
                 if "kind" in BACKEND_CAPABILITIES[other]
             )
-            raise ValueError(
+            reason = _refusal_reason(backend, "kind")
+            raise CapabilityError(
                 f"{name}() draws with the {name!r} renderer, which backend={backend!r} does not have; "
-                f"it is honoured by {honoured} — call quickmap(data, backend={backend!r}) instead"
+                + (f"{reason}. " if reason else "")
+                + f"It is honoured by {honoured} — call quickmap(data, backend={backend!r}) instead"
             )
         return quickmap(data, kind=name, **kwargs)
 
@@ -1068,10 +1101,11 @@ def _method(name: str):
         The finished map :func:`quickmap` built.
 
     Raises:
-        ValueError: when ``backend=`` names a backend that has no renderer selector, since the
+        CapabilityError: when ``backend=`` names a backend that has no renderer selector, since the
             {name!r} renderer is this wrapper's own injection rather than something the caller
-            asked for; the message names the backends that do honour it, and points at
-            :func:`quickmap` for the chosen one.
+            asked for. A ``ValueError``, so catching that still works. The message carries the
+            tier's own reason for having no renderer selector, names the backends that do honour
+            one, and points at :func:`quickmap` for the chosen one.
     """
     return _fn
 
@@ -1083,19 +1117,74 @@ pcolormesh = _method("pcolormesh")
 
 
 def scatter(data: PlottableData, **kwargs) -> Map:
-    """Quick-draw a FeatureCollection of points as a scatter map; returns the finished Map."""
+    """Quick-draw a FeatureCollection of points as a scatter map; returns the finished Map.
+
+    Point input is what makes it a scatter: this adds no ``kind``, so :func:`quickmap`'s own input-type
+    dispatch chooses the builder. Sizing by an attribute is ``size_column``, not ``column`` — the latter
+    names a polygon fill and is refused on points by name.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of point geometries.
+        **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
+            ``colorbar``, ``backend``, plus the styling kwargs ``Map.scatter`` takes).
+
+    Returns:
+        The finished :class:`Map` — or the other tier's map when ``backend=`` names one.
+
+    Raises:
+        ValueError: as :func:`quickmap` raises it, including for ``column`` on point input and for an
+            empty collection.
+        CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
+    """
     return quickmap(data, **kwargs)
 
 
 def grid_cells(data: PlottableData, **kwargs) -> Map:
-    """Quick-draw raster cells as coloured polygons; returns the finished Map."""
+    """Quick-draw raster cells as coloured polygons; returns the finished Map.
+
+    Unlike :func:`scatter` and :func:`choropleth`, this does not go through :func:`quickmap`: it builds a
+    :class:`Map` and calls :meth:`Map.grid_cells` on it, so it is **matplotlib only**. There is no
+    ``backend=`` to choose, and passing one reaches the cleopatra glyph as an unknown styling keyword and
+    is refused there.
+
+    Args:
+        data: A pyramids ``Dataset`` whose cells become one coloured polygon each.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else goes to
+            :meth:`Map.grid_cells` — ``band``, a ``scheme``, and the caller's own ``PolygonGlyph``
+            styling.
+
+    Returns:
+        The finished :class:`Map`, with a colorbar added when the drawn layer has one to draw.
+
+    Raises:
+        ValueError: from ``PolygonGlyph`` for a styling keyword it does not accept — which is also what a
+            stray ``backend=`` becomes here.
+    """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.grid_cells(data, **kwargs)
     return _finish(scene, colorbar=True)
 
 
 def choropleth(data: PlottableData, column: str, **kwargs) -> Map:
-    """Quick-draw a polygon FeatureCollection coloured by ``column``; returns the finished Map."""
+    """Quick-draw a polygon FeatureCollection coloured by ``column``; returns the finished Map.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of polygon geometries.
+        column: The attribute whose value fills each polygon. It is what makes the map a choropleth, so
+            it is positional here rather than a keyword; on **point** input :func:`quickmap` refuses it by
+            name, since points are sized by ``size_column`` instead.
+        **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
+            ``colorbar``, ``backend``, plus ``scheme``/``k``/``cmap`` and the rest of the builder's
+            styling).
+
+    Returns:
+        The finished :class:`Map` — or the other tier's map when ``backend=`` names one.
+
+    Raises:
+        ValueError: as :func:`quickmap` raises it, including for ``column`` on point input and for an
+            empty collection.
+        CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
+    """
     return quickmap(data, column=column, **kwargs)
 
 
@@ -1268,6 +1357,20 @@ def kde(data: PlottableData, **kwargs) -> Map:
     """Quick-draw a 2-D kernel-density surface of a point FeatureCollection; returns the finished Map.
 
     ``clip`` and styling kwargs (``levels``/``shade``/``gridsize``/``cmap``/…) are forwarded to :meth:`Map.kde`.
+
+    Like :func:`grid_cells`, this builds a :class:`Map` and draws on it rather than going through
+    :func:`quickmap`, so it is **matplotlib only**: there is no ``backend=`` to choose.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of point geometries.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else goes to
+            :meth:`Map.kde` — ``clip``, and the caller's own ``KDEGlyph`` styling.
+
+    Returns:
+        The finished :class:`Map`, with a colorbar added when the drawn layer has one to draw.
+
+    See Also:
+        digitalearth.static.maps.vector.VectorMixin.kde: the ``Map`` method this wraps.
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.kde(data, **kwargs)

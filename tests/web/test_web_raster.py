@@ -291,3 +291,57 @@ class TestTheContractsColourLimits:
         m = WebMap()
         with pytest.raises(ValueError, match=r"limits must be a \(vmin, vmax\) pair"):
             m.field(dataset, limits=given)
+
+
+class TestAColormapObjectIsAcceptedWhereItsNameIs:
+    """Review H3 — `field(cmap=)` takes a `Colormap`, as the classified builders already do (#315)."""
+
+    def test_the_encoder_takes_the_object_a_name_resolves_to(self):
+        """A registered name and the object it names colour one band identically.
+
+        Test scenario:
+            The two sides are built differently on purpose: one hands the encoder the string a keyword
+            argument usually carries, the other the object `colormaps[...]` hands back. Before the fix the
+            object side raised `TypeError: unhashable type` from `colormaps[cmap]`, because a `Colormap`
+            defines `__eq__` and so cannot be a dict key.
+        """
+        from matplotlib import colormaps
+
+        band = np.arange(12.0).reshape(3, 4)
+        by_name = WebMap()._rgba_png_datauri(band, "magma")
+        by_object = WebMap()._rgba_png_datauri(band, colormaps["magma"])
+        assert by_object == by_name, "the object and its name must encode the same PNG"
+
+    def test_a_homemade_ramp_colours_the_band_it_was_given(self):
+        """A ramp built on the spot has no registered name, and must still colour the image.
+
+        Test scenario:
+            The three-colour ramp is deliberately unlike any registered map, so the first cell decodes to
+            pure red — which proves the caller's own object reached the encoder rather than a default.
+        """
+        import io
+
+        from matplotlib import image as mpimage
+        from matplotlib.colors import ListedColormap
+
+        ramp = ListedColormap(["#ff0000", "#00ff00", "#0000ff"], name="homemade-ramp")
+        uri = WebMap()._rgba_png_datauri(np.arange(12.0).reshape(3, 4), ramp)
+        rgba = mpimage.imread(io.BytesIO(base64.b64decode(uri.split(",", 1)[1])))
+        assert tuple(rgba[0, 0, :3]) == (1.0, 0.0, 0.0), "the lowest cell must be red"
+
+    def test_the_builder_takes_the_object_too(self, dataset):
+        """`field(cmap=<Colormap>)` builds a layer, as `choropleth(cmap=<Colormap>)` already does.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            This is the asymmetry the finding names: the classified paths resolve a colormap through
+            `as_colormap`, the unclassified raster path looked it up as a dict key and raised.
+        """
+        pytest.importorskip("maplibre")
+        from matplotlib.colors import ListedColormap
+
+        ramp = ListedColormap(["#ff0000", "#00ff00", "#0000ff"], name="homemade-ramp")
+        built = WebMap().field(dataset, cmap=ramp, name="dem")
+        assert built.layer_ids == ["dem"], "the layer must be registered"

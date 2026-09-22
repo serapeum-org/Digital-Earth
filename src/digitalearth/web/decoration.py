@@ -26,7 +26,8 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
-from digitalearth.web.base import _require_layer_api, _require_maplibre
+from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
 # Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
 # collision belongs to the Core contract, not here.
@@ -306,6 +307,138 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre symbol layer for a single text annotation.
+
+    An annotation draws from no data in the figure: its anchor and its string are what the caller passed,
+    recorded as values on its symbology, which is why `_data` is unused. The one-point GeoJSON source the
+    symbol reads is built here from those values rather than opened from anywhere.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — an annotation has no source in the figure to open.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding that point source and the symbol layer.
+
+    Raises:
+        ValueError: when the description carries none of the values the annotation is built from —
+            its anchor, its string, its text size or its colours — naming the layer, its kind and what is missing.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    props = required_props(
+        layer, "lon", "lat", "s", "text_size", "color", "halo_color", "halo_width"
+    )
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec={
+            "type": "geojson",
+            "data": {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [float(props["lon"]), float(props["lat"])],
+                },
+                "properties": {"text": props["s"]},
+            },
+        },
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.SYMBOL,
+            source=source_id,
+            layout={
+                "text-field": ["get", "text"],
+                "text-size": float(props["text_size"]),
+                "text-allow-overlap": True,
+            },
+            paint={
+                "text-color": props["color"],
+                "text-halo-color": props["halo_color"],
+                "text-halo-width": float(props["halo_width"]),
+            },
+        ),
+    )
+
+
+def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre lines (and degree labels) for a graticule layer.
+
+    A graticule draws from no data in the figure: its geometry is generated here from the two steps the
+    caller asked for, which is why `_data` is unused. Everything it needs is in its symbology, and the
+    GeoJSON source the lines read is built from that rather than opened from anywhere.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — a graticule has no source in the figure to open.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding that GeoJSON source, the line layer, and —
+        when the description asked for labels — the degree labels beside it as an extra layer. A hidden
+        graticule hides its labels too, so the numbers never float with nothing to annotate.
+
+    Raises:
+        ValueError: when the description carries none of the values the grid is generated from — its
+            two steps, its colour, width and opacity, or whether it is labelled — naming the layer, its
+            kind and what is missing.
+    """
+    from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    props = required_props(
+        layer, "lon_step", "lat_step", "color", "width", "opacity", "labels"
+    )
+    (label_id,) = derived_ids("graticule", layer.id)
+    features = _graticule_features(float(props["lon_step"]), float(props["lat_step"]))
+    source_id = f"{layer.id}-src"
+    color = props["color"]
+    visible = layer.visible
+    line = layer_cls(
+        id=layer.id,
+        type=layer_types.LINE,
+        source=source_id,
+        paint={
+            "line-color": color,
+            "line-width": float(props["width"]),
+            "line-opacity": float(props["opacity"]),
+        },
+        layout=None if visible else {"visibility": "none"},
+    )
+    extra = []
+    if props["labels"]:
+        label_layout: dict = {
+            "text-field": ["get", "label"],
+            "text-size": 10.0,
+            "symbol-placement": "line",
+        }
+        if not visible:
+            # Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.
+            label_layout["visibility"] = "none"
+        extra.append(
+            layer_cls(
+                id=label_id,
+                type=layer_types.SYMBOL,
+                source=source_id,
+                layout=label_layout,
+                paint={
+                    "text-color": color,
+                    "text-halo-color": "#000000",
+                    "text-halo-width": 1.0,
+                },
+            )
+        )
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec={"type": "geojson", "data": features},
+        layer=line,
+        extra_layers=tuple(extra),
+    )
+
+
 class DecorationMixin(_MixinBase):
     """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`.
 
@@ -402,7 +535,7 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.base.WebMapBase.add_underlay: the registration that keeps it at the
                 bottom of the stack.
         """
-        Layer, LayerType = _require_layer_api()
+        layer_cls, layer_types = _require_layer_api()
         src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
         source = {
             "type": "raster",
@@ -420,9 +553,9 @@ class DecorationMixin(_MixinBase):
                     f"tiles(bounds=...) takes (west, south, east, north) in lon/lat; got {bounds!r}"
                 )
             source["bounds"] = box
-        layer = Layer(
+        layer = layer_cls(
             id=layer_id,
-            type=LayerType.RASTER,
+            type=layer_types.RASTER,
             source=src_id,
             paint={"raster-opacity": float(opacity)},
         )
@@ -729,6 +862,9 @@ class DecorationMixin(_MixinBase):
         Raises:
             TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one
                 parameter, so preferring either would silently drop the other.
+            ValueError: when ``lon``, ``lat``, ``text_size`` or ``halo_width`` is not a finite number —
+                refused at this call, because a figure holding NaN or infinity could not be written
+                down.
 
         Examples:
             - Mark a place:
@@ -741,61 +877,58 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.labels: label many features from a column.
         """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.text()"
         s = renamed_parameter(
             new="s",
             value=s,
             old="string",
             alias=string,
-            caller="WebMap.text()",
+            caller=call,
         )
         if s is None:
             raise TypeError(
                 "text() needs the string to draw; pass it as the third argument"
             )
-        lon, lat = self._as_display_point(float(lon), float(lat), crs)
-        Layer, LayerType = _require_layer_api()
-        text_size = renamed_parameter(
-            new="text_size",
-            value=text_size,
-            old="size",
-            alias=size,
-            caller="WebMap.text()",
-            default=14.0,
+        lon, lat = self._as_display_point(
+            as_finite(lon, "lon", call),
+            as_finite(lat, "lat", call),
+            crs,
         )
-        src_id, layer_id = self._uid("text-src"), self._layer_id("text", name)
-        source = {
-            "type": "geojson",
-            "data": {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
-                "properties": {"text": s},
-            },
-        }
-        layer = Layer(
-            id=layer_id,
-            type=LayerType.SYMBOL,
-            source=src_id,
-            layout={
-                "text-field": ["get", "text"],
-                "text-size": float(text_size),
-                "text-allow-overlap": True,
-            },
-            paint={
-                "text-color": color,
-                "text-halo-color": halo_color,
-                "text-halo-width": float(halo_width),
-            },
+        _require_layer_api()
+        text_size = as_finite(
+            renamed_parameter(
+                new="text_size",
+                value=text_size,
+                old="size",
+                alias=size,
+                caller=call,
+                default=14.0,
+            ),
+            "text_size",
+            call,
         )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        halo_width = as_finite(halo_width, "halo_width", call)
+        layer_id = self._layer_id("text", name)
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
         # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
-        self._index_layer(layer_id, name, kind="text")
-        return self._queue_layer(apply, "text")
+        self._index_layer(
+            layer_id,
+            name,
+            kind="text",
+            symbology=Symbology(
+                props={
+                    "lon": float(lon),
+                    "lat": float(lat),
+                    "s": s,
+                    "text_size": float(text_size),
+                    "color": color,
+                    "halo_color": halo_color,
+                    "halo_width": float(halo_width),
+                }
+            ),
+        )
+        return self
 
     def set_title(
         self,
@@ -869,16 +1002,21 @@ class DecorationMixin(_MixinBase):
             width: Line width in pixels.
             opacity: Line opacity in ``[0, 1]``; a graticule is reference, so it should sit under the data
                 visually as well as in the stack.
-            labels: Whether to label each line with its degree value at the map's edge.
-            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            labels: Whether to label each line with its degree value at the map's edge. It also decides
+                whether the ``"<id>-label"`` id its drawer would derive is reserved: a graticule without
+                labels derives none, so a later layer may take that name (review L2).
+            name: What a layer switcher calls this layer; ``None`` names it ``"Graticule"``, suffixed if
+                that is taken.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when a step is not positive, or is wider than the 180° of latitude there is
-                to divide — either produces a grid with no lines and no hint as to why.
+            ValueError: when ``lon_step``, ``lat_step``, ``width`` or ``opacity`` is not a finite number —
+                checked first, because a figure holding NaN or infinity could not be written down — or
+                when a step is not positive, or is wider than the 180° of latitude there is to divide,
+                either of which produces a grid with no lines and no hint as to why.
 
         Examples:
             - A 10° grid under the data:
@@ -888,7 +1026,9 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        Layer, LayerType = _require_layer_api()
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.graticule()"
+        _require_layer_api()
         # One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square
         # grid; the two steps are what every other tier takes, and what a reader of a world map usually wants
         # (#263). A tier default of 30 degrees matches the interactive tier's.
@@ -896,6 +1036,12 @@ class DecorationMixin(_MixinBase):
         lat_step = _DEFAULT_GRID_STEP if lat_step is None else lat_step
         if spacing is not None:
             lon_step = lat_step = spacing
+        # Finite first: a NaN step passes the range check below (every comparison against NaN is false) and
+        # was written into the description, where it made the whole figure unwritable (review L1).
+        lon_step = as_finite(lon_step, "lon_step", call)
+        lat_step = as_finite(lat_step, "lat_step", call)
+        width = as_finite(width, "width", call)
+        opacity = as_finite(opacity, "opacity", call)
         for name_of, step in (("lon_step", lon_step), ("lat_step", lat_step)):
             if step <= 0 or step > 180:
                 # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,
@@ -903,55 +1049,35 @@ class DecorationMixin(_MixinBase):
                 raise ValueError(
                     f"graticule({name_of}={step!r}) must be greater than 0 and at most 180 degrees"
                 )
-        features = _graticule_features(float(lon_step), float(lat_step))
-        src_id = self._uid("graticule-src")
-        layer_id = self._layer_id("graticule", name or "Graticule")
-        source = {"type": "geojson", "data": features}
-        line = Layer(
-            id=layer_id,
-            type=LayerType.LINE,
-            source=src_id,
-            paint={
-                "line-color": color,
-                "line-width": float(width),
-                "line-opacity": float(opacity),
-            },
-            layout=None if visible else {"visibility": "none"},
+        # The degree labels are drawn under an id derived from this one, which the allocation reserves too,
+        # so a caller's `name=` can no longer take it (review M5). Only when they are drawn, though: the
+        # reservation table is keyed by kind, and whether a graticule labels itself is in its description.
+        # Reserving unconditionally held an id nothing drew, and the caller who then asked for that name got
+        # it silently suffixed — which is the string a layer switcher captions the row with (review L2).
+        layer_id = self._layer_id(
+            "graticule", name or "Graticule", kind="graticule" if labels else None
         )
-        text = None
-        if labels:
-            label_layout: dict = {
-                "text-field": ["get", "label"],
-                "text-size": 10.0,
-                "symbol-placement": "line",
-            }
-            if not visible:
-                # Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.
-                label_layout["visibility"] = "none"
-            text = Layer(
-                id=self._uid("graticule-label"),
-                type=LayerType.SYMBOL,
-                source=src_id,
-                layout=label_layout,
-                paint={
-                    "text-color": color,
-                    "text-halo-color": "#000000",
-                    "text-halo-width": 1.0,
-                },
-            )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(line)
-            if text is not None:
-                widget.add_layer(text)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._index_layer(layer_id, layer_id, kind="graticule", visible=visible)
-        # Reference geography says nothing about where to look, so it does not frame the map. It is
-        # added to the reference band: over the basemap (an underlay would be hidden beneath opaque
-        # tiles) and under the data, which it must not obscure.
-        return self._queue_layer(apply, "graticule")
+        # What was asked for, as values. The lines themselves are built by `draw_graticule` from exactly
+        # this, so the figure describes the grid rather than naming one that a closure drew elsewhere.
+        self._index_layer(
+            layer_id,
+            layer_id,
+            kind="graticule",
+            visible=visible,
+            symbology=Symbology(
+                props={
+                    "lon_step": float(lon_step),
+                    "lat_step": float(lat_step),
+                    "color": color,
+                    "width": float(width),
+                    "opacity": float(opacity),
+                    "labels": bool(labels),
+                }
+            ),
+        )
+        # Reference geography says nothing about where to look, so it does not frame the map. Its band —
+        # over the basemap, under the data — comes from the kind's registration, not from here.
+        return self
 
     #: Deprecated spelling of :meth:`set_title`, the contract's name for a figure's heading (#299). The
     #: web tier's other `title=` -- the HTML document's -- is untouched: it names a different thing.

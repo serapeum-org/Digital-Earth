@@ -13,9 +13,18 @@ gv = pytest.importorskip("geoviews")
 
 
 @pytest.fixture
-def m() -> InteractiveMap:
-    """A fresh Web-Mercator map for each test."""
-    return InteractiveMap()
+def m():
+    """Yield a fresh Web-Mercator map for each test, closing it on the way out.
+
+    The object registry is process-global and holds strong references, so a map that is never closed
+    keeps the data it drew for the rest of the session.
+
+    Yields:
+        The map.
+    """
+    interactive_map = InteractiveMap()
+    yield interactive_map
+    interactive_map.close()
 
 
 @pytest.fixture(scope="module")
@@ -157,6 +166,44 @@ class TestTextAndLabels:
         element = m.layers[0]
         assert isinstance(element, gv.Labels), f"got {type(element)}"
         assert "fid" in [d.name for d in element.vdims]
+
+    def test_text_style_opts_reach_the_annotation(self, m):
+        """An annotation's recorded style has to be applied to the element the drawer builds.
+
+        Args:
+            m: A fresh Web-Mercator map.
+
+        Test scenario:
+            `text` is drawn from its description now — the builder records `x`, `y`, `s` and the
+            caller's options, and `draw_text` rebuilds the `gv.Text` from them. The checks above assert
+            the placement, which a drawer that ignored the recorded options would still get right, so
+            the styling needs its own check.
+        """
+        m.text(12.5, 41.9, "Rome", text_color="red")
+        style = hv.Store.lookup_options("bokeh", m.layers[-1], "style").kwargs
+        assert style.get("text_color") == "red", (
+            f"text opts not applied: {style.get('text_color')}"
+        )
+
+    def test_label_style_opts_reach_the_labels_element(self, m):
+        """The same question for the per-feature labels, whose drawer styles a different element.
+
+        Args:
+            m: A fresh Web-Mercator map.
+
+        Test scenario:
+            `draw_labels` builds its `gv.Labels` from explicit display-CRS x/y/text arrays and then
+            applies the recorded options. Both halves are needed: the column check above passes on an
+            unstyled element, and this one passes on a mis-projected one.
+        """
+        from pyramids.feature import FeatureCollection
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson")
+        m.labels(fc, "fid", text_font_size="14pt")
+        style = hv.Store.lookup_options("bokeh", m.layers[-1], "style").kwargs
+        assert style.get("text_font_size") == "14pt", (
+            f"label opts not applied: {style.get('text_font_size')}"
+        )
 
     def test_labels_missing_column_raises(self, m):
         from pyramids.feature import FeatureCollection

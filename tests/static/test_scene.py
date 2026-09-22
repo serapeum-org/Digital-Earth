@@ -134,29 +134,33 @@ class TestRenderGlyph:
     """Tests for Scene._render_glyph (PA-3)."""
 
     def test_im_convention_registers_glyph_im(self):
-        """artist='im' (default) registers and returns glyph.im.
+        """artist='im' (default) registers glyph.im and reports it as what was drawn.
 
         Test scenario:
             The ArrayGlyph/MeshGlyph convention exposes the mappable on .im; that object is the layer.
+            Since #303 the recipe answers in a ``DrawnLayer``, because its callers are drawers and what
+            they hand back is what the renderer records.
         """
         scene = Scene()
         glyph = _FakeGlyph(im="THE_IMAGE")
-        out = scene._render_glyph(glyph)
-        assert out == "THE_IMAGE", f"expected glyph.im returned, got {out}"
+        drawn = scene._render_glyph(glyph)
+        assert drawn.artist == "THE_IMAGE", f"expected glyph.im, got {drawn.artist}"
         assert scene.layers[-1] == (glyph, "THE_IMAGE"), (
             f"layer not registered correctly: {scene.layers[-1]}"
         )
 
     def test_plot_convention_registers_third_element(self):
-        """artist='plot' registers and returns the third element of plot()'s return.
+        """artist='plot' registers and reports the third element of plot()'s return.
 
         Test scenario:
             Scatter/Polygon/Vector/KDE/Flow glyphs return (fig, ax, artist); the artist is the layer.
         """
         scene = Scene()
         glyph = _FakeGlyph(tuple_artist="THE_COLLECTION")
-        out = scene._render_glyph(glyph, artist="plot")
-        assert out == "THE_COLLECTION", f"expected plot()[2] returned, got {out}"
+        drawn = scene._render_glyph(glyph, artist="plot")
+        assert drawn.artist == "THE_COLLECTION", (
+            f"expected plot()[2], got {drawn.artist}"
+        )
         assert scene.layers[-1] == (glyph, "THE_COLLECTION"), (
             f"layer wrong: {scene.layers[-1]}"
         )
@@ -308,3 +312,29 @@ class TestPreserveView:
         assert scene.ax.get_ylim() == pytest.approx((70.0, 80.0)), (
             f"ylim not kept: {scene.ax.get_ylim()}"
         )
+
+
+class TestUnregisteringALayerThatRegisteredNoMappable:
+    """The colorbar registry is matched by identity, so a pair of `None`s must match nothing."""
+
+    def test_removing_it_leaves_the_earlier_registration_alone(self):
+        """A layer that registered nothing recognisable must not take another layer's entry with it.
+
+        Test scenario:
+            `Scene.layers` holds only the layers that registered a mappable, so a layer's index there is
+            not its index in the description and the two are matched by identity instead. A layer drawn
+            with neither a glyph nor a mappable — a caller's artist that is not one, a glyph whose render
+            produced no `im` — then matches ``(None, None)`` wherever that pair happens to sit, and
+            removing it unregisters whichever layer was filed first. `colorbar(layer=-1)` would key the
+            colorbar to the wrong layer from then on.
+        """
+        scene = Scene()
+        try:
+            scene._add_layer(None, None, "the first caller artist")
+            scene._add_layer(None, None, "the second caller artist")
+            scene._renderer.remove("custom-2")
+            assert scene._layer_labels[0] == "the first caller artist", (
+                f"removing one unregistered layer dropped another: {scene._layer_labels}"
+            )
+        finally:
+            scene.close()

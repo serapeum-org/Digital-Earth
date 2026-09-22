@@ -32,7 +32,8 @@ class Map(
     Args:
         crs: Display CRS as an EPSG int / string / CRS (anything ``Dataset.to_crs`` accepts). Default 3857.
         domain: Optional named region / bbox used to set the extent (resolved in T5.1); ``None`` uses data bounds.
-        ax: Existing axes to draw on (a new figure/axes is created when ``None``).
+        ax: Existing axes to draw on (a new figure/axes is created when ``None``). One axes holds one map;
+            two maps sharing one is unsupported (see :class:`~digitalearth.static.scene.Scene`).
         fig: Figure owning ``ax``.
         figsize: New-figure size when one is created.
         globe: Draw the projection boundary/graticule and clip layers to it (an orthographic globe).

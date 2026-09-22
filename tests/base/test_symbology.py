@@ -9,6 +9,7 @@ from digitalearth.base.symbology import (
     is_null,
     nulls_to_none,
     resolve_categorical_cmap,
+    sample_cmap,
 )
 
 
@@ -176,3 +177,86 @@ def test_matches_cleopatra_categorize(values):
     assert [c.lower() for c in ours_colors] == [c.lower() for c in upstream_colors], (
         "colours must match"
     )
+
+
+class TestAColormapObjectIsAcceptedWhereItsNameIs:
+    """A `Colormap` and its name must mean the same thing to every helper that classifies (#315)."""
+
+    def test_sampling_a_colormap_object_matches_sampling_its_name(self):
+        """A caller holding a colormap should not have to know to pass its name instead.
+
+        Test scenario:
+            `sample_cmap` branched on `isinstance(cmap, str)` and treated everything else as an
+            already-built sequence of colours, so a `Colormap` fell through to `list(cmap)` and raised
+            `TypeError: 'ListedColormap' object is not iterable`. The unclassified builders accept the
+            object, so whether a colormap worked depended on whether a scheme was given.
+        """
+        from matplotlib import colormaps
+
+        by_name = sample_cmap("magma", 4)
+        by_object = sample_cmap(colormaps["magma"], 4)
+        assert by_object == by_name, (
+            f"a colormap and its name must sample alike: {by_object} vs {by_name}"
+        )
+
+    def test_colouring_categories_from_a_colormap_object_matches_its_name(self):
+        """The categorical path had its own wall: an unhashable object used as a dict key.
+
+        Test scenario:
+            `categorical_colors` looked the colormap up with `colormaps[cmap]`. A `Colormap` defines
+            `__eq__` without `__hash__`, so the lookup raised `TypeError: unhashable type: 'ListedColormap'`
+            before anything could name the argument that was wrong.
+        """
+        from matplotlib import colormaps
+
+        values = ["a", "b", "c"]
+        _, by_name = categorical_colors(values, "tab10")
+        _, by_object = categorical_colors(values, colormaps["tab10"])
+        assert by_object == by_name, (
+            f"a colormap and its name must colour alike: {by_object} vs {by_name}"
+        )
+
+    def test_a_sequence_of_colours_is_still_taken_as_given(self):
+        """Accepting an object must not disturb the spelling that was already accepted."""
+        given = ["#ff0000", "#00ff00"]
+        assert sample_cmap(given, 5) == given, (
+            "an already-built sequence of colours is returned untouched, whatever n is"
+        )
+
+
+class TestTheTwoHelpersReadASequenceTheSameWay:
+    """`sample_cmap` takes a sequence of colours as a palette; its neighbour raised on one (review L9)."""
+
+    def test_colouring_categories_from_a_sequence_of_colours_uses_them(self):
+        """One argument, read one way, whether the caller classifies or not.
+
+        Test scenario:
+            `sample_cmap(['#f00', '#0f0'], 2)` answers `['#f00', '#0f0']` — a sequence is a palette there —
+            while `categorical_colors(values, cmap=['#f00', '#0f0'])` reached `as_colormap`, which used the
+            list as a dict key and raised `TypeError: unhashable type: 'list'`. Two neighbours reading the
+            same argument two ways is a trap for the tier code that passes a caller's `cmap` down both.
+        """
+        _, colours = categorical_colors(["a", "b"], ["#ff0000", "#00ff00"])
+        assert colours == ["#ff0000", "#00ff00"], (
+            f"a sequence of colours must be the palette, as it is for sample_cmap; got {colours}"
+        )
+
+    def test_a_palette_shorter_than_the_categories_cycles(self):
+        """A palette is cycled the way a `ListedColormap`'s own colours are."""
+        _, colours = categorical_colors(["a", "b", "c"], ["#ff0000", "#00ff00"])
+        assert colours == ["#ff0000", "#00ff00", "#ff0000"], (
+            f"a short palette must cycle, as a ListedColormap's does; got {colours}"
+        )
+
+    def test_an_empty_palette_is_refused_by_name(self):
+        """Cycling an empty palette divides by zero, which names neither the argument nor the helper."""
+        values = ["a", "b"]
+        with pytest.raises(ValueError, match="cmap"):
+            categorical_colors(values, [])
+
+    def test_a_colormap_name_is_unaffected(self):
+        """Reading a sequence as a palette must not change what a name means."""
+        _, named = categorical_colors(["a", "b", "c"], "tab10")
+        assert len(named) == 3, (
+            f"a name still samples one colour per category; got {named}"
+        )

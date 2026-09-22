@@ -13,16 +13,108 @@ materialise a frame (``dmap[0]``) to assert on it.
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.clim import sample_evenly, stack_clim
+from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec._serial import thawed_value
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
+    cmap_name,
+    describe,
+    describe_opts,
+    held_props,
 )
+
+
+def _iso_labels(labels: Optional[Sequence]) -> Optional[list]:
+    """Return slider labels in a spelling a figure can be written with.
+
+    A time slider is normally labelled with timestamps, and JSON has no spelling for one — the writer says
+    so by name and refuses the figure (review M9). Each label that knows its own ISO form is written as
+    that string; anything else is written as it is and refused by the writer as before, which keeps a
+    label a reader cannot make sense of out of the description rather than inventing one.
+
+    Args:
+        labels: The caller's labels, or `None`.
+
+    Returns:
+        The labels as JSON-safe values, or `None`.
+    """
+    if labels is None:
+        return None
+    return [
+        label.isoformat() if hasattr(label, "isoformat") else label for label in labels
+    ]
+
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the time-slider layer a described cube asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The `DatasetCollection` whose members are the frames.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _, hv = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    band = props["band"]
+    members = data.datasets
+    # One colour range and one colormap for the whole cube, resolved from the collection and its first
+    # member, so the colorbar on the last frame is the colorbar on the first.
+    clim = props.get("clim")
+    frozen_clim = clim if clim is not None else interactive_map._global_clim(data, band)
+    cmap = props.get("cmap")
+    if cmap is None and members:
+        cmap = interactive_map._auto_cmap(
+            interactive_map._to_display_source(members[0], band=band), None
+        )
+    cmap = cmap or "viridis"
+    labels = props.get("labels")
+    # Only the slider keys are thawed: a symbology stores every sequence as a tuple, and `clim` beside
+    # them *is* a pair — HoloViews reads it as one, and a list where a tuple belongs is not honoured.
+    keys = thawed_value(labels) if labels is not None else list(range(len(members)))
+    key_to_index = {key: index for index, key in enumerate(keys)}
+    common = {
+        "cmap": cmap,
+        "clim": frozen_clim,
+        "colorbar": props.get("colorbar"),
+        **dict(props.get("opts") or {}),
+    }
+
+    def frame(value: Any) -> Any:
+        """Draw one member of the cube.
+
+        Args:
+            value: The slider key naming the member.
+
+        Returns:
+            The styled image for that member.
+        """
+        src = interactive_map._to_display_source(
+            members[key_to_index[value]], band=band
+        )
+        image = hv.Image(
+            (src.x.values, src.y.values, _masked_to_nan(src.z.values)),
+            kdims=["x", "y"],
+            vdims=[interactive_map._vdim_name(src)],
+        )
+        return interactive_map._styled(image, common=common, bokeh={"tools": ["hover"]})
+
+    dmap = hv.DynamicMap(frame, kdims=[props["kdim"]]).redim.values(
+        **{props["kdim"]: keys}
+    )
+    return DrawnLayer(element=dmap, style=common)
 
 
 class TemporalMixin(_MixinBase):
@@ -106,7 +198,9 @@ class TemporalMixin(_MixinBase):
             The same map instance, so builder calls chain — one ``DynamicMap`` layer is registered.
 
         Raises:
-            ValueError: when ``labels`` is given but its length differs from the member count.
+            ValueError: when ``labels`` is given but its length differs from the member count, or two of
+                its entries are equal — duplicate keys collapse the slider and make the matching frames
+                unreachable.
 
         Examples:
             - Scrub a 3-step collection with a frozen colour range:
@@ -132,9 +226,9 @@ class TemporalMixin(_MixinBase):
 
                 ```
         """
-        gv, hv = _require_holoviz()
-        members = collection.datasets
-        n = len(members)
+        _require_holoviz()
+        # Both refusals stay with the builder: each names the `labels` the caller wrote.
+        n = len(collection.datasets)
         if labels is not None:
             if len(labels) != n:
                 raise ValueError(
@@ -145,31 +239,27 @@ class TemporalMixin(_MixinBase):
                     "timecube labels must be unique — duplicate labels collapse the slider and "
                     "make the matching frames unreachable"
                 )
-        frozen_clim = clim if clim is not None else self._global_clim(collection, band)
-        # One colormap for the whole cube, resolved from the first member so every frame matches.
-        if cmap is None and members:
-            cmap = self._auto_cmap(self._to_display_source(members[0], band=band), None)
-        cmap = cmap or "viridis"
-        keys = list(labels) if labels is not None else list(range(n))
-        key_to_index = {key: index for index, key in enumerate(keys)}
-
-        def frame(value: Any) -> Any:
-            src = self._to_display_source(members[key_to_index[value]], band=band)
-            arr = _masked_to_nan(src.z.values)
-            name = self._vdim_name(src)
-            image = hv.Image(
-                (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
-            )
-            return self._styled(
-                image,
-                common={
-                    "cmap": cmap,
-                    "clim": frozen_clim,
+        kept = None if labels is None else list(labels)
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="raster",
+            source=collection,
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "timecube",
+                    "kdim": kdim,
+                    # A slider's labels are usually timestamps, which JSON has no spelling for: the
+                    # originals are held beside the layer and the description keeps them as ISO strings,
+                    # which is what a reader without the objects slides through (review M9).
+                    "labels": describe(held, "labels", kept, _iso_labels(kept)),
+                    "band": band,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "clim": describe(held, "clim", clim),
                     "colorbar": colorbar,
-                    **opts,
-                },
-                bokeh={"tools": ["hover"]},
-            )
-
-        dmap = hv.DynamicMap(frame, kdims=[kdim]).redim.values(**{kdim: keys})
-        return self.add_element(dmap)
+                    "opts": described_opts,
+                }
+            ),
+        )

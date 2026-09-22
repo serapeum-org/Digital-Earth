@@ -97,11 +97,22 @@ class TestTheGridOnTheMap:
     """Reference geography that only exists in Python is not reference geography."""
 
     def test_it_reaches_the_saved_page(self):
-        """Embedding as GeoJSON is what lets an offline page keep its grid."""
+        """Embedding as GeoJSON is what lets an offline page keep its grid.
+
+        Test scenario:
+            Asserted on the id the map itself reports rather than on a lowercase substring: the source id
+            is derived from the layer's id now (#296), so re-drawing a described grid gives the same id
+            instead of a fresh counter, and the page names the layer the map says it drew.
+        """
         from digitalearth.web import WebMap
 
-        payload = _payload(WebMap().basemap().graticule(spacing=30.0).to_html())
-        assert "graticule" in payload
+        m = WebMap().basemap().graticule(spacing=30.0)
+        payload = _payload(m.to_html())
+        assert m.layer_ids == ["Graticule"], m.layer_ids
+        assert "Graticule" in payload, "the grid must reach the page it is saved into"
+        assert '"type": "geojson"' in payload, (
+            "embedded as GeoJSON, so an offline page keeps it"
+        )
         assert '"line-color"' in payload
 
     def test_labels_can_be_turned_off(self):

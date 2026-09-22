@@ -22,8 +22,14 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.interactive.base import _require_holoviz, _skips_off_limb
+from digitalearth.interactive.base import (
+    _require_holoviz,
+    _skips_off_limb,
+    describe_opts,
+    held_props,
+)
 
 # Note (#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
 # `provider=` argument. Splitting that collision (a `tiles(url=...)` vs `basemap(provider=...)` rename)
@@ -121,6 +127,267 @@ def _upper_placeholders(url: str) -> str:
     return url
 
 
+def _provider_description(provider: Any) -> Optional[str]:
+    """Return a tile provider in a spelling a figure can be written with, carrying no credential.
+
+    A provider name is already one. An `xyzservices.TileProvider` is a `dict` whose fields include the
+    service's API key, so the object itself is never written down: its `url` **template** is, which still
+    names the service and which `_build_tiles` draws through the raw-URL path. A provider whose own fields
+    appear verbatim in that template — one built with the key substituted in — is described as nothing,
+    and a reader without the held object draws the tier's default basemap.
+
+    Args:
+        provider: The caller's `provider` argument.
+
+    Returns:
+        The name, the URL template, or `None`.
+    """
+    if isinstance(provider, str):
+        return provider
+    # Every string field but the four public ones is treated as a credential: `apikey`, `accessToken`,
+    # whatever a service calls it. What is written must not depend on knowing each service's spelling.
+    public = {"url", "name", "attribution", "html_attribution"}
+    secrets = [
+        value
+        for key, value in dict(provider).items()
+        if key not in public and isinstance(value, str) and value
+    ]
+    for spelling in (getattr(provider, "url", None), getattr(provider, "name", None)):
+        if isinstance(spelling, str) and not any(
+            secret in spelling for secret in secrets
+        ):
+            return spelling
+    return None
+
+
+#: What `xyzservices` writes into a field the caller has to fill in — `'<insert your apiKey here>'`. It is
+#: the catalog's own marker for a credential, and `TileProvider.requires_token` reads it the same way.
+TOKEN_PLACEHOLDER = "<insert your"
+
+
+def _token_fields(provider: Any) -> list:
+    """Return the field names a provider needs a credential in before its URL can be built.
+
+    Args:
+        provider: An `xyzservices.TileProvider`.
+
+    Returns:
+        The names, in catalog order — usually one (`apiKey`, `accessToken`, `apikey`), and empty for a
+        service that needs none.
+    """
+    return [
+        field
+        for field, value in dict(provider).items()
+        if isinstance(value, str) and TOKEN_PLACEHOLDER in value
+    ]
+
+
+def _catalogued_tiles(name: str, api_key: Any, *, known: Any) -> Any:
+    """Resolve a provider name GeoViews' own catalog does not carry, through the `xyzservices` catalog.
+
+    The second half of :func:`_provider_description`: that one decides what a figure may write a provider
+    down as, and this one reads it back. A provider whose `url` repeats one of its own field values —
+    Esri's polar maps (`variant="Arctic_Imagery"`), HERE's styles (`variant="explore.day"`) — is described
+    by **name**, because the guard cannot tell such a template from one a key was substituted into. Only
+    32 of the 880 catalogued services are in GeoViews' catalog, and it spells them without the dot, so
+    those figures named a provider nothing here could resolve (review M9). The guard itself is unchanged:
+    it leaks no credential across the catalog, and what was wrong was the resolution, not the writing.
+
+    Args:
+        name: The provider name a description carries, as `xyzservices` spells it.
+        api_key: The credential held for this layer, or `None`.
+        known: The GeoViews catalog, named in the refusal when nothing resolves the name — a caller
+            reading it wants the names this tier offers, not all 880.
+
+    Returns:
+        The tile element. A keyed service is built from its filled-in template and carries its attribution
+        as a plot hook, as a keyed preset does; a keyless one is handed over as the provider object, which
+        is how GeoViews reads its attribution for itself.
+
+    Raises:
+        ValueError: when neither catalog knows the name — a typo must stay a refusal rather than become a
+            blank basemap.
+        ImportError: when the service needs a credential and none is held, matching the answer a keyed
+            preset and the Stadia catalog entry already give.
+    """
+    import xyzservices.providers as xyz
+
+    gv, _ = _require_holoviz()
+    try:
+        provider = xyz.query_name(name)
+    except ValueError:
+        # `xyzservices`' own message names its 880 services; this one names the catalog a caller chooses
+        # from, which is the answer the tier has always given for an unknown name.
+        raise ValueError(
+            f"unknown tile provider {name!r} — choose one of: {', '.join(sorted(known))}"
+        ) from None
+    secrets = _token_fields(provider)
+    if not secrets:
+        return gv.WMTS(provider)
+    if api_key is None:
+        raise ImportError(
+            f"tile provider {name!r} needs an api_key ({', '.join(secrets)}); pass "
+            "tiles(provider, api_key=...)"
+        )
+    # Built rather than handed over, because the credential has to reach the template; the attribution
+    # GeoViews would have read off the object is re-attached the way a keyed preset's is.
+    url = provider.build_url(**dict.fromkeys(secrets, api_key))
+    return gv.WMTS(_upper_placeholders(url)).opts(
+        hooks=[_attribution_hook(provider.attribution)]
+    )
+
+
+def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the tile basemap a description asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        _data: Unused — tiles are fetched from a provider, not from a caller's source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded provider names no tile service :meth:`DecorationMixin._build_tiles`
+            knows, or carries preset keywords a non-keyed provider takes none of.
+        ImportError: when the recorded provider needs a credential and the map holds none for this layer.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _require_holoviz()
+    props = held_props(interactive_map, layer)
+    element = interactive_map._build_tiles(
+        # `None` is a figure whose provider had no JSON spelling and whose reader holds no object: the
+        # shared default basemap is what such a layer draws.
+        props.get("provider") or DEFAULT_BASEMAP_PROVIDER,
+        # The credential is the map's, not the figure's: a description that carried it would write it
+        # out with the figure.
+        interactive_map._layer_keys.get(layer.id),
+        **dict(props.get("preset") or {}),
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    element = element.opts(level=props["level"])
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build one piece of Natural-Earth reference geography at the described resolution.
+
+    Args:
+        interactive_map: The map being drawn, whose held values carry the half of the caller's own
+            keywords a description cannot spell; the plain half is read off the description itself.
+        _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    # clone: .opts() would otherwise restyle the shared gv.feature singleton
+    element = (
+        getattr(gv.feature, props["feature"]).clone().opts(scale=props["resolution"])
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_labels(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the per-feature text labels a description asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the features whose column is drawn.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        KeyError: when the recorded column is absent from the reprojected frame. The builder refuses a
+            column it can see is missing, but a features object that exposes no ``columns`` — a pyramids
+            ``FeatureCollection`` rather than a GeoDataFrame — is only read here.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    column = props["column"]
+    gdf = interactive_map._display_gdf(data)
+    # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
+    # geometry-bearing GeoDataFrame: gv.Labels mis-projects a GeoDataFrame's point geometry at
+    # render time (a boolean-mask length mismatch). The geometry is already in the display CRS
+    # (reprojected by _display_gdf), so its x/y are the label anchors directly.
+    element = gv.Labels(
+        (gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy(), gdf[column].to_numpy()),
+        kdims=["x", "y"],
+        vdims=[column],
+        crs=gv.util.process_crs(interactive_map.crs),
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the GeoViews text element for a described annotation.
+
+    Args:
+        interactive_map: The map being drawn.
+        _data: Unused — an annotation has no source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    element = gv.Text(
+        props["x"],
+        props["y"],
+        props["s"],
+        crs=gv.util.process_crs(interactive_map.crs),
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_coastlines(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the GeoViews coastline feature at the described resolution.
+
+    Args:
+        interactive_map: The map being drawn, whose held values carry the half of the caller's own
+            keywords a description cannot spell; the plain half is read off the description itself.
+        _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    # clone: .opts() would otherwise restyle the shared gv.feature.coastline singleton
+    element = gv.feature.coastline.clone().opts(scale=props["resolution"])
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
 class DecorationMixin(_MixinBase):
     """Decoration builders (DI.1c): tile basemaps, Natural-Earth features, legend/colorbar toggles.
 
@@ -163,19 +430,23 @@ class DecorationMixin(_MixinBase):
                 a **keyed** preset name such as ``"Planet.NICFI"`` (see
                 :mod:`digitalearth.base.basemaps`), whose credential is read from the environment; a raw
                 XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``); or an
-                ``xyzservices.TileProvider``.
+                ``xyzservices.TileProvider``. A name GeoViews does not hold falls back to the
+                `xyzservices` catalog, which is why :meth:`list_tile_providers` lists fewer names than
+                this accepts — 32 against 880, measured.
             level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
                 them on top (rare — e.g. a labels overlay).
             api_key: Credential for a keyed provider. For a keyed **preset** (``"Planet.NICFI"``) it is the
-                service's API key and ``None`` reads the preset's environment variable; for a catalog
-                provider that needs one (Stadia) it is only checked for presence.
+                service's API key and ``None`` reads the preset's environment variable; for a provider in
+                GeoViews' own catalog that needs one (Stadia) it is only checked for presence, while one
+                resolved from the `xyzservices` catalog has it substituted into the URL template, under
+                whichever field that provider declares.
             preset: A keyed preset's own keywords, e.g. ``{"date": "2024-01", "flavour": "visual"}``. A
                 dict rather than ``**kwargs`` so it cannot collide with a HoloViews style option.
             **opts: Extra HoloViews style options applied to the tile element.
 
         Returns:
-            The same map instance, so builder calls chain — the tile layer is inserted *beneath*
-            existing layers.
+            The same map instance, so builder calls chain — the tile layer is drawn *beneath* the data,
+            because the basemap band puts it there, whenever in the chain it was added.
 
         Examples:
             - Put a light Carto basemap beneath a raster:
@@ -209,31 +480,52 @@ class DecorationMixin(_MixinBase):
                 non-Mercator projection is active, or when a provider name is unknown.
             ImportError: when a keyed provider is requested without an ``api_key``.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Both refusals stay with the builder: each answers the call the caller made.
         self._require_web_mercator("tiles")
         if getattr(self, "_projection", None) is not None:
             raise ValueError(
                 "tiles() cannot compose with a non-Mercator projection() — Bokeh tiles render in "
                 "Web-Mercator only. Drop the projection to use a tile basemap."
             )
-        element = self._build_tiles(provider, api_key, **(preset or {}))
-        if opts:
-            element = element.opts(**opts)
-        element = element.opts(level=level)
         # An explicit tiles() call supersedes any provider passed to the constructor, so render()'s
         # one-shot hook does not also prepend a second basemap (L2).
         self._tiles_provider = None
-        if level == "overlay":
-            self.add_element(element)
-        else:
-            self.layers.insert(0, element)
-        return self
+        # A provider object is an `xyzservices.TileProvider`: a `dict` subclass whose fields include the
+        # service's API key, so freezing it into the description wrote the key into every saved figure
+        # (review C1) and thawed it back as a plain dict the engine cannot draw from (review H2). It is
+        # held beside the layer, and described by its key-free URL template.
+        held: dict = {"provider": provider}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="basemap",
+            # `level="overlay"` asks for a basemap drawn *over* the data — a labels-and-roads layer on top
+            # of imagery, say — so it declares the band that overrides its kind's.
+            band="overlay" if level == "overlay" else None,
+            key=api_key,
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "tiles",
+                    "provider": _provider_description(provider),
+                    "level": level,
+                    "preset": dict(preset or {}),
+                    "opts": described_opts,
+                }
+            ),
+        )
 
     def _build_tiles(self, provider: Any, api_key: Any, **preset: Any) -> Any:
         """Resolve ``provider`` to a ``gv.WMTS``/``gv.Tiles`` element (name, URL, or xyzservices).
 
+        A name is looked up in GeoViews' own catalog first and in the wider ``xyzservices`` one after it,
+        so every name a figure can be **described** by is a name that can be **drawn** — which is what a
+        provider written down as its name needs (review M9; see :func:`_catalogued_tiles`).
+
         Args:
-            provider: A catalog name, a keyed preset name, a raw ``{Z}/{X}/{Y}`` URL, or an
+            provider: A ``geoviews.tile_sources`` name, any ``xyzservices`` provider name
+                (``"Esri.ArcticImagery"``), a keyed preset name, a raw ``{Z}/{X}/{Y}`` URL, or an
                 ``xyzservices.TileProvider``.
             api_key: Credential for a keyed provider or preset.
             **preset: A keyed preset's own keywords, e.g. ``date`` / ``flavour``.
@@ -242,11 +534,11 @@ class DecorationMixin(_MixinBase):
             The tile element (a fresh clone for catalog names — the shared instance is never mutated).
 
         Raises:
-            ValueError: for an unknown provider name, or when preset keywords are passed with a provider
-                that is not a keyed preset.
+            ValueError: for a provider name neither catalog knows, or when preset keywords are passed with
+                a provider that is not a keyed preset.
             ImportError: when a keyed provider needs an ``api_key`` that was not supplied.
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         if is_keyed_basemap(provider):
             # A keyed preset resolves to a URL with the credential already substituted; GeoViews wants the
             # tile placeholders upper-cased.
@@ -278,10 +570,11 @@ class DecorationMixin(_MixinBase):
         if isinstance(provider, str):
             sources = gv.tile_sources.tile_sources
             if provider not in sources:
-                known = ", ".join(sorted(sources))
-                raise ValueError(
-                    f"unknown tile provider {provider!r} — choose one of: {known}"
-                )
+                # Not in GeoViews' own catalog, which spells `Esri.ArcticImagery` as `EsriArcticImagery`
+                # and carries 32 of the 880 services `xyzservices` does. A figure describes a provider by
+                # name whenever its URL is one the credential guard refuses, so a name this tier cannot
+                # resolve is a figure that writes cleanly and then raises when it is drawn back (review M9).
+                return _catalogued_tiles(provider, api_key, known=sources)
             if "stadia" in provider.lower() and api_key is None:
                 raise ImportError(
                     f"tile provider {provider!r} needs an api_key (Stadia/Stamen require a key for "
@@ -312,9 +605,13 @@ class DecorationMixin(_MixinBase):
         """Return the sorted catalog of named ``geoviews.tile_sources`` providers.
 
         Returns:
-            The provider names accepted by :meth:`tiles`.
+            GeoViews' own catalog — 32 names, measured against the installed version. It is a *subset* of
+            what :meth:`tiles` accepts, not the whole of it: a name GeoViews does not hold falls back to
+            the `xyzservices` catalog, which carries 880. The narrower list is deliberate — a caller
+            reading it wants the names this tier offers rather than every service in the world — so read
+            it as "the catalogued names", not as "the accepted names".
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         return sorted(gv.tile_sources.tile_sources)
 
     def coastlines(self, resolution: str = "110m", **opts: Any) -> Self:
@@ -340,13 +637,23 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when the display CRS is not Web Mercator.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Refused here, because the message names the builder the caller called.
         self._require_web_mercator("coastlines")
-        # clone: .opts() would otherwise restyle the shared gv.feature.coastline singleton
-        element = gv.feature.coastline.clone().opts(scale=resolution)
-        if opts:
-            element = element.opts(**opts)
-        return self.add_element(element)
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="coastlines",
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "coastlines",
+                    "resolution": resolution,
+                    "opts": described_opts,
+                }
+            ),
+        )
 
     def features(
         self,
@@ -359,7 +666,7 @@ class DecorationMixin(_MixinBase):
         resolution: str = "110m",
         **opts: Any,
     ) -> Self:
-        """Add Natural-Earth context layers (land/ocean beneath the data, borders/rivers on top).
+        """Add Natural-Earth context layers (land/ocean/lakes beneath the data, borders/rivers on top).
 
         The flag-per-layer form, kept as the way to request several layers in one call. The six named
         methods (:meth:`coastlines`, :meth:`borders`, :meth:`land`, :meth:`ocean`, :meth:`lakes`,
@@ -370,7 +677,8 @@ class DecorationMixin(_MixinBase):
             ocean: Draw the ocean polygons (underlay).
             borders: Draw country borders (overlay).
             rivers: Draw river centerlines (overlay).
-            lakes: Draw lake polygons (overlay).
+            lakes: Draw lake polygons (underlay — the band the registry files ``lakes`` under, which is
+                where :meth:`lakes` draws them: beneath the data, with land and ocean).
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             **opts: Extra HoloViews style options applied to every requested feature element.
 
@@ -392,25 +700,33 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when the display CRS is not Web Mercator.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
         self._require_web_mercator("features")
-
-        def _styled_feature(feature: Any) -> Any:
-            element = feature.clone().opts(
-                scale=resolution
-            )  # clone: keep the gv singletons pristine
-            return element.opts(**opts) if opts else element
-
-        for underlay, requested in (("land", land), ("ocean", ocean)):
-            if requested:
-                self.layers.insert(0, _styled_feature(getattr(gv.feature, underlay)))
-        for overlay, requested in (
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
+        for name, requested in (
+            ("land", land),
+            ("ocean", ocean),
             ("borders", borders),
             ("rivers", rivers),
             ("lakes", lakes),
         ):
             if requested:
-                self.add_element(_styled_feature(getattr(gv.feature, overlay)))
+                # Each is its own kind, so a figure says which piece of reference geography it drew —
+                # and the registry, not this loop, decides where each is drawn.
+                self.add_element(
+                    None,
+                    kind=name,
+                    held=held,
+                    symbology=Symbology(
+                        props={
+                            "via": "natural_earth",
+                            "feature": name,
+                            "resolution": resolution,
+                            "opts": described_opts,
+                        }
+                    ),
+                )
         return self
 
     def borders(self, resolution: str = "110m", **opts: Any) -> Self:
@@ -458,8 +774,8 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Land is an **underlay**: it is inserted at the front of the registry, so a data layer
-              added before it still ends up drawn on top:
+            - Land is an **underlay**: its band draws it beneath the data, so a data layer added before
+              it still ends up drawn on top:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
@@ -512,19 +828,19 @@ class DecorationMixin(_MixinBase):
                 ['Ocean', 'Image']
 
                 ```
-            - The two underlays compose, each new one going in front of the last:
+            - The two underlays compose, in the order they were asked for, both beneath the data:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> m = InteractiveMap().ocean().land()                        # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
-                ['Land', 'Ocean']
+                ['Ocean', 'Land']
 
                 ```
         """
         return self.features(ocean=True, resolution=resolution, **opts)
 
     def lakes(self, resolution: str = "110m", **opts: Any) -> Self:
-        """Overlay Natural-Earth lake polygons (one of the six named layers, #253).
+        """Fill Natural-Earth lake polygons beneath the data (one of the six named layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
@@ -544,15 +860,17 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Lakes are an **overlay**: appended after the data, so inland water reads on top of
-              the raster instead of being hidden by it:
+            - Lakes are an **underlay**, like land and ocean: the registry files all three as ground
+              cover, so a lake polygon is drawn beneath a data layer added before it rather than over it.
+              Inland water that must read on top of an opaque raster is :meth:`rivers` — the line
+              geography is the half of the pair drawn above the data:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
                 >>> m = InteractiveMap().image(dem).lakes()                    # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
-                ['Image', 'Lakes']
+                ['Lakes', 'Image']
 
                 ```
             - Chain the named layers to build the hydrography context in one line:
@@ -586,8 +904,8 @@ class DecorationMixin(_MixinBase):
                 1
 
                 ```
-            - Rivers are an **overlay**: appended after the data, so the centerlines are drawn over
-              the raster they describe:
+            - Rivers are an **overlay**: their band draws them over the data, so the centerlines are drawn
+              over the raster they describe:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
@@ -647,12 +965,26 @@ class DecorationMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Reprojected here, because `crs=` is the caller's own argument and this is where it is answered;
+        # the element itself is built by `draw_text` from the display coordinates this records.
         (x,), (y,) = self._to_display_xy(lon, lat, crs)
-        element = gv.Text(x, y, s, crs=gv.util.process_crs(self.crs))
-        if opts:
-            element = element.opts(**opts)
-        return self.add_element(element)
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="text",
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "text",
+                    "x": float(x),
+                    "y": float(y),
+                    "s": s,
+                    "opts": described_opts,
+                }
+            ),
+        )
 
     @_skips_off_limb
     def labels(
@@ -674,34 +1006,33 @@ class DecorationMixin(_MixinBase):
         Raises:
             KeyError: when ``column`` is not a column of ``features``.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Refused here, because the message names the column the caller asked for.
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
                 f"labels column {column!r} not found in the feature attributes"
             )
-        gdf = self._display_gdf(features)
-        # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
-        # geometry-bearing GeoDataFrame: gv.Labels mis-projects a GeoDataFrame's point geometry at
-        # render time (a boolean-mask length mismatch). The geometry is already in the display CRS
-        # (reprojected by _display_gdf), so its x/y are the label anchors directly.
-        xs = gdf.geometry.x.to_numpy()
-        ys = gdf.geometry.y.to_numpy()
-        texts = gdf[column].to_numpy()
-        element = gv.Labels(
-            (xs, ys, texts),
-            kdims=["x", "y"],
-            vdims=[column],
-            crs=gv.util.process_crs(self.crs),
+        held: dict = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_element(
+            None,
+            kind="labels",
+            source=features,
+            held=held,
+            symbology=Symbology(
+                props={"via": "labels", "column": column, "opts": described_opts}
+            ),
         )
-        if opts:
-            element = element.opts(**opts)
-        return self.add_element(element)
 
     def colorbar(self, show: bool = True) -> Self:
-        """Toggle the colorbar on the most recently added layer.
+        """Toggle the colorbar on the layer the caller added last.
+
+        That is the layer the last builder call added, not the one drawn on top: a raster added after a
+        coastline is drawn beneath it, and still is the layer this toggles. An underlay — a basemap, land,
+        ocean — added after data does not take it over, since it has no colorbar to toggle.
 
         Args:
-            show: Whether the last layer draws a colorbar.
+            show: Whether that layer draws a colorbar.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -721,18 +1052,17 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when no layer has been added yet.
         """
-        if not self.layers:
-            raise ValueError(
-                "colorbar() needs at least one layer — add a builder call first"
-            )
-        self.layers[-1] = self.layers[-1].opts(colorbar=show)
+        index = self._last_layer_index("colorbar")
+        self.layers[index] = self.layers[index].opts(colorbar=show)
         return self
 
     def legend(self, show: bool = True) -> Self:
-        """Toggle the Bokeh legend on the most recently added layer.
+        """Toggle the Bokeh legend on the layer the caller added last.
+
+        The layer the last builder call added, as :meth:`colorbar` reads it — not the one drawn on top.
 
         Args:
-            show: Whether the last layer contributes to the legend.
+            show: Whether that layer contributes to the legend.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -751,11 +1081,11 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when no layer has been added yet.
+            ImportError: when the ``interactive`` extra is not installed.
         """
-        gv, hv = _require_holoviz()
-        if not self.layers:
-            raise ValueError(
-                "legend() needs at least one layer — add a builder call first"
-            )
-        self.layers[-1] = self.layers[-1].opts(show_legend=show, backend="bokeh")
+        # Called for its actionable ImportError: `show_legend` is applied for the Bokeh backend, which
+        # `_require_holoviz` is what registers.
+        _require_holoviz()
+        index = self._last_layer_index("legend")
+        self.layers[index] = self.layers[index].opts(show_legend=show, backend="bokeh")
         return self

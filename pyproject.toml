@@ -479,9 +479,12 @@ test-all = { cmd = "pytest -vvv -m 'not mpl' --cov=src/digitalearth -sv --cov-re
 test-images = { cmd = "pytest -vvv -m mpl --mpl --cov=src/digitalearth --cov-report=xml", description = "Compare the static backend's figures against the committed baseline PNGs in tests/baseline (pytest-mpl). Carries --cov like every other tier task, because `main` deselects these tests and this is the only job that reports the 18 rendering paths. Regenerate the baselines with `test-images-generate` after a deliberate rendering change. Note it writes coverage.xml like the other tier tasks, so locally it replaces a full `main` report with an 18-test one -- re-run `main` before reading coverage; in CI the two are separate jobs and never collide" }
 test-images-generate = { cmd = "pytest -m mpl --mpl-generate-path=tests/baseline", description = "Regenerate every tests/baseline PNG from the current rendering — review the image diff before committing, it is the record of what the change did to the picture" }
 notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb' --ignore-glob='docs/examples/pyvista/**' --ignore-glob='docs/examples/interactive/**' --ignore-glob='docs/examples/web/**'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; the 3-D/PyVista notebooks need the viz3d env, run via `notebooks-3d`; the interactive/HoloViz notebooks need the interactive env, run via `notebooks-interactive`; the web/MapLibre notebooks need the web env, run via `notebooks-web`)" }
-test-3d = { cmd = "pytest -vvv tests/three_d -m 'not image3d' --cov=src/digitalearth --cov-report=xml", description = """
+test-3d = { cmd = "pytest -vvv tests/three_d tests/base/test_renderer_conformance.py -m 'not image3d' --cov=src/digitalearth --cov-report=xml", description = """
     Run the 3-D (PyVista) tier tests — run in the viz3d env (`pixi run -e viz3d test-3d`). The `image3d`
-    baselines are deselected; they run in `test-3d-images`
+    baselines are deselected; they run in `test-3d-images`. The shared renderer contract
+    (tests/base/test_renderer_conformance.py) is collected here too: its 3-D class is gated on pyvista, and
+    this is the only job with it, so leaving it to the `main` matrix skipped every check the 3-D tier signs
+    (review M6). The web tier gets the same coverage by hosting its adapter beside its own tests
 """ }
 test-3d-images = { cmd = "pytest -vvv tests/three_d -m image3d --image3d-compare", description = """
     Compare the 3-D renders against the committed baselines in tests/baseline3d. Run in the viz3d env under a
@@ -492,7 +495,7 @@ test-3d-images-generate = { cmd = "pytest tests/three_d -m image3d --image3d-gen
     before committing
 """ }
 notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
-test-interactive = { cmd = "pytest -vvv tests/interactive --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`)" }
+test-interactive = { cmd = "pytest -vvv tests/interactive tests/base/test_renderer_conformance.py --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`). The shared renderer contract (tests/base/test_renderer_conformance.py) is collected here too: its interactive class is gated on geoviews, and this is the only job with it, so leaving it to the `main` matrix skipped every check the interactive tier signs (review M6)" }
 notebooks-interactive = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/interactive", description = "check the interactive (HoloViz) notebooks — run in the interactive env (`pixi run -e interactive notebooks-interactive`). Notebooks 01/06/07 guard their WorldClim cells (in the gitignored examples/data/global/) — they render locally when present and skip otherwise." }
 test-web = { cmd = "pytest -vvv tests/web --cov=src/digitalearth --cov-report=xml", description = "Run the web (MapLibre + deck.gl) tier tests — run in the web env (`pixi run -e web test-web`)" }
 notebooks-web = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/web", description = "check the web (MapLibre + deck.gl) notebooks — run in the web env (`pixi run -e web notebooks-web`)" }

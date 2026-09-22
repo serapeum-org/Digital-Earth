@@ -17,9 +17,18 @@ rng = np.random.default_rng(1337)
 
 
 @pytest.fixture
-def m() -> InteractiveMap:
-    """A fresh Web-Mercator map for each test."""
-    return InteractiveMap()
+def m():
+    """Yield a fresh Web-Mercator map for each test, closing it on the way out.
+
+    The object registry is process-global and holds strong references, so a map that is never closed
+    keeps the data it drew for the rest of the session.
+
+    Yields:
+        The map.
+    """
+    interactive_map = InteractiveMap()
+    yield interactive_map
+    interactive_map.close()
 
 
 @pytest.fixture(scope="module")
@@ -158,6 +167,28 @@ class TestDatashade:
         )
         assert isinstance(m.layers[0], hv.RGB)
 
+    def test_a_list_color_key_is_accepted(self, m, big_points):
+        """HoloViews takes a colour list as well as a mapping; the description must not narrow that.
+
+        Args:
+            m: The map.
+            big_points: Points with a three-class column.
+
+        Test scenario:
+            The recorded `color_key` comes back from the description as a tuple, and the drawer passed it
+            through `dict()`, so a list of colours — one per category, in category order — raised
+            `ValueError: dictionary update sequence element #0 has length 7` (review L6).
+        """
+        m.datashade(
+            big_points,
+            color_key=["#ff0000", "#00ff00", "#0000ff"],
+            column="cls",
+            dynamic=False,
+            width=40,
+            height=30,
+        )
+        assert isinstance(m.layers[0], hv.RGB), type(m.layers[0])
+
 
 class TestAutoRouting:
     """``points``/``polygons`` auto-route through Datashader above the threshold."""
@@ -251,6 +282,25 @@ class TestTrajectory:
         )
         assert isinstance(m.layers[0], hv.RGB)
 
+    def test_trajectory_takes_a_list_color_key(self, m, tracks):
+        """The trajectory drawer passed `color_key` through `dict()` too, so a colour list raised there.
+
+        Args:
+            m: The map.
+            tracks: Three tracks in two classes.
+        """
+        m.trajectory(
+            tracks,
+            track_column="track",
+            by="kind",
+            color_key=["#ff0000", "#0000ff"],
+            dynamic=False,
+            dynspread=False,
+            width=80,
+            height=60,
+        )
+        assert isinstance(m.layers[0], hv.RGB), type(m.layers[0])
+
     def test_trajectory_by_class_with_color_key(self, m, tracks):
         """The ``by`` + ``color_key`` branch colours each track class explicitly."""
         m.trajectory(
@@ -264,3 +314,25 @@ class TestTrajectory:
             height=60,
         )
         assert isinstance(m.layers[0], hv.RGB)
+
+
+class TestAFigureThatCarriesNoReduction:
+    """A Datashader reduction has no JSON form, so a figure read back from a dict describes none."""
+
+    def test_no_aggregator_at_all_becomes_the_tier_s_default_count(self):
+        """The drawer is handed `None`, and `None` is not something Datashader can aggregate with.
+
+        Test scenario:
+            A reduction object is held on the map, never written into the description — so a figure
+            saved and read back elsewhere reaches this resolver with nothing. Passing that `None`
+            straight through hands Datashader a null reduction and fails inside the engine, where the
+            builder's own default is what the figure meant.
+        """
+        import datashader as ds
+
+        from digitalearth.interactive.bigdata import _resolve_aggregator
+
+        resolved = _resolve_aggregator(None, None)
+        assert isinstance(resolved, type(ds.count())), (
+            f"a description carrying no reduction must default to count(); got {resolved!r}"
+        )

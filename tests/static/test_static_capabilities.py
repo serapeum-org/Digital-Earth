@@ -162,7 +162,6 @@ class TestTheDeclaration:
             ("height", "flat"),
             ("export_html", "not as a page"),
             ("layer_switcher", "drawn once"),
-            ("custom:matplotlib", "Map.ax"),
         ],
     )
     def test_what_is_missing_says_why(self, name, phrase):

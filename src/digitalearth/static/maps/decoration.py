@@ -11,7 +11,7 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 import contextlib
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
@@ -27,14 +27,43 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.domains import resolve_domain
+from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
+from digitalearth.static.renderer import DrawnLayer, artists_added
+from digitalearth.static.scene import LayerRecord, drawing_style
 
 logger = logging.getLogger(__name__)
+
+#: How each Natural-Earth layer looks when the caller asks for nothing else — this package's own defaults, in
+#: the singular matplotlib keys. The drawer lays whatever the caller passed over them, so a layer drawn on a
+#: scene that holds none of the caller's keywords (a figure read back from JSON) still looks like itself.
+_NATURAL_EARTH_STYLE: Dict[str, Dict[str, Any]] = {
+    "coastline": {"color": "black", "linewidth": 0.5},
+    "borders": {"color": "gray", "linewidth": 0.4},
+    "land": {"color": "#efefdb", "edgecolor": "none"},
+    "ocean": {"color": "#cfe6f5", "edgecolor": "none"},
+    "lakes": {"color": "#cfe6f5", "edgecolor": "none"},
+    "rivers": {"color": "#5a8fcf", "linewidth": 0.4},
+}
 
 #: Natural-Earth layers that ``cleopatra.basemap.reference`` renders as filled polygons (vs. line layers); used to
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
 _POLYGON_LAYERS = frozenset({"land", "ocean", "lakes"})
+
+#: The Natural-Earth layer name cleopatra takes -> the registered kind the figure records (#303). Only
+#: ``coastline`` differs, and it differs in both directions at once: the cross-tier kind is the plural
+#: ``coastlines`` (what :meth:`DecorationMixin.coastlines` is called), while cleopatra's dataset is the
+#: singular. Mapping it here keeps that one-word difference out of six builders.
+_NATURAL_EARTH_KINDS = {
+    "coastline": "coastlines",
+    "borders": "borders",
+    "land": "land",
+    "ocean": "ocean",
+    "lakes": "lakes",
+    "rivers": "rivers",
+}
 
 #: The cross-tier basemap names — :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them —
 #: keyed by their lower-cased spelling, mapped to the ``xyzservices`` dot-path
@@ -198,6 +227,29 @@ def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> An
     )
 
 
+def _described_tile_source(source: Any) -> Tuple[Any, Any]:
+    """Split a basemap source into the name a description records and the object held beside the layer.
+
+    An ``xyzservices.TileProvider`` is a ``dict`` subclass whose fields include the caller's ``apikey``, so
+    recording it wrote that credential into every figure the map produced — and rebuilding it from the
+    description handed cleopatra a plain ``dict``, which has no ``build_url`` and cannot be tiled from. Its
+    **name** is what a description carries: it names the same tiles wherever the figure is read, and it
+    carries no secret.
+
+    Args:
+        source: The ``source`` a caller passed to :meth:`DecorationMixin.basemap`.
+
+    Returns:
+        ``(recorded, held)``. A name or ``None`` passes through and is held nowhere. A provider object is
+        recorded by its own ``name`` — or as ``None``, the shared default, when it has none — and held beside
+        the layer, which is what this map tiles from.
+    """
+    if source is None or isinstance(source, str):
+        return source, None
+    name = getattr(source, "name", None)
+    return (name if isinstance(name, str) else None), source
+
+
 def _resolve_tile_source(source: Any) -> Any:
     """Resolve an unnamed or cross-tier-named basemap into the provider ``add_tiles`` understands.
 
@@ -235,6 +287,227 @@ def _resolve_tile_source(source: Any) -> Any:
     if isinstance(name, str):
         return _SHARED_PROVIDERS.get(name.lower(), name)
     return name
+
+
+def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Place the text label a described layer asks for, at the lon/lat it recorded.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — a label draws from a coordinate pair and
+            a string, both of which the description carries.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``Text``, or ``None`` when the point
+        is on the far side of a globe and reprojects to nothing: a layer that was not drawn rather than an
+        empty one.
+    """
+    props = dict(layer.symbology.props)
+    xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
+    if xy is None:
+        return None
+    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_style(scene, layer))
+    return DrawnLayer(artist=drawn, artists=(drawn,))
+
+
+def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Annotate the lon/lat a described layer recorded, optionally with an arrow.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — see :func:`draw_text`.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``Annotation``, or ``None`` when the
+        annotated point is on the far side of a globe.
+    """
+    props = dict(layer.symbology.props)
+    xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
+    if xy is None:
+        return None
+    drawn = scene.ax.annotate(
+        props["s"], xy=xy, xytext=props["xytext"], **drawing_style(scene, layer)
+    )
+    return DrawnLayer(artist=drawn, artists=(drawn,))
+
+
+def draw_natural_earth(
+    scene: Any, _data: Any, layer: LayerSpec
+) -> Optional[DrawnLayer]:
+    """Draw the Natural-Earth layer a description names, the way this map's projection needs it drawn.
+
+    Three renders behind one recipe, because they are three ways of putting the same reference geography on
+    the axes rather than three layers: a globe fills polygons re-closed at the projection limb, a globe
+    draws lines split at it, and a flat map hands the whole thing to ``add_features`` — which is hole-aware
+    and reprojects for itself.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — the geography is Natural Earth's, named by
+            the layer rather than handed to it.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding whatever that path produced — the
+        ``PolyCollection`` of a globe fill, the polylines of a globe line layer, the axes on a flat map — or
+        ``None`` when the whole layer is on the far side of the globe, which is a layer that was not drawn.
+    """
+    props = dict(layer.symbology.props)
+    name, zorder = props["via"], props["zorder"]
+    style = {**_NATURAL_EARTH_STYLE[name], **drawing_style(scene, layer)}
+    if scene.globe:
+        if name == "ocean":
+            # The disc *is* the ocean: filling the whole projection boundary and letting land overlay it
+            # is exact and far cheaper than clipping the global ocean polygon.
+            disc: Optional[DrawnLayer] = scene._fill_globe_polygons(
+                [np.asarray(scene._frame()[0])],
+                zorder=zorder,
+                **_to_feature_style("polygon", style),
+            )
+            return disc
+        parts = natural_earth(name, props["resolution"])
+        if props["polygon"]:
+            filled: Optional[DrawnLayer] = scene._fill_globe_polygons(
+                scene._project_polygon_features(parts),
+                zorder=zorder,
+                **_to_feature_style("polygon", style),
+            )
+            return filled
+        style.pop("edgecolor", None)
+        style.pop("facecolor", None)
+        drawn = [
+            scene.ax.plot(seg[:, 0], seg[:, 1], **style)[0]
+            for seg in scene._project_line_features(parts)
+        ]
+        # One layer, however many polylines the limb split it into — and none at all when the whole layer
+        # is on the far side, which is a layer that was not drawn rather than an empty one.
+        return DrawnLayer(artist=drawn, artists=tuple(drawn)) if drawn else None
+    kind = "polygon" if name in _POLYGON_LAYERS else "line"
+    had_data = (
+        bool(scene.layers)
+        or bool(scene.ax.images)
+        or bool(scene.ax.collections)
+        or bool(scene.ax.lines)
+    )
+    with artists_added(scene.ax) as drawn_features:
+        add_features(
+            scene.ax,
+            name,
+            props["resolution"],
+            crs=scene.crs,
+            zorder=zorder,
+            **_to_feature_style(kind, style),
+        )
+    if (
+        not had_data
+    ):  # add_features pinned the (empty) view; fit it to the layer just drawn
+        scene.ax.autoscale()
+    # `add_features` hands the axes back rather than what it drew, so the artists the layer owns are the
+    # ones that appeared on the axes while it ran. The public return stays the axes, as it always was.
+    return DrawnLayer(artist=scene.ax, artists=tuple(drawn_features))
+
+
+#: The axes limits matplotlib starts an unused axes at. cleopatra reads the same pair as "nothing has been
+#: drawn here yet" and refuses to tile it, which is the state a replayed basemap meets (round 2, H2).
+_UNFRAMED_LIMITS: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
+
+
+def _axes_extent(axes: Any) -> Optional[Tuple[float, float, float, float]]:
+    """Return what an axes is looking at as ``(xmin, xmax, ymin, ymax)``, or ``None`` when it is unframed.
+
+    The ordering is matplotlib's own — the one
+    :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_extent` takes — and the values are in
+    the display CRS, so the frame is read and written back without a reprojection.
+
+    Args:
+        axes: The axes to read.
+
+    Returns:
+        Four plain floats, or ``None`` when the axes still shows matplotlib's default unit square, which
+        means nothing has framed it yet rather than that it is looking at one square metre.
+    """
+    xmin, xmax = (float(value) for value in axes.get_xlim())
+    ymin, ymax = (float(value) for value in axes.get_ylim())
+    limits = (xmin, xmax, ymin, ymax)
+    return None if limits == _UNFRAMED_LIMITS else limits
+
+
+def _frame_from(scene: Any, extent: Optional[Sequence[float]]) -> None:
+    """Frame an unframed axes on the extent a stored layer recorded, so its drawer has a view to work in.
+
+    Args:
+        scene: The map being drawn on.
+        extent: The recorded ``(xmin, xmax, ymin, ymax)`` in the display CRS, or ``None`` for a layer whose
+            description carries none — a figure written before the frame was recorded, or hand-built.
+
+    Note:
+        A no-op unless **both** are true: the axes is still at matplotlib's default unit square, and the
+        description carries a frame. So it only ever supplies a view nothing else has, and never overrides
+        the one a data layer or the caller set.
+    """
+    if extent is None or _axes_extent(scene.ax) is not None:
+        return
+    xmin, xmax, ymin, ymax = (float(value) for value in extent)
+    scene.ax.set_xlim(xmin, xmax)
+    scene.ax.set_ylim(ymin, ymax)
+
+
+def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Fetch and draw the XYZ tiles a described basemap asks for.
+
+    Drawn from the description rather than described after the draw, which is the same guarantee said the
+    other way round: tiles come off the network, and :meth:`~digitalearth.static.scene.Scene._draw` drops
+    the description again when this raises, so a figure never names a basemap the tier could not fetch.
+
+    **The axes is framed from the description when nothing else has framed it.** A basemap is an underlay,
+    so a figure lists it before the data — while the builders run the other way round, data first, because
+    ``add_tiles`` tiles whatever the axes is already looking at. Replaying a stored figure therefore reaches
+    this drawer with an axes matplotlib has not framed yet, and cleopatra refuses to tile one
+    (``ValueError: Axes have no data extent``). The frame the tiles were fetched for is recorded with the
+    layer for exactly that reason (``extent``), and is put back here — so the replay asks for the same
+    mosaic at the same zoom rather than for whatever a fresh axes would imply (round 2, H2). An axes that
+    *is* framed — the caller's own order, and the second pass of a reconcile — is left as it stands.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — a tile set is named by its provider, which
+            is a style property, not data this process holds.
+        layer: The layer's description. The credential, and a provider object the caller built (which
+            carries one of its own), are held on the scene under the layer's id — never written into a
+            figure.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` whose ``artist`` is whatever ``add_tiles``
+        returned — the axes, which is this builder's public return — and whose ``artists`` are the tile
+        images it actually added, which is what hiding and removing the layer reach.
+
+    Raises:
+        ValueError: when a keyed preset's credential is unavailable, when the extent being drawn lies
+            entirely outside its coverage, or when neither the axes nor the description carries a frame to
+            tile.
+        TypeError: when a preset keyword is missing or misspelled.
+    """
+    props = dict(layer.symbology.props)
+    _frame_from(scene, props.get("extent"))
+    opts = drawing_style(scene, layer)
+    # The provider object, when the caller passed one: held beside the layer, because it is an engine object
+    # and carries their credential. A figure read back elsewhere has only the name the description records.
+    source = opts.pop("source", props["source"])
+    if not is_keyed_basemap(source):
+        with artists_added(scene.ax) as drawn_tiles:
+            tiles = add_tiles(
+                scene.ax, source=_resolve_tile_source(source), crs=scene.crs, **opts
+            )
+        return DrawnLayer(artist=tiles, artists=tuple(drawn_tiles))
+    keyed = get_keyed_basemap(str(source), **dict(props["preset"]))
+    keyed.check_bounds(scene._coverage_extent())
+    provider = _keyed_tile_provider(keyed, scene._layer_keys.get(layer.id))
+    opts.setdefault("attribution", keyed.attribution)
+    with _quiet_tile_urls(), artists_added(scene.ax) as drawn_tiles:
+        tiles = add_tiles(scene.ax, source=provider, crs=scene.crs, **opts)
+    return DrawnLayer(artist=tiles, artists=tuple(drawn_tiles))
 
 
 class DecorationMixin(_MixinBase):
@@ -292,10 +565,23 @@ class DecorationMixin(_MixinBase):
         Returns:
             The :class:`matplotlib.text.Text`, or ``None`` if the point is off the visible globe.
         """
-        xy = self._reproject_point(lon, lat, crs)
-        if xy is None:
-            return None
-        return self.ax.text(xy[0], xy[1], s, **kwargs)
+        return self._draw(
+            LayerRecord(
+                "text",
+                symbology=Symbology(
+                    props={
+                        "via": "text",
+                        "lon": float(lon),
+                        "lat": float(lat),
+                        "s": s,
+                        # In the shared CRS spelling: a caller may hand in a CRS object, which a figure
+                        # written to JSON has no form for, and this is how every other spec field holds one.
+                        "crs": crs_to_json(crs, "Map.text(crs=)"),
+                    }
+                ),
+                opts=kwargs,
+            )
+        )
 
     def annotate(
         self,
@@ -325,10 +611,22 @@ class DecorationMixin(_MixinBase):
         Returns:
             The :class:`matplotlib.text.Annotation`, or ``None`` if the point is off the visible globe.
         """
-        xy = self._reproject_point(lon, lat, crs)
-        if xy is None:
-            return None
-        return self.ax.annotate(s, xy=xy, xytext=xytext, **kwargs)
+        return self._draw(
+            LayerRecord(
+                "text",
+                symbology=Symbology(
+                    props={
+                        "via": "annotate",
+                        "lon": float(lon),
+                        "lat": float(lat),
+                        "s": s,
+                        "xytext": xytext,
+                        "crs": crs_to_json(crs, "Map.annotate(crs=)"),
+                    }
+                ),
+                opts=kwargs,
+            )
+        )
 
     def stock_img(
         self,
@@ -350,7 +648,8 @@ class DecorationMixin(_MixinBase):
         separately. For a raster backdrop today, supply your own ``Dataset``.
 
         Args:
-            dataset: A pyramids ``Dataset`` to use as the backdrop, or ``None`` to try a tile basemap.
+            dataset: A pyramids ``Dataset`` to use as the backdrop, or a path or URL to one, or
+                ``None`` to try a tile basemap. Only a path-backed layer can be written down.
             zorder: Draw order for the backdrop (default ``-3.0``, below data/coastlines).
             cmap: Colormap for a raster backdrop (ignored for the tile path). ``None`` (default) resolves
                 one from the backdrop's own variable via
@@ -369,11 +668,17 @@ class DecorationMixin(_MixinBase):
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
         with self._preserve_view():
-            im = self.imshow(dataset, cmap=cmap, default_cmap=STOCK_IMG_CMAP, **kwargs)
-            # the backdrop is off-limb: there is nothing to push behind the data
-            if im is None:
-                return None
-            im.set_zorder(zorder)
+            # `draw_band="underlay"` is the description's half of `zorder`: one says where the
+            # backdrop sits among the figure's layers, the other where it sits on the axes. Both are
+            # recorded, so a backdrop drawn again from its description comes back behind the data.
+            im = self.imshow(
+                dataset,
+                cmap=cmap,
+                default_cmap=STOCK_IMG_CMAP,
+                draw_band="underlay",
+                zorder=zorder,
+                **kwargs,
+            )
         return im
 
     def _project_line_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
@@ -435,8 +740,12 @@ class DecorationMixin(_MixinBase):
         return rings
 
     def _fill_globe_polygons(
-        self, rings: List[np.ndarray], *, facecolor: Any, zorder: float
-    ) -> Any:
+        self,
+        rings: List[np.ndarray],
+        *,
+        zorder: float,
+        **style: Any,
+    ) -> Optional[DrawnLayer]:
         """Fill projected rings with a solid colour on a globe (map-specific overlay; clipped at frame time).
 
         cleopatra ``PolygonGlyph`` only fills when given per-polygon *values*, so a uniform land/ocean fill is
@@ -446,26 +755,31 @@ class DecorationMixin(_MixinBase):
 
         Args:
             rings: Closed, finite projected fill rings (from :meth:`_project_polygon_features`).
-            facecolor: Solid fill colour.
             zorder: Draw order (ocean below land below data below coastlines).
+            **style: What the layer recorded, in the plural keys a collection takes (see
+                :func:`_to_feature_style`) — ``facecolors``, and whatever else the caller asked for:
+                ``edgecolors``, ``alpha``, ``linewidths``. A globe fill recorded ``alpha`` and
+                ``edgecolor`` and then drew neither, because only the fill colour reached here.
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer), or ``None`` when ``rings`` is empty.
+            What the fill produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` holding the
+            ``PolyCollection``, or ``None`` when ``rings`` is empty — nothing on the near side is a layer
+            that was not drawn.
         """
         if not rings:
             return None
         with self._preserve_view():
-            pc = PolyCollection(
-                rings, facecolors=facecolor, edgecolors="none", zorder=zorder
-            )
+            # The edge is off unless the layer asks for one: a fill is a fill, and the Natural-Earth
+            # defaults spell that out for the layers that have an edge to speak of.
+            pc = PolyCollection(rings, zorder=zorder, **{"edgecolors": "none", **style})
             self.ax.add_collection(pc)
-        return self._add_layer(None, pc)
+        self._register_artist(None, pc)
+        return DrawnLayer(artist=pc, artists=(pc,))
 
     def _natural_earth(
         self,
         layer: str,
         resolution: str,
-        defaults: dict,
         *,
         polygon: bool = False,
         zorder: float = 0.5,
@@ -485,69 +799,69 @@ class DecorationMixin(_MixinBase):
         Args:
             layer: Natural-Earth layer name (e.g. ``"coastline"``, ``"land"``).
             resolution: Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
-            defaults: Base style; ``color``/``facecolor`` is the fill colour for polygon layers.
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
             zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
-            **kwargs: Style overrides merged over ``defaults``.
+            **kwargs: Style overrides, laid over the layer's defaults (:data:`_NATURAL_EARTH_STYLE`) when it
+                is drawn. Held beside the layer exactly as passed, and the plain ones described as well, so
+                a figure read back elsewhere still draws them (see
+                :func:`~digitalearth.static.scene.described_opts`).
+
+        Returns:
+            Whatever the path that drew it returns — the ``PolyCollection`` of a globe fill, the list of
+            polyline artists of a globe line layer, or the axes on a flat map; and ``None`` when nothing
+            was on the near side to draw. All three describe one layer of the reference geography's own
+            kind, whichever matplotlib objects they happened to leave behind.
         """
-        if self.globe:
-            parts = natural_earth(layer, resolution)
-            style = {**defaults, **kwargs}
-            if polygon:
-                facecolor = style.get("facecolor", style.get("color", "#efefdb"))
-                return self._fill_globe_polygons(
-                    self._project_polygon_features(parts),
-                    facecolor=facecolor,
-                    zorder=zorder,
-                )
-            style.pop("edgecolor", None)
-            style.pop("facecolor", None)
-            segments = self._project_line_features(parts)
-            return [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in segments]
-        kind = "polygon" if layer in _POLYGON_LAYERS else "line"
-        style = _to_feature_style(kind, {**defaults, **kwargs})
-        had_data = (
-            bool(self.layers)
-            or bool(self.ax.images)
-            or bool(self.ax.collections)
-            or bool(self.ax.lines)
+        return self._draw(
+            LayerRecord(
+                _NATURAL_EARTH_KINDS[layer],
+                symbology=Symbology(
+                    props={
+                        "via": layer,
+                        "resolution": resolution,
+                        # How the drawer must draw it, recorded rather than passed: a globe fills polygons
+                        # and splits lines at the limb, a flat map hands both to `add_features`.
+                        "polygon": polygon,
+                        "zorder": zorder,
+                    }
+                ),
+                opts=kwargs,
+            )
         )
-        add_features(self.ax, layer, resolution, crs=self.crs, zorder=zorder, **style)
-        if (
-            not had_data
-        ):  # add_features pinned the (empty) view; fit it to the layer we just drew
-            self.ax.autoscale()
-        return self.ax
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
             on a flat map).
         """
-        return self._natural_earth(
-            "coastline",
-            resolution,
-            {"color": "black", "linewidth": 0.5},
-            zorder=2.5,
-            **kwargs,
-        )
+        return self._natural_earth("coastline", resolution, zorder=2.5, **kwargs)
 
     def borders(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth country borders.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
 
         Returns:
             The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth(
-            "borders",
-            resolution,
-            {"color": "gray", "linewidth": 0.4},
-            zorder=2.5,
-            **kwargs,
-        )
+        return self._natural_earth("borders", resolution, zorder=2.5, **kwargs)
 
     def land(self, resolution: str = "110m", **kwargs) -> Any:
         """Fill Natural-Earth land polygons.
@@ -556,17 +870,20 @@ class DecorationMixin(_MixinBase):
         re-closed at the projection limb into finite rings and filled as a map-specific overlay (drawn below
         data and coastlines, clipped to the boundary). Interior rings (holes) are dropped in v1 — see #43.
 
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
+
         Returns:
             The land fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "land",
-            resolution,
-            {"color": "#efefdb", "edgecolor": "none"},
-            polygon=True,
-            zorder=-1.5,
-            **kwargs,
+            "land", resolution, polygon=True, zorder=-1.5, **kwargs
         )
 
     def ocean(self, resolution: str = "110m", **kwargs) -> Any:
@@ -576,19 +893,27 @@ class DecorationMixin(_MixinBase):
         colour and lets land overlay it — exact and far cheaper than clipping the global ocean polygon. On a
         **flat** map, the Natural-Earth ocean polygons are reprojected and filled directly.
 
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
+
         Returns:
             The ocean fill layer (a ``PolyCollection`` disc on a globe; the reprojected plot artist on a flat
             map).
         """
-        color = kwargs.pop("color", "#cfe6f5")
         if self.globe:
-            boundary = self._frame()[0]
-            return self._fill_globe_polygons(
-                [np.asarray(boundary)], facecolor=color, zorder=-2.0
+            # The disc is the ocean: filling the whole projection boundary and letting land overlay it is
+            # exact and far cheaper than clipping the global ocean polygon, and it is still `ocean`. The
+            # drawer reads the globe flag off the scene, so what differs here is only the draw order this
+            # layer is recorded with.
+            return self._natural_earth(
+                "ocean", resolution, polygon=True, zorder=-2.0, **kwargs
             )
-        return self._natural_earth(
-            "ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs
-        )
+        return self._natural_earth("ocean", resolution, **kwargs)
 
     def lakes(self, resolution: str = "110m", **kwargs) -> Any:
         """Fill Natural-Earth lake polygons.
@@ -596,33 +921,38 @@ class DecorationMixin(_MixinBase):
         Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
         still below data and coastlines. On a globe the polygons are re-closed at the projection limb.
 
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
+
         Returns:
             The lake fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "lakes",
-            resolution,
-            {"color": "#cfe6f5", "edgecolor": "none"},
-            polygon=True,
-            zorder=-1.4,
-            **kwargs,
+            "lakes", resolution, polygon=True, zorder=-1.4, **kwargs
         )
 
     def rivers(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe.
 
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **kwargs: Style overrides laid over this layer's Natural-Earth defaults
+                (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
+                written into the layer's description as well, so a figure drawn on another scene keeps it;
+                a dash tuple or an engine object is held beside the layer alone, and that scene falls back
+                to the Natural-Earth default for it.
+
         Returns:
             The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth(
-            "rivers",
-            resolution,
-            {"color": "#5a8fcf", "linewidth": 0.4},
-            zorder=2.4,
-            **kwargs,
-        )
+        return self._natural_earth("rivers", resolution, zorder=2.4, **kwargs)
 
     def basemap(
         self,
@@ -696,16 +1026,68 @@ class DecorationMixin(_MixinBase):
                     f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
                     f"only to a keyed preset such as 'Planet.NICFI'"
                 )
-            return add_tiles(
-                self.ax, source=_resolve_tile_source(source), crs=self.crs, **kwargs
-            )
+        return self._describe_basemap(source, preset, api_key, kwargs)
 
-        keyed = get_keyed_basemap(str(source), **(preset or {}))
-        keyed.check_bounds(self._coverage_extent())
-        provider = _keyed_tile_provider(keyed, api_key)
-        kwargs.setdefault("attribution", keyed.attribution)
-        with _quiet_tile_urls():
-            return add_tiles(self.ax, source=provider, crs=self.crs, **kwargs)
+    def _describe_basemap(
+        self,
+        source: Any,
+        preset: Optional[dict],
+        api_key: Optional[str],
+        options: dict,
+    ) -> Any:
+        """Record the basemap this map should draw and let :func:`draw_basemap` fetch it.
+
+        No data source is recorded — a tile set is named by its provider, which is a style property here,
+        not data this process holds and could resolve an ``object:`` reference to.
+
+        The credential is deliberately absent from the *record*. A figure is written to JSON and read back,
+        and an API key written into one leaks with it; the keyed presets read theirs from the environment,
+        so a reloaded figure asks for the same basemap and authenticates itself. An explicit ``api_key``
+        travels with the scene instead, under this layer's id, and is forgotten with the layer. A provider
+        **object** travels the same way, and for both reasons at once (see :func:`_described_tile_source`):
+        it is an engine object, and an ``xyzservices.TileProvider`` holds the caller's key among its fields.
+
+        The **extent is** recorded, as four plain numbers in the display CRS. It is not styling: a tile
+        mosaic *is* the frame it was fetched for, at the zoom that frame implies, so a figure that did not
+        carry it could not ask for the same basemap again — and, because a basemap is listed before the
+        data it underlays, a replay reaches :func:`draw_basemap` before anything has framed the axes at all
+        (round 2, H2). ``None`` when the axes is not framed yet, which is the case cleopatra refuses.
+
+        Args:
+            source: The provider as the caller named it, or ``None`` for the shared default.
+            preset: The keyed preset's own keywords, or ``None``.
+            api_key: The credential for a keyed preset, or ``None`` to read it from the environment.
+            options: The keywords forwarded to ``add_tiles``.
+
+        Returns:
+            Whatever ``add_tiles`` returned. Not ``None``: tiles that cannot be fetched raise, and the
+            layer is dropped from the description with them — :meth:`stock_img` is the one caller that
+            turns that into a quiet ``None``, because a backdrop is best-effort.
+
+        Raises:
+            ValueError: from :func:`draw_basemap` — a keyed preset whose credential is unavailable, an
+                extent entirely outside the provider's coverage, or neither an axes nor a description
+                carrying a frame to tile.
+            TypeError: from :func:`draw_basemap`, for a preset keyword that is missing or misspelled.
+        """
+        recorded, held = _described_tile_source(source)
+        if held is not None:
+            options = {**options, "source": held}
+        return self._draw(
+            LayerRecord(
+                "basemap",
+                symbology=Symbology(
+                    props={
+                        "via": "basemap",
+                        "source": recorded,
+                        "preset": dict(preset or {}),
+                        "extent": _axes_extent(self.ax),
+                    }
+                ),
+                key=api_key,
+                opts=options,
+            )
+        )
 
     def _coverage_extent(self) -> Optional[Tuple[float, float, float, float]]:
         """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.

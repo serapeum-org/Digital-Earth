@@ -45,7 +45,7 @@ class InteractionMixin(_MixinBase):
         *,
         tooltips: Optional[list] = None,
         formatters: Optional[dict] = None,
-        layer: int = -1,
+        layer: Optional[int] = None,
     ) -> Self:
         """Configure the Bokeh hover tooltips on a registered layer (DI.7).
 
@@ -53,7 +53,11 @@ class InteractionMixin(_MixinBase):
             tooltips: Bokeh ``HoverTool`` tooltips spec (e.g. ``[("value", "@value"), ("x", "$x")]``);
                 ``None`` keeps the default value+coord readout.
             formatters: Optional Bokeh tooltip ``formatters`` mapping.
-            layer: Index of the layer to configure (default the most recent).
+            layer: Index into :attr:`layers` — draw order, bottom first — of the layer to configure.
+                ``None`` (the default) configures the layer the caller added last, which is not
+                ``layers[-1]`` whenever that layer is drawn beneath an overlay such as coastlines; an
+                underlay added after data does not take it over (see
+                :meth:`~digitalearth.interactive.decoration.DecorationMixin.colorbar`).
 
         Returns:
             The same map instance, so builder calls chain.
@@ -68,8 +72,9 @@ class InteractionMixin(_MixinBase):
             raise ValueError(
                 "hover() needs at least one layer — add a builder call first"
             )
+        index = self._last_layer_index("hover") if layer is None else layer
         tool = HoverTool(tooltips=tooltips, formatters=formatters or {})
-        self.layers[layer] = self.layers[layer].opts(tools=[tool], backend="bokeh")
+        self.layers[index] = self.layers[index].opts(tools=[tool], backend="bokeh")
         return self
 
     def on_tap(self, callback: Callable, *, source: Any = None) -> Any:
@@ -81,7 +86,8 @@ class InteractionMixin(_MixinBase):
 
         Args:
             callback: ``callback(x, y) -> hv element`` invoked on each tap.
-            source: The element the tap listens on; defaults to the most recent layer.
+            source: The element the tap listens on; defaults to the layer the caller added last — not the
+                one drawn on top, which is a different layer whenever an overlay sits over it.
 
         Returns:
             The ``hv.DynamicMap`` driven by the tap stream.
@@ -92,13 +98,13 @@ class InteractionMixin(_MixinBase):
         gv, hv = _require_holoviz()
         from holoviews import streams
 
-        src = (
-            source if source is not None else (self.layers[-1] if self.layers else None)
-        )
+        src = source
         if src is None:
-            raise ValueError(
-                "on_tap() needs a source layer — add a builder call or pass source="
-            )
+            if self._last_layer_id is None:
+                raise ValueError(
+                    "on_tap() needs a source layer — add a builder call or pass source="
+                )
+            src = self.layers[self._last_layer_index("on_tap")]
         tap = streams.Tap(source=src, x=0.0, y=0.0)
         return hv.DynamicMap(lambda x, y: callback(x, y), streams=[tap])
 
@@ -111,7 +117,8 @@ class InteractionMixin(_MixinBase):
 
         Args:
             collection: A pyramids ``DatasetCollection`` whose members are time steps.
-            source: The map layer the tap listens on; defaults to the most recent.
+            source: The map layer the tap listens on; defaults to the layer the caller added last, as
+                :meth:`on_tap` reads it.
             band: 1-based band sampled at the clicked cell.
 
         Returns:
@@ -190,7 +197,10 @@ class InteractionMixin(_MixinBase):
                 f"unknown draw kind {kind!r}; choose 'box'/'poly'/'point'/'freehand'"
             )
         self._draw_stream = stream
-        self.add_element(layer)
+        self.add_element(
+            layer,
+            kind="custom:holoviews",
+        )
         return self
 
     @property

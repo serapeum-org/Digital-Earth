@@ -1,7 +1,8 @@
 """VectorMixin — web-tier vector builders (DW.2, recipe W2).
 
-``points`` / ``lines`` / ``polygons`` turn a pyramids ``FeatureCollection`` (reprojected to lon/lat through
-pyramids) into MapLibre circle / line / fill layers over a GeoJSON source; ``choropleth`` is the thematic
+``points`` / ``lines`` / ``polygons`` turn a pyramids ``FeatureCollection`` — or a path or URL naming one,
+which is what lets the figure be written down — (reprojected to lon/lat through pyramids) into MapLibre
+circle / line / fill layers over a GeoJSON source; ``choropleth`` is the thematic
 polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expression**:
 
 * graduated (``scheme`` set) → a ``["step", ["get", col], …]`` expression whose breaks come from
@@ -14,13 +15,13 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
-from digitalearth.base.spec import LegendSpec, Scale
-from digitalearth.web.base import _require_layer_api
+from digitalearth.base.spec import LayerSpec, LegendSpec, Scale, Symbology
+from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
 
 @dataclass(frozen=True)
@@ -109,10 +110,62 @@ def _as_interval(
 #: the internals use when they have to supply it themselves.
 CONTOUR_COLOR = "#3388ff"
 
+#: Outline of a filled contour band — `polygons()`'s own default outline, which is what filled contours were
+#: drawn with while they were drawn through it.
+CONTOUR_OUTLINE_COLOR = "#ffffff"
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre source and typed layer for any of the vector kinds.
+
+    All seven — points, lines, polygons, choropleth, labels, and the two contour kinds — are a GeoJSON
+    source plus one typed layer, differing only in the MapLibre type and the paint the builder resolved. They
+    share a drawer for the same reason they share a registration funnel.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the geometry is placed in.
+        data: The layer's source, served as GeoJSON — the display-CRS frame the builder already holds, or
+            whatever the figure's reference opened to when the layer is being drawn back from a
+            description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`. It never declines: any of these kinds either
+        draws or refuses by raising, which is why their builders do not ask whether the layer survived.
+
+    Raises:
+        ValueError: when the description records no MapLibre type or no paint for the layer, naming the
+            layer rather than the missing MapLibre key.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, _ = _require_layer_api()
+    props = required_props(layer, "maplibre_type", "paint")
+    spec_layout = dict(props.get("layout") or {})
+    if not layer.visible:
+        spec_layout["visibility"] = "none"
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=placed_features(web_map, data, layer),
+        layer=layer_cls(
+            id=layer.id,
+            type=props[
+                "maplibre_type"
+            ],  # MapLibre coerces the string back to its own enum
+            source=source_id,
+            paint=dict(props["paint"]),
+            layout=spec_layout or None,
+        ),
+    )
 
 
 class VectorMixin(_MixinBase):
@@ -384,7 +437,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids ``FeatureCollection`` or GeoDataFrame; points label at the point, lines
-                and polygons at a placement MapLibre picks.
+                and polygons at a placement MapLibre picks. A path or URL to one is taken too, and is the
+                only input this layer can be written down with — a pyramids object does not know where it
+                came from. The reference is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what the
+                figure records.
             column: The property to read the text from.
             text_size: Text size in pixels (``12.0`` when omitted — the signature's ``None`` is the
                 "not passed" sentinel the deprecated spelling is resolved against). Named for the text
@@ -408,7 +465,11 @@ class VectorMixin(_MixinBase):
             TypeError: when ``features`` is not a vector layer, or when both ``text_size`` and the
                 deprecated ``size`` are passed — they name one parameter.
             KeyError: when ``column`` is not one of its properties — a MapLibre expression reading a
-                missing property renders nothing at all, with no error to explain the empty map.
+                missing property renders nothing at all, with no error to explain the empty map — or when
+                ``features`` is a URL with no resolver registered for its scheme.
+            ValueError: when ``text_size`` or ``halo_width`` is not a finite number, refused at this call
+                because a figure holding NaN or infinity could not be written down.
+            FileNotFoundError: when ``features`` is a path that names nothing.
 
         Examples:
             - Name each feature:
@@ -421,15 +482,19 @@ class VectorMixin(_MixinBase):
         See Also:
             digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
         """
-        _, LayerType = _require_layer_api()
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.labels()"
+        _, layer_types = _require_layer_api()
         text_size = renamed_parameter(
             new="text_size",
             value=text_size,
             old="size",
             alias=size,
-            caller="WebMap.labels()",
+            caller=call,
             default=12.0,
         )
+        text_size = as_finite(text_size, "text_size", call)
+        halo_width = as_finite(halo_width, "halo_width", call)
         gdf = self._display_gdf(features, method="labels")
         if column not in getattr(gdf, "columns", []):
             raise KeyError(
@@ -451,12 +516,13 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "label",
-            LayerType.SYMBOL,
+            layer_types.SYMBOL,
             paint,
             kind="labels",
             name=name,
             visible=visible,
             layout=layout,
+            source=features,
         )
 
     def _contour_levels(
@@ -504,43 +570,87 @@ class VectorMixin(_MixinBase):
         name: Optional[str],
         visible: bool,
     ) -> None:
-        """Hand the traced features to the polygon or line builder, whichever `filled` asked for.
+        """Describe the traced features as one contour layer: the levels as lines, or the bands between as fills.
+
+        The layer is recorded under its own kind — `contours` or `filled_contours` — when it is drawn, and
+        :func:`draw_vector` draws it back from that description like any other vector kind (review L3). It
+        used to be drawn through `lines`/`polygons` and relabelled afterwards, which reached for whatever
+        `_last_layer_id` named: a flat fill over the big-data threshold routed to a deck.gl overlay that
+        records no layer, so the relabelling found none, or renamed an earlier layer. A contour layer is
+        therefore always the MapLibre layer it describes, whatever the threshold.
 
         Args:
             features: The `FeatureCollection` pyramids traced.
             filled: Draw the bands between levels as polygons rather than the levels as lines.
             column: Attribute to colour by, or `None` when an explicit `color` was given.
-            cmap: Colormap for the classified attribute, already resolved by `_auto_cmap`.
+            cmap: Colormap for the continuous ramp over the attribute, already resolved by `_auto_cmap`.
             color: A single flat colour; `None` takes the tier's default contour blue.
             width: Line width, used only by the line branch.
             opacity: Layer opacity in `[0, 1]`.
             name: What a layer switcher calls the layer.
             visible: Whether the layer starts visible.
+
+        Raises:
+            KeyError: naming ``column`` when the traced features carry no such attribute (see
+                :meth:`_require_column`). The layer is dropped from the description again before it
+                propagates, so a refused trace leaves the map with no layer and no source.
+            ImportError: when the `web` extra is not installed, so there is no MapLibre layer API to
+                describe the layer against.
         """
-        flat = color or CONTOUR_COLOR
-        if filled:
-            self.polygons(
-                features,
-                column=column,
-                scheme=None,
-                cmap=cmap,
-                color=flat,
-                opacity=opacity,
-                name=name,
-                visible=visible,
-            )
-            return
-        self.lines(
-            features,
-            column=column,
-            scheme=None,
-            cmap=cmap,
-            color=flat,
-            width=width,
-            opacity=opacity,
-            name=name,
-            visible=visible,
+        _, layer_types = _require_layer_api()
+        gdf = self._display_gdf(features, method="contours")
+        # The level colours each contour along a continuous ramp, as `lines`/`polygons` do with no scheme;
+        # a caller's `color=` pins every contour to one colour instead.
+        colour = (
+            color or CONTOUR_COLOR
+            if column is None
+            else self._ramp_color_expr(self._require_column(gdf, column), column, cmap)
         )
+        if filled:
+            paint = self._fill_paint(opacity, CONTOUR_OUTLINE_COLOR, colour)
+            prefix, layer_type, kind = "fill", layer_types.FILL, "filled_contours"
+        else:
+            paint = self._line_paint(width, opacity, colour)
+            prefix, layer_type, kind = "line", layer_types.LINE, "contours"
+        self._vector_layer(
+            gdf, prefix, layer_type, paint, kind=kind, name=name, visible=visible
+        )
+
+    @staticmethod
+    def _line_paint(width: float, opacity: float, colour: Any) -> dict:
+        """Return a MapLibre line layer's paint.
+
+        Args:
+            width: Line width in pixels.
+            opacity: Line opacity in `[0, 1]`.
+            colour: A colour, or a data-driven colour expression.
+
+        Returns:
+            The paint dict `lines` and `contours` both draw with.
+        """
+        return {
+            "line-width": float(width),
+            "line-opacity": float(opacity),
+            "line-color": colour,
+        }
+
+    @staticmethod
+    def _fill_paint(opacity: float, outline_color: str, colour: Any) -> dict:
+        """Return a MapLibre fill layer's paint.
+
+        Args:
+            opacity: Fill opacity in `[0, 1]`.
+            outline_color: The polygon outline colour.
+            colour: A colour, or a data-driven colour expression.
+
+        Returns:
+            The paint dict `polygons` and filled `contours` both draw with.
+        """
+        return {
+            "fill-opacity": float(opacity),
+            "fill-outline-color": outline_color,
+            "fill-color": colour,
+        }
 
     def contours(
         self,
@@ -569,6 +679,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset``.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             interval: Spacing between levels — a number for "one every N", or a
                 :class:`ContourInterval` when the spacing has to be anchored somewhere other than zero.
                 Give at most one of this or ``levels``.
@@ -583,7 +698,9 @@ class VectorMixin(_MixinBase):
             cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the
                 band's variable.
             units: What the contoured values are measured in, which the key names in parentheses after the
-                column. ``None`` (the default) takes the variable's units from
+                column — when this layer makes a key at all. An explicit ``color=`` colours every level
+                alike, so there is no classification to key and the units are recorded nowhere the reader
+                sees (review #314). ``None`` (the default) takes the variable's units from
                 :func:`~digitalearth.base.autostyle.auto_style`, and leaves the heading bare when it
                 carries none — a unit is never guessed. Pass one to correct a band the library
                 mis-identifies, or to name the units of a variable it does not know.
@@ -601,9 +718,13 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: when both ``interval`` and ``levels`` are given — pyramids takes exactly one, and
-                saying so here names the argument the caller actually wrote — or when neither is given
-                and the variable is not one ``auto_style`` knows levels for.
+                saying so here names the argument the caller actually wrote — when neither is given and
+                the variable is not one ``auto_style`` knows levels for, or when ``width`` or ``opacity``
+                is not a finite number, refused at this call because a figure holding NaN or infinity
+                could not be written down.
             TypeError: when ``interval`` is neither a number nor a :class:`ContourInterval`.
+            FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
+                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
 
         Examples:
             - Contour a DEM every 100 m:
@@ -618,6 +739,8 @@ class VectorMixin(_MixinBase):
             digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
         spacing = _as_interval(interval)
+        width = as_finite(width, "width", "WebMap.contours()")
+        opacity = as_finite(opacity, "opacity", "WebMap.contours()")
         data = self._display_raster_or_skip(dataset, layer="contours")
         if data is None:
             return self
@@ -660,16 +783,17 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
         )
-        # Drawn through `lines` or `polygons`, which record their own kind; the layer is contours. Both builders
-        # set `_last_layer_id` to the layer they add, so it names that layer here.
-        self._rekind_layer(
-            cast(str, self._last_layer_id),
-            "filled_contours" if filled else "contours",
-        )
-        if self.last_units and self.last_legend is not None:
-            # The classification the sub-builder just recorded describes this raster's values, so the key
-            # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.
-            self.last_legend["units"] = self.last_units
+        # The units describe *this* layer's values, so they are written on *this* layer's key — looked up
+        # by the id the sub-builder just drew under, not on `last_legend`. `last_legend` answers "the most
+        # recent classification", so with an explicit `color=` (where `column` is `None` and this layer
+        # classifies nothing) it still pointed at whichever layer classified before, and that layer's
+        # classes ended up labelled in this raster's units (#314). Asking the layer also means a draw the
+        # tier declined — which leaves no key behind — writes nothing at all.
+        drawn_id = self._last_layer_id
+        keyed = self._legends.get(drawn_id) if drawn_id is not None else None
+        if self.last_units and keyed is not None:
+            # Never guessed: `last_units` is only set when auto_style supplied one.
+            keyed["units"] = self.last_units
         if labels:
             # Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.
             return self.labels(features, attribute, visible=visible)
@@ -686,14 +810,20 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         layout: Optional[dict] = None,
+        source: Any = None,
     ) -> Self:
-        """Register a GeoJSON source + a typed layer with `paint` and record it as the last data layer.
+        """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
+
+        The single funnel the vector builders and `contours` register through. It does not build the MapLibre
+        objects: it records what they should be — the type, the paint, the layout — as values on the
+        layer's symbology, and :func:`draw_vector` rebuilds the source and the layer from exactly that.
 
         Args:
             features: The display-CRS GeoDataFrame to serve as the GeoJSON source.
             prefix: The layer id prefix, from the MapLibre type (`"circle"`/`"line"`/`"fill"`/`"label"`).
                 It shapes the public `layer_ids`, so it is kept apart from `kind`.
-            layer_type: The `maplibre` `LayerType` member for the layer.
+            layer_type: The `maplibre` `LayerType` member for the layer. Recorded by its value, not the
+                member itself, so a figure written to disk carries a string MapLibre reads back.
             paint: The MapLibre paint dict for the layer.
             kind: The registered, engine-neutral kind the layer is recorded as — `"points"`, `"polygons"`,
                 `"choropleth"` — which the MapLibre type cannot tell apart.
@@ -701,36 +831,58 @@ class VectorMixin(_MixinBase):
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             layout: MapLibre layout properties for the layer (a symbol layer's `text-field` and its
                 placement live here rather than in `paint`). Merged with the visibility flag.
+            source: What the *figure* records the layer as drawing — the caller's own path or URL, which is
+                the only reference that survives leaving the process. `features` is what the first draw is
+                handed, so nothing is warped twice; `None` records `features` itself, which a builder that
+                derived its geometry (`contours` traces its own) has nothing better than (review H1).
 
         Returns:
             The same map instance, so builder calls chain.
         """
-        Layer, _ = _require_layer_api()
-        src_id = self._uid(f"{prefix}-src")
+        _require_layer_api()
         layer_id = self._layer_id(prefix, name)
-        spec_layout = dict(layout) if layout else {}
-        if not visible:
-            spec_layout["visibility"] = "none"
-        layer = Layer(
-            id=layer_id,
-            type=layer_type,
-            source=src_id,
-            paint=paint,
-            layout=spec_layout or None,
+        # `paint` and `layout` are MapLibre's own spelling, so they are held under a single prop rather
+        # than spread across the symbology as if they were engine-neutral channels. `draw_vector` reads
+        # them straight back; what makes this a description rather than a closure is that they are
+        # *values in the figure* — a saved figure carries them, and nothing is captured in a lambda.
+        # Unconditional: `draw_vector` either draws or raises — only the raster drawers decline, and
+        # only they need to ask whether the layer survived.
+        self._index_layer(
+            layer_id,
+            name,
+            kind=kind,
+            visible=visible,
+            source=features if source is None else source,
+            placed=features,
+            symbology=Symbology(
+                props={
+                    # The enum's value, not the member: a description holds plain values, so a figure
+                    # written to disk carries a string MapLibre reads back. The spec refuses the member,
+                    # which is how this was caught rather than shipped as an unserialisable figure.
+                    "maplibre_type": getattr(layer_type, "value", layer_type),
+                    "paint": dict(paint),
+                    "layout": dict(layout) if layout else {},
+                }
+            ),
         )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, features)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind=kind, visible=visible, source=features)
-        return self._queue_layer(apply, kind)
+        return self
 
     @staticmethod
     def _require_column(gdf: Any, column: str) -> Any:
-        """Return ``gdf[column]`` as a numpy array, raising a clear error when the column is absent."""
+        """Return ``gdf[column]`` as a numpy array, raising a clear error when the column is absent.
+
+        Args:
+            gdf: The feature attributes the column is read from — the display-CRS GeoDataFrame.
+            column: The attribute name the caller asked to colour or label by.
+
+        Returns:
+            The column's values as a numpy array, in feature order.
+
+        Raises:
+            KeyError: naming the column that is not there, rather than letting pandas raise from inside a
+                builder several frames deeper.
+        """
         if column not in getattr(gdf, "columns", []):
             raise KeyError(f"column {column!r} not found in the feature attributes")
         return gdf[column].to_numpy()
@@ -756,6 +908,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: Optional value column; when given, circles are coloured by it (graduated if ``scheme``
                 is set, else a continuous ramp).
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
@@ -785,8 +942,12 @@ class VectorMixin(_MixinBase):
                 and the deprecated ``radius`` are passed — they name one parameter.
             KeyError: when ``column`` names no feature attribute — a MapLibre expression
                 reading a property that is not there colours nothing, with no error to explain
-                the blank layer.
-            ValueError: when the layer routes to a GPU deck.gl overlay — through ``big=True``,
+                the blank layer — or when ``features`` is a URL with no resolver registered for
+                its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
+            ValueError: when ``size`` or ``opacity`` is not a finite number, refused at this call
+                because a figure holding NaN or infinity could not be written down; and when the
+                layer routes to a GPU deck.gl overlay — through ``big=True``,
                 or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
                 as well. A deck overlay is not a MapLibre style layer, so the registry cannot
                 address it to rename or hide it, and honouring those arguments silently would
@@ -834,15 +995,19 @@ class VectorMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
             digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
-        Layer, LayerType = _require_layer_api()
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.points()"
+        _, layer_types = _require_layer_api()
         size = renamed_parameter(
             new="size",
             value=size,
             old="radius",
             alias=radius,
-            caller="WebMap.points()",
+            caller=call,
             default=5.0,
         )
+        size = as_finite(size, "size", call)
+        opacity = as_finite(opacity, "opacity", call)
         gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).
@@ -878,11 +1043,12 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "circle",
-            LayerType.CIRCLE,
+            layer_types.CIRCLE,
             paint,
             kind="points",
             name=name,
             visible=visible,
+            source=features,
         )
 
     def lines(
@@ -903,6 +1069,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids line ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: Optional value column to colour the lines by.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
                 ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
@@ -919,7 +1090,11 @@ class VectorMixin(_MixinBase):
 
         Raises:
             TypeError: when ``features`` is a raster rather than a vector layer.
-            KeyError: when ``column`` names no feature attribute.
+            KeyError: when ``column`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            ValueError: when ``width`` or ``opacity`` is not a finite number, refused at this call because
+                a figure holding NaN or infinity could not be written down.
+            FileNotFoundError: when ``features`` is a path that names nothing.
 
         Examples:
             - A fixed-colour network (needs the ``web`` extra, so the block is skipped without it):
@@ -934,7 +1109,7 @@ class VectorMixin(_MixinBase):
                 ... )
                 >>> m = WebMap().lines(gdf, color="#ffcc00", width=3.0)  # doctest: +SKIP
                 >>> m.layer_ids                                      # doctest: +SKIP
-                ['line-2']
+                ['line-1']
 
                 ```
             - Colouring by a column is a continuous ramp unless a ``scheme`` is named, and the
@@ -957,23 +1132,26 @@ class VectorMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
         """
-        Layer, LayerType = _require_layer_api()
+        _, layer_types = _require_layer_api()
+        width = as_finite(width, "width", "WebMap.lines()")
+        opacity = as_finite(opacity, "opacity", "WebMap.lines()")
         gdf = self._display_gdf(features, method="lines")
-        paint: dict = {"line-width": float(width), "line-opacity": float(opacity)}
-        if column is not None:
-            paint["line-color"] = self._color_expr(
+        colour = (
+            color
+            if column is None
+            else self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
-        else:
-            paint["line-color"] = color
+        )
         return self._vector_layer(
             gdf,
             "line",
-            LayerType.LINE,
-            paint,
+            layer_types.LINE,
+            self._line_paint(width, opacity, colour),
             kind="lines",
             name=name,
             visible=visible,
+            source=features,
         )
 
     def polygons(
@@ -996,6 +1174,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: Optional value column to colour the polygons by (graduated if ``scheme`` is set, else a
                 continuous ramp). For full thematic symbology prefer :meth:`choropleth`.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
@@ -1018,8 +1201,12 @@ class VectorMixin(_MixinBase):
 
         Raises:
             TypeError: when ``features`` is a raster rather than a vector layer.
-            KeyError: when ``column`` names no feature attribute.
-            ValueError: when the layer routes to a GPU deck.gl overlay — through ``big=True``,
+            KeyError: when ``column`` names no feature attribute, or when ``features`` is a URL with
+                no resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
+            ValueError: when ``opacity`` is not a finite number, refused at this call because a figure
+                holding NaN or infinity could not be written down; and when the
+                layer routes to a GPU deck.gl overlay — through ``big=True``,
                 or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
                 as well. A deck overlay is not a MapLibre style layer, so the registry cannot
                 address it to rename or hide it, and honouring those arguments silently would
@@ -1068,7 +1255,8 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.choropleth: the thematic build of this fill.
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
-        Layer, LayerType = _require_layer_api()
+        _, layer_types = _require_layer_api()
+        opacity = as_finite(opacity, "opacity", "WebMap.polygons()")
         gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
@@ -1094,24 +1282,22 @@ class VectorMixin(_MixinBase):
                     "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
             return self.deck_polygons(gdf)
-        paint: dict = {
-            "fill-opacity": float(opacity),
-            "fill-outline-color": outline_color,
-        }
-        if column is not None:
-            paint["fill-color"] = self._color_expr(
+        colour = (
+            color
+            if column is None
+            else self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
-        else:
-            paint["fill-color"] = color
+        )
         return self._vector_layer(
             gdf,
             "fill",
-            LayerType.FILL,
-            paint,
+            layer_types.FILL,
+            self._fill_paint(opacity, outline_color, colour),
             kind="polygons",
             name=name,
             visible=visible,
+            source=features,
         )
 
     def choropleth(
@@ -1139,6 +1325,11 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
             column: The attribute that colours the polygons (numeric for graduated/continuous; any hashable
                 value for ``scheme="categorical"``). Required.
             scheme: A cleopatra classification scheme (``"quantiles"``, ``"equal_interval"``,
@@ -1159,8 +1350,12 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            KeyError: when ``column`` is not a feature attribute.
-            ValueError: propagated from the classifier (unknown scheme, constant data, …).
+            KeyError: when ``column`` is not a feature attribute, when ``cmap`` names no registered
+                colormap, or when ``features`` is a URL with no resolver registered for its scheme.
+            ValueError: when ``opacity`` is not a finite number — refused before the classifier runs,
+                because a figure holding NaN or infinity could not be written down — and propagated from
+                the classifier itself (unknown scheme, constant data, …).
+            FileNotFoundError: when ``features`` is a path that names nothing.
 
         Examples:
             - The default is a **continuous** ramp: no ``scheme``, no classes, and ``last_breaks``
@@ -1207,7 +1402,8 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.polygons: the same fill layer without the thematic
                 classification.
         """
-        Layer, LayerType = _require_layer_api()
+        _, layer_types = _require_layer_api()
+        opacity = as_finite(opacity, "opacity", "WebMap.choropleth()")
         gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
         paint = {
@@ -1218,9 +1414,10 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "fill",
-            LayerType.FILL,
+            layer_types.FILL,
             paint,
             kind="choropleth",
             name=name,
             visible=visible,
+            source=features,
         )

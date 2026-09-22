@@ -14,6 +14,14 @@ styling it — but it is not listed as absent, because the tier draws a `text` *
 both claimed and disclaimed. Which channels fold is
 :data:`~digitalearth.interactive.style_fold.UNEXPRESSIBLE`'s answer; this declaration answers what a caller can
 ask the tier to draw.
+
+**Three capabilities here are conditional, and stay tier checks.** `basemap`, `coastlines` and the Natural
+Earth `features` are declared — the tier draws all three — but only on the default Web-Mercator display CRS,
+because Bokeh renders tiles and GeoViews' Bokeh features in EPSG:3857 only and on any other CRS they would
+misalign with the pre-reprojected data silently. A `Capabilities` answers by name, not by the value of
+another parameter, so it cannot say "yes, when `crs=3857`";
+:meth:`~digitalearth.interactive.base.InteractiveMapBase._require_web_mercator` says it instead, at the six
+call sites that need it, and is named here so the two are read together.
 """
 
 from digitalearth.base.capabilities import Capabilities
@@ -41,6 +49,7 @@ CAPABILITIES = Capabilities(
             "choropleth",
             "labels",
             "heatmap",
+            "flow",
             "unstructured",
             "text",
             "graticule",
