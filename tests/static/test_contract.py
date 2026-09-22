@@ -646,7 +646,12 @@ class TestAutoStyleLevelsAndUnits:
 
 
 class TestStrictOffLimb:
-    """C7 — a layer with nothing to draw is skipped with a warning, or raises under ``strict``."""
+    """C7 — a layer with nothing to draw is skipped with a warning, or raises under ``strict``.
+
+    "Nothing to draw" is the whole of C7: off-limb data, an empty geometry set, a custom layer whose object
+    this process does not hold. A **kind this tier does not draw at all** — ``terrain`` here — is a caller
+    error rather than a fact about the data, so `drawer_for` refuses it by name in every mode (#320).
+    """
 
     def test_strict_defaults_to_false(self):
         """Scenes are lenient unless asked otherwise.

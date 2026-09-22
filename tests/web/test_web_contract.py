@@ -12,7 +12,8 @@ silently):
 * **C4** ``scheme=None`` (continuous) with ``k=5`` wherever a layer classifies;
 * **C5** ``cmap=None`` resolves through ``auto_style``;
 * **C6** ``auto_style``'s ``levels`` and ``units`` are consumed, never guessed;
-* **C7** an unplaceable layer is skipped with a warning, and raises only under ``strict=True``;
+* **C7** an unplaceable layer is skipped with a warning, and raises only under ``strict=True``. C7 is about a
+  layer with *nothing to draw*; a kind this tier does not draw at all is refused by name in every mode (#320);
 * **C8** ``big_data_threshold`` as an instance attribute **and** a per-call override;
 * **C9** the basemap default comes from ``base/basemaps.py``;
 * **C10** a keyed provider's coverage reaches the MapLibre source's ``bounds``;
@@ -775,7 +776,12 @@ class TestC6LevelsAndUnitsAreConsumed:
 
 
 class TestC7OffLimbSkipsAndWarns:
-    """Data the display CRS cannot place is a skipped layer, not a lost map."""
+    """Data the display CRS cannot place is a skipped layer, not a lost map.
+
+    That is what C7 covers — a layer with nothing to draw. A kind this tier does not draw at all (``mesh``,
+    ``vectors``) never reaches a drawer to be skipped: `drawer_for` refuses it by name in every mode (#320),
+    which `test_web_capabilities.py` pins.
+    """
 
     def test_strict_defaults_to_off(self):
         """Skipping is the default because a builder chain may have a dozen layers in it."""

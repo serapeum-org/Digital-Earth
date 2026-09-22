@@ -377,7 +377,11 @@ class TestAutoLevelsAndUnits:
 
 
 class TestOffLimbIsSkipped:
-    """C7 (#257) — data the display CRS cannot place skips the layer and warns; ``strict`` raises."""
+    """C7 (#257) — data the display CRS cannot place skips the layer and warns; ``strict`` raises.
+
+    C7 governs a layer with **nothing to draw**, which unplaceable data is. A **kind this tier does not draw
+    at all** is not C7's case: `drawer_for` refuses it by name whether or not the map is ``strict`` (#320).
+    """
 
     def test_the_layer_is_skipped_and_the_map_still_chains(self, dataset, off_limb):
         """A skipped layer registers nothing and still returns the map.

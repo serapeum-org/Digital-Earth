@@ -12,6 +12,13 @@ grammar allows one namespace (#288). The object itself stays with the renderer t
 So a figure can name a layer whose object is not here: one loaded from a dict, or one handed to another backend.
 :func:`held_object` is the single rule for that case, and it says which of the two it is. The tier decides what to
 do with it, as contract C7 asks — skip the layer with a warning, or raise under ``strict``.
+
+**What C7 governs, and what it does not (#320).** C7 is the rule for *a layer with nothing to draw*: a missing
+object, an off-limb raster, an empty geometry set. Those are facts about the data, leniency there is useful, and
+``strict=True`` is how a caller opts out of it. A *kind the tier does not draw at all* — ``terrain`` asked of the
+static tier, ``choropleth`` asked of the 3-D one — is **not** C7's case and is never skipped: every tier's
+``drawer_for`` refuses it by name, in every mode, ``strict`` or not. That one is a caller error, and a silent one
+costs more than it saves — the figure claims a layer, nothing appears, and nothing says why.
 """
 
 from typing import Any, Mapping, Optional

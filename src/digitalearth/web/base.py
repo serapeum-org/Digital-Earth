@@ -366,6 +366,10 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     except MissingObject as error:
         # Contract C7: a figure that names an object this process does not hold is skipped with a warning
         # naming the layer and its engine, and raised under `strict`. The same answer the 3-D tier gives.
+        #
+        # C7 governs a *layer with nothing to draw*, which a missing object is — the case `strict=` is the
+        # dial for. A *kind this tier does not draw at all* (`mesh`, `vectors`) is a different case and
+        # never reaches a drawer: `drawer_for` refuses it by name in every mode, lenient or strict (#320).
         web_map._skipped(layer.id, str(error))
         return None
     return DrawnLayer(source_id=None, source_spec=None, layer=obj)

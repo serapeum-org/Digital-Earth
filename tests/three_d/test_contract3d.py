@@ -11,7 +11,10 @@ of them fails here rather than in a user's notebook:
   :meth:`~digitalearth.three_d.animation.AnimationMixin.animate`.
 * **C3** — marker size is ``size``, with ``point_size=`` a deprecated alias.
 * **C4** — a classifiable layer takes ``scheme`` + ``k``, computing the same classes as the 2-D tiers.
-* **C7** — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``.
+* **C7** — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``. That is
+  the whole of C7: an off-limb raster, an empty point table, a custom layer whose object this process does
+  not hold. A *kind this tier does not draw at all* — ``choropleth`` here — is not C7's case and is never
+  skipped: `drawer_for` refuses it by name in every mode, lenient or strict (#320).
 * **C13** — this tier declares that it has no display CRS.
 
 Every deprecated alias is tested three ways over: that it still works, that it warns while it does,
@@ -520,7 +523,12 @@ class TestC4SchemeAndK:
 
 
 class TestC7SkipAndWarn:
-    """C7 — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``."""
+    """C7 — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``.
+
+    Every layer here has a drawer and nothing for it to draw. A kind this tier has **no** drawer for is the
+    other situation C7 used to be read for, and is refused by name in every mode (#320) — see
+    `TestTheDeclaration` and `test_seam3d.py`, which pin that half.
+    """
 
     #: ``(method name, argument builder)`` for every layer that can end up with nothing to place.
     EMPTY_LAYERS = {
