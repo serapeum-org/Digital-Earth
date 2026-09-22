@@ -11,7 +11,7 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 import contextlib
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
@@ -409,12 +409,66 @@ def draw_natural_earth(
     return DrawnLayer(artist=scene.ax, artists=tuple(drawn_features))
 
 
+#: The axes limits matplotlib starts an unused axes at. cleopatra reads the same pair as "nothing has been
+#: drawn here yet" and refuses to tile it, which is the state a replayed basemap meets (round 2, H2).
+_UNFRAMED_LIMITS: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
+
+
+def _axes_extent(axes: Any) -> Optional[Tuple[float, float, float, float]]:
+    """Return what an axes is looking at as ``(xmin, xmax, ymin, ymax)``, or ``None`` when it is unframed.
+
+    The ordering is matplotlib's own — the one
+    :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_extent` takes — and the values are in
+    the display CRS, so the frame is read and written back without a reprojection.
+
+    Args:
+        axes: The axes to read.
+
+    Returns:
+        Four plain floats, or ``None`` when the axes still shows matplotlib's default unit square, which
+        means nothing has framed it yet rather than that it is looking at one square metre.
+    """
+    xmin, xmax = (float(value) for value in axes.get_xlim())
+    ymin, ymax = (float(value) for value in axes.get_ylim())
+    limits = (xmin, xmax, ymin, ymax)
+    return None if limits == _UNFRAMED_LIMITS else limits
+
+
+def _frame_from(scene: Any, extent: Optional[Sequence[float]]) -> None:
+    """Frame an unframed axes on the extent a stored layer recorded, so its drawer has a view to work in.
+
+    Args:
+        scene: The map being drawn on.
+        extent: The recorded ``(xmin, xmax, ymin, ymax)`` in the display CRS, or ``None`` for a layer whose
+            description carries none — a figure written before the frame was recorded, or hand-built.
+
+    Note:
+        A no-op unless **both** are true: the axes is still at matplotlib's default unit square, and the
+        description carries a frame. So it only ever supplies a view nothing else has, and never overrides
+        the one a data layer or the caller set.
+    """
+    if extent is None or _axes_extent(scene.ax) is not None:
+        return
+    xmin, xmax, ymin, ymax = (float(value) for value in extent)
+    scene.ax.set_xlim(xmin, xmax)
+    scene.ax.set_ylim(ymin, ymax)
+
+
 def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
     """Fetch and draw the XYZ tiles a described basemap asks for.
 
     Drawn from the description rather than described after the draw, which is the same guarantee said the
     other way round: tiles come off the network, and :meth:`~digitalearth.static.scene.Scene._draw` drops
     the description again when this raises, so a figure never names a basemap the tier could not fetch.
+
+    **The axes is framed from the description when nothing else has framed it.** A basemap is an underlay,
+    so a figure lists it before the data — while the builders run the other way round, data first, because
+    ``add_tiles`` tiles whatever the axes is already looking at. Replaying a stored figure therefore reaches
+    this drawer with an axes matplotlib has not framed yet, and cleopatra refuses to tile one
+    (``ValueError: Axes have no data extent``). The frame the tiles were fetched for is recorded with the
+    layer for exactly that reason (``extent``), and is put back here — so the replay asks for the same
+    mosaic at the same zoom rather than for whatever a fresh axes would imply (round 2, H2). An axes that
+    *is* framed — the caller's own order, and the second pass of a reconcile — is left as it stands.
 
     Args:
         scene: The map being drawn on.
@@ -430,11 +484,13 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
         images it actually added, which is what hiding and removing the layer reach.
 
     Raises:
-        ValueError: when a keyed preset's credential is unavailable, or the extent being drawn lies
-            entirely outside its coverage.
+        ValueError: when a keyed preset's credential is unavailable, when the extent being drawn lies
+            entirely outside its coverage, or when neither the axes nor the description carries a frame to
+            tile.
         TypeError: when a preset keyword is missing or misspelled.
     """
     props = dict(layer.symbology.props)
+    _frame_from(scene, props.get("extent"))
     opts = drawing_opts(scene, layer)
     # The provider object, when the caller passed one: held beside the layer, because it is an engine object
     # and carries their credential. A figure read back elsewhere has only the name the description records.
@@ -982,6 +1038,12 @@ class DecorationMixin(_MixinBase):
         **object** travels the same way, and for both reasons at once (see :func:`_described_tile_source`):
         it is an engine object, and an ``xyzservices.TileProvider`` holds the caller's key among its fields.
 
+        The **extent is** recorded, as four plain numbers in the display CRS. It is not styling: a tile
+        mosaic *is* the frame it was fetched for, at the zoom that frame implies, so a figure that did not
+        carry it could not ask for the same basemap again — and, because a basemap is listed before the
+        data it underlays, a replay reaches :func:`draw_basemap` before anything has framed the axes at all
+        (round 2, H2). ``None`` when the axes is not framed yet, which is the case cleopatra refuses.
+
         Args:
             source: The provider as the caller named it, or ``None`` for the shared default.
             preset: The keyed preset's own keywords, or ``None``.
@@ -1004,6 +1066,7 @@ class DecorationMixin(_MixinBase):
                         "via": "basemap",
                         "source": recorded,
                         "preset": dict(preset or {}),
+                        "extent": _axes_extent(self.ax),
                     }
                 ),
                 key=api_key,

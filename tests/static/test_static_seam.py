@@ -1145,6 +1145,113 @@ class TestATileProviderIsHeldRatherThanDescribed:
         assert FAKE_TILE_KEY not in written, "the key was written into the figure"
 
 
+class TestABasemapFigureDrawsBackFromItsOwnDescription:
+    """A basemap is an underlay, so the description puts it first — before anything has framed the axes.
+
+    Builders run data-first: the raster frames the axes and the basemap then tiles that frame. The
+    description is band-sorted, so a replay reverses the two and cleopatra's ``add_tiles`` meets an axes
+    with no data extent. The extent the basemap was drawn at is therefore part of what the layer *is*, and
+    is recorded with it (round 2, H2).
+    """
+
+    def test_a_basemap_figure_redraws_rather_than_raising(self, dataset, served_tiles):
+        """The figure written by ``test_a_basemap_writes_a_storable_figure``, actually drawn back.
+
+        Args:
+            dataset: The raster the map is framed on.
+            served_tiles: The in-memory tile service.
+
+        Test scenario:
+            Only ``json.dumps`` was asserted before, so the replay raised
+            ``ValueError: Axes have no data extent`` with the suite green.
+        """
+        drawn_from = Map(crs=dataset.epsg)
+        drawn_from.imshow(dataset)
+        drawn_from.basemap()
+        figure = _written_and_read_back(_saved(drawn_from.figure_spec))
+        target = Map(crs=dataset.epsg)
+        target._renderer.apply(target.figure_spec, figure)
+        redrawn = sorted(target._renderer.drawn)
+        target.close()
+        drawn_from.close()
+        assert served_tiles, "no tile was requested"
+        assert redrawn == sorted(figure.layers.ids), redrawn
+
+    def test_a_replayed_basemap_asks_for_the_tiles_the_first_one_did(
+        self, dataset, served_tiles
+    ):
+        """Drawing back is not enough: the mosaic has to be the one the figure described.
+
+        Args:
+            dataset: The raster the map is framed on.
+            served_tiles: The in-memory tile service.
+
+        Test scenario:
+            The first map fetches its tiles at the raster's extent. The replay is a fresh map that has
+            drawn nothing, so anything it frames itself on — the whole projection, say — would ask for a
+            different mosaic at a different zoom.
+        """
+        drawn_from = Map(crs=dataset.epsg)
+        drawn_from.imshow(dataset)
+        drawn_from.basemap()
+        # Sorted, not as served: the tiles are fetched in parallel, so their arrival order is the pool's.
+        built = sorted(served_tiles)
+        figure = _written_and_read_back(_saved(drawn_from.figure_spec))
+        drawn_from.close()
+        served_tiles.clear()
+        target = Map(crs=dataset.epsg)
+        target._renderer.apply(target.figure_spec, figure)
+        replayed = sorted(served_tiles)
+        target.close()
+        assert built, "no tile was requested for the first map"
+        assert replayed == built, (replayed, built)
+
+    def test_the_description_records_the_extent_the_tiles_were_fetched_for(
+        self, dataset, served_tiles
+    ):
+        """The frame is what a reader needs, so it is written as four plain numbers, not held.
+
+        Args:
+            dataset: The raster the map is framed on.
+            served_tiles: The in-memory tile service.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.imshow(dataset)
+        canvas.basemap()
+        recorded = canvas.figure_spec.layers.get("basemap-2").symbology.props["extent"]
+        framed = (*canvas.ax.get_xlim(), *canvas.ax.get_ylim())
+        canvas.close()
+        assert served_tiles, "no tile was requested"
+        assert recorded == pytest.approx(framed), (recorded, framed)
+
+    def test_a_basemap_drawn_on_a_framed_axes_keeps_that_frame(
+        self, dataset, served_tiles
+    ):
+        """The recorded extent must not re-frame an axes that is already looking somewhere.
+
+        Args:
+            dataset: The raster the map is framed on.
+            served_tiles: The in-memory tile service.
+
+        Test scenario:
+            A replay onto a map whose data has already been drawn — the order a caller uses — must leave
+            the axes limits exactly as that data set them.
+        """
+        drawn_from = Map(crs=dataset.epsg)
+        drawn_from.imshow(dataset)
+        drawn_from.basemap()
+        figure = _written_and_read_back(_saved(drawn_from.figure_spec))
+        drawn_from.close()
+        target = Map(crs=dataset.epsg)
+        target.imshow(dataset)
+        expected = (*target.ax.get_xlim(), *target.ax.get_ylim())
+        target._renderer.draw_layer(figure, "basemap-2")
+        after = (*target.ax.get_xlim(), *target.ax.get_ylim())
+        target.close()
+        assert served_tiles, "no tile was requested"
+        assert after == pytest.approx(expected), (after, expected)
+
+
 class TestADecorationLayerOwnsTheArtistsItAdded:
     """Hiding or removing a layer must reach what that layer drew — and nothing else on the axes.
 
