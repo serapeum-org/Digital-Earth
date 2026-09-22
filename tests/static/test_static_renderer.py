@@ -18,14 +18,16 @@ import numpy as np
 import pytest
 from pyramids.feature import FeatureCollection
 
+from digitalearth.base.custom import MissingObject
 from digitalearth.base.registry import _OBJECTS, band_of
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.static import Map
+from digitalearth.static import Map, Scene
 from digitalearth.static.capabilities import CAPABILITIES
 from digitalearth.static.renderer import (
     DRAWN_KINDS,
     DrawnLayer,
     Renderer,
+    _reinsert,
     drawer_for,
     drawing_opts,
 )
@@ -1046,3 +1048,165 @@ class TestWhatADrawerHandsBack:
         drawn_map._renderer._drawn["stray"] = DrawnLayer(artist=stray, artists=(stray,))
         drawn_map._renderer.remove("stray")
         assert "stray" not in drawn_map._renderer.drawn
+
+
+class TestALayerDescribedAsHidden:
+    """Visibility is part of a description, so a layer drawn *from* one has to arrive hidden."""
+
+    def test_a_layer_added_hidden_is_hidden_as_it_is_drawn(self, drawn_map):
+        """A new layer is `added`, never `hidden`, so only `draw_layer` can apply its visibility.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            `diff` reports a layer that is new *and* hidden under `added` alone — there is no earlier
+            figure for it to have been visible in. Reconciling the two figures therefore draws it and
+            never reaches the `hidden` arm, so a renderer that reads visibility only from the diff paints
+            a layer the figure says is switched off.
+        """
+        figure = drawn_map.figure_spec
+        tree = figure.layers.add(_text_layer("label", drawn_map.crs)).set_visible(
+            "label", False
+        )
+        drawn_map._renderer.apply(figure, with_fields(figure, layers=tree))
+        assert drawn_map.ax.texts[-1].get_visible() is False, (
+            "a layer whose description says it is hidden must not be painted when it is drawn"
+        )
+
+    def test_toggling_a_layer_nothing_was_drawn_for_is_quiet(self, drawn_map):
+        """`set_visible` is called with whatever a figure names, including ids that never drew.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            A figure can name a layer this renderer skipped — an off-limb raster, a far-side label — and
+            `apply` still routes its `shown`/`hidden` ids here. Reading `self._drawn[layer_id].artists`
+            without the guard turns that into an `AttributeError` on `None`, and takes the rest of the
+            reconciliation with it.
+        """
+        drawn_map._renderer.set_visible("never-drawn", False)
+        assert drawn_map.ax.images[-1].get_visible() is True, (
+            "an id nothing was drawn for must be ignored, not applied to another layer"
+        )
+
+
+class TestACustomLayerWhoseObjectIsNotHere:
+    """`draw_custom` answers a missing object with the scene's own skip-or-raise policy."""
+
+    def test_a_strict_scene_re_raises_rather_than_skipping_it(self):
+        """``strict=True`` is the caller asking to hear about a layer that drew nothing.
+
+        Test scenario:
+            The non-strict arm logs and returns `None`, which a strict scene must not do: a custom layer
+            is the one kind a description cannot rebuild, so silently dropping it under `strict` hides
+            exactly the case the flag exists to surface.
+        """
+        scene = Scene(strict=True)
+        try:
+            scene._add_layer(None, "an artist the caller drew")
+            scene._held_objects.clear()
+            figure = scene.figure_spec
+            with pytest.raises(MissingObject, match="custom-1"):
+                scene._renderer.draw_layer(figure, "custom-1")
+        finally:
+            scene.close()
+
+
+class TestTheGuardsARollbackLeansOn:
+    """The rollback's own edge cases: nothing to move, no artist list, nothing restored."""
+
+    @pytest.mark.parametrize(
+        "moved_block, old_artists",
+        [
+            pytest.param(False, True, id="the-re-draw-added-nothing"),
+            pytest.param(True, False, id="the-layer-owned-no-artists"),
+        ],
+    )
+    def test_a_layer_with_nothing_to_move_leaves_the_paint_order_alone(
+        self, moved_block, old_artists
+    ):
+        """`_reinsert` is handed both of these by a real rollback, and neither names a position.
+
+        Args:
+            moved_block: Whether the re-draw put anything on the axes.
+            old_artists: Whether the layer owned artists before it was taken off.
+
+        Test scenario:
+            A graticule owns no artists, and a drawer whose re-draw declined added none — so
+            ``positions`` is empty and ``order[positions[-1] + 1:]`` is an `IndexError` on an otherwise
+            successful rollback. Both arms must leave the axes' live list exactly as they found it.
+        """
+        first, old, last, moved = object(), object(), object(), object()
+        painted = [first, last, moved]
+        block = [moved] if moved_block else []
+        was = (old,) if old_artists else ()
+        _reinsert(painted, block, was, (first, old, last))
+        assert painted == [first, last, moved], (
+            "a layer with no position to go back to must not be moved at all"
+        )
+
+    def test_a_restored_layer_is_left_alone_when_the_axes_keeps_no_artist_list(
+        self, drawn_map, monkeypatch
+    ):
+        """The order a layer goes back in is read off a private matplotlib list that may not be there.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+            monkeypatch: Used to make the axes answer with no list, as a future matplotlib could.
+
+        Test scenario:
+            `_painted` answers `None` when the axes keeps no children list, and the rollback then has no
+            order to restore into. Carrying on regardless iterates `None` and turns a rollback that
+            otherwise succeeded into a `TypeError` that masks the refusal it was rolling back.
+        """
+        monkeypatch.setattr("digitalearth.static.renderer._painted", lambda axes: None)
+        figure = drawn_map.figure_spec
+        refused = _refused_removal(figure, "raster-1")
+        with pytest.raises(KeyError):
+            drawn_map._renderer.apply(figure, refused)
+        assert "raster-1" in drawn_map._renderer.drawn, sorted(
+            drawn_map._renderer.drawn
+        )
+
+    def test_a_layer_whose_re_draw_declines_is_dropped_from_the_colorbar_registry(
+        self, drawn_map, monkeypatch
+    ):
+        """`Scene.layers` is what ``colorbar(layer=-1)`` indexes, so a hole in it is a wrong colorbar.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+            monkeypatch: Used to make the restoring re-draw decline the layer.
+
+        Test scenario:
+            The rollback restores a removed layer by drawing it again, and a drawer may decline the
+            second time — the data is off-limb in the view the axes now holds. Rebuilding the registry
+            from what it held without dropping such a layer files a `None` where a ``(glyph, mappable)``
+            pair belongs, which the next `colorbar()` unpacks.
+        """
+        redraw = Renderer.draw_layer
+
+        def declines_the_restore(self, spec, layer_id):
+            """Draw every layer but the fixture's raster, which is declined instead.
+
+            Args:
+                self: The renderer being driven.
+                spec: The figure the layer is drawn from.
+                layer_id: The layer to draw.
+
+            Returns:
+                What the real drawer produced, or ``None`` for the declined layer.
+            """
+            if layer_id == "raster-1":
+                return None
+            return redraw(self, spec, layer_id)
+
+        monkeypatch.setattr(Renderer, "draw_layer", declines_the_restore)
+        figure = drawn_map.figure_spec
+        refused = _refused_removal(figure, "raster-1")
+        with pytest.raises(KeyError):
+            drawn_map._renderer.apply(figure, refused)
+        assert drawn_map.layers == [], (
+            f"a layer that could not be restored must leave no entry behind; got {drawn_map.layers}"
+        )

@@ -312,3 +312,29 @@ class TestPreserveView:
         assert scene.ax.get_ylim() == pytest.approx((70.0, 80.0)), (
             f"ylim not kept: {scene.ax.get_ylim()}"
         )
+
+
+class TestUnregisteringALayerThatRegisteredNoMappable:
+    """The colorbar registry is matched by identity, so a pair of `None`s must match nothing."""
+
+    def test_removing_it_leaves_the_earlier_registration_alone(self):
+        """A layer that registered nothing recognisable must not take another layer's entry with it.
+
+        Test scenario:
+            `Scene.layers` holds only the layers that registered a mappable, so a layer's index there is
+            not its index in the description and the two are matched by identity instead. A layer drawn
+            with neither a glyph nor a mappable — a caller's artist that is not one, a glyph whose render
+            produced no `im` — then matches ``(None, None)`` wherever that pair happens to sit, and
+            removing it unregisters whichever layer was filed first. `colorbar(layer=-1)` would key the
+            colorbar to the wrong layer from then on.
+        """
+        scene = Scene()
+        try:
+            scene._add_layer(None, None, "the first caller artist")
+            scene._add_layer(None, None, "the second caller artist")
+            scene._renderer.remove("custom-2")
+            assert scene._layer_labels[0] == "the first caller artist", (
+                f"removing one unregistered layer dropped another: {scene._layer_labels}"
+            )
+        finally:
+            scene.close()
