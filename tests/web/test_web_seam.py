@@ -869,21 +869,37 @@ class TestTheBandOfALayerIsItsKinds:
 
         Args:
             points_gdf: A small point collection.
+
+        Test scenario:
+            The order is read off the *drawing* — the queue replayed into a recording widget, which is how
+            `_build_map_widget` adds them — rather than off `layer_ids`, which a `LayerTree` sorts by band
+            by construction and so cannot disagree with the bands (review M13). The layers are added in an
+            order that is not their band order, so a queue that kept call order would fail here.
         """
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap().points(points_gdf, name="obs").graticule(name="grid")
+        m = WebMap().points(points_gdf, name="obs").graticule(name="grid").basemap()
         assert band_of("graticule") == "reference", band_of("graticule")
-        assert m.layer_ids.index("grid") < m.layer_ids.index("obs"), m.layer_ids
+        drawn = _widget_layer_ids(m)
+        basemap = next(
+            (layer_id for layer_id in drawn if str(layer_id).startswith("tiles")), None
+        )
+        label = derived_ids("graticule", "grid")[0]
+        assert drawn == [basemap, "grid", label, "obs"], drawn
 
     def test_a_custom_layer_is_placed_in_the_band_it_asked_for(self):
-        """`custom:maplibre` names an engine, which says nothing about what the layer draws."""
+        """`custom:maplibre` names an engine, which says nothing about what the layer draws.
+
+        Test scenario:
+            The underlay is added *after* the data layer, and the drawing is what is read, so a band that
+            reached neither the queue nor the widget would show here.
+        """
         from digitalearth.web import WebMap
 
         m = WebMap()
-        m.add_layer(_fake_layer("tiles"), name="tiles", band="underlay")
         m.add_layer(_fake_layer("obs"), name="obs")
-        assert m.layer_ids == ["tiles", "obs"], m.layer_ids
+        m.add_layer(_fake_layer("tiles"), name="tiles", band="underlay")
+        assert _widget_layer_ids(m) == ["tiles", "obs"], _widget_layer_ids(m)
 
 
 def _fake_layer(layer_id: str):
