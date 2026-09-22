@@ -265,7 +265,9 @@ class Encoding:
     Attributes:
         channel: Which channel this drives — a key of :data:`CHANNELS`.
         value: The constant, when the channel does not vary with the data. A list in it, however nested, is stored
-            as a tuple, so `[1, 0, 0]` and `(1, 0, 0)` are one constant.
+            as a tuple, so `[1, 0, 0]` and `(1, 0, 0)` are one constant. A **mapping** is a constant like any
+            other — it is stored with its values frozen the same way, round-trips through `to_dict`, and hashes
+            (review L5).
         field: The column or band name the channel varies with. Exactly one of `value` and `field` is set.
         scale: How a field's values map onto the channel. ``None`` passes the values through untouched, which
             is what a renderer wants when it holds its own mapping.
@@ -279,8 +281,9 @@ class Encoding:
     Raises:
         ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, if `field` is
             not a non-empty string, if a scale or an output range is attached to a constant — a constant that
-            carries a mapping is a caller who expected the mapping to apply, and silently ignoring it would draw one
-            colour — or if `guide` is not a :class:`Guide`.
+            carries a *scale* is a caller who expected that scale to apply, and silently ignoring it would draw one
+            colour — or if `guide` is not a :class:`Guide`. Note this is about the `scale`/`output_range` fields,
+            not about a `value` that happens to be a mapping, which is accepted.
 
     Examples:
         - A constant, which is what a plain ``color="#f00"`` means:

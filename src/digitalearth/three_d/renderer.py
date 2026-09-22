@@ -12,9 +12,10 @@ a layer can be removed, hidden or re-described without rebuilding the scene arou
 
 **Changes go through the diff.** When the scene's figure changes, the renderer is handed the old and the new one
 and applies :meth:`~digitalearth.base.spec.FigureSpec.diff` (#289): added layers are drawn, removed ones taken
-off the plotter, rebuilt and restyled ones drawn again — VTK has no cheap restyle, so a colour change is a
-rebuild of that one layer — and shown/hidden ones toggled on their actor. Draw order is recorded but not
-applied: VTK composites by depth, not by the order actors were added.
+off the plotter, rebuilt ones drawn again, and shown/hidden ones toggled on their actor. A restyle is drawn
+again **only when it reaches the engine** — VTK has no cheap restyle, so a colour change is a rebuild of that
+one layer, while a change of `label` alone is not (see :meth:`Renderer3D._reaches_pyvista`). Draw order is
+recorded but not applied: VTK composites by depth, not by the order actors were added.
 """
 
 import logging
@@ -331,7 +332,9 @@ class Renderer3D:
         """Show or hide what was drawn for a layer.
 
         Args:
-            layer_id: The layer to toggle.
+            layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
+                three tiers answer one too — note its neighbour :meth:`is_visible` **raises** for the same
+                id, because there is no visibility to report where there is nothing to toggle.
             visible: Whether it is drawn.
         """
         drawn = self._drawn.get(layer_id)

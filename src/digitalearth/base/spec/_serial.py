@@ -534,7 +534,7 @@ _MAPPING_TAG: Any = object()
 
 
 def hashable_value(value: Any) -> Any:
-    """Return `value` in a form that hashes, with every mapping in it as its sorted items.
+    """Return `value` in a form that hashes, with every mapping in it as a tagged tuple of its items.
 
     The vocabulary freezes a list to a tuple so a spec holding one still hashes, but it leaves a mapping a
     mapping — and every tier records at least one: MapLibre's `paint`, the resolved HoloViews style, a tile
@@ -547,15 +547,20 @@ def hashable_value(value: Any) -> Any:
 
     Returns:
         The value with each mapping as :data:`_MAPPING_TAG` followed by a tuple of its ``(key, value)`` pairs
-        in key order, applied inside sequences and mappings alike. Anything else is returned as it is — a
-        value that is unhashable for its own reasons still raises when it is hashed, which is the honest
-        outcome. The tag is what keeps a mapping from hashing as the plain tuple of pairs a caller could have
-        written instead (review N1); it is a surrogate for hashing, never something to read back.
+        in key order, applied inside a mapping and inside a **tuple**; any other sequence, and anything else,
+        is returned as it is — a value that is unhashable for its own reasons still raises when it is hashed,
+        which is the honest outcome. (A list does not need reaching into: the vocabulary froze it to a tuple
+        long before this runs.) The tag is what keeps a mapping from hashing as the plain tuple of pairs a
+        caller could have written instead (review N1); it is a surrogate for hashing, never something to read
+        back.
 
         The order is the keys' own where they compare, and their `repr`\\ s where they do not. A mapping's
         keys need not be orderable against each other — `{1: 'a', 'b': 2}` hashes perfectly well — so sorting
-        them was refusing values that this helper exists to accept (review L6). Either way the order is a
-        function of the keys alone, never of the insertion order, so two spellings of one mapping agree.
+        them was refusing values that this helper exists to accept (review L6). Where the keys compare, the
+        order is a function of the keys alone and two spellings of one mapping agree. The `repr` fallback is
+        a **stable** sort, so it settles that for keys whose `repr`\\ s differ and leaves the insertion order
+        standing for keys that share one — two objects of a class with a constant `repr`, say, which is the
+        one shape where two equal mappings can still reach two hashes.
 
     Examples:
         - Two mappings written in a different order hash alike, because the items are ordered by key:

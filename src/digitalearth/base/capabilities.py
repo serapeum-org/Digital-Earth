@@ -195,7 +195,7 @@ class Capabilities:
         (review L2).
 
         Returns:
-            The hash of the six fields, with `absent` taken as its sorted items.
+            The hash of all seven fields, with `absent` taken as its sorted items.
         """
         return hash(
             (
