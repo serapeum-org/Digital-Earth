@@ -28,6 +28,7 @@ from shapely.geometry import Polygon  # noqa: E402
 from digitalearth.base.spec import Scale  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
+from digitalearth.three_d.point_cloud import SCALAR  # noqa: E402
 from digitalearth.three_d.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
 
 #: The committed raster the surface builders are given. Read from the repo root, as the rest of the suite does.
@@ -41,6 +42,17 @@ def _cloud() -> np.ndarray:
         The array every point-cloud call below is given.
     """
     return np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 0.5, 0.2]])
+
+
+def _four_points() -> np.ndarray:
+    """Return four xyz points, one per value the classification check colours.
+
+    Returns:
+        The array the classified point-cloud call is given.
+    """
+    return np.array(
+        [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 0.5, 0.2], [3.0, 1.5, 0.4]]
+    )
 
 
 def _cube() -> np.ndarray:
@@ -286,14 +298,29 @@ class TestTheSchemesAreTheSharedClassifiers:
     def test_a_classified_layer_cuts_the_number_of_classes_it_was_asked_for(
         self, scene
     ):
-        """C4's own shape: `scheme` + `k` reach the classifier rather than being swallowed."""
-        scene.point_cloud(
-            _cloud(), values=np.array([1.0, 5.0, 9.0]), scheme="quantiles", k=2
-        )
-        recorded = dict(
-            scene.figure_spec.layers.get(scene.layer_ids[-1]).symbology.props
-        )
-        assert (recorded["scheme"], recorded["k"]) == ("quantiles", 2), recorded
+        """C4's own shape: `scheme` + `k` reach the classifier rather than being swallowed.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Reading `scheme` and `k` back off the description asked nothing: they are the keywords the call
+            had just passed, so the check passed with the classifier itself stubbed out (review L7). What is
+            read now is what was **drawn** — VTK has no class breaks, so a classified layer reaches the
+            engine as per-point class *indices* — against the classes the shared classifier's own edges put
+            those values in. The four values are chosen so that the schemes disagree: quantiles split them
+            at the median, an equal-interval cut of the same `k` would not.
+        """
+        values = np.array([1.0, 2.0, 3.0, 40.0])
+        scene.point_cloud(_four_points(), values=values, scheme="quantiles", k=2)
+        drawn = [int(value) for value in scene.mesh_of(scene.layer_ids[-1])[SCALAR]]
+        # The class each value falls in according to the shared classifier's edges, computed here rather
+        # than taken from the tier: `breaks_of` is what C4 says every tier cuts with.
+        interior = list(Scale.breaks_of(values.tolist(), "quantiles", 2))[1:-1]
+        expected = [
+            int(np.searchsorted(interior, value, side="right")) for value in values
+        ]
+        assert drawn == expected, (drawn, expected, interior)
 
 
 class TestARefusalCarriesTheDeclaredReason:
