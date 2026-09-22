@@ -880,6 +880,66 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         assert sorted(target._renderer.drawn) == sorted(figure.layers.ids)
 
 
+class TestEveryBuilderWritesAFigureJsonCanCarry:
+    """The property the seam exists to provide, asked of every builder rather than of a chosen few.
+
+    A figure is only as storable as its least storable layer, and one builder recording one live object
+    takes the whole figure with it. The sources are referenced by path first — an ``object:`` reference is
+    refused by `FigureSpec.to_dict` by design, wherever it came from — so what is under test here is what
+    the builders write.
+    """
+
+    @pytest.mark.parametrize("builder", sorted(DATA_BUILDERS))
+    def test_a_data_builder_writes_a_storable_figure(self, builder, given):
+        """Args:
+        builder: The entry in :data:`DATA_BUILDERS` under test.
+        given: The inputs the builders draw from.
+        """
+        _, draw = DATA_BUILDERS[builder]
+        canvas = Map(crs=given["raster"].epsg)
+        draw(canvas, given)
+        written = json.dumps(_saved(canvas.figure_spec).to_dict(), allow_nan=False)
+        canvas.close()
+        assert written.startswith("{"), written[:40]
+
+    @pytest.mark.parametrize("builder", sorted(DECORATION_BUILDERS))
+    def test_a_decoration_builder_writes_a_storable_figure(self, builder):
+        """Args:
+        builder: The entry in :data:`DECORATION_BUILDERS` under test.
+        """
+        _, draw = DECORATION_BUILDERS[builder]
+        canvas = Map()
+        draw(canvas)
+        written = json.dumps(_saved(canvas.figure_spec).to_dict(), allow_nan=False)
+        canvas.close()
+        assert written.startswith("{"), written[:40]
+
+    def test_a_basemap_writes_a_storable_figure(self, served_tiles):
+        """The one builder the tables leave out, because it fetches tiles.
+
+        Args:
+            served_tiles: The in-memory tile service.
+        """
+        canvas = _framed_map()
+        canvas.basemap()
+        written = json.dumps(_saved(canvas.figure_spec).to_dict(), allow_nan=False)
+        canvas.close()
+        assert served_tiles, "no tile was requested"
+        assert written.startswith("{"), written[:40]
+
+    def test_a_backdrop_writes_a_storable_figure(self, dataset):
+        """And the other: a backdrop is a field layer drawn somewhere else.
+
+        Args:
+            dataset: The raster drawn as a backdrop.
+        """
+        canvas = Map(crs=dataset.epsg)
+        canvas.stock_img(dataset)
+        written = json.dumps(_saved(canvas.figure_spec).to_dict(), allow_nan=False)
+        canvas.close()
+        assert written.startswith("{"), written[:40]
+
+
 class TestANamedArgumentIsNormalisedForTheDescription:
     """A builder's own arguments are part of what the layer *is*, so they are recorded — as plain values.
 
