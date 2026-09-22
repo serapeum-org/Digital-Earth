@@ -10,7 +10,7 @@ deterministic arrays. Reprojection still happens upstream in pyramids; Datashade
 projected planar coordinates.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Self
 
 from loguru import logger
 
@@ -49,6 +49,24 @@ def _resolve_aggregator(aggregator: Any, column: Optional[str]) -> Any:
     if column is None:
         raise ValueError(f"aggregator {aggregator!r} needs a column= to aggregate")
     return getattr(ds, aggregator)(column)
+
+
+def _color_key(recorded: Any) -> Any:
+    """Return a recorded `color_key` in the shape Datashader reads it.
+
+    HoloViews and Datashader take either a ``{category: colour}`` mapping or a colour list in category order.
+    A description stores a list as a tuple, so the drawer gets one back as a tuple — and passing that through
+    ``dict()``, as both drawers did, refused every colour list (review L6).
+
+    Args:
+        recorded: The `color_key` the layer recorded: a mapping, or a sequence of colours.
+
+    Returns:
+        A plain ``dict`` for a mapping, a ``list`` for a sequence.
+    """
+    if isinstance(recorded, Mapping):
+        return dict(recorded)
+    return list(recorded)
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -157,7 +175,7 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     op_kwargs: dict = dict(props.get("canvas") or {})
     color_key = props.get("color_key")
     if color_key is not None:
-        op_kwargs["color_key"] = dict(color_key)
+        op_kwargs["color_key"] = _color_key(color_key)
     else:
         op_kwargs["cmap"] = props.get("cmap")
     shaded = _datashade(
@@ -201,7 +219,7 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         op_kwargs["aggregator"] = ds.count_cat(by)
         color_key = props.get("color_key")
         if color_key is not None:
-            op_kwargs["color_key"] = dict(color_key)
+            op_kwargs["color_key"] = _color_key(color_key)
     else:
         op_kwargs["cmap"] = props.get("cmap")
     shaded = _datashade(path, dynamic=props.get("dynamic", True), **op_kwargs)
@@ -299,7 +317,7 @@ class BigDataMixin(_MixinBase):
         layer: Any,
         *,
         cmap: str = "viridis",
-        color_key: Optional[dict] = None,
+        color_key: Optional[Any] = None,
         aggregator: Any = "count",
         column: Optional[str] = None,
         dynamic: bool = True,
@@ -313,7 +331,8 @@ class BigDataMixin(_MixinBase):
         Args:
             layer: A HoloViews element or a (Feature)GeoDataFrame (becomes a point layer).
             cmap: Colormap for continuous shading (ignored when ``color_key`` is given).
-            color_key: ``{category: colour}`` mapping for categorical shading; requires a
+            color_key: ``{category: colour}`` mapping for categorical shading, or a list of colours in
+                category order — the two forms HoloViews takes; requires a
                 ``count_cat``/``by`` aggregation over ``column``. Non-categorical columns are
                 converted (and the conversion logged — no silent dtype switch).
             aggregator: Reduction name or Datashader reduction; ``color_key`` implies
@@ -361,7 +380,7 @@ class BigDataMixin(_MixinBase):
         by: Optional[str] = None,
         dynspread: bool = True,
         cmap: str = "viridis",
-        color_key: Optional[dict] = None,
+        color_key: Optional[Any] = None,
         dynamic: bool = True,
         **opts: Any,
     ) -> Self:
@@ -378,7 +397,8 @@ class BigDataMixin(_MixinBase):
             by: Optional categorical column colouring tracks per class (``count_cat`` blend).
             dynspread: Grow isolated pixels so sparse tracks stay visible.
             cmap: Colormap for continuous shading (ignored when ``color_key`` is given).
-            color_key: ``{category: colour}`` mapping used with ``by``.
+            color_key: ``{category: colour}`` mapping used with ``by``, or a list of colours in category
+                order — the two forms HoloViews takes.
             dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
