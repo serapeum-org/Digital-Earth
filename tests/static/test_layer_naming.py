@@ -181,6 +181,51 @@ class TestANameUsedTwice:
         assert drawn.layer_ids == [ASKED, SUFFIXED, "wells-3"], drawn.layer_ids
 
 
+class TestANameThatIsWhatTheGeneratorWouldMint:
+    """The other collision: the caller's name lands *on* the generated sequence rather than beside it.
+
+    `TestANameUsedTwice` covers two callers asking for one name. This is the case the suffix rule cannot
+    answer, because the caller asks first: `scatter(name="points-1")` takes the very id the next unnamed
+    `scatter` would generate. The counter is per-scene and the issued set is per-id, so the generator has
+    to step over what is already out — and the cost of it not doing so is not a cosmetic id clash. The
+    renderer keys everything it drew by layer id, so a second layer minting an id already in use makes the
+    first one unaddressable: `set_visible`, `is_visible` and `remove_layer` would all reach the wrong
+    artist, or the only surviving one.
+    """
+
+    def test_an_unnamed_layer_steps_over_the_id_a_caller_already_took(self, drawn):
+        """The generator skips `points-1` because the caller holds it, and mints `points-2`.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The kind a `scatter` counts under is `points`, so the first generated id is `points-1` — which
+            this caller asks for by name before any unnamed layer exists. Without the skip the second call
+            re-mints it and the scene describes two layers under one id.
+        """
+        drawn.scatter(_points(), name="points-1")
+        drawn.scatter(_points())
+        assert drawn.layer_ids == ["points-1", "points-2"], drawn.layer_ids
+
+    def test_each_layer_is_still_the_only_artist_its_id_toggles(self, drawn):
+        """The half the id list cannot show: two ids, two separately switchable sets of artists.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            `Renderer._drawn` is a mapping from layer id to the artists drawn for it, so a re-minted id
+            does not merely read oddly — it overwrites the entry, and the first layer's artists are left on
+            the axes with nothing able to reach them. Hiding the caller's own layer and reading the other
+            one back is what tells the two apart, because it asks the renderer rather than the description.
+        """
+        drawn.scatter(_points(), name="points-1")
+        drawn.scatter(_points())
+        drawn._renderer.set_visible("points-1", False)
+        assert drawn._renderer.is_visible("points-2") is True, drawn.layer_ids
+
+
 class TestALayerBuiltHidden:
     """`visible=False` describes the layer hidden **and** leaves it hidden on the axes (#327)."""
 
