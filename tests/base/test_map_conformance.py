@@ -10,9 +10,9 @@ makes the call.
 
 So this is the other half. A tier supplies three things — its name, a way to hand back an empty map, and
 whatever it legitimately cannot do — and inherits every probe below. **Adding a tier is a subclass**, and
-the two at the foot of this module are twelve lines each. The probes themselves never mention a tier: they
-call the Core names (`points`, `choropleth`, `graticule`) and read `figure_spec`, which is the whole point of
-the contract those names were frozen into.
+the two that sign here are a `backend` string and a `make()` and nothing else. The probes never mention a
+tier: they call the Core names (`points`, `choropleth`, `graticule`) and read `figure_spec`, which is the
+whole point of the contract those names were frozen into.
 
 **Which tiers subclass it, and why the other two cannot yet.** The package has four —
 :data:`ALL_TIERS` — and `web` and `interactive` are the two that sign here. The **static** tier is the
@@ -31,11 +31,12 @@ this module's job. What is built here is the *probe that will hold it*, exercise
 tiers' `figure_spec`s directly. A round trip through `to_backend()` is only worth having if the two ends
 describe the same figure, so these probes are the precondition: each tier builds the shared seed figure
 (:func:`_seed`) and is held to one described result, :data:`EXPECTED_SEED`. Held to the same constant, the
-tiers are held to each other — and each half runs in its own CI job, which matters because **no environment
-has both engines**: `web` carries MapLibre and `interactive` carries HoloViz, and neither carries the other.
-A probe that compared two live tiers in one process could never run anywhere. When `to_backend()` lands it
-gets one more probe — that a figure carried across describes what :data:`EXPECTED_SEED` already pins — and
-nothing here changes.
+tiers are held to each other — which is what lets each half run in its own CI job, where only one of them
+collects: `web` carries MapLibre, `interactive` carries HoloViz, and neither of those two carries the other.
+The `all` environment does carry both, and :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` uses
+it to ask the two live tiers directly; the constant is what holds them in the jobs that cannot. When
+`to_backend()` lands it gets one more probe — that a figure carried across describes what
+:data:`EXPECTED_SEED` already pins — and nothing here changes.
 
 **What a described result is, and what it deliberately leaves out.** :func:`_described` reduces a figure to
 `(kind, band, visible)` per layer in draw order. It does **not** compare `symbology.props`, because there is
@@ -753,8 +754,10 @@ class MapConformanceBase:
         Test scenario:
             This is the check `to_backend()` (order 33) will be held to, exercised today against the tier's
             own `figure_spec`. Both tiers are compared with one constant rather than with each other,
-            because no environment carries both engines — so each half runs in its own CI job and the two
-            still cannot drift apart.
+            because the `web` and `interactive` jobs each carry one engine and collect one tier — so this
+            probe still holds them to each other in the jobs where only one of them is live. The `all`
+            environment carries both, and :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` is what
+            asks them directly there.
         """
         described = _described(self._seed(drawn))
         assert described == EXPECTED_SEED, (
