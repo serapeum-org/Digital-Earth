@@ -33,6 +33,7 @@ from digitalearth.base.contract import (
     alias_table,
     orders_named_in,
     pending_for,
+    roadmap_order,
 )
 from tests.open_issues import KNOWN_OPEN_ISSUES, issues_named_in
 
@@ -527,6 +528,42 @@ class TestTheKeywordsAreThePromiseToo:
             f"{backend} answers {sorted(impossible)} with a property, which can take no keywords, while "
             f"the contract declares {impossible}"
         )
+
+
+class TestWhatARoadmapOrderPromises:
+    """An order reference is a pointer into a plan the repository does not hold, so the number has to resolve.
+
+    :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they say
+    "order 26" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
+    above ask whether a cited order is *in* the table; nothing asked what following one gives back, so a
+    lookup that returned the key, or that let a bare `KeyError` out with no message, would still leave both
+    guards green while the pointer answered nothing.
+    """
+
+    def test_an_order_the_contract_names_says_what_it_builds(self):
+        """Following a pointer gives the line that tells a waiting caller what they are waiting for.
+
+        Test scenario:
+            `order 26` is what `interactive.set_bounds` is pending on. A lookup answering the key back, or
+            the short handle, would read as a plan while saying nothing a reader can act on.
+        """
+        built = roadmap_order("order 26")
+        assert built.startswith("auto-framing and camera round-trip"), built
+
+    def test_an_order_nobody_wrote_down_is_refused_with_the_ones_there_are(self):
+        """A number that is not a step of the plan fails loudly rather than reading as one (review R-L3).
+
+        Test scenario:
+            The defect this table was added for: every guard accepted any `order \\d+`, so a reason naming
+            order 99 passed all three checks in `TestAPendingReasonPointsAtLiveWork`. The refusal has to
+            name the bad order *and* list the real ones — a bare `KeyError('order 99')` would be the
+            unhelpful answer this replaces, and would still satisfy a check that only asserted it raised.
+        """
+        with pytest.raises(KeyError) as refused:
+            roadmap_order("order 99")
+        message = refused.value.args[0]
+        assert "'order 99' is not a roadmap order" in message, message
+        assert "order 26" in message, message
 
 
 class TestAPlannedRenameIsNotAnAlias:
