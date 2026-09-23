@@ -69,6 +69,16 @@ GUARD_MODULE = Path(__file__).resolve()
 #: the direction backwards.
 CANONICAL_MODULE = REPO_ROOT / "src" / "digitalearth" / "base" / "contract_clauses.py"
 
+#: The two modules that spell clause numbers to **explain** the rule rather than to cite it, excluded from
+#: both directions of the guard.
+#:
+#: The exclusions used to be asymmetric — :func:`_all_citations` skipped the canonical module only, and
+#: :func:`_pins` the guard module only — so this module's own prose was scanned for citations and reported as
+#: one (review R-N2). Skipping the canonical module in :func:`_pins` is moot, since that function already
+#: keeps to ``tests/``; it is stated anyway, because a rule with a hole on one side is the shape that let the
+#: first hole through, and a reader comparing the two functions should find the same answer in both.
+SELF_REFERRING = (GUARD_MODULE, CANONICAL_MODULE)
+
 
 def _cited_in(text: str, origin: str) -> dict[int, list[str]]:
     """Collect the clause numbers a block of text cites, with where each was found.
@@ -136,7 +146,7 @@ def _all_citations() -> dict[int, list[str]]:
     """
     citations: dict[int, list[str]] = {}
     for path in _python_files():
-        if path == CANONICAL_MODULE:
+        if path in SELF_REFERRING:
             continue
         _merge(citations, _cited_in(path.read_text(encoding="utf-8"), _relative(path)))
     return citations
@@ -173,7 +183,7 @@ def _pins() -> dict[int, list[str]]:
     """
     pinned: dict[int, list[str]] = {}
     for path in _python_files():
-        if path == GUARD_MODULE or REPO_ROOT / "tests" not in path.parents:
+        if path in SELF_REFERRING or REPO_ROOT / "tests" not in path.parents:
             continue
         for text in _pinning_docstrings(path):
             _merge(pinned, _cited_in(text, _relative(path)))
@@ -244,6 +254,28 @@ class TestTheCitationsAndTheClausesDoNotDrift:
         assert undefined == {}, (
             f"these numbers are cited but are not clauses: {undefined}; state each in "
             "digitalearth.base.contract_clauses.CLAUSES, or correct the citation"
+        )
+
+    def test_the_guard_does_not_read_its_own_prose_as_a_citation(self):
+        """A guard that cites the numbers it explains must not count itself among the citers.
+
+        Test scenario:
+            The two self-exclusions were asymmetric (review R-N2): `_pins` skipped this module and
+            `_all_citations` did not, so every number this file spells while documenting the rule was
+            collected as a citation — and the docstring's own example of the spelling to avoid was
+            attributed to the clause it names. Both directions now skip both modules, which is what this
+            asserts: a sentence added here explaining a clause cannot make this file a citation site.
+        """
+        mine = f"{_relative(GUARD_MODULE)}:"
+        cited_here = sorted(
+            site
+            for sites in _all_citations().values()
+            for site in sites
+            if site.startswith(mine)
+        )
+        assert cited_here == [], (
+            f"the guard reads its own prose as citing the contract: {cited_here}; the module explains the "
+            "spelling rather than using it, so it belongs in SELF_REFERRING"
         )
 
     def test_every_clause_is_pinned_by_some_test(self):
