@@ -12,10 +12,13 @@ symbology as values — and the drawer here rebuilds the element from that descr
 refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
 one built from a `FeatureCollection` or a dataset already in memory is drawn from its description in this
 process and handed to a renderer directly. And a caller's keyword that does not travel in a figure — a
-colormap built on the spot, a callable hook, a container of any kind — is held on the map beside the layer
-rather than in its description (:func:`~digitalearth.interactive.base.describe_opts`), so a figure read back
-elsewhere draws that layer with the engine's default in its place. The static tier's module docstring states
-the same two, for the same reasons; both tiers lose exactly what
+colormap built on the spot, a callable hook, a tuple such as a dash pattern, an array — is held on the map
+beside the layer rather than in its description (:func:`~digitalearth.interactive.base.describe_opts`), so a
+figure read back elsewhere draws that layer with the engine's default in its place. A ``list`` or ``dict``
+of plain values is **not** in that half: JSON reads it back as itself, so it is described, which is what
+keeps a reloaded figure's palette (#330). Measured: ``describe_opts`` describes
+``color_levels=[0.0, 0.5, 1.0]`` and holds ``line_dash=(0, (5, 5))``. The static tier's module docstring
+states the same two, for the same reasons; both tiers lose exactly what
 :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses, and nothing else.
 
 **This tier composes rather than mutates.** PyVista hands out a live plotter whose actors are mutated in

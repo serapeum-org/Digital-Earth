@@ -14,10 +14,13 @@ layer rather than a rebuild of the scene around it.
 **Two things the description deliberately leaves out**, so "round-trips" is read for what it is. ``to_dict``
 refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
 one built from data already in memory is handed to a renderer directly instead. And of the caller's own
-engine keywords only the plain half is described — a string, a boolean, a finite number or ``None``, which
-is what :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts. A container, an array or an engine
-object stays on the scene beside the layer (:func:`drawing_opts`) and nowhere else, so a figure read back
-elsewhere draws *those* with the engine's defaults in their place.
+engine keywords only the half a figure carries is described — a string, a boolean, a finite number or
+``None``, and a ``list`` or ``dict`` built out of those, which is what
+:func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts. A tuple (which JSON reads back as a
+list), an array or an engine object stays on the scene beside the layer (:func:`drawing_opts`) and nowhere
+else, so a figure read back elsewhere draws *those* with the engine's defaults in their place. Measured:
+``described_opts`` describes ``levels=[0.0, 0.5, 1.0]`` and ``ticks={'a': 1}`` and holds
+``figsize=(8, 6)``.
 
 **This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
 :meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
