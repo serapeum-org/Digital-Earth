@@ -27,8 +27,9 @@ backend's job, and in the static tier there is exactly one place it happens.
 
 from dataclasses import dataclass, field
 from difflib import get_close_matches
-from math import isfinite
 from typing import Any, Dict, Mapping, Optional, Tuple
+
+import numpy as np
 
 from digitalearth.base.spec._serial import (
     FrozenDict,
@@ -39,6 +40,7 @@ from digitalearth.base.spec._serial import (
     read_entry,
     refuse_unknown,
     to_json_value,
+    travels_in_a_figure,
 )
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
@@ -446,7 +448,14 @@ class Symbology:
 #: than the typing does: an ``xyzservices.TileProvider`` **is** a mapping, and one of its values is the
 #: caller's API key, so anything that copied a container into a layer's description would write a credential
 #: to disk the next time the figure was saved.
-PORTABLE_VALUES: Tuple[type, ...] = (bool, int, float, str)
+#:
+#: ``np.generic`` is every numpy *scalar* and no array, so the family answers as one. Without it the tuple
+#: was a per-type accident (`R-L9`): ``np.float64`` subclasses `float` and lifted, while ``np.int64``,
+#: ``np.bool_``, ``np.float32`` and ``np.uint8`` subclass nothing here, so a tier that recorded a numpy
+#: number or flag published no channel at all and its layer crossed unstyled. Membership is not the whole
+#: gate — :func:`~digitalearth.base.spec._serial.travels_in_a_figure` is, and it is what still refuses
+#: ``datetime64``, a non-finite number and anything else no figure can be written with.
+PORTABLE_VALUES: Tuple[type, ...] = (bool, int, float, str, np.generic)
 
 
 def portable_constants(
@@ -495,9 +504,13 @@ def portable_constants(
             continue
         if not isinstance(value, PORTABLE_VALUES):
             continue
-        if isinstance(value, float) and not isfinite(value):
-            # A figure holding NaN or an infinity cannot be written at all — `to_dict` refuses the whole
-            # thing — so lifting one would turn a drawable layer into an unsavable figure.
+        if not travels_in_a_figure(value):
+            # The two gates ask different questions and neither subsumes the other. `PORTABLE_VALUES` asks
+            # whether this is one channel's constant at all, which is what refuses a palette and a tile
+            # provider; the shared rule asks whether a figure can be written with it, which is what refuses
+            # NaN, the infinities and `datetime64`. Lifting one of those would turn a drawable layer into a
+            # figure `Symbology.to_dict` refuses outright — and asking the rule rather than re-deriving it
+            # here is what keeps this module and `travels_in_a_figure` from drifting apart again (`R-L9`).
             continue
         lifted[channel] = Encoding.constant(channel, value)
     return lifted
