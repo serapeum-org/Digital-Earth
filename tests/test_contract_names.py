@@ -28,8 +28,10 @@ from digitalearth.base.contract import (
     ALIASES,
     CORE,
     PENDING,
+    ROADMAP_ORDERS,
     TIER2,
     alias_table,
+    orders_named_in,
     pending_for,
 )
 from tests.open_issues import KNOWN_OPEN_ISSUES, issues_named_in
@@ -456,6 +458,26 @@ class TestTheKeywordsAreThePromiseToo:
             f"a KEYWORD_SHORTFALLS reason names an issue nothing vouches for: {unvouched}. Name the "
             "roadmap order that settles it, or add the issue to tests/open_issues.py with its title if it "
             "is still open."
+        )
+
+    def test_every_order_a_shortfall_names_is_one_the_contract_declares(self):
+        """An order reference is a pointer into a plan, and nothing checked the other end (review R-L3).
+
+        Test scenario:
+            The same hole as the issue half, one table over: `OWNER_PATTERN` accepts any `order \\d+`, so a
+            row naming order 99 would read as tracked divergence. `ROADMAP_ORDERS` is the contract's own
+            vendored list of the orders it points at, and both tables are now held to it — a shortfall
+            cannot promise a step of a plan that has no such step.
+        """
+        invented = sorted(
+            f"{tier}.{method} -> {order!r}"
+            for (tier, method), (_, owner) in KEYWORD_SHORTFALLS.items()
+            for order in orders_named_in(owner)
+            if order not in ROADMAP_ORDERS
+        )
+        assert invented == [], (
+            f"a KEYWORD_SHORTFALLS reason names an order the contract does not declare: {invented}. Add it "
+            "to ROADMAP_ORDERS with what it builds, or correct the citation."
         )
 
     def test_the_allowlist_holds_nothing_either_table_stopped_naming(self):

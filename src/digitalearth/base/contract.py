@@ -17,6 +17,7 @@ would mean different things (`globe(True)` against `projection("globe")`), the t
 forwarding blindly.
 """
 
+import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import FrozenSet, Mapping, Optional, Tuple
@@ -26,12 +27,15 @@ __all__ = [
     "PLANNED_RENAMES",
     "CORE",
     "PENDING",
+    "ROADMAP_ORDERS",
     "TIER2",
     "Method",
     "alias_table",
     "core_method",
+    "orders_named_in",
     "pending_for",
     "planned_renames",
+    "roadmap_order",
 ]
 
 
@@ -102,6 +106,51 @@ _RENAME_ORDER = "order 27a"
 
 #: Where a figure learns to frame itself: order 26, auto-framing and camera round-trip.
 _FRAMING_ORDER = "order 26"
+
+#: Where a colour key stops being the most recent classification and becomes a guide on its own layer's
+#: encoding. Named here so the two 3-D rows that cite it are held to the same table as every other citation.
+_GUIDES_ORDER = "order 24"
+
+#: How a reason points at the roadmap. The letter is part of the number — order 27a is a step of its own that
+#: sits after 27, not a variant of it — so a pattern that stopped at the digits would read two orders as one.
+_ORDER_REFERENCE = re.compile(r"\border \d+[a-z]?")
+
+#: Every roadmap order a user-facing reason may name, with one line saying what it builds.
+#:
+#: **The roadmap is not in this repository** — it is the maintainer's planning document, and a reason naming
+#: `order 26` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
+#: "order 99" satisfied every guard, because the guards only ever asked whether the *form* was an order rather
+#: than a wave (review R-L3). Measured before this table: a `PENDING` row rewritten to name order 99 passed all
+#: three checks in `TestAPendingReasonPointsAtLiveWork`.
+#:
+#: A test cannot read the document — it is not here to read, and a suite that reached outside the repository
+#: for it would fail for everyone who does not have it. So what is vendored is the part a citation needs: the
+#: orders this contract points at, and what each one builds. That is enough for a reader to know what they are
+#: being promised without going and finding the plan, and enough for the guard to refuse a number nobody wrote
+#: down. It is the bargain :data:`~tests.open_issues.KNOWN_OPEN_ISSUES` strikes for issue numbers, for the same
+#: reason and with the same cost: extending it is a deliberate act.
+#:
+#: The keys are the constants above rather than repeated strings, so a citation and its entry cannot disagree.
+ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
+    {
+        _LAYER_MANAGEMENT_ORDER: (
+            "layer management — the public toggle, reorder and replace on each tier, over the renderers' "
+            "own set_visible/is_visible that Wave 6 landed"
+        ),
+        _GUIDES_ORDER: (
+            "a legend and a colorbar that follow their own layer, as guides on its encoding rather than on "
+            "the most recent classification"
+        ),
+        _FRAMING_ORDER: (
+            "auto-framing and camera round-trip: a figure that frames itself on its data, and a viewport "
+            "that carries the bounds it was framed on"
+        ),
+        _RENAME_ORDER: (
+            "the Core contract's remainder — the renames each tier has agreed to and not adopted "
+            "(:data:`PLANNED_RENAMES`), plus the divergences the frozen contract did not settle"
+        ),
+    }
+)
 
 
 def _drawn_as(old: str) -> str:
@@ -505,3 +554,78 @@ def pending_for(backend: str) -> Mapping[str, str]:
             ```
     """
     return PENDING.get(backend, MappingProxyType({}))
+
+
+def orders_named_in(reason: str) -> Tuple[str, ...]:
+    """Return every roadmap order a reason points at, in the order it names them.
+
+    This is the one reading of "an order reference", so a guard over a reason and the reason itself cannot
+    disagree about where one ends. In particular the letter belongs to the number: `order 27a` is a step of
+    its own, and a pattern stopping at the digits would read it as order 27.
+
+    Args:
+        reason: A user-facing string — a `PENDING` reason, or a keyword shortfall's.
+
+    Returns:
+        The orders named, each spelled as :data:`ROADMAP_ORDERS` keys it. Empty for a reason that names none,
+        which is allowed: an open issue and the word "unscheduled" are the other two honest answers.
+
+    Examples:
+        - A reason that names one:
+            ```python
+            >>> from digitalearth.base.contract import orders_named_in, pending_for
+            >>> orders_named_in(pending_for("interactive")["set_bounds"])
+            ('order 26',)
+
+            ```
+        - The letter is part of the number:
+            ```python
+            >>> from digitalearth.base.contract import orders_named_in
+            >>> orders_named_in("adopting the Core spelling is order 27a")
+            ('order 27a',)
+
+            ```
+    """
+    return tuple(_ORDER_REFERENCE.findall(reason))
+
+
+def roadmap_order(order: str) -> str:
+    """Return what one roadmap order builds.
+
+    Args:
+        order: The order, spelled as a reason names it — `"order 26"`.
+
+    Returns:
+        One line saying what that order builds.
+
+    Raises:
+        KeyError: for an order this contract does not point at, naming the ones it does. A reason may only
+            cite an order that is written down here, so a number nobody wrote down fails loudly rather than
+            reading as a plan (review R-L3).
+
+    Examples:
+        - What a caller waiting on `set_bounds` is waiting for:
+            ```python
+            >>> from digitalearth.base.contract import roadmap_order
+            >>> roadmap_order("order 26").split(":")[0]
+            'auto-framing and camera round-trip'
+
+            ```
+        - An order nobody wrote down is refused with the ones there are:
+            ```python
+            >>> from digitalearth.base.contract import roadmap_order
+            >>> try:
+            ...     roadmap_order("order 99")
+            ... except KeyError as error:
+            ...     print(error.args[0])
+            'order 99' is not a roadmap order this contract names; it names order 23, order 24, order 26, order 27a
+
+            ```
+    """
+    try:
+        return ROADMAP_ORDERS[order]
+    except KeyError:
+        raise KeyError(
+            f"{order!r} is not a roadmap order this contract names; it names "
+            + ", ".join(sorted(ROADMAP_ORDERS))
+        ) from None

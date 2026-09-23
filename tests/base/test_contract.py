@@ -13,10 +13,12 @@ import pytest
 from digitalearth.base.contract import (
     CORE,
     PENDING,
+    ROADMAP_ORDERS,
     TIER2,
     Method,
     alias_table,
     core_method,
+    orders_named_in,
     pending_for,
 )
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
@@ -210,6 +212,20 @@ def _issues_named_in_reasons():
     ]
 
 
+def _orders_named_in_reasons():
+    """Return every roadmap order a `PENDING` reason names, as `[(backend, name, order)]`.
+
+    Returns:
+        One row per reference, so a reason naming two orders is reported twice and both are checked.
+    """
+    return [
+        (backend, name, order)
+        for backend, table in PENDING.items()
+        for name, reason in table.items()
+        for order in orders_named_in(reason)
+    ]
+
+
 class TestAPendingReasonPointsAtLiveWork:
     """A reason is a forward promise, so the thing it points at has to still be ahead (#319).
 
@@ -286,4 +302,67 @@ class TestAPendingReasonPointsAtLiveWork:
         ]
         assert dated == [], (
             f"a declared build order names a wave, which renumbers when the plan moves: {dated}"
+        )
+
+    def test_no_reason_names_an_order_the_contract_does_not_declare(self):
+        """An order reference was accepted unconditionally, so `order 99` read as a plan (review R-L3).
+
+        Test scenario:
+            The issue half of this rule has had an allowlist since #319; the order half had nothing — the
+            checks above ask only whether the form is an order rather than a wave, and "order 99" is a
+            perfectly well-formed order. Measured before :data:`ROADMAP_ORDERS` existed: a `PENDING` row
+            rewritten to name order 99 passed all three of them. The roadmap itself is outside this
+            repository, so what is checked against is the vendored list of the orders this contract points
+            at — enough to refuse a number nobody wrote down, and enough for a reader to see what each one
+            builds without going and finding the plan.
+        """
+        invented = sorted(
+            f"{backend}.{name} -> {order!r}"
+            for backend, name, order in _orders_named_in_reasons()
+            if order not in ROADMAP_ORDERS
+        )
+        assert invented == [], (
+            f"a PENDING reason names an order the contract does not declare: {invented}. Add it to "
+            "ROADMAP_ORDERS with what it builds, or correct the citation."
+        )
+
+    def test_no_declared_build_order_is_one_the_contract_does_not_declare(self):
+        """`Method.builds_in` is read out by `core_method(...)`, so the same rule governs it.
+
+        Test scenario:
+            The same pairing as the wave check above: a `builds_in` is shown to a user asking when a name
+            arrives, so it has to point somewhere real. `TIER2` is read too, since a name that must agree
+            wherever it appears may declare one.
+        """
+        invented = [
+            (method.name, order)
+            for method in CORE + TIER2
+            if method.builds_in
+            for order in orders_named_in(method.builds_in)
+            if order not in ROADMAP_ORDERS
+        ]
+        assert invented == [], (
+            f"a declared build order names an order the contract does not declare: {invented}"
+        )
+
+    def test_the_declared_orders_are_all_still_cited(self):
+        """The other direction: a vendored order nothing points at is the next thing to go stale.
+
+        Test scenario:
+            :data:`ROADMAP_ORDERS` is a copy of four lines of a document that lives elsewhere, which is
+            exactly the shape that rots. An order stops being cited when the work lands and its `PENDING`
+            rows come off — and the entry describing it should come off in the same change, not survive as
+            a description of something already built.
+        """
+        cited = {order for _, _, order in _orders_named_in_reasons()}
+        cited |= {
+            order
+            for method in CORE + TIER2
+            if method.builds_in
+            for order in orders_named_in(method.builds_in)
+        }
+        orphaned = sorted(set(ROADMAP_ORDERS) - cited)
+        assert orphaned == [], (
+            f"ROADMAP_ORDERS describes {orphaned}, which no PENDING reason and no declared build order "
+            "names any more; take each off now that nothing is waiting on it"
         )
