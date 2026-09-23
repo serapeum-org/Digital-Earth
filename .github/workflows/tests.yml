@@ -523,7 +523,15 @@ jobs:
           xvfb-run -a pixi run -e all test-backends
 
       - name: Upload coverage reports to Codecov with GitHub Action
+        # The one upload in this workflow that carries a flag. Every other job runs a whole tier's suite, so
+        # its report is a fair sample of the tree; `test-backends` runs two modules, and an untagged
+        # two-module report merged into the project total moves the reported figure with nothing on the
+        # report saying which job moved it (review R-N3). The flag does not keep it out of the total — every
+        # upload for a commit is merged — it makes this one attributable in the Codecov UI and addressable by
+        # name in a future `codecov.yml`.
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          flags: backends
 
   # The web notebook gallery, rendered headless in the web env (anywidget -> HTML; no browser needed).
   notebooks-web:
