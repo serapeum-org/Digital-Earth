@@ -190,12 +190,95 @@ PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
 )
 
 
+#: The paint values this tier's builders write when the caller asked for nothing, by paint property.
+#:
+#: **Why this table has to exist.** ``props["paint"]`` is the *resolved* style: a builder writes
+#: ``circle-radius`` whether the caller passed ``size=`` or not, so the dict that reaches
+#: :func:`portable_encodings` cannot tell an ask from a default. Publishing it wholesale made an unstyled
+#: ``points(features)`` claim ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` as the caller's own style,
+#: against the interactive tier's ``{'size': 6.0}`` for the same call — two tiers publishing two sets of
+#: defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
+#:
+#: **What is listed.** One row per paint property a builder writes unasked, with the value(s) it writes.
+#: Every row was measured by drawing that builder with no style keywords and reading back
+#: ``symbology.props["paint"]``: ``points`` (5.0 / 0.9 / ``#3388ff``), ``lines`` (2.0 / 1.0 / ``#3388ff``),
+#: ``polygons`` (0.6 / ``#3388ff``), ``choropleth`` (0.85), ``contours`` (1.5 / 1.0), ``labels``
+#: (``#ffffff``), ``extrusion`` (0.9 / ``#3388ff``) and ``heatmap`` (0.8). A key with two rows has two
+#: builders defaulting it differently — ``fill-opacity`` is 0.6 for a plain polygon and 0.85 for a
+#: choropleth.
+#:
+#: **What it costs, deliberately.** A caller who explicitly asks for a value this tier also defaults to —
+#: ``points(size=5.0)`` — publishes nothing for that channel, so a figure carried to another tier is drawn
+#: at *that* tier's default. That is the loss the conformance suite already calls acceptable: "Which default
+#: a tier picks is not what a round trip has to agree about". The opposite error is not acceptable, because
+#: it silently repaints a layer nobody styled.
+UNASKED_PAINT: Mapping[str, Tuple[Any, ...]] = MappingProxyType(
+    {
+        "circle-color": ("#3388ff",),
+        "circle-opacity": (0.9,),
+        "circle-radius": (5.0,),
+        "fill-color": ("#3388ff",),
+        "fill-extrusion-color": ("#3388ff",),
+        "fill-extrusion-opacity": (0.9,),
+        "fill-opacity": (0.6, 0.85),
+        "heatmap-opacity": (0.8,),
+        "line-color": ("#3388ff",),
+        "line-opacity": (1.0,),
+        "line-width": (1.5, 2.0),
+        "text-color": ("#ffffff",),
+    }
+)
+
+
+def asked_for(key: str, value: Any, unasked: Mapping[str, Tuple[Any, ...]]) -> bool:
+    """Say whether a resolved style value is evidence that a caller asked for it.
+
+    Args:
+        key: The style property, spelled the way the tier records it.
+        value: What the tier resolved it to.
+        unasked: The values that tier's builders write when nobody asked — :data:`UNASKED_PAINT` here.
+
+    Returns:
+        `False` when the value is one the builders write unasked, `True` otherwise. The type is compared as
+        well as the value so that `True` is not read as the default `1.0` — in Python `True == 1.0`, and a
+        boolean flag silently matching a numeric default would drop a real ask.
+
+    Examples:
+        - A radius nobody asked for is not evidence of an ask; one that differs is:
+            ```python
+            >>> from digitalearth.web.renderer import UNASKED_PAINT, asked_for
+            >>> asked_for("circle-radius", 5.0, UNASKED_PAINT)
+            False
+            >>> asked_for("circle-radius", 12.0, UNASKED_PAINT)
+            True
+
+            ```
+        - A property no builder defaults is always the caller's:
+            ```python
+            >>> from digitalearth.web.renderer import UNASKED_PAINT, asked_for
+            >>> asked_for("circle-blur", 0.5, UNASKED_PAINT)
+            True
+
+            ```
+    """
+    return not any(
+        type(value) is type(default) and value == default
+        for default in unasked.get(key, ())
+    )
+
+
 def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
-    """Return the declared channels a web layer's recorded paint says it drives.
+    """Return the declared channels a web layer's recorded paint says the **caller** asked for.
 
     Additive by construction: it reads ``props["paint"]`` and writes nothing back, so every drawer keeps
     rebuilding its layer from the paint dict it was given and the engine-exact redraw is untouched. What it
     produces is the *second* reading of the same style — the one another tier, and `to_backend()`, can act on.
+
+    A paint property whose value is one this tier's builders write unasked (:data:`UNASKED_PAINT`) is passed
+    over rather than published. The figure does not record which keywords the caller named — every builder
+    resolves its defaults before the paint dict is built — so this comparison is the only attribution
+    available, and publishing an unattributed value as an `Encoding` is what made an unstyled layer carry one
+    tier's defaults onto another (review R-H2).
 
     Args:
         symbology: The layer's recorded style, as the builder wrote it.
@@ -218,6 +301,15 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             (['color', 'opacity', 'size'], 7.0)
 
             ```
+        - The same paint as `points()` writes it when nobody styled the layer publishes nothing at all:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.web.renderer import portable_encodings
+            >>> unstyled = {"circle-radius": 5.0, "circle-opacity": 0.9, "circle-color": "#3388ff"}
+            >>> sorted(portable_encodings(Symbology(props={"paint": unstyled})))
+            []
+
+            ```
         - A classified fill is an expression, so the colour channel is left unclaimed:
             ```python
             >>> from digitalearth.base.spec import Symbology
@@ -231,7 +323,12 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
     paint = symbology.props.get("paint")
     if not isinstance(paint, dict):
         return {}
-    return portable_constants(paint, PAINT_CHANNELS)
+    asked = {
+        key: value
+        for key, value in paint.items()
+        if asked_for(key, value, UNASKED_PAINT)
+    }
+    return portable_constants(asked, PAINT_CHANNELS)
 
 
 def _show(drawn: DrawnLayer, visible: bool) -> None:

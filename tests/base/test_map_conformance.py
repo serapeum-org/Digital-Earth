@@ -621,6 +621,34 @@ class MapConformanceBase:
             f"{symbology.encoding('size').resolve()!r}"
         )
 
+    def test_an_unstyled_layer_publishes_no_portable_channel(self, drawn):
+        """A layer nobody styled must publish no caller intent, because there was none to publish.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The other half of the probe above, and the one the module docstring already promised: *"Which
+            default a tier picks is not what a round trip has to agree about; what a caller **asked** for
+            is."* `Symbology.encodings` is the field `to_backend()` (order 33) will read, so a tier that
+            lifts its own builder defaults into it publishes them **as** the caller's intent — and the two
+            tiers' defaults differ, so carrying an unstyled web layer across would draw it at the web
+            tier's colour, opacity and size rather than the target tier's own (review R-H2). Measured
+            before the fix: the web tier published `{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}` and
+            the interactive tier `{'size': 6.0}` for the same `points(features)`.
+        """
+        drawn.points(_points())
+        figure = drawn.figure_spec
+        symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+        published = {
+            channel: symbology.encoding(channel).resolve()
+            for channel in sorted(symbology.encodings)
+        }
+        assert published == {}, (
+            f"the {self.backend} tier was asked for an unstyled layer and published {published} as the "
+            "caller's own style; a value its builder defaulted to is the tier's business, not a portable ask"
+        )
+
     def test_this_tier_contributes_a_non_zero_count_of_probes(self):
         """A tier whose class is live must really bring every probe with it.
 

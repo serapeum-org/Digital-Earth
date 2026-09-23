@@ -28,10 +28,13 @@ from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbo
 from digitalearth.base.spec.style import portable_constants
 
 __all__ = [
+    "ASKED_BUCKET",
     "CHANNEL_KEYWORDS",
     "CHANNEL_OPTIONS",
+    "DERIVED_BUCKET",
     "INTERACTIVE_STYLE_SCHEMA",
     "STYLE_BUCKETS",
+    "UNASKED_STYLE",
     "ChannelOption",
     "allowed_options",
     "fold_symbology",
@@ -277,23 +280,84 @@ CHANNEL_KEYWORDS: Mapping[str, str] = MappingProxyType(
     }
 )
 
+#: The bucket a builder files the style it **derived** under — defaults included, so a value here is not
+#: evidence that anyone asked for it.
+DERIVED_BUCKET: str = "common"
+
+#: The bucket a builder files the caller's **own** ``**opts`` under. Every key here was written by the
+#: caller, which is what makes it liftable without a second question.
+ASKED_BUCKET: str = "opts"
+
 #: The props a builder files its resolved HoloViews style under, in the precedence the drawer applies.
 #:
 #: A builder writes the style it derived into ``common`` and the caller's own keywords into ``opts``, and
 #: every drawer merges the second over the first — so an explicit keyword outranks a derived one, and the
 #: lift below must read them in the same order. A few builders (``image``, ``rgb``) write their flat style
 #: at the top level of ``props`` instead, which is why the mapping itself is read first.
-STYLE_BUCKETS: Tuple[str, ...] = ("common", "opts")
+STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
+
+#: The derived-bucket values this tier's builders write when the caller asked for nothing.
+#:
+#: **Why this table has to exist.** ``opts`` is the caller's own, but a builder also writes its resolved
+#: parameters into ``common`` and into the flat top level — ``points`` writes ``size`` there whether or not
+#: ``size=`` was passed, and ``image``/``rgb`` write ``alpha`` the same way. Publishing those made an
+#: unstyled ``points(features)`` claim ``{'size': 6.0}`` as the caller's own style, against the web tier's
+#: ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` for the same call — two tiers publishing two sets
+#: of defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
+#:
+#: **What is listed.** Measured by drawing each builder with no style keywords and reading back
+#: ``symbology.props``: ``points`` records ``common['size'] == 6.0`` and ``image``/``rgb`` record a flat
+#: ``alpha == 1.0``. Nothing else this tier derives drives a declared channel — a classified ``color`` is a
+#: value dimension and is refused below, and ``fill_alpha``/``cmap``/``colorbar`` drive no channel at all.
+#:
+#: **What it costs, deliberately.** A caller who asks for exactly the default — ``points(size=6.0)`` —
+#: publishes no ``size``, so a figure carried elsewhere is drawn at that tier's own default. The conformance
+#: suite already calls that acceptable: "Which default a tier picks is not what a round trip has to agree
+#: about". Publishing it anyway is not, because it repaints a layer nobody styled. A caller who writes the
+#: same value through ``**opts`` is unaffected — that bucket is never filtered.
+UNASKED_STYLE: Mapping[str, Tuple[Any, ...]] = MappingProxyType(
+    {"alpha": (1.0,), "size": (6.0,)}
+)
+
+
+def _asked_constants(flat: Mapping[str, Any]) -> Dict[str, Encoding]:
+    """Lift a derived bucket's channel values, skipping the ones no caller asked for.
+
+    Args:
+        flat: One derived bucket of the recorded style — ``props`` itself or ``props['common']``.
+
+    Returns:
+        The same mapping :func:`~digitalearth.base.spec.style.portable_constants` would give, minus every
+        key whose value is one :data:`UNASKED_STYLE` says this tier's builders write unasked. The type is
+        compared as well as the value so `True` is not read as the default `1.0` — in Python `True == 1.0`,
+        and a boolean flag matching a numeric default would drop a real ask.
+    """
+    asked = {
+        key: value
+        for key, value in flat.items()
+        if not any(
+            type(value) is type(default) and value == default
+            for default in UNASKED_STYLE.get(key, ())
+        )
+    }
+    return portable_constants(asked, CHANNEL_KEYWORDS)
 
 
 def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
-    """Return the declared channels an interactive layer's recorded options say it drives.
+    """Return the declared channels an interactive layer's recorded options say the **caller** asked for.
 
     Additive by construction: the resolved HoloViews options stay exactly where every drawer reads them, and
     this writes a second, portable reading of the same style beside them — the one another tier, and
     `to_backend()`, can act on (#328). Nothing here renames a keyword: `alpha` is still `alpha` in the
     props a drawer applies, and the channel it drives is recorded as `opacity` because that is what the
     vocabulary calls it.
+
+    The two buckets are read differently, because they mean different things. ``opts`` holds the caller's
+    own ``**opts`` and is lifted as it stands; ``common`` and the flat top level hold what the builder
+    *derived*, defaults included, so a value :data:`UNASKED_STYLE` names there is passed over rather than
+    published. The figure records no list of the keywords a caller named, so that comparison is the only
+    attribution available — and publishing an unattributed value as an `Encoding` is what made an unstyled
+    layer carry one tier's defaults onto another (review R-H2).
 
     Args:
         symbology: The layer's recorded style, as the builder wrote it.
@@ -318,6 +382,23 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             (['opacity', 'size'], 7.0, 0.5)
 
             ```
+        - The same options as `points()` writes them when nobody styled the layer publish nothing at all:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> sorted(portable_encodings(Symbology(props={"common": {"size": 6.0}, "opts": {}})))
+            []
+
+            ```
+        - The caller's own bucket is never filtered, so asking for the default there still publishes it:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> asked = portable_encodings(Symbology(props={"opts": {"alpha": 1.0}}))
+            >>> sorted(asked), asked["opacity"].resolve()
+            (['opacity'], 1.0)
+
+            ```
         - A colour that names a value dimension is a column, not a colour, so it is left unclaimed:
             ```python
             >>> from digitalearth.base.spec import Symbology
@@ -329,11 +410,15 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             ```
     """
     props = dict(symbology.props)
-    lifted = portable_constants(props, CHANNEL_KEYWORDS)
+    lifted = _asked_constants(props)
     for bucket in STYLE_BUCKETS:
         held = props.get(bucket)
-        if isinstance(held, dict):
+        if not isinstance(held, dict):
+            continue
+        if bucket == ASKED_BUCKET:
             lifted.update(portable_constants(held, CHANNEL_KEYWORDS))
+        else:
+            lifted.update(_asked_constants(held))
     coloured = lifted.get("color")
     dimensions = {str(name) for name in (props.get("vdims") or ())}
     if coloured is not None and coloured.value in dimensions:
