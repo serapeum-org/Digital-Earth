@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.clim import sample_evenly, stack_clim
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.base.spec._serial import thawed_value
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
@@ -81,9 +80,10 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         )
     cmap = cmap or "viridis"
     labels = props.get("labels")
-    # Only the slider keys are thawed: a symbology stores every sequence as a tuple, and `clim` beside
-    # them *is* a pair — HoloViews reads it as one, and a list where a tuple belongs is not honoured.
-    keys = thawed_value(labels) if labels is not None else list(range(len(members)))
+    # `held_props` is this tier's one read boundary and thaws the described half there, so the labels
+    # arrive as a list whichever half they came from — the caller's own, or thawed back out of a frozen
+    # description (#330). Copied rather than thawed, so the slider's keys are not the held list itself.
+    keys = list(labels) if labels is not None else list(range(len(members)))
     key_to_index = {key: index for index, key in enumerate(keys)}
     common = {
         "cmap": cmap,
