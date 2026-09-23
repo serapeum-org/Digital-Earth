@@ -62,6 +62,7 @@ from digitalearth.base.spec import (
     PanelSpec,
     Symbology,
     Viewport,
+    free_layer_id,
 )
 from digitalearth.base.spec._serial import travels_in_a_figure
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
@@ -362,15 +363,17 @@ class Scene(WatermarkMixin):
             name: The caller's own name for the layer, used as its id when it is free.
 
         Returns:
-            The id. A caller's name that collides with one already issued is suffixed, because two layers
-            sharing an id makes the second unaddressable.
+            The id. A caller's name that is already issued is suffixed ``-2``, ``-3``, … by
+            :func:`~digitalearth.base.spec.layer.free_layer_id` — the rule all four tiers share (#321) —
+            because two layers sharing an id makes the second unaddressable.
         """
-        candidate = name or ""
-        while not candidate or candidate in self._issued_ids:
+        if name:
+            candidate = free_layer_id(name, self._issued_ids.__contains__)
+        else:
             self._id_counter += 1
-            candidate = (
-                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
-            )
+            while f"{prefix}-{self._id_counter}" in self._issued_ids:
+                self._id_counter += 1
+            candidate = f"{prefix}-{self._id_counter}"
         self._issued_ids.add(candidate)
         return candidate
 
@@ -620,7 +623,15 @@ class Scene(WatermarkMixin):
                 del self._layer_labels[index]
                 return
 
-    def _add_layer(self, glyph: Any, mappable: Any, label: Optional[str] = None) -> Any:
+    def _add_layer(
+        self,
+        glyph: Any,
+        mappable: Any,
+        label: Optional[str] = None,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Any:
         """Register an artist the caller built themselves, and describe it as a custom layer.
 
         Not the builders' path: an artist somebody built by hand has no source to reference and no
@@ -636,6 +647,11 @@ class Scene(WatermarkMixin):
             glyph: The cleopatra glyph instance that was drawn on :attr:`ax`, or ``None``.
             mappable: The matplotlib mappable/artist to register.
             label: Optional default colorbar label for this layer.
+            name: The caller's own name for the layer, used as its id; ``None`` (default) generates
+                ``custom-1``, ``custom-2``, … A name already on the figure is suffixed ``-2``, ``-3``, …
+                (#321).
+            visible: Whether the layer is drawn. ``False`` registers it hidden **and** describes it
+                hidden (#327).
 
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
@@ -643,6 +659,8 @@ class Scene(WatermarkMixin):
         return self._draw(
             LayerRecord(
                 custom_kind(ENGINE),
+                name=name,
+                visible=visible,
                 symbology=Symbology(props={"via": "custom"}),
                 held=(glyph, mappable, label),
             )

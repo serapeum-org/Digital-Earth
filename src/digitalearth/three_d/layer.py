@@ -20,7 +20,7 @@ from typing import Any, Dict, Mapping
 
 import numpy as np
 
-from digitalearth.base.spec import DataRef, LayerTree
+from digitalearth.base.spec import DataRef, LayerTree, free_layer_id
 
 __all__ = ["REFERENCE_KEY", "next_layer_id", "ref", "resolved"]
 
@@ -37,8 +37,9 @@ def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
         name: The caller's name for the layer, if any.
 
     Returns:
-        `name` when it is a non-empty string and free, `name` suffixed (`"wells-2"`) when it is taken, else
-        `"<kind>-<n>"` with the lowest `n` that is free. A `custom:pyvista` kind generates `custom-1`, since a
+        `name` when it is a non-empty string and free, `name` suffixed (`"wells-2"`) when it is taken —
+        through :func:`~digitalearth.base.spec.layer.free_layer_id`, the rule all four tiers share (#321) —
+        else `"<kind>-<n>"` with the lowest `n` that is free. A `custom:pyvista` kind generates `custom-1`, since a
         colon cannot appear in the middle of an id.
 
     Examples:
@@ -62,12 +63,7 @@ def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
     """
     taken = set(tree.ids)
     if isinstance(name, str) and name.strip():
-        if name not in taken:
-            return name
-        suffix = 2
-        while f"{name}-{suffix}" in taken:
-            suffix += 1
-        return f"{name}-{suffix}"
+        return free_layer_id(name, taken.__contains__)
     stem = kind.split(":")[0]
     number = 1
     while f"{stem}-{number}" in taken:

@@ -548,7 +548,17 @@ class DecorationMixin(_MixinBase):
             return None
         return x[0], y[0]
 
-    def text(self, lon: float, lat: float, s: str, *, crs: Any = 4326, **kwargs) -> Any:
+    def text(
+        self,
+        lon: float,
+        lat: float,
+        s: str,
+        *,
+        crs: Any = 4326,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Place a text label at a ``lon``/``lat`` location (reprojected to the display CRS).
 
         The point is reprojected from ``crs`` (lon/lat by default) into the display CRS via pyramids, then
@@ -560,6 +570,11 @@ class DecorationMixin(_MixinBase):
             lat: Latitude (y) of the label, in ``crs``.
             s: The text to draw.
             crs: CRS of ``lon``/``lat`` (default ``4326`` = WGS84 lon/lat).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``Axes.text`` (e.g. ``ha``, ``va``, ``fontsize``, ``color``).
 
         Returns:
@@ -568,6 +583,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 "text",
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "text",
@@ -591,6 +608,8 @@ class DecorationMixin(_MixinBase):
         *,
         xytext: Any = None,
         crs: Any = 4326,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs,
     ) -> Any:
         """Annotate a ``lon``/``lat`` location (reprojected), optionally with an arrow.
@@ -606,6 +625,11 @@ class DecorationMixin(_MixinBase):
             xytext: Optional text position (in the coordinate system given by ``textcoords``/``kwargs``); with
                 ``arrowprops`` an arrow is drawn from there to the point.
             crs: CRS of ``lon``/``lat`` (default ``4326``).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``Axes.annotate`` (e.g. ``arrowprops``, ``textcoords``, ``fontsize``).
 
         Returns:
@@ -614,6 +638,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 "text",
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "annotate",
@@ -634,6 +660,8 @@ class DecorationMixin(_MixinBase):
         *,
         zorder: float = -3.0,
         cmap: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs,
     ) -> Any:
         """Draw a background raster (a "stock image" backdrop) beneath all data layers.
@@ -655,6 +683,11 @@ class DecorationMixin(_MixinBase):
                 one from the backdrop's own variable via
                 :func:`~digitalearth.base.autostyle.auto_style` — so a DEM backdrop is coloured as terrain
                 — falling back to :data:`STOCK_IMG_CMAP` when the lookup has no opinion.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`imshow` (raster) or :meth:`basemap` (tiles).
 
         Returns:
@@ -663,7 +696,7 @@ class DecorationMixin(_MixinBase):
         """
         if dataset is None:
             try:
-                return self.basemap(**kwargs)
+                return self.basemap(name=name, visible=visible, **kwargs)
             except Exception as exc:  # tile servers unavailable — best-effort backdrop
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
@@ -674,6 +707,8 @@ class DecorationMixin(_MixinBase):
             im = self.imshow(
                 dataset,
                 cmap=cmap,
+                name=name,
+                visible=visible,
                 default_cmap=STOCK_IMG_CMAP,
                 draw_band="underlay",
                 zorder=zorder,
@@ -783,6 +818,8 @@ class DecorationMixin(_MixinBase):
         *,
         polygon: bool = False,
         zorder: float = 0.5,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs,
     ) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
@@ -801,6 +838,11 @@ class DecorationMixin(_MixinBase):
             resolution: Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
             zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Style overrides, laid over the layer's defaults (:data:`_NATURAL_EARTH_STYLE`) when it
                 is drawn. Held beside the layer exactly as passed, and the plain ones described as well, so
                 a figure read back elsewhere still draws them (see
@@ -815,6 +857,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 _NATURAL_EARTH_KINDS[layer],
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": layer,
@@ -829,11 +873,23 @@ class DecorationMixin(_MixinBase):
             )
         )
 
-    def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -844,13 +900,27 @@ class DecorationMixin(_MixinBase):
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
             on a flat map).
         """
-        return self._natural_earth("coastline", resolution, zorder=2.5, **kwargs)
+        return self._natural_earth(
+            "coastline", resolution, zorder=2.5, name=name, visible=visible, **kwargs
+        )
 
-    def borders(self, resolution: str = "110m", **kwargs) -> Any:
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Overlay Natural-Earth country borders.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -861,9 +931,18 @@ class DecorationMixin(_MixinBase):
             The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth("borders", resolution, zorder=2.5, **kwargs)
+        return self._natural_earth(
+            "borders", resolution, zorder=2.5, name=name, visible=visible, **kwargs
+        )
 
-    def land(self, resolution: str = "110m", **kwargs) -> Any:
+    def land(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Fill Natural-Earth land polygons.
 
         On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
@@ -872,6 +951,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -883,10 +967,23 @@ class DecorationMixin(_MixinBase):
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "land", resolution, polygon=True, zorder=-1.5, **kwargs
+            "land",
+            resolution,
+            polygon=True,
+            zorder=-1.5,
+            name=name,
+            visible=visible,
+            **kwargs,
         )
 
-    def ocean(self, resolution: str = "110m", **kwargs) -> Any:
+    def ocean(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Fill Natural-Earth ocean polygons.
 
         On a **globe** map, ``ocean`` fills the whole projection disc (the boundary ring) with the ocean
@@ -895,6 +992,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -911,11 +1013,26 @@ class DecorationMixin(_MixinBase):
             # drawer reads the globe flag off the scene, so what differs here is only the draw order this
             # layer is recorded with.
             return self._natural_earth(
-                "ocean", resolution, polygon=True, zorder=-2.0, **kwargs
+                "ocean",
+                resolution,
+                polygon=True,
+                zorder=-2.0,
+                name=name,
+                visible=visible,
+                **kwargs,
             )
-        return self._natural_earth("ocean", resolution, **kwargs)
+        return self._natural_earth(
+            "ocean", resolution, name=name, visible=visible, **kwargs
+        )
 
-    def lakes(self, resolution: str = "110m", **kwargs) -> Any:
+    def lakes(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Fill Natural-Earth lake polygons.
 
         Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
@@ -923,6 +1040,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -934,14 +1056,32 @@ class DecorationMixin(_MixinBase):
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "lakes", resolution, polygon=True, zorder=-1.4, **kwargs
+            "lakes",
+            resolution,
+            polygon=True,
+            zorder=-1.4,
+            name=name,
+            visible=visible,
+            **kwargs,
         )
 
-    def rivers(self, resolution: str = "110m", **kwargs) -> Any:
+    def rivers(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -952,7 +1092,9 @@ class DecorationMixin(_MixinBase):
             The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth("rivers", resolution, zorder=2.4, **kwargs)
+        return self._natural_earth(
+            "rivers", resolution, zorder=2.4, name=name, visible=visible, **kwargs
+        )
 
     def basemap(
         self,
@@ -960,6 +1102,8 @@ class DecorationMixin(_MixinBase):
         *,
         api_key: Optional[str] = None,
         preset: Optional[dict] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs: Any,
     ) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
@@ -982,6 +1126,11 @@ class DecorationMixin(_MixinBase):
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
                 ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to
                 ``add_tiles``, and the three tiers take presets the same way.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
@@ -1026,7 +1175,9 @@ class DecorationMixin(_MixinBase):
                     f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
                     f"only to a keyed preset such as 'Planet.NICFI'"
                 )
-        return self._describe_basemap(source, preset, api_key, kwargs)
+        return self._describe_basemap(
+            source, preset, api_key, kwargs, name=name, visible=visible
+        )
 
     def _describe_basemap(
         self,
@@ -1034,6 +1185,8 @@ class DecorationMixin(_MixinBase):
         preset: Optional[dict],
         api_key: Optional[str],
         options: dict,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Any:
         """Record the basemap this map should draw and let :func:`draw_basemap` fetch it.
 
@@ -1058,6 +1211,11 @@ class DecorationMixin(_MixinBase):
             preset: The keyed preset's own keywords, or ``None``.
             api_key: The credential for a keyed preset, or ``None`` to read it from the environment.
             options: The keywords forwarded to ``add_tiles``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
 
         Returns:
             Whatever ``add_tiles`` returned. Not ``None``: tiles that cannot be fetched raise, and the
@@ -1076,6 +1234,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 "basemap",
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "basemap",

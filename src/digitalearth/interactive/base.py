@@ -51,6 +51,7 @@ from digitalearth.base.spec import (
     PanelSpec,
     Symbology,
     Viewport,
+    free_layer_id,
 )
 from digitalearth.base.spec._serial import travels_in_a_figure
 from digitalearth.base.spec.bounds import same_crs
@@ -575,15 +576,17 @@ class InteractiveMapBase:
             name: The caller's own name for the layer, used as its id when it is free.
 
         Returns:
-            The id. A caller's name that collides with one already issued is suffixed, because two layers
-            sharing an id makes the second unaddressable.
+            The id. A caller's name that is already issued is suffixed ``-2``, ``-3``, … by
+            :func:`~digitalearth.base.spec.layer.free_layer_id` — the rule all four tiers share (#321) —
+            because two layers sharing an id makes the second unaddressable.
         """
-        candidate = name or ""
-        while not candidate or candidate in self._issued_ids:
+        if name:
+            candidate = free_layer_id(name, self._issued_ids.__contains__)
+        else:
             self._id_counter += 1
-            candidate = (
-                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
-            )
+            while f"{prefix}-{self._id_counter}" in self._issued_ids:
+                self._id_counter += 1
+            candidate = f"{prefix}-{self._id_counter}"
         self._issued_ids.add(candidate)
         return candidate
 

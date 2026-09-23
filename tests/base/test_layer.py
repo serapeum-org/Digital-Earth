@@ -16,6 +16,7 @@ from digitalearth.base.spec import (
     Scale,
     Selection,
     Symbology,
+    free_layer_id,
 )
 
 #: Work the counting doubles below record — equality comparisons made against a layer id, and reads of the layer a
@@ -711,3 +712,58 @@ class TestLayerTreeSerialisation:
         stored = {"layers": [], "order": ["a"]}
         with pytest.raises(ValueError, match=r"unknown keys \['order'\]"):
             LayerTree.from_dict(stored)
+
+
+class TestFreeLayerId:
+    """`free_layer_id` — the one answer to a name a caller uses twice (#321).
+
+    Written as its own class because all four tiers reach it and none of them owns it: the web and 3-D tiers
+    counted the name, the static and interactive tiers counted the *scene*, and the id is what a caller holds
+    afterwards. The rule is checked here once and the tiers are checked against each other in
+    `tests/base/test_map_conformance.py`.
+    """
+
+    def test_a_free_name_is_taken_as_it_is(self):
+        """No suffix where none is needed, or every first layer would be called `roads-2`."""
+        assert free_layer_id("roads", {"rivers", "roads-2"}.__contains__) == "roads"
+
+    def test_a_taken_name_counts_from_two(self):
+        """The second layer under one name is `-2`, which is where the tiers already agreed."""
+        assert free_layer_id("roads", {"roads"}.__contains__) == "roads-2"
+
+    def test_the_count_follows_the_name_and_not_the_figure(self):
+        """The divergence this settles: the suffix counts *this name*, not the layers drawn so far.
+
+        Test scenario:
+            The static and interactive tiers minted a colliding name from a scene-wide counter, so a name
+            reused after three other layers came back as `roads-4` while the web and 3-D tiers answered
+            `roads-2` to the very same script. Nine other ids are on the figure here and none of them is a
+            suffix of `roads`, so a rule that counted the figure could not answer `roads-2`.
+        """
+        taken = {"roads"} | {f"points-{index}" for index in range(1, 10)}
+        assert free_layer_id("roads", taken.__contains__) == "roads-2"
+
+    def test_it_keeps_counting_past_a_taken_suffix(self):
+        """A caller who names three layers alike gets three ids, not two ids and a collision."""
+        assert free_layer_id("roads", {"roads", "roads-2"}.__contains__) == "roads-3"
+
+    def test_a_name_that_looks_like_a_suffix_is_still_only_a_name(self):
+        """`roads-2` asked for by name is an id of its own, free until something takes it."""
+        assert free_layer_id("roads-2", {"roads"}.__contains__) == "roads-2"
+
+    def test_the_predicate_is_asked_once_per_candidate_in_order(self):
+        """The web tier's `taken` reserves as it answers, so the order of the asking is the contract.
+
+        Test scenario:
+            `WebMap._layer_id` passes a predicate that claims the id (and every id its drawer derives from
+            it) the moment it finds one free, so a rule that probed out of order, or probed a candidate it
+            then did not use, would reserve ids no layer holds. Recording the asking is what pins that.
+        """
+        asked = []
+
+        def taken(candidate):
+            asked.append(candidate)
+            return candidate in {"roads", "roads-2"}
+
+        free_layer_id("roads", taken)
+        assert asked == ["roads", "roads-2", "roads-3"], asked

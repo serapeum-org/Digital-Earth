@@ -114,13 +114,13 @@ EXPECTED_SEED = (
 #: builds the hidden layer on every listed tier and **fails when the tier has been fixed**, so an entry cannot
 #: outlive what it excuses — the same shape as `UNDRAWN_KINDS` in the renderer contract. Taking a tier off the
 #: list is what turns its `test_a_layer_built_hidden_is_described_hidden` on.
-CANNOT_HIDE_AT_BUILD: dict[str, str] = {
-    "interactive": (
-        "`points(visible=False)` is swallowed by the builder's `**opts` and forwarded to HoloViews as a "
-        "style option, so the figure describes the layer `visible=True` while the element is drawn hidden — "
-        "the description and the drawing disagree about the same layer"
-    ),
-}
+#:
+#: **Empty, and the guard is what emptied it.** The interactive tier was listed here: `points(visible=False)`
+#: fell through the builder's `**opts` to HoloViews as a style option, so the element was hidden while the
+#: figure went on describing the layer visible (#327). The flag is a declared parameter of every builder on
+#: that tier now, so it reaches `add_element(visible=)` and the description and the drawing say the same
+#: thing — and the probe above runs for both tiers instead of skipping one.
+CANNOT_HIDE_AT_BUILD: dict[str, str] = {}
 
 #: The tiers that record no portable channel for a layer's style, each with what they record instead.
 #:
@@ -149,15 +149,27 @@ TIER_JOBS: dict[str, tuple[str, str, str]] = {
 #: it is importable to decide whether this environment is one where that tier must contribute items.
 TIER_ENGINES: dict[str, str] = {"web": "maplibre", "interactive": "geoviews"}
 
+#: The name the naming probes ask for, and what a second layer asking for it again must be given.
+#:
+#: One constant per spelling because both probes read both: the first checks that the name a caller gives is
+#: the id they get back, the second that a name used twice is *suffixed* rather than shared — the answer all
+#: four tiers now give, through :func:`~digitalearth.base.spec.layer.free_layer_id` (#321).
+ASKED_NAME = "wells"
+SUFFIXED_NAME = "wells-2"
+
 # ---------------------------------------------------------------------------------------------------------
-# The seam D-11 leaves behind. Neither tier's `points()` accepts `name=` today — the web tier does, the
-# interactive tier swallows it into `**opts` — so a probe that the id a caller asked for is the id the figure
-# describes cannot be written yet, and deliberately is not written here. It belongs directly beneath
-# `test_two_layers_are_described_in_the_order_they_were_added`, reading `figure.layers.ids` against the names
-# passed in, and it is the probe that makes EXPECTED_SEED comparable by id rather than only by kind. Until
-# then the seed is compared by kind, which is why `_described` carries no ids: the web tier names a points
-# layer after the MapLibre type it draws (`circle-1`) and the interactive tier after the kind (`points-1`),
-# and neither spelling is wrong while neither can be overridden.
+# The seam D-11 left behind, and closed. `points()` took no `name=` on either 2-D tier — the web tier's did,
+# the interactive tier's swallowed it into `**opts` — so the probe that the id a caller asked for is the id
+# the figure describes could not be written, and was reserved for here (#321). It is written now, directly
+# beneath `test_two_layers_are_described_in_the_order_they_were_added`, reading `figure.layers.ids` against
+# the names passed in.
+#
+# What has *not* changed is `_described`, which still compares the seed by kind and carries no ids. Those are
+# two different promises: that a caller's own name is honoured (the probes below, on a named layer), and that
+# an *unnamed* layer is numbered the same way everywhere — which it is not, since the web tier numbers a
+# points layer after the MapLibre type it draws (`circle-1`) and the interactive tier after the kind
+# (`points-1`). Neither spelling is wrong, and settling which one every tier generates is not what naming a
+# layer was about.
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -394,6 +406,46 @@ class MapConformanceBase:
         assert tuple(figure.layers.ids) == tuple(drawn.layer_ids), (
             f"the {self.backend} tier's figure and its layer_ids disagree about draw order: "
             f"{tuple(figure.layers.ids)} vs {tuple(drawn.layer_ids)}"
+        )
+
+    def test_the_name_a_caller_gives_is_the_id_the_figure_describes(self, drawn):
+        """Name a layer and the figure should call it that, on any tier.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The probe this module reserved and could not write (#321). An id is not decoration — it is what
+            `get_layer`, `remove_layer` and a layer switcher key on — so a tier that accepts a name and files
+            the layer under a generated one hands the caller an id they never asked for and cannot guess.
+            The web and 3-D tiers honoured a name; the static and interactive tiers took no `name=` at all
+            and dropped it into the engine's styling, where it either did nothing or coloured something.
+        """
+        drawn.points(_points(), name=ASKED_NAME)
+        assert drawn.figure_spec.layers.ids == (ASKED_NAME,), (
+            f"the {self.backend} tier was asked for a layer called {ASKED_NAME!r} and described "
+            f"{drawn.figure_spec.layers.ids}"
+        )
+
+    def test_a_name_used_twice_is_suffixed_rather_than_shared(self, drawn):
+        """Two layers under one name get one id each — the second suffixed, never the same.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The other half of naming, and the half the tiers disagreed about: `free_layer_id` counts the
+            **name** (`wells`, `wells-2`), while the static and interactive tiers counted the *scene* and
+            produced `wells-4` when three other layers had been drawn first. Held here rather than per tier
+            because the id is what a caller writes down afterwards, so the same script must address the same
+            layer whichever backend drew it. Sharing one id instead would be worse than either: it makes the
+            second layer unaddressable, and silently drops one of the two from anything keyed by id.
+        """
+        drawn.points(_points(), name=ASKED_NAME)
+        drawn.points(_points(), name=ASKED_NAME)
+        assert drawn.figure_spec.layers.ids == (ASKED_NAME, SUFFIXED_NAME), (
+            f"the {self.backend} tier drew {ASKED_NAME!r} twice and described "
+            f"{drawn.figure_spec.layers.ids}"
         )
 
     def test_a_reference_layer_is_described_beneath_the_data_it_references(self, drawn):

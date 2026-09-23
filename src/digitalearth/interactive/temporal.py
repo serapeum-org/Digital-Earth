@@ -172,6 +172,8 @@ class TemporalMixin(_MixinBase):
         cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
         colorbar: bool = True,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Render a ``DatasetCollection`` as an interactive time-slider map.
@@ -192,6 +194,12 @@ class TemporalMixin(_MixinBase):
                 once, from at most :data:`~digitalearth.base.clim.DEFAULT_CLIM_SCAN_CAP` members sampled
                 evenly across it.
             colorbar: Whether to draw a colorbar.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to every frame.
 
         Returns:
@@ -244,6 +252,8 @@ class TemporalMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="raster",
             source=collection,
             held=held,

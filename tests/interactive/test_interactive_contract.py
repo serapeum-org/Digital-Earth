@@ -719,6 +719,13 @@ class TestNamedNaturalEarthFeatures:
             name: The named method.
             flag: The ``features`` keyword it must set.
             monkeypatch: pytest's attribute patcher.
+
+        Test scenario:
+            The forwarded keywords are compared in full rather than by the flag alone, because what each of
+            these adds beyond its flag is the whole question. `name=` and `visible=` are among them since
+            #321/#327: each named method draws exactly one feature, so it passes a caller's name straight
+            through and the layer takes it — which is what `features()` itself cannot promise, since it may
+            draw five layers from one call.
         """
         seen = {}
 
@@ -736,7 +743,12 @@ class TestNamedNaturalEarthFeatures:
 
         monkeypatch.setattr(m, "features", _record)
         assert getattr(m, name)(resolution="50m") is m
-        assert seen == {flag: True, "resolution": "50m"}, seen
+        assert seen == {
+            flag: True,
+            "resolution": "50m",
+            "name": None,
+            "visible": True,
+        }, seen
 
     def test_coastlines_is_one_of_the_six_and_still_draws(self, m):
         """``coastlines`` completes the six and keeps its own element (no Natural-Earth flag for it)."""

@@ -171,17 +171,34 @@ class ProjectionMixin(_MixinBase):
 
     # ------------------------------------------------------------------ globe / projection frame
 
-    def graticule(self, lon_step: float = 30.0, lat_step: float = 30.0) -> None:
+    def graticule(
+        self,
+        lon_step: float = 30.0,
+        lat_step: float = 30.0,
+        *,
+        spacing: Optional[float] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> None:
         """Add a lon/lat graticule to a projected map (drawn when the frame is applied).
 
         A second call **replaces** the first — the map holds one set of graticule lines, so it draws one
         graticule — and the description follows: the layer keeps its id and its place in the tree and only
-        its spacing changes. Describing the second call as a second layer would say the map draws two grids
-        where it draws one.
+        its spacing and its visibility change. Describing the second call as a second layer would say the
+        map draws two grids where it draws one — and that is also why a ``name`` on a *replacing* call
+        names nothing: the layer already has its id, and taking a new one would break every caller holding
+        the old one.
 
         Args:
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
+            spacing: One step for both, for a caller who wants a square grid; it overrides the two
+                above. The same shorthand the web tier takes, so one call draws one grid on every
+                tier that draws a graticule at all (#324).
+            name: The caller's own name for the layer, used as its id and its label on the call that
+                **creates** it; ``None`` (default) generates one from the kind (#321).
+            visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
 
         Raises:
             Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
@@ -189,6 +206,8 @@ class ProjectionMixin(_MixinBase):
                 layer that was not drawn, and a refused *replacement* must not restyle the graticule the
                 map is still drawing (round 2, M1).
         """
+        if spacing is not None:
+            lon_step = lat_step = spacing
         symbology = Symbology(
             props={"via": "graticule", "lon_step": lon_step, "lat_step": lat_step}
         )
@@ -201,10 +220,14 @@ class ProjectionMixin(_MixinBase):
         if was is not None:
             held = was.id
             self._layer_tree = self._layer_tree.replace(
-                with_fields(was, symbology=symbology)
+                with_fields(was, symbology=symbology, visible=visible)
             )
         else:
-            held = self._describe_layer(LayerRecord("graticule", symbology=symbology))
+            held = self._describe_layer(
+                LayerRecord(
+                    "graticule", name=name, visible=visible, symbology=symbology
+                )
+            )
             self._graticule_id = held
         # Described first, then drawn — but through the renderer directly rather than through
         # `Scene._draw`, because a second call replaces the layer it already has rather than adding one,

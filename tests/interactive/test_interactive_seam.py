@@ -287,11 +287,18 @@ class TestIdsFollowTheLayer:
 
         Args:
             new_map: The map factory.
+
+        Test scenario:
+            The suffix counts **the name**, so the second `obs` is `obs-2` — the answer the web and 3-D
+            tiers already gave, and which this tier now reaches through the shared
+            :func:`~digitalearth.base.spec.layer.free_layer_id` (#321). It used to come from the map-wide
+            id counter and so read `obs-1` here and `obs-4` on a map that had drawn three other layers
+            first, which made the id a caller wrote down depend on what else was on the map.
         """
         interactive_map = new_map()
         interactive_map.add_element("first", name="obs")
         interactive_map.add_element("second", name="obs")
-        assert interactive_map.layer_ids == ["obs", "obs-1"], interactive_map.layer_ids
+        assert interactive_map.layer_ids == ["obs", "obs-2"], interactive_map.layer_ids
 
     def test_an_unnamed_layer_is_counted_under_its_kind(self, new_map):
         """A generated id says what the layer is, which is what a reader of `layer_ids` needs.

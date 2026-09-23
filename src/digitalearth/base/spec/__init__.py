@@ -65,7 +65,12 @@ from digitalearth.base.spec.figure import (
     PanelSpec,
 )
 from digitalearth.base.spec.furniture import Furniture
-from digitalearth.base.spec.layer import LAYER_REFERENCE, LayerSpec, LayerTree
+from digitalearth.base.spec.layer import (
+    LAYER_REFERENCE,
+    LayerSpec,
+    LayerTree,
+    free_layer_id,
+)
 from digitalearth.base.spec.legend import (
     DEFAULT_RAMP_STOPS,
     LEGEND_KINDS,
@@ -100,6 +105,7 @@ __all__ = [
     "LegendEntry",
     "LayerSpec",
     "LayerTree",
+    "free_layer_id",
     "LegendSpec",
     "PanelSpec",
     "RenderTarget",

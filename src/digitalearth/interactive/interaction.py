@@ -158,7 +158,14 @@ class InteractionMixin(_MixinBase):
 
         return self.on_tap(_profile, source=source)
 
-    def draw(self, kind: str = "box", *, num_objects: Optional[int] = None) -> Self:
+    def draw(
+        self,
+        kind: str = "box",
+        *,
+        num_objects: Optional[int] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
         """Add a draw/edit tool so the user can sketch an area-of-interest (DI.8).
 
         Wraps a HoloViews draw stream around a fresh annotation layer: ``"box"`` → ``BoxEdit``,
@@ -169,6 +176,11 @@ class InteractionMixin(_MixinBase):
         Args:
             kind: ``"box"`` / ``"poly"`` / ``"point"`` / ``"freehand"``.
             num_objects: Max number of shapes (``None`` = unlimited).
+            name: The caller's own name for the annotation layer, used as its id and its label;
+                ``None`` (default) generates one, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the annotation layer is drawn. ``False`` builds it hidden **and**
+                describes it hidden (#327).
 
         Returns:
             The same map instance, so builder calls chain.
@@ -199,6 +211,8 @@ class InteractionMixin(_MixinBase):
         self._draw_stream = stream
         self.add_element(
             layer,
+            name=name,
+            visible=visible,
             kind="custom:holoviews",
         )
         return self

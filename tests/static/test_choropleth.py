@@ -54,3 +54,44 @@ def test_polygon_vertices_multipolygon():
     polys, repeats = Map._polygon_vertices(series)
     assert len(polys) == 2
     assert repeats == [2]
+
+
+class TestTheColormapIsANamedArgument:
+    """`cmap=` was only ever a keyword in `**opts`, and is now in the signature (#324).
+
+    The Core declares `cmap` as a keyword of `choropleth` on every tier; this tier took it and forwarded it
+    to `PolygonGlyph` without naming it, so it worked and appeared nowhere a caller would look. Naming it
+    must not move it — these are what say so.
+    """
+
+    def test_the_named_colormap_still_reaches_the_drawing(self, polygons):
+        """The keyword travels exactly as far as it did when it rode in `**opts`.
+
+        Args:
+            polygons: The polygon fixture.
+        """
+        with Map(crs=polygons.epsg) as built:
+            built.choropleth(polygons, column="fid", cmap="magma", name="areas")
+            assert built.ax.collections[-1].get_cmap().name == "magma"
+
+    def test_the_figure_describes_the_colormap_it_was_given(self, polygons):
+        """Described as well as drawn, so a figure read back elsewhere is coloured the same.
+
+        Args:
+            polygons: The polygon fixture.
+        """
+        with Map(crs=polygons.epsg) as built:
+            built.choropleth(polygons, column="fid", cmap="magma", name="areas")
+            described = built.figure_spec.layers.get("areas").symbology.props
+            assert described["opts"]["cmap"] == "magma", described
+
+    def test_a_call_without_one_names_no_colormap(self, polygons):
+        """The default is unchanged: nothing recorded, so the glyph's own choice stands.
+
+        Args:
+            polygons: The polygon fixture.
+        """
+        with Map(crs=polygons.epsg) as built:
+            built.choropleth(polygons, column="fid", name="areas")
+            described = built.figure_spec.layers.get("areas").symbology.props
+            assert "cmap" not in described.get("opts", {}), described

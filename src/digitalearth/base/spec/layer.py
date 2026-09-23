@@ -51,11 +51,56 @@ from digitalearth.base.spec._serial import (
 from digitalearth.base.spec.selection import Selection
 from digitalearth.base.spec.style import Symbology
 
-__all__ = ["LAYER_REFERENCE", "LayerSpec", "LayerTree"]
+__all__ = ["LAYER_REFERENCE", "LayerSpec", "LayerTree", "free_layer_id"]
 
 #: The prefix a ``z_source`` takes when a layer's elevation comes from **another layer** rather than from a source —
 #: imagery draped over terrain (#202). ``"layer:dem"`` names the layer ``dem``; anything else names a source.
 LAYER_REFERENCE = "layer:"
+
+
+def free_layer_id(name: str, taken: Any) -> str:
+    """Return the id a layer the caller named should take: ``name``, or the first free suffix of it.
+
+    The one answer to "what happens when a caller names two layers the same thing", shared by all four tiers
+    (#321). It has to be shared because it is the id a caller holds afterwards — ``remove_layer``,
+    ``get_layer`` and a layer switcher all key on it — and two tiers answering differently means the same
+    script addresses a different layer depending on the backend it drew with. The web and 3-D tiers already
+    counted the **name**; the static and interactive tiers counted the *scene*, so a name reused after three
+    other layers became ``roads-4`` rather than ``roads-2``.
+
+    Suffixing rather than replacing is the other half of the answer: two layers under one id makes the second
+    unaddressable, and overwriting the first silently drops a layer the caller drew.
+
+    Args:
+        name: The caller's own name, already known to be a non-empty string.
+        taken: Answers whether a candidate id is unavailable. A plain ``in`` test over the ids in hand on the
+            tiers that have them; on the web tier a reservation that also claims the ids its drawer derives
+            from this one, and so must be called once per candidate in order.
+
+    Returns:
+        ``name`` when it is free, else ``f"{name}-2"``, ``f"{name}-3"``, … — the first that is not.
+
+    Examples:
+        - A free name is taken as it is:
+            ```python
+            >>> from digitalearth.base.spec.layer import free_layer_id
+            >>> free_layer_id("roads", {"rivers"}.__contains__)
+            'roads'
+
+            ```
+        - A name already on the figure counts from two, whatever else the figure holds:
+            ```python
+            >>> from digitalearth.base.spec.layer import free_layer_id
+            >>> free_layer_id("roads", {"roads", "roads-2", "points-9"}.__contains__)
+            'roads-3'
+
+            ```
+    """
+    candidate, suffix = name, 2
+    while taken(candidate):
+        candidate = f"{name}-{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _optional_text(owner: str, name: str, value: Any) -> None:

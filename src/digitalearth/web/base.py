@@ -61,7 +61,7 @@ from digitalearth.base.spec import (
     Viewport,
 )
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.base.spec.layer import LayerSpec, LayerTree
+from digitalearth.base.spec.layer import LayerSpec, LayerTree, free_layer_id
 from digitalearth.base.symbology import sample_cmap
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
@@ -1779,15 +1779,15 @@ class WebMapBase:
 
         Returns:
             The name (suffixed ``-2``, ``-3``, … if that name, or an id derived from it, is already on the
-            map), or a generated ``"<prefix>-<n>"`` when unnamed.
+            map — through :func:`~digitalearth.base.spec.layer.free_layer_id`, the rule all four tiers
+            share), or a generated ``"<prefix>-<n>"`` when unnamed.
         """
         if not name:
             return self._uid(prefix, kind=kind)
-        candidate, suffix = name, 2
-        while not self._reserve(candidate, kind):
-            candidate = f"{name}-{suffix}"
-            suffix += 1
-        return candidate
+        # `_reserve` claims the id when it takes it, so "is this one taken?" is its negation — which is why
+        # the shared rule asks a predicate rather than reading a set: this tier has derived ids to claim
+        # with the one the caller named, and the other three do not.
+        return free_layer_id(name, lambda candidate: not self._reserve(candidate, kind))
 
     def _uid(self, prefix: str, *, kind: Optional[str] = None) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.

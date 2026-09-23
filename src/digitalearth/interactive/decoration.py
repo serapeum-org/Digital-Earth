@@ -413,6 +413,8 @@ class DecorationMixin(_MixinBase):
         level: str = "underlay",
         api_key: Any = None,
         preset: Optional[dict] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
@@ -442,6 +444,12 @@ class DecorationMixin(_MixinBase):
                 whichever field that provider declares.
             preset: A keyed preset's own keywords, e.g. ``{"date": "2024-01", "flavour": "visual"}``. A
                 dict rather than ``**kwargs`` so it cannot collide with a HoloViews style option.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the tile element.
 
         Returns:
@@ -499,6 +507,8 @@ class DecorationMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="basemap",
             # `level="overlay"` asks for a basemap drawn *over* the data — a labels-and-roads layer on top
             # of imagery, say — so it declares the band that overrides its kind's.
@@ -614,11 +624,24 @@ class DecorationMixin(_MixinBase):
         gv, _ = _require_holoviz()
         return sorted(gv.tile_sources.tile_sources)
 
-    def coastlines(self, resolution: str = "110m", **opts: Any) -> Self:
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Add the Natural-Earth coastline on top of the data layers.
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
@@ -644,6 +667,8 @@ class DecorationMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="coastlines",
             held=held,
             symbology=Symbology(
@@ -664,6 +689,8 @@ class DecorationMixin(_MixinBase):
         rivers: bool = False,
         lakes: bool = False,
         resolution: str = "110m",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add Natural-Earth context layers (land/ocean/lakes beneath the data, borders/rivers on top).
@@ -680,6 +707,14 @@ class DecorationMixin(_MixinBase):
             lakes: Draw lake polygons (underlay — the band the registry files ``lakes`` under, which is
                 where :meth:`lakes` draws them: beneath the data, with land and ocean).
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from each feature's kind. This call draws **one layer per
+                requested feature**, so a single name is shared by all of them and the second and later
+                take ``-2``, ``-3``, … — which is what :meth:`land`, :meth:`ocean` and their four
+                siblings avoid, each asking for one feature and so taking the name exactly (#321).
+            visible: Whether the requested features are drawn. ``False`` builds them hidden **and**
+                describes them hidden — before, the flag fell through ``**opts`` to HoloViews, which hid
+                the elements while the figure went on calling them visible (#327).
             **opts: Extra HoloViews style options applied to every requested feature element.
 
         Returns:
@@ -704,7 +739,9 @@ class DecorationMixin(_MixinBase):
         self._require_web_mercator("features")
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        for name, requested in (
+        # `feature`, not `name`: `name` is the caller's own name for the layer, and this loop's variable
+        # is the piece of reference geography — two different words that were spelled the same (#321).
+        for feature, requested in (
             ("land", land),
             ("ocean", ocean),
             ("borders", borders),
@@ -716,12 +753,14 @@ class DecorationMixin(_MixinBase):
                 # and the registry, not this loop, decides where each is drawn.
                 self.add_element(
                     None,
-                    kind=name,
+                    name=name,
+                    visible=visible,
+                    kind=feature,
                     held=held,
                     symbology=Symbology(
                         props={
                             "via": "natural_earth",
-                            "feature": name,
+                            "feature": feature,
                             "resolution": resolution,
                             "opts": described_opts,
                         }
@@ -729,11 +768,23 @@ class DecorationMixin(_MixinBase):
                 )
         return self
 
-    def borders(self, resolution: str = "110m", **opts: Any) -> Self:
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Overlay Natural-Earth country borders (one of the six named feature layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
@@ -751,13 +802,27 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        return self.features(borders=True, resolution=resolution, **opts)
+        return self.features(
+            borders=True, resolution=resolution, name=name, visible=visible, **opts
+        )
 
-    def land(self, resolution: str = "110m", **opts: Any) -> Self:
+    def land(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Fill Natural-Earth land polygons beneath the data (one of the six named layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
@@ -794,13 +859,27 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        return self.features(land=True, resolution=resolution, **opts)
+        return self.features(
+            land=True, resolution=resolution, name=name, visible=visible, **opts
+        )
 
-    def ocean(self, resolution: str = "110m", **opts: Any) -> Self:
+    def ocean(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Fill Natural-Earth ocean polygons beneath the data (one of the six named layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
@@ -837,13 +916,27 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        return self.features(ocean=True, resolution=resolution, **opts)
+        return self.features(
+            ocean=True, resolution=resolution, name=name, visible=visible, **opts
+        )
 
-    def lakes(self, resolution: str = "110m", **opts: Any) -> Self:
+    def lakes(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Fill Natural-Earth lake polygons beneath the data (one of the six named layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
@@ -881,13 +974,27 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        return self.features(lakes=True, resolution=resolution, **opts)
+        return self.features(
+            lakes=True, resolution=resolution, name=name, visible=visible, **opts
+        )
 
-    def rivers(self, resolution: str = "110m", **opts: Any) -> Self:
+    def rivers(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Overlay Natural-Earth river centerlines (one of the six named layers, #253).
 
         Args:
             resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
@@ -924,7 +1031,9 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        return self.features(rivers=True, resolution=resolution, **opts)
+        return self.features(
+            rivers=True, resolution=resolution, name=name, visible=visible, **opts
+        )
 
     def _to_display_xy(self, lon: Any, lat: Any, crs: Any) -> tuple:
         """Reproject ``(lon, lat)`` from ``crs`` to the display CRS via pyramids.
@@ -951,7 +1060,17 @@ class DecorationMixin(_MixinBase):
 
         return reproject_coordinates(xs, ys, from_crs=crs, to_crs=self.crs)
 
-    def text(self, lon: Any, lat: Any, s: str, *, crs: Any = 4326, **opts: Any) -> Self:
+    def text(
+        self,
+        lon: Any,
+        lat: Any,
+        s: str,
+        *,
+        crs: Any = 4326,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Add a single text annotation at ``(lon, lat)`` (reprojected to the display CRS).
 
         Args:
@@ -960,6 +1079,12 @@ class DecorationMixin(_MixinBase):
             s: The text to draw.
             crs: CRS of ``lon``/``lat`` (default EPSG:4326); reprojected to the display CRS via
                 pyramids.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -973,6 +1098,8 @@ class DecorationMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="text",
             held=held,
             symbology=Symbology(
@@ -988,7 +1115,14 @@ class DecorationMixin(_MixinBase):
 
     @_skips_off_limb
     def labels(
-        self, features: Any, column: str, *, crs: Any = 4326, **opts: Any
+        self,
+        features: Any,
+        column: str,
+        *,
+        crs: Any = 4326,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Add per-feature text labels from a point ``FeatureCollection`` column.
 
@@ -998,6 +1132,12 @@ class DecorationMixin(_MixinBase):
             column: The attribute column whose values are drawn as labels.
             crs: Unused when ``features`` carries its own CRS (kept for signature symmetry with
                 :meth:`text`); reprojection goes through ``FeatureCollection.to_crs``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1016,6 +1156,8 @@ class DecorationMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="labels",
             source=features,
             held=held,

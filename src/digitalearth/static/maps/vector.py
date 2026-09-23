@@ -971,6 +971,8 @@ class VectorMixin(_MixinBase):
         *,
         size_column: Optional[str] = None,
         scale: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, sized by a column (``ScatterGlyph``).
@@ -985,6 +987,11 @@ class VectorMixin(_MixinBase):
             scale: Deprecated spelling of ``size_column``; it names a column, not a magnification, and ``size``
                 is what sets a marker's visual size on every backend. Still accepted (with a
                 ``DeprecationWarning``) for one release.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``k``, ``size``,
                 ``size_limits``, ``size_scale``, ``size_legend``, ``size_legend_values``, …).
                 ``size`` is the marker's visual size, spelled the same way on every backend;
@@ -1024,6 +1031,8 @@ class VectorMixin(_MixinBase):
             LayerRecord(
                 "points",
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "scatter",
@@ -1040,6 +1049,8 @@ class VectorMixin(_MixinBase):
         *,
         _alias_caller: str = "Map.grid_points()",
         _alias_depth: int = 4,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
@@ -1053,6 +1064,11 @@ class VectorMixin(_MixinBase):
             _alias_depth: How many stack frames sit between that warning and the caller's line.
                 Defaults to ``4`` for a direct call; :meth:`point_cloud` passes ``5``, the one extra
                 frame its delegation adds.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options. ``size``
                 sets the marker size (the cross-backend spelling); cleopatra's ``point_size``
                 is its deprecated alias, accepted with a ``DeprecationWarning`` for one
@@ -1084,6 +1100,8 @@ class VectorMixin(_MixinBase):
         record = LayerRecord(
             "points",
             source=dataset,
+            name=name,
+            visible=visible,
             symbology=Symbology(props={"via": "grid_points"}),
             opts=opts,
         )
@@ -1093,7 +1111,9 @@ class VectorMixin(_MixinBase):
             self._skipped_off_limb("grid_points")
             return None
 
-    def point_cloud(self, dataset: Any, **opts) -> Any:
+    def point_cloud(
+        self, dataset: Any, *, name: Optional[str] = None, visible: bool = True, **opts
+    ) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
 
         A ``DeprecationWarning`` raised on the way through (cleopatra's ``point_size=`` instead of
@@ -1103,6 +1123,11 @@ class VectorMixin(_MixinBase):
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
                 first). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Styling kwargs, forwarded to :meth:`grid_points` unchanged.
 
         Returns:
@@ -1112,18 +1137,33 @@ class VectorMixin(_MixinBase):
         """
         return self.grid_points(
             dataset,
+            name=name,
+            visible=visible,
             _alias_caller="Map.point_cloud()",
             _alias_depth=5,  # one frame further out than grid_points: this alias delegates to it
             **opts,
         )
 
-    def grid_cells(self, dataset: Any, band: int = 1, **opts) -> Any:
+    def grid_cells(
+        self,
+        dataset: Any,
+        band: int = 1,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
+    ) -> Any:
         """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
                 first). Only a path-backed layer can be written down.
             band: 1-based band whose values colour the cells.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: The caller's own engine keywords, handed to ``PolygonGlyph`` as passed and held beside
                 the layer rather than recorded in it (see the class docstring). ``PolygonGlyph`` refuses a
                 name it does not know rather than dropping it. A ``scheme`` (including
@@ -1160,6 +1200,8 @@ class VectorMixin(_MixinBase):
             # polygon layer one kind or the other is whether its polygons are filled by a value.
             _polygon_kind(band),
             source=dataset,
+            name=name,
+            visible=visible,
             symbology=Symbology(props={"via": "grid_cells", "band": band}),
             opts=opts,
         )
@@ -1170,7 +1212,15 @@ class VectorMixin(_MixinBase):
             return None
 
     def _vector(
-        self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts
+        self,
+        u_dataset: Any,
+        v_dataset: Any,
+        *,
+        kind: str,
+        band: int = 1,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
     ) -> Any:
         """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
 
@@ -1181,6 +1231,11 @@ class VectorMixin(_MixinBase):
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
             kind: ``"quiver"``, ``"barbs"`` or ``"streamplot"``.
             band: 1-based band index read from each dataset.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: The caller's own engine keywords, handed to ``VectorGlyph`` as passed and held beside
                 the layer rather than recorded in it (see the class docstring). ``VectorGlyph`` refuses a
                 name it does not know rather than dropping it.
@@ -1204,6 +1259,8 @@ class VectorMixin(_MixinBase):
             # here rather than left to the figure's source table, because that table names **one** source
             # per layer and so has no spelling for a pair — see `_opened_component` (round 2, L7).
             source=(_opened_component(u_dataset), _opened_component(v_dataset)),
+            name=name,
+            visible=visible,
             symbology=Symbology(props={"via": kind, "band": band}),
             opts=opts,
         )
@@ -1213,7 +1270,15 @@ class VectorMixin(_MixinBase):
             self._skipped_off_limb(kind)
             return None
 
-    def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
+    def quiver(
+        self,
+        u_dataset: Any,
+        v_dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
 
         Args:
@@ -1221,6 +1286,11 @@ class VectorMixin(_MixinBase):
                 Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
                 because a layer names one source and a field needs two.
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, split between the layer's description and the scene
                 (see the class docstring).
@@ -1236,9 +1306,19 @@ class VectorMixin(_MixinBase):
             FileNotFoundError: when a component's path names nothing.
             KeyError: when no resolver is registered for a component's URL scheme.
         """
-        return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
+        return self._vector(
+            u_dataset, v_dataset, kind="quiver", name=name, visible=visible, **kwargs
+        )
 
-    def barbs(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
+    def barbs(
+        self,
+        u_dataset: Any,
+        v_dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``).
 
         Args:
@@ -1246,6 +1326,11 @@ class VectorMixin(_MixinBase):
                 Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
                 because a layer names one source and a field needs two.
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, split between the layer's description and the scene
                 (see the class docstring).
@@ -1261,9 +1346,19 @@ class VectorMixin(_MixinBase):
             FileNotFoundError: when a component's path names nothing.
             KeyError: when no resolver is registered for a component's URL scheme.
         """
-        return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
+        return self._vector(
+            u_dataset, v_dataset, kind="barbs", name=name, visible=visible, **kwargs
+        )
 
-    def streamplot(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
+    def streamplot(
+        self,
+        u_dataset: Any,
+        v_dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
 
         Args:
@@ -1271,6 +1366,11 @@ class VectorMixin(_MixinBase):
                 Only a path-backed layer can be written down — and a u/v pair is not one of those yet,
                 because a layer names one source and a field needs two.
             v_dataset: pyramids ``Dataset`` of the v (northward) component, or a path or URL to one.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_vector` — ``band`` is the one named argument; the rest is the
                 caller's own ``VectorGlyph`` styling, split between the layer's description and the scene
                 (see the class docstring).
@@ -1286,7 +1386,14 @@ class VectorMixin(_MixinBase):
             FileNotFoundError: when a component's path names nothing.
             KeyError: when no resolver is registered for a component's URL scheme.
         """
-        return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
+        return self._vector(
+            u_dataset,
+            v_dataset,
+            kind="streamplot",
+            name=name,
+            visible=visible,
+            **kwargs,
+        )
 
     def quiverkey(
         self,
@@ -1352,7 +1459,15 @@ class VectorMixin(_MixinBase):
             raise ValueError("FeatureCollection has no numeric value column to contour")
         return src.x.values, src.y.values, src.z.values
 
-    def _tri(self, data: Any, *, kind: str, **opts) -> Any:
+    def _tri(
+        self,
+        data: Any,
+        *,
+        kind: str,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
+    ) -> Any:
         """Triangulate scattered points and render via ``cleopatra.MeshGlyph``.
 
         Args:
@@ -1361,6 +1476,11 @@ class VectorMixin(_MixinBase):
                 layer can be written down.
             kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
                 ``tripcolor``).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: The caller's own engine keywords, forwarded to the glyph as passed and held beside the
                 layer rather than recorded in it (see the class docstring).
 
@@ -1383,6 +1503,8 @@ class VectorMixin(_MixinBase):
         record = LayerRecord(
             "unstructured",
             source=data,
+            name=name,
+            visible=visible,
             symbology=Symbology(props={"via": kind}),
             opts=opts,
         )
@@ -1392,12 +1514,19 @@ class VectorMixin(_MixinBase):
             self._skipped_off_limb(kind)
             return None
 
-    def tricontourf(self, data: Any, **kwargs) -> Any:
+    def tricontourf(
+        self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
+    ) -> Any:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
                 path or URL to either. Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
                 held beside the layer rather than described.
 
@@ -1411,14 +1540,21 @@ class VectorMixin(_MixinBase):
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        return self._tri(data, kind="tricontourf", **kwargs)
+        return self._tri(data, kind="tricontourf", name=name, visible=visible, **kwargs)
 
-    def tricontour(self, data: Any, **kwargs) -> Any:
+    def tricontour(
+        self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
+    ) -> Any:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
                 path or URL to either. Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
                 held beside the layer rather than described.
 
@@ -1432,14 +1568,21 @@ class VectorMixin(_MixinBase):
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        return self._tri(data, kind="tricontour", **kwargs)
+        return self._tri(data, kind="tricontour", name=name, visible=visible, **kwargs)
 
-    def tripcolor(self, data: Any, **kwargs) -> Any:
+    def tripcolor(
+        self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
+    ) -> Any:
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
                 path or URL to either. Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: The caller's own engine styling, forwarded through :meth:`_tri` to the glyph and
                 held beside the layer rather than described.
 
@@ -1453,7 +1596,7 @@ class VectorMixin(_MixinBase):
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        return self._tri(data, kind="tripcolor", **kwargs)
+        return self._tri(data, kind="tripcolor", name=name, visible=visible, **kwargs)
 
     @staticmethod
     def _polygon_vertices(geometry: Any) -> tuple:
@@ -1540,6 +1683,9 @@ class VectorMixin(_MixinBase):
         *,
         scheme: Optional[Any] = None,
         k: int = 5,
+        cmap: Optional[Any] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
@@ -1563,6 +1709,15 @@ class VectorMixin(_MixinBase):
                 ramp has no classes and is left to matplotlib.
             k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
                 ``"categorical"``).
+            cmap: The colormap the fill is drawn with, forwarded to ``PolygonGlyph`` exactly as a
+                ``cmap=`` in ``**opts`` always was. Named in the signature because the Core declares it
+                as a keyword of ``choropleth`` on every tier, and a keyword that works but is not
+                written down is one a caller has to read the source to find (#324).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. For a categorical scheme, ``cmap`` should
                 be a **qualitative** (``ListedColormap``) map — ``"tab10"`` (the default), ``"Set2"``,
                 ``"Paired"``, … A continuous ``LinearSegmentedColormap`` (``"coolwarm"``, ``"RdBu"``) is
@@ -1604,11 +1759,17 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        if cmap is not None:
+            # Straight back into the caller's keywords: this is where `cmap=` has always travelled, so
+            # naming it in the signature documents the keyword without moving it.
+            opts["cmap"] = cmap
         return self._draw(
             LayerRecord(
                 # A column is required, so the polygons are always filled by a value: a choropleth.
                 _polygon_kind(column),
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "choropleth",
@@ -1624,12 +1785,24 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def shapes(self, features: Any, **opts) -> Any:
+    def shapes(
+        self,
+        features: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
+    ) -> Any:
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one
                 (reprojected to the display CRS). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
 
         Returns:
@@ -1641,6 +1814,8 @@ class VectorMixin(_MixinBase):
             LayerRecord(
                 _polygon_kind(None),  # outlines only, whatever the collection carries
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(props={"via": "shapes"}),
                 opts=opts,
             )
@@ -1691,7 +1866,14 @@ class VectorMixin(_MixinBase):
 
     @_skips_off_limb
     def voronoi(
-        self, features: Any, column: Optional[str] = None, *, clip: Any = None, **opts
+        self,
+        features: Any,
+        column: Optional[str] = None,
+        *,
+        clip: Any = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
     ) -> Any:
         """Voronoi diagram of a point ``FeatureCollection`` (pyramids points → cells → ``PolygonGlyph``).
 
@@ -1708,6 +1890,11 @@ class VectorMixin(_MixinBase):
             clip: Optional boundary the cells are clipped to — a ``FeatureCollection``/``GeoDataFrame`` (reprojected
                 to the display CRS) or a shapely geometry already in the display CRS. ``None`` leaves shapely's
                 default bounded cells.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
                 ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale,
                 or ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
@@ -1742,6 +1929,8 @@ class VectorMixin(_MixinBase):
                 # drawn — the same recipe, two kinds, decided by the argument rather than by the drawing.
                 _polygon_kind(column),
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(props={"via": "voronoi", "column": column}),
                 opts=opts,
                 # The boundary is a shapely geometry or a feature collection: a figure written to JSON has
@@ -1776,6 +1965,8 @@ class VectorMixin(_MixinBase):
         column: Optional[str] = None,
         *,
         limits: Tuple[float, float] = (0.2, 1.0),
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Cartogram: scale each polygon about its centroid by a value column (pyramids → ``PolygonGlyph``).
@@ -1791,6 +1982,11 @@ class VectorMixin(_MixinBase):
             scale: Name of the numeric column whose value sets each feature's size (normalised to ``limits``).
             column: Optional column whose value colours each scaled polygon, or ``None`` for outlines only.
             limits: ``(min, max)`` scale factors mapped to the smallest/largest ``scale`` value.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
                 ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale, or
                 ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
@@ -1825,6 +2021,8 @@ class VectorMixin(_MixinBase):
                 # As in `voronoi`: a column fills the scaled polygons, no column leaves their outlines.
                 _polygon_kind(column),
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "cartogram",
@@ -1901,6 +2099,8 @@ class VectorMixin(_MixinBase):
         nmax: int = 100,
         nmin: int = 0,
         clip: Any = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Quadtree choropleth: aggregate points into adaptive cells (pyramids points → ``PolygonGlyph``).
@@ -1923,6 +2123,11 @@ class VectorMixin(_MixinBase):
             nmin: Cells with fewer than this many points are dropped.
             clip: Optional boundary the cells are clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` keeps the full rectangular cells.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
                 ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale,
                 or ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
@@ -1957,6 +2162,8 @@ class VectorMixin(_MixinBase):
                 # A quadtree is always filled — by the column's aggregate, or by the point count.
                 _polygon_kind(column or "count"),
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "quadtree",
@@ -2025,7 +2232,15 @@ class VectorMixin(_MixinBase):
         return MplPath(np.asarray(verts), codes)
 
     @_skips_off_limb
-    def kde(self, features: Any, *, clip: Any = None, **opts) -> Any:
+    def kde(
+        self,
+        features: Any,
+        *,
+        clip: Any = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
+    ) -> Any:
         """2-D kernel-density (isochrone) plot of a point ``FeatureCollection`` (pyramids points → ``KDEGlyph``).
 
         Estimates the point density on a grid and draws it as filled (``shade=True``) or line contours, coloured
@@ -2036,6 +2251,11 @@ class VectorMixin(_MixinBase):
                 (reprojected to the display CRS). Only a path-backed layer can be written down.
             clip: Optional boundary the density is clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` draws the full grid.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``KDEGlyph`` (``levels``, ``shade``, ``gridsize``,
                 ``bw_method``, ``cmap``, …).
 
@@ -2066,6 +2286,8 @@ class VectorMixin(_MixinBase):
             LayerRecord(
                 "heatmap",
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(props={"via": "kde"}),
                 opts=opts,
                 key=clip,  # a geometry, which a figure cannot carry — see `voronoi`
@@ -2078,6 +2300,9 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: Optional[str] = None,
         scale: Optional[str] = None,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Spatial flow / Sankey map of a line ``FeatureCollection`` (pyramids lines → ``FlowGlyph``).
@@ -2090,6 +2315,11 @@ class VectorMixin(_MixinBase):
                 or a path or URL to one (reprojected to the display CRS). Only a path-backed layer can be written down.
             column: Numeric column whose value colours each path, or ``None`` for a single colour.
             scale: Numeric column whose value sets each path's line width, or ``None`` for a uniform width.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``FlowGlyph`` (``width_limits``, ``width_scale``, ``cmap``,
                 ``size_legend``, …).
 
@@ -2126,6 +2356,8 @@ class VectorMixin(_MixinBase):
             LayerRecord(
                 "flow",
                 source=features,
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "sankey",

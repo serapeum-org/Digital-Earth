@@ -287,6 +287,8 @@ class BigDataMixin(_MixinBase):
         column: Optional[str] = None,
         dynamic: bool = True,
         cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a server-rasterized density layer that re-aggregates on zoom.
@@ -302,6 +304,12 @@ class BigDataMixin(_MixinBase):
             dynamic: Re-rasterize on every viewport change (needs a live kernel/server); ``False``
                 bakes a single static image (deterministic — what the tests assert on).
             cmap: Colormap for the rasterized image.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
         Returns:
@@ -313,6 +321,8 @@ class BigDataMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="raster",
             source=layer,
             held=held,
@@ -343,6 +353,8 @@ class BigDataMixin(_MixinBase):
         aggregator: Any = "count",
         column: Optional[str] = None,
         dynamic: bool = True,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a fully shaded (RGB) density layer — categorical blends via ``color_key`` (DI.2a).
@@ -361,6 +373,12 @@ class BigDataMixin(_MixinBase):
                 ``count_cat`` when the aggregator is left at ``"count"``.
             column: The value/category column.
             dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
         Returns:
@@ -380,6 +398,8 @@ class BigDataMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="points",
             source=layer,
             held=held,
@@ -408,6 +428,8 @@ class BigDataMixin(_MixinBase):
         cmap: str = "viridis",
         color_key: Optional[Any] = None,
         dynamic: bool = True,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Datashade millions of ordered track points as line density (GPS/AIS, DI.2b).
@@ -426,6 +448,12 @@ class BigDataMixin(_MixinBase):
             color_key: ``{category: colour}`` mapping used with ``by``, or a list of colours in category
                 order — the two forms HoloViews takes.
             dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
         Returns:
@@ -439,6 +467,8 @@ class BigDataMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="lines",
             source=features,
             held=held,

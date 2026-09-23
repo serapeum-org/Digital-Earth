@@ -259,6 +259,8 @@ class RasterMixin(_MixinBase):
         alpha: float = 1.0,
         colorbar: bool = True,
         clabel: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a colour-mapped raster layer with hover readout (interactive ``imshow``).
@@ -274,6 +276,12 @@ class RasterMixin(_MixinBase):
             colorbar: Whether to draw a colorbar.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
                 ``autostyle.auto_style`` (#230) and leaves the colorbar unlabelled when it knows none.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -298,6 +306,8 @@ class RasterMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="raster",
             source=data,
             held=held,
@@ -322,6 +332,8 @@ class RasterMixin(_MixinBase):
         *,
         bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
         limits: Optional[ChannelLimits] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a true-colour composite from three raster bands (2–98 % percentile stretch).
@@ -331,6 +343,12 @@ class RasterMixin(_MixinBase):
             bands: The three 1-based band indices composing ``(R, G, B)``.
             limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call
                 percentile scan, so a sequence of frames can share one black and white point.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -359,6 +377,8 @@ class RasterMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="rgb",
             source=data,
             held=held,
@@ -383,6 +403,8 @@ class RasterMixin(_MixinBase):
         band: int = 1,
         cmap: Optional[str] = None,
         clabel: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).
@@ -397,6 +419,12 @@ class RasterMixin(_MixinBase):
                 ``autostyle.auto_style`` (DI.12) — consistent with :meth:`image`.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
                 ``autostyle.auto_style`` (#230), as :meth:`image` does.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -418,6 +446,8 @@ class RasterMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="mesh",
             source=data,
             held=held,
@@ -434,7 +464,14 @@ class RasterMixin(_MixinBase):
 
     @_skips_off_limb
     def contours(
-        self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
+        self,
+        data: Any,
+        *,
+        band: int = 1,
+        levels: Any = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Add line contours of a raster band.
 
@@ -443,6 +480,11 @@ class RasterMixin(_MixinBase):
             band: 1-based band to contour.
             levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
                 variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -460,11 +502,26 @@ class RasterMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        return self._contour_layer(data, band=band, levels=levels, filled=False, **opts)
+        return self._contour_layer(
+            data,
+            band=band,
+            levels=levels,
+            filled=False,
+            name=name,
+            visible=visible,
+            **opts,
+        )
 
     @_skips_off_limb
     def filled_contours(
-        self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
+        self,
+        data: Any,
+        *,
+        band: int = 1,
+        levels: Any = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Add filled contour bands of a raster band.
 
@@ -473,6 +530,11 @@ class RasterMixin(_MixinBase):
             band: 1-based band to contour.
             levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
                 variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -490,10 +552,26 @@ class RasterMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        return self._contour_layer(data, band=band, levels=levels, filled=True, **opts)
+        return self._contour_layer(
+            data,
+            band=band,
+            levels=levels,
+            filled=True,
+            name=name,
+            visible=visible,
+            **opts,
+        )
 
     def _contour_layer(
-        self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
+        self,
+        data: Any,
+        *,
+        band: int,
+        levels: Any,
+        filled: bool,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Record the shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
 
@@ -508,6 +586,12 @@ class RasterMixin(_MixinBase):
             levels: Contour levels — an int (count) or explicit sequence; ``None`` auto-resolves.
             filled: Whether the bands between the levels are filled, which is also what the layer's kind
                 records: ``"filled_contours"`` against ``"contours"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -518,6 +602,8 @@ class RasterMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="filled_contours" if filled else "contours",
             source=data,
             held=held,
@@ -546,7 +632,15 @@ class RasterMixin(_MixinBase):
         "#17becf",
     )
 
-    def spaghetti(self, collection: Any, *, band: int = 1, **opts: Any) -> Self:
+    def spaghetti(
+        self,
+        collection: Any,
+        *,
+        band: int = 1,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Overlay each member of a ``DatasetCollection`` as line contours (ensemble spaghetti).
 
         Each member gets a distinct colour from a cycling palette so the strands are
@@ -555,6 +649,11 @@ class RasterMixin(_MixinBase):
         Args:
             collection: A pyramids ``DatasetCollection`` whose members share a grid.
             band: 1-based band contoured in every member.
+            name: The caller's own name for the layers, used as their ids and labels; ``None``
+                (default) generates one per member. One call draws **one layer per member**, so a
+                single name is shared and the second and later take ``-2``, ``-3``, … (#321).
+            visible: Whether the members are drawn. ``False`` builds them hidden **and** describes
+                them hidden (#327).
             **opts: Extra HoloViews style options applied to each member's contour element. An
                 explicit ``color`` or ``cmap`` here disables the per-member colour cycle.
 
@@ -580,7 +679,7 @@ class RasterMixin(_MixinBase):
                 member_opts["color"] = self._SPAGHETTI_COLORS[
                     index % len(self._SPAGHETTI_COLORS)
                 ]
-            self.contours(member, band=band, **member_opts)
+            self.contours(member, band=band, name=name, visible=visible, **member_opts)
         return self
 
     @_skips_off_limb
@@ -592,6 +691,8 @@ class RasterMixin(_MixinBase):
         max_pixels: int = 4_000_000,
         dynamic: bool = True,
         cmap: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a large raster / COG by loading only the viewport at a decimated overview (DI.14).
@@ -617,6 +718,12 @@ class RasterMixin(_MixinBase):
                 tests assert).
             cmap: Colormap; ``None`` (default) resolves from the band's variable name via
                 ``autostyle.auto_style`` (#249), with ``"viridis"`` behind the lookup as the fallback.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -678,6 +785,8 @@ class RasterMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="raster",
             source=dataset,
             held=held,
