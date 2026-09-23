@@ -592,8 +592,9 @@ def _travelling_budget(value: Any, budget: int) -> int:
 def travels_in_a_figure(value: Any) -> bool:
     """Whether a figure's description carries `value`, or the tier must hold it beside the layer.
 
-    The one rule every tier asks, so that "what can a figure carry?" has a single answer rather than one per
-    backend (#322). The rule is two-sided, and it is stated that way because it is enforced that way:
+    The one rule the tiers share, so that "what can a figure carry?" has a single answer rather than one per
+    backend (#322) — which tier asks it, and how, is at the foot of this docstring. The rule is two-sided,
+    and it is stated that way because it is enforced that way:
 
     * **A scalar travels when the round trip gives back an equal value.** Its class need not survive, and for
       a subclass it does not: the trip flattens every one of them to the plain counterpart the writer spells.
@@ -640,14 +641,24 @@ def travels_in_a_figure(value: Any) -> bool:
       *value* moves — a `str`-valued `enum.Enum` member, flattened through `Enum.__str__` — and that is refused
       on the same measurement rather than by name.
 
-    The other half of the rule is the tier's to keep, and it is two-sided:
+    The other half of the rule is the asking tier's to keep, and it is two-sided:
 
     * A value this refuses must still reach the drawer, or the engine silently draws its own default in its
-      place. Every tier holds what is refused under the layer's id and merges it back before drawing.
+      place. The tier holds what is refused under the layer's id and merges it back before drawing.
     * A value this accepts is stored frozen — `Symbology` turns every list into a tuple so a spec still
-      hashes — so every tier **thaws the described half once at its read boundary**. Because only a `list`
-      ever travels, thawing is the exact inverse of that freeze; a genuine tuple is in the held half, which
-      is merged on afterwards and never thawed.
+      hashes — so the tier **thaws the described half at its read boundary**. Because only a `list` ever
+      travels, thawing is the exact inverse of that freeze; a genuine tuple is in the held half, which is
+      merged on afterwards and never thawed.
+
+    **Which tiers ask, and which do not.** Measured: the two that hand a caller's keywords straight to their
+    engine ask it per value and keep both halves — the static tier in
+    :func:`~digitalearth.static.scene.described_opts` (held in ``Scene._layer_opts``) and the interactive
+    tier in :func:`~digitalearth.interactive.base.describe` (held in ``InteractiveMapBase._layer_held``).
+    The web and 3-D tiers take named, typed parameters and resolve them into their engine's own spelling
+    before recording, so they have no caller keyword to split and no held half of their own; the web drawer
+    thaws what it reads all the same (``web/renderer.py``), and the 3-D tier calls no thaw at all. Every
+    tier reaches this rule *indirectly* through :func:`~digitalearth.base.spec.style.portable_constants`,
+    which asks it of any value before lifting it onto a channel.
 
     Args:
         value: The caller's value for one keyword.

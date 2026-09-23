@@ -317,12 +317,13 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
     tuple, an array — is handed to the drawer through the map instead, keyed by layer id, and the
     description keeps the JSON-safe rendering of it that `spelling` gives, or nothing.
 
-    The rule is :func:`~digitalearth.base.spec._serial.travels_in_a_figure`, which every tier asks (#322).
-    This tier used to ask its own `is_json_value`, which stopped at what the writer accepts and so described
-    a tuple: a caller's `line_dash=(0, (5, 5))` was written down and read back as `[0, [5, 5]]`, which
-    matplotlib refuses. The shared rule is narrower than the writer for exactly that reason and no wider —
-    a **list** of plain values comes back as itself, so a palette and a classifier's edges travel and a
-    figure reloaded elsewhere keeps its colours (#330). See its docstring for the round trip behind it.
+    The rule is :func:`~digitalearth.base.spec._serial.travels_in_a_figure`, the one this tier and the
+    static one both ask of a caller's keywords (#322). This tier used to ask its own `is_json_value`, which
+    stopped at what the writer accepts and so described a tuple: a caller's `line_dash=(0, (5, 5))` was
+    written down and read back as `[0, [5, 5]]`, which matplotlib refuses. The shared rule is narrower than
+    the writer for exactly that reason and no wider — a **list** of plain values comes back as itself, so a
+    palette and a classifier's edges travel and a figure reloaded elsewhere keeps its colours (#330). See
+    its docstring for the round trip behind it.
 
     Args:
         held: The values being held beside this layer; a value that cannot travel is added to it.
