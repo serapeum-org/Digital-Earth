@@ -364,12 +364,14 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
             backend="web",
         )
     except MissingObject as error:
-        # Contract C7: a figure that names an object this process does not hold is skipped with a warning
-        # naming the layer and its engine, and raised under `strict`. The same answer the 3-D tier gives.
+        # Contract C7, stated once in `digitalearth.base.contract_clauses.CLAUSES` (#326). This site does not
+        # restate it; it records only which half of it a missing object is, and that this tier answers the way
+        # the other three do.
         #
-        # C7 governs a *layer with nothing to draw*, which a missing object is — the case `strict=` is the
-        # dial for. A *kind this tier does not draw at all* (`mesh`, `vectors`) is a different case and
-        # never reaches a drawer: `drawer_for` refuses it by name in every mode, lenient or strict (#320).
+        # A missing object is a *layer with nothing to draw* — a fact about the data, not about the call —
+        # so it is skipped with a warning here and raised under `strict`. A *kind this tier does not draw at
+        # all* (`mesh`, `vectors`) is C7's other half and never reaches a drawer: `drawer_for` refuses it by
+        # name in every mode (#320).
         web_map._skipped(layer.id, str(error))
         return None
     return DrawnLayer(source_id=None, source_spec=None, layer=obj)
