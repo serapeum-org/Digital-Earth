@@ -58,9 +58,12 @@ styled probe passes an explicit value rather than comparing two silences — and
 rule in `encodings`, which briefly published each tier's defaults as though a caller had asked for them
 (review R-H2).
 
-The other symbology value that is portable today is the classification itself:
+The classification is the other thing the two tiers are held to, and it is **not** a symbology value:
 `choropleth(..., scheme=, k=)` goes through :class:`~digitalearth.base.spec.scale.Scale` on every tier and
-both tiers publish the result as `last_breaks`, so that is what :data:`EXPECTED_BREAKS` pins.
+both publish the result as `last_breaks`, an attribute of the live map that no `FigureSpec` carries.
+:data:`EXPECTED_BREAKS` pins it as live-map parity between two engines — not as part of the `to_backend()`
+precondition, which it was framed as while reading something a figure does not carry (review R-M6). What
+the figure does carry is asked separately and guarded by :data:`NO_PORTABLE_CLASSIFICATION`.
 
 **The collection trap this module is built not to fall into.** The shared renderer contract collected nothing
 useful in the 3-D and interactive jobs for its whole life: its classes are gated on optional engines, and the
@@ -226,6 +229,32 @@ TIER_JOBS: dict[str, tuple[str, str, str]] = {
 #: Each tier's engine, as the module whose absence gates the tier's class. The collection guard asks whether
 #: it is importable to decide whether this environment is one where that tier must contribute items.
 TIER_ENGINES: dict[str, str] = {"web": "maplibre", "interactive": "geoviews"}
+
+#: The tiers whose **figure** carries no class edges, each with what carries them instead.
+#:
+#: `choropleth(..., scheme=, k=)` classifies through :class:`~digitalearth.base.spec.scale.Scale` on every
+#: tier, and both tiers publish the result on the live map as `last_breaks`. A `FigureSpec` carries neither:
+#: measured, the breaks appear in no layer's `symbology.props` and in no `encodings`, on either tier, and the
+#: probe that read `last_breaks` was framed as the `to_backend()` precondition while reading something a
+#: figure does not carry (review R-M6).
+#:
+#: Guarded in both directions by
+#: :meth:`MapConformanceBase.test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such`, so the entry
+#: retires itself the day a tier publishes the `Scale` on its colour encoding.
+#:
+#: This table is about the two tiers that record encodings at all. The static and 3-D tiers are excused
+#: wholesale by :data:`NO_PORTABLE_CHANNELS` — a tier that publishes no encoding publishes no scale either.
+NO_PORTABLE_CLASSIFICATION: dict[str, str] = {
+    "web": (
+        "the edges become a MapLibre step expression in paint['fill-color'], which carries the interior "
+        "stop (5.0) and neither end; the expression is refused as a colour, so the layer publishes no "
+        "colour encoding to hang a Scale on"
+    ),
+    "interactive": (
+        "the edges become props['common']['color_levels'] beside a color naming the value dimension, and a "
+        "colour that names a column is refused, so the layer publishes no colour encoding either"
+    ),
+}
 
 #: Every tier the package ships, as its own `Capabilities` spells the backend.
 #:
@@ -452,6 +481,24 @@ def _asked_to_hide(tier: OutsideTheSuite, drawn) -> str:
     figure = drawn.figure_spec
     shown = figure.layers.get(figure.layers.ids[-1]).visible
     return "visible" if shown else "hidden"
+
+
+def _class_edges(symbology) -> tuple:
+    """Return the class edges a layer's symbology carries, from the one place they could portably live.
+
+    Args:
+        symbology: The layer's recorded `Symbology`.
+
+    Returns:
+        The `breaks` of the :class:`~digitalearth.base.spec.scale.Scale` on the layer's `color` encoding,
+        or `()` when the layer publishes no colour encoding, or one with no scale. Only that one place is
+        read: a tier's own spelling of the same edges — MapLibre's `step` expression, HoloViews'
+        `color_levels` — is what `Symbology.encodings` exists to replace, so finding the edges there would
+        say the figure carries them when only that tier can read them.
+    """
+    encoding = dict(symbology.encodings).get("color")
+    scale = getattr(encoding, "scale", None)
+    return tuple(getattr(scale, "breaks", None) or ())
 
 
 def _described(figure) -> tuple:
@@ -717,21 +764,57 @@ class MapConformanceBase:
     def test_the_same_classification_gives_the_same_class_edges_on_every_tier(
         self, drawn
     ):
-        """One column, one scheme, one class count — one set of breaks, on any tier.
+        """One column, one scheme, one class count — one set of breaks on the **live map**, on any tier.
 
         Args:
             drawn: The map under test.
 
         Test scenario:
-            The only symbology value portable enough to compare across tiers today. Both tiers route a
-            graduated `choropleth` through `Scale`, which is the single place the classifier is reached, and
-            both publish the result as `last_breaks` — the interactive tier's docstring says so explicitly,
-            "for legend parity with the web tier", and nothing checked it. A tier that classified locally
-            would draw a legend that disagreed with its own fill.
+            Both tiers route a graduated `choropleth` through `Scale`, which is the single place the
+            classifier is reached, and both publish the result as `last_breaks` — the interactive tier's
+            docstring says so explicitly, "for legend parity with the web tier", and nothing checked it. A
+            tier that classified locally would draw a legend that disagreed with its own fill.
+
+            `last_breaks` is an attribute of the map object and **no `FigureSpec` carries it** (measured:
+            it appears in no layer's `symbology.props` and in no `encodings` on either tier). So this is
+            live-map parity between two engines, not a statement about what survives a write to JSON, and
+            it is not part of the `to_backend()` precondition the probes above are — a probe cannot be the
+            precondition for carrying a figure across while reading something the figure does not carry
+            (review R-M6). What the figure carries is asked separately, by
+            :meth:`test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such`.
         """
         drawn.choropleth(_polygons(), COLUMN, scheme=SCHEME, k=CLASSES)
         assert tuple(drawn.last_breaks) == EXPECTED_BREAKS, (
             f"the {self.backend} tier cut {COLUMN!r} into {tuple(drawn.last_breaks)}"
+        )
+
+    def test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such(self, drawn):
+        """And the figure's own answer to the same question, which is a different answer.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            A drift guard over the gap the probe above leaves, in both directions.
+            :class:`~digitalearth.base.spec.scale.Scale` on the layer's `color` encoding is where class
+            edges would have to live for `to_backend()` to carry them, and :func:`_class_edges` looks
+            exactly there. A tier on :data:`NO_PORTABLE_CLASSIFICATION` must carry none; a tier off it must
+            carry :data:`EXPECTED_BREAKS`, so the day a tier publishes its classification the entry comes
+            off and this becomes the cross-seam check the classification probe was mistaken for.
+        """
+        drawn.choropleth(_polygons(), COLUMN, scheme=SCHEME, k=CLASSES)
+        figure = drawn.figure_spec
+        symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+        carried = _class_edges(symbology)
+        if self.backend in NO_PORTABLE_CLASSIFICATION:
+            assert carried == (), (
+                f"the {self.backend} tier's figure now carries {carried}; take it off "
+                "NO_PORTABLE_CLASSIFICATION so the cross-tier check holds it"
+            )
+            return
+        assert carried == EXPECTED_BREAKS, (
+            f"the {self.backend} tier's figure carries {carried} for a graduated choropleth; publish the "
+            "Scale on the colour encoding, or name the tier in NO_PORTABLE_CLASSIFICATION"
         )
 
     def test_a_layer_nobody_hid_is_described_visible(self, drawn):
@@ -1170,7 +1253,11 @@ class TestTheTablesDescribeThePackage:
             place would be an excuse nothing can contradict, which is the shape this module exists to
             refuse.
         """
-        named = set(CANNOT_HIDE_AT_BUILD) | set(NO_PORTABLE_CHANNELS)
+        named = (
+            set(CANNOT_HIDE_AT_BUILD)
+            | set(NO_PORTABLE_CHANNELS)
+            | set(NO_PORTABLE_CLASSIFICATION)
+        )
         unreachable = sorted(named - set(TIER_JOBS) - set(ABSENT_TIERS))
         assert unreachable == [], (
             f"{unreachable} are excused by a table and reachable from nowhere; give each one a row in "
