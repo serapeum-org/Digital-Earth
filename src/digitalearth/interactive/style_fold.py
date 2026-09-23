@@ -300,15 +300,17 @@ STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
 #:
 #: **Why this table has to exist.** ``opts`` is the caller's own, but a builder also writes its resolved
 #: parameters into ``common`` and into the flat top level — ``points`` writes ``size`` there whether or not
-#: ``size=`` was passed, and ``image``/``rgb`` write ``alpha`` the same way. Publishing those made an
+#: ``size=`` was passed, and ``image`` writes ``alpha`` the same way. Publishing those made an
 #: unstyled ``points(features)`` claim ``{'size': 6.0}`` as the caller's own style, against the web tier's
 #: ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` for the same call — two tiers publishing two sets
 #: of defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
 #:
 #: **What is listed.** Measured by drawing each builder with no style keywords and reading back
-#: ``symbology.props``: ``points`` records ``common['size'] == 6.0`` and ``image``/``rgb`` record a flat
-#: ``alpha == 1.0``. Nothing else this tier derives drives a declared channel — a classified ``color`` is a
-#: value dimension and is refused below, and ``fill_alpha``/``cmap``/``colorbar`` drive no channel at all.
+#: ``symbology.props``: ``points`` records ``common['size'] == 6.0`` and ``image`` records a flat
+#: ``alpha == 1.0``. ``rgb`` is **not** one of them — measured, it records ``via``/``bands``/``limits``/
+#: ``opts`` and no ``alpha`` at all — so the rows are the two keywords, not the three builders. Nothing else
+#: this tier derives drives a declared channel: a classified ``color`` is a value dimension and is refused
+#: below, and ``fill_alpha``/``cmap``/``colorbar`` drive no channel at all.
 #:
 #: **What it costs, deliberately.** A caller who asks for exactly the default — ``points(size=6.0)`` —
 #: publishes no ``size``, so a figure carried elsewhere is drawn at that tier's own default. The conformance
