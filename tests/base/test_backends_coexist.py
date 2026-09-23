@@ -26,6 +26,8 @@ from typing import Any, Tuple
 
 import pytest
 
+from digitalearth.base.registry import band_of
+
 #: The features the `all` environment must carry, one per rendering backend plus the test tooling.
 REQUIRED_FEATURES = ("dev", "3d", "interactive", "web")
 
@@ -35,9 +37,15 @@ MANIFEST = Path(__file__).resolve().parents[2] / "pyproject.toml"
 #: What both 2-D tiers must say about the seed figure: a graticule under points, both shown.
 #:
 #: Held as a constant rather than as one tier's live answer so a single wrong tier cannot make the pair agree.
+#:
+#: The band is the *resolved* one, not `LayerSpec.band`. Both tiers leave that field unset and let the kind
+#: decide, so a constant expecting `None` there asserted nothing at all — the vacuous comparison
+#: :func:`tests.base.test_map_conformance._described` already refuses to make, and for the reason it gives:
+#: "the band is the layer's own override where it set one and its kind's band otherwise … comparing the raw
+#: field would say they agree while saying nothing" (review R-L1).
 EXPECTED_DESCRIPTION: Tuple[Tuple[str, Any, bool], ...] = (
-    ("graticule", None, True),
-    ("points", None, True),
+    ("graticule", "reference", True),
+    ("points", "data", True),
 )
 
 
@@ -74,12 +82,17 @@ def _described(tier) -> Tuple[Tuple[str, Any, bool], ...]:
         tier: A constructed 2-D map.
 
     Returns:
-        One `(kind, band, visible)` per described layer, in draw order.
+        One `(kind, band, visible)` per described layer, in draw order. The band is the layer's own
+        override where it set one and its kind's band otherwise — the same reduction
+        :func:`tests.base.test_map_conformance._described` makes, and for the same reason: a tier that
+        leaves `band` unset is not thereby drawing somewhere else, and both tiers leave it unset here, so
+        comparing the raw field said the two agreed while saying nothing at all (review R-L1).
     """
     tier.points(_seed_points())
     tier.graticule()
     return tuple(
-        (layer.kind, layer.band, layer.visible) for layer in tier.figure_spec.layers
+        (layer.kind, layer.band or band_of(layer.kind), layer.visible)
+        for layer in tier.figure_spec.layers
     )
 
 
