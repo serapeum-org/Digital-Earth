@@ -116,6 +116,52 @@ class TestTheNameACallerGives:
         assert drawn.layer_ids[-2:] == [ASKED, SUFFIXED], drawn.layer_ids
 
 
+class TestANameThatIsWhatTheGeneratorWouldMint:
+    """The collision the suffix rule cannot answer: the caller asks for the id first.
+
+    `points(name="points-1")` takes the very id the next unnamed `points` would generate, so the generator
+    has to step over what is already issued rather than count blindly. What it costs when it does not is
+    not a cosmetic clash: `Renderer._drawn` maps layer id to the element drawn for it, so a re-minted id
+    replaces the entry and the first element is left on the overlay with nothing able to reach it —
+    `set_visible`, `is_visible` and `remove_layer` all key on that id.
+    """
+
+    def test_an_unnamed_layer_steps_over_the_id_a_caller_already_took(
+        self, drawn, point_fc
+    ):
+        """The generator skips `points-1` because the caller holds it, and mints `points-2`.
+
+        Args:
+            drawn: The map under test.
+            point_fc: The point fixture.
+
+        Test scenario:
+            This tier counts a point layer under `points`, so the first generated id is `points-1` — asked
+            for by name here before any unnamed layer exists. Without the skip the second call re-mints it
+            and the figure describes two layers under one id.
+        """
+        drawn.points(point_fc, name="points-1")
+        drawn.points(point_fc)
+        assert drawn.layer_ids == ["points-1", "points-2"], drawn.layer_ids
+
+    def test_each_layer_is_still_the_only_element_its_id_toggles(self, drawn, point_fc):
+        """The half the id list cannot show: two ids, two separately switchable elements.
+
+        Args:
+            drawn: The map under test.
+            point_fc: The point fixture.
+
+        Test scenario:
+            Asked of the renderer rather than the description, because that is where a re-minted id does
+            its damage — one entry where two elements were drawn. Hiding the caller's own layer and reading
+            the generated one back off the element is what separates the two.
+        """
+        drawn.points(point_fc, name="points-1")
+        drawn.points(point_fc)
+        drawn._renderer.set_visible("points-1", False)
+        assert drawn._renderer.is_visible("points-2") is True, drawn.layer_ids
+
+
 class TestALayerBuiltHidden:
     """#327 — `visible=False` hid the element and described the layer visible."""
 
