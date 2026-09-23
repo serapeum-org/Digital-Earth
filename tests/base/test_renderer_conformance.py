@@ -60,6 +60,16 @@ missing objects — missing the default tier's — and a caller who handled one 
 other. `MissingObject` now derives from `OffLimbError`, and the check below asks each tier for the refusal
 rather than trusting the class: a tier that invents a third answer fails it.
 
+**What that check can and cannot catch** (review R-L6). Asked for the type alone it is satisfied by the
+class hierarchy on any tier that raises `MissingObject`, which the doctest in `base/custom.py` already
+asserts — the only mutation it fails is a tier inventing a genuinely unrelated class. Measured: a stand-in
+tier raising ``OffLimbError("nope")`` passed it. So the refusal is asked for its *message* as well, which a
+tier has to produce rather than inherit: a figure with a dozen layers has to say which one drew nothing.
+And it is three tiers of four, not four — the interactive tier keeps a caller's elements outside its
+renderer and so has no drawer to ask, which it declares in :data:`UNDRAWN_KINDS` and the drift guard holds
+it to. C7's other half, a kind the tier does not draw at all, *is* asked of all four, in
+``tests/base/test_custom_layers.py::TestWhatC7DoesNotCover``.
+
 **Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
 updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
 the overlay from `layers` — and on none of the 2-D tiers does it move the figure the tier reports. That is
@@ -679,7 +689,11 @@ class RendererConformance:
         data to build, no warp to fail, no engine call before the refusal — and every tier that draws a
         caller's own object looks it up by layer id through the one shared rule,
         :func:`~digitalearth.base.custom.held_object`. A tier that declares the kind but keeps those
-        objects outside its renderer (the interactive tier does) has no such drawer, and skips.
+        objects outside its renderer (the interactive tier does) has no such drawer, and skips — so this is
+        three tiers of four, and the module docstring says so rather than claiming every tier. The skip is
+        not silent: the kind is named in :data:`UNDRAWN_KINDS` with the reason, and
+        `test_the_drawer_table_and_the_declaration_differ_only_by_the_named_undrawn_kinds` fails the day
+        that stops being true.
 
         Returns:
             The drawer for this tier's ``custom:<engine>`` kind, and a `LayerSpec` naming it.
@@ -718,11 +732,39 @@ class RendererConformance:
             `OffLimbError`, a `RuntimeError`. The two were unrelated, so ``except OffLimbError`` around a
             strict render covered every tier's off-limb case and three of the four missing-object cases —
             missing the default tier's. A caller who handled one was silently not handling the other.
+
+            The type is the narrow half of the guarantee: `MissingObject` derives from `OffLimbError`, so a
+            tier raising it passes here by inheritance. `test_the_refusal_names_the_layer_it_could_not_draw`
+            is the half a tier has to answer for itself.
         """
         drawer, layer = self._a_layer_this_tier_cannot_draw()
         tier.strict = True
         with pytest.raises(OffLimbError):
             drawer(tier, None, layer)
+
+    def test_the_refusal_names_the_layer_it_could_not_draw(self, tier):
+        """A refusal a caller cannot act on is a `KeyError` with better manners (review R-L6).
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            The type check above cannot fail for a tier that raises `MissingObject`, because the class
+            relationship it asserts is the one `base/custom.py` sets up — measured with a stand-in tier
+            raising ``OffLimbError("nope")``, which passed it. What a tier has to produce rather than
+            inherit is the message: a figure holding a dozen layers has to say which one drew nothing, or
+            the caller is left grepping. Each tier reaches this through the one shared rule,
+            :func:`~digitalearth.base.custom.held_object`, so naming the layer is a promise every tier keeps
+            or none does.
+        """
+        drawer, layer = self._a_layer_this_tier_cannot_draw()
+        tier.strict = True
+        with pytest.raises(OffLimbError) as refused:
+            drawer(tier, None, layer)
+        assert _UNDRAWABLE_LAYER in str(refused.value), (
+            f"the {self.contract.backend} tier refused {_UNDRAWABLE_LAYER!r} without naming it: "
+            f"{refused.value}"
+        )
 
     def test_a_layer_it_cannot_draw_is_skipped_when_the_tier_is_not_strict(self, tier):
         """The other half of the same answer: lenient is a skip, and a skip draws nothing.
