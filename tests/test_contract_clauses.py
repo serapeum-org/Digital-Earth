@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pytest
 
-from digitalearth.base.contract_clauses import CLAUSES, clause
+from digitalearth.base.contract_clauses import CLAUSES, cite, clause
 
 #: The repository root, from which the scanned trees hang.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -247,6 +247,51 @@ class TestTheClauseTable:
         absent = max(CLAUSES) + 1
         with pytest.raises(KeyError, match=f"C{absent} is not a clause"):
             clause(absent)
+
+
+class TestHowAClauseIsQuoted:
+    """A number is a citation only once it resolves to words, so the rendering is part of #326's promise.
+
+    :data:`CLAUSES` is the table; these are the three calls a reader ever meets it through. A tier's
+    contract test cites the bare number and keeps its own scenario prose, so when one fails, the clause's
+    single wording reaches the reader only via `Clause.name`, `Clause.__str__` and `cite`. Nothing else in
+    the suite exercises them — the drift guards below compare numbers and never render one — which is
+    exactly how a rendering could start quoting the short `title`, or drop the number, unnoticed.
+    """
+
+    def test_a_clause_names_itself_the_way_prose_cites_it(self):
+        """`Clause.name` is the token a citation is written as, not a description of one.
+
+        Test scenario:
+            The guard in this module matches the bare ``C<n>`` spelling wherever `src/` and `tests/` cite a
+            clause. A `name` answering anything else — ``"clause 7"``, ``"C-7"`` — would be a handle no
+            citation in the tree is written with, and a failure message quoting it could not be grepped
+            back to the line that raised it.
+        """
+        cited = clause(7).name
+        assert cited == "C7", cited
+
+    def test_a_clause_renders_as_its_citation_and_then_its_rule(self):
+        """`str(clause)` leads with the number and continues into that clause's own wording.
+
+        Test scenario:
+            The two ways the rendering goes wrong are dropping the number — leaving a reader with a rule and
+            no idea which clause states it — and quoting the short `title` handle where the `rule` belongs.
+            The opening pinned here separates them: C7's title begins "a layer", its rule "A layer".
+        """
+        rendered = str(clause(7))
+        assert rendered.startswith("C7 — A layer with nothing to draw"), rendered
+
+    def test_cite_hands_a_failure_message_the_whole_clause(self):
+        """`cite` is what an assertion message calls, so it quotes the citation and the rule together.
+
+        Test scenario:
+            The errand #326 exists to remove is "go and look up what C5 was". A `cite` returning the title,
+            or the rule without its number, puts that errand back — and would still satisfy every other
+            check in this module, since none of them reads a clause's text.
+        """
+        quoted = cite(5)
+        assert quoted.startswith("C5 — `cmap=None` on a raster builder"), quoted
 
 
 #: What :data:`CITATION` must and must not read as a citation, as `(line, the numbers it yields)`.
