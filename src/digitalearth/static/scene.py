@@ -64,7 +64,7 @@ from digitalearth.base.spec import (
     Viewport,
     free_layer_id,
 )
-from digitalearth.base.spec._serial import travels_in_a_figure
+from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import DrawnLayer, Renderer, drawing_opts
 
@@ -130,13 +130,19 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     those win — so on the scene that built it a layer is drawn with exactly what it always was, frozen
     copies included nowhere.
 
+    This is **the tier's read boundary for a caller's keywords**, so it is where the described half is
+    thawed. A spec freezes every list to a tuple so it still hashes, and matplotlib reads the two spellings
+    as two different requests. Only a `list` is ever described — the shared rule holds a tuple back for
+    exactly that reason — so thawing is the exact inverse of that freeze, and the held half, which is where
+    a genuine tuple such as a dash pattern lives, is laid over it untouched.
+
     Args:
         scene: The scene the layer is drawn on, which holds the caller's own objects.
         layer: The layer being drawn.
 
     Returns:
-        A fresh dict a drawer may pop and set keys on, holding the description's keywords overlaid with
-        whatever the scene holds.
+        A fresh dict a drawer may pop and set keys on, holding the description's keywords — thawed —
+        overlaid with whatever the scene holds.
 
     Examples:
         - A scene that holds nothing draws a described layer with what its figure carries:
@@ -152,7 +158,7 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
 
             ```
     """
-    described = dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {})
+    described = thawed_value(dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {}))
     return {**described, **drawing_opts(scene, layer)}
 
 

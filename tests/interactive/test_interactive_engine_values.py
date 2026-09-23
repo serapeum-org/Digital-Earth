@@ -720,42 +720,105 @@ class TestAKeywordJsonCannotCarryIsStillHeld:
         assert _written(interactive_map), "the figure wrote nothing at all"
 
 
-class TestAContainerKeywordIsHeldRatherThanDescribed:
-    """A container travels no better than an engine object, so this tier holds it too (#322).
+def _drawn_style(element):
+    """Return the Bokeh **style** options HoloViews will draw an element with.
 
-    This tier used to ask its own oracle, which stopped at what the figure *writer* accepts — so a container
-    of plain values was described. A description freezes every sequence to a tuple, because JSON has no
-    tuple, and the drawer then splatted that tuple into `element.opts(...)`: the engine was handed a
-    spelling the caller had not written. The static tier had already measured the same trip the other way
-    round, where a `linestyle` of `(0, (5, 5))` comes back `[0, [5, 5]]` and matplotlib refuses it outright.
-    The rule is now the shared, narrower one.
+    Args:
+        element: A HoloViews element the map has drawn.
 
-    The dangerous half is holding: a value kept out of the description and then never read leaves the engine
-    drawing its own default, silently — the defect that left four builders on this tier ignoring the
+    Returns:
+        The style keywords HoloViews holds for it, which is what the renderer builds the glyph from —
+        `line_dash` and `cmap` among them.
+    """
+    return hv.Store.lookup_options("bokeh", element, "style").kwargs
+
+
+def _drawn_plot(element):
+    """Return the Bokeh **plot** options HoloViews will draw an element with.
+
+    HoloViews splits an element's options into groups and validates each against its own parameters, so
+    `cmap` is a style option while `color_levels` is a plot one. A drawer hands both over together; where
+    each lands is HoloViews' decision, and reading the wrong group finds nothing at all.
+
+    Args:
+        element: A HoloViews element the map has drawn.
+
+    Returns:
+        The plot keywords HoloViews holds for it.
+    """
+    return hv.Store.lookup_options("bokeh", element, "plot").kwargs
+
+
+def _props_of(interactive_map):
+    """Return the properties described for the map's most recent layer.
+
+    Args:
+        interactive_map: The map whose last layer is read.
+
+    Returns:
+        A fresh dict of the layer's `Symbology.props`.
+    """
+    layers = interactive_map.figure_spec.layers
+    return dict(layers.get(interactive_map.layer_ids[-1]).symbology.props)
+
+
+def _reloaded(interactive_map):
+    """Return the map's layers written to JSON and read back, as a figure from elsewhere would be.
+
+    Args:
+        interactive_map: The map whose description is written.
+
+    Returns:
+        A `LayerTree` built from the JSON text, carrying nothing the map holds beside its layers.
+    """
+    from digitalearth.base.spec import LayerTree
+
+    return LayerTree.from_dict(json.loads(_written(interactive_map)))
+
+
+def _drawn_elsewhere(built, fresh, data):
+    """Draw the last layer of `built`'s **reloaded** description on a map that holds nothing.
+
+    This is the reload the regression is about: the description crosses JSON, and the engine values the
+    building map kept beside its layers do not cross with it. A drawer is called directly rather than
+    through `render()` so the data is supplied by the test — a figure whose source is an in-memory object
+    records an `object:` reference a reader cannot resolve, which is a property of the *source* and not of
+    the symbology these tests are about.
+
+    Args:
+        built: The map that built the layer.
+        fresh: A new map, holding nothing.
+        data: The layer's data, handed over as a reader would have opened it.
+
+    Returns:
+        The `DrawnLayer` the fresh map produced.
+    """
+    from digitalearth.interactive.renderer import drawer_for
+
+    layer_id = built.layer_ids[-1]
+    layer = _reloaded(built).get(layer_id)
+    return drawer_for(layer.kind)(fresh, data, layer)
+
+
+class TestATupleOrArrayKeywordIsHeldRatherThanDescribed:
+    """A tuple travels no better than an engine object, so this tier holds it too (#322).
+
+    JSON has no tuple. A description freezes every sequence, writes it as a list and reads it back as one,
+    so a matplotlib/Bokeh dash pattern spelled `(0, (5, 5))` comes back `[0, [5, 5]]` — which matplotlib
+    refuses outright with `ValueError: Unrecognized linestyle`. Describing it would trade a layer that
+    redraws with the engine's defaults for one that cannot redraw at all.
+
+    The dangerous half is holding: a value kept out of the description and then never read leaves the
+    engine drawing its own default, silently — the defect that left four builders on this tier ignoring the
     caller's colormap. So the last check here reads HoloViews, not the description.
     """
 
-    #: The dash pattern the caller passes, as a **list** — the spelling a caller writes and the one Bokeh is
-    #: meant to receive. Described, it was frozen to the tuple `(4, 4)` on the way into `Symbology.props`.
-    DASH = [4, 4]
-
-    @staticmethod
-    def _drawn_dash(element):
-        """Return the dash pattern HoloViews will draw an element with.
-
-        Args:
-            element: A HoloViews element the map has drawn.
-
-        Returns:
-            The `line_dash` HoloViews holds for it in the Bokeh style options, which is what the renderer
-            builds the glyph from.
-        """
-        return hv.Store.lookup_options("bokeh", element, "style").kwargs.get(
-            "line_dash"
-        )
+    #: A dash pattern in its `(offset, (on, off))` form — a genuine tuple, and the value the whole rule is
+    #: argued from. Its **list** counterpart is a different case, covered by the class below.
+    DASH = (0, (5, 5))
 
     def _with_a_dash(self, new_map, point_fc):
-        """Return a map holding one line layer the caller styled with a dash pattern.
+        """Return a map holding one line layer the caller styled with a tuple dash pattern.
 
         Args:
             new_map: The map factory.
@@ -764,7 +827,7 @@ class TestAContainerKeywordIsHeldRatherThanDescribed:
         Returns:
             The map. The pattern is passed as a **copy**, so nothing here can pass by identity alone.
         """
-        return new_map().path(point_fc, line_dash=list(self.DASH))
+        return new_map().path(point_fc, line_dash=tuple(self.DASH))
 
     def test_the_description_does_not_carry_it(self, new_map, point_fc):
         """A figure written out names no dash pattern at all.
@@ -777,7 +840,7 @@ class TestAContainerKeywordIsHeldRatherThanDescribed:
         assert "line_dash" not in written, written
 
     def test_the_map_holds_it_instead(self, new_map, point_fc):
-        """Kept out of the figure, but not thrown away — the map keeps the caller's own list.
+        """Kept out of the figure, but not thrown away — the map keeps the caller's own tuple.
 
         Args:
             new_map: The map factory.
@@ -788,7 +851,7 @@ class TestAContainerKeywordIsHeldRatherThanDescribed:
         assert dict(held.get("opts") or {}).get("line_dash") == self.DASH, held
 
     def test_the_engine_still_draws_the_caller_s_pattern(self, new_map, point_fc):
-        """The drawn object is unchanged: HoloViews holds the list the caller wrote.
+        """The drawn object is unchanged: HoloViews holds the tuple the caller wrote.
 
         Args:
             new_map: The map factory.
@@ -796,13 +859,64 @@ class TestAContainerKeywordIsHeldRatherThanDescribed:
 
         Test scenario:
             This is the half that cannot be checked against the description. Held and never read, the layer
-            draws Bokeh's default and the two checks above still pass. Described instead of held, HoloViews
-            is handed `(4, 4)` — equal by nothing the caller wrote — which is what this refuses.
+            draws Bokeh's default and the two checks above still pass.
         """
         interactive_map = self._with_a_dash(new_map, point_fc)
-        drawn = self._drawn_dash(interactive_map.layers[-1])
+        drawn = _drawn_style(interactive_map.layers[-1]).get("line_dash")
         assert drawn == self.DASH, (
             f"HoloViews was given {drawn!r}, not the dash pattern the caller passed"
+        )
+
+    def test_it_is_not_quietly_turned_into_a_list(self, new_map, point_fc):
+        """The read boundary thaws the *described* half only, so a held tuple stays a tuple.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+
+        Test scenario:
+            Thawing the merged properties rather than the described half would hand matplotlib
+            `[0, [5, 5]]` — the very value holding the tuple exists to avoid — and the equality check above
+            would not notice, because a list of equal numbers compares equal to nothing here.
+        """
+        interactive_map = self._with_a_dash(new_map, point_fc)
+        drawn = _drawn_style(interactive_map.layers[-1]).get("line_dash")
+        assert isinstance(drawn, tuple), (
+            f"HoloViews was given a {type(drawn).__name__}, not the tuple the caller passed"
+        )
+
+    def test_an_array_is_held_too(self, new_map, point_fc):
+        """An array is re-typed like a tuple, and is unbounded besides, so it never travels.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+
+        Test scenario:
+            The size half of the rule, at the one value that makes it matter: a per-pixel `alpha` on a
+            1000 x 1000 raster is a million values, and writing it costs seconds and megabytes. Widening
+            the rule to lists must not widen it to arrays, which is the thing a description is not for.
+        """
+        import numpy as np
+
+        interactive_map = new_map().path(point_fc, line_dash=np.array([4, 4]))
+        written = _written(interactive_map)
+        assert "line_dash" not in written, written
+
+    def test_the_engine_is_handed_the_caller_s_own_array(self, new_map, point_fc):
+        """Held and never read is the defect; this reads HoloViews for the array too.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+        """
+        import numpy as np
+
+        pattern = np.array([4, 4])
+        interactive_map = new_map().path(point_fc, line_dash=pattern)
+        drawn = _drawn_style(interactive_map.layers[-1]).get("line_dash")
+        assert drawn is pattern, (
+            f"HoloViews was given {drawn!r}, not the caller's own array"
         )
 
     def test_the_figure_still_writes(self, new_map, point_fc):
@@ -813,3 +927,195 @@ class TestAContainerKeywordIsHeldRatherThanDescribed:
             point_fc: A point collection.
         """
         assert _written(self._with_a_dash(new_map, point_fc)), "nothing was written"
+
+
+class TestAListKeywordIsDescribedAndReachesTheEngineAsAList:
+    """The other half of #330: a list round-trips, so a figure carries it — and thaws it back.
+
+    Holding every container was an over-correction. The measurement behind it is the tuple's, and it was
+    generalised without re-measuring: `['#ff0000', '#00ff00']`, `[4, 4]`, `[0.0, 0.5, 1.0]` and `['fid']`
+    all come back from the freeze and from the JSON trip as the very same value. So they travel — and the
+    tier thaws them once at its read boundary, because the spec stores every list as a tuple and HoloViews
+    reads the two spellings as two different requests.
+    """
+
+    #: The dash pattern the caller passes, as a **list** — the spelling a caller writes and the one Bokeh
+    #: is meant to receive. Described, it is frozen to `(4, 4)` on the way into `Symbology.props`.
+    DASH = [4, 4]
+
+    def _with_a_dash(self, new_map, point_fc):
+        """Return a map holding one line layer the caller styled with a list dash pattern.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection, drawn as a path.
+
+        Returns:
+            The map. The pattern is passed as a **copy**, so nothing here can pass by identity alone.
+        """
+        return new_map().path(point_fc, line_dash=list(self.DASH))
+
+    def test_the_description_carries_it(self, new_map, point_fc):
+        """A figure written out names the caller's pattern, so a reader elsewhere can draw it.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+        """
+        written = _written(self._with_a_dash(new_map, point_fc))
+        assert '"line_dash": [4, 4]' in written, written
+
+    def test_nothing_is_held_for_it(self, new_map, point_fc):
+        """Described and held at once would be two sources of truth for one keyword.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+        """
+        interactive_map = self._with_a_dash(new_map, point_fc)
+        held = interactive_map._held_for(interactive_map.layer_ids[-1])
+        assert "line_dash" not in dict(held.get("opts") or {}), held
+
+    def test_the_engine_is_given_the_list_the_caller_wrote(self, new_map, point_fc):
+        """The half the description cannot check: what HoloViews actually received.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+
+        Test scenario:
+            Describing a list without thawing it back hands HoloViews the `(4, 4)` the spec froze it to —
+            a spelling the caller never wrote, and one `color_levels` refuses outright. The type is asserted
+            beside the value because `[4, 4] == (4, 4)` is false but says nothing about the *other*
+            direction, where a tuple of equal numbers would read as "drawn correctly" in a looser check.
+        """
+        interactive_map = self._with_a_dash(new_map, point_fc)
+        drawn = _drawn_style(interactive_map.layers[-1]).get("line_dash")
+        assert drawn == self.DASH, (
+            f"HoloViews was given {drawn!r}, not the dash pattern the caller passed"
+        )
+        assert isinstance(drawn, list), (
+            f"and as a {type(drawn).__name__}; the description's tuple was not thawed back"
+        )
+
+    def test_a_map_that_holds_nothing_draws_it_from_the_description_alone(
+        self, new_map, point_fc
+    ):
+        """The point of describing it: the figure carries the pattern to a map that never saw the call.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+
+        Test scenario:
+            Held instead of described, this map draws Bokeh's default — which is exactly what a user saw
+            after reopening a saved figure.
+        """
+        built = self._with_a_dash(new_map, point_fc)
+        drawn = _drawn_elsewhere(built, new_map(), point_fc)
+        pattern = _drawn_style(drawn.element).get("line_dash")
+        assert pattern == self.DASH, (
+            f"a reloaded figure drew with {pattern!r} rather than the caller's pattern"
+        )
+
+
+class TestAPaletteSurvivesBeingReloadedOnAnotherMap:
+    """The user-visible regression #330 reports, drawn rather than described.
+
+    A graduated choropleth resolves a colour per class and the class edges that separate them, and hands
+    both to HoloViews as `cmap` and `color_levels` — lists, both of them. Held beside the layer, the map
+    that built them merged the held copy back and rendered correctly, so nothing on that map showed the
+    defect: **a figure reloaded anywhere else lost the palette and redrew with the tier default.** The
+    classification survived; the colours did not.
+    """
+
+    #: The column the polygons are classified by, and the number of classes — three, so the palette has
+    #: more than one colour in it and a default could not be mistaken for the real thing.
+    COLUMN = "fid"
+    CLASSES = 3
+
+    def _built(self, new_map, polygon_fc):
+        """Return a map holding one graduated choropleth.
+
+        Args:
+            new_map: The map factory.
+            polygon_fc: A polygon collection carrying a numeric column.
+
+        Returns:
+            The map.
+        """
+        return new_map().choropleth(
+            polygon_fc, self.COLUMN, scheme="quantiles", k=self.CLASSES
+        )
+
+    def test_the_description_carries_the_palette(self, new_map, polygon_fc):
+        """A written figure names every colour, so the picture is reproducible from it.
+
+        Args:
+            new_map: The map factory.
+            polygon_fc: A polygon collection.
+        """
+        built = self._built(new_map, polygon_fc)
+        style = dict(_props_of(built).get("common") or {})
+        assert len(style.get("cmap") or ()) == self.CLASSES, style
+        assert len(style.get("color_levels") or ()) == self.CLASSES + 1, style
+
+    def test_the_palette_survives_being_written_and_read_back(
+        self, new_map, polygon_fc
+    ):
+        """In the description is not enough; it has to come out of the JSON the same.
+
+        Args:
+            new_map: The map factory.
+            polygon_fc: A polygon collection.
+        """
+        built = self._built(new_map, polygon_fc)
+        layer_id = built.layer_ids[-1]
+        reread = dict(_reloaded(built).get(layer_id).symbology.props)
+        assert dict(reread.get("common") or {}).get("cmap") == tuple(
+            dict(_props_of(built).get("common") or {})["cmap"]
+        ), reread
+
+    def test_a_map_that_holds_nothing_draws_the_same_palette(self, new_map, polygon_fc):
+        """The check the defect fails: draw the reloaded figure somewhere that holds nothing.
+
+        Args:
+            new_map: The map factory.
+            polygon_fc: A polygon collection.
+
+        Test scenario:
+            Asserted against what HoloViews received rather than against the description, because a value
+            described and then never read is a defect this seam has already had. The two sides are reached
+            by different paths — one through the map's held values, one through JSON and back — so they
+            agreeing is a real statement about the reload.
+        """
+        built = self._built(new_map, polygon_fc)
+        here = _drawn_style(built.layers[-1]).get("cmap")
+        there = _drawn_style(
+            _drawn_elsewhere(built, new_map(), polygon_fc).element
+        ).get("cmap")
+        assert len(here or ()) == self.CLASSES, f"the built map drew with {here!r}"
+        assert there == here, (
+            f"a figure reloaded elsewhere drew with {there!r}, not the palette it was built with"
+        )
+
+    def test_the_class_edges_reach_the_engine_as_a_list(self, new_map, polygon_fc):
+        """`color_levels` is a `ClassSelector` of `(int, list, range)`, so a tuple is refused outright.
+
+        Args:
+            new_map: The map factory.
+            polygon_fc: A polygon collection.
+
+        Test scenario:
+            The thawing half, on the one property whose engine refuses the frozen spelling by type rather
+            than by drawing something subtly wrong.
+        """
+        built = self._built(new_map, polygon_fc)
+        drawn = _drawn_elsewhere(built, new_map(), polygon_fc)
+        edges = _drawn_plot(drawn.element).get("color_levels")
+        assert isinstance(edges, list), (
+            f"HoloViews was given {type(edges).__name__} class edges, not a list"
+        )
+        assert len(edges) == self.CLASSES + 1, (
+            f"and {edges!r} is not {self.CLASSES} classes"
+        )

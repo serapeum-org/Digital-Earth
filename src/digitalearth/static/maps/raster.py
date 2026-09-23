@@ -139,7 +139,11 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the data lies entirely outside what the display CRS shows. The builder answers
             it by skipping the layer (or, under ``strict``, letting it out).
     """
-    props = dict(layer.symbology.props)
+    # Thawed whole rather than key by key: a spec freezes every list to a tuple so it still hashes, and
+    # `levels` was the one key this drawer knew to thaw back. Nothing held is in `props` on this tier —
+    # the scene holds the caller's own objects, and `drawing_style` lays them over the description — so
+    # every container here is a described list, and thawing is the exact inverse of the freeze.
+    props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
     src = scene._prepare(data, props["band"])
@@ -157,7 +161,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     opts["cmap"] = auto_cmap(
         src, requested, props["default_cmap"], lookup=lambda _: style
     )
-    levels = thawed_value(props["levels"])
+    levels = props["levels"]
     if levels is None and kind in _CONTOUR_KINDS:
         levels = style.get("levels")  # the variable's canonical contour levels
     if levels is not None:
@@ -257,7 +261,7 @@ def draw_rgb_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
     """
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     opts = drawing_style(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
@@ -286,7 +290,7 @@ def draw_hsv_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     from matplotlib.colors import hsv_to_rgb
 
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     opts = drawing_style(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     rgb = hsv_to_rgb(stretched)  # (rows, cols, 3) RGB

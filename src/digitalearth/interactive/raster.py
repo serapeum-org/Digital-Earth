@@ -29,7 +29,6 @@ from digitalearth.base.spec import (
     Symbology,
     Viewport,
 )
-from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -185,7 +184,9 @@ def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     resolved = interactive_map._auto_levels(src, props.get("levels"))
     element = contour_op(
         interactive_map._image_from_source(src),
-        levels=10 if resolved is None else thawed_value(resolved),
+        # Already a list: `held_props` thaws the described half once, so a caller's `levels=[0, 5, 10]`
+        # reaches the contour operation in the spelling it was written in.
+        levels=10 if resolved is None else resolved,
         filled=props.get("filled", False),
     )
     common = dict(props.get("opts") or {})

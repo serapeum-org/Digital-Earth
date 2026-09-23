@@ -33,6 +33,7 @@ T = TypeVar("T")
 
 __all__ = [
     "FrozenDict",
+    "MAX_TRAVELLING_ELEMENTS",
     "frozen_value",
     "as_list",
     "as_mapping",
@@ -504,34 +505,109 @@ def _has_a_json_form(value: Any) -> bool:
     return True
 
 
+#: How many values one description may carry for a single keyword, counting every value at every depth —
+#: the list itself, each item, and each item's items. The bound is stated rather than implied, because it is
+#: the second of the two reasons a container might not travel and the type gate used to hide it: refusing
+#: every container refused the big ones as a side effect, and widening the gate would have let a per-pixel
+#: `alpha` through with nothing left to stop it.
+#:
+#: Measured on the full record path (freeze, hash, write, `json.dumps`) for a flat list of floats:
+#: 256 values ~0.6 ms / 1.6 KB, 1,000 ~2.2 ms / 6.7 KB, 10,000 ~31 ms / 77 KB, 1,000,000 ~3.0 s / 9.4 MB.
+#: Every style container a caller really writes sits far below the bound — a 256-entry palette, a colour
+#: ramp, a classifier's edges, a list of columns — and the thing the bound exists to refuse, a per-pixel
+#: `alpha` on a 1000 x 1000 raster, is a thousand times above it. There is no realistic value in between,
+#: which is why one flat number is enough and why it is a round one.
+MAX_TRAVELLING_ELEMENTS: int = 1000
+
+
+def _travelling_budget(value: Any, budget: int) -> int:
+    """Return what is left of `budget` after `value`, or ``-1`` when `value` cannot travel.
+
+    The walk behind :func:`travels_in_a_figure`. It counts as it goes, so a container too large to describe
+    is refused after :data:`MAX_TRAVELLING_ELEMENTS` values rather than after all of them: the gate costs
+    the same whether a caller passes a 3-element list or a million-element one.
+
+    Args:
+        value: The value, or a part of one.
+        budget: How many values may still be counted.
+
+    Returns:
+        The budget left, or ``-1`` for a value the description cannot carry — one the writer refuses, a
+        tuple or an array (which JSON reads back as a list), a mapping with a non-string key, a live
+        object, or a container that exhausts the budget.
+    """
+    if budget <= 0:
+        return -1
+    # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather than
+    # naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64` travelled
+    # (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses `str`, but a numpy
+    # bool is neither, so it missed a gate it belonged in. Membership is not the decision — the writer still
+    # is, and it refuses `datetime64`, `complex128` and `timedelta64`.
+    if value is None or isinstance(value, (bool, str, Real, np.generic)):
+        return budget - 1 if _has_a_json_form(value) else -1
+    # `list` and `dict` **exactly**, not `isinstance`: those two are what the round trip returns as
+    # themselves, and a subclass is re-typed by it exactly as a tuple is. That is not a technicality — an
+    # `xyzservices.TileProvider` *is* a dict, of plain strings, one of which is the caller's API key, and
+    # `isinstance` wrote it into the figure. A dict subclass is an engine object wearing a dict; the type
+    # check that refuses a tuple is what keeps it, and the key in it, out.
+    if type(value) is list:
+        budget -= 1
+        for item in value:
+            budget = _travelling_budget(item, budget)
+            if budget < 0:
+                return -1
+        return budget
+    if type(value) is dict:
+        budget -= 1
+        for key, item in value.items():
+            if not isinstance(key, str):
+                return -1
+            budget = _travelling_budget(item, budget)
+            if budget < 0:
+                return -1
+        return budget
+    return -1
+
+
 def travels_in_a_figure(value: Any) -> bool:
     """Whether a figure's description carries `value`, or the tier must hold it beside the layer.
 
     The one rule every tier asks, so that "what can a figure carry?" has a single answer rather than one per
-    backend (#322). The rule is **a plain value JSON reads back as the very same value**: a string, a boolean, a
-    finite number, or `None`. That is what the shared vocabulary already models — `vmin`/`vmax` are a `Scale`'s
-    bounds, `color`, `width`, `size` and `opacity` are declared channels — and it is what a reader on another
-    machine can act on.
+    backend (#322). The rule is **a value the round trip gives back as an equal value of the same kind**: a
+    string, a boolean, a finite number or `None`, and a `list` or `dict` built out of those — up to
+    :data:`MAX_TRAVELLING_ELEMENTS` values. That is what a reader on another machine can act on.
 
-    It is deliberately **narrower than the writer**: a container of plain values writes down perfectly well and
-    still does not travel. Three measurements are why, each one a defect a tier has already had:
+    It is **narrower than the writer**, and the boundary is measured rather than argued. Taking the whole
+    record-to-draw path — `frozen_value` into the spec, `to_json_value` out to JSON, back in, `thawed_value`
+    at the drawer — a value survives exactly when its kind survives:
 
-    * **A container is not read back as itself.** JSON has no tuple, so a matplotlib dash pattern written as
-      ``(0, (5, 5))`` comes back ``[0, [5, 5]]``, which matplotlib refuses outright
-      (``ValueError: Unrecognized linestyle``) — describing it would trade a layer that redraws with the engine's
-      defaults for one that cannot redraw at all. The trip the other way loses the same value on the scene that
-      drew it: a caller's ``line_dash=[4, 4]`` reaches HoloViews as the ``(4, 4)`` the description froze it to.
-      Held instead, the engine is handed the caller's own object and draws exactly what it was asked for.
-    * **A container can be arbitrarily large, and nothing bounds what a caller hands a builder.** A per-pixel
-      ``alpha`` on a ``1000 x 1000`` raster costs ~1.5 s to write and ~1.2 s to freeze and hash — many times the
-      render it belonged to. An array is the layer's *data*; a description is not the place to copy it to.
+    * **A list or a dict of plain values comes back as itself.** ``['#ff0000', '#00ff00']``, ``[4, 4]``,
+      ``[0.0, 0.5, 1.0]``, ``['fid']`` and ``{'a': 1}`` each return equal, and as the same type, through both
+      the freeze and the JSON trip. So a graduated choropleth's ``color_levels`` and a categorical palette
+      travel, and a figure reloaded elsewhere still redraws in the colours it was built with (#330).
+    * **A tuple does not.** JSON has no tuple, so a matplotlib dash pattern written as ``(0, (5, 5))`` comes
+      back ``[0, [5, 5]]``, which matplotlib refuses outright (``ValueError: Unrecognized linestyle``).
+      Describing it would trade a layer that redraws with the engine's defaults for one that cannot redraw at
+      all. The loss is inherent to the **tuple**, not to the container: a tuple nested inside a list re-types
+      the same way, so ``[1, (2, 3)]`` is held too.
+    * **An array does not either**, and for a second reason: it is re-typed like a tuple *and* it is
+      unbounded. An array is the layer's data; a description is not the place to copy it to.
     * **An engine object has no JSON form at all** — a ``Normalize``, a ``FontProperties``, a ``Colormap``, a
-      Datashader reduction — so a figure holding one could not be written down; and one that happens to *be* a
-      `dict`, such as a tile provider, would be written down with its API key in it.
+      Datashader reduction — so a figure holding one could not be written down. The writer is the oracle for
+      every scalar and every leaf, so that refusal is not re-spelled here.
+    * **A `list` or `dict` *subclass* does not travel either**, and for the same reason a tuple does not: the
+      trip returns a plain `list` or `dict`, which is a different type. It is the subclasses that make this
+      matter rather than the principle — an ``xyzservices.TileProvider`` *is* a dict, of plain strings, one
+      of which is the caller's API key, and a figure is not a place to write a credential.
 
-    The other half of the rule is the tier's to keep: a value this refuses must still reach the drawer, or the
-    engine silently draws its own default in its place. Every tier holds what is refused under the layer's id and
-    merges it back before drawing.
+    The other half of the rule is the tier's to keep, and it is two-sided:
+
+    * A value this refuses must still reach the drawer, or the engine silently draws its own default in its
+      place. Every tier holds what is refused under the layer's id and merges it back before drawing.
+    * A value this accepts is stored frozen — `Symbology` turns every list into a tuple so a spec still
+      hashes — so every tier **thaws the described half once at its read boundary**. Because only a `list`
+      ever travels, thawing is the exact inverse of that freeze; a genuine tuple is in the held half, which
+      is merged on afterwards and never thawed.
 
     Args:
         value: The caller's value for one keyword.
@@ -540,20 +616,27 @@ def travels_in_a_figure(value: Any) -> bool:
         `True` when the layer's description carries it; `False` when the tier must hold it beside the layer.
 
     Examples:
-        - A scalar travels; the container around it does not:
+        - A scalar travels, and so does a list or a dict of scalars:
             ```python
             >>> from digitalearth.base.spec._serial import travels_in_a_figure
             >>> travels_in_a_figure(0.25), travels_in_a_figure("solid"), travels_in_a_figure(None)
             (True, True, True)
-            >>> travels_in_a_figure((0, (5, 5))), travels_in_a_figure(["fid"])
+            >>> travels_in_a_figure(["#ff0000", "#00ff00"]), travels_in_a_figure({"a": 1})
+            (True, True)
+
+            ```
+        - A tuple does not, wherever it sits, because JSON reads it back as a list:
+            ```python
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure((0, (5, 5))), travels_in_a_figure([1, (2, 3)])
             (False, False)
 
             ```
-        - A scalar the writer itself refuses does not travel either:
+        - A scalar the writer itself refuses does not travel, inside a container or out of one:
             ```python
             >>> from digitalearth.base.spec._serial import travels_in_a_figure
-            >>> travels_in_a_figure(float("nan"))
-            False
+            >>> travels_in_a_figure(float("nan")), travels_in_a_figure([1.0, float("nan")])
+            (False, False)
 
             ```
         - A numpy scalar travels wherever its Python counterpart does, and the array around it does not:
@@ -566,15 +649,17 @@ def travels_in_a_figure(value: Any) -> bool:
             False
 
             ```
+        - A container is bounded by the values in it, however they are nested:
+            ```python
+            >>> from digitalearth.base.spec._serial import MAX_TRAVELLING_ELEMENTS, travels_in_a_figure
+            >>> travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS - 1)))
+            True
+            >>> travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS)))
+            False
+
+            ```
     """
-    # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather than
-    # naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64` travelled
-    # (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses `str`, but a numpy
-    # bool is neither, so it missed a gate it belonged in. Membership is not the decision — the writer still
-    # is, and it refuses `datetime64`, `complex128` and `timedelta64` on the line below.
-    if value is None or isinstance(value, (bool, str, Real, np.generic)):
-        return _has_a_json_form(value)
-    return False
+    return _travelling_budget(value, MAX_TRAVELLING_ELEMENTS) >= 0
 
 
 def frozen_value(value: Any) -> Any:

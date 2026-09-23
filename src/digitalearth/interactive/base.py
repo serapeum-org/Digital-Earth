@@ -53,7 +53,7 @@ from digitalearth.base.spec import (
     Viewport,
     free_layer_id,
 )
-from digitalearth.base.spec._serial import travels_in_a_figure
+from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.capabilities import CAPABILITIES
 
@@ -310,16 +310,17 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
     """Record a builder argument if a figure can travel with it; otherwise hold it beside the layer.
 
     The tier's answer to engine values in a description (review C1/H2/H3/M9): a figure is written to JSON
-    and read back, so it carries **plain scalars only**. Anything else — a colormap object, an
-    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp, and
-    every container — is handed to the drawer through the map instead, keyed by layer id, and the
+    and read back, so it carries only what comes back unchanged. Anything else — a colormap object, an
+    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp, a
+    tuple, an array — is handed to the drawer through the map instead, keyed by layer id, and the
     description keeps the JSON-safe rendering of it that `spelling` gives, or nothing.
 
     The rule is :func:`~digitalearth.base.spec._serial.travels_in_a_figure`, which every tier asks (#322).
     This tier used to ask its own `is_json_value`, which stopped at what the writer accepts and so described
-    containers: a caller's `line_dash=[4, 4]` was written down, frozen to `(4, 4)`, and handed to HoloViews
-    in the spelling the caller had not written. The shared rule is narrower on purpose — see its docstring
-    for the three measurements behind it.
+    a tuple: a caller's `line_dash=(0, (5, 5))` was written down and read back as `[0, [5, 5]]`, which
+    matplotlib refuses. The shared rule is narrower than the writer for exactly that reason and no wider —
+    a **list** of plain values comes back as itself, so a palette and a classifier's edges travel and a
+    figure reloaded elsewhere keeps its colours (#330). See its docstring for the round trip behind it.
 
     Args:
         held: The values being held beside this layer; a value that cannot travel is added to it.
@@ -345,17 +346,30 @@ def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
     figure loaded from disk — or drawn on another map — has nothing held, so the drawer sees the
     description alone and draws the layer with what it can.
 
+    This is also **the tier's one read boundary**, so it is where the described half is thawed. A spec
+    freezes every list to a tuple so it still hashes, and HoloViews reads the two spellings as two
+    different requests — a tuple of dimensions is a ``(name, label)`` pair, and `color_levels` is a
+    `ClassSelector` of ``(int, list, range)`` that refuses a tuple outright. Each drawer used to thaw the
+    keys it happened to know about (`vdims` here, `cmap`/`color_levels` in the vector drawer, `levels` in
+    the contour one), so a newly described list reached the engine as a tuple until someone added it to a
+    list of names. Thawing once covers every key, present and future.
+
+    Only the described half is thawed. A **tuple** is exactly what the shared rule refuses to describe, so
+    a genuine tuple is always in the held half — a caller's ``line_dash=(0, (5, 5))``, a ``clim`` pair —
+    and that half is merged on afterwards, untouched, as the caller's own object.
+
     Args:
         interactive_map: The map being drawn, which holds the engine values.
         layer: The layer's description.
 
     Returns:
-        The merged properties. A held value replaces the described one under the same key, **except**
-        where both are mappings: those are merged one level deep, described first, so a held style value
-        joins the ones the builder described rather than replacing the whole dict they sit in. Nesting
-        deeper than one level is not merged — the inner mapping is taken from the held side whole.
+        The merged properties, the described half thawed. A held value replaces the described one under the
+        same key, **except** where both are mappings: those are merged one level deep, described first, so
+        a held style value joins the ones the builder described rather than replacing the whole dict they
+        sit in. Nesting deeper than one level is not merged — the inner mapping is taken from the held side
+        whole.
     """
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     for key, value in interactive_map._held_for(layer.id).items():
         described = props.get(key)
         if isinstance(value, Mapping) and isinstance(described, Mapping):

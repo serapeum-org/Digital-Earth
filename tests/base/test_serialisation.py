@@ -34,11 +34,14 @@ from digitalearth.base.spec import (
     ViewRequest,
 )
 from digitalearth.base.spec._serial import (
+    MAX_TRAVELLING_ELEMENTS,
     FrozenDict,
     crs_to_json,
     finite_number,
+    frozen_value,
     hashable_value,
     read_entry,
+    thawed_value,
     to_json_value,
     travels_in_a_figure,
 )
@@ -1429,15 +1432,91 @@ class TestAMappingHashesByItsItemsAndNothingElse:
 #: and the one whose round trip the rule's docstring cites.
 _DASH_PATTERN = (0, (5, 5))
 
+#: A graduated choropleth's class edges and a categorical palette, as a builder resolves them. Both are
+#: lists, both are far below the size bound, and losing them is the regression #330 reports: a figure
+#: reloaded on another map redrew in the tier's default colours while its classification survived.
+_COLOR_LEVELS = [0.0, 0.25, 0.5, 1.0]
+_PALETTE = ["#440154", "#21918c", "#fde725"]
+
+
+def _same_kind(left, right):
+    """Whether two values are equal and of the same type, reached inside lists and dicts.
+
+    Plain `==` is not enough here: a tuple compares unequal to the list it becomes, but a `list` and a
+    `tuple` of equal numbers nested one level down still have to be told apart, and an array compares
+    element-wise rather than to a single boolean.
+
+    Args:
+        left: The value a builder recorded.
+        right: What came back from the trip.
+
+    Returns:
+        `True` when the two are the same type and equal, at every depth.
+    """
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        if set(left) != set(right):
+            return False
+        return all(_same_kind(left[key], right[key]) for key in left)
+    if isinstance(left, (list, tuple)):
+        if len(left) != len(right):
+            return False
+        return all(_same_kind(one, other) for one, other in zip(left, right))
+    if isinstance(left, np.ndarray):
+        return bool(np.array_equal(left, right))
+    return bool(left == right)
+
+
+def _survives_the_trip(value):
+    """Whether the record-to-draw path gives `value` back as an equal value of the same kind.
+
+    The oracle the rule is measured against, rather than a second spelling of the rule: it runs the real
+    path a described value takes — `frozen_value` into the spec, `to_json_value` out, `json` there and
+    back, `frozen_value` on read, `thawed_value` at the drawer — and compares what comes out.
+
+    Args:
+        value: The value a builder would record.
+
+    Returns:
+        `True` when both the in-process freeze and the stored JSON trip return an equal value whose type
+        is the same at every depth; `False` when either loses it or the writer refuses it outright.
+    """
+    try:
+        after_freeze = thawed_value(frozen_value(value))
+        written = to_json_value(frozen_value(value), "Symbology.props")
+        after_json = thawed_value(frozen_value(json.loads(json.dumps(written))))
+    except (TypeError, ValueError):
+        return False
+    if not _same_kind(value, after_freeze):
+        return False
+    return _same_kind(value, after_json)
+
+
+class _KeyedProvider(dict):
+    """A `dict` subclass carrying a credential, standing in for an `xyzservices.TileProvider`.
+
+    Declared here rather than imported so the rule is checked without the tile stack installed; the real
+    provider is checked by the static tier's own seam suite.
+    """
+
+
+class _TaggedList(list):
+    """A `list` subclass, standing for any sequence a library hands back with behaviour attached."""
+
 
 class TestWhatTravelsInAFigure:
     """One rule, in one place, for what a figure's description carries (#322).
 
     Two tiers used to answer this separately: static asked `travels_in_a_figure` and kept plain scalars only,
-    while interactive asked its own `is_json_value` and kept everything the writer accepts — containers
-    included. The rule is now shared, and it is the narrower of the two. These pin both halves, including the
-    part that reads like an oversight until the round trip is looked at: a container the writer takes
-    perfectly well still does not travel.
+    while interactive asked its own `is_json_value` and kept everything the writer accepts. The rule is now
+    shared, and it is drawn where the **round trip** puts it rather than where either tier had guessed: a
+    value travels when the path back gives it as an equal value of the same kind.
+
+    Holding every container was the over-correction in between (#330). It is true of a tuple and was
+    generalised to the containers beside it without being re-measured, so a graduated choropleth's
+    `color_levels` and a categorical palette — both plain lists, both lossless — were held beside the layer
+    and lost the moment the figure was read anywhere else.
     """
 
     @pytest.mark.parametrize(
@@ -1497,17 +1576,207 @@ class TestWhatTravelsInAFigure:
 
     @pytest.mark.parametrize(
         "value",
-        [[1, 2], _DASH_PATTERN, {"a": 1}, np.array([1.0, 2.0]), ["fid"]],
-        ids=["list", "dash-pattern", "mapping", "array", "columns"],
+        [
+            _PALETTE,
+            _COLOR_LEVELS,
+            [4, 4],
+            ["fid"],
+            {"a": 1},
+            [[1, 2], [3, 4]],
+            {"a": ["x", "y"]},
+            [],
+            {},
+        ],
+        ids=[
+            "palette",
+            "color-levels",
+            "dash-list",
+            "columns",
+            "mapping",
+            "nested-lists",
+            "mapping-of-lists",
+            "empty-list",
+            "empty-mapping",
+        ],
     )
-    def test_a_container_does_not(self, value):
-        """A container is held beside the layer, however plain the values inside it are.
+    def test_a_list_or_a_mapping_of_plain_values_travels(self, value):
+        """A list and a dict come back as themselves, so a figure carries them.
 
         Args:
             value: The container under test.
+
+        Test scenario:
+            This is the half #330 lost. Holding a palette meant the map that drew it merged the held copy
+            back and rendered correctly, while a figure reloaded anywhere else redrew in the tier's default
+            colours — the classification surviving, the colours not.
+        """
+        assert travels_in_a_figure(value), (
+            f"{value!r} comes back from the trip as itself, so a figure's description carries it"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [_DASH_PATTERN, (1, 2), [1, (2, 3)], {"dash": (5, 5)}, np.array([1.0, 2.0])],
+        ids=["dash-pattern", "pair", "tuple-in-a-list", "tuple-in-a-mapping", "array"],
+    )
+    def test_a_tuple_or_an_array_does_not(self, value):
+        """JSON has no tuple, so anything holding one is held beside the layer instead.
+
+        Args:
+            value: The container under test.
+
+        Test scenario:
+            The loss is the tuple's, not the container's, so it has to be found wherever the tuple sits —
+            alone, inside a list, or inside a mapping. A rule that only looked at the outermost type would
+            describe `[1, (2, 3)]` and hand the engine `[1, [2, 3]]`, which is the defect holding
+            containers existed to prevent.
         """
         assert not travels_in_a_figure(value), (
-            f"{value!r} is a container, so the tier holds it beside the layer"
+            f"{value!r} is re-typed by the trip, so the tier holds it beside the layer"
+        )
+
+    def test_a_dict_subclass_does_not_travel_either(self):
+        """A tile provider *is* a dict, and a figure is not a place to write an API key.
+
+        Test scenario:
+            The one case where the same-type half of the rule is not a technicality. An
+            `xyzservices.TileProvider` is a `dict` of plain strings, one of which is the caller's
+            credential, so an `isinstance` gate wrote the key into the figure — measured, as a real
+            failure of `tests/static/test_static_seam.py`, while this rule was being widened. The trip
+            returns a plain `dict`, a different type, so the same check that refuses a tuple refuses this.
+        """
+        provider = _KeyedProvider(
+            {"name": "Thunderforest", "apikey": "FAKE-KEY-NOT-REAL"}
+        )
+        assert not travels_in_a_figure(provider), (
+            "a dict subclass is an engine object wearing a dict, so the tier holds it beside the layer"
+        )
+
+    def test_a_list_subclass_does_not_travel_either(self):
+        """The same holds on the sequence side, so the rule needs no list of blessed subclasses.
+
+        Test scenario:
+            A subclass carries behaviour the trip cannot restore — it comes back a plain `list` — so it is
+            re-typed exactly as a tuple is, and answering by type rather than by name means a subclass
+            nobody has heard of yet is already handled.
+        """
+        assert not travels_in_a_figure(_TaggedList(_PALETTE)), (
+            "a list subclass comes back as a plain list, so the tier holds it beside the layer"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            _PALETTE,
+            _COLOR_LEVELS,
+            ["fid"],
+            {"a": 1},
+            _DASH_PATTERN,
+            [1, (2, 3)],
+            np.array([1.0, 2.0]),
+            [1.0, float("nan")],
+            {1: "a"},
+            _KeyedProvider({"apikey": "FAKE-KEY-NOT-REAL"}),
+            _TaggedList([1, 2]),
+            0.25,
+            "solid",
+            None,
+            float("nan"),
+        ],
+        ids=[
+            "palette",
+            "color-levels",
+            "columns",
+            "mapping",
+            "dash-pattern",
+            "tuple-in-a-list",
+            "array",
+            "nan-in-a-list",
+            "non-string-key",
+            "keyed-provider",
+            "list-subclass",
+            "float",
+            "text",
+            "none",
+            "nan",
+        ],
+    )
+    def test_the_rule_answers_what_the_round_trip_measures(self, value):
+        """The rule is not a taste: for anything inside the size bound it *is* the measured trip.
+
+        Args:
+            value: The value under test.
+
+        Test scenario:
+            Holding every container was justified by one measurement — a dash pattern — generalised to
+            every container beside it without re-measuring. This compares the rule against the trip
+            itself, case by case, so the next generalisation has to survive the same comparison.
+        """
+        assert travels_in_a_figure(value) is _survives_the_trip(value), (
+            f"the rule and the measured round trip disagree about {value!r}"
+        )
+
+    def test_a_described_list_reaches_the_drawer_as_the_list_it_was(self):
+        """The whole point of describing it: what the drawer is handed is what the builder recorded.
+
+        Test scenario:
+            Describing without thawing hands the engine a tuple — HoloViews' `color_levels` is a
+            `ClassSelector` of `(int, list, range)` and refuses one outright — so the rule and the read
+            boundary have to land together. This pins the value half; the tier suites pin the engine half.
+        """
+        written = to_json_value(frozen_value(_PALETTE), "Symbology.props")
+        drawn = thawed_value(frozen_value(json.loads(json.dumps(written))))
+        assert drawn == _PALETTE, f"the palette came back as {drawn!r}"
+        assert isinstance(drawn, list), f"and as a {type(drawn).__name__}, not a list"
+
+    def test_a_container_of_the_bounded_size_travels(self):
+        """The bound is inclusive, so the biggest describable container really is describable.
+
+        Test scenario:
+            Stated as a rule rather than left implicit. Refusing every container bounded the cost as a
+            side effect; describing lists has to keep that bound on purpose, and a bound nobody can reach
+            from either side is not a bound that has been checked.
+        """
+        assert travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS - 1))), (
+            "a container holding exactly the bounded number of values must travel"
+        )
+
+    def test_a_container_over_the_bound_does_not(self):
+        """A per-pixel `alpha` is the layer's data, and a description is not where data is copied.
+
+        Test scenario:
+            Measured on the full record path: 1,000 values cost ~2 ms and ~7 KB, 1,000,000 cost ~3 s and
+            ~9 MB. The second is a 1000 x 1000 raster's worth of per-pixel alpha, and it is many times the
+            render it belonged to.
+        """
+        assert not travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS))), (
+            "a container one value over the bound must be held beside the layer"
+        )
+
+    def test_the_bound_counts_every_value_at_every_depth(self):
+        """Nesting cannot be used to smuggle a big container past a bound that counted only the top level.
+
+        Test scenario:
+            `[[0, 0], [1, 1], ...]` has few entries and many values. A bound on `len()` would wave through
+            an arbitrarily large payload one level down, which is the cost the bound exists to refuse.
+        """
+        pairs = [[index, index] for index in range(MAX_TRAVELLING_ELEMENTS // 2)]
+        assert len(pairs) < MAX_TRAVELLING_ELEMENTS, (
+            "the outer list is well inside the bound, so only its depth can refuse it"
+        )
+        assert not travels_in_a_figure(pairs), (
+            "and it holds half as many values again as the bound allows, so it must not travel"
+        )
+
+    def test_a_leaf_the_writer_refuses_sinks_the_container_around_it(self):
+        """The writer is still the oracle for every leaf, reached however deep it sits.
+
+        Test scenario:
+            A `nan` written into a figure is read back by `JSON.parse` as a `SyntaxError`, so a list
+            holding one is no more writable than the bare `nan` is.
+        """
+        assert not travels_in_a_figure({"levels": [1.0, float("nan")]}), (
+            "a mapping holding a value JSON cannot spell must be held beside the layer"
         )
 
     def test_the_rule_is_narrower_than_the_writer_on_purpose(self):

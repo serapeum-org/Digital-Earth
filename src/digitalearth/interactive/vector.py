@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
-from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -39,18 +38,6 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
-
-
-#: The style options HoloViews takes as a `list` and refuses as a tuple. These are the builder's **own**
-#: resolved values — a sampled colour ramp, a classifier's edges — which the description carries and so
-#: stores as tuples: a ramp read back from one is spelled `("#440154", ...)`, which `color_levels` rejects
-#: outright (`ClassSelector` of `(int, list, range)`) and which makes a palette harder to read wherever a
-#: style is printed. Everything else keeps the spelling it was stored in, `clim` included: that one *is* a
-#: pair, and HoloViews reads it as one. The caller's own keywords go through the freeze too, since M3 began
-#: describing the JSON-safe half of them: a `cmap=["#ff0000", "#00ff00"]` is stored, and handed to
-#: HoloViews, as `("#ff0000", "#00ff00")`. Only the builder's own resolved values are thawed back here —
-#: the keys this names — so a caller's tuple-spelled list reaches the engine as a tuple.
-_AS_LISTS: Tuple[str, ...] = ("cmap", "color_levels")
 
 
 def _classifiable(features: Any) -> Any:
@@ -164,17 +151,13 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     element = interactive_map._vector_element(
         props["hv_type"],
         gdf,
-        # Thawed, because the description stores every sequence as a tuple and HoloViews reads a tuple of
-        # dimensions as a `(name, label)` pair — the stored `("fid",)` is refused where `["fid"]` is not.
-        # Only this property: a `clim` is a pair, and reaches Bokeh as the pair it was written as.
-        vdims=thawed_value(props.get("vdims")),
+        # Already a list: `held_props` thaws the described half once, for every key, so this drawer no
+        # longer names the ones HoloViews refuses as a tuple (`vdims`, `cmap`, `color_levels`).
+        vdims=props.get("vdims"),
     )
     # The builder's own resolved style, then the caller's raw keywords over it — the precedence the
     # builder applied before the two were split (the description carries the first, the map the second).
-    common = {
-        key: thawed_value(value) if key in _AS_LISTS else value
-        for key, value in dict(props.get("common") or {}).items()
-    }
+    common = dict(props.get("common") or {})
     common.update(dict(props.get("opts") or {}))
     element = interactive_map._styled(
         element, common=common or None, bokeh={"tools": ["hover"]}
