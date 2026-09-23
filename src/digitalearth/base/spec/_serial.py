@@ -20,6 +20,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    List,
     Mapping,
     NoReturn,
     Optional,
@@ -535,6 +536,14 @@ def _travelling_budget(value: Any, budget: int) -> int:
     is refused after :data:`MAX_TRAVELLING_ELEMENTS` values rather than after all of them: the gate costs
     the same whether a caller passes a 3-element list or a million-element one.
 
+    The walk carries its own stack rather than the interpreter's, and that is not a style choice (`R-M1`).
+    `MAX_TRAVELLING_ELEMENTS` is 1,000 and CPython's default recursion limit is 1,000, so a recursive walk
+    raised `RecursionError` before the budget could refuse a deeply nested container — and a builder that
+    raises loses the value outright, where the tier's promise is to *hold* what this refuses beside the
+    layer. Iterating makes both halves of one bound reachable: breadth and depth are counted the same way,
+    and a container that holds itself simply spends the budget one visit at a time until it is refused, so
+    no cycle memory is needed.
+
     Args:
         value: The value, or a part of one.
         budget: How many values may still be counted.
@@ -542,39 +551,42 @@ def _travelling_budget(value: Any, budget: int) -> int:
     Returns:
         The budget left, or ``-1`` for a value the description cannot carry — one the writer refuses or
         writes back as a different value, a tuple or an array (which JSON reads back as a list), a mapping
-        with a non-string key, a live object, or a container that exhausts the budget.
+        with a non-string key, a live object, or a container that exhausts the budget, whether by holding
+        too many values, by nesting too deep, or by holding itself.
     """
-    if budget <= 0:
+    pending: List[Any] = [value]
+    while pending:
+        if budget <= 0:
+            return -1
+        item = pending.pop()
+        # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather
+        # than naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64`
+        # travelled (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses
+        # `str`, but a numpy bool is neither, so it missed a gate it belonged in. Membership is not the
+        # decision — the writer still is, and it refuses `datetime64`, `complex128` and `timedelta64`.
+        if item is None or isinstance(item, (bool, str, Real, np.generic)):
+            if not _written_back_equal(item):
+                return -1
+            budget -= 1
+            continue
+        # `list` and `dict` **exactly**, not `isinstance`: those two are what the round trip returns as
+        # themselves, and a subclass is re-typed by it exactly as a tuple is. That is not a technicality —
+        # an `xyzservices.TileProvider` *is* a dict, of plain strings, one of which is the caller's API key,
+        # and `isinstance` wrote it into the figure. A dict subclass is an engine object wearing a dict; the
+        # type check that refuses a tuple is what keeps it, and the key in it, out.
+        if type(item) is list:
+            budget -= 1
+            pending.extend(item)
+            continue
+        if type(item) is dict:
+            budget -= 1
+            for key, entry in item.items():
+                if not isinstance(key, str):
+                    return -1
+                pending.append(entry)
+            continue
         return -1
-    # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather than
-    # naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64` travelled
-    # (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses `str`, but a numpy
-    # bool is neither, so it missed a gate it belonged in. Membership is not the decision — the writer still
-    # is, and it refuses `datetime64`, `complex128` and `timedelta64`.
-    if value is None or isinstance(value, (bool, str, Real, np.generic)):
-        return budget - 1 if _written_back_equal(value) else -1
-    # `list` and `dict` **exactly**, not `isinstance`: those two are what the round trip returns as
-    # themselves, and a subclass is re-typed by it exactly as a tuple is. That is not a technicality — an
-    # `xyzservices.TileProvider` *is* a dict, of plain strings, one of which is the caller's API key, and
-    # `isinstance` wrote it into the figure. A dict subclass is an engine object wearing a dict; the type
-    # check that refuses a tuple is what keeps it, and the key in it, out.
-    if type(value) is list:
-        budget -= 1
-        for item in value:
-            budget = _travelling_budget(item, budget)
-            if budget < 0:
-                return -1
-        return budget
-    if type(value) is dict:
-        budget -= 1
-        for key, item in value.items():
-            if not isinstance(key, str):
-                return -1
-            budget = _travelling_budget(item, budget)
-            if budget < 0:
-                return -1
-        return budget
-    return -1
+    return budget
 
 
 def travels_in_a_figure(value: Any) -> bool:

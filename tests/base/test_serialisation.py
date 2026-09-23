@@ -1871,6 +1871,77 @@ class TestWhatTravelsInAFigure:
             "and it holds half as many values again as the bound allows, so it must not travel"
         )
 
+    @staticmethod
+    def _nested(depth):
+        """Return a list nested `depth` deep, each level holding only the next.
+
+        Args:
+            depth: How many lists to build.
+
+        Returns:
+            The outermost list. It holds `depth` values in total — one per level — so the depth is what
+            the size bound is counting.
+        """
+        innermost = []
+        outermost = innermost
+        for _ in range(depth - 1):
+            outermost = [outermost]
+        return outermost
+
+    def test_a_container_nested_inside_the_bound_travels_however_deep_it_is(self):
+        """Depth is counted by the budget, not by the interpreter's stack (`R-M1`).
+
+        Test scenario:
+            `MAX_TRAVELLING_ELEMENTS` is 1,000 and CPython's default recursion limit is 1,000 too, so a
+            recursive walk hit `RecursionError` before the budget could answer and the nesting half of the
+            bound could not be reached from either side. Measured before the walk was made iterative, this
+            depth raised; the breadth case one value smaller has always passed, so the two halves of one
+            bound behaved differently for no stated reason.
+        """
+        assert travels_in_a_figure(self._nested(MAX_TRAVELLING_ELEMENTS - 1)), (
+            "a container holding the bounded number of values must travel however they are arranged"
+        )
+
+    def test_a_container_nested_past_the_bound_is_refused_rather_than_raising(self):
+        """The gate answers; it does not throw (`R-M1`).
+
+        Test scenario:
+            A builder calls this on a caller's style value, and the tier's promise is that a refused value
+            is *held* beside the layer rather than lost. Raising breaks that promise in the worst way — the
+            builder call itself fails, so nothing is drawn at all — and it was a new failure mode: before
+            the rule was widened, every container was refused by type in O(1) and no caller value recursed.
+        """
+        assert not travels_in_a_figure(self._nested(MAX_TRAVELLING_ELEMENTS + 1)), (
+            "a container nested one value past the bound must be refused, not raise"
+        )
+
+    def test_a_self_referential_list_is_refused_rather_than_raising(self):
+        """A container that holds itself is over every bound, so the budget is what ends the walk.
+
+        Test scenario:
+            The walk has no cycle memory and needs none: each visit to the list spends one value, so a
+            cycle exhausts the budget in `MAX_TRAVELLING_ELEMENTS` steps and is refused as the unbounded
+            container it is.
+        """
+        cyclic = []
+        cyclic.append(cyclic)
+        assert not travels_in_a_figure(cyclic), (
+            "a list holding itself must be refused, not raise"
+        )
+
+    def test_a_self_referential_mapping_is_refused_rather_than_raising(self):
+        """The same on the mapping side, which walks a second code path.
+
+        Test scenario:
+            The dict branch checks its keys before descending, so it is worth its own case: a cycle reached
+            through a value must end the same way one reached through a list item does.
+        """
+        cyclic = {}
+        cyclic["self"] = cyclic
+        assert not travels_in_a_figure(cyclic), (
+            "a mapping holding itself must be refused, not raise"
+        )
+
     def test_a_leaf_the_writer_refuses_sinks_the_container_around_it(self):
         """The writer is still the oracle for every leaf, reached however deep it sits.
 
