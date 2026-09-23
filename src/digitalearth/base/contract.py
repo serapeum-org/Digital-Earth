@@ -357,10 +357,17 @@ PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "imshow": "field",
                 "scatter": "points",
                 "shapes": "polygons",
-                "set_extent": "set_bounds",
-                # `point_cloud` is not listed: it is a second *current* spelling of `grid_points`, which the
-                # tier offers and deprecates neither of. A rename is a name on its way out, and nothing has
-                # been agreed about that one (review M5).
+                # `set_extent` is not listed, and used to be. It is not `set_bounds` under an older name:
+                # measured, it is `set_extent(bbox) -> None`, which takes no `padding`, has no `None` that
+                # fits the data, and returns nothing where the Core name returns `self`. So the two tables
+                # dated the same arrival differently — a rename at order 27a here, a capability at order 26
+                # in `PENDING` — and a caller reading `PLANNED_RENAMES` was told the method existed under
+                # another spelling (review R-L4). The roadmap agrees: order 27a carries `imshow`, `scatter`
+                # and `shapes`, and order 26 is where a figure learns to frame itself.
+                #
+                # `point_cloud` is not listed either: it is a second *current* spelling of `grid_points`,
+                # which the tier offers and deprecates neither of. A rename is a name on its way out, and
+                # nothing has been agreed about that one (review M5).
             }
         ),
     }

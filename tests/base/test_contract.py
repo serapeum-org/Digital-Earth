@@ -13,6 +13,7 @@ import pytest
 from digitalearth.base.contract import (
     CORE,
     PENDING,
+    PLANNED_RENAMES,
     ROADMAP_ORDERS,
     TIER2,
     Method,
@@ -196,6 +197,34 @@ class TestTheRenamesNobodyHasAdopted:
         from digitalearth.base.contract import planned_renames
 
         assert dict(planned_renames("nobody")) == {}, planned_renames("nobody")
+
+    def test_each_planned_rename_is_why_its_core_name_is_pending(self):
+        """The two tables must not date the same arrival differently (review R-L4).
+
+        Test scenario:
+            `_drawn_as`'s docstring promises that "the old spelling is the one `PLANNED_RENAMES` records, so
+            the two tables answer consistently" — and for `set_extent` they did not: `PLANNED_RENAMES` dated
+            static's `set_bounds` at the rename order and `PENDING` at the framing order, two different
+            answers to when a caller gets it. A row belongs here only when the tier already draws the thing
+            and the spelling is all that is missing, which is exactly what `_drawn_as` says; a row whose
+            reason says something else is a capability gap wearing a rename's clothes.
+        """
+        from digitalearth.base.contract import _drawn_as
+
+        stated = {
+            (backend, new): PENDING.get(backend, {}).get(new)
+            for backend, table in PLANNED_RENAMES.items()
+            for new in table.values()
+        }
+        expected = {
+            (backend, new): _drawn_as(old)
+            for backend, table in PLANNED_RENAMES.items()
+            for old, new in table.items()
+        }
+        assert stated == expected, (
+            "a planned rename's Core name is not pending for the reason the rename gives; either the tier "
+            "draws it under the old name, or the entry does not belong in PLANNED_RENAMES"
+        )
 
 
 def _issues_named_in_reasons():
