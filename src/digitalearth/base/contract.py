@@ -79,14 +79,20 @@ class Method:
 
 
 #: When the three live layer-management methods are built. Named once because it is one decision — the order
-#: that adds toggle, reorder and replace to every tier — rather than nine independent notes that happen to
-#: agree today.
+#: that adds toggle, reorder and replace to the tiers still without them — rather than nine independent notes
+#: that happen to agree today.
 #:
 #: It names the **order** and not the wave. This said "Wave 5, order 23" until a wave was inserted ahead of it
 #: and every later wave renumbered, after which it told callers their methods were coming in a wave that had
 #: already shipped without them (#317). Orders keep their numbers when the plan moves; waves do not, so a wave
-#: number in a message a user reads is a fact with a shelf life. The per-tier issues are #216 (static) and
-#: #188 (web); the 3-D and interactive halves are unfiled.
+#: number in a message a user reads is a fact with a shelf life.
+#:
+#: Three tiers are waiting, and only one of them has an open issue: #216 for the static half. The web half's
+#: issue, #188, is **closed** — it closed with the identity work, while `set_visible`, `move_layer` and
+#: `replace_layer` are still absent from `WebMap`, so nothing open tracks that half. The interactive half was
+#: never filed. The 3-D tier is not waiting at all: measured, `Scene3D` answers to all three already, which is
+#: why `PENDING` lists none of them against it. The issue numbers stay out of the reasons below deliberately —
+#: a reason is held to :data:`~tests.open_issues.KNOWN_OPEN_ISSUES`, and a closed issue could not pass it.
 _LAYER_MANAGEMENT_ORDER = "order 23"
 
 #: Why a tier has none of them yet. The two spellings differ in what "layer management" means on that tier:
