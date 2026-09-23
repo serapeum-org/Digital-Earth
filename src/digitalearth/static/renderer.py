@@ -282,8 +282,12 @@ def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional["DrawnLaye
         elsewhere carries the description and not the artist.
 
     Raises:
-        MissingObject: when the object is not here and the scene is ``strict``, which is the same
-            skip-or-raise answer every other layer gives for data it cannot draw.
+        MissingObject: when the object is not here and the scene is ``strict`` — the same skip-or-raise
+            answer every other layer gives for data it cannot draw, and since #325 the same *type* as
+            well. `MissingObject` derives from :class:`~digitalearth.base.crs.OffLimbError`, so the one
+            ``except OffLimbError`` that catches a strict off-limb raster on this tier catches this too.
+            It did not before: this was a bare `LookupError` while the 3-D and web tiers raised
+            `OffLimbError` for the same case, so a caller who handled one was not handling the other.
     """
     try:
         glyph, artist, label = held_object(

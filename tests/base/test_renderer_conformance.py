@@ -51,6 +51,15 @@ the one of the three readings that was wrong. The check is asked in both forms, 
 group, and a third check pins that a layer described *visible* is not drawn hidden, so a tier cannot pass
 the first two by hiding everything.
 
+A seventh is one level down from the sixth (#325). **A layer that could not be drawn is one type to catch.**
+Asked of the four tiers under ``strict``, that had two unrelated answers: the static tier raised
+`MissingObject`, a `LookupError`, for a custom layer whose object it does not hold, while the 3-D and web
+tiers raised `OffLimbError`, a `RuntimeError`, for the same case and for every off-limb one. So
+``except OffLimbError`` around a strict render caught every tier's off-limb layer and three of the four
+missing objects — missing the default tier's — and a caller who handled one was silently not handling the
+other. `MissingObject` now derives from `OffLimbError`, and the check below asks each tier for the refusal
+rather than trusting the class: a tier that invents a third answer fails it.
+
 **Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
 updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
 the overlay from `layers` — and on none of the 2-D tiers does it move the figure the tier reports. That is
@@ -65,12 +74,17 @@ from dataclasses import replace as with_fields
 
 import pytest
 
+from digitalearth.base.crs import OffLimbError
+from digitalearth.base.custom import CUSTOM_PREFIX
 from digitalearth.base.registry import _OBJECTS
-from digitalearth.base.spec import LayerSpec
+from digitalearth.base.spec import LayerSpec, Symbology
 
 #: The group the group-hidden check files a layer under. Named after this contract so it cannot collide with
 #: a group a tier put a layer in itself.
 _HIDDEN_GROUP = "conformance-hidden-group"
+
+#: The layer id the undrawable-layer checks name. No tier holds an object under it, which is the point.
+_UNDRAWABLE_LAYER = "conformance-undrawable-layer"
 
 
 def _hidden_by_its_own_flag(figure, layer_id: str):
@@ -656,6 +670,74 @@ class RendererConformance:
         layer_id = self.contract.draw_one(tier)
         assert self.contract.drawn_is_hidden(tier, layer_id) is False, (
             f"{layer_id!r} is described visible and the {self.contract.backend} tier drew it hidden"
+        )
+
+    def _a_layer_this_tier_cannot_draw(self):
+        """Return this tier's drawer for a custom layer, and a layer naming an object nothing holds.
+
+        A custom layer whose object is absent is the cheapest "layer with nothing to draw" a tier has: no
+        data to build, no warp to fail, no engine call before the refusal — and every tier that draws a
+        caller's own object looks it up by layer id through the one shared rule,
+        :func:`~digitalearth.base.custom.held_object`. A tier that declares the kind but keeps those
+        objects outside its renderer (the interactive tier does) has no such drawer, and skips.
+
+        Returns:
+            The drawer for this tier's ``custom:<engine>`` kind, and a `LayerSpec` naming it.
+        """
+        custom = sorted(
+            kind
+            for kind in self.contract.declared_kinds()
+            if kind.startswith(CUSTOM_PREFIX)
+        )
+        if not custom:
+            pytest.skip(
+                f"the {self.contract.backend} tier declares no custom kind, so it has no object to miss"
+            )
+        kind = custom[0]
+        undrawn = UNDRAWN_KINDS[self.contract.backend]
+        if kind in undrawn:
+            pytest.skip(
+                f"the {self.contract.backend} tier has no drawer for {kind!r}: {undrawn[kind]}"
+            )
+        # `via` is how the static tier's dispatcher picks between the recipes one kind is drawn by; the
+        # other tiers register the drawer against the kind directly and never read it.
+        layer = LayerSpec(
+            _UNDRAWABLE_LAYER, kind, symbology=Symbology(props={"via": "custom"})
+        )
+        return self.contract.drawer_for(kind), layer
+
+    def test_a_layer_it_cannot_draw_is_refused_as_one_catchable_type(self, tier):
+        """Under `strict`, "this layer could not be drawn" is one type a caller catches, on every tier.
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            The seventh defect (#325), and the same shape as the sixth: one question, more than one answer.
+            The static tier raised `MissingObject`, a `LookupError`; the 3-D and web tiers raised
+            `OffLimbError`, a `RuntimeError`. The two were unrelated, so ``except OffLimbError`` around a
+            strict render covered every tier's off-limb case and three of the four missing-object cases —
+            missing the default tier's. A caller who handled one was silently not handling the other.
+        """
+        drawer, layer = self._a_layer_this_tier_cannot_draw()
+        tier.strict = True
+        with pytest.raises(OffLimbError):
+            drawer(tier, None, layer)
+
+    def test_a_layer_it_cannot_draw_is_skipped_when_the_tier_is_not_strict(self, tier):
+        """The other half of the same answer: lenient is a skip, and a skip draws nothing.
+
+        Args:
+            tier: The tier under test.
+
+        Test scenario:
+            Pins the check above to `strict` rather than to the refusal being unconditional — a tier that
+            raised whatever its policy said would pass it and break every lenient caller.
+        """
+        drawer, layer = self._a_layer_this_tier_cannot_draw()
+        tier.strict = False
+        assert drawer(tier, None, layer) is None, (
+            f"the {self.contract.backend} tier drew something for a layer whose object it does not hold"
         )
 
     def test_every_drawable_kind_resolves_to_a_drawer(self):
