@@ -29,6 +29,15 @@ SUFFIXED = "wells-2"
 #: The column the polygon fixture carries, so a `choropleth` has something to colour by.
 COLUMN = "pop"
 
+#: A family matplotlib ships with itself, so it resolves on every machine that can import matplotlib.
+FONT = "DejaVu Serif"
+
+#: A second shipped family, for the probe that an explicit font keyword outranks the layer's name.
+OTHER_FONT = "DejaVu Sans Mono"
+
+#: What `Text.get_fontfamily()` answers when nobody chose a family — matplotlib's `font.family` default.
+DEFAULT_FAMILY = "sans-serif"
+
 
 @pytest.fixture
 def drawn():
@@ -239,3 +248,69 @@ class TestTheSquareGraticuleShorthand:
         drawn.graticule(lon_step=20.0, lat_step=5.0, name=ASKED)
         props = drawn.figure_spec.layers.get(ASKED).symbology.props
         assert (props["lon_step"], props["lat_step"]) == (20.0, 5.0), props
+
+
+class TestTheFontMatplotlibReadsFromAName:
+    """`name=` names the layer without taking matplotlib's font alias away from the caller (R-M2).
+
+    `matplotlib.axes.Axes.text` and `.annotate` document `name=` as an alias of the font family, so
+    `text(..., name="DejaVu Serif")` chose a font for as long as this package forwarded the keyword. #321
+    gave `name=` to the layer on all thirty-five builders, and on these two — the only two whose artist is a
+    `Text`, and so the only two of matplotlib's artists that answer to `name` at all — that silently
+    reinterpreted a font as an id. These probes read the font **off the artist**, not off the description:
+    the defect was a value that looked recorded and never reached the engine.
+    """
+
+    def test_a_name_that_is_a_font_family_still_reaches_the_artist(self, drawn):
+        """The old spelling keeps choosing the font it always chose.
+
+        Args:
+            drawn: The map under test.
+        """
+        placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        assert placed.get_fontfamily() == [FONT], placed.get_fontfamily()
+
+    def test_the_layer_is_named_for_it_all_the_same(self, drawn):
+        """And the layer is still filed under what the caller asked for, like every other builder.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        assert drawn.layer_ids == [FONT], drawn.layer_ids
+
+    def test_annotate_keeps_the_font_too(self, drawn):
+        """`annotate` draws an `Annotation`, which is a `Text` and reads `name` the same way.
+
+        Args:
+            drawn: The map under test.
+        """
+        placed = drawn.annotate(0.5, 0.5, "Amsterdam", name=FONT)
+        assert placed.get_fontfamily() == [FONT], placed.get_fontfamily()
+
+    def test_a_name_that_is_no_font_leaves_the_font_alone(self, drawn):
+        """The complement: an ordinary layer name must not become a font matplotlib then fails to find.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            Forwarding every `name=` on to matplotlib would answer the finding and cost a `findfont: Font
+            family 'wells' not found.` on every named label. The name is only read as a font when it
+            resolves to one.
+        """
+        placed = drawn.text(0.5, 0.5, "Amsterdam", name=ASKED)
+        assert placed.get_fontfamily() == [DEFAULT_FAMILY], placed.get_fontfamily()
+
+    def test_a_font_the_caller_spelled_out_outranks_the_name(self, drawn):
+        """`fontname=` is the unambiguous spelling, so it decides — and matplotlib is never handed both.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            Passing a family under two of matplotlib's aliases at once raises `TypeError: Got both`, so the
+            name is only read as a font when the call has not already said which font it wants.
+        """
+        placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT, fontname=OTHER_FONT)
+        assert placed.get_fontfamily() == [OTHER_FONT], placed.get_fontfamily()
