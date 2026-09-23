@@ -127,11 +127,11 @@ class TestALayerThatDescribesACustomObject:
 
 
 class TestAMissingObject:
-    """One rule for a figure that names a custom layer whose object is not here (contract C7).
+    """One rule for a figure that names a custom layer whose object is not here — contract C7.
 
-    C7 is the rule for a layer with **nothing to draw**, which a missing object is: skipped with a warning,
-    raised under ``strict=True``. A **kind the tier does not draw at all** is a different situation and not
-    C7's — `drawer_for` refuses it by name in every mode (#320); `TestWhatC7DoesNotCover` pins that half.
+    The clause is stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`. A missing object is
+    its *nothing to draw* half; `TestWhatC7DoesNotCover` pins the other half, a kind the tier does not draw
+    at all, which is refused by name rather than skipped (#320).
     """
 
     @staticmethod
@@ -185,12 +185,10 @@ class TestAMissingObject:
 class TestWhatC7DoesNotCover:
     """The two situations C7 used to be read for, pinned apart so neither drifts into the other (#320).
 
-    C7 is *a layer with nothing to draw*: a missing object, an off-limb raster, an empty geometry set. Those
-    skip with a warning and raise under ``strict=True``, and the rest of this file and each tier's contract
-    file pin that. A *kind the tier does not draw at all* is a caller error rather than a fact about the
-    data, so it is refused by name in **every** mode — the half this class exists to keep, because the text
-    once read as if ``strict=`` governed it too, and softening it would swallow a typo'd or cross-backend
-    kind in silence.
+    Both halves of the clause are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`. The
+    *nothing to draw* half is pinned by the rest of this file and by each tier's contract file; this class
+    exists to keep the other half, because the text once read as if ``strict=`` governed it too, and
+    softening it would swallow a typo'd or cross-backend kind in silence.
 
     Both halves are asked of one lenient scene, so a future change cannot satisfy one by breaking the other.
     """

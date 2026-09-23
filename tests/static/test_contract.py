@@ -6,6 +6,10 @@ none was asked for, and what happens to a layer with nothing to draw. This modul
 (matplotlib) tier's answers, one class per contract point, plus the deprecated spellings each rename keeps
 alive for a release.
 
+The clauses themselves are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`. Each class
+below names the clause it pins and then says only what *this* tier brings to it — which builders, which
+literal, which dial — so amending a clause is one edit in ``base/`` rather than one per tier (#326).
+
 Every rename here is a *rename*: the old keyword still works, still does the same thing, and warns once
 naming its replacement. A test per alias proves both halves of that, so the release that drops the alias
 has a failing test to delete rather than a silent behaviour change to discover.
@@ -105,7 +109,7 @@ def _styled(monkeypatch, **style):
 
 
 class TestSaveReturnsPath:
-    """C1 — every ``save`` hands back a ``pathlib.Path`` pointing at what it wrote."""
+    """C1 on the static tier — the ``Scene``, ``Map`` and globe saves, which take three different paths."""
 
     def test_scene_save_returns_the_written_path(self, tmp_path):
         """Scene.save returns the path it wrote, and the file is really there.
@@ -159,7 +163,7 @@ class TestSaveReturnsPath:
 
 
 class TestFrameRateDefault:
-    """C2 — ``fps`` is the frame rate everywhere, and both entry points start from one default."""
+    """C2 on the static tier — both animation entry points, ``animate`` and ``rotate``."""
 
     @pytest.mark.parametrize("method", ["animate", "rotate"])
     def test_fps_defaults_to_the_shared_rate(self, method):
@@ -198,7 +202,7 @@ class TestFrameRateDefault:
 
 
 class TestMarkerSizeAndColumn:
-    """C3 — ``size`` is a marker's size; the column that varies it is ``column``."""
+    """C3 on the static tier — the scatter builders, and the rename each of them carried."""
 
     def test_size_column_scales_the_markers(self, points_fc):
         """scatter(size_column=...) maps the column's values across ``size_limits``.
@@ -358,7 +362,7 @@ class TestADeprecationWarningPointsAtTheCaller:
 
 
 class TestClassification:
-    """C4 — a classifiable layer takes ``scheme`` + ``k``, and ``scheme=None`` is a continuous ramp."""
+    """C4 on the static tier — the builders here that classify, and the legend they key."""
 
     def test_signature_declares_scheme_and_k(self):
         """choropleth declares the contract's parameters and defaults.
@@ -430,7 +434,7 @@ class TestClassification:
 
 
 class TestColormapResolution:
-    """C5 — ``cmap=None`` resolves through ``auto_style``, with the tier's literal behind the lookup."""
+    """C5 on the static tier — every raster builder, with the tier's own literal behind the lookup."""
 
     @pytest.mark.parametrize(
         "method", ["imshow", "contourf", "contour", "pcolormesh", "block"]
@@ -520,7 +524,7 @@ class TestColormapResolution:
 
 
 class TestAutoStyleLevelsAndUnits:
-    """C6 — the style lookup's ``levels`` and ``units`` are consumed, not just its ``cmap``."""
+    """C6 on the static tier — where the lookup's ``levels`` and ``units`` land once they are read."""
 
     def test_levels_fill_in_for_a_contour_render(self, dataset, monkeypatch):
         """A contour render takes the variable's canonical levels when the caller passed none.
@@ -646,11 +650,10 @@ class TestAutoStyleLevelsAndUnits:
 
 
 class TestStrictOffLimb:
-    """C7 — a layer with nothing to draw is skipped with a warning, or raises under ``strict``.
+    """C7 on the static tier — off-limb data, an empty geometry set, and the ``strict`` dial over both.
 
-    "Nothing to draw" is the whole of C7: off-limb data, an empty geometry set, a custom layer whose object
-    this process does not hold. A **kind this tier does not draw at all** — ``terrain`` here — is a caller
-    error rather than a fact about the data, so `drawer_for` refuses it by name in every mode (#320).
+    The clause's other half, a kind this tier does not draw at all, is ``terrain`` here; it is pinned for
+    every tier in ``tests/base/test_custom_layers.py::TestWhatC7DoesNotCover`` rather than again per tier.
     """
 
     def test_strict_defaults_to_false(self):
@@ -707,7 +710,7 @@ class TestStrictOffLimb:
 
 
 class TestNaturalEarthSurface:
-    """C12 — static's six named Natural-Earth methods are the canonical surface (unchanged)."""
+    """C12 on the static tier — the six named methods here, which are the surface the others align to."""
 
     @pytest.mark.parametrize("method, layer", sorted(NATURAL_EARTH_METHODS.items()))
     def test_method_draws_its_own_layer(self, method, layer, mocker):
@@ -730,7 +733,7 @@ class TestNaturalEarthSurface:
 
 
 class TestAnimationState:
-    """C14 — ``_animation_fps`` is declared in ``__init__``, not conjured by ``getattr``."""
+    """C14 on the static tier — the animation rate ``Map`` carries between a build and a save."""
 
     def test_declared_on_a_fresh_map(self):
         """A Map has the attribute before anything is animated.
