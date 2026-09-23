@@ -1839,6 +1839,11 @@ class TestWhatTravelsInAFigure:
             Stated as a rule rather than left implicit. Refusing every container bounded the cost as a
             side effect; describing lists has to keep that bound on purpose, and a bound nobody can reach
             from either side is not a bound that has been checked.
+
+            The `- 1` is not an off-by-one, and it is worth a sentence because it reads like one (`R-N4`).
+            The bound counts the list itself as well as its items, so 999 items plus the list is exactly
+            1,000 values and the budget comes back at 0 — spent, not overspent. One item more is 1,001
+            values, which is the case below.
         """
         assert travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS - 1))), (
             "a container holding exactly the bounded number of values must travel"
@@ -1853,7 +1858,7 @@ class TestWhatTravelsInAFigure:
             render it belonged to.
         """
         assert not travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS))), (
-            "a container one value over the bound must be held beside the layer"
+            "a container one value over the bound — 1,000 items and the list — must be held beside the layer"
         )
 
     def test_the_bound_counts_every_value_at_every_depth(self):
