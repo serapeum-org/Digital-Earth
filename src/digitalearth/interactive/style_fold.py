@@ -21,16 +21,21 @@ the tier accepts, and that must not cost a backend import.
 """
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Dict, FrozenSet, Mapping, Tuple
 
 from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec.style import portable_constants
 
 __all__ = [
+    "CHANNEL_KEYWORDS",
     "CHANNEL_OPTIONS",
     "INTERACTIVE_STYLE_SCHEMA",
+    "STYLE_BUCKETS",
     "ChannelOption",
     "allowed_options",
     "fold_symbology",
+    "portable_encodings",
     "route_flat_style",
 ]
 
@@ -257,6 +262,83 @@ def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]
         encodings=dict(symbology.encodings),
         props={**dict(symbology.props), **leftover},
     ), {}
+
+
+#: Which declared visual channel each of this tier's own style keywords drives.
+#:
+#: The inverse view of :data:`INTERACTIVE_STYLE_SCHEMA`, derived from it rather than written out again, so a
+#: keyword cannot be tied to one channel for routing and another for recording. Only the keywords that drive
+#: a channel appear; `cmap`, `clim` and the rest are engine options with no portable reading.
+CHANNEL_KEYWORDS: Mapping[str, str] = MappingProxyType(
+    {
+        key.name: key.channel
+        for key in INTERACTIVE_STYLE_SCHEMA.keys.values()
+        if key.channel is not None
+    }
+)
+
+#: The props a builder files its resolved HoloViews style under, in the precedence the drawer applies.
+#:
+#: A builder writes the style it derived into ``common`` and the caller's own keywords into ``opts``, and
+#: every drawer merges the second over the first — so an explicit keyword outranks a derived one, and the
+#: lift below must read them in the same order. A few builders (``image``, ``rgb``) write their flat style
+#: at the top level of ``props`` instead, which is why the mapping itself is read first.
+STYLE_BUCKETS: Tuple[str, ...] = ("common", "opts")
+
+
+def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
+    """Return the declared channels an interactive layer's recorded options say it drives.
+
+    Additive by construction: the resolved HoloViews options stay exactly where every drawer reads them, and
+    this writes a second, portable reading of the same style beside them — the one another tier, and
+    `to_backend()`, can act on (#328). Nothing here renames a keyword: `alpha` is still `alpha` in the
+    props a drawer applies, and the channel it drives is recorded as `opacity` because that is what the
+    vocabulary calls it.
+
+    Args:
+        symbology: The layer's recorded style, as the builder wrote it.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the style values
+        that drive a declared channel and are constants a channel can portably hold.
+
+        A `color` that names one of the layer's value dimensions is **not** one of them. HoloViews reads a
+        colour naming a dimension as "colour by that column", so recording it as a constant would say the
+        layer is painted the literal string `"pop"`; the classification behind it is published portably as
+        ``last_breaks`` instead.
+
+    Examples:
+        - A marker size and an opacity read back as the channels a caller asked for:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> props = {"common": {"size": 7.0}, "opts": {"alpha": 0.5}}
+            >>> lifted = portable_encodings(Symbology(props=props))
+            >>> sorted(lifted), lifted["size"].resolve(), lifted["opacity"].resolve()
+            (['opacity', 'size'], 7.0, 0.5)
+
+            ```
+        - A colour that names a value dimension is a column, not a colour, so it is left unclaimed:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> classified = {"vdims": ("pop",), "common": {"color": "pop", "colorbar": True}}
+            >>> sorted(portable_encodings(Symbology(props=classified)))
+            []
+
+            ```
+    """
+    props = dict(symbology.props)
+    lifted = portable_constants(props, CHANNEL_KEYWORDS)
+    for bucket in STYLE_BUCKETS:
+        held = props.get(bucket)
+        if isinstance(held, dict):
+            lifted.update(portable_constants(held, CHANNEL_KEYWORDS))
+    coloured = lifted.get("color")
+    dimensions = {str(name) for name in (props.get("vdims") or ())}
+    if coloured is not None and coloured.value in dimensions:
+        del lifted["color"]
+    return lifted
 
 
 def allowed_options(

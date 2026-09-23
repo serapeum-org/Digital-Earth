@@ -1422,6 +1422,18 @@ class WebMapBase:
             self._sources[layer_id] = DataRef.of(
                 source, name=f"{self._objects_ns}:{layer_id}"
             )
+        # Imported here, not at module scope: `digitalearth.web.renderer` is reached through the package,
+        # whose `__init__` builds the map this module defines.
+        from digitalearth.web.renderer import DRAWN_KINDS, portable_encodings
+
+        recorded = Symbology() if symbology is None else symbology
+        # The same style said twice: MapLibre's `paint` stays exactly as the builder wrote it, because that
+        # is what the drawer rebuilds the layer from, and the declared channels it drives are recorded
+        # beside it so another tier can read the layer's style at all (#328). Laid *over* the derived half,
+        # so an encoding a builder wrote itself — `popup()`'s `tooltip` — outranks anything lifted here.
+        recorded = recorded.merged_over(
+            Symbology(encodings=portable_encodings(recorded))
+        )
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
             # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
@@ -1429,7 +1441,7 @@ class WebMapBase:
                 layer_id,
                 kind,
                 source_id=layer_id if source is not None else None,
-                symbology=Symbology() if symbology is None else symbology,
+                symbology=recorded,
                 label=label or layer_id,
                 visible=bool(visible),
                 band=band,
@@ -1437,8 +1449,6 @@ class WebMapBase:
         )
         # Drawn as it is recorded, for the kinds the renderer owns: what it holds is what `layers` reports
         # and what the widget is built from, so a description and its drawing cannot drift apart.
-        from digitalearth.web.renderer import DRAWN_KINDS
-
         if kind in DRAWN_KINDS:
             try:
                 drawn = self._renderer.draw_layer(

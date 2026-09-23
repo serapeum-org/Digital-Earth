@@ -34,11 +34,12 @@ record and stays on the widget. Nothing in the tier calls it: every builder draw
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec import Encoding, FigureSpec, LayerSpec, Symbology
 from digitalearth.base.spec._serial import thawed_value
+from digitalearth.base.spec.style import portable_constants
 from digitalearth.web.capabilities import CAPABILITIES
 
 
@@ -153,6 +154,84 @@ def derived_ids(kind: str, layer_id: str) -> Tuple[str, ...]:
             ```
     """
     return tuple(f"{layer_id}{suffix}" for suffix in DERIVED_SUFFIXES.get(kind, ()))
+
+
+#: Which declared visual channel each MapLibre paint property drives.
+#:
+#: The tier records a layer's style as MapLibre's own ``paint`` dict, because that is what
+#: :func:`draw_vector` and its siblings rebuild the layer from and the rebuild must stay exact. That dict is
+#: unreadable anywhere else, though: nothing but MapLibre knows that ``circle-radius`` is the marker size a
+#: caller wrote as ``size=``. This table is that translation, and :func:`portable_encodings` applies it so a
+#: layer says what it draws in :data:`~digitalearth.base.spec.encoding.CHANNELS` as well as in MapLibre's
+#: spelling (#328).
+#:
+#: **What is deliberately absent.** ``fill-outline-color`` and ``text-halo-*`` drive no declared channel —
+#: there is no stroke or halo channel — and ``text-size`` is the label size the tier renamed *away* from
+#: ``size`` precisely because a glyph's size and a label's are not one thing. ``heatmap-radius`` is a kernel
+#: width rather than a marker's size. Each would be over-claiming, so each is left to ``paint``, where it
+#: already reads correctly.
+PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
+    {
+        "circle-color": "color",
+        "circle-opacity": "opacity",
+        "circle-radius": "size",
+        "fill-color": "color",
+        "fill-extrusion-color": "color",
+        "fill-extrusion-height": "height",
+        "fill-extrusion-opacity": "opacity",
+        "fill-opacity": "opacity",
+        "heatmap-opacity": "opacity",
+        "line-color": "color",
+        "line-opacity": "opacity",
+        "line-width": "width",
+        "raster-opacity": "opacity",
+        "text-color": "color",
+    }
+)
+
+
+def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
+    """Return the declared channels a web layer's recorded paint says it drives.
+
+    Additive by construction: it reads ``props["paint"]`` and writes nothing back, so every drawer keeps
+    rebuilding its layer from the paint dict it was given and the engine-exact redraw is untouched. What it
+    produces is the *second* reading of the same style — the one another tier, and `to_backend()`, can act on.
+
+    Args:
+        symbology: The layer's recorded style, as the builder wrote it.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`. A paint property
+        MapLibre compiled into a data-driven expression — a choropleth's ``fill-color``, a cluster's stepped
+        ``circle-radius`` — carries a list rather than a value and so contributes nothing: the class edges
+        that expression encodes are published portably as ``last_breaks`` instead, and inventing a constant
+        from it would describe the layer wrongly.
+
+    Examples:
+        - A point layer's radius and opacity read back as the channels a caller asked for:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.web.renderer import portable_encodings
+            >>> paint = {"circle-radius": 7.0, "circle-opacity": 0.5, "circle-color": "#f00"}
+            >>> lifted = portable_encodings(Symbology(props={"paint": paint}))
+            >>> sorted(lifted), lifted["size"].resolve()
+            (['color', 'opacity', 'size'], 7.0)
+
+            ```
+        - A classified fill is an expression, so the colour channel is left unclaimed:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.web.renderer import portable_encodings
+            >>> expression = ("step", ("get", "pop"), "#440154", 5.0, "#fde725")
+            >>> sorted(portable_encodings(Symbology(props={"paint": {"fill-color": expression}})))
+            []
+
+            ```
+    """
+    paint = symbology.props.get("paint")
+    if not isinstance(paint, dict):
+        return {}
+    return portable_constants(paint, PAINT_CHANNELS)
 
 
 def _show(drawn: DrawnLayer, visible: bool) -> None:

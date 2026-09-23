@@ -30,12 +30,20 @@ nothing here changes.
 `(kind, band, visible)` per layer in draw order. It does **not** compare `symbology.props`, because there is
 nothing there to compare: the web tier records MapLibre's own paint
 (`{"maplibre_type": "circle", "paint": {"circle-radius": 7.0, ...}}`) and the interactive tier records
-HoloViews' (`{"via": "geometry", "hv_type": "Points", "common": {"size": 7.0}, ...}`). The vocabulary has a
-portable answer for exactly this — `Symbology.encodings`, keyed by
-:data:`~digitalearth.base.spec.encoding.CHANNELS` — and **neither tier writes one**; both come back with
-`encodings == {}`. That is a finding, not something to paper over, so it is named in
-:data:`NO_PORTABLE_CHANNELS` with a guard that fails the day a tier starts recording them. The symbology
-value that *is* portable today is the classification itself: `choropleth(..., scheme=, k=)` goes through
+HoloViews' (`{"via": "geometry", "hv_type": "Points", "common": {"size": 7.0}, ...}`). The vocabulary's
+portable answer to the same question — `Symbology.encodings`, keyed by
+:data:`~digitalearth.base.spec.encoding.CHANNELS` — was written by **neither tier**; both came back with
+`encodings == {}`, so a figure could round-trip its kinds, its draw order and its visibility and then be
+redrawn in the target engine's default colours and sizes. Both tiers record the declared channels now
+(#328), :data:`NO_PORTABLE_CHANNELS` is empty, and
+:class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` asks the two live tiers for the same styled layer
+and holds them to one set of channels.
+
+The seed figure still carries no style, and that is deliberate: it draws `points()` with no arguments, and
+the tiers' *defaults* differ — the web tier's marker is 5 pixels and the interactive tier's is 6. Which
+default a tier picks is not what a round trip has to agree about; what a caller **asked** for is, so the
+styled probe passes an explicit value rather than comparing two silences. The other symbology value that is
+portable today is the classification itself: `choropleth(..., scheme=, k=)` goes through
 :class:`~digitalearth.base.spec.scale.Scale` on every tier and both tiers publish the result as
 `last_breaks`, so that is what :data:`EXPECTED_BREAKS` pins.
 
@@ -86,9 +94,31 @@ CLASSES = 2
 
 #: The marker size the style probe asks for. `size` is a declared keyword of `points` in the Core contract
 #: and a declared channel in :data:`~digitalearth.base.spec.encoding.CHANNELS`, so a tier has both a reason
-#: to accept it and a place to record it — which is what makes its absence from `Symbology.encodings` worth
+#: to accept it and a place to record it — which is what made its absence from `Symbology.encodings` worth
 #: asserting rather than assuming.
 SIZE = 7.0
+
+#: The opacity and the colour the cross-tier probe asks for alongside `SIZE`, so three channels of three
+#: different kinds are held rather than one number: a number the tiers spell differently, and a colour.
+OPACITY = 0.25
+COLOUR = "#cc4444"
+
+#: The same three channels, in each tier's own keyword spelling.
+#:
+#: The web tier's opacity keyword is `opacity=` and the interactive tier's is `alpha=`. That disagreement is
+#: filed as #332 and is **not** reconciled here: the promise this probe holds is that the two describe one
+#: *channel*, whatever each calls the keyword that sets it, so the two spellings sit side by side.
+CROSS_TIER_STYLE: dict[str, dict] = {
+    "web": {"size": SIZE, "opacity": OPACITY, "color": COLOUR},
+    "interactive": {"size": SIZE, "alpha": OPACITY, "color": COLOUR},
+}
+
+#: What either tier must say the styled layer draws: channel -> the value the caller asked for, sorted.
+EXPECTED_CHANNELS = (("color", COLOUR), ("opacity", OPACITY), ("size", SIZE))
+
+#: The cross-backend job, as `(pixi task, pixi environment)`. The only job with both 2-D engines in one
+#: process, and so the only one where :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` runs live.
+CROSS_TIER_JOB = ("test-backends", "all")
 
 #: The class edges `COLUMN`/`SCHEME`/`CLASSES` cut :func:`_polygons` into. Two polygons valued 1 and 9, in
 #: two quantile classes: the minimum, the break, the maximum. Both tiers route the request through
@@ -125,14 +155,15 @@ CANNOT_HIDE_AT_BUILD: dict[str, str] = {}
 #: The tiers that record no portable channel for a layer's style, each with what they record instead.
 #:
 #: `Symbology.encodings` is the vocabulary's answer to "what drives this layer's colour, size and opacity",
-#: keyed by :data:`~digitalearth.base.spec.encoding.CHANNELS` so any tier can read any other tier's. Both
-#: tiers here answer `{}` and put the engine's own spelling in `props` instead, which is why
-#: :func:`_described` compares no style. Guarded the same way as the list above: the probe fails the day a
-#: listed tier starts recording an encoding, so the list is corrected in the same change.
-NO_PORTABLE_CHANNELS: dict[str, str] = {
-    "web": "the MapLibre paint dict is recorded under `props['paint']`, keyed by MapLibre's own names",
-    "interactive": "the resolved HoloViews options are recorded under `props['common']` and `props['opts']`",
-}
+#: keyed by :data:`~digitalearth.base.spec.encoding.CHANNELS` so any tier can read any other tier's.
+#:
+#: **Empty, and the guard is what emptied it.** Both tiers were listed: each recorded its engine's own
+#: spelling — MapLibre's paint under `props['paint']`, HoloViews' resolved options under `props['common']`
+#: and `props['opts']` — and neither wrote an encoding, so a styled layer described its style in a form only
+#: the tier that drew it could read. Both lift the declared channels out of what they already record now
+#: (#328), and because the list is guarded in **both** directions a fixed tier left on it fails just as a
+#: broken tier taken off it would.
+NO_PORTABLE_CHANNELS: dict[str, str] = {}
 
 #: Each tier's CI job, as `(pixi task, pixi environment, the pixi feature carrying its engine)`.
 #:
@@ -238,8 +269,10 @@ def _described(figure) -> tuple:
         somewhere else — both tiers here leave it unset and rely on the kind, and comparing the raw field
         would say they agree while saying nothing.
 
-        Ids are left out for the reason the D-11 seam above records, and style is left out for the reason
-        :data:`NO_PORTABLE_CHANNELS` records.
+        Ids are left out for the reason the D-11 seam above records. Style is left out because the seed asks
+        for none, and a tier's *default* marker size is its own business —
+        :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` is where an explicitly styled layer is
+        held to one answer.
     """
     return tuple(
         (layer.kind, layer.band or band_of(layer.kind), layer.visible)
@@ -558,7 +591,7 @@ class MapConformanceBase:
         )
 
     def test_a_tier_that_records_no_portable_channel_is_named_as_such(self, drawn):
-        """`Symbology.encodings` is the one style reading any tier can take from any other, and is empty.
+        """`Symbology.encodings` is the one style reading any tier can take from any other.
 
         Args:
             drawn: The map under test.
@@ -566,22 +599,26 @@ class MapConformanceBase:
         Test scenario:
             A drift guard over the finding, in both directions. The layer is drawn with an explicit `size=`,
             which the contract declares as a keyword of `points` and `CHANNELS` declares as a channel, so
-            there really is something to record. A tier not on :data:`NO_PORTABLE_CHANNELS` must record it;
-            a tier on it must still record nothing. So the day either tier folds its style into the declared
-            channels — which is what makes a figure restylable after drawing, and what `to_backend()` will
-            need to carry a style across — this fails until the list is corrected.
+            there really is something to record. A tier not on :data:`NO_PORTABLE_CHANNELS` must record it,
+            **under that channel and with the value asked for** — recording *something* would pass a tier
+            that filed the number under the wrong channel; a tier on the list must still record nothing.
         """
         drawn.points(_points(), size=SIZE)
         figure = drawn.figure_spec
-        recorded = sorted(figure.layers.get(figure.layers.ids[-1]).symbology.encodings)
+        symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+        recorded = sorted(symbology.encodings)
         if self.backend in NO_PORTABLE_CHANNELS:
             assert recorded == [], (
                 f"the {self.backend} tier now records {recorded}; take it off NO_PORTABLE_CHANNELS"
             )
             return
-        assert recorded != [], (
-            f"the {self.backend} tier records no portable channel for a styled layer; fold its style into "
+        assert "size" in recorded, (
+            f"the {self.backend} tier records {recorded} for a layer drawn with size=; fold its style into "
             "Symbology.encodings, or name it in NO_PORTABLE_CHANNELS with what it records instead"
+        )
+        assert symbology.encoding("size").resolve() == SIZE, (
+            f"the {self.backend} tier was asked for size={SIZE} and records "
+            f"{symbology.encoding('size').resolve()!r}"
         )
 
     def test_this_tier_contributes_a_non_zero_count_of_probes(self):
@@ -742,4 +779,136 @@ class TestEveryTierIsReallyCollected:
         assert empty == [], (
             f"{empty} have their engine installed here and collected no items from {MODULE_PATH}; "
             f"collected {len(collected)} items in total"
+        )
+
+
+class TestOneStyledLayerDescribesOneChannelOnBothTiers:
+    """Two live 2-D tiers, one process, one styled layer — and one answer to "how is this styled?".
+
+    The probes above hold each tier to a **constant**, because until the `all` environment existed no
+    interpreter carried MapLibre and HoloViz at once. That is enough to stop the two drifting apart, and it
+    is not enough to show that a style *crosses*: a constant can be met by a tier that spells the same
+    reading in its own way. This asks the two directly, in one process, which is the capability the `all`
+    environment exists for and the precondition `to_backend()` (order 33) is built on — carrying a figure
+    across is only worth doing if both ends describe its style in the same words.
+
+    The layer is styled explicitly, in each tier's own keyword spelling (:data:`CROSS_TIER_STYLE`): the web
+    tier's opacity keyword is `opacity=` and the interactive tier's is `alpha=` (#332). The promise is not
+    that the keywords match — it is that both describe the same *channel*, which is the whole reason a
+    channel vocabulary exists.
+
+    The declaration check runs in **every** environment, so this class cannot become the thing this module
+    was written to prevent: a contract that reads green because nothing collected it.
+    """
+
+    @staticmethod
+    def _channels(build, style: dict) -> tuple:
+        """Draw one styled point layer and return the channels the figure says it drives.
+
+        Args:
+            build: A no-argument callable returning an empty map of one tier.
+            style: The keywords to draw with, in that tier's own spelling.
+
+        Returns:
+            `(channel, value)` per described encoding, sorted by channel — the portable reading of the
+            layer's style, with no tier name anywhere in it.
+        """
+        drawn = build()
+        try:
+            drawn.points(_points(), **style)
+            figure = drawn.figure_spec
+            symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+            return tuple(
+                (channel, symbology.encoding(channel).resolve())
+                for channel in sorted(symbology.encodings)
+            )
+        finally:
+            try:
+                drawn.close()
+            except (
+                Exception
+            ):  # pragma: no cover - a closed map may refuse a second close
+                pass
+
+    @staticmethod
+    def _web() -> tuple:
+        """Return the web tier's reading of the shared styled layer.
+
+        Returns:
+            Its `(channel, value)` pairs.
+        """
+        from digitalearth.web import WebMap
+
+        return TestOneStyledLayerDescribesOneChannelOnBothTiers._channels(
+            WebMap, CROSS_TIER_STYLE["web"]
+        )
+
+    @staticmethod
+    def _interactive() -> tuple:
+        """Return the interactive tier's reading of the shared styled layer.
+
+        Returns:
+            Its `(channel, value)` pairs.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        return TestOneStyledLayerDescribesOneChannelOnBothTiers._channels(
+            InteractiveMap, CROSS_TIER_STYLE["interactive"]
+        )
+
+    def test_the_cross_backend_job_collects_this_module(self):
+        """The environment with both engines must run this module, or nothing here ever executes.
+
+        Test scenario:
+            The manifest half, and the reason it is here rather than assumed: this class skips in every
+            single-backend job by design, so the only evidence that it runs at all is that the one job which
+            can run it names this module. Read from `pyproject.toml`, so it answers in every environment —
+            including the lean `dev` matrix, where neither engine is installed.
+        """
+        task, environment = CROSS_TIER_JOB
+        manifest = tomllib.loads(
+            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        defined = manifest["tool"]["pixi"]["tasks"][task]
+        command = defined["cmd"] if isinstance(defined, dict) else defined
+        assert MODULE_PATH in command, (
+            f"the {task!r} task does not collect {MODULE_PATH}, so the cross-tier probes never run: "
+            f"{command}"
+        )
+        carried = manifest["tool"]["pixi"]["environments"][environment]["features"]
+        missing = sorted(
+            feature for _, _, feature in TIER_JOBS.values() if feature not in carried
+        )
+        assert missing == [], (
+            f"the {environment!r} environment is missing {missing}, so it cannot hold both 2-D tiers in "
+            f"one process; it carries {carried}"
+        )
+
+    @needs_maplibre
+    def test_the_web_tier_describes_the_styled_layer_by_channel(self):
+        """One half of the pair, held to the constant so a wrong pair cannot agree its way to green."""
+        assert self._web() == EXPECTED_CHANNELS, (
+            f"the web tier describes the styled layer as {self._web()}"
+        )
+
+    @needs_geoviews
+    def test_the_interactive_tier_describes_the_styled_layer_by_channel(self):
+        """The other half, held to the same constant, through its own keyword spelling."""
+        assert self._interactive() == EXPECTED_CHANNELS, (
+            f"the interactive tier describes the styled layer as {self._interactive()}"
+        )
+
+    @needs_maplibre
+    @needs_geoviews
+    def test_both_tiers_describe_one_styled_layer_by_the_same_channels(self):
+        """The check no single-backend job can run: two live tiers, one interpreter, one style.
+
+        Test scenario:
+            Each side is built from a different tier and a different keyword spelling, so the two are not
+            the same expression reaching the same answer — they are two engines asked the same question.
+            Held against each other *as well as* against the constant above, because the constant catches a
+            tier that drifts and this catches the pair drifting together.
+        """
+        assert self._web() == self._interactive(), (
+            f"the web tier describes {self._web()} and the interactive tier {self._interactive()}"
         )

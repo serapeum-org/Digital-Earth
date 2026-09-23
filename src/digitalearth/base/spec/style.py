@@ -27,6 +27,7 @@ backend's job, and in the static tier there is exactly one place it happens.
 
 from dataclasses import dataclass, field
 from difflib import get_close_matches
+from math import isfinite
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.spec._serial import (
@@ -41,7 +42,13 @@ from digitalearth.base.spec._serial import (
 )
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
-__all__ = ["StyleKey", "StyleSchema", "Symbology"]
+__all__ = [
+    "PORTABLE_VALUES",
+    "StyleKey",
+    "StyleSchema",
+    "Symbology",
+    "portable_constants",
+]
 
 
 @dataclass(frozen=True)
@@ -425,6 +432,75 @@ class Symbology:
             },
             props=as_mapping("Symbology", "props", data.get("props", {})),
         )
+
+
+#: The value types one channel may portably carry as a constant.
+#:
+#: What a caller writes for a channel is a number, a colour string or a flag. Everything else a tier keeps in
+#: its own style bucket is that engine's machinery — a MapLibre paint expression such as
+#: ``("step", ("get", "pop"), "#440154", "#fde725")``, a per-class colormap list, a Datashader reduction, a
+#: tile provider — and it means nothing to another engine, so claiming it as a portable constant would
+#: describe the layer wrongly rather than describe it at all.
+#:
+#: Restricting the lift to a scalar is also what keeps a container out of the figure, and that matters more
+#: than the typing does: an ``xyzservices.TileProvider`` **is** a mapping, and one of its values is the
+#: caller's API key, so anything that copied a container into a layer's description would write a credential
+#: to disk the next time the figure was saved.
+PORTABLE_VALUES: Tuple[type, ...] = (bool, int, float, str)
+
+
+def portable_constants(
+    flat: Mapping[str, Any], channels: Mapping[str, str]
+) -> Dict[str, Encoding]:
+    """Lift a tier's own flat style values onto the declared channels they drive.
+
+    The half of :meth:`StyleSchema.route` a backend needs when it has *already* resolved a caller's keywords
+    into its engine's own spelling and wants the portable reading of them as well. A tier keeps recording
+    what its renderer rebuilds from — MapLibre's ``paint``, HoloViews' resolved options — and calls this to
+    say the same thing a second time in the vocabulary every other tier can read.
+
+    Args:
+        flat: The tier's own style values, keyed the way that engine spells them.
+        channels: Which declared channel each of those keys drives. Keys absent from it are the engine's own
+            business and are passed over; a key that drives no channel simply has no row.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that both
+        name a channel and carry a value a channel can portably hold (see :data:`PORTABLE_VALUES`). A
+        ``None`` is a caller declining a key rather than binding one, so it lifts nothing — the same reading
+        :meth:`StyleSchema.route` gives it.
+
+    Examples:
+        - A tier lifts its own spelling onto the channel, and keeps the spelling:
+            ```python
+            >>> from digitalearth.base.spec.style import portable_constants
+            >>> lifted = portable_constants({"circle-radius": 7.0}, {"circle-radius": "size"})
+            >>> sorted(lifted), lifted["size"].resolve()
+            (['size'], 7.0)
+
+            ```
+        - An engine's compiled expression is not a style value, so nothing is claimed for that channel:
+            ```python
+            >>> from digitalearth.base.spec.style import portable_constants
+            >>> paint = {"fill-color": ("step", ("get", "pop"), "#440154", "#fde725")}
+            >>> portable_constants(paint, {"fill-color": "color"})
+            {}
+
+            ```
+    """
+    lifted: Dict[str, Encoding] = {}
+    for keyword, value in flat.items():
+        channel = channels.get(keyword)
+        if channel is None or value is None:
+            continue
+        if not isinstance(value, PORTABLE_VALUES):
+            continue
+        if isinstance(value, float) and not isfinite(value):
+            # A figure holding NaN or an infinity cannot be written at all — `to_dict` refuses the whole
+            # thing — so lifting one would turn a drawable layer into an unsavable figure.
+            continue
+        lifted[channel] = Encoding.constant(channel, value)
+    return lifted
 
 
 @dataclass(frozen=True)

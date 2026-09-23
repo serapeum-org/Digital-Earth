@@ -632,12 +632,24 @@ class InteractiveMapBase:
             self._sources[layer_id] = DataRef.of(
                 source, name=f"{self._objects_ns}:{layer_id}"
             )
+        # Imported here, not at module scope: `digitalearth.interactive.style_fold` is reached through the
+        # package, whose `__init__` builds the map this module defines.
+        from digitalearth.interactive.style_fold import portable_encodings
+
+        recorded = Symbology() if symbology is None else symbology
+        # The same style said twice: the resolved HoloViews options stay exactly where every drawer reads
+        # them, and the declared channels they drive are recorded beside them so another tier can read the
+        # layer's style at all (#328). Laid *over* the derived half, so an encoding a builder wrote itself
+        # outranks anything lifted here.
+        recorded = recorded.merged_over(
+            Symbology(encodings=portable_encodings(recorded))
+        )
         self._layer_tree = self._layer_tree.add(
             LayerSpec(
                 layer_id,
                 kind,
                 source_id=layer_id if source is not None else None,
-                symbology=Symbology() if symbology is None else symbology,
+                symbology=recorded,
                 label=label or layer_id,
                 visible=bool(visible),
                 band=band,
