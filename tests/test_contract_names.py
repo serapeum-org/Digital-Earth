@@ -32,6 +32,7 @@ from digitalearth.base.contract import (
     alias_table,
     pending_for,
 )
+from tests.open_issues import KNOWN_OPEN_ISSUES, issues_named_in
 
 #: The facades, by the backend name `quickmap` spells them with. Each is imported lazily, so a missing extra
 #: skips that tier rather than failing the file.
@@ -140,6 +141,21 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
 #: that says so. Written as one pattern because the three are alternatives to each other, and because a reason
 #: that names none of them is a shrug rather than a plan.
 OWNER_PATTERN = re.compile(r"#\d+|order \d+|unscheduled")
+
+
+def _every_user_facing_reason() -> Tuple[str, ...]:
+    """Return every reason the suite shows a *user*, from both tables that carry one.
+
+    `PENDING` answers "when does this tier get the method"; :data:`KEYWORD_SHORTFALLS` answers "why does this
+    tier spell the keyword differently". They are the two consumers of the shared open-issue allowlist, so a
+    check over that allowlist has to read both or it reports every row the other table owns as stale.
+
+    Returns:
+        The reason strings, `PENDING`'s first.
+    """
+    pending = tuple(reason for table in PENDING.values() for reason in table.values())
+    shortfalls = tuple(owner for _, owner in KEYWORD_SHORTFALLS.values())
+    return pending + shortfalls
 
 
 def _facade(backend: str):
@@ -418,6 +434,50 @@ class TestTheKeywordsAreThePromiseToo:
             if OWNER_PATTERN.search(owner) is None
         )
         assert vague == [], f"no issue, order or 'unscheduled' against {vague}"
+
+    def test_every_issue_a_shortfall_names_is_one_the_suite_vouches_for(self):
+        """An issue reference is only a plan while the issue is open, and this table never asked.
+
+        Test scenario:
+            The rows above were held to a *shape* — an issue, an order, or the word "unscheduled" — and a
+            row naming a closed issue satisfies that shape perfectly (review R-L2). It is the defect #319
+            fixed for `PENDING`, left unfixed one table over: a reader follows `#261` expecting to find out
+            when `colorbar` gains `layer_id`, and a closed issue answers "it already did". The allowlist is
+            shared with `PENDING`'s check rather than copied, so the two tables cannot vouch for different
+            sets of issues.
+        """
+        unvouched = sorted(
+            f"{tier}.{method} -> #{number}"
+            for (tier, method), (_, owner) in KEYWORD_SHORTFALLS.items()
+            for number in issues_named_in(owner)
+            if number not in KNOWN_OPEN_ISSUES
+        )
+        assert unvouched == [], (
+            f"a KEYWORD_SHORTFALLS reason names an issue nothing vouches for: {unvouched}. Name the "
+            "roadmap order that settles it, or add the issue to tests/open_issues.py with its title if it "
+            "is still open."
+        )
+
+    def test_the_allowlist_holds_nothing_either_table_stopped_naming(self):
+        """An allowlist outliving its reasons is the next stale pointer, one indirection further away.
+
+        Test scenario:
+            The reverse half of the check above, and of `PENDING`'s. It lives here because the allowlist now
+            has two consumers and an entry is stale only when *neither* names it — asked of one table alone
+            it would fail for every issue the other one owns. An issue that closes is taken off the list,
+            which fails the forward checks until each row that named it is corrected; an issue whose row
+            goes away is taken off here.
+        """
+        named = {
+            number
+            for reason in _every_user_facing_reason()
+            for number in issues_named_in(reason)
+        }
+        unused = sorted(set(KNOWN_OPEN_ISSUES) - named)
+        assert unused == [], (
+            f"tests/open_issues.py vouches for {unused}, which no PENDING reason and no KEYWORD_SHORTFALLS "
+            "row names any more"
+        )
 
     @pytest.mark.parametrize("backend", EVERY_TIER)
     def test_a_name_answered_by_a_property_declares_no_keywords(self, backend):

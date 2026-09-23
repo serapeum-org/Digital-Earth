@@ -7,7 +7,6 @@ facade, just the vocabulary and the shim.
 
 import re
 import warnings
-from types import MappingProxyType
 
 import pytest
 
@@ -21,28 +20,11 @@ from digitalearth.base.contract import (
     pending_for,
 )
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
-
-#: An issue reference inside a reason, as a reader would follow it.
-ISSUE_REFERENCE = re.compile(r"#(\d+)")
+from tests.open_issues import KNOWN_OPEN_ISSUES, issues_named_in
 
 #: A wave reference inside a reason. It is the form that rots: inserting one wave renumbers every wave after
 #: it, so the string keeps its number and loses its meaning, while an order keeps both (#317).
 WAVE_REFERENCE = re.compile(r"\bwave\s+\d+", re.IGNORECASE)
-
-#: The issues a :data:`~digitalearth.base.contract.PENDING` reason is allowed to name, with the title each
-#: carried when it was last checked against the tracker **by hand, on 2026-09-23**.
-#:
-#: It is an allowlist and not a lookup on purpose: a test that asked GitHub would need a network and a token to
-#: run, and would go red for an outage rather than for a defect. So the offline stand-in for "this issue is
-#: open" is a short list a human maintains, and extending it is the deliberate act this check exists to force.
-#: A reason that names an **order** instead needs no entry here at all — which is the point, and why order is
-#: the preferred form: orders outlive the issues that implement them.
-KNOWN_OPEN_ISSUES = MappingProxyType(
-    {
-        201: "The 3-D tier cannot draw line geometries — no rivers, roads, tracks or trajectories",
-        226: "feat(static): add Map.lines for plain line geometry, matching the web tier",
-    }
-)
 
 
 class TestReadingTheContract:
@@ -221,10 +203,10 @@ def _issues_named_in_reasons():
         One row per reference, so a reason naming two issues is reported twice and both are checked.
     """
     return [
-        (backend, name, reason, int(number))
+        (backend, name, reason, number)
         for backend, table in PENDING.items()
         for name, reason in table.items()
-        for number in ISSUE_REFERENCE.findall(reason)
+        for number in issues_named_in(reason)
     ]
 
 
@@ -239,7 +221,11 @@ class TestAPendingReasonPointsAtLiveWork:
     before that (#317). Both were found by reading. This is what finds the next one.
 
     The rule is therefore: a reason may name a roadmap **order**, which needs no bookkeeping because orders
-    keep their numbers when the plan moves, or an issue listed in :data:`KNOWN_OPEN_ISSUES`. A **wave** number
+    keep their numbers when the plan moves, or an issue listed in
+    :data:`~tests.open_issues.KNOWN_OPEN_ISSUES`. That allowlist moved out of this module when the keyword
+    table next door was held to it too (review R-L2), and the check that nothing in it has gone stale moved
+    with it, to `tests/test_contract_names.py` — the one place both tables that consume it are in scope.
+    A **wave** number
     is refused outright, with no allowlist to escape through, because a wave is the part that renumbers — the
     reasoning `contract.py` already carries from #317, which the first version of this class did not enforce
     and which let five 3-D reasons go on naming a closed Wave 5. Anything else fails, naming the tier, the
@@ -300,12 +286,4 @@ class TestAPendingReasonPointsAtLiveWork:
         ]
         assert dated == [], (
             f"a declared build order names a wave, which renumbers when the plan moves: {dated}"
-        )
-
-    def test_the_allowlist_holds_nothing_the_reasons_stopped_naming(self):
-        """An allowlist outliving its reasons is the next stale pointer, one indirection further away."""
-        named = {number for _, _, _, number in _issues_named_in_reasons()}
-        unused = sorted(set(KNOWN_OPEN_ISSUES) - named)
-        assert unused == [], (
-            f"KNOWN_OPEN_ISSUES vouches for {unused}, which no PENDING reason names any more"
         )
