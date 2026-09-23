@@ -309,7 +309,7 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
 def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
     """Record a builder argument if a figure can travel with it; otherwise hold it beside the layer.
 
-    The tier's answer to engine values in a description (review C1/H2/H3/M9): a figure is written to JSON
+    The tier's answer to engine values in a description (review R-C1/R-H2/R-H3/R-M9): a figure is written to JSON
     and read back, so it carries only what comes back unchanged. Anything else — a colormap object, an
     `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp, a
     tuple, an array — is handed to the drawer through the map instead, keyed by layer id, and the
@@ -529,7 +529,7 @@ class InteractiveMapBase:
         self._layer_keys: Dict[str, Any] = {}
         # The engine values a layer's drawer needs that a description cannot carry, by layer id: the
         # caller's raw HoloViews keywords, a colormap object, a tile provider, a Datashader reduction
-        # (review C1/H2/H3/M9). Held here for the same reason the credentials are — a figure written to
+        # (review R-C1/R-H2/R-H3/R-M9). Held here for the same reason the credentials are — a figure written to
         # JSON holds plain values — and let go with the layer and on `close()`.
         self._layer_held: Dict[str, Dict[str, Any]] = {}
         # The layer the caller added last — what `colorbar`, `legend`, `hover` and `on_tap` act on by

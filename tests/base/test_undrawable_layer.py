@@ -89,9 +89,9 @@ class TestOneCatchableTypeForALayerThatCouldNotBeDrawn:
 
         Test scenario:
             `RuntimeError` and `LookupError` are both plain `Exception` subclasses with no conflicting
-            C-level layout, so the pair resolves. Pinned rather than assumed because a C3 failure is a
-            `TypeError` at import time and a *reordering* is silent — and the order decides which class an
-            `except` chain that names several of them picks.
+            C-level layout, so the pair resolves. Pinned rather than assumed because a linearisation
+            failure is a `TypeError` at import time and a *reordering* is silent — and the order decides
+            which class an `except` chain that names several of them picks.
         """
         order = [cls.__name__ for cls in MissingObject.__mro__]
         assert order == [

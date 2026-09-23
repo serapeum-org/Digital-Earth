@@ -501,7 +501,7 @@ class DecorationMixin(_MixinBase):
         self._tiles_provider = None
         # A provider object is an `xyzservices.TileProvider`: a `dict` subclass whose fields include the
         # service's API key, so freezing it into the description wrote the key into every saved figure
-        # (review C1) and thawed it back as a plain dict the engine cannot draw from (review H2). It is
+        # (review R-C1) and thawed it back as a plain dict the engine cannot draw from (review R-H2). It is
         # held beside the layer, and described by its key-free URL template.
         held: dict = {"provider": provider}
         described_opts = describe_opts(held, opts)

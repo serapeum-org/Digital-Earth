@@ -37,10 +37,13 @@ defined here, and every clause defined here must be pinned by some test.
 (``field``, ``points``, ``save`` and their keywords). That module says which names exist; this one says which
 behaviours they are held to. They are deliberately separate files so neither grows the other's job.
 
-**Three namespaces spell an identifier ``C<n>``** and only one of them is this contract. The review rounds
-number their findings by severity and rank (``C1``/``H2``/``M9``), and Python's method-resolution order is
-computed by the *C3 linearisation*. The guard reads a line naming a review or a linearisation as belonging to
-those namespaces, not this one; a new citation of this contract should avoid both words on the same line.
+**The guard judges a token by its shape, never by the prose around it.** It once read a window of
+surrounding text and dropped any number near the words "review" or "linearise", which guessed wrong both
+ways — a real citation in a sentence that mentioned a review round went unchecked, and a finding phrased
+without either word was reported as a clause that does not exist. The three bullets above replace that
+heuristic: each of the other namespaces now spells itself so it cannot be read as a citation, and the guard
+matches only what is left. Naming a review round on the same line as a citation is therefore fine; writing
+the finding itself as ``C1`` is not.
 
 Nothing here imports a renderer, or anything outside the standard library, so ``base/`` stays engine-neutral
 and reading a clause costs no engine import.

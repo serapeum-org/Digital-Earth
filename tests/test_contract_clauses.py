@@ -21,8 +21,9 @@ declaration that rots, so drift is checked **both ways**.
 **Four namespaces used to spell an identifier the same way**, and that ambiguity is now resolved at the
 source rather than guessed at here. This contract numbers its clauses ``C<n>``. The review rounds numbered
 their findings the same way, so a review's first critical read as clause 1; they are now written ``R-C1``.
-Python's method-resolution order was described as "the C3 linearisation"; it is now named in words. And
-matplotlib's colour cycle spells a colour ``"C0"``, which is a quoted string and never prose.
+Python's method-resolution order was spelled the same way, after the algorithm that computes it; it is now
+named in words. And matplotlib's colour cycle spells a colour ``"C0"``, which is a quoted string and never
+prose.
 
 The guard therefore matches on **shape** — see :data:`CITATION`. It previously read a window of surrounding
 text and dropped any token near the words "review" or "linearise", which guessed wrong in both directions: a
@@ -60,6 +61,19 @@ SCANNED_TREES = (REPO_ROOT / "src", REPO_ROOT / "tests")
 #:   ``colors="C0"`` colour-cycle name.
 #: * Python's method-resolution order is described by name rather than as "C3".
 CITATION = re.compile(r"(?<![\w-])C(\d+)\b(?![\"'])")
+
+#: A review-round finding written in the clause spelling — the one collision that keeps coming back, because
+#: a review round generates fresh ``C<n>`` findings every time one is run.
+#:
+#: The shape rules above cannot tell this apart: the token really is a bare ``C<n>`` in prose, and only the
+#: word in front of it says it belongs to a review round rather than to the contract. What *can* be checked is
+#: that word, so this matches the phrase and not the number — a finding cited as ``review C1`` is caught here
+#: and rewritten ``review R-C1``, after which :data:`CITATION` no longer sees it at all.
+#:
+#: The first sweep (commit ``7d98a6e0``) migrated ``tests/`` and left three sites under ``src/`` writing a
+#: finding this way, where they were silently counted as citations of clause 1 (review R-M3). Nothing said so,
+#: because clause 1 exists. This is what says so next time.
+REVIEW_FINDING = re.compile(r"\breviews?\s+C\d")
 
 #: This module cites numbers while explaining the rule, and must not count as anybody's pin.
 GUARD_MODULE = Path(__file__).resolve()
@@ -235,6 +249,49 @@ class TestTheClauseTable:
             clause(absent)
 
 
+#: What :data:`CITATION` must and must not read as a citation, as `(line, the numbers it yields)`.
+#:
+#: The guard is a regular expression over every line of `src/` and `tests/`, and nothing held it to the four
+#: namespaces its docstring says it separates (review R-M3, gap 5). The last two rows are the shape rules'
+#: **cost**, pinned rather than hidden: an upper bound written after a hyphen and a possessive written with an
+#: apostrophe are real citations that the exclusions drop. Both are false negatives, which is the safe
+#: direction — the guard reports a citation of a clause that does not exist, so a missed one is a citation
+#: nobody checked rather than a failure nobody can explain.
+CITATION_CASES = [
+    ("a change to contract C4 is a change to every tier", [4]),
+    ("clause C13 and clause C7 both bind the display CRS", [13, 7]),
+    ("the finding R-C1 was raised by a review round, not by this contract", []),
+    ('cleopatra draws the first series in colors="C0"', []),
+    ("the clauses run C1-C14", [1]),
+    ("C7's other half is a kind the tier does not draw", []),
+]
+
+
+class TestTheCitationPatternIsTheShapeRuleItDocuments:
+    """The regular expression is the whole guard, and nothing held it to the rules it claims.
+
+    Four namespaces spell ``C<n>``; three of them respell themselves so this pattern skips them, and that
+    arrangement is only as good as the pattern. A change to it that silently stopped matching — a stray
+    anchor, a lost word boundary — would empty :func:`_all_citations` and turn both drift checks green with
+    nothing behind them.
+    """
+
+    @pytest.mark.parametrize(
+        ("line", "expected"),
+        CITATION_CASES,
+        ids=[row[0][:40] for row in CITATION_CASES],
+    )
+    def test_a_line_yields_exactly_the_numbers_it_cites(self, line, expected):
+        """Each namespace, and each cost of telling them apart by shape.
+
+        Args:
+            line: The line to read.
+            expected: The clause numbers it should yield, in the order they appear.
+        """
+        found = [int(match.group(1)) for match in CITATION.finditer(line)]
+        assert found == expected, f"{line!r} yielded {found}"
+
+
 class TestTheCitationsAndTheClausesDoNotDrift:
     """Drift either way is a defect: a citation with no clause, or a clause with no test."""
 
@@ -254,6 +311,30 @@ class TestTheCitationsAndTheClausesDoNotDrift:
         assert undefined == {}, (
             f"these numbers are cited but are not clauses: {undefined}; state each in "
             "digitalearth.base.contract_clauses.CLAUSES, or correct the citation"
+        )
+
+    def test_no_review_finding_is_written_in_the_clause_spelling(self):
+        """The collision that regenerates: every review round mints fresh `C<n>` findings.
+
+        Test scenario:
+            The spelling rule is stated in `digitalearth.base.contract_clauses` and was applied to `tests/`
+            alone, leaving three sites under `src/` citing a finding as a bare `C1` — counted as citations
+            of clause 1, and passing because clause 1 exists (review R-M3). The number cannot be judged by
+            shape here, so the *phrase* is: a finding introduced by the word "review" is a finding, whatever
+            number follows, and it belongs in the `R-` spelling that the citation pattern skips. The two
+            modules that explain the rule are excluded, as they are from the citation scan, because quoting
+            the spelling to forbid it is not using it.
+        """
+        offenders = []
+        for path in _python_files():
+            if path in SELF_REFERRING:
+                continue
+            for index, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+                if REVIEW_FINDING.search(line):
+                    offenders.append(f"{_relative(path)}:{index + 1}")
+        assert offenders == [], (
+            f"these sites cite a review finding in the contract's own spelling: {sorted(offenders)}; write "
+            "it R-C1 / R-H2 / R-M9, which the citation pattern skips"
         )
 
     def test_the_guard_does_not_read_its_own_prose_as_a_citation(self):
