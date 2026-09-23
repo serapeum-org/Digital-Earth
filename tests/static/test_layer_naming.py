@@ -318,9 +318,10 @@ class TestTheFontMatplotlibReadsFromAName:
 
     `matplotlib.axes.Axes.text` and `.annotate` document `name=` as an alias of the font family, so
     `text(..., name="DejaVu Serif")` chose a font for as long as this package forwarded the keyword. #321
-    gave `name=` to the layer on all thirty-five builders, and on these two — the only two whose artist is a
-    `Text`, and so the only two of matplotlib's artists that answer to `name` at all — that silently
-    reinterpreted a font as an id. These probes read the font **off the artist**, not off the description:
+    gave `name=` to the layer on all thirty-six of this tier's builders — counted as the public methods of
+    `Map` whose signature takes one — and on these two, the only two whose artist is a `Text` and so the
+    only two of matplotlib's artists that answer to `name` at all, that silently reinterpreted a font as an
+    id. These probes read the font **off the artist**, not off the description:
     the defect was a value that looked recorded and never reached the engine.
     """
 

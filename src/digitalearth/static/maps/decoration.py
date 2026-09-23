@@ -65,7 +65,8 @@ def _font_family_a_name_still_stands_for(
 
     ``matplotlib.axes.Axes.text`` and ``.annotate`` document ``name=`` as an alias of the font family, and
     ``Text``/``Annotation`` are the only two of matplotlib's artists that answer to it — so of the
-    thirty-five builders #321 gave a ``name=``, these are the only two where the keyword was already taken.
+    thirty-six builders #321 gave a ``name=`` on this tier (counted: the public methods of ``Map`` whose
+    signature takes one), these are the only two where the keyword was already taken.
     Giving the layer that name without this would drop the caller's font on the floor: ``text(...,
     name="DejaVu Serif")`` named a layer and drew in sans-serif, with nothing said (review R-M2).
 
