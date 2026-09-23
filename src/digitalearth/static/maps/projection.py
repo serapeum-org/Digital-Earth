@@ -178,16 +178,17 @@ class ProjectionMixin(_MixinBase):
         *,
         spacing: Optional[float] = None,
         name: Optional[str] = None,
-        visible: bool = True,
+        visible: Optional[bool] = None,
     ) -> None:
         """Add a lon/lat graticule to a projected map (drawn when the frame is applied).
 
         A second call **replaces** the first — the map holds one set of graticule lines, so it draws one
         graticule — and the description follows: the layer keeps its id and its place in the tree and only
-        its spacing and its visibility change. Describing the second call as a second layer would say the
+        what the replacing call named changes. Describing the second call as a second layer would say the
         map draws two grids where it draws one — and that is also why a ``name`` on a *replacing* call
         names nothing: the layer already has its id, and taking a new one would break every caller holding
-        the old one.
+        the old one. ``visible`` is the same story from the other side: a call that does not name it is
+        asking for a different spacing, not for a hidden grid to come back (review R-L5).
 
         Args:
             lon_step: Meridian spacing in degrees.
@@ -198,7 +199,10 @@ class ProjectionMixin(_MixinBase):
             name: The caller's own name for the layer, used as its id and its label on the call that
                 **creates** it; ``None`` (default) generates one from the kind (#321).
             visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it
-                hidden, so a switcher reading the figure agrees with the axes (#327).
+                hidden, so a switcher reading the figure agrees with the axes (#327). ``None`` (default)
+                leaves the flag as it is: on the call that creates the layer that means drawn, and on a
+                *replacing* call it means whatever the caller last chose, so restyling a hidden graticule
+                does not put it back on screen (review R-L5).
 
         Raises:
             Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
@@ -220,12 +224,19 @@ class ProjectionMixin(_MixinBase):
         if was is not None:
             held = was.id
             self._layer_tree = self._layer_tree.replace(
-                with_fields(was, symbology=symbology, visible=visible)
+                with_fields(
+                    was,
+                    symbology=symbology,
+                    visible=was.visible if visible is None else visible,
+                )
             )
         else:
             held = self._describe_layer(
                 LayerRecord(
-                    "graticule", name=name, visible=visible, symbology=symbology
+                    "graticule",
+                    name=name,
+                    visible=True if visible is None else visible,
+                    symbology=symbology,
                 )
             )
             self._graticule_id = held

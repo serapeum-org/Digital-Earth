@@ -314,3 +314,57 @@ class TestTheFontMatplotlibReadsFromAName:
         """
         placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT, fontname=OTHER_FONT)
         assert placed.get_fontfamily() == [OTHER_FONT], placed.get_fontfamily()
+
+
+class TestAGraticuleCalledASecondTime:
+    """A replacing `graticule()` changes what the call named, and nothing it did not (R-L5)."""
+
+    def test_a_replacing_call_leaves_a_hidden_graticule_hidden(self, drawn):
+        """Changing the spacing is not a request to put the grid back on screen.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The replacing branch passed its own `visible` through, so a caller who changed only the
+            spacing had `visible=True` — the *default*, not anything they wrote — reset the flag they
+            had set on the creating call.
+        """
+        drawn.graticule(name=ASKED, visible=False)
+        drawn.graticule(spacing=20.0)
+        assert drawn.figure_spec.layers.get(ASKED).visible is False
+
+    def test_a_replacing_call_can_still_hide_a_graticule_that_was_showing(self, drawn):
+        """The flag is left alone, not ignored: a replacing call that asks for `False` gets it.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The mirror of the probe above, so "leave the flag alone when it is not named" cannot be
+            satisfied by never reading it.
+        """
+        drawn.graticule(name=ASKED)
+        drawn.graticule(spacing=20.0, visible=False)
+        assert drawn.figure_spec.layers.get(ASKED).visible is False
+
+    def test_a_replacing_call_that_asks_for_it_does_show_it_again(self, drawn):
+        """The complement: naming the flag still sets it, so the fix is not "ignore `visible` on replace".
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.graticule(name=ASKED, visible=False)
+        drawn.graticule(spacing=20.0, visible=True)
+        assert drawn.figure_spec.layers.get(ASKED).visible is True
+
+    def test_the_replacement_still_moves_the_spacing(self, drawn):
+        """And the replacement itself is unchanged — one graticule, restyled in place.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.graticule(name=ASKED, visible=False)
+        drawn.graticule(spacing=20.0)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert (props["lon_step"], props["lat_step"]) == (20.0, 20.0), props
