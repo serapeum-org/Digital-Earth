@@ -194,8 +194,12 @@ class ProjectionMixin(_MixinBase):
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
             spacing: One step for both, for a caller who wants a square grid; it overrides the two
-                above. The same shorthand the web tier takes, so one call draws one grid on every
-                tier that draws a graticule at all (#324).
+                above. The same **keyword** the web and interactive tiers take, so one call draws one
+                grid on every tier that draws a graticule at all (#324). The **values** are each
+                engine's own: this tier generates its meridians, so any positive step draws, and so does
+                the web tier — while the interactive tier draws Natural Earth's pre-cut layers and
+                honours only ``1``, ``5``, ``10``, ``15``, ``20`` and ``30``. ``spacing=7.5`` draws here
+                and raises there (review R-L10).
             name: The caller's own name for the layer, used as its id and its label on the call that
                 **creates** it; ``None`` (default) generates one from the kind (#321).
             visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it

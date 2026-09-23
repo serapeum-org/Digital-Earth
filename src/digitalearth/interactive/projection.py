@@ -174,8 +174,10 @@ class ProjectionMixin(_MixinBase):
             lon_step: Meridian spacing in degrees; one of :data:`_GRATICULE_STEPS`.
             lat_step: Parallel spacing in degrees; must equal ``lon_step``.
             spacing: One step for both, for a caller who wants a square grid; it overrides the two
-                above. The same shorthand the web tier takes, so one call draws one grid on every
-                tier that draws a graticule at all (#324).
+                above. The same **keyword** the static and web tiers take, so one call draws one grid on
+                every tier that draws a graticule at all (#324) — but its **value** domain is this
+                engine's, not theirs: only the shipped steps listed above are honoured, so
+                ``spacing=7.5`` raises here while it draws on both of them (review R-L10).
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).

@@ -249,6 +249,24 @@ class TestTheSquareGraticuleShorthand:
         props = drawn.figure_spec.layers.get(ASKED).symbology.props
         assert (props["lon_step"], props["lat_step"]) == (20.0, 5.0), props
 
+    def test_a_step_the_interactive_tier_refuses_still_draws_here(self, drawn):
+        """The keyword is shared across the tiers; the values it takes are each engine's (R-L10).
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            This tier generates its own meridians, so any positive step draws — and so does the web
+            tier. The interactive tier draws Natural Earth's pre-cut `graticules_<n>` layers and honours
+            only 1, 5, 10, 15, 20 and 30, which
+            `tests/interactive/test_interactive_projection.py::test_unsupported_spacing_raises` pins from
+            that side. This pins the static half, so a change that quietly narrows this tier to the
+            other's domain is caught rather than read as parity.
+        """
+        drawn.graticule(spacing=7.5, name=ASKED)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert (props["lon_step"], props["lat_step"]) == (7.5, 7.5), props
+
 
 class TestTheFontMatplotlibReadsFromAName:
     """`name=` names the layer without taking matplotlib's font alias away from the caller (R-M2).
