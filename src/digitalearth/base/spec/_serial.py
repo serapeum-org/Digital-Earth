@@ -479,30 +479,38 @@ def _finite(value: Any, where: str) -> Any:
     return value
 
 
-#: What :func:`_has_a_json_form` tells the writer it is asking about. The refusal's message is thrown away —
+#: What :func:`_written_back_equal` tells the writer it is asking about. The refusal's message is thrown away —
 #: only the yes or no is used — but `to_json_value` names a field in every message it raises, and every caller
 #: of the oracle is asking on behalf of a layer's recorded properties.
 _ASKING_FOR: str = "Symbology.props"
 
 
-def _has_a_json_form(value: Any) -> bool:
-    """Whether the figure writer takes `value` as it stands.
+def _written_back_equal(value: Any) -> bool:
+    """Whether the figure writer takes `value` **and** writes something equal to it.
 
     The oracle is the writer itself — :func:`to_json_value`, which `Symbology.to_dict` applies — so the answer
     cannot drift from what a figure actually accepts. It is what refuses `nan` and the infinities, a `datetime`,
     a set, a mapping with a non-string key, and every live object.
 
+    Acceptance alone is not enough, and one scalar proves it. The writer flattens a scalar subclass to its plain
+    counterpart, which is almost always the *same value* — ``np.float64(2.5)`` writes ``2.5``, a `str` subclass
+    writes its characters. A `str`-valued `enum.Enum` member is the exception: flattening goes through `str`,
+    which on a mixin enumeration is `Enum.__str__`, so ``Linestyle.SOLID`` writes ``'Linestyle.SOLID'`` where its
+    value ``'solid'`` belongs — a layer that reloads with a linestyle no engine has heard of. Comparing what came
+    out against what went in catches that by measurement rather than by naming `enum`, so any scalar whose
+    flattening moves the value is refused the same way.
+
     Args:
-        value: A value a layer is about to record.
+        value: A scalar a layer is about to record.
 
     Returns:
-        `True` when the writer would take it.
+        `True` when the writer would take it and give back an equal value.
     """
     try:
-        to_json_value(value, _ASKING_FOR)
+        written = to_json_value(value, _ASKING_FOR)
     except (TypeError, ValueError):
         return False
-    return True
+    return bool(written == value)
 
 
 #: How many values one description may carry for a single keyword, counting every value at every depth —
@@ -532,9 +540,9 @@ def _travelling_budget(value: Any, budget: int) -> int:
         budget: How many values may still be counted.
 
     Returns:
-        The budget left, or ``-1`` for a value the description cannot carry — one the writer refuses, a
-        tuple or an array (which JSON reads back as a list), a mapping with a non-string key, a live
-        object, or a container that exhausts the budget.
+        The budget left, or ``-1`` for a value the description cannot carry — one the writer refuses or
+        writes back as a different value, a tuple or an array (which JSON reads back as a list), a mapping
+        with a non-string key, a live object, or a container that exhausts the budget.
     """
     if budget <= 0:
         return -1
@@ -544,7 +552,7 @@ def _travelling_budget(value: Any, budget: int) -> int:
     # bool is neither, so it missed a gate it belonged in. Membership is not the decision — the writer still
     # is, and it refuses `datetime64`, `complex128` and `timedelta64`.
     if value is None or isinstance(value, (bool, str, Real, np.generic)):
-        return budget - 1 if _has_a_json_form(value) else -1
+        return budget - 1 if _written_back_equal(value) else -1
     # `list` and `dict` **exactly**, not `isinstance`: those two are what the round trip returns as
     # themselves, and a subclass is re-typed by it exactly as a tuple is. That is not a technicality — an
     # `xyzservices.TileProvider` *is* a dict, of plain strings, one of which is the caller's API key, and
@@ -573,13 +581,26 @@ def travels_in_a_figure(value: Any) -> bool:
     """Whether a figure's description carries `value`, or the tier must hold it beside the layer.
 
     The one rule every tier asks, so that "what can a figure carry?" has a single answer rather than one per
-    backend (#322). The rule is **a value the round trip gives back as an equal value of the same kind**: a
-    string, a boolean, a finite number or `None`, and a `list` or `dict` built out of those — up to
+    backend (#322). The rule is two-sided, and it is stated that way because it is enforced that way:
+
+    * **A scalar travels when the round trip gives back an equal value.** Its class need not survive, and for
+      a subclass it does not: the trip flattens every one of them to the plain counterpart the writer spells.
+    * **A container travels when the round trip gives back an equal value of the same class**, at every depth.
+
+    So: a string, a boolean, a finite number or `None`, and a `list` or `dict` built out of those — up to
     :data:`MAX_TRAVELLING_ELEMENTS` values. That is what a reader on another machine can act on.
+
+    The asymmetry is not an oversight, and it is the half a single-sentence "an equal value of the same kind"
+    got wrong (`R-H1`, `R-M5`). A container's class is load-bearing twice over — flattening a tuple changes the
+    *value* into one matplotlib refuses, and flattening a `dict` subclass copies its contents, the API key
+    included, into the figure. A scalar carries nothing but itself, so flattening it moves no payload and,
+    where the value survives, costs the drawer nothing: ``np.float64(2.5)`` is handed on as ``2.5``, which every
+    engine takes in its place. Where the value does *not* survive the flattening the scalar is refused too —
+    see :func:`_written_back_equal` for the `str`-valued enumeration that makes the point.
 
     It is **narrower than the writer**, and the boundary is measured rather than argued. Taking the whole
     record-to-draw path — `frozen_value` into the spec, `to_json_value` out to JSON, back in, `thawed_value`
-    at the drawer — a value survives exactly when its kind survives:
+    at the drawer — here is each kind, and what the trip does to it:
 
     * **A list or a dict of plain values comes back as itself.** ``['#ff0000', '#00ff00']``, ``[4, 4]``,
       ``[0.0, 0.5, 1.0]``, ``['fid']`` and ``{'a': 1}`` each return equal, and as the same type, through both
@@ -599,6 +620,13 @@ def travels_in_a_figure(value: Any) -> bool:
       trip returns a plain `list` or `dict`, which is a different type. It is the subclasses that make this
       matter rather than the principle — an ``xyzservices.TileProvider`` *is* a dict, of plain strings, one
       of which is the caller's API key, and a figure is not a place to write a credential.
+    * **A *scalar* subclass does travel**, and comes back as its plain counterpart. ``np.float64(2.5)`` returns
+      ``2.5``, ``np.bool_(True)`` returns ``True``, a `str` subclass returns its characters as `str`. The value
+      is the same one, and it is the one the drawer would have been handed anyway, so refusing it would hold a
+      numpy flag out of a figure for a change no engine can observe (#329). Nothing else rides along: unlike a
+      container subclass, a scalar has no contents for the trip to copy. The exception is the one scalar whose
+      *value* moves — a `str`-valued `enum.Enum` member, flattened through `Enum.__str__` — and that is refused
+      on the same measurement rather than by name.
 
     The other half of the rule is the tier's to keep, and it is two-sided:
 

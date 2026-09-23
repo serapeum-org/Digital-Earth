@@ -8,6 +8,7 @@ the pairs `Bounds`, `Selection`, `Scale`, `Encoding` and `Symbology` gained, and
 import copy
 import dataclasses
 import datetime
+import enum
 import json
 import pickle
 import re
@@ -1439,37 +1440,47 @@ _COLOR_LEVELS = [0.0, 0.25, 0.5, 1.0]
 _PALETTE = ["#440154", "#21918c", "#fde725"]
 
 
-def _same_kind(left, right):
-    """Whether two values are equal and of the same type, reached inside lists and dicts.
+#: The types the oracle holds to their exact class. A container is the half of the rule where the type is
+#: load-bearing: a tuple flattened to a list is a value matplotlib refuses outright, and a `dict` subclass
+#: flattened to a `dict` has had its contents — an `xyzservices.TileProvider`'s API key — copied into the
+#: figure. Neither is true of a scalar, which carries nothing but itself.
+_CONTAINERS = (list, tuple, dict, set, frozenset, np.ndarray)
 
-    Plain `==` is not enough here: a tuple compares unequal to the list it becomes, but a `list` and a
-    `tuple` of equal numbers nested one level down still have to be told apart, and an array compares
-    element-wise rather than to a single boolean.
+
+def _comes_back_the_same(left, right):
+    """Whether the trip returned `left` as `right` under the rule the code actually makes.
+
+    Two comparisons, not one, because the rule is two-sided (`R-M5`). A **container** must come back as the
+    same class as well as equal — plain `==` would call a tuple equal to nothing, but a `list` holding a
+    `tuple` one level down compares equal to the list holding a list it becomes, and that is the loss the
+    rule exists to catch. A **scalar** is compared by value alone, because the trip flattens every scalar
+    subclass to its plain counterpart and that counterpart is what the drawer is handed.
 
     Args:
         left: The value a builder recorded.
         right: What came back from the trip.
 
     Returns:
-        `True` when the two are the same type and equal, at every depth.
+        `True` when the two are equal, and — wherever either side is a container — of the same class, at
+        every depth.
     """
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        if set(left) != set(right):
+    if isinstance(left, _CONTAINERS) or isinstance(right, _CONTAINERS):
+        if type(left) is not type(right):
             return False
-        return all(_same_kind(left[key], right[key]) for key in left)
-    if isinstance(left, (list, tuple)):
+        if isinstance(left, np.ndarray):
+            return bool(np.array_equal(left, right))
+        if isinstance(left, dict):
+            if set(left) != set(right):
+                return False
+            return all(_comes_back_the_same(left[key], right[key]) for key in left)
         if len(left) != len(right):
             return False
-        return all(_same_kind(one, other) for one, other in zip(left, right))
-    if isinstance(left, np.ndarray):
-        return bool(np.array_equal(left, right))
+        return all(_comes_back_the_same(one, other) for one, other in zip(left, right))
     return bool(left == right)
 
 
 def _survives_the_trip(value):
-    """Whether the record-to-draw path gives `value` back as an equal value of the same kind.
+    """Whether the record-to-draw path gives `value` back equal, and a container back as its own class.
 
     The oracle the rule is measured against, rather than a second spelling of the rule: it runs the real
     path a described value takes — `frozen_value` into the spec, `to_json_value` out, `json` there and
@@ -1479,8 +1490,8 @@ def _survives_the_trip(value):
         value: The value a builder would record.
 
     Returns:
-        `True` when both the in-process freeze and the stored JSON trip return an equal value whose type
-        is the same at every depth; `False` when either loses it or the writer refuses it outright.
+        `True` when both the in-process freeze and the stored JSON trip return a value that satisfies
+        :func:`_comes_back_the_same`; `False` when either loses it or the writer refuses it outright.
     """
     try:
         after_freeze = thawed_value(frozen_value(value))
@@ -1488,9 +1499,9 @@ def _survives_the_trip(value):
         after_json = thawed_value(frozen_value(json.loads(json.dumps(written))))
     except (TypeError, ValueError):
         return False
-    if not _same_kind(value, after_freeze):
+    if not _comes_back_the_same(value, after_freeze):
         return False
-    return _same_kind(value, after_json)
+    return _comes_back_the_same(value, after_json)
 
 
 class _KeyedProvider(dict):
@@ -1505,13 +1516,32 @@ class _TaggedList(list):
     """A `list` subclass, standing for any sequence a library hands back with behaviour attached."""
 
 
+class _TaggedStr(str):
+    """A `str` subclass with nothing added, standing for any string a library hands back as its own type."""
+
+
+class _TaggedInt(int):
+    """An `int` subclass with nothing added, the counterpart of `_TaggedStr` on the number side."""
+
+
+class _Linestyle(str, enum.Enum):
+    """A caller's `str`-valued enumeration of a style keyword's allowed values.
+
+    The one scalar whose flattening changes the **value** rather than only the type: `str` on a mixin
+    enumeration is `Enum.__str__`, so the writer stores the member's name where its value belongs.
+    """
+
+    SOLID = "solid"
+
+
 class TestWhatTravelsInAFigure:
     """One rule, in one place, for what a figure's description carries (#322).
 
     Two tiers used to answer this separately: static asked `travels_in_a_figure` and kept plain scalars only,
     while interactive asked its own `is_json_value` and kept everything the writer accepts. The rule is now
     shared, and it is drawn where the **round trip** puts it rather than where either tier had guessed: a
-    value travels when the path back gives it as an equal value of the same kind.
+    value travels when the path back gives it back equal, and — for a container, where the class is what
+    carries the loss — as the same class too.
 
     Holding every container was the over-correction in between (#330). It is true of a tuple and was
     generalised to the containers beside it without being re-measured, so a graduated choropleth's
@@ -1652,6 +1682,57 @@ class TestWhatTravelsInAFigure:
             "a dict subclass is an engine object wearing a dict, so the tier holds it beside the layer"
         )
 
+    @pytest.mark.parametrize(
+        "value,plain",
+        [
+            (np.float64(2.5), 2.5),
+            (np.bool_(True), True),
+            (np.int64(7), 7),
+            (_TaggedStr("solid"), "solid"),
+            (_TaggedInt(3), 3),
+        ],
+        ids=["np-float64", "np-bool", "np-int64", "str-subclass", "int-subclass"],
+    )
+    def test_a_scalar_subclass_travels_as_its_plain_counterpart(self, value, plain):
+        """The loss the rule accepts, written down rather than left to be discovered (`R-M5`).
+
+        Args:
+            value: The scalar subclass a builder recorded.
+            plain: The plain value the drawer is handed in its place.
+
+        Test scenario:
+            The rule says "same class" for a container and only "equal" for a scalar, and the difference
+            was stated as one rule, so a reader could not tell the flattening was intended. It is: the
+            value survives, nothing rides along with it — a scalar has no contents to copy, which is the
+            whole of the `TileProvider` argument on the container side — and the plain value is what every
+            engine would have received anyway.
+        """
+        written = to_json_value(frozen_value(value), "Symbology.props")
+        drawn = thawed_value(frozen_value(json.loads(json.dumps(written))))
+        assert drawn == value, (
+            f"{value!r} must come back equal, and came back {drawn!r}"
+        )
+        assert type(drawn) is type(plain), (
+            f"and as a plain {type(plain).__name__}, not a {type(drawn).__name__}"
+        )
+
+    def test_a_scalar_whose_value_moves_in_the_writing_does_not_travel(self):
+        """Equal is the whole of the scalar rule, so a flattening that changes the value is refused.
+
+        Test scenario:
+            `str` on a mixin enumeration is `Enum.__str__`, so the writer stores ``'_Linestyle.SOLID'``
+            where the member's value ``'solid'`` belongs — a figure that reloads with a linestyle no
+            engine has heard of. Asking only whether the writer *accepts* a scalar admitted it; asking
+            whether the writer gives back an equal value refuses it, and refuses by measurement anything
+            else whose flattening moves the value.
+        """
+        assert (
+            to_json_value(_Linestyle.SOLID, "Symbology.props") == "_Linestyle.SOLID"
+        ), "the writer accepts the member and stores its name, not its value"
+        assert not travels_in_a_figure(_Linestyle.SOLID), (
+            "so the tier holds it beside the layer and hands the drawer the member itself"
+        )
+
     def test_a_list_subclass_does_not_travel_either(self):
         """The same holds on the sequence side, so the rule needs no list of blessed subclasses.
 
@@ -1682,6 +1763,15 @@ class TestWhatTravelsInAFigure:
             "solid",
             None,
             float("nan"),
+            np.float64(2.5),
+            np.bool_(True),
+            np.int64(7),
+            np.str_("solid"),
+            [np.float64(2.5)],
+            {"width": np.int64(1)},
+            _TaggedStr("solid"),
+            _TaggedInt(3),
+            _Linestyle.SOLID,
         ],
         ids=[
             "palette",
@@ -1699,6 +1789,15 @@ class TestWhatTravelsInAFigure:
             "text",
             "none",
             "nan",
+            "np-float64",
+            "np-bool",
+            "np-int64",
+            "np-str",
+            "np-float-in-a-list",
+            "np-int-in-a-mapping",
+            "str-subclass",
+            "int-subclass",
+            "str-enum",
         ],
     )
     def test_the_rule_answers_what_the_round_trip_measures(self, value):
@@ -1711,6 +1810,10 @@ class TestWhatTravelsInAFigure:
             Holding every container was justified by one measurement — a dash pattern — generalised to
             every container beside it without re-measuring. This compares the rule against the trip
             itself, case by case, so the next generalisation has to survive the same comparison.
+
+            The parametrisation carried no numpy scalar and no scalar subclass, which is exactly where the
+            rule and the oracle disagreed, so the comparison could not fail (`R-H1`). They are here now, and
+            with them the `str`-valued enumeration whose trip changes the value rather than only the type.
         """
         assert travels_in_a_figure(value) is _survives_the_trip(value), (
             f"the rule and the measured round trip disagree about {value!r}"
