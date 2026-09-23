@@ -11,6 +11,23 @@ across ``base/``, ``web/`` and four tiers' tests, two of which were found by gre
 anything up. The failure mode of that exercise is a stale statement left behind on one tier, and nothing
 would have caught it.
 
+**How to cite a clause, and how not to.** Write the bare number — ``C7``, or ``contract C7`` — and do not
+restate the clause beside it; the whole point is that the wording lives here. ``tests/test_contract_clauses.py``
+scans for that spelling and holds it both ways: a number nobody wrote down fails, and a clause no test names
+fails.
+
+That makes the spelling load bearing, because three other things in this repository used to be written the
+same way and one of them is generated continuously:
+
+* **A review-round finding.** The review passes number findings by severity and rank, so a round's first
+  critical was also written ``C1``. Write these ``R-C1`` / ``R-H2`` / ``R-M9`` — the leading ``R-`` is what
+  keeps them out of the scan, and findings already spelled ``H<n>`` or ``M<n>`` never collided.
+* **Python's method resolution order**, once written "the C3 linearisation". Name it in words instead.
+* **matplotlib's colour cycle**, ``colors="C0"``. A quoted string, so it never reads as prose.
+
+A citation that ignores this is not merely untidy: a review finding written ``C1`` is indistinguishable from
+clause 1 and would be counted as a citation of it, which is the drift this module exists to stop.
+
 So the clause text lives here, once, and the tiers **cite** it: a tier's contract test names the number and
 keeps its own scenario prose, rather than paraphrasing the rule in a fifth wording.
 :mod:`tests.test_contract_clauses` is the drift guard over that arrangement — every cited number must be

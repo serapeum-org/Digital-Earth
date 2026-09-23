@@ -1,4 +1,4 @@
-"""A figure holds plain values; the engine's own objects are held beside the layer (C1/H2/H3/M9).
+"""A figure holds plain values; the engine's own objects are held beside the layer (review R-C1/R-H2/R-H3/R-M9).
 
 The seam froze whatever a builder was handed into `Symbology.props` and thawed it back at the drawer. That
 works for a number and a colour name and for nothing else: a `ListedColormap`, a Datashader reduction, a
@@ -416,7 +416,7 @@ class TestAnEngineValueIsHeldBesideTheLayer:
 
 
 class TestAKeyedProviderKeepsItsCredentialOffTheFigure:
-    """An `xyzservices.TileProvider` is a `dict`, so freezing it wrote every field it holds (review C1)."""
+    """An `xyzservices.TileProvider` is a `dict`, so freezing it wrote every field it holds (review R-C1)."""
 
     @staticmethod
     def _keyed_provider():
@@ -660,7 +660,7 @@ class TestAKeywordJsonCannotCarryIsStillHeld:
     """The other half of the rule, which widening the description must not break (round 2, M3).
 
     Routing `**opts` through the per-value test is only right if the test is still applied. A bag recorded
-    wholesale would write a `ListedColormap` into `Symbology.props`, which is what round 1's C1/H2 were
+    wholesale would write a `ListedColormap` into `Symbology.props`, which is what round 1's R-C1/R-H2 were
     about: the figure then refuses to write at all, or writes something a reader cannot draw from.
     """
 

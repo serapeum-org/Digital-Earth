@@ -18,12 +18,17 @@ declaration that rots, so drift is checked **both ways**.
    skip three tiers out of four in the lean ``dev`` env. The files are read with :mod:`ast` instead, which
    costs no import and sees every tier.
 
-**Three namespaces spell an identifier the same way.** This contract numbers its clauses ``C<n>``; the review
-rounds number their findings by severity and rank, so a review's first critical is also written that way; and
-Python's method-resolution order is computed by the C3 linearisation. A token whose own line or either
-neighbour names a review or a linearisation is read as belonging to those namespaces rather than to this
-contract — a window rather than a line, because the sentence that marks it wraps. The filter is narrow on
-purpose, and it is the reason a new citation of this contract should keep clear of both words.
+**Four namespaces used to spell an identifier the same way**, and that ambiguity is now resolved at the
+source rather than guessed at here. This contract numbers its clauses ``C<n>``. The review rounds numbered
+their findings the same way, so a review's first critical read as clause 1; they are now written ``R-C1``.
+Python's method-resolution order was described as "the C3 linearisation"; it is now named in words. And
+matplotlib's colour cycle spells a colour ``"C0"``, which is a quoted string and never prose.
+
+The guard therefore matches on **shape** — see :data:`CITATION`. It previously read a window of surrounding
+text and dropped any token near the words "review" or "linearise", which guessed wrong in both directions: a
+real citation in a sentence mentioning a review was silently unchecked, and a review finding phrased without
+either word was reported as a clause that does not exist. A guard against silent drift must not itself fail
+silently, so the heuristic is gone.
 """
 
 import ast
@@ -40,15 +45,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: The trees a citation may live in. Everything the package ships and everything that tests it.
 SCANNED_TREES = (REPO_ROOT / "src", REPO_ROOT / "tests")
 
-#: A citation of this contract: the bare token. It may open a docstring, so a quote before it is fine; a quote
-#: *after* it makes the token a string of its own, which is matplotlib's ``colors="C0"`` colour-cycle name and
-#: not a citation of anything.
-CITATION = re.compile(r"(?<!\w)C(\d+)\b(?![\"'])")
-
-#: What marks a window as belonging to one of the other two namespaces — a review finding, or the C3
-#: linearisation. Read the module docstring before widening this: every term here is one a citation of *this*
-#: contract must keep clear of.
-OTHER_NAMESPACE = re.compile(r"\breview\b|C\d+/[HMLN]\d+|lineari[sz]", re.IGNORECASE)
+#: A citation of this contract: the bare token, with nothing joined to its left.
+#:
+#: The exclusions are **shape**, not prose. An earlier version read a window of surrounding text and dropped any
+#: token near the words "review" or "linearise", which guessed wrong in both directions: a real citation in a
+#: sentence that happened to mention a review round was silently not checked, and a review finding phrased
+#: without either word was reported as a clause that does not exist. Both failures are silent, and the guard
+#: exists to stop exactly that kind of silence.
+#:
+#: So the other namespaces are now spelled so they cannot collide, and this matches only what is left:
+#:
+#: * ``(?<![\w-])`` — a review finding is written ``R-C1``/``R-H2``, so a hyphen to the left is not a citation.
+#: * ``(?![\"'])`` — a quote to the right makes the token a string of its own, which is matplotlib's
+#:   ``colors="C0"`` colour-cycle name.
+#: * Python's method-resolution order is described by name rather than as "C3".
+CITATION = re.compile(r"(?<![\w-])C(\d+)\b(?![\"'])")
 
 #: This module cites numbers while explaining the rule, and must not count as anybody's pin.
 GUARD_MODULE = Path(__file__).resolve()
@@ -62,10 +73,9 @@ CANONICAL_MODULE = REPO_ROOT / "src" / "digitalearth" / "base" / "contract_claus
 def _cited_in(text: str, origin: str) -> dict[int, list[str]]:
     """Collect the clause numbers a block of text cites, with where each was found.
 
-    A citation is judged against the line it sits on **and its two neighbours**, because the sentence that
-    marks it as another namespace's often wraps: ``tests/test_mixin_contract.py`` writes "and C3 cannot" on
-    one line and "linearize it" on the next, and a line-at-a-time reading would take that for this contract's
-    third clause.
+    A citation is judged **line by line**, on its own shape. It used to be judged against a window of
+    surrounding prose, because the other namespaces spelled themselves the same way and only the sentence
+    around a token said which one it was. They no longer do, so there is nothing left to infer.
 
     Args:
         text: The text to read.
@@ -75,11 +85,7 @@ def _cited_in(text: str, origin: str) -> dict[int, list[str]]:
         Clause number to the sites citing it, each site as ``"<origin>:<line>"``.
     """
     found: dict[int, list[str]] = {}
-    lines = text.splitlines()
-    for index, line in enumerate(lines):
-        context = "\n".join(lines[max(index - 1, 0) : index + 2])
-        if OTHER_NAMESPACE.search(context):
-            continue
+    for index, line in enumerate(text.splitlines()):
         for match in CITATION.finditer(line):
             found.setdefault(int(match.group(1)), []).append(f"{origin}:{index + 1}")
     return found
