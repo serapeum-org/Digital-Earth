@@ -289,7 +289,9 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
     others. Going through one helper is what keeps the two from disagreeing again.
 
     Args:
-        held: The values being held beside this layer; anything with no JSON form is added to it.
+        held: The values being held beside this layer; anything
+            :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses is added to it — which is
+            narrower than "has no JSON form", because a tuple has one and is still held (#322).
         style: The resolved style, as the builder computed it.
 
     Returns:
@@ -341,8 +343,8 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
 def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
     """Return a layer's recorded properties with the values held beside it merged back in.
 
-    What every drawer reads instead of `layer.symbology.props`: the description carries the JSON-safe
-    half, the map carries the engine values :func:`describe` kept out of it, and a drawer wants both. A
+    What every drawer reads instead of `layer.symbology.props`: the description carries the half that
+    travels, the map carries what :func:`describe` kept out of it, and a drawer wants both. A
     figure loaded from disk — or drawn on another map — has nothing held, so the drawer sees the
     description alone and draws the layer with what it can.
 
@@ -699,9 +701,12 @@ class InteractiveMapBase:
             A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`, whose layers are the
             tree in draw order and whose sources are what each builder was given.
 
-            It carries the JSON-safe half of the styling only. A colormap object, a Datashader reduction,
-            a tile provider and a timestamp are held beside the layer instead (:func:`describe`), so a
-            figure read back elsewhere draws each layer with what the description alone can say.
+            It carries only the half of the styling that travels
+            (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`). A colormap object, a Datashader
+            reduction, a tile provider, a timestamp, a tuple such as a dash pattern and an array are held
+            beside the layer instead (:func:`describe`), so a figure read back elsewhere draws each layer
+            with what the description alone can say. A `list` or `dict` of plain values is not one of
+            those — it comes back from JSON as itself, so it is described (#330).
 
             A map built from a GeoDataFrame or a dataset already in memory can be handed straight to a
             renderer, but not written: `to_dict()` refuses an `object:` source, since a reference into this
