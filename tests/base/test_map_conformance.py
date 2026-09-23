@@ -14,6 +14,17 @@ the two at the foot of this module are twelve lines each. The probes themselves 
 call the Core names (`points`, `choropleth`, `graticule`) and read `figure_spec`, which is the whole point of
 the contract those names were frozen into.
 
+**Which tiers subclass it, and why the other two cannot yet.** The package has four —
+:data:`ALL_TIERS` — and `web` and `interactive` are the two that sign here. The **static** tier is the
+*default* one and is still absent: `points` and `choropleth` are `PENDING` under the Core spelling on it
+(they are `scatter`, and a `choropleth` with a different signature), so probes written against the frozen
+names cannot run against it until order 27a. The **3-D** tier draws a scene rather than a map and has no
+`points`/`graticule` at all. Saying that nowhere is what let :data:`NO_PORTABLE_CHANNELS` sit empty beside
+two tiers that record no portable channel, reading as a statement about the package when it was one about
+the subset (review R-M4). Both are named in the tables now, and
+:class:`TestTheTablesDescribeThePackage` re-asks them the questions those tables answer for — so an entry
+cannot outlive the defect it excuses on an unsubclassed tier either (review R-L7).
+
 **About `to_backend()`.** The brief this was written from calls for a minimal `to_backend` round trip, web to
 interactive. `to_backend()` does not exist yet — it is **order 33 (U-6)**, and building it is explicitly not
 this module's job. What is built here is the *probe that will hold it*, exercised today against the two
@@ -34,18 +45,22 @@ HoloViews' (`{"via": "geometry", "hv_type": "Points", "common": {"size": 7.0}, .
 portable answer to the same question — `Symbology.encodings`, keyed by
 :data:`~digitalearth.base.spec.encoding.CHANNELS` — was written by **neither tier**; both came back with
 `encodings == {}`, so a figure could round-trip its kinds, its draw order and its visibility and then be
-redrawn in the target engine's default colours and sizes. Both tiers record the declared channels now
-(#328), :data:`NO_PORTABLE_CHANNELS` is empty, and
+redrawn in the target engine's default colours and sizes. Both 2-D tiers record the declared channels now
+(#328) and are off :data:`NO_PORTABLE_CHANNELS`, which names the static and 3-D tiers instead, and
 :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` asks the two live tiers for the same styled layer
 and holds them to one set of channels.
 
 The seed figure still carries no style, and that is deliberate: it draws `points()` with no arguments, and
 the tiers' *defaults* differ — the web tier's marker is 5 pixels and the interactive tier's is 6. Which
 default a tier picks is not what a round trip has to agree about; what a caller **asked** for is, so the
-styled probe passes an explicit value rather than comparing two silences. The other symbology value that is
-portable today is the classification itself: `choropleth(..., scheme=, k=)` goes through
-:class:`~digitalearth.base.spec.scale.Scale` on every tier and both tiers publish the result as
-`last_breaks`, so that is what :data:`EXPECTED_BREAKS` pins.
+styled probe passes an explicit value rather than comparing two silences — and
+:meth:`MapConformanceBase.test_an_unstyled_layer_publishes_no_portable_channel` holds the tiers to the same
+rule in `encodings`, which briefly published each tier's defaults as though a caller had asked for them
+(review R-H2).
+
+The other symbology value that is portable today is the classification itself:
+`choropleth(..., scheme=, k=)` goes through :class:`~digitalearth.base.spec.scale.Scale` on every tier and
+both tiers publish the result as `last_breaks`, so that is what :data:`EXPECTED_BREAKS` pins.
 
 **The collection trap this module is built not to fall into.** The shared renderer contract collected nothing
 useful in the 3-D and interactive jobs for its whole life: its classes are gated on optional engines, and the
@@ -62,7 +77,9 @@ import importlib.util
 import subprocess
 import sys
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 
@@ -145,25 +162,55 @@ EXPECTED_SEED = (
 #: outlive what it excuses — the same shape as `UNDRAWN_KINDS` in the renderer contract. Taking a tier off the
 #: list is what turns its `test_a_layer_built_hidden_is_described_hidden` on.
 #:
-#: **Empty, and the guard is what emptied it.** The interactive tier was listed here: `points(visible=False)`
-#: fell through the builder's `**opts` to HoloViews as a style option, so the element was hidden while the
-#: figure went on describing the layer visible (#327). The flag is a declared parameter of every builder on
-#: that tier now, so it reaches `add_element(visible=)` and the description and the drawing say the same
-#: thing — and the probe above runs for both tiers instead of skipping one.
-CANNOT_HIDE_AT_BUILD: dict[str, str] = {}
+#: **The interactive tier came off it, and the 3-D tier went on.** The interactive tier was listed here:
+#: `points(visible=False)` fell through the builder's `**opts` to HoloViews as a style option, so the element
+#: was hidden while the figure went on describing the layer visible (#327). The flag is a declared parameter
+#: of every builder on that tier now, so it reaches `add_element(visible=)` and the description and the
+#: drawing say the same thing. The 3-D tier never gained it: measured,
+#: `Scene3D().point_cloud(cloud, visible=False)` raises `TypeError: "visible" is an invalid keyword argument
+#: for _common_arg_parser` — the flag falls through `**kwargs` to PyVista, which refuses it, and
+#: `set_visible()` after the build is the only way to hide a 3-D layer. The static tier is **not** listed:
+#: measured, `Map(crs=4326).scatter(features, visible=False)` describes the layer `visible=False` (R-M4).
+#:
+#: Listing the 3-D tier is also what makes the reverse branch execute again. With the table empty the guard
+#: skipped for every tier, in every job, so nothing was being guarded in either direction (review R-L7); the
+#: tiers named here that do not subclass the base are held by
+#: :class:`TestTheTablesDescribeThePackage` instead.
+CANNOT_HIDE_AT_BUILD: dict[str, str] = {
+    "3d": (
+        "visible= is not a parameter of its builders; it reaches PyVista through **kwargs, which raises "
+        "TypeError, so a 3-D layer is hidden with set_visible() after it is built"
+    ),
+}
 
 #: The tiers that record no portable channel for a layer's style, each with what they record instead.
 #:
 #: `Symbology.encodings` is the vocabulary's answer to "what drives this layer's colour, size and opacity",
 #: keyed by :data:`~digitalearth.base.spec.encoding.CHANNELS` so any tier can read any other tier's.
 #:
-#: **Empty, and the guard is what emptied it.** Both tiers were listed: each recorded its engine's own
-#: spelling — MapLibre's paint under `props['paint']`, HoloViews' resolved options under `props['common']`
-#: and `props['opts']` — and neither wrote an encoding, so a styled layer described its style in a form only
-#: the tier that drew it could read. Both lift the declared channels out of what they already record now
-#: (#328), and because the list is guarded in **both** directions a fixed tier left on it fails just as a
-#: broken tier taken off it would.
-NO_PORTABLE_CHANNELS: dict[str, str] = {}
+#: **The 2-D tiers came off it; the other two never did.** Both 2-D tiers were listed: each recorded its
+#: engine's own spelling — MapLibre's paint under `props['paint']`, HoloViews' resolved options under
+#: `props['common']` and `props['opts']` — and neither wrote an encoding, so a styled layer described its
+#: style in a form only the tier that drew it could read. Both lift the declared channels out of what they
+#: already record now (#328), and because the list is guarded in **both** directions a fixed tier left on it
+#: fails just as a broken tier taken off it would.
+#:
+#: The static and 3-D tiers were never fixed, and the empty table said otherwise (review R-M4). Measured:
+#: `Map(crs=4326).scatter(features, size=7.0)` records `props == ['opts', 'size_column', 'via']` and
+#: `encodings == {}`; `Scene3D().point_cloud(cloud, size=7.0)` records `size` flat in `props` and
+#: `encodings == {}`. Neither is a 2-D map, and neither has a fold that turns its own spelling into declared
+#: channels, so both are named here with what they record instead — and both are held to it, in both
+#: directions, by :class:`TestTheTablesDescribeThePackage`.
+NO_PORTABLE_CHANNELS: dict[str, str] = {
+    "matplotlib": (
+        "the caller's keywords stay in props['opts'] and go to cleopatra as they are; nothing on this tier "
+        "folds them into declared channels"
+    ),
+    "3d": (
+        "the builders record their resolved keywords flat in props — size, cmap, scheme — with no fold onto "
+        "declared channels"
+    ),
+}
 
 #: Each tier's CI job, as `(pixi task, pixi environment, the pixi feature carrying its engine)`.
 #:
@@ -179,6 +226,13 @@ TIER_JOBS: dict[str, tuple[str, str, str]] = {
 #: Each tier's engine, as the module whose absence gates the tier's class. The collection guard asks whether
 #: it is importable to decide whether this environment is one where that tier must contribute items.
 TIER_ENGINES: dict[str, str] = {"web": "maplibre", "interactive": "geoviews"}
+
+#: Every tier the package ships, as its own `Capabilities` spells the backend.
+#:
+#: Written out because the tables above describe a *subset* and nothing said so. Two of these four subclass
+#: :class:`MapConformanceBase`; the other two are held to the drift tables instead, and
+#: :class:`TestTheTablesDescribeThePackage` refuses a tier that is in neither place (review R-M4).
+ALL_TIERS: tuple[str, ...] = ("3d", "interactive", "matplotlib", "web")
 
 #: The name the naming probes ask for, and what a second layer asking for it again must be given.
 #:
@@ -255,6 +309,149 @@ def _polygons():
             crs=4326,
         )
     )
+
+
+def _point_cloud():
+    """Return the three points the 3-D tier's probe draws.
+
+    Returns:
+        An `(n, 3)` array of x/y/z coordinates. Three points because the probe is about what the tier
+        *records*, not about what it renders, and three is the smallest cloud PyVista will take.
+    """
+    import numpy as np
+
+    return np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0], [2.0, 0.5, 3.0]])
+
+
+def _static_map():
+    """Return an empty static map in the display CRS the other tiers' probes use.
+
+    Returns:
+        The matplotlib tier's `Map`.
+    """
+    from digitalearth.static import Map
+
+    return Map(crs=4326)
+
+
+def _static_styled(drawn) -> None:
+    """Draw one explicitly styled point layer on the static tier.
+
+    Args:
+        drawn: The static map to draw on.
+
+    Note:
+        `scatter`, not `points`: the Core spelling is `PENDING` on this tier, which is the reason it does
+        not subclass :class:`MapConformanceBase` and is held here instead.
+    """
+    drawn.scatter(_points(), size=SIZE)
+
+
+def _static_hidden(drawn) -> None:
+    """Ask the static tier for a point layer that starts hidden.
+
+    Args:
+        drawn: The static map to draw on.
+    """
+    drawn.scatter(_points(), visible=False)
+
+
+def _scene_3d():
+    """Return an empty 3-D scene.
+
+    Returns:
+        The 3-D tier's `Scene3D`.
+    """
+    from digitalearth.three_d import Scene3D
+
+    return Scene3D()
+
+
+def _cloud_styled(drawn) -> None:
+    """Draw one explicitly styled point cloud on the 3-D tier.
+
+    Args:
+        drawn: The scene to draw on.
+    """
+    drawn.point_cloud(_point_cloud(), size=SIZE)
+
+
+def _cloud_hidden(drawn) -> None:
+    """Ask the 3-D tier for a point cloud that starts hidden.
+
+    Args:
+        drawn: The scene to draw on.
+    """
+    drawn.point_cloud(_point_cloud(), visible=False)
+
+
+@dataclass(frozen=True)
+class OutsideTheSuite:
+    """How to reach a tier that does not subclass :class:`MapConformanceBase`.
+
+    The tables above excuse a tier from a promise, and an excuse is only honest while something re-asks the
+    question. The subclassed tiers are re-asked by the base class; these two had nothing asking, so an entry
+    for them would have been a claim rather than a measurement (review R-M4/R-L7).
+
+    Attributes:
+        engine: The module whose absence means this tier cannot be exercised here, for `importorskip`.
+        make: Returns an empty map or scene of that tier.
+        styled: Draws one layer on it with an explicit `size=`, so there is a channel to record.
+        hidden: Asks it for a layer that starts hidden.
+    """
+
+    engine: str
+    make: Callable[[], Any]
+    styled: Callable[[Any], None]
+    hidden: Callable[[Any], None]
+
+
+#: The two tiers the probes above do not reach, and how to ask them the questions the tables answer for.
+#:
+#: The static tier's `points`/`choropleth` are `PENDING` under the Core spelling (they are `scatter` and
+#: `choropleth` with a different signature), and the 3-D tier draws a scene rather than a map — neither can
+#: inherit probes written against the frozen Core names. That is why they are not subclasses, and it is
+#: why they need this.
+ABSENT_TIERS: dict[str, OutsideTheSuite] = {
+    "matplotlib": OutsideTheSuite(
+        "matplotlib", _static_map, _static_styled, _static_hidden
+    ),
+    "3d": OutsideTheSuite("pyvista", _scene_3d, _cloud_styled, _cloud_hidden),
+}
+
+
+def _closed(drawn) -> None:
+    """Release a map built outside the `drawn` fixture.
+
+    Args:
+        drawn: The map or scene to close.
+    """
+    try:
+        drawn.close()
+    except Exception:  # pragma: no cover - a closed map may refuse a second close
+        pass
+
+
+def _asked_to_hide(tier: OutsideTheSuite, drawn) -> str:
+    """Ask one tier for a layer that starts hidden, and say what it did about it.
+
+    Args:
+        tier: The tier's row in :data:`ABSENT_TIERS`.
+        drawn: Its empty map or scene.
+
+    Returns:
+        `"refused"` when the builder raised rather than take the flag, `"hidden"` when the figure describes
+        the layer hidden, and `"visible"` when it accepted the flag and described the layer visible anyway.
+        Three answers rather than two because a tier on :data:`CANNOT_HIDE_AT_BUILD` can fail either way,
+        and only `"hidden"` means the entry has to come off.
+    """
+    try:
+        tier.hidden(drawn)
+    except TypeError:
+        return "refused"
+    figure = drawn.figure_spec
+    shown = figure.layers.get(figure.layers.ids[-1]).visible
+    return "visible" if shown else "hidden"
 
 
 def _described(figure) -> tuple:
@@ -939,4 +1136,103 @@ class TestOneStyledLayerDescribesOneChannelOnBothTiers:
         """
         assert self._web() == self._interactive(), (
             f"the web tier describes {self._web()} and the interactive tier {self._interactive()}"
+        )
+
+
+class TestTheTablesDescribeThePackage:
+    """Every tier is either held by the probes above or named in a table, and nothing is silently absent."""
+
+    def test_every_tier_either_signs_the_contract_or_is_named_in_a_table(self):
+        """A tier that neither subclasses the base nor appears in a drift table is covered by nothing.
+
+        Test scenario:
+            The module opens "One set of behavioural questions **every tier's** map answers the same way",
+            and two of the four tiers subclass it. That is defensible — and it was said nowhere, while
+            `NO_PORTABLE_CHANNELS` sat empty beside two tiers that record no portable channel at all, so
+            the ledger read as a statement about the package and was one about the subset (review R-M4).
+        """
+        unheld = sorted(
+            backend
+            for backend in ALL_TIERS
+            if backend not in TIER_JOBS and backend not in NO_PORTABLE_CHANNELS
+        )
+        assert unheld == [], (
+            f"{unheld} neither subclass MapConformanceBase nor appear in NO_PORTABLE_CHANNELS, so nothing "
+            "in this module says anything about them"
+        )
+
+    def test_every_tier_a_table_excuses_can_be_re_asked_the_question(self):
+        """An excuse is only honest while something re-asks the question it excuses.
+
+        Test scenario:
+            A tier named in a table is either a subclass — re-asked by the base class's reverse probes — or
+            reachable through :data:`ABSENT_TIERS`, where the two checks below re-ask it. A name in neither
+            place would be an excuse nothing can contradict, which is the shape this module exists to
+            refuse.
+        """
+        named = set(CANNOT_HIDE_AT_BUILD) | set(NO_PORTABLE_CHANNELS)
+        unreachable = sorted(named - set(TIER_JOBS) - set(ABSENT_TIERS))
+        assert unreachable == [], (
+            f"{unreachable} are excused by a table and reachable from nowhere; give each one a row in "
+            "ABSENT_TIERS or a subclass, so the day it is fixed something says so"
+        )
+
+    @pytest.mark.parametrize("backend", sorted(ABSENT_TIERS))
+    def test_a_tier_excused_from_portable_channels_still_records_none(self, backend):
+        """The reverse branch for the tiers that do not subclass the base.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The same promise :meth:`MapConformanceBase.test_a_tier_that_records_no_portable_channel_is_named_as_such`
+            makes for the subclassed tiers, asked of the two that cannot subclass. The layer is drawn with
+            an explicit `size=`, which `CHANNELS` declares, so a tier that grew a fold would record
+            something here and the entry would have to come off — which is what turns a real probe on for
+            it. Before this existed the branch was unreachable in both directions (review R-L7).
+        """
+        if backend not in NO_PORTABLE_CHANNELS:
+            pytest.skip(
+                f"the {backend} tier is not excused from recording portable channels"
+            )
+        tier = ABSENT_TIERS[backend]
+        pytest.importorskip(tier.engine)
+        drawn = tier.make()
+        try:
+            tier.styled(drawn)
+            figure = drawn.figure_spec
+            symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+            recorded = sorted(symbology.encodings)
+        finally:
+            _closed(drawn)
+        assert recorded == [], (
+            f"the {backend} tier now records {recorded} for a layer drawn with size={SIZE}; take it off "
+            "NO_PORTABLE_CHANNELS and give it a MapConformanceBase subclass, so the probes hold it"
+        )
+
+    @pytest.mark.parametrize("backend", sorted(ABSENT_TIERS))
+    def test_a_tier_excused_from_hiding_at_build_still_cannot(self, backend):
+        """The other reverse branch, for the same two tiers.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            A tier on :data:`CANNOT_HIDE_AT_BUILD` is asked for a hidden layer here too; the day it
+            describes one correctly, this fails and the entry has to come off. `"refused"` and `"visible"`
+            are both failures of the promise and so both leave the entry standing — only a layer really
+            described hidden retires it.
+        """
+        if backend not in CANNOT_HIDE_AT_BUILD:
+            pytest.skip(f"the {backend} tier is not on the hidden-at-build list")
+        tier = ABSENT_TIERS[backend]
+        pytest.importorskip(tier.engine)
+        drawn = tier.make()
+        try:
+            outcome = _asked_to_hide(tier, drawn)
+        finally:
+            _closed(drawn)
+        assert outcome != "hidden", (
+            f"the {backend} tier now describes a layer built hidden as hidden; take it off "
+            "CANNOT_HIDE_AT_BUILD so its probe runs"
         )
