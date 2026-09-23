@@ -938,16 +938,31 @@ class MapConformanceBase:
             collects and runs this module for this tier. It then counts what the tier contributes, because a
             subclass that shadowed the probes, or a base class that lost them, would leave a green job
             covering nothing.
+
+            The relation is **containment, not equality**: a tier must bring every shared probe, and may
+            bring probes of its own. Equality made any tier-specific probe a failure, reported as a
+            "shadowed" probe, so a tier could never ask a question only it can answer (review R-L8).
+            Containment alone would miss a subclass that keeps a probe's name and empties it — `dir()`
+            reports the name either way — so each declared probe is also asked whether it is still
+            callable here.
         """
-        mine = sorted(name for name in dir(self) if name.startswith("test_"))
+        mine = {name for name in dir(self) if name.startswith("test_")}
         declared = sorted(
             name for name in vars(MapConformanceBase) if name.startswith("test_")
         )
-        assert mine == declared, (
-            f"the {self.backend} tier contributes {len(mine)} probes and the contract declares "
-            f"{len(declared)}: {sorted(set(declared) ^ set(mine))}"
+        missing = sorted(set(declared) - mine)
+        assert missing == [], (
+            f"the {self.backend} tier brings {len(mine)} probes and is missing {len(missing)} of the "
+            f"{len(declared)} the contract declares: {missing}"
         )
         assert declared != [], "the contract declares no probes at all"
+        emptied = sorted(
+            name for name in declared if not callable(getattr(self, name, None))
+        )
+        assert emptied == [], (
+            f"the {self.backend} tier shadows {emptied} with something that is not callable, so those "
+            "probes are collected and cover nothing"
+        )
 
 
 #: Skipping is per tier, not per module. A module-level `importorskip` would skip the base class and the
@@ -1323,3 +1338,52 @@ class TestTheTablesDescribeThePackage:
             f"the {backend} tier now describes a layer built hidden as hidden; take it off "
             "CANNOT_HIDE_AT_BUILD so its probe runs"
         )
+
+
+class TestATierMayBringAProbeOfItsOwn:
+    """The count check must let a tier add to the contract, and still refuse a tier that subtracts."""
+
+    @staticmethod
+    def _with_its_own():
+        """Return a subclass that declares one probe the base class does not.
+
+        Returns:
+            The class. Its name does not begin with `Test`, so pytest collects nothing from it — the point
+            is the count check's answer about it, not running its probes.
+        """
+
+        class _WithItsOwn(MapConformanceBase):
+            """A tier that answers every shared question and one of its own."""
+
+            backend = "make-believe"
+
+            def test_something_only_this_tier_can_answer(self):
+                """A probe a single tier is entitled to add, which is what the check must tolerate."""
+
+        return _WithItsOwn
+
+    def test_a_subclass_that_adds_a_probe_still_satisfies_the_count_check(self):
+        """A tier-specific probe is a contribution, not a defect.
+
+        Test scenario:
+            The check asserted set **equality** between what a tier contributes and what the base declares,
+            so any probe a tier added made the two differ and failed — with a message about "shadowed"
+            probes that would not have described what happened. A tier could therefore never bring a
+            question only it can answer (review R-L8).
+        """
+        self._with_its_own()().test_this_tier_contributes_a_non_zero_count_of_probes()
+
+    def test_a_subclass_that_shadows_a_probe_with_a_non_callable_is_still_refused(self):
+        """The direction the check exists for has to survive the widening.
+
+        Test scenario:
+            Relaxing equality to "declares at least the shared probes" is only safe while something still
+            catches a subclass that keeps a probe's *name* and empties it — `dir()` reports the name either
+            way, so a name check alone would pass. The check asks whether each declared probe is still
+            callable on the tier.
+        """
+        shadowing = self._with_its_own()
+        shadowing.test_a_layer_nobody_hid_is_described_visible = None
+        with pytest.raises(AssertionError) as refusal:
+            shadowing().test_this_tier_contributes_a_non_zero_count_of_probes()
+        assert "test_a_layer_nobody_hid_is_described_visible" in str(refusal.value)
