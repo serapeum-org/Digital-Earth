@@ -15,7 +15,8 @@ which is the default one and the only tier that re-raises `MissingObject` rather
 import pytest
 
 from digitalearth.base.crs import OffLimbError
-from digitalearth.base.custom import MissingObject, held_object
+from digitalearth.base.custom import MissingObject, custom_kind, held_object
+from digitalearth.base.registry import kind_info, resolve_uri
 
 #: The layer every refusal here names, so the two messages are read side by side.
 _LAYER = "wells"
@@ -42,6 +43,62 @@ def _data_the_display_crs_cannot_place() -> None:
     from digitalearth.static import Map
 
     Map(crs=3857, strict=True)._skipped_off_limb("imshow")
+
+
+def _a_url_with_no_resolver() -> None:
+    """Ask the registry to open a scheme nobody registered.
+
+    Raises:
+        KeyError: always. A `LookupError`, like `MissingObject` — the nearest neighbour there is, and so
+            the one most likely to be folded into it by a later tidy-up.
+    """
+    resolve_uri("nosuch://thing")
+
+
+def _a_kind_nobody_registered() -> None:
+    """Ask for the description of a layer kind that does not exist.
+
+    Raises:
+        KeyError: always. The other lookup in the same registry, and a caller error rather than a fact
+            about the data — which is the line the shared type is not supposed to cross.
+    """
+    kind_info("nosuchkind")
+
+
+def _a_name_that_cannot_be_a_kind() -> None:
+    """Ask for a custom kind from a name that is not spellable as one.
+
+    Raises:
+        ValueError: always. Raised by the same module that defines `MissingObject`, so it is the refusal
+            most easily reached by a change meant for the other one.
+    """
+    custom_kind("PyVista")
+
+
+def _swallowed_by_the_shared_clause(refuse) -> bool:
+    """Whether ``except OffLimbError`` would silence this refusal.
+
+    The clause is written out and run, rather than asked about with `isinstance`, because that is what a
+    caller writes and it is the thing the answer has to be true of.
+
+    Args:
+        refuse: A call that refuses something.
+
+    Returns:
+        `True` when the shared clause catches it, `False` when the refusal gets past it to a clause of its
+        own.
+
+    Raises:
+        AssertionError: if the call refuses nothing, in which case the clause was never reached and the
+            answer would be meaningless.
+    """
+    try:
+        refuse()
+    except OffLimbError:
+        return True
+    except Exception:
+        return False
+    raise AssertionError(f"{refuse.__name__} refused nothing, so no clause was reached")
 
 
 class TestOneCatchableTypeForALayerThatCouldNotBeDrawn:
@@ -104,27 +161,38 @@ class TestOneCatchableTypeForALayerThatCouldNotBeDrawn:
             "object",
         ], f"MissingObject resolves to {order}"
 
-    def test_the_shared_type_does_not_reach_past_the_two_it_covers(self):
+    @pytest.mark.parametrize(
+        "refuse",
+        [
+            _a_url_with_no_resolver,
+            _a_kind_nobody_registered,
+            _a_name_that_cannot_be_a_kind,
+        ],
+        ids=[
+            "a URL with no resolver",
+            "a kind nobody registered",
+            "a name that cannot be a kind",
+        ],
+    )
+    def test_the_shared_type_does_not_reach_past_the_two_it_covers(self, refuse):
         """One type to catch must not become a clause that swallows unrelated failures.
 
+        Args:
+            refuse: A refusal the package really raises, which does not mean "this layer drew nothing".
+
         Test scenario:
-            `OffLimbError` sits under `RuntimeError`, so the risk runs the other way: a caller writing
-            ``except OffLimbError`` must still see a warp that failed for a real reason, a URL with no
-            resolver, or a bad level list. Each of those is raised elsewhere in the package and none of
-            them means "this layer drew nothing".
+            This used to hold hand-built `RuntimeError`/`KeyError`/`LookupError`/`ValueError` *instances*
+            and ask whether each was an `OffLimbError`. Since `OffLimbError` is a strict subclass of all
+            of those, no base-class instance could ever satisfy it: the test could only have failed if
+            `OffLimbError` stopped being a `RuntimeError`, which is the opposite of what it is about
+            (`R2-N4`). The refusals are now the package's own, provoked rather than constructed, and the
+            clause is written out and run rather than asked about — so folding any of these into
+            `MissingObject`, the change this exists to catch, fails here.
         """
-        unrelated = [
-            RuntimeError("the warp failed for a reason of its own"),
-            KeyError("no resolver is registered for that URL scheme"),
-            LookupError("an unrelated lookup"),
-            ValueError("no level lies inside the data"),
-        ]
-        swallowed = [
-            type(error).__name__
-            for error in unrelated
-            if isinstance(error, OffLimbError)
-        ]
-        assert swallowed == [], f"`except OffLimbError` would also silence {swallowed}"
+        assert not _swallowed_by_the_shared_clause(refuse), (
+            f"`except OffLimbError` silences {refuse.__name__}, which is a caller error and not a layer "
+            "that drew nothing"
+        )
 
     def test_the_message_still_says_which_of_the_two_cases_it_is(self):
         """A shared type is only usable while the messages stay distinguishable."""
