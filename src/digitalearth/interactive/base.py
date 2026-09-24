@@ -29,7 +29,7 @@ from digitalearth.base.bigdata import (
     validate_big_data_threshold,
 )
 from digitalearth.base.crs import OffLimbError
-from digitalearth.base.custom import custom_kind
+from digitalearth.base.custom import MissingObject, custom_kind
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
@@ -1099,28 +1099,46 @@ class InteractiveMapBase:
         return to_display_source(data, self.crs, band=band)
 
     def _skip_off_limb(self, layer: str, error: OffLimbError) -> Self:
-        """Answer a layer whose data the display CRS cannot place: skip it, or raise under ``strict``.
+        """Answer a layer that could not be drawn: skip it with a warning, or raise under ``strict``.
 
         The default is a **warning**, not a debug line: unlike the static tier there is no clipped globe
         here — the display CRS is Web Mercator or another unclipped projection — so a warp that places
         *none* of the data almost always means the source's CRS or geo-transform is wrong, and the only
         other symptom would be a layer that silently never appears.
 
+        **Two causes arrive here, and the warning names the one it met** (review R2-L9). Since #325,
+        :class:`~digitalearth.base.custom.MissingObject` is an `OffLimbError`, so `_skips_off_limb` catches
+        a custom layer whose engine object is not in this process as well as a warp that placed nothing.
+        Catching both is right — either way the layer has nothing to draw, which is the leniency
+        :mod:`digitalearth.base.custom` prescribes — but the message was written for one of them and stated
+        it as a fact, so a figure read back without its holoviews object was reported as
+        ``none of the data could be placed in crs=3857``. That sends a caller to check a projection that is
+        fine. The two are already distinguishable by type, so the cause is asked rather than assumed.
+
         Args:
             layer: The public builder that drew nothing, named in the log line.
-            error: The off-limb error the reprojection raised.
+            error: The error the builder raised — a `MissingObject` for an engine object this process does
+                not hold, any other `OffLimbError` for a warp that placed none of the data. Its own message
+                is quoted in the warning, and for a missing object that is the only place the layer id and
+                the engine appear.
 
         Returns:
             The same map instance, so the skipped call still chains.
 
         Raises:
-            OffLimbError: when the map was built with ``strict=True``.
+            OffLimbError: when the map was built with ``strict=True`` — the error itself, so a caller
+                catching `MissingObject` still catches that.
         """
         if self.strict:
             raise error
+        cause = (
+            "the object this layer draws is not in this process"
+            if isinstance(error, MissingObject)
+            else f"none of the data could be placed in crs={self.crs!r}"
+        )
         logger.warning(
-            f"{layer}: none of the data could be placed in crs={self.crs!r}, so the layer was skipped "
-            f"({error}). Build the map with InteractiveMap(strict=True) to raise instead."
+            f"{layer}: {cause}, so the layer was skipped ({error}). "
+            "Build the map with InteractiveMap(strict=True) to raise instead."
         )
         return self
 
