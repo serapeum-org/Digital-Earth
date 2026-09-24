@@ -354,7 +354,7 @@ def _json_scalar(value: Any, where: str) -> Any:
 
     Returns:
         `None` or a boolean unchanged; a string — a `numpy.str_` included — as `str`; a finite number, Python's or
-        numpy's, as a Python number; `_NOT_A_SCALAR` otherwise.
+        numpy's, as a plain Python `int` or `float`; `_NOT_A_SCALAR` otherwise.
 
     Raises:
         ValueError: for a non-finite number.
@@ -367,7 +367,14 @@ def _json_scalar(value: Any, where: str) -> Any:
     if isinstance(value, (int, float)) and not isinstance(value, np.generic):
         # `np.float64` subclasses `float`, so without the second test it came back as numpy, not as the Python float
         # the dict promises — `json` copes, but YAML, TOML and msgpack writers do not.
-        return _finite(value, where)
+        #
+        # Through `int()`/`float()`, for that same argument one step further (`R2-M2`). A subclass came back live:
+        # a units library's quantity, and — the case that reads worst — an `int`-valued `enum` member, sitting
+        # inside the plain mapping `Symbology.to_dict` promises. `str` was flattened here from the beginning; its
+        # number siblings were not, and the round trip hid it because `json` flattens a number on its own. A
+        # flattening that moved the *value* is caught by `_written_back_equal`, which compares what came out.
+        plain = int(value) if isinstance(value, int) else float(value)
+        return _finite(plain, where)
     if isinstance(value, np.generic):
         native = value.item()
         if isinstance(native, (bool, int, float, str)):
@@ -668,8 +675,10 @@ def travels_in_a_figure(value: Any) -> bool:
       trip returns a plain `list` or `dict`, which is a different type. It is the subclasses that make this
       matter rather than the principle — an ``xyzservices.TileProvider`` *is* a dict, of plain strings, one
       of which is the caller's API key, and a figure is not a place to write a credential.
-    * **A *scalar* subclass does travel**, and comes back as its plain counterpart. ``np.float64(2.5)`` returns
-      ``2.5``, ``np.bool_(True)`` returns ``True``, a `str` subclass returns its characters as `str`. The value
+    * **A *scalar* subclass does travel**, and comes back as its plain counterpart — flattened by the writer
+      itself, not by `json` on the way out (`R2-M2`). ``np.float64(2.5)`` returns ``2.5``, ``np.bool_(True)``
+      returns ``True``, a `str` subclass returns its characters as `str` and an `int`-valued `enum` member
+      returns the number it stands for rather than the member. The value
       is the same one, and it is the one the drawer would have been handed anyway, so refusing it would hold a
       numpy flag out of a figure for a change no engine can observe (#329). Nothing else rides along: unlike a
       container subclass, a scalar has no contents for the trip to copy. The exception is the one scalar whose

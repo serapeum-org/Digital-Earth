@@ -1592,6 +1592,40 @@ class _TaggedInt(int):
     """An `int` subclass with nothing added, the counterpart of `_TaggedStr` on the number side."""
 
 
+class _TaggedFloat(float):
+    """A `float` subclass with nothing added — a units library's quantity, or a `Decimal`-ish wrapper."""
+
+
+class _Weight(int, enum.Enum):
+    """A caller's `int`-valued enumeration of a style keyword's allowed values.
+
+    The sibling of :class:`_Linestyle` on the number side, and the one the round-1 fix did not reach: `str`
+    flattens a `str`-valued member (to the wrong text, which is why it is refused), while an `int`-valued
+    member was returned live because the writer flattened no number at all (`R2-M2`).
+    """
+
+    BOLD = 700
+
+
+class _Opacity(float, enum.Enum):
+    """The same on the `float` side, so the rule is read off the class and not off one member's type."""
+
+    HALF = 0.5
+
+
+#: Every shape of non-numpy scalar subclass a caller can hand a builder, with the plain value the figure is
+#: supposed to carry in its place. Enumerated as a class rather than as the one case that was reported: the
+#: writer's rule is "a scalar subclass is flattened to its plain counterpart", and `str` was the only one it
+#: kept (`R2-M2`). A `bool` has no subclasses to add — the type is final — and a numpy scalar is a separate
+#: branch, checked by the cases beside these.
+_SCALAR_SUBCLASSES = [
+    (_TaggedInt(3), 3),
+    (_TaggedFloat(2.5), 2.5),
+    (_Weight.BOLD, 700),
+    (_Opacity.HALF, 0.5),
+]
+
+
 class _Linestyle(str, enum.Enum):
     """A caller's `str`-valued enumeration of a style keyword's allowed values.
 
@@ -1782,6 +1816,57 @@ class TestWhatTravelsInAFigure:
         )
         assert type(drawn) is type(plain), (
             f"and as a plain {type(plain).__name__}, not a {type(drawn).__name__}"
+        )
+
+    @pytest.mark.parametrize(
+        "value,plain",
+        _SCALAR_SUBCLASSES,
+        ids=["int-subclass", "float-subclass", "int-enum", "float-enum"],
+    )
+    def test_a_scalar_subclass_is_flattened_by_the_writer_and_not_by_json(
+        self, value, plain
+    ):
+        """The flattening has to happen where the value is written down (`R2-M2`).
+
+        Args:
+            value: The scalar subclass a builder recorded.
+            plain: The plain value the figure is supposed to carry.
+
+        Test scenario:
+            The trip test above passes a subclass through `json.dumps`/`json.loads`, and `json` flattens a
+            number of its own accord — so it measured `json`'s behaviour, not the writer's, and the writer
+            returned the live object. `to_dict()` is a boundary of its own: a caller reads it, hashes it,
+            or hands it to a YAML, TOML or msgpack writer, none of which cope with a subclass the way
+            `json` does. `str` was flattened here from the start; its number siblings were not.
+        """
+        written = to_json_value(value, "Symbology.props")
+        assert type(written) is type(plain), (
+            f"the writer returned a {type(written).__name__} for {value!r}, not a "
+            f"{type(plain).__name__}"
+        )
+
+    @pytest.mark.parametrize(
+        "value,plain",
+        _SCALAR_SUBCLASSES,
+        ids=["int-subclass", "float-subclass", "int-enum", "float-enum"],
+    )
+    def test_a_described_symbology_is_a_plain_mapping_of_plain_values(
+        self, value, plain
+    ):
+        """`to_dict` is the boundary that yields plain values, so it must not yield a live one (`R2-M2`).
+
+        Args:
+            value: The scalar subclass a builder recorded.
+            plain: The plain value the description is supposed to hold.
+
+        Test scenario:
+            Measured before the fix: `Symbology(props={"k": Weight.BOLD}).to_dict()` came back holding
+            `<_Weight.BOLD: 700>` — an enumeration member, alive, inside the mapping whose stated job is to
+            be dead data. The gate says the value travels, so this is the path it travels by.
+        """
+        described = Symbology(props={"k": value}).to_dict()["props"]["k"]
+        assert type(described) is type(plain), (
+            f"to_dict() described {value!r} as a {type(described).__name__}"
         )
 
     def test_a_scalar_whose_value_moves_in_the_writing_does_not_travel(self):
