@@ -25,7 +25,7 @@ from types import MappingProxyType
 from typing import Any, Dict, FrozenSet, Mapping, Tuple
 
 from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
-from digitalearth.base.spec.style import portable_constants
+from digitalearth.base.spec.style import asked_constants, portable_constants
 
 __all__ = [
     "ASKED_BUCKET",
@@ -34,8 +34,10 @@ __all__ = [
     "DERIVED_BUCKET",
     "INTERACTIVE_STYLE_SCHEMA",
     "STYLE_BUCKETS",
+    "TIER_BUCKET",
     "UNASKED_STYLE",
     "ChannelOption",
+    "builder_of",
     "allowed_options",
     "fold_symbology",
     "portable_encodings",
@@ -59,7 +61,12 @@ INTERACTIVE_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     ),
     # -- how a field-driven colour is drawn
     StyleKey("cmap", "Colormap a field-driven colour is ramped through."),
-    StyleKey("clim", "Colour limits, as (low, high)."),
+    StyleKey(
+        "clim",
+        "Colour limits, as (low, high). A list is taken too, and is the spelling a figure carries: a "
+        "tuple is what the travel rule refuses, so the documented pair was dropped from every saved "
+        "figure while the list survived (review R2-M13).",
+    ),
     StyleKey("color_levels", "Class edges a classified colour is drawn with."),
     StyleKey("cnorm", "How colour values are normalised — linear, log, eq_hist."),
     StyleKey("colorbar", "Whether a colour key is drawn beside the layer."),
@@ -280,13 +287,35 @@ CHANNEL_KEYWORDS: Mapping[str, str] = MappingProxyType(
     }
 )
 
-#: The bucket a builder files the style it **derived** under — defaults included, so a value here is not
-#: evidence that anyone asked for it.
+#: The bucket a builder files its **resolved parameters** under — defaults included, so a value here is not
+#: by itself evidence that anyone asked for it.
+#:
+#: ``points(size=7.0)`` and ``points(features)`` both land here as ``{"size": …}``, which is why the
+#: subtraction below exists at all: the bucket records what the parameter *resolved to* and not whether it
+#: was passed. :data:`UNASKED_STYLE` is the only attribution available until a builder records the ask
+#: itself (#334).
 DERIVED_BUCKET: str = "common"
 
 #: The bucket a builder files the caller's **own** ``**opts`` under. Every key here was written by the
 #: caller, which is what makes it liftable without a second question.
+#:
+#: The invariant is load bearing — :func:`portable_encodings` lifts this bucket **unfiltered** — and it was
+#: broken once: ``spaghetti`` passed its per-member colour cycle through ``**opts``, so three unstyled
+#: ensemble members published three different colours as three caller intents (review R2-H3). Style a
+#: builder works out for itself belongs in :data:`TIER_BUCKET`, which nothing lifts;
+#: ``tests/interactive/test_interactive_unasked_style.py`` holds every builder to that.
 ASKED_BUCKET: str = "opts"
+
+#: The bucket a builder files style **it** invented under — never a parameter, never an ask, never lifted.
+#:
+#: The third case the two buckets above could not hold. ``spaghetti`` colours each ensemble member from a
+#: cycle so the strands are distinguishable: that colour is neither a keyword the caller wrote
+#: (:data:`ASKED_BUCKET`) nor a parameter of the builder that happened to resolve to it
+#: (:data:`DERIVED_BUCKET`) — no caller can pass it, and it exists only because the tier drew several
+#: layers from one call. It reaches the element like any other option and is absent from
+#: :data:`STYLE_BUCKETS`, so :func:`portable_encodings` never publishes it and no table has to enumerate
+#: the ten colours to keep it out (review R2-H3).
+TIER_BUCKET: str = "tier"
 
 #: The props a builder files its resolved HoloViews style under, in the precedence the drawer applies.
 #:
@@ -296,53 +325,67 @@ ASKED_BUCKET: str = "opts"
 #: at the top level of ``props`` instead, which is why the mapping itself is read first.
 STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
 
-#: The derived-bucket values this tier's builders write when the caller asked for nothing.
+#: What each of this tier's builders derives when the caller styled nothing, by the builder that wrote it.
 #:
-#: **Why this table has to exist.** ``opts`` is the caller's own, but a builder also writes its resolved
-#: parameters into ``common`` and into the flat top level — ``points`` writes ``size`` there whether or not
-#: ``size=`` was passed, and ``image`` writes ``alpha`` the same way. Publishing those made an
-#: unstyled ``points(features)`` claim ``{'size': 6.0}`` as the caller's own style, against the web tier's
-#: ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` for the same call — two tiers publishing two sets
-#: of defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
+#: **Why this table has to exist.** :data:`ASKED_BUCKET` is the caller's own, but a builder also writes its
+#: resolved parameters into :data:`DERIVED_BUCKET` and into the flat top level — ``points`` writes ``size``
+#: there whether or not ``size=`` was passed, and ``image`` writes ``alpha`` the same way. Publishing those
+#: made an unstyled ``points(features)`` claim ``{'size': 6.0}`` as the caller's own style, against the web
+#: tier's ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` for the same call — two tiers publishing two
+#: sets of defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
 #:
-#: **What is listed.** Measured by drawing each builder with no style keywords and reading back
-#: ``symbology.props``: ``points`` records ``common['size'] == 6.0`` and ``image`` records a flat
-#: ``alpha == 1.0``. ``rgb`` is **not** one of them — measured, it records ``via``/``bands``/``limits``/
-#: ``opts`` and no ``alpha`` at all — so the rows are the two keywords, not the three builders. Nothing else
-#: this tier derives drives a declared channel: a classified ``color`` is a value dimension and is refused
-#: below, and ``fill_alpha``/``cmap``/``colorbar`` drive no channel at all.
+#: **Why it is keyed by builder.** The first version was keyed by style keyword, with every builder's
+#: defaults pooled under one tuple, so each builder was also charged with its siblings' (review R2-H2). This
+#: tier can do better than the web tier can, because every builder already records **which builder it was**:
+#: ``props["via"]``, with ``hv_type`` separating the five kinds that share the geometry funnel. So a row is
+#: looked up rather than guessed at, and adding a builder with its own default cannot silently swallow
+#: another's explicit ask.
+#:
+#: **What is listed.** Measured by drawing all nineteen builders with no style keywords and reading back
+#: ``symbology.props``: only two derive anything that drives a declared channel — ``points`` records
+#: ``common['size'] == 6.0`` and ``image`` records a flat ``alpha == 1.0``. ``rgb`` is **not** one of them
+#: (it records ``via``/``bands``/``limits``/``opts`` and no ``alpha``), ``polygons`` derives
+#: ``fill_alpha``, which drives no channel, and a classified ``color`` is a value dimension and is refused
+#: below. ``tests/interactive/test_interactive_unasked_style.py`` re-measures every builder, so a row that
+#: stops matching fails rather than rots (review R2-M5).
 #:
 #: **What it costs, deliberately.** A caller who asks for exactly the default — ``points(size=6.0)`` —
 #: publishes no ``size``, so a figure carried elsewhere is drawn at that tier's own default. The conformance
 #: suite already calls that acceptable: "Which default a tier picks is not what a round trip has to agree
 #: about". Publishing it anyway is not, because it repaints a layer nobody styled. A caller who writes the
 #: same value through ``**opts`` is unaffected — that bucket is never filtered.
-UNASKED_STYLE: Mapping[str, Tuple[Any, ...]] = MappingProxyType(
-    {"alpha": (1.0,), "size": (6.0,)}
+UNASKED_STYLE: Mapping[Tuple[str, str], Mapping[str, Any]] = MappingProxyType(
+    {
+        ("geometry", "Points"): MappingProxyType({"size": 6.0}),
+        ("image", ""): MappingProxyType({"alpha": 1.0}),
+    }
 )
 
 
-def _asked_constants(flat: Mapping[str, Any]) -> Dict[str, Encoding]:
-    """Lift a derived bucket's channel values, skipping the ones no caller asked for.
+def builder_of(props: Mapping[str, Any]) -> Tuple[str, str]:
+    """Return the key :data:`UNASKED_STYLE` is looked up by, for one recorded style.
 
     Args:
-        flat: One derived bucket of the recorded style — ``props`` itself or ``props['common']``.
+        props: A layer's recorded `Symbology.props`.
 
     Returns:
-        The same mapping :func:`~digitalearth.base.spec.style.portable_constants` would give, minus every
-        key whose value is one :data:`UNASKED_STYLE` says this tier's builders write unasked. The type is
-        compared as well as the value so `True` is not read as the default `1.0` — in Python `True == 1.0`,
-        and a boolean flag matching a numeric default would drop a real ask.
+        ``(via, hv_type)``. Five builders share ``via == "geometry"`` — the vector funnel records the
+        HoloViews element type beside it, which is what tells a point layer from a path — and every other
+        builder's ``via`` is its own, so the second half is an empty string there. A description carrying
+        no ``via`` at all answers ``("", "")``, which matches no row and is therefore charged nothing.
+
+    Examples:
+        - The geometry funnel is told apart by its element type; every other builder by its own name:
+            ```python
+            >>> from digitalearth.interactive.style_fold import builder_of
+            >>> builder_of({"via": "geometry", "hv_type": "Points"})
+            ('geometry', 'Points')
+            >>> builder_of({"via": "image"})
+            ('image', '')
+
+            ```
     """
-    asked = {
-        key: value
-        for key, value in flat.items()
-        if not any(
-            type(value) is type(default) and value == default
-            for default in UNASKED_STYLE.get(key, ())
-        )
-    }
-    return portable_constants(asked, CHANNEL_KEYWORDS)
+    return (str(props.get("via") or ""), str(props.get("hv_type") or ""))
 
 
 def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
@@ -354,12 +397,14 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
     props a drawer applies, and the channel it drives is recorded as `opacity` because that is what the
     vocabulary calls it.
 
-    The two buckets are read differently, because they mean different things. ``opts`` holds the caller's
-    own ``**opts`` and is lifted as it stands; ``common`` and the flat top level hold what the builder
-    *derived*, defaults included, so a value :data:`UNASKED_STYLE` names there is passed over rather than
-    published. The figure records no list of the keywords a caller named, so that comparison is the only
-    attribution available — and publishing an unattributed value as an `Encoding` is what made an unstyled
-    layer carry one tier's defaults onto another (review R-H2).
+    The three buckets are read differently, because they mean different things. :data:`ASKED_BUCKET` holds
+    the caller's own ``**opts`` and is lifted as it stands; :data:`DERIVED_BUCKET` and the flat top level
+    hold the builder's *resolved parameters*, defaults included, so a value :data:`UNASKED_STYLE` names for
+    **that builder** is passed over rather than published; and :data:`TIER_BUCKET` holds style the tier
+    invented for itself and is not read at all. The figure records no list of the keywords a caller named,
+    so the comparison against the builder's own defaults is the only attribution available — and publishing
+    an unattributed value as an `Encoding` is what made an unstyled layer carry one tier's defaults onto
+    another (review R-H2).
 
     Args:
         symbology: The layer's recorded style, as the builder wrote it.
@@ -378,8 +423,8 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             ```python
             >>> from digitalearth.base.spec import Symbology
             >>> from digitalearth.interactive.style_fold import portable_encodings
-            >>> props = {"common": {"size": 7.0}, "opts": {"alpha": 0.5}}
-            >>> lifted = portable_encodings(Symbology(props=props))
+            >>> props = {"via": "geometry", "hv_type": "Points", "common": {"size": 7.0}}
+            >>> lifted = portable_encodings(Symbology(props=dict(props, opts={"alpha": 0.5})))
             >>> sorted(lifted), lifted["size"].resolve(), lifted["opacity"].resolve()
             (['opacity', 'size'], 7.0, 0.5)
 
@@ -388,15 +433,25 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             ```python
             >>> from digitalearth.base.spec import Symbology
             >>> from digitalearth.interactive.style_fold import portable_encodings
-            >>> sorted(portable_encodings(Symbology(props={"common": {"size": 6.0}, "opts": {}})))
+            >>> unstyled = {"via": "geometry", "hv_type": "Points", "common": {"size": 6.0}, "opts": {}}
+            >>> sorted(portable_encodings(Symbology(props=unstyled)))
             []
+
+            ```
+        - 6.0 is `points`' default and nobody else's, so the same number from another builder is an ask:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> other = {"via": "trimesh", "common": {"size": 6.0}}
+            >>> portable_encodings(Symbology(props=other))["size"].resolve()
+            6.0
 
             ```
         - The caller's own bucket is never filtered, so asking for the default there still publishes it:
             ```python
             >>> from digitalearth.base.spec import Symbology
             >>> from digitalearth.interactive.style_fold import portable_encodings
-            >>> asked = portable_encodings(Symbology(props={"opts": {"alpha": 1.0}}))
+            >>> asked = portable_encodings(Symbology(props={"via": "image", "opts": {"alpha": 1.0}}))
             >>> sorted(asked), asked["opacity"].resolve()
             (['opacity'], 1.0)
 
@@ -412,7 +467,11 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             ```
     """
     props = dict(symbology.props)
-    lifted = _asked_constants(props)
+    unasked = {
+        key: (default,)
+        for key, default in UNASKED_STYLE.get(builder_of(props), {}).items()
+    }
+    lifted = asked_constants(props, CHANNEL_KEYWORDS, unasked)
     for bucket in STYLE_BUCKETS:
         held = props.get(bucket)
         if not isinstance(held, dict):
@@ -420,7 +479,7 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
         if bucket == ASKED_BUCKET:
             lifted.update(portable_constants(held, CHANNEL_KEYWORDS))
         else:
-            lifted.update(_asked_constants(held))
+            lifted.update(asked_constants(held, CHANNEL_KEYWORDS, unasked))
     coloured = lifted.get("color")
     dimensions = {str(name) for name in (props.get("vdims") or ())}
     if coloured is not None and coloured.value in dimensions:

@@ -34,12 +34,12 @@ record and stays on the widget. Nothing in the tier calls it: every builder draw
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import Encoding, FigureSpec, LayerSpec, Symbology
 from digitalearth.base.spec._serial import thawed_value
-from digitalearth.base.spec.style import portable_constants
+from digitalearth.base.spec.style import asked_constants
 from digitalearth.web.capabilities import CAPABILITIES
 
 
@@ -170,6 +170,13 @@ def derived_ids(kind: str, layer_id: str) -> Tuple[str, ...]:
 #: ``size`` precisely because a glyph's size and a label's are not one thing. ``heatmap-radius`` is a kernel
 #: width rather than a marker's size. Each would be over-claiming, so each is left to ``paint``, where it
 #: already reads correctly.
+#:
+#: **``raster-opacity`` is here for a paint dict this tier's own builders never write.** ``field`` and
+#: ``rgb_composite`` record ``props["opacity"]`` flat and their drawers compile the MapLibre property at draw
+#: time, so the row matched nothing a builder produced and ``field(opacity=0.5)`` published no channel at all
+#: (review R2-M12). The flat recording is read by :data:`FLAT_CHANNELS` now; the row stays because a
+#: description written by hand — or a caller's own MapLibre layer — may carry the property itself, and when
+#: it does this is still the channel it drives.
 PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
     {
         "circle-color": "color",
@@ -190,7 +197,42 @@ PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
 )
 
 
-#: The paint values this tier's builders write when the caller asked for nothing, by paint property.
+#: Which flat property each of this tier's non-paint builders records a channel under.
+#:
+#: The raster builders compile their style at draw time rather than into a MapLibre ``paint`` dict — ``field``
+#: and ``rgb_composite`` record ``props["opacity"]`` flat, and :func:`~digitalearth.web.raster.draw_field`
+#: turns it into ``raster-opacity`` — and ``graticule`` records the same way. So the ``raster-opacity`` row of
+#: :data:`PAINT_CHANNELS` translated a key no builder ever writes, and an unambiguous ``field(opacity=0.5)``
+#: published nothing at all while that row made the gap look covered (review R2-M12). This is the second
+#: place a channel can be recorded, and it is read alongside the paint dict.
+#:
+#: Deliberately one row. ``text``'s ``color``, ``cluster``'s ``color``/``radius`` and ``labels``' halo are
+#: each a *second* colour or width on a layer that already has one, so lifting them under the layer's own
+#: ``color``/``size`` channel would say the layer is painted something it is not.
+FLAT_CHANNELS: Mapping[str, str] = MappingProxyType({"opacity": "opacity"})
+
+
+@dataclass(frozen=True)
+class UnaskedStyle:
+    """One builder's resolved style when the caller styled nothing, and the shape it is recognised by.
+
+    Attributes:
+        builders: The `WebMap` methods that record this shape. Carried so a drift test can name them, and
+            so the table reads as a statement about builders rather than about properties.
+        keys: Every key that builder writes, defaulted or not. This is the row's **identity**: a figure
+            records the resolved style and not the builder that wrote it, so the set of keys is the only
+            thing a recorded dict can be matched by.
+        defaults: What each key holds when nobody asked. A key absent from here is one the builder cannot
+            default — ``extrusion``'s height is a required argument, ``choropleth``'s ``fill-color`` is
+            always a compiled expression — so any value under it is the caller's.
+    """
+
+    builders: Tuple[str, ...]
+    keys: FrozenSet[str]
+    defaults: Mapping[str, Any]
+
+
+#: What each of this tier's paint-writing builders resolves to when the caller styled nothing.
 #:
 #: **Why this table has to exist.** ``props["paint"]`` is the *resolved* style: a builder writes
 #: ``circle-radius`` whether the caller passed ``size=`` or not, so the dict that reaches
@@ -199,86 +241,192 @@ PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
 #: against the interactive tier's ``{'size': 6.0}`` for the same call — two tiers publishing two sets of
 #: defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
 #:
-#: **What is listed.** One row per paint property a builder writes unasked, with the value(s) it writes.
+#: **Why it is one row per builder and not one per property.** The first version was keyed by paint property,
+#: with the values every builder writes merged into one tuple, so each builder was charged with its siblings'
+#: defaults too: ``polygons(opacity=0.85)`` published nothing because 0.85 is *choropleth's* default, and
+#: ``contours(filled=True, opacity=0.6)`` published nothing because 0.6 is *polygons'* (review R2-H2). A row
+#: per builder also stops a value going missing: ``fill-opacity: 1.0`` — filled ``contours`` — was in no row
+#: at all, so an unstyled filled contour went on publishing ``{'opacity': 1.0}``, which is the very defect
+#: the subtraction was written to remove (review R2-H1).
+#:
+#: **What identifies a row, and the residue that leaves.** The figure records the style, not the builder, so
+#: a row is matched by the set of keys the builder writes. Three builders share ``{fill-opacity,
+#: fill-outline-color, fill-color}`` and two share the line trio, and those are the only collisions: within a
+#: shared shape the defaults are still pooled, so ``polygons(opacity=0.85)`` *remains* unpublished. That
+#: residue is bounded by the shape rather than by the tier, it is named on the rows below, and it closes
+#: entirely when a builder records the ask itself (#334) — which is the only way a subtractive table ever
+#: becomes exact.
+#:
 #: Every row was measured by drawing that builder with no style keywords and reading back
-#: ``symbology.props["paint"]``: ``points`` (5.0 / 0.9 / ``#3388ff``), ``lines`` (2.0 / 1.0 / ``#3388ff``),
-#: ``polygons`` (0.6 / ``#3388ff``), ``choropleth`` (0.85), ``contours`` (1.5 / 1.0), ``labels``
-#: (``#ffffff``), ``extrusion`` (0.9 / ``#3388ff``) and ``heatmap`` (0.8). A key with two rows has two
-#: builders defaulting it differently — ``fill-opacity`` is 0.6 for a plain polygon and 0.85 for a
-#: choropleth.
+#: ``symbology.props["paint"]``; ``tests/web/test_web_unasked_paint.py`` re-measures each one, so a row that
+#: stops matching its builder fails rather than rots.
 #:
 #: **What it costs, deliberately.** A caller who explicitly asks for a value this tier also defaults to —
 #: ``points(size=5.0)`` — publishes nothing for that channel, so a figure carried to another tier is drawn
 #: at *that* tier's default. That is the loss the conformance suite already calls acceptable: "Which default
 #: a tier picks is not what a round trip has to agree about". The opposite error is not acceptable, because
 #: it silently repaints a layer nobody styled.
-UNASKED_PAINT: Mapping[str, Tuple[Any, ...]] = MappingProxyType(
-    {
-        "circle-color": ("#3388ff",),
-        "circle-opacity": (0.9,),
-        "circle-radius": (5.0,),
-        "fill-color": ("#3388ff",),
-        "fill-extrusion-color": ("#3388ff",),
-        "fill-extrusion-opacity": (0.9,),
-        "fill-opacity": (0.6, 0.85),
-        "heatmap-opacity": (0.8,),
-        "line-color": ("#3388ff",),
-        "line-opacity": (1.0,),
-        "line-width": (1.5, 2.0),
-        "text-color": ("#ffffff",),
-    }
+UNASKED_PAINT: Tuple[UnaskedStyle, ...] = (
+    UnaskedStyle(
+        ("points",),
+        frozenset({"circle-radius", "circle-opacity", "circle-color"}),
+        MappingProxyType(
+            {"circle-radius": 5.0, "circle-opacity": 0.9, "circle-color": "#3388ff"}
+        ),
+    ),
+    UnaskedStyle(
+        ("lines",),
+        frozenset({"line-width", "line-opacity", "line-color"}),
+        MappingProxyType(
+            {"line-width": 2.0, "line-opacity": 1.0, "line-color": "#3388ff"}
+        ),
+    ),
+    # Shares its shape with `lines`, so the two pool their defaults: `contours(width=2.0)` is read as a
+    # default and `lines(width=1.5)` likewise. `line-color` is absent because an unstyled trace is coloured
+    # by level, as an expression — a constant under that key is the caller's own `color=`.
+    UnaskedStyle(
+        ("contours",),
+        frozenset({"line-width", "line-opacity", "line-color"}),
+        MappingProxyType({"line-width": 1.5, "line-opacity": 1.0}),
+    ),
+    UnaskedStyle(
+        ("polygons",),
+        frozenset({"fill-opacity", "fill-outline-color", "fill-color"}),
+        MappingProxyType(
+            {
+                "fill-opacity": 0.6,
+                "fill-outline-color": "#ffffff",
+                "fill-color": "#3388ff",
+            }
+        ),
+    ),
+    # The three fill builders share one shape. `choropleth` and filled `contours` colour by value, so their
+    # `fill-color` is a compiled expression and no constant of theirs is a default; their opacities differ
+    # from `polygons`' and from each other, and that is the residue the shape cannot separate.
+    UnaskedStyle(
+        ("choropleth",),
+        frozenset({"fill-opacity", "fill-outline-color", "fill-color"}),
+        MappingProxyType({"fill-opacity": 0.85, "fill-outline-color": "#ffffff"}),
+    ),
+    UnaskedStyle(
+        ("contours(filled=True)",),
+        frozenset({"fill-opacity", "fill-outline-color", "fill-color"}),
+        MappingProxyType({"fill-opacity": 1.0, "fill-outline-color": "#ffffff"}),
+    ),
+    UnaskedStyle(
+        ("labels",),
+        frozenset({"text-color", "text-halo-color", "text-halo-width"}),
+        MappingProxyType(
+            {
+                "text-color": "#ffffff",
+                "text-halo-color": "#000000",
+                "text-halo-width": 1.0,
+            }
+        ),
+    ),
+    UnaskedStyle(
+        ("heatmap",),
+        frozenset({"heatmap-radius", "heatmap-intensity", "heatmap-opacity"}),
+        MappingProxyType(
+            {"heatmap-radius": 30.0, "heatmap-intensity": 1.0, "heatmap-opacity": 0.8}
+        ),
+    ),
+    # `fill-extrusion-height` has no default: `height=` is a required argument, so whatever is under it was
+    # asked for.
+    UnaskedStyle(
+        ("extrusion",),
+        frozenset(
+            {"fill-extrusion-opacity", "fill-extrusion-height", "fill-extrusion-color"}
+        ),
+        MappingProxyType(
+            {"fill-extrusion-opacity": 0.9, "fill-extrusion-color": "#3388ff"}
+        ),
+    ),
 )
 
 
-def asked_for(key: str, value: Any, unasked: Mapping[str, Tuple[Any, ...]]) -> bool:
-    """Say whether a resolved style value is evidence that a caller asked for it.
+#: The same table for the builders that record their style flat in ``props`` rather than in a paint dict.
+#:
+#: Read against :data:`FLAT_CHANNELS`. The three shapes are distinct, so none of them charges another with
+#: its defaults — ``graticule``'s 0.6 and ``field``'s 1.0 never meet.
+UNASKED_PROPS: Tuple[UnaskedStyle, ...] = (
+    UnaskedStyle(
+        ("field",),
+        frozenset({"cmap", "vmin", "vmax", "opacity", "band"}),
+        MappingProxyType({"opacity": 1.0}),
+    ),
+    UnaskedStyle(
+        ("rgb_composite",),
+        frozenset({"bands", "limits", "opacity", "mask_nodata"}),
+        MappingProxyType({"opacity": 1.0}),
+    ),
+    UnaskedStyle(
+        ("graticule",),
+        frozenset({"lon_step", "lat_step", "color", "width", "opacity", "labels"}),
+        MappingProxyType({"opacity": 0.6}),
+    ),
+)
+
+
+def unasked_here(
+    recorded: Mapping[str, Any], table: Tuple[UnaskedStyle, ...]
+) -> Dict[str, Tuple[Any, ...]]:
+    """Return the defaults chargeable to one recorded style, by the shape it was written in.
 
     Args:
-        key: The style property, spelled the way the tier records it.
-        value: What the tier resolved it to.
-        unasked: The values that tier's builders write when nobody asked — :data:`UNASKED_PAINT` here.
+        recorded: A layer's resolved style — its ``paint`` dict, or its flat ``props``.
+        table: :data:`UNASKED_PAINT` or :data:`UNASKED_PROPS`.
 
     Returns:
-        `False` when the value is one the builders write unasked, `True` otherwise. The type is compared as
-        well as the value so that `True` is not read as the default `1.0` — in Python `True == 1.0`, and a
-        boolean flag silently matching a numeric default would drop a real ask.
+        Key -> the default(s) a builder writing *this shape* leaves under it. A shape no row matches — a
+        description written by hand, a builder added without a row — charges nothing, so its whole style is
+        read as the caller's. That is the safe direction: the failure it leaves is a figure carrying one
+        default, and the failure the other way is a caller's real value silently dropped.
 
     Examples:
-        - A radius nobody asked for is not evidence of an ask; one that differs is:
+        - A point layer's shape charges a point layer's defaults, and nothing else's:
             ```python
-            >>> from digitalearth.web.renderer import UNASKED_PAINT, asked_for
-            >>> asked_for("circle-radius", 5.0, UNASKED_PAINT)
-            False
-            >>> asked_for("circle-radius", 12.0, UNASKED_PAINT)
-            True
+            >>> from digitalearth.web.renderer import UNASKED_PAINT, unasked_here
+            >>> paint = {"circle-radius": 5.0, "circle-opacity": 0.9, "circle-color": "#3388ff"}
+            >>> unasked_here(paint, UNASKED_PAINT)["circle-radius"]
+            (5.0,)
 
             ```
-        - A property no builder defaults is always the caller's:
+        - An unrecognised shape charges nothing at all:
             ```python
-            >>> from digitalearth.web.renderer import UNASKED_PAINT, asked_for
-            >>> asked_for("circle-blur", 0.5, UNASKED_PAINT)
-            True
+            >>> from digitalearth.web.renderer import UNASKED_PAINT, unasked_here
+            >>> unasked_here({"circle-blur": 0.5}, UNASKED_PAINT)
+            {}
 
             ```
     """
-    return not any(
-        type(value) is type(default) and value == default
-        for default in unasked.get(key, ())
-    )
+    shape = frozenset(recorded)
+    charged: Dict[str, Tuple[Any, ...]] = {}
+    for row in table:
+        if row.keys != shape:
+            continue
+        for key, default in row.defaults.items():
+            known = charged.get(key, ())
+            if not any(existing == default for existing in known):
+                charged[key] = known + (default,)
+    return charged
 
 
 def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
-    """Return the declared channels a web layer's recorded paint says the **caller** asked for.
+    """Return the declared channels a web layer's recorded style says the **caller** asked for.
 
-    Additive by construction: it reads ``props["paint"]`` and writes nothing back, so every drawer keeps
-    rebuilding its layer from the paint dict it was given and the engine-exact redraw is untouched. What it
-    produces is the *second* reading of the same style — the one another tier, and `to_backend()`, can act on.
+    Additive by construction: it reads what the builders already record and writes nothing back, so every
+    drawer keeps rebuilding its layer from the paint dict it was given and the engine-exact redraw is
+    untouched. What it produces is the *second* reading of the same style — the one another tier, and
+    `to_backend()`, can act on.
 
-    A paint property whose value is one this tier's builders write unasked (:data:`UNASKED_PAINT`) is passed
-    over rather than published. The figure does not record which keywords the caller named — every builder
-    resolves its defaults before the paint dict is built — so this comparison is the only attribution
-    available, and publishing an unattributed value as an `Encoding` is what made an unstyled layer carry one
-    tier's defaults onto another (review R-H2).
+    Both places this tier records style are read: MapLibre's ``paint`` dict (:data:`PAINT_CHANNELS`) and the
+    flat properties the raster and graticule builders compile at draw time (:data:`FLAT_CHANNELS`). A value
+    this tier's builders write unasked is passed over rather than published, charged by the shape the style
+    was recorded in (:func:`unasked_here`). The figure does not record which keywords the caller named —
+    every builder resolves its defaults before it records anything — so that comparison is the only
+    attribution available, and publishing an unattributed value as an `Encoding` is what made an unstyled
+    layer carry one tier's defaults onto another (review R-H2).
 
     Args:
         symbology: The layer's recorded style, as the builder wrote it.
@@ -310,6 +458,15 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             []
 
             ```
+        - A raster records its opacity flat rather than in a paint dict, and it is read there too:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.web.renderer import portable_encodings
+            >>> field = {"cmap": "viridis", "vmin": 0.0, "vmax": 1.0, "opacity": 0.5, "band": 1}
+            >>> portable_encodings(Symbology(props=field))["opacity"].resolve()
+            0.5
+
+            ```
         - A classified fill is an expression, so the colour channel is left unclaimed:
             ```python
             >>> from digitalearth.base.spec import Symbology
@@ -320,15 +477,14 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
 
             ```
     """
-    paint = symbology.props.get("paint")
-    if not isinstance(paint, dict):
-        return {}
-    asked = {
-        key: value
-        for key, value in paint.items()
-        if asked_for(key, value, UNASKED_PAINT)
-    }
-    return portable_constants(asked, PAINT_CHANNELS)
+    props = dict(symbology.props)
+    lifted = asked_constants(props, FLAT_CHANNELS, unasked_here(props, UNASKED_PROPS))
+    paint = props.get("paint")
+    if isinstance(paint, dict):
+        lifted.update(
+            asked_constants(paint, PAINT_CHANNELS, unasked_here(paint, UNASKED_PAINT))
+        )
+    return lifted
 
 
 def _show(drawn: DrawnLayer, visible: bool) -> None:

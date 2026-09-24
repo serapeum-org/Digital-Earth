@@ -444,10 +444,15 @@ class Symbology:
 #: tile provider — and it means nothing to another engine, so claiming it as a portable constant would
 #: describe the layer wrongly rather than describe it at all.
 #:
-#: Restricting the lift to a scalar is also what keeps a container out of the figure, and that matters more
-#: than the typing does: an ``xyzservices.TileProvider`` **is** a mapping, and one of its values is the
-#: caller's API key, so anything that copied a container into a layer's description would write a credential
-#: to disk the next time the figure was saved.
+#: Restricting the lift to a scalar also keeps a container out of the figure — but it is the **second** line
+#: of that defence and not the first, which is worth saying plainly so nobody reads this tuple as the thing
+#: standing between a figure and an API key. An ``xyzservices.TileProvider`` **is** a mapping and one of its
+#: values is the caller's key; since `ec56fb6e`/`0ee874c6`,
+#: :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses it at the shared gate, by
+#: ``type(item) is dict`` rather than by ``isinstance``, so a `dict` subclass never reaches a description at
+#: all (pinned by `tests/base/test_serialisation.py`). What this tuple adds is the narrower question — is
+#: this one *channel's* constant — which is what also refuses a palette list and an engine expression
+#: (review R2-N5).
 #:
 #: ``np.generic`` is every numpy *scalar* and no array, so the family answers as one. Without it the tuple
 #: was a per-type accident (`R-L9`): ``np.float64`` subclasses `float` and lifted, while ``np.int64``,
@@ -514,6 +519,95 @@ def portable_constants(
             continue
         lifted[channel] = Encoding.constant(channel, value)
     return lifted
+
+
+def is_a_tier_default(value: Any, defaults: Tuple[Any, ...]) -> bool:
+    """Say whether a resolved style value is one a tier's builders write when nobody asked.
+
+    The one comparison both 2-D tiers subtract their defaults with. It lived twice, spelled
+    ``type(value) is type(default) and value == default``, which made the published style depend on how a
+    caller *spelled* a number: on the interactive tier, which records what it was handed rather than
+    coercing it, ``points(size=6)`` published ``{'size': 6}`` and ``points(size=6.0)`` published nothing
+    (review R2-M4).
+
+    Args:
+        value: What the tier resolved the style to.
+        defaults: The values that tier's builders write for this key unasked. Empty for a key no builder
+            defaults, which is always the caller's.
+
+    Returns:
+        `True` when `value` is one of `defaults`, comparing numerically. `bool` is the one type held
+        apart, in both directions: `True == 1.0` and `False == 0` in Python, so without the guard a flag a
+        caller really did set would be read as a numeric default and dropped.
+
+    Examples:
+        - The two spellings of one number answer alike, and a key nobody defaults is always an ask:
+            ```python
+            >>> from digitalearth.base.spec.style import is_a_tier_default
+            >>> is_a_tier_default(6, (6.0,)), is_a_tier_default(6.0, (6.0,))
+            (True, True)
+            >>> is_a_tier_default(7.0, (6.0,)), is_a_tier_default(7.0, ())
+            (False, False)
+
+            ```
+        - A boolean is never read as the number it equals:
+            ```python
+            >>> from digitalearth.base.spec.style import is_a_tier_default
+            >>> is_a_tier_default(True, (1.0,)), is_a_tier_default(0, (False,))
+            (False, False)
+
+            ```
+    """
+    return any(
+        isinstance(value, bool) == isinstance(default, bool) and value == default
+        for default in defaults
+    )
+
+
+def asked_constants(
+    flat: Mapping[str, Any],
+    channels: Mapping[str, str],
+    unasked: Mapping[str, Tuple[Any, ...]],
+) -> Dict[str, Encoding]:
+    """Lift a tier's flat style onto its channels, minus the values its builders wrote unasked.
+
+    :func:`portable_constants` with the one subtraction both 2-D tiers need. A builder resolves its
+    defaults before it records anything, so the recorded style cannot tell an ask from a default;
+    publishing it wholesale made an unstyled layer claim one tier's defaults as the caller's own intent and
+    repaint itself when the figure was carried elsewhere (review R-H2). Which defaults are chargeable to
+    *this* layer is the tier's question — it is the tier that knows which builder wrote the values — so it
+    is passed in rather than decided here.
+
+    Args:
+        flat: The tier's own style values, keyed the way that engine spells them.
+        channels: Which declared channel each of those keys drives.
+        unasked: The defaults chargeable to this layer, per key, as the tier resolved them.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that
+        name a channel, carry a portable value, and are not one of `unasked`.
+
+    Examples:
+        - A default is passed over and an explicit value is published, for the same key:
+            ```python
+            >>> from digitalearth.base.spec.style import asked_constants
+            >>> channels = {"circle-radius": "size"}
+            >>> unasked = {"circle-radius": (5.0,)}
+            >>> sorted(asked_constants({"circle-radius": 5.0}, channels, unasked))
+            []
+            >>> asked_constants({"circle-radius": 12.0}, channels, unasked)["size"].resolve()
+            12.0
+
+            ```
+    """
+    return portable_constants(
+        {
+            key: value
+            for key, value in flat.items()
+            if not is_a_tier_default(value, unasked.get(key, ()))
+        },
+        channels,
+    )
 
 
 @dataclass(frozen=True)

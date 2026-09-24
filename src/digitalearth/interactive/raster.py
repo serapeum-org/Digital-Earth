@@ -16,7 +16,7 @@ is intentional (this tier reads as HoloViews to its users); the static↔interac
 in the tier plan's feature-parity matrix.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources.view import SourceView
@@ -44,11 +44,48 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
+from digitalearth.interactive.style_fold import TIER_BUCKET
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _travelling_pair(pair: Any) -> Any:
+    """Return a ``(low, high)`` argument in the spelling a figure can be written with.
+
+    ``clim`` is declared as a pair — "Colour limits, as (low, high)" — and a **tuple** is exactly what
+    :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses, so the documented spelling was
+    held beside the layer and dropped from every saved figure while the undocumented list form travelled
+    (review R2-M13). Normalising here is what makes the two spellings one recorded value;
+    :func:`_engine_pair` restores the engine's spelling at draw time.
+
+    Args:
+        pair: What the caller passed — a tuple, a list, or `None` to decline the keyword.
+
+    Returns:
+        A list for a two-item sequence, and the argument untouched for anything else, so a value this
+        tier does not recognise still reaches `describe` and is held rather than mangled.
+    """
+    if isinstance(pair, (tuple, list)) and len(pair) == 2:
+        return list(pair)
+    return pair
+
+
+def _engine_pair(pair: Any) -> Any:
+    """Return a recorded ``(low, high)`` in the spelling HoloViews declares the option with.
+
+    Args:
+        pair: The recorded value, thawed by :func:`~digitalearth.interactive.base.held_props`.
+
+    Returns:
+        A tuple for a two-item sequence, and the value untouched otherwise — including `None`, which is a
+        caller declining the keyword and must stay a decline.
+    """
+    if isinstance(pair, (tuple, list)) and len(pair) == 2:
+        return tuple(pair)
+    return pair
 
 
 def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
@@ -68,7 +105,7 @@ def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     src = interactive_map._to_display_source(data, band=props["band"])
     common = {
         "cmap": interactive_map._auto_cmap(src, props.get("cmap")),
-        "clim": props.get("clim"),
+        "clim": _engine_pair(props.get("clim")),
         "alpha": props.get("alpha"),
         "colorbar": props.get("colorbar"),
         "clabel": interactive_map._auto_clabel(src, props.get("clabel")),
@@ -189,7 +226,13 @@ def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         levels=10 if resolved is None else resolved,
         filled=props.get("filled", False),
     )
-    common = dict(props.get("opts") or {})
+    # The derived half first, the caller's own over it — the precedence every other drawer on this tier
+    # applies, and the reason `spaghetti`'s per-member colour can sit in `common` without outranking a
+    # `color=` the caller wrote (review R2-H3).
+    common = {
+        **dict(props.get(TIER_BUCKET) or {}),
+        **dict(props.get("opts") or {}),
+    }
     element = interactive_map._styled(
         element, common=common or None, bokeh={"tools": ["hover"]}
     )
@@ -272,7 +315,10 @@ class RasterMixin(_MixinBase):
             band: 1-based band to render.
             cmap: Colormap name; ``None`` (default) resolves it from the variable via
                 ``autostyle.auto_style`` (DI.12) — the same lookup the static ``Map`` uses.
-            clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales.
+            clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. A list is taken too,
+                and is the spelling the figure records — a tuple is what the travel rule refuses, so the
+                documented pair used to be dropped from every saved figure (review R2-M13). The drawer
+                hands HoloViews the tuple its own option is declared with either way.
             alpha: Layer opacity in ``[0, 1]``.
             colorbar: Whether to draw a colorbar.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
@@ -317,7 +363,7 @@ class RasterMixin(_MixinBase):
                     "via": "image",
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
-                    "clim": describe(held, "clim", clim),
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
                     "alpha": alpha,
                     "colorbar": colorbar,
                     "clabel": clabel,
@@ -510,7 +556,7 @@ class RasterMixin(_MixinBase):
             filled=False,
             name=name,
             visible=visible,
-            **opts,
+            opts=opts,
         )
 
     @_skips_off_limb
@@ -560,7 +606,7 @@ class RasterMixin(_MixinBase):
             filled=True,
             name=name,
             visible=visible,
-            **opts,
+            opts=opts,
         )
 
     def _contour_layer(
@@ -572,7 +618,8 @@ class RasterMixin(_MixinBase):
         filled: bool,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts: Any,
+        derived: Optional[Mapping[str, Any]] = None,
+        opts: Optional[Mapping[str, Any]] = None,
     ) -> Self:
         """Record the shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
 
@@ -593,14 +640,29 @@ class RasterMixin(_MixinBase):
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
                 element while the figure went on calling it visible (#327).
-            **opts: Extra HoloViews style options applied to the element.
+            derived: Style this tier worked out for the caller rather than style the caller wrote —
+                :meth:`spaghetti`'s per-member colour is the only one today. Filed under the derived
+                bucket, because the bucket a builder files style in is what says whether anyone asked
+                for it: `portable_encodings` lifts ``opts`` unfiltered, so a derived value routed
+                through ``**opts`` was published as the caller's own style (review R2-H3).
+            opts: The caller's own HoloViews style options, taken as a mapping rather than ``**opts``
+                so a keyword named like one of this method's own parameters cannot collide with it.
 
         Returns:
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
         held: Dict[str, Any] = {}
-        described_opts = describe_opts(held, opts)
+        described_opts = describe_opts(held, dict(opts or {}))
+        # The tier's own half is described into its own bucket, and anything that cannot travel is held
+        # under the same key — which is how `held_props` merges the two back together for the drawer.
+        tier_held: Dict[str, Any] = {}
+        described_tier = {
+            key: describe(tier_held, key, value)
+            for key, value in dict(derived or {}).items()
+        }
+        if tier_held:
+            held[TIER_BUCKET] = tier_held
         return self.add_element(
             None,
             name=name,
@@ -614,6 +676,7 @@ class RasterMixin(_MixinBase):
                     "band": band,
                     "levels": describe(held, "levels", levels),
                     "filled": filled,
+                    TIER_BUCKET: described_tier,
                     "opts": described_opts,
                 }
             ),
@@ -674,13 +737,29 @@ class RasterMixin(_MixinBase):
             This map (chainable) — one contour layer registered per member.
         """
         cycle_colour = "color" not in opts and "cmap" not in opts
+        # `levels` is a parameter of the shared funnel rather than a style option, so it is taken out of
+        # the caller's keywords here instead of being handed to it twice.
+        levels = opts.pop("levels", None)
         for index, member in enumerate(collection.datasets):
-            member_opts = dict(opts)
-            if cycle_colour:
-                member_opts["color"] = self._SPAGHETTI_COLORS[
-                    index % len(self._SPAGHETTI_COLORS)
-                ]
-            self.contours(member, band=band, name=name, visible=visible, **member_opts)
+            # The cycle goes in the *derived* bucket, not in the caller's. Passing it through `**opts`
+            # filed a colour nobody asked for under the one bucket `portable_encodings` lifts unfiltered,
+            # so three unstyled members published three different colours as three caller intents — and a
+            # figure carried to another tier repainted itself in this tier's cycle (review R2-H3).
+            derived = (
+                {"color": self._SPAGHETTI_COLORS[index % len(self._SPAGHETTI_COLORS)]}
+                if cycle_colour
+                else {}
+            )
+            self._contour_layer(
+                member,
+                band=band,
+                levels=levels,
+                filled=False,
+                name=name,
+                visible=visible,
+                derived=derived,
+                opts=opts,
+            )
         return self
 
     @_skips_off_limb
