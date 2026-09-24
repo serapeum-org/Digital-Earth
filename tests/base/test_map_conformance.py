@@ -77,6 +77,7 @@ first two run in **every** environment, the plain `dev` matrix included, so they
 uncollected.
 """
 
+import importlib
 import importlib.util
 import subprocess
 import sys
@@ -161,10 +162,11 @@ EXPECTED_SEED = (
 
 #: The tiers that cannot build a layer already hidden, each with what they do instead.
 #:
-#: A drift guard, not an excuse: :meth:`MapConformanceBase.test_a_tier_on_the_hidden_at_build_list_still_belongs_there`
-#: builds the hidden layer on every listed tier and **fails when the tier has been fixed**, so an entry cannot
-#: outlive what it excuses — the same shape as `UNDRAWN_KINDS` in the renderer contract. Taking a tier off the
-#: list is what turns its `test_a_layer_built_hidden_is_described_hidden` on.
+#: A drift guard, not an excuse:
+#: :meth:`TestTheTablesDescribeThePackage.test_a_tier_excused_from_hiding_at_build_still_cannot` builds the
+#: hidden layer on every listed tier and **fails when the tier has been fixed**, so an entry cannot outlive
+#: what it excuses — the same shape as `UNDRAWN_KINDS` in the renderer contract. Taking a tier off the list
+#: is what turns its `test_a_layer_built_hidden_is_described_hidden` on.
 #:
 #: **The interactive tier came off it, and the 3-D tier went on.** The interactive tier was listed here:
 #: `points(visible=False)` fell through the builder's `**opts` to HoloViews as a style option, so the element
@@ -176,10 +178,16 @@ EXPECTED_SEED = (
 #: `set_visible()` after the build is the only way to hide a 3-D layer. The static tier is **not** listed:
 #: measured, `Map(crs=4326).scatter(features, visible=False)` describes the layer `visible=False` (R-M4).
 #:
-#: Listing the 3-D tier is also what makes the reverse branch execute again. With the table empty the guard
-#: skipped for every tier, in every job, so nothing was being guarded in either direction (review R-L7); the
-#: tiers named here that do not subclass the base are held by
-#: :class:`TestTheTablesDescribeThePackage` instead.
+#: **Where the reverse branch actually runs, and where it does not.** The base class used to carry a reverse
+#: probe of its own, and it could never execute: it skips unless the tier is on this table, the only tier on
+#: it is `3d`, and the only subclasses are `web` and `interactive` — so it was skipped in `dev`, `web` and
+#: `interactive` and not collected at all in `viz3d`, while this comment credited the R-L7 fix to it (review
+#: R2-M7). It is gone. The guard that runs is
+#: :meth:`TestTheTablesDescribeThePackage.test_a_tier_excused_from_hiding_at_build_still_cannot`, which
+#: reaches the 3-D tier through :data:`ABSENT_TIERS` and passes in `viz3d`; every tier named here is
+#: reachable from there, which
+#: :meth:`TestTheTablesDescribeThePackage.test_every_tier_a_table_excuses_can_be_re_asked_the_question`
+#: is what holds.
 CANNOT_HIDE_AT_BUILD: dict[str, str] = {
     "3d": (
         "visible= is not a parameter of its builders; it reaches PyVista through **kwargs, which raises "
@@ -257,12 +265,41 @@ NO_PORTABLE_CLASSIFICATION: dict[str, str] = {
     ),
 }
 
+
+def _shipped_tiers() -> tuple[str, ...]:
+    """Return every tier the package ships, read off the `Capabilities` each one declares.
+
+    Returns:
+        The backend names, sorted. Discovered by walking `src/digitalearth/*/capabilities.py` and importing
+        each — which costs no engine, because a tier's capability table is the one module of it that is
+        pure data. `base/capabilities.py` defines the class rather than a tier and declares no
+        `CAPABILITIES`, so it drops out.
+    """
+    shipped = []
+    for module_path in sorted(
+        (REPO_ROOT / "src" / "digitalearth").glob("*/capabilities.py")
+    ):
+        module = importlib.import_module(
+            f"digitalearth.{module_path.parent.name}.capabilities"
+        )
+        declared = getattr(module, "CAPABILITIES", None)
+        if declared is not None:
+            shipped.append(declared.backend)
+    return tuple(sorted(shipped))
+
+
 #: Every tier the package ships, as its own `Capabilities` spells the backend.
 #:
-#: Written out because the tables above describe a *subset* and nothing said so. Two of these four subclass
+#: The tables above describe a *subset* and nothing said so. Two of these four subclass
 #: :class:`MapConformanceBase`; the other two are held to the drift tables instead, and
 #: :class:`TestTheTablesDescribeThePackage` refuses a tier that is in neither place (review R-M4).
-ALL_TIERS: tuple[str, ...] = ("3d", "interactive", "matplotlib", "web")
+#:
+#: **Read off the package rather than written down.** The hand-written tuple made
+#: :class:`TestTheTablesDescribeThePackage` set arithmetic over test-module constants alone: no symbol under
+#: `src/digitalearth/**` took part, so a fifth tier could ship and pass both checks in silence (review
+#: R2-M8). This is the same fix `tests/test_contract_names.py` already applies to `EVERY_TIER`, whose own
+#: comment records why: "the listed version went stale silently (#324)".
+ALL_TIERS: tuple[str, ...] = _shipped_tiers()
 
 #: The name the naming probes ask for, and what a second layer asking for it again must be given.
 #:
@@ -286,6 +323,43 @@ SUFFIXED_NAME = "wells-2"
 # (`points-1`). Neither spelling is wrong, and settling which one every tier generates is not what naming a
 # layer was about.
 # ---------------------------------------------------------------------------------------------------------
+
+
+def _declared_probes() -> list:
+    """Return every probe the contract declares, by name.
+
+    Returns:
+        The `test_`-prefixed callables defined on :class:`MapConformanceBase` itself, sorted. Read off the
+        class body rather than off an instance, because an instance reports what it *resolves* and that is
+        the other half of the question.
+    """
+    return sorted(
+        name
+        for name, declared in vars(MapConformanceBase).items()
+        if name.startswith("test_") and callable(declared)
+    )
+
+
+def _shadowed_probes(tier: type) -> list:
+    """Return the declared probes a tier answers with something other than the contract's own.
+
+    Args:
+        tier: A :class:`MapConformanceBase` subclass.
+
+    Returns:
+        The names, sorted, where what `tier` resolves the name to is not the function the base declares.
+        That covers every shape of shadowing at once — a probe overridden with an empty body, one replaced
+        by a non-callable, one shadowed by an attribute — where a name check covers none of them, because
+        the name is present either way.
+
+        A tier's *own* probes are not in it: only the names the contract declares are asked about, which is
+        what lets a tier bring a question only it can answer (review R-L8).
+    """
+    return sorted(
+        name
+        for name in _declared_probes()
+        if getattr(tier, name, None) is not getattr(MapConformanceBase, name)
+    )
 
 
 def _points():
@@ -853,26 +927,6 @@ class MapConformanceBase:
             f"the {self.backend} tier was asked for a hidden layer and described it visible"
         )
 
-    def test_a_tier_on_the_hidden_at_build_list_still_belongs_there(self, drawn):
-        """An excuse must not outlive what it excuses, so the list is checked against the tier.
-
-        Args:
-            drawn: The map under test.
-
-        Test scenario:
-            The half of the allowlist pattern that keeps it honest. A tier named in
-            :data:`CANNOT_HIDE_AT_BUILD` is asked for a hidden layer here too; the day it describes one
-            correctly, this fails and the entry has to come off — which is what turns the probe above on for
-            that tier. Without it the list would quietly outlast the defect, and the probe would stay off
-            forever.
-        """
-        if self.backend not in CANNOT_HIDE_AT_BUILD:
-            pytest.skip(f"the {self.backend} tier is not on the hidden-at-build list")
-        assert self._hidden_layer(drawn) is True, (
-            f"the {self.backend} tier now describes a layer built hidden as hidden; take it off "
-            "CANNOT_HIDE_AT_BUILD so its probe runs"
-        )
-
     def test_a_tier_that_records_no_portable_channel_is_named_as_such(self, drawn):
         """`Symbology.encodings` is the one style reading any tier can take from any other.
 
@@ -938,33 +992,25 @@ class MapConformanceBase:
         Test scenario:
             The per-tier half of the collection guard. It runs only where the tier's engine is installed —
             that is what its class is gated on — so reaching it at all is the evidence that this environment
-            collects and runs this module for this tier. It then counts what the tier contributes, because a
+            collects and runs this module for this tier. It then asks what the tier contributes, because a
             subclass that shadowed the probes, or a base class that lost them, would leave a green job
             covering nothing.
 
-            The relation is **containment, not equality**: a tier must bring every shared probe, and may
-            bring probes of its own. Equality made any tier-specific probe a failure, reported as a
-            "shadowed" probe, so a tier could never ask a question only it can answer (review R-L8).
-            Containment alone would miss a subclass that keeps a probe's name and empties it — `dir()`
-            reports the name either way — so each declared probe is also asked whether it is still
-            callable here.
+            Asked of the **resolved function**, by :func:`_shadowed_probes`. It used to be asked of names,
+            with `dir(self)` on one side: `dir()` reports inherited names, so the difference was empty for
+            any subclass of the base — measured, `declared=13, mine=13, missing=[]` for both real tiers and
+            for a deliberately broken one too (review R2-M6). A `callable` check beside it caught only a
+            probe replaced by a non-callable, so a subclass writing `def test_…(self): pass` passed both —
+            which is the failure the paragraph above names. Comparing the function the tier resolves each
+            name to against the one the base declares catches every shape of shadowing, and still lets a
+            tier add probes of its own (review R-L8).
         """
-        mine = {name for name in dir(self) if name.startswith("test_")}
-        declared = sorted(
-            name for name in vars(MapConformanceBase) if name.startswith("test_")
-        )
-        missing = sorted(set(declared) - mine)
-        assert missing == [], (
-            f"the {self.backend} tier brings {len(mine)} probes and is missing {len(missing)} of the "
-            f"{len(declared)} the contract declares: {missing}"
-        )
+        declared = _declared_probes()
         assert declared != [], "the contract declares no probes at all"
-        emptied = sorted(
-            name for name in declared if not callable(getattr(self, name, None))
-        )
-        assert emptied == [], (
-            f"the {self.backend} tier shadows {emptied} with something that is not callable, so those "
-            "probes are collected and cover nothing"
+        shadowed = _shadowed_probes(type(self))
+        assert shadowed == [], (
+            f"the {self.backend} tier answers {shadowed} with something other than the probe the contract "
+            f"declares, out of the {len(declared)} it declares, so those are collected and cover nothing"
         )
 
 
@@ -1118,6 +1164,12 @@ class TestOneStyledLayerDescribesOneChannelOnBothTiers:
     environment exists for and the precondition `to_backend()` (order 33) is built on — carrying a figure
     across is only worth doing if both ends describe its style in the same words.
 
+    **What that does and does not buy, said plainly.** Both probes below are gated on their own engine, so
+    in a single-backend job one of them runs and in the `all` environment both do. What makes the two tiers
+    agree is that both are held to one constant; a third probe asserting `web == interactive` was here and
+    could not fail on its own, since in the only environment where it ran both sides had already been
+    asserted equal to that constant (review R2-L10).
+
     The layer is styled explicitly, in each tier's own keyword spelling (:data:`CROSS_TIER_STYLE`): the web
     tier's opacity keyword is `opacity=` and the interactive tier's is `alpha=` (#332). The promise is not
     that the keywords match — it is that both describe the same *channel*, which is the whole reason a
@@ -1212,36 +1264,58 @@ class TestOneStyledLayerDescribesOneChannelOnBothTiers:
 
     @needs_maplibre
     def test_the_web_tier_describes_the_styled_layer_by_channel(self):
-        """One half of the pair, held to the constant so a wrong pair cannot agree its way to green."""
-        assert self._web() == EXPECTED_CHANNELS, (
-            f"the web tier describes the styled layer as {self._web()}"
+        """One half of the pair, held to the constant so a wrong pair cannot agree its way to green.
+
+        Test scenario:
+            The map is built once and the answer kept, rather than rebuilt to format the message. Calling
+            the helper a second time in the message built and closed a second map on a failing run, and
+            could in principle report a value other than the one that failed (review R2-N2).
+        """
+        described = self._web()
+        assert described == EXPECTED_CHANNELS, (
+            f"the web tier describes the styled layer as {described}"
         )
 
     @needs_geoviews
     def test_the_interactive_tier_describes_the_styled_layer_by_channel(self):
-        """The other half, held to the same constant, through its own keyword spelling."""
-        assert self._interactive() == EXPECTED_CHANNELS, (
-            f"the interactive tier describes the styled layer as {self._interactive()}"
-        )
-
-    @needs_maplibre
-    @needs_geoviews
-    def test_both_tiers_describe_one_styled_layer_by_the_same_channels(self):
-        """The check no single-backend job can run: two live tiers, one interpreter, one style.
+        """The other half, held to the same constant, through its own keyword spelling.
 
         Test scenario:
-            Each side is built from a different tier and a different keyword spelling, so the two are not
-            the same expression reaching the same answer — they are two engines asked the same question.
-            Held against each other *as well as* against the constant above, because the constant catches a
-            tier that drifts and this catches the pair drifting together.
+            Built once, as above (review R2-N2). Between them these two are also what held the *pair*
+            together: a third probe asserted `self._web() == self._interactive()`, and both sides were
+            already asserted equal to :data:`EXPECTED_CHANNELS` under the same engine gates, so in the one
+            environment where all three ran the pair could differ only when one of these had failed first.
+            It is gone; the constant is what holds the two tiers to each other (review R2-L10).
         """
-        assert self._web() == self._interactive(), (
-            f"the web tier describes {self._web()} and the interactive tier {self._interactive()}"
+        described = self._interactive()
+        assert described == EXPECTED_CHANNELS, (
+            f"the interactive tier describes the styled layer as {described}"
         )
 
 
 class TestTheTablesDescribeThePackage:
     """Every tier is either held by the probes above or named in a table, and nothing is silently absent."""
+
+    def test_the_tier_list_is_read_off_the_package_and_not_written_down(self):
+        """The set arithmetic below is only about the package while its scope comes from the package.
+
+        Test scenario:
+            Every symbol in the two checks that follow used to be defined in this module, `ALL_TIERS`
+            included, so no change under `src/digitalearth/**` could fail either of them and a fifth tier
+            would ship in silence (review R2-M8). :data:`ALL_TIERS` is discovered now, and this is what
+            stops the discovery going quietly empty: a tier that ships a capability module without a
+            `CAPABILITIES` table is skipped by :func:`_shipped_tiers`, which is exactly the way a derived
+            list rots.
+        """
+        declaring = sorted(
+            path.parent.name
+            for path in (REPO_ROOT / "src" / "digitalearth").glob("*/capabilities.py")
+            if path.parent.name != "base"
+        )
+        assert len(ALL_TIERS) == len(declaring), (
+            f"{len(declaring)} packages under src/digitalearth declare a capability module ({declaring}) "
+            f"and {len(ALL_TIERS)} of them name a backend ({list(ALL_TIERS)}); one is not being discovered"
+        )
 
     def test_every_tier_either_signs_the_contract_or_is_named_in_a_table(self):
         """A tier that neither subclasses the base nor appears in a drift table is covered by nothing.
@@ -1390,3 +1464,33 @@ class TestATierMayBringAProbeOfItsOwn:
         with pytest.raises(AssertionError) as refusal:
             shadowing().test_this_tier_contributes_a_non_zero_count_of_probes()
         assert "test_a_layer_nobody_hid_is_described_visible" in str(refusal.value)
+
+    def test_a_subclass_that_empties_a_probe_but_keeps_it_callable_is_refused_too(self):
+        """The shape the name-and-callable check could not see (review R2-M6).
+
+        Test scenario:
+            A subclass writing `def test_a_layer_nobody_hid_is_described_visible(self): pass` keeps the
+            name *and* stays callable, so the old check passed it — and that is precisely "a green job
+            covering nothing", the failure its own docstring names. Written as a mutation rather than as a
+            claim: the class below is the mutant, and the check has to refuse it.
+        """
+        shadowing = self._with_its_own()
+
+        def emptied(self):
+            """Stand in for the probe without asking anything."""
+
+        shadowing.test_a_layer_nobody_hid_is_described_visible = emptied
+        with pytest.raises(AssertionError) as refusal:
+            shadowing().test_this_tier_contributes_a_non_zero_count_of_probes()
+        assert "test_a_layer_nobody_hid_is_described_visible" in str(refusal.value)
+
+    def test_a_subclass_that_changes_nothing_is_reported_as_shadowing_nothing(self):
+        """The negative the two mutations above are measured against.
+
+        Test scenario:
+            A check that refused every subclass would pass both mutation tests and be useless. The
+            untouched subclass has to come back clean, and the two real tiers are the same shape.
+        """
+        assert _shadowed_probes(self._with_its_own()) == [], (
+            "an untouched subclass answers every declared probe with the contract's own function"
+        )
