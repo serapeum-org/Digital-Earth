@@ -19,11 +19,15 @@ import pytest
 matplotlib.use("Agg")
 
 import geopandas as gpd
+from matplotlib.font_manager import font_family_aliases
 from matplotlib.text import Text
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.static import Map
+from digitalearth.static.maps.decoration import (
+    _font_family_a_name_still_stands_for,
+)
 
 #: The name the probes ask for, and the id a second layer asking for it again must be given.
 ASKED = "wells"
@@ -40,6 +44,11 @@ OTHER_FONT = "DejaVu Sans Mono"
 
 #: What `Text.get_fontfamily()` answers when nobody chose a family — matplotlib's `font.family` default.
 DEFAULT_FAMILY = "sans-serif"
+
+#: One of matplotlib's generic family aliases — a family name that resolves without being registered under
+#: that spelling anywhere. Deliberately not `DEFAULT_FAMILY`: an alias that is also the default would draw
+#: the same picture whether or not the name was read as a font, so the case could not fail.
+GENERIC_ALIAS = "monospace"
 
 #: The canonical `Text` properties that set a font family. Every keyword matplotlib takes for one is an alias
 #: of one of these three.
@@ -515,6 +524,71 @@ class TestTheFontMatplotlibReadsFromAName:
         drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
         drawn.text(0.6, 0.6, "Rotterdam", name=FONT)
         assert drawn.layer_ids == [FONT, PATTERN_ONLY], drawn.layer_ids
+
+    def test_a_generic_family_alias_is_read_off_a_name_as_well(self, drawn):
+        """A family matplotlib resolves by alias is a family, and the registry does not list it.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            `serif`, `monospace` and the rest name families without being registered under those spellings
+            — the registry holds `DejaVu Sans Mono`, never `monospace` — so a membership test that only
+            read the registry would answer `False` and drop the caller's font. Asked through the artist,
+            as every case here is: this reads back as the family the label is actually drawn in.
+        """
+        placed = drawn.text(0.5, 0.5, "Amsterdam", name=GENERIC_ALIAS)
+        assert placed.get_fontfamily() == [GENERIC_ALIAS], placed.get_fontfamily()
+
+    def test_the_alias_probed_is_one_matplotlib_declares_and_is_not_the_default(self):
+        """The case above can only fail if the alias differs from the font a bare label already gets.
+
+        Test scenario:
+            `get_fontfamily()` answers `DEFAULT_FAMILY` for a label nobody gave a font, and `sans-serif`
+            is both the default and a generic alias — so probing with that one would pass whether the name
+            was read as a font or ignored entirely. This is the cheapest proof the probe is a real one,
+            and it reads the alias set from matplotlib rather than from this file.
+        """
+        assert GENERIC_ALIAS in font_family_aliases - {DEFAULT_FAMILY}, (
+            f"{GENERIC_ALIAS!r} is not an alias matplotlib declares, or it is the default family"
+        )
+
+    def test_a_pair_matplotlib_will_refuse_has_no_third_spelling_added_to_it(self):
+        """Two aliases of one property: the call is lost, and this package must not make the pile worse.
+
+        Test scenario:
+            Asked of the resolution rather than through a draw, because a draw cannot tell the two answers
+            apart: `Axes.text(family=..., fontfamily=...)` raises on the pair whatever this decides, with
+            the same message, so the only observable difference is whether a `fontname=` the caller never
+            wrote was added on the way. Both ways of getting this wrong are caught here — letting the
+            refusal escape from inside the check, and reading the unreadable set as "no font chosen" and
+            so adding the layer's name to it.
+        """
+        refused = {"family": OTHER_FONT, "fontfamily": OTHER_FONT}
+        assert _font_family_a_name_still_stands_for(FONT, refused) == {}, (
+            "a keyword set matplotlib cannot read is not one to add a third spelling to"
+        )
+
+    def test_that_pair_is_still_refused_by_matplotlib_in_its_own_words(self, drawn):
+        """And the refusal reaches the caller unchanged, rather than being swallowed here.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The complement of the case above. Deciding to add nothing must not become deciding to drop the
+            caller's keywords: the pair is theirs, it is wrong, and matplotlib is the one that says so.
+        """
+        with pytest.raises(TypeError) as refusal:
+            drawn.text(
+                0.5,
+                0.5,
+                "Amsterdam",
+                name=FONT,
+                family=OTHER_FONT,
+                fontfamily=OTHER_FONT,
+            )
+        assert "aliases of one another" in str(refusal.value), str(refusal.value)
 
 
 class TestAGraticuleAskedForMoreThanItCanHonour:
