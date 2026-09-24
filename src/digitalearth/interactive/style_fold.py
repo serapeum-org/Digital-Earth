@@ -341,7 +341,9 @@ STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
 #: looked up rather than guessed at, and adding a builder with its own default cannot silently swallow
 #: another's explicit ask.
 #:
-#: **What is listed.** Measured by drawing all nineteen builders with no style keywords and reading back
+#: **What is listed.** Measured by drawing every builder on this tier that records a layer with no style
+#: keywords at all — **twenty-seven** of them, the twenty-three data builders and the four decorations, as
+#: ``tests/interactive/test_interactive_unasked_style.py`` enumerates them — and reading back
 #: ``symbology.props``: only two derive anything that drives a declared channel — ``points`` records
 #: ``common['size'] == 6.0`` and ``image`` records a flat ``alpha == 1.0``. ``rgb`` is **not** one of them
 #: (it records ``via``/``bands``/``limits``/``opts`` and no ``alpha``), ``polygons`` derives
