@@ -16,8 +16,10 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence,
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
 from cleopatra.basemap.tiles import add_tiles
+from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
 from matplotlib.font_manager import FontProperties, findfont
+from matplotlib.text import Text
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.base.basemaps import (
@@ -49,13 +51,61 @@ _NATURAL_EARTH_STYLE: Dict[str, Dict[str, Any]] = {
     "rivers": {"color": "#5a8fcf", "linewidth": 0.4},
 }
 
-#: Every spelling matplotlib accepts for a text artist's font family. ``name`` is one of them — and it is the
-#: one #321 handed to the layer — so :func:`_font_family_a_name_still_stands_for` only reads a name as a font
-#: when the call has not already chosen one under any of these, which is also what keeps matplotlib from
-#: being handed the same family twice ("Got both").
-_FONT_FAMILY_KEYWORDS = frozenset(
-    {"font", "fontfamily", "family", "fontname", "fontproperties"}
-)
+#: The canonical :class:`matplotlib.text.Text` properties that set a font family. Every keyword matplotlib
+#: accepts for one — ``family``, ``font``, ``font_properties``, ``name`` and the three spellings below — is
+#: an alias of one of these, so :func:`_a_font_is_already_chosen` asks
+#: :func:`matplotlib.cbook.normalize_kwargs` rather than matching against a list of spellings. The list this
+#: replaces was short by one: ``font_properties=`` was not on it, the layer's name went on as ``fontname=``
+#: — which ``Text`` applies *after* ``fontproperties`` — and the caller's font was discarded with nothing
+#: said (review R2-H5). Naming the three properties instead means a spelling matplotlib adds later is
+#: covered by the alias table it ships with, not by an edit here.
+_FONT_FAMILY_PROPERTIES = frozenset({"fontfamily", "fontname", "fontproperties"})
+
+
+def _a_font_is_already_chosen(opts: Dict[str, Any]) -> bool:
+    """Say whether a text call's own keywords name a font family, under any spelling matplotlib takes.
+
+    This decides **priority**, and only priority: a layer's name is read as a font solely when the call
+    itself named none. It is not, as this once claimed, what keeps matplotlib from being handed the same
+    family twice — measured, ``Axes.text(fontname=..., fontfamily=...)`` and
+    ``Axes.text(fontname=..., family=...)`` both draw, with the later keyword winning. The only pairs that
+    raise ``TypeError: Got both`` are two aliases of *one* property (``family=`` beside ``fontfamily=``,
+    ``name=`` beside ``fontname=``), which only the caller can write, and ``name=`` never reaches these
+    keywords at all (review R2-L5).
+
+    Args:
+        opts: The keywords the call will hand the text artist.
+
+    Returns:
+        ``True`` when any of them canonicalises to one of :data:`_FONT_FAMILY_PROPERTIES`, or when
+        matplotlib refuses the set outright — both of which mean the layer's name stays out of it.
+
+    Examples:
+        - Each spelling of a family is recognised as one, including the one a list of spellings missed:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _a_font_is_already_chosen
+            >>> [
+            ...     _a_font_is_already_chosen({key: "DejaVu Sans"})
+            ...     for key in ("font", "font_properties", "fontproperties", "family", "fontname")
+            ... ]
+            [True, True, True, True, True]
+
+            ```
+        - A call that styles the label some other way has chosen no font:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _a_font_is_already_chosen
+            >>> _a_font_is_already_chosen({"fontsize": 12, "color": "red"})
+            False
+
+            ```
+    """
+    try:
+        chosen = normalize_kwargs(opts, Text)
+    except TypeError:
+        # Two aliases of one property. `Axes.text` raises on exactly this set, so the call is going to
+        # fail whatever is decided here; what matters is not adding a third spelling to the pile first.
+        return True
+    return bool(_FONT_FAMILY_PROPERTIES.intersection(chosen))
 
 
 def _font_family_a_name_still_stands_for(
@@ -78,7 +128,8 @@ def _font_family_a_name_still_stands_for(
 
     Args:
         name: The name the caller gave the layer, or ``None``.
-        opts: The caller's remaining keywords, read for a font family they already chose.
+        opts: The caller's remaining keywords, read for a font family they already chose — under any
+            spelling matplotlib takes for one, which is what :func:`_a_font_is_already_chosen` answers.
 
     Returns:
         ``{"fontname": name}`` when ``name`` names a resolvable font family and the call names no other one;
@@ -99,10 +150,12 @@ def _font_family_a_name_still_stands_for(
             {}
             >>> _font_family_a_name_still_stands_for("DejaVu Serif", {"fontname": "DejaVu Sans"})
             {}
+            >>> _font_family_a_name_still_stands_for("DejaVu Serif", {"font_properties": "DejaVu Sans"})
+            {}
 
             ```
     """
-    if not isinstance(name, str) or _FONT_FAMILY_KEYWORDS.intersection(opts):
+    if not isinstance(name, str) or _a_font_is_already_chosen(opts):
         return {}
     try:
         findfont(FontProperties(family=name), fallback_to_default=False)
@@ -642,8 +695,9 @@ class DecorationMixin(_MixinBase):
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``Axes.text`` (e.g. ``ha``, ``va``, ``fontsize``, ``color``). A font
-                family given here — under any of ``font``/``fontfamily``/``family``/``fontname``/
-                ``fontproperties`` — outranks the layer's name.
+                family given here outranks the layer's name, under every spelling matplotlib takes for
+                one — ``font``, ``font_properties``, ``fontproperties``, ``fontfamily``, ``family`` and
+                ``fontname``.
 
         Returns:
             The :class:`matplotlib.text.Text`, or ``None`` if the point is off the visible globe.
@@ -702,8 +756,9 @@ class DecorationMixin(_MixinBase):
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``Axes.annotate`` (e.g. ``arrowprops``, ``textcoords``, ``fontsize``).
-                A font family given here — under any of ``font``/``fontfamily``/``family``/``fontname``/
-                ``fontproperties`` — outranks the layer's name.
+                A font family given here outranks the layer's name, under every spelling matplotlib takes
+                for one — ``font``, ``font_properties``, ``fontproperties``, ``fontfamily``, ``family``
+                and ``fontname``.
 
         Returns:
             The :class:`matplotlib.text.Annotation`, or ``None`` if the point is off the visible globe.

@@ -11,12 +11,15 @@ cross-tier half — that the web and interactive tiers answer identically — is
 `tests/base/test_map_conformance.py`; the rule itself is in `tests/base/test_layer.py`.
 """
 
+from typing import Tuple
+
 import matplotlib
 import pytest
 
 matplotlib.use("Agg")
 
 import geopandas as gpd
+from matplotlib.text import Text
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
@@ -37,6 +40,37 @@ OTHER_FONT = "DejaVu Sans Mono"
 
 #: What `Text.get_fontfamily()` answers when nobody chose a family — matplotlib's `font.family` default.
 DEFAULT_FAMILY = "sans-serif"
+
+#: The canonical `Text` properties that set a font family. Every keyword matplotlib takes for one is an alias
+#: of one of these three.
+FAMILY_PROPERTIES = frozenset({"fontfamily", "fontname", "fontproperties"})
+
+
+def _family_spellings() -> Tuple[str, ...]:
+    """Return every keyword matplotlib accepts for a text artist's font family, without `name`.
+
+    Asked of matplotlib rather than typed out here: a list typed out is what the package itself had, and it
+    was short by one — `font_properties=` went unrecognised and the caller's font was dropped (review
+    R2-H5). `name` is left out because these two builders spend it on the layer's id, which is the whole
+    subject of this file.
+
+    Returns:
+        The aliases matplotlib declares for `fontfamily`/`fontname`/`fontproperties`, together with the
+        three canonical spellings, sorted so the parametrisation reads the same on every run.
+    """
+    declared = getattr(Text, "_alias_to_prop", None)
+    if declared is None:  # matplotlib < 3.11 declared the mapping the other way round
+        declared = {
+            alias: prop
+            for prop, aliases in getattr(Text, "_alias_map", {}).items()
+            for alias in aliases
+        }
+    aliases = {alias for alias, prop in declared.items() if prop in FAMILY_PROPERTIES}
+    return tuple(sorted((aliases | FAMILY_PROPERTIES) - {"name"}))
+
+
+#: Every spelling the probes below pass a font under, derived once.
+FAMILY_SPELLINGS = _family_spellings()
 
 
 @pytest.fixture
@@ -366,18 +400,40 @@ class TestTheFontMatplotlibReadsFromAName:
         placed = drawn.text(0.5, 0.5, "Amsterdam", name=ASKED)
         assert placed.get_fontfamily() == [DEFAULT_FAMILY], placed.get_fontfamily()
 
-    def test_a_font_the_caller_spelled_out_outranks_the_name(self, drawn):
-        """`fontname=` is the unambiguous spelling, so it decides — and matplotlib is never handed both.
+    @pytest.mark.parametrize("spelling", FAMILY_SPELLINGS)
+    def test_a_font_the_caller_spelled_any_way_outranks_the_name(self, drawn, spelling):
+        """Whichever of matplotlib's six spellings the caller chose a font with, that font is the one drawn.
 
         Args:
             drawn: The map under test.
+            spelling: One keyword matplotlib accepts for a text artist's font family.
 
         Test scenario:
-            Passing a family under two of matplotlib's aliases at once raises `TypeError: Got both`, so the
-            name is only read as a font when the call has not already said which font it wants.
+            The name is a fallback, so a call that says which font it wants decides. The check behind that
+            was a hand-written list of spellings and `font_properties=` was not on it: the layer's name
+            went on as `fontname=`, which `Text` applies *after* `fontproperties`, so the caller's font
+            lost with nothing said (review R2-H5). Parametrising over the whole class is what stops the
+            list being short again — the spellings come from matplotlib, not from this file.
+
+            The pair is never an error, either: `Axes.text(fontname=..., fontfamily=...)` draws, with the
+            later keyword winning, so what this pins is priority rather than a refusal.
         """
-        placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT, fontname=OTHER_FONT)
-        assert placed.get_fontfamily() == [OTHER_FONT], placed.get_fontfamily()
+        placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT, **{spelling: OTHER_FONT})
+        assert placed.get_fontfamily() == [OTHER_FONT], (
+            spelling,
+            placed.get_fontfamily(),
+        )
+
+    def test_the_spellings_probed_include_the_one_that_was_missed(self):
+        """The derivation above really found the class, rather than quietly finding nothing.
+
+        Test scenario:
+            `_family_spellings` reads a private matplotlib mapping, so it can go empty on an upgrade and
+            take the parametrisation with it — every case would then pass by not existing.
+            `font_properties` is the spelling R2-H5 reports, so its presence is the cheapest proof the
+            list is real.
+        """
+        assert "font_properties" in FAMILY_SPELLINGS, FAMILY_SPELLINGS
 
 
 class TestAGraticuleCalledASecondTime:
