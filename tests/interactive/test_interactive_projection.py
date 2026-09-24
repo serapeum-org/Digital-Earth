@@ -19,6 +19,22 @@ def m() -> InteractiveMap:
     return InteractiveMap()
 
 
+def _graticule_parameters():
+    """Return both 2-D tiers' `graticule` parameters, so the two signatures can be compared.
+
+    Returns:
+        `(interactive, static)`, each a mapping of parameter name to `inspect.Parameter`.
+    """
+    import inspect
+
+    from digitalearth.static.maps.projection import ProjectionMixin as StaticMixin
+
+    return (
+        inspect.signature(InteractiveMap.graticule).parameters,
+        inspect.signature(StaticMixin.graticule).parameters,
+    )
+
+
 class TestProjection:
     """``projection`` — arbitrary display projections via the matplotlib backend."""
 
@@ -137,20 +153,76 @@ class TestGraticuleSpacing:
             f"lon_step/lat_step ignored: {m.layers[-1].data.name}"
         )
 
-    def test_signature_matches_the_static_tier(self):
-        """Both tiers spell the spacing the same way, with the same defaults."""
-        import inspect
+    def test_both_tiers_take_the_same_spacing_arguments(self):
+        """The three spellings of a spacing are on both tiers' signatures (#324).
 
-        from digitalearth.static.maps.projection import ProjectionMixin as StaticMixin
-
-        interactive = inspect.signature(InteractiveMap.graticule).parameters
-        static = inspect.signature(StaticMixin.graticule).parameters
-        for name in ("lon_step", "lat_step"):
+        Test scenario:
+            `graticule` is a TIER2 name, so wherever it exists it means one thing: `lon_step`,
+            `lat_step` and `spacing` are the keywords `base/contract.py` records for it, and a caller
+            moving between tiers writes the same call. This half of the old signature check is unchanged
+            — it is the half that is still literally true.
+        """
+        interactive, static = _graticule_parameters()
+        for name in ("lon_step", "lat_step", "spacing"):
             assert name in interactive, f"interactive graticule must accept {name}"
-            assert interactive[name].default == static[name].default, (
-                f"{name} default differs between tiers: "
-                f"{interactive[name].default} vs {static[name].default}"
-            )
+            assert name in static, f"static graticule must accept {name}"
+
+    def test_both_tiers_draw_the_same_grid_when_no_step_is_named(self):
+        """A caller who names no spacing gets the same grid on either tier.
+
+        Test scenario:
+            This used to be checked by comparing the two signatures' default *values*, which held only
+            while both tiers spelled 30 degrees as a literal. The static tier now defaults its two steps
+            to `None`, so it can tell a step the caller wrote from one they did not and say when
+            `spacing=` has discarded one (review R2-L3). The defaults are no longer the same value; the
+            grid they draw still is, and the grid is what a caller moving between tiers is promised.
+
+            So each side is read from what that tier actually drew rather than from its signature, which
+            is a stronger claim than the one it replaces: either tier moving its default fails this,
+            including by resolving `None` to something other than 30.
+        """
+        from digitalearth.static import Map
+
+        drawn = InteractiveMap().graticule()
+        interactive_step = int(drawn.layers[-1].data.name.rsplit("_", 1)[-1])
+        built = Map(crs=4326)
+        try:
+            built.graticule(name="grid")
+            props = built.figure_spec.layers.get("grid").symbology.props
+        finally:
+            built.close()
+        assert (props["lon_step"], props["lat_step"]) == (
+            interactive_step,
+            interactive_step,
+        ), (props, interactive_step)
+
+    def test_only_the_static_tier_defaults_its_steps_to_a_sentinel(self):
+        """The divergence itself, pinned exactly, so it can neither widen nor close unnoticed.
+
+        Test scenario:
+            The two tiers spell "the caller named no step" differently, and only one of them needs to.
+            The static tier reports a discarded step, so it has to see that a step was written; the
+            interactive tier makes no such report, so it keeps the literal. Stating that here — rather
+            than deleting the comparison that caught it — is what keeps the divergence tracked, the same
+            shape as `KEYWORD_SHORTFALLS` in `tests/test_contract_names.py`: the pair is compared
+            exactly, so this fails the moment either tier changes its mind, including the day the
+            interactive tier grows the same report and takes `None` too.
+
+            It would grow it for a reason: `InteractiveMap.graticule` discards `lon_step`/`lat_step`
+            under `spacing=` exactly as the static tier did, and says nothing. That is the same defect on
+            the other tier, and it is out of R2-L3's scope, which names the static module alone.
+        """
+        from digitalearth.static.maps.projection import DEFAULT_GRATICULE_STEP
+
+        interactive, static = _graticule_parameters()
+        sentinels = {
+            name: (interactive[name].default, static[name].default)
+            for name in ("lon_step", "lat_step")
+        }
+        assert sentinels == {
+            "lon_step": (DEFAULT_GRATICULE_STEP, None),
+            "lat_step": (DEFAULT_GRATICULE_STEP, None),
+        }, sentinels
 
     def test_asymmetric_spacing_raises(self, m):
         """Natural Earth ships symmetric graticules only — say so, do not ignore the request."""
