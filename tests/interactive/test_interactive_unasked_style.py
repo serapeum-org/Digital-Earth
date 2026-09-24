@@ -40,6 +40,11 @@ DEM = "examples/data/acc4000.tif"
 #: The contour levels every contour probe traces, so no probe depends on an auto-resolved level set.
 LEVELS = [10.0, 100.0]
 
+#: A `spaghetti` cycle spelled the one way a figure cannot carry: bokeh's RGB triple. Every colour the
+#: tier ships is a hex string, which travels, so this is what a derived value the description has to hold
+#: rather than record looks like.
+UNTRAVELLED_CYCLE = ((255, 0, 0), (0, 255, 0), (0, 0, 255))
+
 
 def _points(count: int = 5):
     """Return a small point frame with the columns the aggregating builders need.
@@ -129,7 +134,7 @@ def _collection(members: int = 3):
 
 #: Every builder on this tier that records a layer, and how to draw it with no style keyword at all.
 #:
-#: All nineteen data builders plus the four decorations, because "which builders derive a channel" is
+#: All twenty-three data builders plus the four decorations, because "which builders derive a channel" is
 #: exactly the question the table answers and a probe that draws a subset can only ever confirm the subset.
 #: `grep -rn UNASKED tests/` returned nothing before this (review R2-M5).
 UNSTYLED: Dict[str, Callable[[Any], Any]] = {
@@ -441,6 +446,40 @@ class TestTheDerivedColourIsNotTheCallersOwn:
         invented = Symbology(props={TIER_BUCKET: {"size": 99.0, "alpha": 0.25}})
         assert portable_encodings(invented) == {}, (
             f"{TIER_BUCKET!r} was lifted; it holds style the tier invented, which no caller asked for"
+        )
+
+    def test_a_derived_colour_the_figure_cannot_carry_still_reaches_the_engine(
+        self, monkeypatch
+    ):
+        """A cycle spelled as an RGB triple is held beside the layer rather than lost between the buckets.
+
+        Args:
+            monkeypatch: Stands an RGB-tuple cycle in for the shipped hex one. It is the only way to reach
+                this path: every colour the tier cycles through today is a string, and a string travels.
+
+        Test scenario:
+            The derived bucket is described like any other style, so a value the shared travel rule refuses
+            — a tuple is refused precisely because JSON reads it back as a list — is described as nothing
+            and has to be held beside the layer instead. Only the held half carries the colour: the
+            description keeps `None` whether or not the hold happens, so a drawer reading the description
+            alone paints every member `color=None` and the three stop being distinguishable, which is the
+            one thing the cycle exists for. Read off the live elements for that reason.
+        """
+        import holoviews as hv
+
+        monkeypatch.setattr(InteractiveMap, "_SPAGHETTI_COLORS", UNTRAVELLED_CYCLE)
+        drawn = InteractiveMap()
+        try:
+            drawn.spaghetti(_collection(), levels=4)
+            reached = [
+                hv.Store.lookup_options("bokeh", layer, "style").kwargs.get("color")
+                for layer in drawn.layers
+            ]
+        finally:
+            drawn.close()
+        assert reached == list(UNTRAVELLED_CYCLE), (
+            f"the members were drawn {reached}; a derived colour that cannot be described has to be "
+            "held beside the layer, or the drawer is handed the nothing the description carries"
         )
 
 
