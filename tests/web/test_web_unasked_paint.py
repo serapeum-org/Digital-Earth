@@ -9,8 +9,17 @@ nothing else, so it pinned three of the fourteen values and an unstyled filled c
 `{'opacity': 1.0}` (review R2-H1/R2-M5).
 
 Every case here draws a real layer through a real builder and reads `figure_spec`, so a row that stops
-matching the builder it describes fails here rather than rotting quietly. Three questions are asked of every
-row: what an unstyled call publishes, what the builder really writes, and what an explicit ask publishes.
+matching the builder it describes fails here rather than rotting quietly. Four questions are asked of every
+row: what an unstyled call publishes, which kind the row is found by, what the builder really writes, and
+what an explicit ask publishes.
+
+The tables are keyed by the layer **kind** the builder records under, which is the only thing that can tell
+`polygons` from `choropleth` from filled `contours` — all three write the same three paint keys. The last
+question is where that shows: three explicit, non-default asks published nothing while a sibling's default
+could be charged to them (review R2-H2). What no keying fixes is asked too, by
+:meth:`TestAnExplicitAskIsStillPublished.test_a_caller_asking_for_their_own_builders_default_still_publishes_nothing`
+— the table is still subtractive, so a caller asking for exactly their own builder's default is
+indistinguishable from one who asked for nothing, and that is what #334 stays open for.
 """
 
 from dataclasses import dataclass
@@ -22,6 +31,7 @@ pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
 from digitalearth.web import WebMap  # noqa: E402
 from digitalearth.web.renderer import (  # noqa: E402
+    DRAWN_KINDS,
     UNASKED_PAINT,
     UNASKED_PROPS,
     UnaskedStyle,
@@ -101,101 +111,158 @@ def _dem():
 
 @dataclass(frozen=True)
 class Probe:
-    """One builder, and how to ask it the three questions.
+    """One builder, and how to ask it the questions below.
 
     Attributes:
+        builder: The `WebMap` method, for the failure messages — the kind is the identity, but "polygons"
+            is what a reader has to go and look at.
         unstyled: Draws the builder with no style keyword at all.
+        styled: Draws it with an explicit style, spelled the way that builder takes it.
         recorded: Where that builder records its resolved style — `"paint"` for the MapLibre dict,
             `"props"` for the builders that record flat and compile at draw time.
         publishes: What an unstyled call is nonetheless expected to publish. Empty for all but
             `extrusion`, whose `height=` is a required argument and therefore always an ask.
     """
 
+    builder: str
     unstyled: Callable[[Any], Any]
+    styled: Callable[[Any, dict], Any]
     recorded: str
     publishes: Mapping[str, Any]
 
 
-#: Every builder on this tier that records a style the lift can read, and how to draw it bare.
+#: Every builder on this tier that records a style the lift can read, keyed by the kind it records under.
 #:
-#: Keyed by the name the tables' own rows carry, so a row and its probe cannot drift apart — the parametrised
-#: checks below walk :data:`~digitalearth.web.renderer.UNASKED_PAINT` and
-#: :data:`~digitalearth.web.renderer.UNASKED_PROPS` and look each row's builder up here, and a row naming a
-#: builder with no probe fails rather than going unmeasured.
+#: Keyed by **kind** because that is what the table is keyed by: the parametrised checks below walk
+#: :data:`~digitalearth.web.renderer.UNASKED_PAINT` and :data:`~digitalearth.web.renderer.UNASKED_PROPS` and
+#: look each row's kind up here, so a row naming a kind with no probe fails rather than going unmeasured.
 PROBES: Dict[str, Probe] = {
-    "points": Probe(lambda m: m.points(_points()), "paint", {}),
-    "lines": Probe(lambda m: m.lines(_lines()), "paint", {}),
-    "contours": Probe(lambda m: m.contours(_dem(), levels=LEVELS), "paint", {}),
-    "polygons": Probe(lambda m: m.polygons(_polygons()), "paint", {}),
-    "choropleth": Probe(lambda m: m.choropleth(_polygons(), "pop"), "paint", {}),
-    "contours(filled=True)": Probe(
-        lambda m: m.contours(_dem(), filled=True, levels=LEVELS), "paint", {}
+    "points": Probe(
+        "points",
+        lambda m: m.points(_points()),
+        lambda m, style: m.points(_points(), **style),
+        "paint",
+        {},
     ),
-    "labels": Probe(lambda m: m.labels(_points(), "pop"), "paint", {}),
-    "heatmap": Probe(lambda m: m.heatmap(_points()), "paint", {}),
+    "lines": Probe(
+        "lines",
+        lambda m: m.lines(_lines()),
+        lambda m, style: m.lines(_lines(), **style),
+        "paint",
+        {},
+    ),
+    "contours": Probe(
+        "contours",
+        lambda m: m.contours(_dem(), levels=LEVELS),
+        lambda m, style: m.contours(_dem(), levels=LEVELS, **style),
+        "paint",
+        {},
+    ),
+    "polygons": Probe(
+        "polygons",
+        lambda m: m.polygons(_polygons()),
+        lambda m, style: m.polygons(_polygons(), **style),
+        "paint",
+        {},
+    ),
+    "choropleth": Probe(
+        "choropleth",
+        lambda m: m.choropleth(_polygons(), "pop"),
+        lambda m, style: m.choropleth(_polygons(), "pop", **style),
+        "paint",
+        {},
+    ),
+    "filled_contours": Probe(
+        "contours(filled=True)",
+        lambda m: m.contours(_dem(), filled=True, levels=LEVELS),
+        lambda m, style: m.contours(_dem(), filled=True, levels=LEVELS, **style),
+        "paint",
+        {},
+    ),
+    "labels": Probe(
+        "labels",
+        lambda m: m.labels(_points(), "pop"),
+        lambda m, style: m.labels(_points(), "pop", **style),
+        "paint",
+        {},
+    ),
+    "heatmap": Probe(
+        "heatmap",
+        lambda m: m.heatmap(_points()),
+        lambda m, style: m.heatmap(_points(), **style),
+        "paint",
+        {},
+    ),
     "extrusion": Probe(
-        lambda m: m.extrusion(_polygons(), height=10.0), "paint", {"height": 10.0}
+        "extrusion",
+        lambda m: m.extrusion(_polygons(), height=10.0),
+        lambda m, style: m.extrusion(_polygons(), height=10.0, **style),
+        "paint",
+        {"height": 10.0},
     ),
-    "field": Probe(lambda m: m.field(_dem()), "props", {}),
-    "rgb_composite": Probe(
-        lambda m: m.rgb_composite(_dem(), bands=(1, 1, 1)), "props", {}
+    "raster": Probe(
+        "field",
+        lambda m: m.field(_dem()),
+        lambda m, style: m.field(_dem(), **style),
+        "props",
+        {},
     ),
-    "graticule": Probe(lambda m: m.graticule(), "props", {}),
+    "rgb": Probe(
+        "rgb_composite",
+        lambda m: m.rgb_composite(_dem(), bands=(1, 1, 1)),
+        lambda m, style: m.rgb_composite(_dem(), bands=(1, 1, 1), **style),
+        "props",
+        {},
+    ),
+    "graticule": Probe(
+        "graticule",
+        lambda m: m.graticule(),
+        lambda m, style: m.graticule(**style),
+        "props",
+        {},
+    ),
 }
 
-#: Every row of both tables, flattened to `(builder name, row)` for parametrisation.
+#: Every row of both tables, as `(kind, row)`, for parametrisation.
 ROWS: Tuple[Tuple[str, UnaskedStyle], ...] = tuple(
-    (name, row) for row in (*UNASKED_PAINT, *UNASKED_PROPS) for name in row.builders
+    (row.kind, row) for row in (*UNASKED_PAINT, *UNASKED_PROPS)
 )
 
-#: An explicit ask that is **another** builder's default, for the shapes a builder has to itself.
+#: An explicit ask whose value is a default **somewhere else**, and must still be published.
 #:
 #: The half of the ledger a wrong row cannot be caught by otherwise: the unstyled probes catch a row that is
-#: too small, and only this catches one that is too large. Each value below is a number this tier defaults
-#: *somewhere* — 6.0 is the interactive tier's marker size, 0.9 is `points`' circle opacity, 0.6 is
-#: `graticule`'s opacity and 1.0 is `field`'s — so a table that pooled its rows would swallow every one of
-#: them (review R2-H2).
+#: too small, and only this catches one that is too large.
+#:
+#: The last four are the cases the *shape*-keyed table could not answer. Three builders wrote
+#: `{fill-opacity, fill-outline-color, fill-color}` and two wrote the line trio, so a row matched by the key
+#: set could not tell them apart and pooled their defaults: `polygons(opacity=0.85)` was read as
+#: choropleth's default, `choropleth(opacity=0.6)` as polygons', and `lines(width=1.5)` as contours' — every
+#: one of them an explicit, non-default ask that published nothing. The kind is what tells them apart
+#: (review R2-H2).
 BORROWED_DEFAULT: Tuple[Tuple[str, str, Any, str, Any], ...] = (
     ("points", "size", 6.0, "size", 6.0),
     ("heatmap", "opacity", 0.9, "opacity", 0.9),
-    ("field", "opacity", 0.6, "opacity", 0.6),
+    ("raster", "opacity", 0.6, "opacity", 0.6),
     ("graticule", "opacity", 1.0, "opacity", 1.0),
+    ("polygons", "opacity", 0.85, "opacity", 0.85),
+    ("choropleth", "opacity", 0.6, "opacity", 0.6),
+    ("filled_contours", "opacity", 0.6, "opacity", 0.6),
+    ("lines", "width", 1.5, "width", 1.5),
 )
 
-#: The loss the shape-keyed table still takes, named rather than assumed.
+#: The loss a subtractive table takes even when it knows exactly which builder wrote the style.
 #:
-#: Three builders record `{fill-opacity, fill-outline-color, fill-color}` and two record the line trio, and
-#: a figure carries the resolved style rather than the builder that wrote it — so within one shape the
-#: defaults are still pooled and an explicit ask that happens to be a *shape-mate's* default is read as a
-#: default. This is what #334 closes by recording the ask at the builder; until then the residue is bounded
-#: by the shape, and pinned here so it cannot quietly widen (review R2-H2).
-POOLED_WITHIN_ONE_SHAPE: Tuple[Tuple[str, dict, str], ...] = (
-    (
-        "polygons",
-        {"opacity": 0.85},
-        "0.85 is choropleth's fill-opacity, and the two record the same keys",
-    ),
-    (
-        "contours(filled=True)",
-        {"opacity": 0.6},
-        "0.6 is polygons' fill-opacity, and the two record the same keys",
-    ),
-    (
-        "lines",
-        {"width": 1.5},
-        "1.5 is contours' line-width, and the two record the same keys",
-    ),
-)
-
-#: Every recorded shape more than one builder writes, as the builders that share it.
-#:
-#: The bound on the residue above, as a check rather than as a sentence. A shape one builder has to itself
-#: is subtracted exactly; a shape two builders share pools their defaults, which is the whole of what #334
-#: has left to close — so the day a new builder joins one of these shapes, or opens a third, this fails and
-#: the cost has to be looked at again rather than absorbed (review R2-H2).
-SHARED_SHAPES: Tuple[Tuple[str, ...], ...] = (
-    ("choropleth", "contours(filled=True)", "polygons"),
-    ("contours", "lines"),
+#: Keying by kind removes the *pooling* — a builder is no longer charged its siblings' defaults — and it does
+#: not remove the subtraction. A caller who asks for exactly **their own** builder's default is
+#: indistinguishable from one who asked for nothing, because the figure records the resolved value and not
+#: the fact that a keyword was passed. That is the whole of what #334 has left to close, and it closes only
+#: by recording the ask at the builder rather than by any table. Pinned here so the real cost is measured
+#: rather than described (review R2-H2).
+OWN_DEFAULT_ASKED_FOR: Tuple[Tuple[str, dict], ...] = (
+    ("points", {"size": 5.0}),
+    ("polygons", {"opacity": 0.6}),
+    ("lines", {"width": 2.0}),
+    ("raster", {"opacity": 1.0}),
 )
 
 
@@ -245,14 +312,12 @@ def _resolved(drawn, where: str) -> Mapping[str, Any]:
 class TestAnUnstyledLayerPublishesNothing:
     """The question that catches a row the table is missing (review R2-H1)."""
 
-    @pytest.mark.parametrize("builder", sorted(PROBES))
-    def test_a_builder_drawn_bare_publishes_no_channel_it_was_not_asked_for(
-        self, builder
-    ):
+    @pytest.mark.parametrize("kind", sorted(PROBES))
+    def test_a_builder_drawn_bare_publishes_no_channel_it_was_not_asked_for(self, kind):
         """Every builder on this tier, drawn with no style keyword at all.
 
         Args:
-            builder: The builder under test.
+            kind: The kind under test, which is what its row is keyed by.
 
         Test scenario:
             The old guard drew `points()` and nothing else, so `fill-opacity: 1.0` — what filled
@@ -261,39 +326,62 @@ class TestAnUnstyledLayerPublishesNothing:
             check that no row can go missing again. `extrusion` is the one builder that publishes from a
             bare call, because its `height=` is a required argument and so is never a default.
         """
+        probe = PROBES[kind]
         drawn = WebMap()
         try:
-            PROBES[builder].unstyled(drawn)
+            probe.unstyled(drawn)
             published = _published(drawn)
         finally:
             drawn.close()
-        assert published == dict(PROBES[builder].publishes), (
-            f"an unstyled {builder} published {published}; a value its builder defaulted to is the tier's "
-            "business, not a portable ask"
+        assert published == dict(probe.publishes), (
+            f"an unstyled {probe.builder} published {published}; a value its builder defaulted to is the "
+            "tier's business, not a portable ask"
         )
 
 
 class TestEveryRowStillDescribesItsBuilder:
-    """The question that catches a row that has rotted — the value, and the shape it is matched by."""
+    """The question that catches a row that has rotted — the kind it claims, the keys, and the values."""
 
-    @pytest.mark.parametrize(
-        ("builder", "row"), ROWS, ids=[f"{name}" for name, _ in ROWS]
-    )
-    def test_the_shape_a_row_is_matched_by_is_the_shape_its_builder_records(
-        self, builder, row
-    ):
-        """A row is looked up by the set of keys its builder writes, so that set has to be right.
+    @pytest.mark.parametrize(("kind", "row"), ROWS, ids=[name for name, _ in ROWS])
+    def test_a_rows_kind_is_the_kind_its_builder_records_under(self, kind, row):
+        """A row is looked up by the kind the builder indexes its layer as, so that has to match.
 
         Args:
-            builder: The builder the row names.
+            kind: The row's kind.
             row: The row under test.
 
         Test scenario:
-            The figure records the resolved style and not the builder that wrote it, so the key set is the
-            row's identity. A builder that gains or loses a key matches no row from that moment on, which
-            would silently publish its whole style as the caller's — the failure this catches first.
+            The kind is the row's identity, so a row keyed to a kind no builder records subtracts nothing
+            at all — and the builder goes straight back to publishing its own defaults as the caller's ask,
+            which is the R2-H1 defect one indirection further along.
         """
-        probe = PROBES[builder]
+        probe = PROBES[kind]
+        drawn = WebMap()
+        try:
+            probe.unstyled(drawn)
+            figure = drawn.figure_spec
+            recorded = figure.layers.get(figure.layers.ids[-1]).kind
+        finally:
+            drawn.close()
+        assert recorded == row.kind, (
+            f"{probe.builder} records kind {recorded!r} and its row is keyed {row.kind!r}, so the row "
+            "matches nothing it describes"
+        )
+
+    @pytest.mark.parametrize(("kind", "row"), ROWS, ids=[name for name, _ in ROWS])
+    def test_a_row_knows_every_key_its_builder_writes(self, kind, row):
+        """The keys are no longer the identity, and they are still the drift guard they were.
+
+        Args:
+            kind: The row's kind.
+            row: The row under test.
+
+        Test scenario:
+            A builder that gains a key gains a default nobody listed, which is exactly how
+            `fill-opacity: 1.0` came to be missing (review R2-H1). Matching moved to the kind, so a new key
+            no longer breaks the lookup — it just goes unsubtracted, silently. This is what says so.
+        """
+        probe = PROBES[kind]
         drawn = WebMap()
         try:
             probe.unstyled(drawn)
@@ -301,18 +389,16 @@ class TestEveryRowStillDescribesItsBuilder:
         finally:
             drawn.close()
         assert written == row.keys, (
-            f"{builder} records {sorted(written)} and its row is matched by {sorted(row.keys)}, so the row "
-            "matches nothing it describes"
+            f"{probe.builder} records {sorted(written)} and its row knows {sorted(row.keys)}; a key the row "
+            "has not seen carries a default nothing subtracts"
         )
 
-    @pytest.mark.parametrize(
-        ("builder", "row"), ROWS, ids=[f"{name}" for name, _ in ROWS]
-    )
-    def test_every_default_a_row_lists_is_what_its_builder_writes(self, builder, row):
+    @pytest.mark.parametrize(("kind", "row"), ROWS, ids=[name for name, _ in ROWS])
+    def test_every_default_a_row_lists_is_what_its_builder_writes(self, kind, row):
         """The values, measured rather than remembered.
 
         Args:
-            builder: The builder the row names.
+            kind: The row's kind.
             row: The row under test.
 
         Test scenario:
@@ -320,7 +406,7 @@ class TestEveryRowStillDescribesItsBuilder:
             builder goes back to publishing its default as an ask. Reading the resolved style back off a
             real call is the only way that cannot drift, and it is what the round-1 table was missing.
         """
-        probe = PROBES[builder]
+        probe = PROBES[kind]
         drawn = WebMap()
         try:
             probe.unstyled(drawn)
@@ -329,100 +415,111 @@ class TestEveryRowStillDescribesItsBuilder:
             drawn.close()
         listed = {key: written.get(key) for key in row.defaults}
         assert listed == dict(row.defaults), (
-            f"{builder} writes {listed} where its row says {dict(row.defaults)}"
+            f"{probe.builder} writes {listed} where its row says {dict(row.defaults)}"
         )
 
 
 class TestAnExplicitAskIsStillPublished:
     """The question that catches a row that is too large (review R2-H2)."""
 
-    def test_only_the_named_shapes_are_shared_by_more_than_one_builder(self):
-        """The residue is bounded by the shapes builders share, so the sharing itself is pinned.
+    def test_no_two_rows_claim_the_same_kind(self):
+        """The kind is the row's identity, so two rows claiming one kind make one of them dead.
 
         Test scenario:
-            A row is matched by the set of keys its builder writes, which is exact wherever a builder has
-            that set to itself. The two shapes below are the exceptions, and they are also the whole of
-            what the property-keyed table got wrong that is left. A builder added into one of them — or a
-            third shape opening — widens the loss silently otherwise, which is how the first table grew.
+            Re-points the guard that used to assert which *shapes* builders shared. That question retired
+            with the shape: a row is keyed by kind now, so nothing is pooled and there is no shared-shape
+            residue left to bound. What the identity needs instead is uniqueness — `unasked_here` answers
+            with the first row that matches, so a duplicate kind silently charges one builder the other's
+            defaults, which is the very failure the pooled table had.
         """
-        by_shape: Dict[Any, list] = {}
-        for row in (*UNASKED_PAINT, *UNASKED_PROPS):
-            by_shape.setdefault(row.keys, []).extend(row.builders)
-        shared = tuple(
-            sorted(
-                tuple(sorted(builders))
-                for builders in by_shape.values()
-                if len(builders) > 1
-            )
+        claimed = [row.kind for row in (*UNASKED_PAINT, *UNASKED_PROPS)]
+        duplicated = sorted({kind for kind in claimed if claimed.count(kind) > 1})
+        assert duplicated == [], (
+            f"{duplicated} are claimed by more than one row; the lookup answers with the first, so the "
+            "others are dead and their builders are charged someone else's defaults"
         )
-        assert shared == SHARED_SHAPES, (
-            f"the builders sharing a recorded shape are {shared}, not {SHARED_SHAPES}; every shape below "
-            "pools its members' defaults, so a new member takes a wider loss than the one written down"
+
+    @pytest.mark.parametrize(("kind", "row"), ROWS, ids=[name for name, _ in ROWS])
+    def test_every_rows_kind_is_one_this_tier_actually_draws(self, kind, row):
+        """The other half of the identity: a row keyed to a kind nobody draws subtracts nothing.
+
+        Args:
+            kind: The row's kind.
+            row: The row under test.
+
+        Test scenario:
+            Read against :data:`~digitalearth.web.renderer.DRAWN_KINDS`, which is the tier's own list, so
+            a kind renamed under `src/` fails here rather than turning the row off in silence.
+        """
+        assert row.kind in DRAWN_KINDS, (
+            f"{row.builder}'s row is keyed {row.kind!r}, which this tier does not draw: {list(DRAWN_KINDS)}"
         )
 
     @pytest.mark.parametrize(
-        ("builder", "keyword", "value", "channel", "expected"),
+        ("kind", "keyword", "value", "channel", "expected"),
         BORROWED_DEFAULT,
         ids=[f"{name}-{keyword}" for name, keyword, _, _, _ in BORROWED_DEFAULT],
     )
-    def test_a_value_another_builder_defaults_to_is_still_this_caller_s_ask(
-        self, builder, keyword, value, channel, expected
+    def test_a_value_another_builder_defaults_to_is_still_this_callers_ask(
+        self, kind, keyword, value, channel, expected
     ):
         """A number is only a default for the builder that defaults it.
 
         Args:
-            builder: The builder under test.
+            kind: The kind under test.
             keyword: The keyword the ask is written with.
             value: A value some *other* builder on this tier resolves to unasked.
             channel: The declared channel it must be published under.
             expected: The value it must be published with.
 
         Test scenario:
-            The table was keyed by paint property, so every builder was charged with its siblings' defaults
-            as well as its own and a real ask was dropped. Keyed by builder, the same number asked for
-            somewhere else is the caller's and is published.
+            The table was keyed by paint property first and by the recorded key set second, and neither
+            could tell `polygons` from `choropleth` from filled `contours` — all three write the same three
+            keys — so each was charged with the others' defaults and three explicit, non-default asks
+            published nothing. The kind is what tells them apart (review R2-H2).
         """
+        probe = PROBES[kind]
         drawn = WebMap()
         try:
-            _ask(drawn, builder, {keyword: value})
+            probe.styled(drawn, {keyword: value})
             published = _published(drawn)
         finally:
             drawn.close()
         assert published.get(channel) == expected, (
-            f"{builder}({keyword}={value!r}) published {published}; {value!r} is another builder's default, "
-            "not this one's"
+            f"{probe.builder}({keyword}={value!r}) published {published}; {value!r} is another builder's "
+            "default, not this one's"
         )
 
     @pytest.mark.parametrize(
-        ("builder", "asked", "why"),
-        POOLED_WITHIN_ONE_SHAPE,
-        ids=[name for name, _, _ in POOLED_WITHIN_ONE_SHAPE],
+        ("kind", "asked"),
+        OWN_DEFAULT_ASKED_FOR,
+        ids=[name for name, _ in OWN_DEFAULT_ASKED_FOR],
     )
-    def test_the_residue_a_shared_shape_leaves_is_the_one_that_is_written_down(
-        self, builder, asked, why
+    def test_a_caller_asking_for_their_own_builders_default_still_publishes_nothing(
+        self, kind, asked
     ):
-        """The loss the table still takes, measured so it cannot widen unnoticed.
+        """The loss a subtractive table takes however well it knows the builder.
 
         Args:
-            builder: The builder under test.
-            asked: The explicit, non-default ask it is drawn with.
-            why: The shape-mate whose default that value is.
+            kind: The kind under test.
+            asked: An explicit ask whose value is that builder's own default.
 
         Test scenario:
-            Not a promise that this is right — it is not, and #334 is what fixes it by recording the ask at
-            the builder. It is a promise that the loss is **exactly** this: three fill builders and two line
-            builders share a recorded shape, and nothing else on this tier does. The day a builder records
-            its own ask, this fails and the row comes out.
+            Not a promise that this is right — it is what #334 is open for. Keying by kind removed the
+            pooling; it did not remove the subtraction, because a figure records the resolved value and
+            never the fact that a keyword was passed. So this is the real, remaining cost, measured rather
+            than described. The day a builder records its own ask, this fails and the rows come out.
         """
+        probe = PROBES[kind]
         drawn = WebMap()
         try:
-            _ask(drawn, builder, asked)
+            probe.styled(drawn, asked)
             published = _published(drawn)
         finally:
             drawn.close()
-        assert published == {}, (
-            f"{builder}({asked}) published {published}; the residue is meant to be exactly the shape-mates "
-            f"({why}), so this is either a fix (#334) or a widening"
+        assert published == dict(probe.publishes), (
+            f"{probe.builder}({asked}) published {published}; a subtractive table cannot tell this from an "
+            "unstyled call, and #334 is what closes it"
         )
 
 
@@ -471,33 +568,3 @@ class TestTheSpellingOfANumberDoesNotDecideWhatIsPublished:
         assert published.get("size") == 12.0, (
             f"points(size={spelling!r}) published {published}"
         )
-
-
-def _ask(drawn, builder: str, style: dict) -> None:
-    """Draw one builder with an explicit style, spelled the way that builder takes it.
-
-    Args:
-        drawn: The map to draw on.
-        builder: The builder's name, as :data:`PROBES` keys it.
-        style: The style keywords to pass.
-
-    Raises:
-        KeyError: when the builder has no styled form here, which means a new row was added to a table
-            without a way to ask it for an explicit value.
-    """
-    styled = {
-        "points": lambda: drawn.points(_points(), **style),
-        "lines": lambda: drawn.lines(_lines(), **style),
-        "polygons": lambda: drawn.polygons(_polygons(), **style),
-        "contours(filled=True)": lambda: drawn.contours(
-            _dem(), filled=True, levels=LEVELS, **style
-        ),
-        "heatmap": lambda: drawn.heatmap(_points(), **style),
-        "field": lambda: drawn.field(_dem(), **style),
-        "graticule": lambda: drawn.graticule(**style),
-    }
-    if builder not in styled:
-        raise KeyError(
-            f"no styled probe for {builder!r}; add one beside its unstyled probe"
-        )
-    styled[builder]()

@@ -374,6 +374,14 @@ def builder_of(props: Mapping[str, Any]) -> Tuple[str, str]:
         builder's ``via`` is its own, so the second half is an empty string there. A description carrying
         no ``via`` at all answers ``("", "")``, which matches no row and is therefore charged nothing.
 
+    Note:
+        **Deliberately not the layer's `kind`,** which is what the web tier's table is keyed by. A kind is
+        coarser than a builder here: ``image``, ``large_image`` and ``rasterize`` all record ``"raster"``,
+        ``hexbin`` and ``kde`` both record ``"heatmap"``, and ``points`` and ``datashade`` both record
+        ``"points"``. Keying on it would pool those builders' defaults — the exact defect keying by kind
+        *removes* on the web tier, where one kind has one builder (review R2-H2). So the two tiers look
+        asymmetric and are answering the same question: which builder wrote this style.
+
     Examples:
         - The geometry funnel is told apart by its element type; every other builder by its own name:
             ```python
