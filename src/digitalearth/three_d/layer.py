@@ -21,6 +21,7 @@ from typing import Any, Dict, Mapping
 import numpy as np
 
 from digitalearth.base.spec import DataRef, LayerTree, free_layer_id
+from digitalearth.base.spec.layer import layer_name
 
 __all__ = ["REFERENCE_KEY", "next_layer_id", "ref", "resolved"]
 
@@ -31,16 +32,27 @@ REFERENCE_KEY: str = "$ref"
 def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
     """Return the id a new layer takes.
 
+    The ids are read off the **live tree**, which is what gives this tier the id lifetime all four now share:
+    an id is reserved exactly as long as the layer is on the scene, and a name removed and asked for again is
+    handed back unsuffixed (review R2-M9, and :func:`~digitalearth.base.spec.layer.free_layer_id`).
+
     Args:
         tree: The layers already in the scene, whose ids the new one must not clash with.
         kind: The layer's kind, used as the stem of a generated id.
-        name: The caller's name for the layer, if any.
+        name: The caller's name for the layer, if any. Normalised by
+            :func:`~digitalearth.base.spec.layer.layer_name`, so surrounding whitespace is dropped and a blank
+            name means no name — this tier kept the padding and then crashed resolving the source it had
+            registered under it (review R2-H4).
 
     Returns:
         `name` when it is a non-empty string and free, `name` suffixed (`"wells-2"`) when it is taken —
         through :func:`~digitalearth.base.spec.layer.free_layer_id`, the rule all four tiers share (#321) —
         else `"<kind>-<n>"` with the lowest `n` that is free. A `custom:pyvista` kind generates `custom-1`, since a
         colon cannot appear in the middle of an id.
+
+    Raises:
+        TypeError: if `name` is neither a string nor `None`. It was **silently ignored** here — `name=123`
+            drew a layer called `terrain-1` — while the other three tiers refused it (review R2-L1).
 
     Examples:
         - An unnamed layer is numbered by its kind:
@@ -62,8 +74,9 @@ def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
             ```
     """
     taken = set(tree.ids)
-    if isinstance(name, str) and name.strip():
-        return free_layer_id(name, taken.__contains__)
+    asked = layer_name(name)
+    if asked is not None:
+        return free_layer_id(asked, taken.__contains__)
     stem = kind.split(":")[0]
     number = 1
     while f"{stem}-{number}" in taken:

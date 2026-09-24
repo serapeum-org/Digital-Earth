@@ -168,7 +168,7 @@ class TestLayersCompose:
             images, contours = len(canvas.ax.images), len(canvas.ax.collections)
             described = attached_per_layer(canvas)
         assert (images, contours) == (1, 1), f"{images} images, {contours} collections"
-        assert described == {"raster-1": 1, "contours-2": 1}
+        assert described == {"raster-1": 1, "contours-1": 1}
 
     def test_a_vector_field_over_a_raster_keeps_the_image_below(self, flat_grid):
         """Arrows drawn over a field leave the field where it is.
@@ -187,7 +187,7 @@ class TestLayersCompose:
             images = len(canvas.ax.images)
             described = attached_per_layer(canvas)
         assert images == 1, f"the backdrop was taken off the axes ({images} images)"
-        assert described == {"raster-1": 1, "vectors-2": 1}
+        assert described == {"raster-1": 1, "vectors-1": 1}
 
     def test_a_point_layer_over_a_raster_keeps_the_image_below(
         self, dataset, point_features
@@ -209,7 +209,7 @@ class TestLayersCompose:
             images = len(canvas.ax.images)
             described = attached_per_layer(canvas)
         assert images == 1, f"the field was taken off the axes ({images} images)"
-        assert described == {"raster-1": 1, "points-2": 1}
+        assert described == {"raster-1": 1, "points-1": 1}
 
     def test_a_scene_has_not_drawn_until_it_has(self, dataset):
         """The flag that drives all of this is off until this scene has rendered something.

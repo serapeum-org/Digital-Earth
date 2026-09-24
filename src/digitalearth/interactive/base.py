@@ -55,6 +55,7 @@ from digitalearth.base.spec import (
 )
 from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.bounds import same_crs
+from digitalearth.base.spec.layer import layer_name
 from digitalearth.interactive.capabilities import CAPABILITIES
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
@@ -525,7 +526,9 @@ class InteractiveMapBase:
         self._renderer = _new_renderer(self)
         self._sources: Dict[str, DataRef] = {}
         self._objects_ns: str = object_namespace()
-        self._id_counter: int = 0
+        #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
+        #: within its kind rather than within the figure (review R2-M10).
+        self._id_counters: Dict[str, int] = {}
         self._issued_ids: set = set()
         # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
         # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
@@ -585,27 +588,55 @@ class InteractiveMapBase:
             **placement,
         )
 
-    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+    def _layer_id(self, prefix: str, name: Any = None) -> str:
         """Return a unique layer id: the caller's name when they gave one, else a generated one.
 
         Args:
             prefix: What a generated id counts — the kind, usually.
-            name: The caller's own name for the layer, used as its id when it is free.
+            name: The caller's own name for the layer, used as its id when it is free. Normalised by
+                :func:`~digitalearth.base.spec.layer.layer_name`, so surrounding whitespace is dropped and a
+                blank name means no name (review R2-H4).
 
         Returns:
             The id. A caller's name that is already issued is suffixed ``-2``, ``-3``, … by
             :func:`~digitalearth.base.spec.layer.free_layer_id` — the rule all four tiers share (#321) —
-            because two layers sharing an id makes the second unaddressable.
+            because two layers sharing an id makes the second unaddressable. An unnamed layer is numbered
+            **within its kind**, so two kinds interleaved give ``points-1``, ``text-1``, ``points-2``,
+            ``text-2`` (review R2-M10).
+
+        Raises:
+            TypeError: if `name` is neither a string nor `None`.
         """
-        if name:
-            candidate = free_layer_id(name, self._issued_ids.__contains__)
+        asked = layer_name(name)
+        if asked is not None:
+            candidate = free_layer_id(asked, self._issued_ids.__contains__)
         else:
-            self._id_counter += 1
-            while f"{prefix}-{self._id_counter}" in self._issued_ids:
-                self._id_counter += 1
-            candidate = f"{prefix}-{self._id_counter}"
+            candidate = self._generated_id(prefix)
         self._issued_ids.add(candidate)
         return candidate
+
+    def _generated_id(self, prefix: str) -> str:
+        """Return the next generated id for one kind, stepping over any a caller already holds.
+
+        One counter per prefix, not one per map (review R2-M10). A single map-wide counter numbered the
+        *figure*: ``points, text, points, text`` came back as ``points-1, text-2, points-3, text-4``, which
+        reads as if two layers had gone missing — and disagreed with the 3-D tier, which has always counted
+        within the kind, and with what this tier's own :attr:`layer_ids` docstring claimed (review R2-L2).
+
+        Args:
+            prefix: What the id counts — the kind, with any engine namespace already removed.
+
+        Returns:
+            ``f"{prefix}-{n}"`` with the lowest ``n`` this map has not issued. The counter stays where the
+            search ended, so the next layer of the same kind does not re-walk the ids it stepped over.
+        """
+        number = self._id_counters.get(prefix, 0)
+        while True:
+            number += 1
+            candidate = f"{prefix}-{number}"
+            if candidate not in self._issued_ids:
+                self._id_counters[prefix] = number
+                return candidate
 
     def _index_layer(
         self,
@@ -622,7 +653,9 @@ class InteractiveMapBase:
 
         Args:
             layer_id: The layer's id, as `layer_ids` reports it.
-            label: What a layer switcher should call it; `None` falls back to the id.
+            label: What a layer switcher should call it; `None` — or a name that is nothing but
+                whitespace — falls back to the id. Normalised with
+                :func:`~digitalearth.base.spec.layer.layer_name`, so it agrees with the id it came from.
             kind: The registered, engine-neutral kind — `"raster"`, `"points"`, `"choropleth"` — not the
                 HoloViews element type, which cannot tell a choropleth from a plain polygon draw.
             visible: Whether the layer was built visible.
@@ -653,7 +686,10 @@ class InteractiveMapBase:
                 kind,
                 source_id=layer_id if source is not None else None,
                 symbology=recorded,
-                label=label or layer_id,
+                # Normalised like the id it falls back to: the two come from one `name=`, and a label
+                # that kept padding the id had dropped was the same invisible difference in the other
+                # field — two layers a switcher captions identically (review R2-H4).
+                label=layer_name(label) or layer_id,
                 visible=bool(visible),
                 band=band,
             )
@@ -664,8 +700,11 @@ class InteractiveMapBase:
         """The ids of the layers this map draws, in draw order, bottom first.
 
         Returns:
-            One id per described layer. A layer the caller named carries that name; an unnamed one gets a
-            generated id counting the layers of its kind.
+            One id per described layer. A layer the caller named carries that name, with surrounding
+            whitespace removed; an unnamed one gets a generated id counting the layers of its kind —
+            ``points, text, points, text`` is ``points-1, points-2, text-1, text-2``, listed in draw order.
+            It counted the *map* until review R2-M10, while this sentence already said otherwise
+            (review R2-L2).
 
         Examples:
             - A named layer keeps its name; an unnamed one is numbered after what it is:

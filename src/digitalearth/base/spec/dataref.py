@@ -22,7 +22,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from digitalearth.base.registry import register_object, resolve_uri
+from digitalearth.base.registry import OBJECT_SCHEME, register_object, resolve_uri
 from digitalearth.base.spec._serial import plain_text, refuse_unknown, require
 
 __all__ = ["DataRef"]
@@ -92,9 +92,18 @@ class DataRef:
                 raise ValueError(
                     f"DataRef needs {hint} as a string or None; got {value!r}"
                 )
-        if self.uri != self.uri.strip():
+        if self.uri != self.uri.strip() and not self.uri.startswith(
+            f"{OBJECT_SCHEME}:"
+        ):
             # Blank was already refused; surrounding whitespace was not, and " a.tif" is a path that does
             # not exist on any filesystem that would have opened "a.tif".
+            #
+            # An `object:` uri is exempt because its tail is not a path but the **key**
+            # `digitalearth.base.registry.register_object` stored, verbatim, whitespace included. Stripping
+            # it here rewrote the reference away from the entry it had just been handed, so
+            # `Map.scatter(features, name="roads ")` raised a `KeyError` naming neither the layer nor the
+            # name (review R2-H4). `layer_name` now keeps a padded key from ever being registered; this
+            # keeps a reference honest even when something registers one anyway.
             object.__setattr__(self, "uri", self.uri.strip())
 
     @classmethod

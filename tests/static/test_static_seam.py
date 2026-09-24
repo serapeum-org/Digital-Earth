@@ -408,25 +408,33 @@ class TestAnIdFollowsTheLayer:
         canvas.imshow(dataset)
         canvas.scatter(features)
         found = {i: canvas.figure_spec.layers.get(i).kind for i in canvas.layer_ids}
-        assert found == {"raster-1": "raster", "points-2": "points"}, found
+        assert found == {"raster-1": "raster", "points-1": "points"}, found
 
-    def test_the_counter_numbers_the_figure_rather_than_the_kind(
+    def test_the_counter_numbers_the_kind_rather_than_the_figure(
         self, dataset, features
     ):
-        """One sequence, so an id read out of a figure says when the layer was added.
+        """One sequence per kind, so an id says which ``points`` layer this is (review R2-M10).
 
         Args:
             dataset: A raster.
             features: Points drawn over it.
 
         Test scenario:
-            Numbering per kind would give a map with one raster and one point layer two layers both called
-            ``-1``, which reads like a collision even though it is not one.
+            This test asserted the opposite, on the grounds that ``raster-1`` beside ``points-1`` "reads
+            like a collision". It does not — the prefixes differ — and the cost of the figure-wide counter
+            was worse in three ways. It gave ``points-1, points-3`` for two point layers with a text label
+            between them, which reads like a layer that went missing; it disagreed with the 3-D tier, which
+            has always counted within the kind and which cannot adopt a figure-wide counter without also
+            giving up reading its ids off the live tree (the id lifetime of review R2-M9); and it
+            contradicted what both 2-D tiers' own ``layer_ids`` docstrings claimed (review R2-L2). The
+            figure-wide counter never kept its own promise either: it skips any number a caller has taken
+            by name, and ``layer_ids`` is in draw-order band rather than call order, so the number has
+            never said when a layer was added.
         """
         canvas = Map(crs=dataset.epsg)
         canvas.scatter(features)
         canvas.imshow(dataset)
-        assert canvas.layer_ids == ["points-1", "raster-2"], canvas.layer_ids
+        assert canvas.layer_ids == ["points-1", "raster-1"], canvas.layer_ids
 
     def test_a_redrawn_frame_mints_the_same_ids_again(self, dataset):
         """An animation clears the axes per frame, and the description is cleared with it.
@@ -485,7 +493,7 @@ class TestTheSourcesAreWhatTheBuildersWereGiven:
         canvas.scatter(features)
         sources = canvas.figure_spec.sources
         assert sources["raster-1"].open() is dataset, sources["raster-1"].uri
-        assert sources["points-2"].open() is features, sources["points-2"].uri
+        assert sources["points-1"].open() is features, sources["points-1"].uri
 
     def test_a_vector_field_references_both_components(self, dataset):
         """Neither component alone draws the field, so the pair is the source.
@@ -553,9 +561,9 @@ class TestTheBandOfALayerIsItsKinds:
         canvas.graticule()
         canvas.basemap()
         assert canvas.layer_ids == [
-            "basemap-4",
-            "graticule-3",
-            "raster-2",
+            "basemap-1",
+            "graticule-1",
+            "raster-1",
             "coastlines-1",
         ], canvas.layer_ids
 
@@ -1516,7 +1524,7 @@ class TestABasemapFigureDrawsBackFromItsOwnDescription:
         canvas = Map(crs=dataset.epsg)
         canvas.imshow(dataset)
         canvas.basemap()
-        recorded = canvas.figure_spec.layers.get("basemap-2").symbology.props["extent"]
+        recorded = canvas.figure_spec.layers.get("basemap-1").symbology.props["extent"]
         framed = (*canvas.ax.get_xlim(), *canvas.ax.get_ylim())
         canvas.close()
         assert served_tiles, "no tile was requested"
@@ -1543,7 +1551,7 @@ class TestABasemapFigureDrawsBackFromItsOwnDescription:
         target = Map(crs=dataset.epsg)
         target.imshow(dataset)
         expected = (*target.ax.get_xlim(), *target.ax.get_ylim())
-        target._renderer.draw_layer(figure, "basemap-2")
+        target._renderer.draw_layer(figure, "basemap-1")
         after = (*target.ax.get_xlim(), *target.ax.get_ylim())
         target.close()
         assert served_tiles, "no tile was requested"
@@ -1599,7 +1607,7 @@ class TestADecorationLayerOwnsTheArtistsItAdded:
         canvas.imshow(dataset)
         canvas.coastlines()
         drawn_features = len(canvas.ax.collections)
-        canvas._renderer.remove("coastlines-2")
+        canvas._renderer.remove("coastlines-1")
         left = len(canvas.ax.collections)
         canvas.close()
         assert drawn_features == 1, drawn_features

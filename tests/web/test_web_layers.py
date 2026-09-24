@@ -540,23 +540,33 @@ class TestTheRegistryIsAddressable:
         m = WebMap().add_overlay("label").add_layer("data").add_underlay("tiles")
         assert m.layers == ["tiles", "data", "label"], m.layers
 
-    @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
-    def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
-        """A name the web tier accepted before its index became a `LayerTree` is still accepted, verbatim.
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [(" amsterdam", "amsterdam"), ("amsterdam ", "amsterdam"), ("   ", "text-1")],
+    )
+    def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name, expected):
+        """A padded or blank name still builds a layer — under the id the padding is removed from.
 
         Args:
             name: A padded or blank layer name.
+            expected: The id it is filed under.
 
         Test scenario:
-            The tier uses the caller's name as the MapLibre id and as the label, unchanged. `LayerSpec` refused ids
-            with surrounding whitespace and blank labels, so `text(..., name=" amsterdam")` raised a `ValueError` about
-            `LayerSpec` — a regression on a call that had worked, naming a type the caller never used.
+            What must not happen here has not changed: `text(..., name=" amsterdam")` raised a `ValueError`
+            about `LayerSpec` once, naming a type the caller never used, and it must not do that again. What
+            *has* changed is the id it lands on. This tier kept the padding verbatim while the other three
+            crashed on it — the mint registered the layer's source under the padded key and `DataRef` stripped
+            it straight back off (review R2-H4) — so one script drew two different ids depending on the
+            backend. The name is normalised at the shared mint now: padding goes, and a name that is nothing
+            but whitespace means no name, exactly as `name=""` already did.
         """
         from digitalearth.web import WebMap
 
         m = WebMap().text(4.9, 52.4, "A", name=name)
-        assert m.layer_ids == [name], m.layer_ids
-        assert m._layer_tree.get(name).display_label == name, m._layer_tree.get(name)
+        assert m.layer_ids == [expected], m.layer_ids
+        assert m._layer_tree.get(expected).display_label == expected, m._layer_tree.get(
+            expected
+        )
 
     def test_a_map_with_a_layer_can_be_deep_copied(self):
         """`copy.deepcopy` of a map with a data layer works and gives an independent map.
@@ -879,7 +889,7 @@ class TestRemovalReachesThePage:
 
         m = WebMap().basemap().cluster(points)
         m.remove_layer(m.layer_ids[0])
-        assert _emitted_layer_ids(m.to_html()) == ["tiles-2"], _emitted_layer_ids(
+        assert _emitted_layer_ids(m.to_html()) == ["tiles-1"], _emitted_layer_ids(
             m.to_html()
         )
 
