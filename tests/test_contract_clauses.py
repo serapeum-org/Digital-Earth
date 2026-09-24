@@ -538,26 +538,65 @@ class TestTheCitationsAndTheClausesDoNotDrift:
             "it R-C1 / R-H2 / R-M9, which the citation pattern skips"
         )
 
-    def test_the_guard_does_not_read_its_own_prose_as_a_citation(self):
+    def test_the_guard_module_spells_clause_numbers_while_explaining_the_rule(self):
+        """The exclusion below is only worth anything while there is something to exclude.
+
+        Test scenario:
+            This half exists because the half after it subtracts a set, and a subtraction whose subject is
+            empty asserts nothing (`R2-L4`). The number is measured rather than asserted exactly — the
+            prose changes — but that it is *not zero* is the whole premise: if this file ever stops citing
+            clauses, the next reader should be told the exclusion is dead weight rather than left to
+            believe a green test means it is working.
+        """
+        own = _cited_in(
+            GUARD_MODULE.read_text(encoding="utf-8"), _relative(GUARD_MODULE)
+        )
+        assert own != {}, (
+            "this module no longer spells a clause number anywhere, so its entry in SELF_REFERRING "
+            "excludes nothing and can go"
+        )
+
+    def test_none_of_the_guard_module_s_own_numbers_reaches_the_scan(self):
         """A guard that cites the numbers it explains must not count itself among the citers.
 
         Test scenario:
             The two self-exclusions were asymmetric (review R-N2): `_pins` skipped this module and
             `_all_citations` did not, so every number this file spells while documenting the rule was
             collected as a citation — and the docstring's own example of the spelling to avoid was
-            attributed to the clause it names. Both directions now skip both modules, which is what this
-            asserts: a sentence added here explaining a clause cannot make this file a citation site.
+            attributed to the clause it names. Both directions now skip both modules. The sites are
+            collected from this file's own text first and then looked for in the scan, so what is
+            subtracted is a set that is known to be non-empty rather than one the filter emptied on the
+            way in.
         """
-        mine = f"{_relative(GUARD_MODULE)}:"
-        cited_here = sorted(
+        own = _cited_in(
+            GUARD_MODULE.read_text(encoding="utf-8"), _relative(GUARD_MODULE)
+        )
+        mine = {site for sites in own.values() for site in sites}
+        collected = {site for sites in _all_citations().values() for site in sites}
+        assert sorted(mine & collected) == [], (
+            f"the guard reads its own prose as citing the contract: {sorted(mine & collected)}; the "
+            "module explains the spelling rather than using it, so it belongs in SELF_REFERRING"
+        )
+
+    def test_the_scan_still_collects_the_citations_it_is_not_excluding(self):
+        """An exclusion that grew too wide would empty the scan, and every drift check with it.
+
+        Test scenario:
+            Both checks in this class are assertions that a *computed set* is empty, so they are green
+            when the scan finds nothing at all — which is what an over-broad skip, a mistyped tree or a
+            pattern that stopped matching would produce. The package itself cites clauses: measured, 7
+            sites under `src/`, in the four `capabilities.py` files and in `base/custom.py`. At least one
+            has to survive the scan, or nothing behind these tests is running.
+        """
+        from_src = sorted(
             site
             for sites in _all_citations().values()
             for site in sites
-            if site.startswith(mine)
+            if site.startswith("src/")
         )
-        assert cited_here == [], (
-            f"the guard reads its own prose as citing the contract: {cited_here}; the module explains the "
-            "spelling rather than using it, so it belongs in SELF_REFERRING"
+        assert from_src != [], (
+            "no citation under src/ reached the scan; the exclusions, the trees or the pattern have "
+            "emptied it, and every check that subtracts from it is now vacuous"
         )
 
     def test_every_clause_is_pinned_by_some_test(self):
