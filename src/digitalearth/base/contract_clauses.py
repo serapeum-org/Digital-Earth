@@ -49,9 +49,10 @@ Nothing here imports a renderer, or anything outside the standard library, so ``
 and reading a clause costs no engine import.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import List
 
 __all__ = ["CLAUSES", "Clause", "cite", "clause"]
 
@@ -251,6 +252,47 @@ def _clauses() -> tuple[Clause, ...]:
 CLAUSES: Mapping[int, Clause] = MappingProxyType({c.number: c for c in _clauses()})
 
 
+def _stated_numbers(numbers: Sequence[int]) -> str:
+    """Name a set of clause numbers, as a range only where the run really is contiguous.
+
+    The refusal below leads a reader to the clauses that do exist, so every number it names has to be one
+    they can then look up. Rendering the first and last keys with a hyphen between them was true only of an
+    unbroken table (`R2-L7`): remove a clause from the middle and the message went on claiming it, and the
+    table has never had a gap, so nothing would have shown it.
+
+    Args:
+        numbers: The clause numbers, in ascending order.
+
+    Returns:
+        The numbers in the citation spelling, consecutive ones collapsed into a range.
+
+    Examples:
+        - An unbroken table is one range, which is what the contract ships today:
+            ```python
+            >>> from digitalearth.base.contract_clauses import _stated_numbers
+            >>> _stated_numbers([1, 2, 3, 4])
+            'C1-C4'
+
+            ```
+        - A gap ends the range rather than being swallowed by it:
+            ```python
+            >>> from digitalearth.base.contract_clauses import _stated_numbers
+            >>> _stated_numbers([1, 2, 3, 5, 6, 9])
+            'C1-C3, C5-C6, C9'
+
+            ```
+    """
+    runs: List[List[int]] = []
+    for number in numbers:
+        if runs and number == runs[-1][-1] + 1:
+            runs[-1].append(number)
+        else:
+            runs.append([number])
+    return ", ".join(
+        f"C{run[0]}" if len(run) == 1 else f"C{run[0]}-C{run[-1]}" for run in runs
+    )
+
+
 def clause(number: int) -> Clause:
     """Return the clause with this number.
 
@@ -262,7 +304,8 @@ def clause(number: int) -> Clause:
 
     Raises:
         KeyError: If no clause has that number. The message lists the numbers that do exist, because the way
-            this goes wrong is a citation of a number nobody ever wrote down.
+            this goes wrong is a citation of a number nobody ever wrote down — so it names them through
+            :func:`_stated_numbers`, which ranges only over the runs the table actually holds.
 
     Examples:
         - A number that was never a clause says so:
@@ -278,9 +321,9 @@ def clause(number: int) -> Clause:
     try:
         return CLAUSES[number]
     except KeyError:
-        known = sorted(CLAUSES)
         raise KeyError(
-            f"C{number} is not a clause of the contract; it states C{known[0]}-C{known[-1]}"
+            f"C{number} is not a clause of the contract; it states "
+            f"{_stated_numbers(sorted(CLAUSES))}"
         ) from None
 
 

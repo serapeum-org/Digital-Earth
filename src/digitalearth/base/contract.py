@@ -20,7 +20,7 @@ forwarding blindly.
 import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import FrozenSet, Mapping, Optional, Tuple
+from typing import FrozenSet, Iterable, Mapping, Optional, Tuple
 
 __all__ = [
     "ALIASES",
@@ -120,6 +120,9 @@ _GUIDES_ORDER = "order 24"
 #: How a reason points at the roadmap. The letter is part of the number — order 27a is a step of its own that
 #: sits after 27, not a variant of it — so a pattern that stopped at the digits would read two orders as one.
 _ORDER_REFERENCE = re.compile(r"\border \d+[a-z]?")
+
+#: The number and letter inside one order's spelling, for counting orders rather than spelling them.
+_ORDER_NUMBER = re.compile(r"(\d+)([a-z]*)$")
 
 #: Every roadmap order a user-facing reason may name, with one line saying what it builds.
 #:
@@ -602,6 +605,49 @@ def orders_named_in(reason: str) -> Tuple[str, ...]:
     return tuple(_ORDER_REFERENCE.findall(reason))
 
 
+def _counted_order(order: str) -> Tuple[int, str]:
+    """Return the key an order sorts by, so a list of them reads as the roadmap counts them.
+
+    Args:
+        order: An order, spelled as :data:`ROADMAP_ORDERS` keys it.
+
+    Returns:
+        Its number and its letter suffix, so ``order 27a`` follows ``order 27`` and neither is read as the
+        other. An order whose spelling carries no number sorts first, under its own text: there is no right
+        place for it, and putting it where a reader will see it is better than hiding it in the middle.
+    """
+    found = _ORDER_NUMBER.search(order)
+    if found is None:
+        return (0, order)
+    return (int(found.group(1)), found.group(2))
+
+
+def _orders_named(orders: Iterable[str]) -> str:
+    """List the roadmap orders a refusal names, counted rather than spelled.
+
+    `sorted()` over the keys compares them character by character, which was right for every order the
+    contract names today — they all have two digits — and wrong for the next one-digit or three-digit order
+    to be added (`R2-N1`). A refusal exists to point a reader at the orders that *are* written down, so the
+    list it hands them should be in the order they are numbered.
+
+    Args:
+        orders: The orders to name.
+
+    Returns:
+        The orders, comma-separated, in roadmap order.
+
+    Examples:
+        - Ten does not come before nine, and a letter is a step after the bare number:
+            ```python
+            >>> from digitalearth.base.contract import _orders_named
+            >>> _orders_named(["order 10", "order 9", "order 27a", "order 27"])
+            'order 9, order 10, order 27, order 27a'
+
+            ```
+    """
+    return ", ".join(sorted(orders, key=_counted_order))
+
+
 def roadmap_order(order: str) -> str:
     """Return what one roadmap order builds.
 
@@ -640,5 +686,5 @@ def roadmap_order(order: str) -> str:
     except KeyError:
         raise KeyError(
             f"{order!r} is not a roadmap order this contract names; it names "
-            + ", ".join(sorted(ROADMAP_ORDERS))
+            + _orders_named(ROADMAP_ORDERS)
         ) from None
