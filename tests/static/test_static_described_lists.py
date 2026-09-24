@@ -53,10 +53,13 @@ def render_calls(monkeypatch):
     what the engine was asked for — which is the only place the description's spelling can be checked
     against the caller's.
 
+    It returns rather than yields: `monkeypatch` puts `_render_glyph` back itself when the test ends, so
+    the fixture has no teardown of its own and a generator would only hide that.
+
     Args:
         monkeypatch: pytest's patcher, which restores the method afterwards.
 
-    Yields:
+    Returns:
         A list that fills with one keyword dict per glyph rendered.
     """
     calls = []
@@ -77,7 +80,7 @@ def render_calls(monkeypatch):
         return original(self, glyph, **kwargs)
 
     monkeypatch.setattr(Scene, "_render_glyph", recording)
-    yield calls
+    return calls
 
 
 class TestTheCallersOwnKeywordsAreThawedAtTheReadBoundary:
