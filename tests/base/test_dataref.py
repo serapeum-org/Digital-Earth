@@ -447,3 +447,50 @@ class TestReferencingWhateverABuilderWasGiven:
         """A pyramids object does not know where it came from, so it is referenced in memory."""
         rows = [1, 2, 3]
         assert DataRef.of(rows, name="test-of").open() is rows, "the same object"
+
+
+class TestAUriWithWhitespaceRoundIt:
+    """A padded `uri` is a path nothing opens — except where the tail is a registered key (R2-H4).
+
+    Blankness was refused from the start; padding was not, so `DataRef(" a.tif")` was carried as a path
+    that exists on no filesystem that would have opened `"a.tif"`. Stripping it is the fix, and the one
+    place it must not reach is an `object:` reference, whose tail is not a path at all but the key
+    `register_object` stored — verbatim, padding included. Stripping that rewrote the reference away from
+    the entry it had just been handed, and the reader got a `KeyError` naming neither the layer nor the
+    name.
+    """
+
+    def test_a_padded_path_is_carried_as_the_path_it_names(self):
+        """The padding is dropped, so the reference names a file that can exist.
+
+        Test scenario:
+            Both ends are padded, because a leading and a trailing space fail differently on a filesystem
+            and only one rendering of the fix drops both.
+        """
+        assert DataRef("  data/dem.tif  ").uri == "data/dem.tif", DataRef(
+            "  data/dem.tif  "
+        ).uri
+
+    def test_a_padded_path_reads_as_the_same_reference_as_the_unpadded_one(self):
+        """The point of stripping: two spellings of one path are one reference.
+
+        Test scenario:
+            Asked as an equality between two references built from different text rather than as a second
+            look at the attribute above, so the case says what the normalisation is *for* — a padded name
+            and a clean one describe one file and must compare equal.
+        """
+        assert DataRef(" data/dem.tif") == DataRef("data/dem.tif"), (
+            "a padded path and the path it names are one reference"
+        )
+
+    def test_a_registered_key_keeps_the_padding_it_was_stored_under(self):
+        """The exemption, asked by resolving rather than by reading the string back.
+
+        Test scenario:
+            `register_object` stores the key exactly as given, so the reference has to carry it exactly as
+            given or it resolves to nothing. Reading `.uri` would only say the string survived; opening it
+            says the reference still reaches the object, which is what the padding is for.
+        """
+        held = object()
+        uri = register_object(held, name="roads ")
+        assert DataRef(uri).open() is held, uri
