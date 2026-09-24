@@ -34,6 +34,22 @@ REQUIRED_FEATURES = ("dev", "3d", "interactive", "web")
 #: The manifest, read rather than imported so these checks need no environment of their own.
 MANIFEST = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
+#: Each rendering engine, with the symbol the tier built on it reaches for first —
+#: `three_d/base.py` builds a `pyvista.Plotter`, `interactive/renderer.py` reads `holoviews.Store`, and
+#: `web/base.py` imports `maplibre.Layer`.
+#:
+#: The import alone was asserted by comparing each module's `__name__` against its own name, which is the
+#: name it was imported under and can be nothing else (`R2-N3`). What that cannot tell apart from a working
+#: install is a module that is there in name only: a same-named package earlier on the path, a namespace
+#: package left by a half-removed install, or a stub some other test put in `sys.modules`. Naming a symbol
+#: the tier really uses does tell them apart, and it is also the thing that breaks when an engine moves its
+#: API — which, in the one environment that pins three engines together, is what a version bump looks like.
+ENGINE_ENTRY_POINTS: Tuple[Tuple[str, str], ...] = (
+    ("pyvista", "Plotter"),
+    ("holoviews", "Store"),
+    ("maplibre", "Layer"),
+)
+
 #: What both 2-D tiers must say about the seed figure: a graticule under points, both shown.
 #:
 #: Held as a constant rather than as one tier's live answer so a single wrong tier cannot make the pair agree.
@@ -141,17 +157,36 @@ class TestTheEnginesCoexist:
     """The runtime half — a solve proves versions, this proves imports."""
 
     def test_every_engine_imports_in_one_process(self):
-        """Three native stacks loading together is the premise; nothing else here works without it."""
-        pyvista = pytest.importorskip("pyvista")
-        holoviews = pytest.importorskip("holoviews")
-        maplibre = pytest.importorskip("maplibre")
-        loaded = [pyvista.__name__, holoviews.__name__, maplibre.__name__]
-        assert sorted(loaded) == ["holoviews", "maplibre", "pyvista"], (
-            f"loaded {loaded}"
+        """Three native stacks loading together is the premise; nothing else here works without it.
+
+        Test scenario:
+            The import is the real check — a module whose native library fails to load raises
+            `ImportError`, and `importorskip` turns that into a **failure** here rather than a skip, which
+            was measured. What is asserted on top is the entry point each tier reaches for, because a name
+            in `sys.modules` is not an engine: it can be a stub, a shadowing package or the remains of a
+            half-removed install, and every one of those satisfied the `__name__` comparison this replaces
+            (`R2-N3`).
+        """
+        loaded = {name: pytest.importorskip(name) for name, _ in ENGINE_ENTRY_POINTS}
+        missing = sorted(
+            f"{name}.{entry}"
+            for name, entry in ENGINE_ENTRY_POINTS
+            if not hasattr(loaded[name], entry)
+        )
+        assert missing == [], (
+            f"these engines imported without the entry point their tier uses: {missing}; the module is on "
+            "the path but it is not the engine"
         )
 
     def test_every_facade_constructs_in_one_process(self):
-        """A facade that imports but cannot be built would fail a cross-tier probe for the wrong reason."""
+        """A facade that imports but cannot be built would fail a cross-tier probe for the wrong reason.
+
+        Test scenario:
+            Comparing each built object's class name against that class's own name says only that `Map()`
+            returns a `Map` (`R2-N3`). What the probes below actually need is a facade that is *ready to be
+            asked*, so each fresh map is asked the question they ask — how many layers it describes — and
+            has to answer none rather than raise.
+        """
         pytest.importorskip("pyvista")
         pytest.importorskip("geoviews")
         pytest.importorskip("maplibre")
@@ -161,10 +196,13 @@ class TestTheEnginesCoexist:
         from digitalearth.three_d import Scene3D
         from digitalearth.web.map import WebMap
 
-        built = [
-            type(build()).__name__ for build in (Map, InteractiveMap, WebMap, Scene3D)
+        described = [
+            len(build().figure_spec.layers)
+            for build in (Map, InteractiveMap, WebMap, Scene3D)
         ]
-        assert built == ["Map", "InteractiveMap", "WebMap", "Scene3D"], f"built {built}"
+        assert described == [0, 0, 0, 0], (
+            f"a fresh map on each tier must describe no layers, and they described {described}"
+        )
 
 
 class TestTwoTiersDescribeOneFigureAlike:
