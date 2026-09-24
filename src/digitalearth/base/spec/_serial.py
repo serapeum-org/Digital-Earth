@@ -700,9 +700,15 @@ def travels_in_a_figure(value: Any) -> bool:
     tier in :func:`~digitalearth.interactive.base.describe` (held in ``InteractiveMapBase._layer_held``).
     The web and 3-D tiers take named, typed parameters and resolve them into their engine's own spelling
     before recording, so they have no caller keyword to split and no held half of their own; the web drawer
-    thaws what it reads all the same (``web/renderer.py``), and the 3-D tier calls no thaw at all. Every
-    tier reaches this rule *indirectly* through :func:`~digitalearth.base.spec.style.portable_constants`,
-    which asks it of any value before lifting it onto a channel.
+    thaws what it reads all the same (``web/renderer.py``), and the 3-D tier calls no thaw at all.
+
+    **Three** of the four also reach this rule *indirectly*, through
+    :func:`~digitalearth.base.spec.style.portable_constants`, which asks it of any value before lifting it
+    onto a channel: the two above, and the web tier through its own ``portable_encodings``. The 3-D tier
+    reaches it by **no** path — measured, nothing under ``three_d/`` names this function,
+    ``portable_constants``, ``asked_constants`` or ``portable_encodings`` — so that tier publishes no
+    channel and asks this rule of nothing. "Every tier" was the reading this paragraph was rewritten to
+    stop, and the sentence that followed the rewrite put it back (`R2-N1`).
 
     Args:
         value: The caller's value for one keyword.

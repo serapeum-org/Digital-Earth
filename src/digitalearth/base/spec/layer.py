@@ -156,10 +156,14 @@ def free_layer_id(name: str, taken: Any) -> str:
     followed by a new ``wells`` produced ``wells-2`` with nothing called ``wells`` on the map, while the 3-D
     tier read its ids off the live tree and handed ``wells`` straight back. The live tree wins, on all four:
     an id that addresses nothing is free again, on removal as it already was on a rollback
-    (``_forget_layer``). What makes that safe is that a stale id addresses *nothing* until it is re-used —
-    ``get_layer``/``set_visible``/``remove_layer`` raise `KeyError` on every tier for an id the tree no longer
-    holds — whereas reserving forever is silently wrong in the one place the id is a caption: the web tier's
-    layer switcher captions each row with the layer id itself.
+    (``_forget_layer``). What makes that safe is that a stale id addresses *nothing* until it is re-used:
+    every one of the methods that takes an id refuses one the tree no longer holds, with a `KeyError`.
+    Measured, that is five methods rather than twelve — ``get_layer`` and ``remove_layer`` on the web tier,
+    and ``get_layer``, ``set_visible`` and ``remove_layer`` on the 3-D one. The static and interactive tiers
+    have none of the three at all, and the web tier has no ``set_visible``, which is what
+    :data:`~digitalearth.base.contract.PENDING` lists against order 23; a tier cannot be addressed by a
+    stale id it offers no way to address. Reserving forever, meanwhile, is silently wrong in the one place
+    the id is a caption: the web tier's layer switcher captions each row with the layer id itself.
 
     Args:
         name: The caller's own name. Normalise it with :func:`layer_name` first; this refuses what that
