@@ -517,6 +517,122 @@ class TestTheFontMatplotlibReadsFromAName:
         assert drawn.layer_ids == [FONT, PATTERN_ONLY], drawn.layer_ids
 
 
+class TestAGraticuleAskedForMoreThanItCanHonour:
+    """`graticule()` says so when a call's own arguments cannot all be obeyed (review R2-L3).
+
+    Both were silent. `spacing=` overwrote the two steps the same call had just given, and a `name=` on a
+    *replacing* call was accepted and dropped. Neither behaviour is wrong — one grid has one spacing, and
+    a layer cannot be renamed under the callers holding its id — but a caller whose argument is discarded
+    has to hear it.
+    """
+
+    def test_spacing_beside_a_step_says_which_argument_is_dropped(self, drawn):
+        """Naming both a step and a spacing warns, and the warning names the argument that lost.
+
+        Args:
+            drawn: The map under test.
+        """
+        with pytest.warns(UserWarning, match="lon_step"):
+            drawn.graticule(30.0, 60.0, spacing=10.0, name=ASKED)
+
+    def test_the_spacing_is_still_the_one_that_wins(self, drawn):
+        """The warning is a warning, not a change of mind: `spacing` still sets both steps.
+
+        Args:
+            drawn: The map under test.
+        """
+        with pytest.warns(UserWarning):
+            drawn.graticule(30.0, 60.0, spacing=10.0, name=ASKED)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert (props["lon_step"], props["lat_step"]) == (10.0, 10.0), props
+
+    def test_spacing_on_its_own_is_silent(self, drawn, recwarn):
+        """A caller who names only `spacing` has nothing discarded, so nothing is said.
+
+        Args:
+            drawn: The map under test.
+            recwarn: pytest's recorder for whatever the call warns.
+        """
+        drawn.graticule(spacing=10.0, name=ASKED)
+        assert [str(caught.message) for caught in recwarn] == [], recwarn.list
+
+    def test_two_steps_on_their_own_are_silent_too(self, drawn, recwarn):
+        """And so is a caller who names only the two steps.
+
+        Args:
+            drawn: The map under test.
+            recwarn: pytest's recorder for whatever the call warns.
+        """
+        drawn.graticule(30.0, 60.0, name=ASKED)
+        assert [str(caught.message) for caught in recwarn] == [], recwarn.list
+
+    def test_the_two_steps_are_what_was_recorded(self, drawn):
+        """The complement of the override: with no `spacing`, the two steps are drawn as given.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.graticule(30.0, 60.0, name=ASKED)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert (props["lon_step"], props["lat_step"]) == (30.0, 60.0), props
+
+    def test_naming_no_step_at_all_still_draws_the_default_grid(self, drawn):
+        """A call that names no step draws the 30-degree grid it always did.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The two steps default to `None` now, so a discarded step can be told from an unwritten one.
+            This pins that the documented default came through that change intact.
+        """
+        drawn.graticule(name=ASKED)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert (props["lon_step"], props["lat_step"]) == (30.0, 30.0), props
+
+    def test_one_step_alone_still_leaves_the_other_at_the_default(self, drawn):
+        """Naming one of the two steps sets that one and leaves the other where it was.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.graticule(lat_step=15.0, name=ASKED)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert (props["lon_step"], props["lat_step"]) == (30.0, 15.0), props
+
+    def test_a_name_on_a_replacing_call_says_it_is_ignored(self, drawn):
+        """Renaming the one graticule is not on offer, so a call that tries is told.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.graticule(name=ASKED)
+        with pytest.warns(UserWarning, match="other-name"):
+            drawn.graticule(spacing=20.0, name="other-name")
+
+    def test_the_graticule_keeps_the_id_it_was_created_under(self, drawn):
+        """And the id stays the creating call's, which is why the second name has nowhere to go.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.graticule(name=ASKED)
+        with pytest.warns(UserWarning):
+            drawn.graticule(spacing=20.0, name="other-name")
+        assert drawn.layer_ids == [ASKED], drawn.layer_ids
+
+    def test_repeating_the_name_it_already_has_is_silent(self, drawn, recwarn):
+        """Asking again for the name the layer already carries discards nothing, so nothing is said.
+
+        Args:
+            drawn: The map under test.
+            recwarn: pytest's recorder for whatever the call warns.
+        """
+        drawn.graticule(name=ASKED)
+        drawn.graticule(spacing=20.0, name=ASKED)
+        assert [str(caught.message) for caught in recwarn] == [], recwarn.list
+
+
 class TestAGraticuleCalledASecondTime:
     """A replacing `graticule()` changes what the call named, and nothing it did not (R-L5)."""
 

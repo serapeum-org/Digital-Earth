@@ -5,6 +5,7 @@ globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
 
 import os
+import warnings
 from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
@@ -16,6 +17,12 @@ from digitalearth.base.spec import Bounds, LayerSpec, Symbology
 from digitalearth.static import projections
 from digitalearth.static.renderer import DrawnLayer, artists_added
 from digitalearth.static.scene import LayerRecord
+
+#: The meridian and parallel spacing a graticule is drawn at when the caller names neither, in degrees —
+#: the same default the interactive and web tiers take (#263). The two arguments default to ``None`` rather
+#: than to this so that a step the caller wrote can be told from one they did not, which is what lets
+#: :meth:`ProjectionMixin.graticule` say when ``spacing=`` has just discarded one (review R2-L3).
+DEFAULT_GRATICULE_STEP: float = 30.0
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -173,8 +180,8 @@ class ProjectionMixin(_MixinBase):
 
     def graticule(
         self,
-        lon_step: float = 30.0,
-        lat_step: float = 30.0,
+        lon_step: Optional[float] = None,
+        lat_step: Optional[float] = None,
         *,
         spacing: Optional[float] = None,
         name: Optional[str] = None,
@@ -191,22 +198,32 @@ class ProjectionMixin(_MixinBase):
         asking for a different spacing, not for a hidden grid to come back (review R-L5).
 
         Args:
-            lon_step: Meridian spacing in degrees.
-            lat_step: Parallel spacing in degrees.
+            lon_step: Meridian spacing in degrees; ``None`` (default) means
+                :data:`DEFAULT_GRATICULE_STEP`.
+            lat_step: Parallel spacing in degrees; ``None`` (default) means
+                :data:`DEFAULT_GRATICULE_STEP`.
             spacing: One step for both, for a caller who wants a square grid; it overrides the two
-                above. The same **keyword** the web and interactive tiers take, so one call draws one
-                grid on every tier that draws a graticule at all (#324). The **values** are each
-                engine's own: this tier generates its meridians, so any positive step draws, and so does
-                the web tier — while the interactive tier draws Natural Earth's pre-cut layers and
-                honours only ``1``, ``5``, ``10``, ``15``, ``20`` and ``30``. ``spacing=7.5`` draws here
-                and raises there (review R-L10).
+                above, and **warns** when it does, because a call that names all three has had two of
+                its own arguments thrown away (review R2-L3). The same **keyword** the web and
+                interactive tiers take, so one call draws one grid on every tier that draws a graticule
+                at all (#324). The **values** are each engine's own: this tier generates its meridians,
+                so any positive step draws, and so does the web tier — while the interactive tier draws
+                Natural Earth's pre-cut layers and honours only ``1``, ``5``, ``10``, ``15``, ``20`` and
+                ``30``. ``spacing=7.5`` draws here and raises there (review R-L10).
             name: The caller's own name for the layer, used as its id and its label on the call that
-                **creates** it; ``None`` (default) generates one from the kind (#321).
+                **creates** it; ``None`` (default) generates one from the kind (#321). A *replacing*
+                call cannot rename the layer, so one that names a different name **warns** rather than
+                dropping it in silence (review R2-L3).
             visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327). ``None`` (default)
                 leaves the flag as it is: on the call that creates the layer that means drawn, and on a
                 *replacing* call it means whatever the caller last chose, so restyling a hidden graticule
                 does not put it back on screen (review R-L5).
+
+        Warns:
+            UserWarning: when ``spacing`` is given beside either step, which discards the step; and when a
+                *replacing* call names a ``name`` the layer does not already carry, which is discarded
+                because the id is the one thing a replacement cannot change (review R2-L3).
 
         Raises:
             Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
@@ -215,7 +232,17 @@ class ProjectionMixin(_MixinBase):
                 map is still drawing (round 2, M1).
         """
         if spacing is not None:
+            if lon_step is not None or lat_step is not None:
+                warnings.warn(
+                    f"graticule() was given spacing={spacing!r} together with "
+                    f"lon_step={lon_step!r}/lat_step={lat_step!r}; spacing sets both, so those two are "
+                    "discarded. Pass one or the other.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             lon_step = lat_step = spacing
+        lon_step = DEFAULT_GRATICULE_STEP if lon_step is None else lon_step
+        lat_step = DEFAULT_GRATICULE_STEP if lat_step is None else lat_step
         symbology = Symbology(
             props={"via": "graticule", "lon_step": lon_step, "lat_step": lat_step}
         )
@@ -227,6 +254,14 @@ class ProjectionMixin(_MixinBase):
             was = self._layer_tree.get(pointer)
         if was is not None:
             held = was.id
+            if name is not None and name != held:
+                warnings.warn(
+                    f"graticule(name={name!r}) is discarded: this call replaces the graticule already "
+                    f"described as {held!r}, and a replacement keeps the id every caller holding it "
+                    "knows. Name it on the call that creates it.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             self._layer_tree = self._layer_tree.replace(
                 with_fields(
                     was,
