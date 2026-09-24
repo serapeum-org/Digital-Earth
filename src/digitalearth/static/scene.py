@@ -571,8 +571,11 @@ class Scene(WatermarkMixin):
 
         Args:
             layer_id: The layer to forget. One already gone is ignored — as this docstring already promised
-                and line 514 did not, since `LayerTree.remove` raises `KeyError` for an id it does not hold
-                (review R2-L11). That matters now rather than later: :meth:`_describe_layer` rolls back a
+                and the unguarded `LayerTree.remove` below did not, since that call raises `KeyError` for an
+                id it does not hold (review R2-L11). Named by what it is rather than by a line number: the
+                number this sentence carried was already pointing at a docstring's closing quotes by the
+                time the same wave split :meth:`_record_layer` out (`R2-N2`). That matters now rather than
+                later: :meth:`_describe_layer` rolls back a
                 description that refused, and the refusal may have come from `LayerTree.add` itself — so the
                 rollback would have raised over the very exception it was unwinding.
         """
