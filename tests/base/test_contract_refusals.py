@@ -127,3 +127,33 @@ class TestARoadmapRefusalCountsTheOrdersTheWayTheRoadmapDoes:
         assert refusal.value.args[0].endswith("order 9, order 9a, order 10"), (
             refusal.value.args[0]
         )
+
+    def test_an_order_whose_spelling_carries_no_number_is_listed_first(
+        self, monkeypatch
+    ):
+        """A key the counting cannot read has to land somewhere a reader will see it.
+
+        Args:
+            monkeypatch: Stands in a table holding a key that is not a number at all, which the shipped
+                one cannot supply — every order it names is `order <n>`.
+
+        Test scenario:
+            Counting the orders means reading a number off each key, and `ROADMAP_ORDERS` is a table a
+            future order is added to by hand. The two tests above only ask what happens when every key
+            parses; this asks what happens when one does not. There is no right place in a numbered list
+            for a key with no number, so it is sorted to the front, where the reader following the refusal
+            meets it rather than finding it buried between two numbers it does not sit between.
+        """
+        unnumbered = MappingProxyType(
+            {
+                "order 9": "the ninth",
+                "the Core spelling": "no number was ever given to this one",
+                "order 10": "the tenth",
+            }
+        )
+        monkeypatch.setattr(contract, "ROADMAP_ORDERS", unnumbered)
+        with pytest.raises(KeyError) as refusal:
+            roadmap_order(_ABSENT_ORDER)
+        assert refusal.value.args[0].endswith("the Core spelling, order 9, order 10"), (
+            refusal.value.args[0]
+        )
