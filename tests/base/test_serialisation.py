@@ -35,6 +35,7 @@ from digitalearth.base.spec import (
     ViewRequest,
 )
 from digitalearth.base.spec._serial import (
+    MAX_TRAVELLING_DEPTH,
     MAX_TRAVELLING_ELEMENTS,
     FrozenDict,
     crs_to_json,
@@ -1504,6 +1505,73 @@ def _survives_the_trip(value):
     return _comes_back_the_same(value, after_json)
 
 
+#: A nesting no record path here survives, for the case a builder used to lose outright (`R2-M1`). Stated
+#: rather than measured because the measurement moves with the recursion limit and with how deep the caller
+#: already is: `frozen_value` gave out at depth 499 on a fresh 1,000-frame limit, and lower under pytest's
+#: own stack, so anything past 500 is past it wherever this runs. The gate refuses it far earlier.
+_PAST_THE_RECORD_PATH = 600
+
+
+def _nested_list(depth):
+    """Return a value wrapped in `depth` nested lists.
+
+    Args:
+        depth: How many lists to wrap the leaf in.
+
+    Returns:
+        The outermost list.
+    """
+    value = "leaf"
+    for _ in range(depth):
+        value = [value]
+    return value
+
+
+def _record_path_carries(depth):
+    """Whether the record path survives a container nested `depth` deep.
+
+    Args:
+        depth: How deep to nest.
+
+    Returns:
+        `True` when the trip returns an answer of any kind, `False` when it raises `RecursionError`. A
+        value the trip *refuses* still counts as carried: refusing is an answer, and the gate is free to
+        disagree with it. Only the raise is the failure mode this measures.
+    """
+    try:
+        _survives_the_trip(_nested_list(depth))
+    except RecursionError:
+        return False
+    return True
+
+
+def _record_path_ceiling(limit=4096):
+    """Measure the shallowest nesting the record path cannot carry.
+
+    The ceiling is measured rather than written down because it is not a property of this package: it moves
+    with `sys.setrecursionlimit` and with how many frames the caller has already spent, so a number pinned
+    here would be a number about the machine that pinned it.
+
+    Args:
+        limit: How deep to look before giving up.
+
+    Returns:
+        The shallowest depth that raises `RecursionError`, or `limit` when every depth up to there is
+        carried. The limit rather than `None`, so a caller comparing against a bound needs one comparison:
+        a path that survives everything is trivially past any bound.
+    """
+    if _record_path_carries(limit):
+        return limit
+    low, high = 1, limit
+    while low + 1 < high:
+        middle = (low + high) // 2
+        if _record_path_carries(middle):
+            low = middle
+        else:
+            high = middle
+    return high
+
+
 class _KeyedProvider(dict):
     """A `dict` subclass carrying a credential, standing in for an `xyzservices.TileProvider`.
 
@@ -1894,17 +1962,18 @@ class TestWhatTravelsInAFigure:
         return outermost
 
     def test_a_container_nested_inside_the_bound_travels_however_deep_it_is(self):
-        """Depth is counted by the budget, not by the interpreter's stack (`R-M1`).
+        """Depth is counted by a bound of its own, not by the interpreter's stack (`R-M1`, `R2-M1`).
 
         Test scenario:
-            `MAX_TRAVELLING_ELEMENTS` is 1,000 and CPython's default recursion limit is 1,000 too, so a
-            recursive walk hit `RecursionError` before the budget could answer and the nesting half of the
-            bound could not be reached from either side. Measured before the walk was made iterative, this
-            depth raised; the breadth case one value smaller has always passed, so the two halves of one
-            bound behaved differently for no stated reason.
+            Depth used to be counted against `MAX_TRAVELLING_ELEMENTS`, which is 1,000 — and CPython's
+            default recursion limit is 1,000 too, so a recursive walk raised `RecursionError` before the
+            budget could answer. Making the walk iterative reached the bound and made the gate admit
+            depths the recursive record path cannot survive, which is what :data:`MAX_TRAVELLING_DEPTH`
+            now answers. The deepest admitted container is checked here from the inside; the test below
+            checks it from the outside, and the two tests after that check it against the record path.
         """
-        assert travels_in_a_figure(self._nested(MAX_TRAVELLING_ELEMENTS - 1)), (
-            "a container holding the bounded number of values must travel however they are arranged"
+        assert travels_in_a_figure(self._nested(MAX_TRAVELLING_DEPTH)), (
+            "the deepest container the gate admits must travel, or the bound is unreachable"
         )
 
     def test_a_container_nested_past_the_bound_is_refused_rather_than_raising(self):
@@ -1916,8 +1985,63 @@ class TestWhatTravelsInAFigure:
             builder call itself fails, so nothing is drawn at all — and it was a new failure mode: before
             the rule was widened, every container was refused by type in O(1) and no caller value recursed.
         """
-        assert not travels_in_a_figure(self._nested(MAX_TRAVELLING_ELEMENTS + 1)), (
-            "a container nested one value past the bound must be refused, not raise"
+        assert not travels_in_a_figure(self._nested(MAX_TRAVELLING_DEPTH + 1)), (
+            "a container nested one level past the bound must be refused, not raise"
+        )
+
+    def test_the_deepest_container_the_gate_admits_survives_the_record_path(self):
+        """What the gate admits, the record path has to carry (`R2-M1`).
+
+        Test scenario:
+            The gate is asked *before* a value is recorded, so "this travels" is a promise about what
+            `frozen_value`, `hashable_value`, `to_json_value` and `thawed_value` will then do with it.
+            They are recursive, and none of them was asked whether it could survive the depth the gate
+            was admitting.
+        """
+        assert _survives_the_trip(self._nested(MAX_TRAVELLING_DEPTH)), (
+            "the deepest admitted container must come back from the full record-to-draw path"
+        )
+
+    def test_the_gate_stops_short_of_where_the_record_path_gives_out(self):
+        """The two budgets agree, measured rather than asserted by hand (`R2-M1`).
+
+        Test scenario:
+            Round 1 made the walk iterative so the depth half of the element bound could be reached, and
+            reaching it moved the `RecursionError` downstream: the gate said "describe it" at depth 999
+            while `frozen_value` gave out around 499 and `to_json_value` around 996 — so for every depth
+            in between, a builder lost the value outright with a traceback naming neither the keyword nor
+            the bound. The ceiling is measured here rather than written down because it moves with the
+            recursion limit and with how deep the caller already is; the bound has to sit clear of it.
+        """
+        ceiling = _record_path_ceiling()
+        assert ceiling > MAX_TRAVELLING_DEPTH, (
+            f"the record path gives out at depth {ceiling}, at or under the bound the gate admits: "
+            f"MAX_TRAVELLING_DEPTH is {MAX_TRAVELLING_DEPTH}"
+        )
+        assert not travels_in_a_figure(_nested_list(ceiling)), (
+            f"the gate must refuse depth {ceiling}, where the record path raises rather than answers"
+        )
+
+    def test_a_value_the_gate_refuses_is_held_by_the_builder_rather_than_lost(self):
+        """The tier's promise for a refused value, over the split a builder actually makes (`R2-M1`).
+
+        Test scenario:
+            `Map.text(**opts)` is the reachable path the round-2 review measured: at depth 600 the gate
+            answered `True`, and the `Symbology` the builder then built raised `RecursionError` — so the
+            call that was meant to *hold* the value failed outright, with a traceback naming neither the
+            keyword nor the bound. The split is spelled out here rather than reached through a tier, so
+            the measurement is of the rule and not of matplotlib, which refuses an unknown keyword of its
+            own accord at draw time.
+        """
+        deep = self._nested(_PAST_THE_RECORD_PATH)
+        described = {
+            keyword: value
+            for keyword, value in {"deep": deep}.items()
+            if travels_in_a_figure(value)
+        }
+        recorded = Symbology(props={"opts": described})
+        assert recorded.props["opts"] == {}, (
+            "a value past the depth the record path survives must be held, not described"
         )
 
     def test_a_self_referential_list_is_refused_rather_than_raising(self):

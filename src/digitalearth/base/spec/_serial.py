@@ -34,6 +34,7 @@ T = TypeVar("T")
 
 __all__ = [
     "FrozenDict",
+    "MAX_TRAVELLING_DEPTH",
     "MAX_TRAVELLING_ELEMENTS",
     "frozen_value",
     "as_list",
@@ -528,6 +529,29 @@ def _written_back_equal(value: Any) -> bool:
 #: which is why one flat number is enough and why it is a round one.
 MAX_TRAVELLING_ELEMENTS: int = 1000
 
+#: How many containers deep one described value may nest. A second bound, and a much smaller number, because
+#: it answers a different question: :data:`MAX_TRAVELLING_ELEMENTS` bounds what a figure is willing to *carry*,
+#: and this bounds what the record path can *reach*.
+#:
+#: The path is recursive where the gate is not — `frozen_value`, `hashable_value`, `to_json_value` and
+#: `thawed_value` each walk the value with the interpreter's stack — so counting depth against the element
+#: budget promised a depth the writers cannot survive (`R2-M1`). Measured here, on a fresh 1,000-frame
+#: recursion limit, as the shallowest nesting each one raises `RecursionError` at: `hashable_value` 497,
+#: `frozen_value` 499, `to_json_value` 995, `json.dumps` of its output 995. The gate admitted 999.
+#:
+#: 32, not "a little under 497", because 497 is not a property of this package. It moves with
+#: `sys.setrecursionlimit` and with how many frames the caller has already spent before the builder is
+#: reached, so a bound close to it would hold on the machine that measured it and nowhere else. 32 costs
+#: about 64 frames of whatever stack is left, which any caller has, and it is an order of magnitude above
+#: every real style value: a palette nests 1 deep, a dash pattern 2, a dict of per-class colour lists 3.
+#:
+#: Making the four writers iterative instead was the other way to make the two agree, and it loses: it is
+#: four rewrites on the hot record path, it trades a stated bound for an unstated one (whatever stack is
+#: left at the call site), and it would leave the gate promising a depth that still cannot be written down.
+#: Hardening `to_json_value` against its own recursion remains worth doing for callers that reach it
+#: directly — that is #335, and it is not this.
+MAX_TRAVELLING_DEPTH: int = 32
+
 
 def _travelling_budget(value: Any, budget: int) -> int:
     """Return what is left of `budget` after `value`, or ``-1`` when `value` cannot travel.
@@ -540,9 +564,14 @@ def _travelling_budget(value: Any, budget: int) -> int:
     `MAX_TRAVELLING_ELEMENTS` is 1,000 and CPython's default recursion limit is 1,000, so a recursive walk
     raised `RecursionError` before the budget could refuse a deeply nested container — and a builder that
     raises loses the value outright, where the tier's promise is to *hold* what this refuses beside the
-    layer. Iterating makes both halves of one bound reachable: breadth and depth are counted the same way,
-    and a container that holds itself simply spends the budget one visit at a time until it is refused, so
-    no cycle memory is needed.
+    layer.
+
+    **Depth is counted separately, and much lower** (:data:`MAX_TRAVELLING_DEPTH`, `R2-M1`). Counting it
+    against the element budget only moved the raise: the gate accepted a container nested 999 deep, and
+    `frozen_value` — recursive, like every other step of the record path — raised on it at 499. A value
+    this admits has to be one the tier can then *record*, so the bound that decides has to be one the
+    recursive half survives. It also ends a cycle sooner than the element budget did: a container holding
+    itself is over the depth bound after `MAX_TRAVELLING_DEPTH` visits, so no cycle memory is needed.
 
     Args:
         value: The value, or a part of one.
@@ -551,14 +580,14 @@ def _travelling_budget(value: Any, budget: int) -> int:
     Returns:
         The budget left, or ``-1`` for a value the description cannot carry — one the writer refuses or
         writes back as a different value, a tuple or an array (which JSON reads back as a list), a mapping
-        with a non-string key, a live object, or a container that exhausts the budget, whether by holding
+        with a non-string key, a live object, or a container that exhausts either bound, whether by holding
         too many values, by nesting too deep, or by holding itself.
     """
-    pending: List[Any] = [value]
+    pending: List[Tuple[Any, int]] = [(value, 0)]
     while pending:
         if budget <= 0:
             return -1
-        item = pending.pop()
+        item, depth = pending.pop()
         # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather
         # than naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64`
         # travelled (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses
@@ -574,16 +603,20 @@ def _travelling_budget(value: Any, budget: int) -> int:
         # an `xyzservices.TileProvider` *is* a dict, of plain strings, one of which is the caller's API key,
         # and `isinstance` wrote it into the figure. A dict subclass is an engine object wearing a dict; the
         # type check that refuses a tuple is what keeps it, and the key in it, out.
+        if depth >= MAX_TRAVELLING_DEPTH:
+            # Below the scalar branch, so the bound is read as "how deep a *container* may sit": the leaves
+            # of the deepest admitted container are plain values the recursive writers reach in one frame.
+            return -1
         if type(item) is list:
             budget -= 1
-            pending.extend(item)
+            pending.extend((entry, depth + 1) for entry in item)
             continue
         if type(item) is dict:
             budget -= 1
             for key, entry in item.items():
                 if not isinstance(key, str):
                     return -1
-                pending.append(entry)
+                pending.append((entry, depth + 1))
             continue
         return -1
     return budget
@@ -601,7 +634,9 @@ def travels_in_a_figure(value: Any) -> bool:
     * **A container travels when the round trip gives back an equal value of the same class**, at every depth.
 
     So: a string, a boolean, a finite number or `None`, and a `list` or `dict` built out of those — up to
-    :data:`MAX_TRAVELLING_ELEMENTS` values. That is what a reader on another machine can act on.
+    :data:`MAX_TRAVELLING_ELEMENTS` values, nested no more than :data:`MAX_TRAVELLING_DEPTH` containers
+    deep. That is what a reader on another machine can act on, and — the second bound's whole job — what
+    the recursive record path behind this can then write down without raising (`R2-M1`).
 
     The asymmetry is not an oversight, and it is the half a single-sentence "an equal value of the same kind"
     got wrong (`R-H1`, `R-M5`). A container's class is load-bearing twice over — flattening a tuple changes the
@@ -707,6 +742,16 @@ def travels_in_a_figure(value: Any) -> bool:
             True
             >>> travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS)))
             False
+
+            ```
+        - And by how deeply they are nested, which is the bound the record path sets:
+            ```python
+            >>> from digitalearth.base.spec._serial import MAX_TRAVELLING_DEPTH, travels_in_a_figure
+            >>> deep = "leaf"
+            >>> for _ in range(MAX_TRAVELLING_DEPTH):
+            ...     deep = [deep]
+            >>> travels_in_a_figure(deep), travels_in_a_figure([deep])
+            (True, False)
 
             ```
     """
