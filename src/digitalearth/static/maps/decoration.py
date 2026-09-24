@@ -11,14 +11,25 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 import contextlib
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from functools import lru_cache
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    FrozenSet,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
 from cleopatra.basemap.tiles import add_tiles
 from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
-from matplotlib.font_manager import FontProperties, findfont
+from matplotlib.font_manager import font_family_aliases, fontManager
 from matplotlib.text import Text
 from pyramids.base.crs import reproject_coordinates
 
@@ -108,6 +119,71 @@ def _a_font_is_already_chosen(opts: Dict[str, Any]) -> bool:
     return bool(_FONT_FAMILY_PROPERTIES.intersection(chosen))
 
 
+@lru_cache(maxsize=4)
+def _families_matplotlib_has(_registered: int) -> FrozenSet[str]:
+    """Return the case-folded name of every font family matplotlib has registered.
+
+    Args:
+        _registered: ``len(fontManager.ttflist)``. Unread — it is here to be part of the cache key, so a
+            family added with ``fontManager.addfont`` after the first call is seen rather than missed for
+            the life of the process.
+
+    Returns:
+        Every registered family name, case-folded, because matplotlib matches a family case-insensitively.
+    """
+    return frozenset(entry.name.casefold() for entry in fontManager.ttflist)
+
+
+def _names_a_font_family(name: str) -> bool:
+    """Say whether a string is the name of a font family matplotlib can draw in.
+
+    A **membership test**, deliberately, and not a resolution. The resolution this replaces asked
+    ``findfont(FontProperties(family=name), fallback_to_default=False)``, where a lone string is parsed as
+    a *fontconfig pattern*: ``-`` separates the size and ``,`` the families. So ``"DejaVu Serif-2"``
+    resolved — as 2-point DejaVu Serif — and was then forwarded verbatim, where matplotlib reads it as
+    one literal family and finds nothing. That string is exactly what the id allocator mints for a second
+    layer with the same name, so the check produced the `findfont: ... not found` it exists to avoid, on
+    names this package generates (review R2-H6). What decides and what is forwarded are one thing here:
+    both are the literal family name.
+
+    It is also what the resolution cost. Reading the registry is a set lookup, where ``findfont`` scored
+    every registered font against the pattern; and because a name that is no font raises rather than
+    returns, matplotlib's own ``lru_cache`` never held the answer, so every distinct layer name paid the
+    scan again (review R2-L8). The scan could also rebuild the global ``fontManager`` from the filesystem
+    — ``findfont``'s ``rebuild_if_missing`` defaults to ``True`` — from inside a layer builder.
+
+    Args:
+        name: The string to test, as the caller spelled it.
+
+    Returns:
+        ``True`` when ``name`` is a registered family or one of matplotlib's generic aliases
+        (``serif``, ``sans-serif``, ``monospace``, ...), matched case-insensitively as matplotlib matches
+        them.
+
+    Examples:
+        - A family matplotlib ships, whatever case it is written in, and a generic alias:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _names_a_font_family
+            >>> (_names_a_font_family("DejaVu Serif"), _names_a_font_family("dejavu serif"))
+            (True, True)
+            >>> (_names_a_font_family("sans-serif"), _names_a_font_family("monospace"))
+            (True, True)
+
+            ```
+        - A layer name, and a string that is only a *pattern* for a family:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _names_a_font_family
+            >>> (_names_a_font_family("wells"), _names_a_font_family("DejaVu Serif-2"))
+            (False, False)
+
+            ```
+    """
+    folded = name.casefold()
+    if folded in font_family_aliases:
+        return True
+    return folded in _families_matplotlib_has(len(fontManager.ttflist))
+
+
 def _font_family_a_name_still_stands_for(
     name: Optional[str], opts: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -121,10 +197,11 @@ def _font_family_a_name_still_stands_for(
     name="DejaVu Serif")`` named a layer and drew in sans-serif, with nothing said (review R-M2).
 
     Both readings are kept instead of one being chosen: the layer takes the name, and the name is handed on
-    as the font as well **when it resolves to a family matplotlib actually has**. That condition is what
-    separates the two intents without guessing — a name matplotlib cannot resolve would have rendered in the
-    default font anyway, so passing it on would change no pixel and cost a ``findfont: Font family 'wells'
-    not found.`` on every named label.
+    as the font as well **when it is the name of a family matplotlib has** — which is
+    :func:`_names_a_font_family`, a membership test rather than a resolution, so the string that decides is
+    the string that is forwarded (review R2-H6). That condition is what separates the two intents without
+    guessing: a name naming no family would have rendered in the default font anyway, so passing it on
+    would change no pixel and cost a ``findfont: Font family 'wells' not found.`` on every named label.
 
     Args:
         name: The name the caller gave the layer, or ``None``.
@@ -154,12 +231,18 @@ def _font_family_a_name_still_stands_for(
             {}
 
             ```
+        - A name that is only a fontconfig *pattern* for a family is not that family, which matters
+          because ``-2`` is what a duplicate name is suffixed with:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> _font_family_a_name_still_stands_for("DejaVu Serif-2", {})
+            {}
+
+            ```
     """
     if not isinstance(name, str) or _a_font_is_already_chosen(opts):
         return {}
-    try:
-        findfont(FontProperties(family=name), fallback_to_default=False)
-    except (ValueError, RuntimeError, TypeError):
+    if not _names_a_font_family(name):
         return {}
     return {"fontname": name}
 

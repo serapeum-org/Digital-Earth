@@ -45,6 +45,15 @@ DEFAULT_FAMILY = "sans-serif"
 #: of one of these three.
 FAMILY_PROPERTIES = frozenset({"fontfamily", "fontname", "fontproperties"})
 
+#: A name that *parses* as a fontconfig pattern naming a family this machine has — `-` is the size
+#: separator there — while naming no family at all. It is also exactly what the id allocator mints for a
+#: second layer called `FONT`, so the package generates this shape itself (review R2-H6).
+PATTERN_ONLY = f"{FONT}-2"
+
+#: The other half of the same class: `,` separates families in a fontconfig pattern, so this parses too and
+#: is no family either.
+PATTERN_LIST = f"{FONT}, {ASKED}"
+
 
 def _family_spellings() -> Tuple[str, ...]:
     """Return every keyword matplotlib accepts for a text artist's font family, without `name`.
@@ -434,6 +443,27 @@ class TestTheFontMatplotlibReadsFromAName:
             list is real.
         """
         assert "font_properties" in FAMILY_SPELLINGS, FAMILY_SPELLINGS
+
+    @pytest.mark.parametrize("named", [PATTERN_ONLY, PATTERN_LIST])
+    def test_a_name_only_a_pattern_parser_reads_as_a_font_is_not_one(
+        self, drawn, named
+    ):
+        """A name that resolves only because it parses as a *pattern* must not be drawn as a family.
+
+        Args:
+            drawn: The map under test.
+            named: A layer name `FontProperties(family=...)` parses as a fontconfig pattern.
+
+        Test scenario:
+            The check asked `findfont(FontProperties(family=name))`, where a lone string is read as a
+            fontconfig pattern — `-` separates the size, `,` the families — and then forwarded the string
+            verbatim, where matplotlib reads it as one literal family. So `"DejaVu Serif-2"` resolved, was
+            forwarded, and left the artist asking for a family nothing has: the `findfont: ... not found`
+            the check exists to avoid, on the very shape the id allocator mints for a duplicate name
+            (review R2-H6). What decides and what is forwarded have to be the same thing.
+        """
+        placed = drawn.text(0.5, 0.5, "Amsterdam", name=named)
+        assert placed.get_fontfamily() == [DEFAULT_FAMILY], placed.get_fontfamily()
 
 
 class TestAGraticuleCalledASecondTime:
