@@ -384,14 +384,17 @@ class Renderer:
     Examples:
         - A map's renderer holds what it drew, keyed by the same ids
           :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` lists, in the order the
-          layers were drawn:
+          layers were drawn. Each generated id counts **within its kind**, so the second layer of a
+          second kind is ``-1`` and not ``-2``: this example said ``graticule-2`` until review R2-M10
+          gave the tier one counter per prefix, and it is the drawn ids themselves that say otherwise
+          (`R2-N3`):
             ```python
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
             >>> from digitalearth.interactive import InteractiveMap
             >>> wells = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
             >>> list(InteractiveMap().points(wells).graticule()._renderer.drawn)
-            ['points-1', 'graticule-2']
+            ['points-1', 'graticule-1']
 
             ```
     """
