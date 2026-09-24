@@ -23,6 +23,7 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
+from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 
 
 def _iso_labels(labels: Optional[Sequence]) -> Optional[list]:
@@ -71,7 +72,9 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     members = data.datasets
     # One colour range and one colormap for the whole cube, resolved from the collection and its first
     # member, so the colorbar on the last frame is the colorbar on the first.
-    clim = props.get("clim")
+    # `_engine_pair` restores HoloViews' own spelling: the option is declared as a `(low, high)` tuple,
+    # and the figure carries the JSON-safe list (review R2-M13).
+    clim = _engine_pair(props.get("clim"))
     frozen_clim = clim if clim is not None else interactive_map._global_clim(data, band)
     cmap = props.get("cmap")
     if cmap is None and members:
@@ -267,7 +270,15 @@ class TemporalMixin(_MixinBase):
                     "labels": describe(held, "labels", kept, _iso_labels(kept)),
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
-                    "clim": describe(held, "clim", clim),
+                    # Normalised to the spelling a figure can be written with, as `image` records it:
+                    # the documented `(low, high)` is a tuple, and a tuple is exactly what
+                    # `travels_in_a_figure` refuses — so the documented form was held beside the layer and
+                    # dropped from every saved figure while the undocumented list form travelled
+                    # (review R2-M13). The cost here is worse than a restyle: a reloaded cube with no
+                    # `clim` sends `draw_timecube` back to `_global_clim`, which rescans the members to
+                    # invent one, so the figure both looks different and pays for the scan this keyword
+                    # was passed to avoid.
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
                     "colorbar": colorbar,
                     "opts": described_opts,
                 }
