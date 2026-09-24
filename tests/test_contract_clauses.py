@@ -43,8 +43,32 @@ from digitalearth.base.contract_clauses import CLAUSES, cite, clause
 #: The repository root, from which the scanned trees hang.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: The trees a citation may live in. Everything the package ships and everything that tests it.
-SCANNED_TREES = (REPO_ROOT / "src", REPO_ROOT / "tests")
+#: The trees a citation may live in. Everything the package ships, everything that tests it, the pages that
+#: explain it and the workflows and templates that run it. The last two were outside the scan while the
+#: module docstring called the spelling load bearing, so a wrong number in a docs page or a pull-request
+#: template was checked by nobody (`R2-L6`). Measured when they were added: not one citation lives in
+#: either tree today, so this closes a hole rather than papering over a finding.
+SCANNED_TREES = (
+    REPO_ROOT / "src",
+    REPO_ROOT / "tests",
+    REPO_ROOT / "docs",
+    REPO_ROOT / ".github",
+)
+
+#: The file types a citation is read out of: code, and the prose formats around it. Measured when the prose
+#: was added: 317 files before, 349 after — 20 markdown pages, 7 workflows and 5 text files that nothing had
+#: ever read for a citation.
+CITATION_SUFFIXES = (".py", ".md", ".rst", ".txt", ".yml", ".yaml", ".toml", ".cfg")
+
+#: The one text format deliberately left out, with its reason. A notebook stores its outputs inline — base64
+#: PNG payloads and minified JavaScript — and both are full of ``C<n>``-shaped tokens: measured across
+#: `docs/examples/`, 293 of them, not one a citation. Nothing about their *shape* tells them from prose,
+#: which is the only thing this guard judges by, so reading notebooks would mean reporting every such token
+#: whose number is not a clause and silently counting the rest, or a second heuristic of the kind this
+#: module's history says not to add. The hole is stated instead, and
+#: `TestTheScanReachesEveryFileACitationCanLiveIn` holds the reason to a measurement rather than to this
+#: sentence.
+UNSCANNED_SUFFIXES = (".ipynb",)
 
 #: A citation of this contract: the bare token, with nothing joined to its left.
 #:
@@ -73,7 +97,14 @@ CITATION = re.compile(r"(?<![\w-])C(\d+)\b(?![\"'])")
 #: The first sweep (commit ``7d98a6e0``) migrated ``tests/`` and left three sites under ``src/`` writing a
 #: finding this way, where they were silently counted as citations of clause 1 (review R-M3). Nothing said so,
 #: because clause 1 exists. This is what says so next time.
-REVIEW_FINDING = re.compile(r"\breviews?\s+C\d")
+#:
+#: The round number sits between the word and the finding once there has been more than one round — "per
+#: review round C3", "review round 2 C3" — and an adjacent-pair pattern read straight past all of them
+#: (`R2-L6`). It is still the *phrase* that is matched and not merely the presence of the word: a sentence
+#: that mentions a review and then cites a clause ("the review found C7 unenforced") is citing C7, and
+#: reporting that would be the false positive this pattern's own history warns about.
+#: :data:`REVIEW_PHRASE_CASES` holds both directions.
+REVIEW_FINDING = re.compile(r"\breviews?\s+(?:rounds?\s+)?(?:\d+\s+)?C\d")
 
 #: This module cites numbers while explaining the rule, and must not count as anybody's pin.
 GUARD_MODULE = Path(__file__).resolve()
@@ -126,18 +157,61 @@ def _merge(into: dict[int, list[str]], more: dict[int, list[str]]) -> None:
         into.setdefault(number, []).extend(sites)
 
 
-def _python_files() -> list[Path]:
-    """Every Python file a citation could live in.
+def _files_suffixed(suffixes: tuple[str, ...]) -> list[Path]:
+    """Every file under the scanned trees with one of these suffixes.
+
+    Args:
+        suffixes: The file types to collect.
 
     Returns:
-        The files under :data:`SCANNED_TREES`, byte-compiled caches excluded, in a stable order.
+        The files under :data:`SCANNED_TREES`, byte-compiled caches and notebook checkpoints excluded, in a
+        stable order. A tree that is not present is skipped rather than raising, so a checkout without
+        `docs/` still runs the guard over what it has.
     """
+    skipped = {"__pycache__", ".ipynb_checkpoints"}
     return sorted(
         path
         for tree in SCANNED_TREES
-        for path in tree.rglob("*.py")
-        if "__pycache__" not in path.parts
+        if tree.is_dir()
+        for path in tree.rglob("*")
+        if path.suffix in suffixes and skipped.isdisjoint(path.parts) and path.is_file()
     )
+
+
+def _python_files() -> list[Path]:
+    """Every Python file the pin scan parses.
+
+    Returns:
+        The `*.py` files under :data:`SCANNED_TREES`, in a stable order. Separate from
+        :func:`_citation_files` because a pin is read with :mod:`ast` from a module's docstrings, which
+        only a Python file has; a citation is read from text, which any file has.
+    """
+    return _files_suffixed((".py",))
+
+
+def _citation_files() -> list[Path]:
+    """Every file a citation is read out of.
+
+    Returns:
+        The files under :data:`SCANNED_TREES` whose suffix is in :data:`CITATION_SUFFIXES`, in a stable
+        order. :data:`UNSCANNED_SUFFIXES` says what is left out and why.
+    """
+    return _files_suffixed(CITATION_SUFFIXES)
+
+
+def _first_notebook_reading_as_a_citation() -> tuple[Path | None, dict[int, list[str]]]:
+    """Find a notebook whose stored output reads as a citation, which is why notebooks are not scanned.
+
+    Returns:
+        The first notebook under the scanned trees that yields a citation-shaped token, and what it
+        yielded; ``(None, {})`` when no notebook does. Stops at the first one: the point is that the
+        payloads collide with the spelling, not how often.
+    """
+    for path in _files_suffixed(UNSCANNED_SUFFIXES):
+        found = _cited_in(path.read_text(encoding="utf-8"), _relative(path))
+        if found:
+            return path, found
+    return None, {}
 
 
 def _relative(path: Path) -> str:
@@ -159,7 +233,7 @@ def _all_citations() -> dict[int, list[str]]:
         Clause number to the sites citing it.
     """
     citations: dict[int, list[str]] = {}
-    for path in _python_files():
+    for path in _citation_files():
         if path in SELF_REFERRING:
             continue
         _merge(citations, _cited_in(path.read_text(encoding="utf-8"), _relative(path)))
@@ -312,6 +386,51 @@ CITATION_CASES = [
 ]
 
 
+#: What :data:`REVIEW_FINDING` must and must not read as a review finding, as `(line, caught)`.
+#:
+#: The pattern matched an **adjacent** pair only, so "per review round C3" — the way a round is cited once
+#: there has been more than one of them — sailed past it and was read as a citation of clause 3, which
+#: exists, so it passed (`R2-L6`). That is the exact shape the rule was written to stop, one word wider.
+#:
+#: The last two rows are the other direction, and they are why the pattern is not simply "review, then a
+#: number somewhere later": a sentence may mention a review *and* cite a clause, and that citation is real.
+REVIEW_PHRASE_CASES = [
+    ("the finding was raised as review C1", True),
+    ("per review round C3, the gate counts depth on its own", True),
+    ("review round 2 C3 asked for this", True),
+    ("the reviews C7 line has never been right", True),
+    ("the review found C7 unenforced on the static tier", False),
+    ("a change to contract C4 is a change to every tier", False),
+]
+
+
+class TestTheReviewPhraseIsTheCollisionItDocuments:
+    """The one thing that tells a finding from a clause is the phrase in front of it.
+
+    :data:`CITATION` judges a token by shape and cannot help here — a finding really is written as a bare
+    ``C<n>`` in prose — so this pattern carries the whole rule, and a round that phrases itself one word
+    differently walks straight through it. That is not hypothetical: every review round mints fresh
+    ``C<n>`` findings, and by the second round they are cited as "review round 2", not as "review".
+    """
+
+    @pytest.mark.parametrize(
+        ("line", "caught"),
+        REVIEW_PHRASE_CASES,
+        ids=[row[0][:40] for row in REVIEW_PHRASE_CASES],
+    )
+    def test_a_line_is_read_as_a_finding_only_when_a_review_introduces_the_number(
+        self, line, caught
+    ):
+        """Both directions: the phrasings a round uses, and the sentences that merely mention one.
+
+        Args:
+            line: The line to read.
+            caught: Whether it should be reported as a finding written in the contract's spelling.
+        """
+        found = REVIEW_FINDING.search(line) is not None
+        assert found is caught, f"{line!r} was {'caught' if found else 'missed'}"
+
+
 class TestTheCitationPatternIsTheShapeRuleItDocuments:
     """The regular expression is the whole guard, and nothing held it to the rules it claims.
 
@@ -335,6 +454,43 @@ class TestTheCitationPatternIsTheShapeRuleItDocuments:
         """
         found = [int(match.group(1)) for match in CITATION.finditer(line)]
         assert found == expected, f"{line!r} yielded {found}"
+
+
+class TestTheScanReachesEveryFileACitationCanLiveIn:
+    """A scan that reads one file type checks one file type, whatever its docstring claims.
+
+    The spelling is load bearing — a wrong number is a reader sent to a clause nobody wrote — and the scan
+    read ``*.py`` under two trees, so the same wrong number in a docs page, a workflow or a pull-request
+    template was nobody's business (`R2-L6`). Prose is where a citation is most likely to be *written*, so
+    that was the larger half of the surface, not the smaller.
+    """
+
+    def test_the_scan_reads_prose_and_not_only_python(self):
+        """Markdown is where a clause is explained, and a citation in it was unchecked.
+
+        Test scenario:
+            The trees now include `docs/` and `.github/`, and the suffixes include the text formats a
+            citation can be written in. Measured when they were added: no new citation appeared anywhere
+            in them, so this closes a hole rather than papering over a finding.
+        """
+        suffixes = sorted({path.suffix for path in _citation_files()})
+        assert ".md" in suffixes, f"the scan reads only {suffixes}"
+
+    def test_a_notebook_is_left_out_for_a_reason_that_is_measured_here(self):
+        """The half that is declared rather than closed, so the next reader is not left guessing.
+
+        Test scenario:
+            A notebook carries base64 image payloads and minified JavaScript, and both are full of
+            ``C<n>``-shaped tokens — measured across `docs/examples/`, 293 of them, none a citation.
+            A regular expression cannot tell those from prose, so notebooks are excluded by suffix and the
+            exclusion is stated. If this ever fails, the payloads are gone and the exclusion can go with
+            them: take `.ipynb` out of :data:`UNSCANNED_SUFFIXES` and let the scan read them.
+        """
+        noisy, found = _first_notebook_reading_as_a_citation()
+        assert noisy is not None, (
+            "no notebook carries a citation-shaped token any more, so the suffix exclusion is no longer "
+            f"buying anything; scan them ({found})"
+        )
 
 
 class TestTheCitationsAndTheClausesDoNotDrift:
@@ -371,7 +527,7 @@ class TestTheCitationsAndTheClausesDoNotDrift:
             the spelling to forbid it is not using it.
         """
         offenders = []
-        for path in _python_files():
+        for path in _citation_files():
             if path in SELF_REFERRING:
                 continue
             for index, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
