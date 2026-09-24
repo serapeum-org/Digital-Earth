@@ -52,6 +52,15 @@ class MissingObject(OffLimbError, LookupError):
     tier re-raises *this class*, and static is the default tier — so before this base was added,
     ``except OffLimbError`` covered three tiers out of four and silently missed the one most callers use.
 
+    **The base is not only for a caller's own `except`.** Every ``except OffLimbError`` already written in
+    the package now reaches this too, and one of them is a guard the interactive tier puts on its builders
+    (``_skips_off_limb``). So a builder that meets a missing object skips the layer with a warning on a
+    lenient map and re-raises *this class*, with its own message, on a ``strict=True`` one — measured, not
+    inferred (`R2-L9`). That is the answer this module already prescribes two paragraphs down: a missing
+    object is a layer with nothing to draw, a fact about the data, and leniency is the useful default with
+    ``strict`` as the way out. It is latent today, because no builder that draws a custom layer carries the
+    guard, and `tests/base/test_undrawable_layer.py` pins it for the day one does.
+
     **Still a `LookupError`**, because that is what it is: a lookup in the renderer's table of held objects
     that came back empty. Nothing in the package catches it that way today — it is kept because narrowing a
     public exception's bases breaks callers that nothing in this repo can see, and because the reading is

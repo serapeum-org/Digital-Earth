@@ -201,3 +201,88 @@ class TestOneCatchableTypeForALayerThatCouldNotBeDrawn:
         assert "this figure does not carry" in str(refusal.value), (
             f"the missing-object message no longer says which case it is: {refusal.value}"
         )
+
+
+def _a_builder_that_meets_a_missing_object(tier):
+    """Run the tier's off-limb guard over a builder whose custom object is not here.
+
+    The guard rather than a builder, because no builder that draws a custom layer carries it today: the
+    two halves have not met in the package yet, and this is where they do. Declared as a function so the
+    decorator wraps something with a name the guard can log.
+
+    Args:
+        tier: The map to run it on.
+
+    Returns:
+        Whatever the guard answers — the map itself when the layer was skipped.
+    """
+    from digitalearth.interactive.base import _skips_off_limb
+
+    @_skips_off_limb
+    def custom(self):
+        """Reach for a custom layer's held object, the way a drawer does.
+
+        Args:
+            self: The map the builder is bound to.
+
+        Raises:
+            MissingObject: always — nothing is held under this id.
+        """
+        held_object(
+            _LAYER, "custom:holoviews", {}, engine="holoviews", backend="interactive"
+        )
+
+    return custom(tier)
+
+
+class TestATierSkippingAnOffLimbLayerSkipsAMissingObjectToo:
+    """What the widened base means where the shared clause is actually written (`R2-L9`).
+
+    Giving `MissingObject` an `OffLimbError` base did more than let a caller catch both: it put the
+    missing-object case inside every ``except OffLimbError`` already in the package, and the interactive
+    tier has one on its builders. That is a behaviour change nobody asked for in those words, so it is run
+    here rather than reasoned about — and it turns out to be the answer the two modules already promise.
+    `digitalearth.base.custom` says a missing object is "a layer with nothing to draw — a fact about the
+    data, not about the call — which is why leniency is useful here and ``strict=True`` is how a caller
+    opts out of it", and skip-unless-strict is exactly what the guard does with it.
+
+    Latent today: no builder that draws a custom layer carries the guard. Pinned all the same, because the
+    day one does, this is the behaviour it will have, and nothing else in the suite would say so.
+    """
+
+    def test_a_lenient_map_skips_the_layer_and_carries_on(self):
+        """The lenient half: the rest of the figure still renders, as it does for off-limb data.
+
+        Test scenario:
+            The guard's contract is "skip the layer, warn, return the map so the call still chains". A
+            missing object reaches it through the widened base and is answered the same way — measured,
+            not assumed: the call returns the map itself and the figure gains no layer.
+        """
+        from digitalearth.interactive.map import InteractiveMap
+
+        lenient = InteractiveMap()
+        answered = _a_builder_that_meets_a_missing_object(lenient)
+        assert answered is lenient, (
+            f"the skipped call returned {answered!r}, so it no longer chains"
+        )
+        assert [layer.id for layer in lenient.figure_spec.layers] == [], (
+            "a layer that drew nothing must not be described as though it had"
+        )
+
+    def test_a_strict_map_still_raises_the_missing_object_itself(self):
+        """The strict half, and the reason the widening is not a loss of information.
+
+        Test scenario:
+            `strict=True` re-raises the error it was given, so what reaches the caller is still
+            `MissingObject` with its own message — not an `OffLimbError` about the display CRS. A caller
+            who opted out of leniency can still tell the two cases apart, which is the whole basis for
+            giving them one base.
+        """
+        from digitalearth.interactive.map import InteractiveMap
+
+        strict = InteractiveMap(strict=True)
+        with pytest.raises(MissingObject) as refusal:
+            _a_builder_that_meets_a_missing_object(strict)
+        assert "this figure does not carry" in str(refusal.value), (
+            f"the strict tier re-raised something else: {refusal.value}"
+        )
