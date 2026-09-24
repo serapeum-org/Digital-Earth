@@ -142,8 +142,9 @@ class TestANamePaddedWithWhitespace:
             which names a concept the caller never wrote — and `name=0` raised nothing at all, silently
             drawing `points-1`.
         """
+        features = _points()
         with pytest.raises(TypeError, match=r"a layer name must be a string"):
-            drawn.scatter(_points(), name=wrong)
+            drawn.scatter(features, name=wrong)
 
     def test_a_long_name_survives_whole(self, drawn):
         """No length cap: truncating an id silently would make two named layers one.
@@ -227,9 +228,10 @@ class TestADescriptionThatRefuses:
             """
             raise ValueError("refused")
 
+        features = _points()
         monkeypatch.setattr(Map, "_index_layer", refuse)
         with pytest.raises(ValueError, match="refused"):
-            drawn.scatter(_points(), name=ASKED)
+            drawn.scatter(features, name=ASKED)
         assert drawn._issued_ids == set(), drawn._issued_ids
 
     def test_the_next_layer_gets_the_name_unsuffixed(self, drawn, monkeypatch):
@@ -262,9 +264,10 @@ class TestADescriptionThatRefuses:
                 raise ValueError("refused")
             indexed(self, *args, **kwargs)
 
+        refused = _points()
         monkeypatch.setattr(Map, "_index_layer", refuse_once)
         with pytest.raises(ValueError, match="refused"):
-            drawn.scatter(_points(), name=ASKED)
+            drawn.scatter(refused, name=ASKED)
         drawn.scatter(_points(), name=ASKED)
         assert drawn.layer_ids == [ASKED], drawn.layer_ids
 

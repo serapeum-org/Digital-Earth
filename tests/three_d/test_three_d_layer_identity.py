@@ -117,8 +117,9 @@ class TestANamePaddedWithWhitespace:
             said nothing — so the caller's `scene.set_visible(123, False)` would then fail somewhere else
             entirely, about an id nobody wrote.
         """
+        source = _dem()
         with pytest.raises(TypeError, match=r"a layer name must be a string"):
-            scene.terrain(_dem(), name=wrong)
+            scene.terrain(source, name=wrong)
 
 
 class TestHowLongAnIdIsReserved:

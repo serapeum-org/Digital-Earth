@@ -259,10 +259,11 @@ class TestWhatC7DoesNotCover:
         """
         from digitalearth.static import Map
 
+        undrawable = self._figure("terrain")
         with Map(crs=4326) as scene:
             assert scene.strict is False, "the probe must be a lenient scene"
             with pytest.raises(KeyError, match="does not draw 'terrain'"):
-                scene._renderer.draw_layer(self._figure("terrain"), self.LAYER_ID)
+                scene._renderer.draw_layer(undrawable, self.LAYER_ID)
 
     def test_a_layer_with_nothing_to_draw_still_skips_on_that_same_scene(self, caplog):
         """The half the decision must not have broken: nothing to draw is still a warning, not a raise.

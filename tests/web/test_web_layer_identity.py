@@ -175,8 +175,9 @@ class TestANamePaddedWithWhitespace:
             drawn: The map under test.
             wrong: The non-string the caller passed.
         """
+        features = _points()
         with pytest.raises(TypeError, match=r"a layer name must be a string"):
-            drawn.points(_points(), name=wrong)
+            drawn.points(features, name=wrong)
 
 
 class TestAnUnnamedLayerCountsItsOwnKind:

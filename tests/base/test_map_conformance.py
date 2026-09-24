@@ -1461,8 +1461,9 @@ class TestATierMayBringAProbeOfItsOwn:
         """
         shadowing = self._with_its_own()
         shadowing.test_a_layer_nobody_hid_is_described_visible = None
+        probing = shadowing()
         with pytest.raises(AssertionError) as refusal:
-            shadowing().test_this_tier_contributes_a_non_zero_count_of_probes()
+            probing.test_this_tier_contributes_a_non_zero_count_of_probes()
         assert "test_a_layer_nobody_hid_is_described_visible" in str(refusal.value)
 
     def test_a_subclass_that_empties_a_probe_but_keeps_it_callable_is_refused_too(self):
@@ -1480,8 +1481,9 @@ class TestATierMayBringAProbeOfItsOwn:
             """Stand in for the probe without asking anything."""
 
         shadowing.test_a_layer_nobody_hid_is_described_visible = emptied
+        probing = shadowing()
         with pytest.raises(AssertionError) as refusal:
-            shadowing().test_this_tier_contributes_a_non_zero_count_of_probes()
+            probing.test_this_tier_contributes_a_non_zero_count_of_probes()
         assert "test_a_layer_nobody_hid_is_described_visible" in str(refusal.value)
 
     def test_a_subclass_that_changes_nothing_is_reported_as_shadowing_nothing(self):

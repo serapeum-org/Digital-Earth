@@ -58,8 +58,9 @@ class TestAClauseRefusalNamesOnlyNumbersTheTableHolds:
             both correct and the shortest true rendering of it. That is worth keeping: the fix must not
             turn one range into fourteen numbers.
         """
+        uncited = max(CLAUSES) + 1
         with pytest.raises(KeyError) as refusal:
-            clause(max(CLAUSES) + 1)
+            clause(uncited)
         assert "it states C1-C14" in refusal.value.args[0], refusal.value.args[0]
 
     def test_a_table_with_a_gap_is_not_named_as_a_range_that_covers_it(
@@ -77,9 +78,10 @@ class TestAClauseRefusalNamesOnlyNumbersTheTableHolds:
             the suite renders a refusal over a table it does not ship, so nothing else could see it.
         """
         gapped = _without_a_clause(_DROPPED)
+        uncited = max(gapped) + 1
         monkeypatch.setattr(contract_clauses, "CLAUSES", gapped)
         with pytest.raises(KeyError) as refusal:
-            clause(max(gapped) + 1)
+            clause(uncited)
         assert "it states C1-C6, C8-C14" in refusal.value.args[0], refusal.value.args[0]
 
 
