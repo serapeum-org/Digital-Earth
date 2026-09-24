@@ -6,6 +6,10 @@ The sibling of `tests/static/test_static_layer_identity.py`, for the two finding
   the mint kept the padding and `DataRef` stripped the uri it was registered under.
 * **R2-M10 / R2-L2** — an unnamed layer was numbered within the *map* (`points-1, text-2, points-3`) while
   this tier's own `layer_ids` docstring said it was numbered within its kind.
+
+R2-M11 is not here: this tier already rolled a failed description back, and is the tier the static one was
+brought into line with. The pin that it still does is the last class below, so the two tiers cannot drift
+apart again in the other direction.
 """
 
 import pytest
@@ -152,3 +156,39 @@ class TestAnUnnamedLayerCountsItsOwnKind:
         drawn.text(0.5, 0.5, "a", name="text-1")
         drawn.text(0.6, 0.6, "b")
         assert drawn.layer_ids == ["points-1", "text-1", "text-2"], drawn.layer_ids
+
+
+class TestADescriptionThatRefuses:
+    """R2-M11, from the other side: this tier already rolls back, and must keep doing so."""
+
+    def test_the_minted_id_is_given_back(self, drawn, point_fc, monkeypatch):
+        """Nothing is left reserved when describing the layer raises.
+
+        Args:
+            drawn: The map under test.
+            point_fc: The point fixture.
+            monkeypatch: Makes `_index_layer` refuse — the step that runs `LayerSpec` validation,
+                `DataRef.of` and `LayerTree.add`.
+
+        Test scenario:
+            The static tier stranded the id here and this one did not, which is the divergence R2-M11
+            reports. Pinning the behaviour on *both* tiers is what stops the pair drifting apart again
+            from whichever side moves next.
+        """
+
+        def refuse(*args, **kwargs):
+            """Stand in for a description step that refuses.
+
+            Args:
+                *args: Ignored.
+                **kwargs: Ignored.
+
+            Raises:
+                ValueError: always.
+            """
+            raise ValueError("refused")
+
+        monkeypatch.setattr(InteractiveMap, "_index_layer", refuse)
+        with pytest.raises(ValueError, match="refused"):
+            drawn.points(point_fc, name=ASKED)
+        assert drawn._issued_ids == set(), drawn._issued_ids

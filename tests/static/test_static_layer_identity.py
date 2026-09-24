@@ -9,6 +9,10 @@ found underneath it, all of them about identity rather than about naming:
   line earlier. Only a layer carrying a source failed, which made it intermittent across builders.
 * **R2-M10 / R2-L2** — an unnamed layer was numbered within the *figure* (`points-1, text-2, points-3`)
   while this tier's own `layer_ids` docstring said it was numbered within its kind.
+* **R2-M11** — a description that refused left the minted id reserved on a scene that draws no such layer.
+* **R2-L11** — `_forget_layer`'s docstring promised to ignore a layer already gone, and `LayerTree.remove`
+  raised `KeyError` on one.
+
 The cross-tier half — that the other three tiers answer identically — is in the sibling
 `test_*_layer_identity.py` files under `tests/interactive`, `tests/web` and `tests/three_d`; the shared rule
 itself is in `tests/base/test_layer.py`.
@@ -190,3 +194,89 @@ class TestAnUnnamedLayerCountsItsOwnKind:
         drawn.text(0.5, 0.5, "a", name="text-1")
         drawn.text(0.6, 0.6, "b")
         assert drawn.layer_ids == ["points-1", "text-1", "text-2"], drawn.layer_ids
+
+
+class TestADescriptionThatRefuses:
+    """R2-M11 / R2-L11: a layer that was minted but never described takes its id back with it."""
+
+    def test_the_minted_id_is_given_back(self, drawn, monkeypatch):
+        """Nothing is left reserved when recording the layer raises.
+
+        Args:
+            drawn: The map under test.
+            monkeypatch: Makes `_index_layer` refuse — the step that runs `LayerSpec` validation,
+                `DataRef.of` and `LayerTree.add`, each of which refuses for its own reasons.
+
+        Test scenario:
+            The mint sat outside every `try` on this tier, so a refusal left the id in `_issued_ids` with
+            the scene describing no such layer; the interactive tier already rolled its own back. The
+            refusal is injected rather than provoked because the one reachable refusal the review measured
+            — `name=123` — was closed by the R2-H4 fix above and now happens *before* the mint; the
+            finding is about the window between the mint and the description, not about any one way in.
+        """
+
+        def refuse(*args, **kwargs):
+            """Stand in for a description step that refuses.
+
+            Args:
+                *args: Ignored.
+                **kwargs: Ignored.
+
+            Raises:
+                ValueError: always.
+            """
+            raise ValueError("refused")
+
+        monkeypatch.setattr(Map, "_index_layer", refuse)
+        with pytest.raises(ValueError, match="refused"):
+            drawn.scatter(_points(), name=ASKED)
+        assert drawn._issued_ids == set(), drawn._issued_ids
+
+    def test_the_next_layer_gets_the_name_unsuffixed(self, drawn, monkeypatch):
+        """The cost of stranding it, read the way a caller would notice: a name that is suddenly taken.
+
+        Args:
+            drawn: The map under test.
+            monkeypatch: Makes the first attempt refuse, and only the first.
+
+        Test scenario:
+            A stranded id is invisible until the caller retries. The second call is the one that used to
+            come back as `wells-2` on a map with no `wells` on it.
+        """
+        calls = {"n": 0}
+        indexed = Map._index_layer
+
+        def refuse_once(self, *args, **kwargs):
+            """Refuse the first layer and describe every one after it.
+
+            Args:
+                self: The scene describing the layer.
+                *args: Passed through once the first call is past.
+                **kwargs: Passed through once the first call is past.
+
+            Raises:
+                ValueError: on the first call only.
+            """
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ValueError("refused")
+            indexed(self, *args, **kwargs)
+
+        monkeypatch.setattr(Map, "_index_layer", refuse_once)
+        with pytest.raises(ValueError, match="refused"):
+            drawn.scatter(_points(), name=ASKED)
+        drawn.scatter(_points(), name=ASKED)
+        assert drawn.layer_ids == [ASKED], drawn.layer_ids
+
+    def test_forgetting_a_layer_that_was_never_added_is_ignored(self, drawn):
+        """R2-L11: the docstring promised this and `LayerTree.remove` raised `KeyError` instead.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            It matters now rather than later: the rollback above runs for a refusal that may have come from
+            `LayerTree.add` itself, so an unguarded `remove` would raise over the exception it was
+            unwinding and the caller would see the wrong one.
+        """
+        assert drawn._forget_layer("never-added") is None

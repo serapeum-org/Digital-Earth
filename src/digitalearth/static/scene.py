@@ -482,10 +482,36 @@ class Scene(WatermarkMixin):
 
         Returns:
             The layer's id, which a caller-supplied name becomes when it is free.
+
+        Raises:
+            Exception: whatever recording the layer raises — `LayerSpec` validation, `DataRef.of`,
+                `LayerTree.add` — after the id and everything filed under it have been given back again.
+                The mint sat outside every ``try`` in this tier, so a description that refused left the id
+                reserved on a scene that draws no such layer, and the next call under the same name was
+                suffixed past it; the interactive tier already rolled its own back (review R2-M11). Rolling
+                back here rather than in :meth:`_draw` covers the builders that describe without drawing —
+                ``graticule`` is one — which a ``try`` in :meth:`_draw` would not reach.
         """
         # A generated id counts the kind, so `custom:matplotlib` numbers `custom-1`: a colon cannot appear in
         # the middle of an id, and the engine name is not what a reader is counting anyway.
         layer_id = self._layer_id(record.kind.split(":")[0], record.name)
+        try:
+            self._record_layer(layer_id, record)
+        except BaseException:
+            self._forget_layer(layer_id)
+            raise
+        return layer_id
+
+    def _record_layer(self, layer_id: str, record: LayerRecord) -> None:
+        """File one layer's description, data, key and keywords under an id already minted for it.
+
+        Split out of :meth:`_describe_layer` so the mint sits outside the body that can raise and the
+        rollback can be written once (review R2-M11).
+
+        Args:
+            layer_id: The id :meth:`_layer_id` handed out for this layer.
+            record: What the builder drew, as :class:`LayerRecord` describes it.
+        """
         if record.key is not None:
             self._layer_keys[layer_id] = record.key
         if record.held is not None:
@@ -503,7 +529,6 @@ class Scene(WatermarkMixin):
             source=record.source,
             symbology=_with_described_opts(record.symbology, record.opts),
         )
-        return layer_id
 
     def _draw(self, record: LayerRecord) -> Any:
         """Record a layer and draw it, returning whatever its drawer handed back.
@@ -545,9 +570,14 @@ class Scene(WatermarkMixin):
         they asked for rather than a suffixed one.
 
         Args:
-            layer_id: The layer to forget. One already gone is ignored.
+            layer_id: The layer to forget. One already gone is ignored — as this docstring already promised
+                and line 514 did not, since `LayerTree.remove` raises `KeyError` for an id it does not hold
+                (review R2-L11). That matters now rather than later: :meth:`_describe_layer` rolls back a
+                description that refused, and the refusal may have come from `LayerTree.add` itself — so the
+                rollback would have raised over the very exception it was unwinding.
         """
-        self._layer_tree = self._layer_tree.remove(layer_id)
+        if layer_id in self._layer_tree:
+            self._layer_tree = self._layer_tree.remove(layer_id)
         self._issued_ids.discard(layer_id)
         self._forget_layer_data(layer_id)
 
