@@ -196,21 +196,31 @@ def _font_family_a_name_still_stands_for(
     Giving the layer that name without this would drop the caller's font on the floor: ``text(...,
     name="DejaVu Serif")`` named a layer and drew in sans-serif, with nothing said (review R-M2).
 
-    Both readings are kept instead of one being chosen: the layer takes the name, and the name is handed on
+    Both readings are kept instead of one being chosen: the layer takes the name, and the name is drawn in
     as the font as well **when it is the name of a family matplotlib has** — which is
     :func:`_names_a_font_family`, a membership test rather than a resolution, so the string that decides is
-    the string that is forwarded (review R2-H6). That condition is what separates the two intents without
+    the string that is drawn with (review R2-H6). That condition is what separates the two intents without
     guessing: a name naming no family would have rendered in the default font anyway, so passing it on
     would change no pixel and cost a ``findfont: Font family 'wells' not found.`` on every named label.
 
+    It is the **drawers** that ask this, not the builders, so the answer never reaches the description.
+    Whether this machine has a family is a property of the machine: writing the answer into the layer's
+    keywords made one call describe itself two ways, carrying ``{"fontname": ...}`` where the family was
+    installed and nothing where it was not (review R2-M3). A figure records the name the caller wrote; the
+    font is read off that name wherever it is drawn.
+
     Args:
-        name: The name the caller gave the layer, or ``None``.
-        opts: The caller's remaining keywords, read for a font family they already chose — under any
-            spelling matplotlib takes for one, which is what :func:`_a_font_is_already_chosen` answers.
+        name: The name the layer carries — its label, which is what the caller asked for, rather than its
+            id, which a duplicate name suffixes ``-2`` into a string that is no family. ``None`` for a
+            layer with no name at all.
+        opts: The keywords the artist is about to be drawn with, read for a font family they already
+            choose — under any spelling matplotlib takes for one, which is what
+            :func:`_a_font_is_already_chosen` answers.
 
     Returns:
-        ``{"fontname": name}`` when ``name`` names a resolvable font family and the call names no other one;
-        an empty mapping otherwise.
+        ``{"fontname": name}`` when ``name`` is the name of a font family this machine has and the
+        keywords name no other one; an empty mapping otherwise, which draws the label in whatever the
+        keywords and matplotlib's defaults say.
 
     Examples:
         - A family matplotlib ships is read as the font as well as the layer's name:
@@ -491,6 +501,11 @@ def _resolve_tile_source(source: Any) -> Any:
 def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     """Place the text label a described layer asks for, at the lon/lat it recorded.
 
+    The label's font is read from its **name** here, which is where that belongs: matplotlib documents
+    ``name=`` as an alias of the font family, so a layer named for a family is drawn in it as well as
+    called it (review R-M2), but whether a family is installed is a fact about the machine drawing rather
+    than about the figure (review R2-M3). See :func:`_font_family_a_name_still_stands_for`.
+
     Args:
         scene: The map being drawn on.
         _data: The source slot every drawer takes, unread here — a label draws from a coordinate pair and
@@ -506,12 +521,17 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
     if xy is None:
         return None
-    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_style(scene, layer))
+    style = drawing_style(scene, layer)
+    style.update(_font_family_a_name_still_stands_for(layer.label, style))
+    drawn = scene.ax.text(xy[0], xy[1], props["s"], **style)
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
 def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     """Annotate the lon/lat a described layer recorded, optionally with an arrow.
+
+    An ``Annotation`` is a ``Text``, so its name reads as a font family here exactly as in
+    :func:`draw_text`, and for the same reason.
 
     Args:
         scene: The map being drawn on.
@@ -526,9 +546,9 @@ def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLay
     xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
     if xy is None:
         return None
-    drawn = scene.ax.annotate(
-        props["s"], xy=xy, xytext=props["xytext"], **drawing_style(scene, layer)
-    )
+    style = drawing_style(scene, layer)
+    style.update(_font_family_a_name_still_stands_for(layer.label, style))
+    drawn = scene.ax.annotate(props["s"], xy=xy, xytext=props["xytext"], **style)
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
@@ -772,8 +792,10 @@ class DecorationMixin(_MixinBase):
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321). ``Axes.text`` reads ``name=`` as an alias of the font family,
-                and that reading is kept: a name matplotlib resolves to a font is drawn in it as well,
-                unless the call chooses a font itself (review R-M2). Say ``fontname=`` to pick the font
+                and that reading is kept: a name that is the name of a family this machine has is drawn
+                in as well, unless the call chooses a font itself (review R-M2). That is applied when the
+                label is drawn and is not part of what the figure records, so a figure describes the name
+                and not the machine's font list (review R2-M3). Say ``fontname=`` to pick the font
                 independently of what the layer is called.
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
@@ -801,7 +823,7 @@ class DecorationMixin(_MixinBase):
                         "crs": crs_to_json(crs, "Map.text(crs=)"),
                     }
                 ),
-                opts=dict(kwargs, **_font_family_a_name_still_stands_for(name, kwargs)),
+                opts=kwargs,
             )
         )
 
@@ -833,9 +855,11 @@ class DecorationMixin(_MixinBase):
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321). ``Axes.annotate`` reads ``name=`` as an alias of the font
-                family — an ``Annotation`` is a ``Text`` — and that reading is kept: a name matplotlib
-                resolves to a font is drawn in it as well, unless the call chooses a font itself (review
-                R-M2). Say ``fontname=`` to pick the font independently of the layer's name.
+                family — an ``Annotation`` is a ``Text`` — and that reading is kept: a name that is the
+                name of a family this machine has is drawn in as well, unless the call chooses a font
+                itself (review R-M2). That is applied when the annotation is drawn and is not part of
+                what the figure records (review R2-M3). Say ``fontname=`` to pick the font independently
+                of the layer's name.
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``Axes.annotate`` (e.g. ``arrowprops``, ``textcoords``, ``fontsize``).
@@ -861,7 +885,7 @@ class DecorationMixin(_MixinBase):
                         "crs": crs_to_json(crs, "Map.annotate(crs=)"),
                     }
                 ),
-                opts=dict(kwargs, **_font_family_a_name_still_stands_for(name, kwargs)),
+                opts=kwargs,
             )
         )
 

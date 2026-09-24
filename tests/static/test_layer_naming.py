@@ -465,6 +465,57 @@ class TestTheFontMatplotlibReadsFromAName:
         placed = drawn.text(0.5, 0.5, "Amsterdam", name=named)
         assert placed.get_fontfamily() == [DEFAULT_FAMILY], placed.get_fontfamily()
 
+    def test_the_font_a_name_implies_is_not_written_into_the_figure(self, drawn):
+        """A keyword the caller never wrote must not appear in the description of what they asked for.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The font was synthesised into the layer's `opts` as it was built, so the same source produced
+            two figures: on a machine that has the family the layer carried `{'fontname': ...}`, and on
+            one that does not it carried no `opts` at all (review R2-M3). The name is what the caller
+            wrote and the name is what travels; the font is read from it when the label is drawn.
+        """
+        drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        props = drawn.figure_spec.layers.get(FONT).symbology.props
+        assert "opts" not in props, props
+
+    def test_a_font_the_caller_did_write_still_travels(self, drawn):
+        """The complement: a font the caller *did* ask for is described, like any other plain keyword.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.text(0.5, 0.5, "Amsterdam", name=ASKED, fontname=OTHER_FONT)
+        props = drawn.figure_spec.layers.get(ASKED).symbology.props
+        assert props["opts"] == {"fontname": OTHER_FONT}, props
+
+    def test_a_second_label_asking_for_the_same_font_is_drawn_in_it_too(self, drawn):
+        """The suffixed id is the layer's; the font follows the name the caller asked for.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            Reading the font from the layer's id at draw time would give the second label
+            `"DejaVu Serif-2"`, which names no family — the R2-H6 shape, reached from the other side.
+            It is read from the label, which keeps the caller's spelling.
+        """
+        drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        second = drawn.text(0.6, 0.6, "Rotterdam", name=FONT)
+        assert second.get_fontfamily() == [FONT], second.get_fontfamily()
+
+    def test_the_second_label_is_still_filed_under_the_suffixed_id(self, drawn):
+        """And the id is still suffixed, so the font is not bought by giving two layers one name.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        drawn.text(0.6, 0.6, "Rotterdam", name=FONT)
+        assert drawn.layer_ids == [FONT, PATTERN_ONLY], drawn.layer_ids
+
 
 class TestAGraticuleCalledASecondTime:
     """A replacing `graticule()` changes what the call named, and nothing it did not (R-L5)."""
