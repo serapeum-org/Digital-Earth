@@ -187,6 +187,17 @@ POOLED_WITHIN_ONE_SHAPE: Tuple[Tuple[str, dict, str], ...] = (
     ),
 )
 
+#: Every recorded shape more than one builder writes, as the builders that share it.
+#:
+#: The bound on the residue above, as a check rather than as a sentence. A shape one builder has to itself
+#: is subtracted exactly; a shape two builders share pools their defaults, which is the whole of what #334
+#: has left to close — so the day a new builder joins one of these shapes, or opens a third, this fails and
+#: the cost has to be looked at again rather than absorbed (review R2-H2).
+SHARED_SHAPES: Tuple[Tuple[str, ...], ...] = (
+    ("choropleth", "contours(filled=True)", "polygons"),
+    ("contours", "lines"),
+)
+
 
 def _last(drawn) -> Any:
     """Return the symbology of the last layer a map described.
@@ -324,6 +335,30 @@ class TestEveryRowStillDescribesItsBuilder:
 
 class TestAnExplicitAskIsStillPublished:
     """The question that catches a row that is too large (review R2-H2)."""
+
+    def test_only_the_named_shapes_are_shared_by_more_than_one_builder(self):
+        """The residue is bounded by the shapes builders share, so the sharing itself is pinned.
+
+        Test scenario:
+            A row is matched by the set of keys its builder writes, which is exact wherever a builder has
+            that set to itself. The two shapes below are the exceptions, and they are also the whole of
+            what the property-keyed table got wrong that is left. A builder added into one of them — or a
+            third shape opening — widens the loss silently otherwise, which is how the first table grew.
+        """
+        by_shape: Dict[Any, list] = {}
+        for row in (*UNASKED_PAINT, *UNASKED_PROPS):
+            by_shape.setdefault(row.keys, []).extend(row.builders)
+        shared = tuple(
+            sorted(
+                tuple(sorted(builders))
+                for builders in by_shape.values()
+                if len(builders) > 1
+            )
+        )
+        assert shared == SHARED_SHAPES, (
+            f"the builders sharing a recorded shape are {shared}, not {SHARED_SHAPES}; every shape below "
+            "pools its members' defaults, so a new member takes a wider loss than the one written down"
+        )
 
     @pytest.mark.parametrize(
         ("builder", "keyword", "value", "channel", "expected"),
