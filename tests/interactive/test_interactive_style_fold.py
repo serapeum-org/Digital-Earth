@@ -21,11 +21,13 @@ pytest.importorskip("geoviews")
 import holoviews as hv  # noqa: E402
 
 from digitalearth.interactive.style_fold import (  # noqa: E402
+    CHANNEL_KEYWORDS,
     CHANNEL_OPTIONS,
     INTERACTIVE_STYLE_SCHEMA,
     UNEXPRESSIBLE,
     allowed_options,
     fold_symbology,
+    portable_encodings,
     route_flat_style,
 )
 
@@ -353,3 +355,76 @@ class TestTheOtherOptionGroups:
         finally:
             # The session's backend is shared state; a test that sets it puts it back (review N6).
             hv.Store.set_current_backend(held)
+
+
+class TestTheRecordedOptionsAreReadBackAsChannels:
+    """The other direction: what a builder already recorded, read back in the portable vocabulary (#328).
+
+    `fold_symbology` turns a declared style into HoloViews options. Nineteen builders go the other way — they
+    resolve a caller's keywords into HoloViews options themselves and record *those* — so until now a layer
+    this tier drew described its style in a form only this tier could read, and `Symbology.encodings` came
+    back empty however the layer was styled. :func:`portable_encodings` is the read-back, and it changes
+    nothing a drawer sees: the resolved options stay exactly where they were.
+    """
+
+    def test_every_lifted_keyword_drives_a_channel_the_schema_declares(self):
+        """The table is derived from the schema, so the two cannot disagree about a keyword."""
+        declared = {
+            key.name: key.channel
+            for key in INTERACTIVE_STYLE_SCHEMA.keys.values()
+            if key.channel is not None
+        }
+        assert dict(CHANNEL_KEYWORDS) == declared, dict(CHANNEL_KEYWORDS)
+
+    def test_a_builders_resolved_size_reads_back_as_the_size_channel(self):
+        """`common` is where a builder files the style it derived, and it is read first."""
+        lifted = portable_encodings(Symbology(props={"common": {"size": 7.0}}))
+        assert lifted["size"].resolve() == 7.0, lifted
+
+    def test_the_callers_own_keyword_outranks_the_builders_derived_one(self):
+        """`opts` is merged over `common` by every drawer, so the lift must read them in that order."""
+        props = {"common": {"alpha": 0.2}, "opts": {"alpha": 0.9}}
+        assert portable_encodings(Symbology(props=props))["opacity"].resolve() == 0.9
+
+    def test_a_flat_style_at_the_top_of_props_is_read_too(self):
+        """`image` and `rgb` file `alpha` beside `via` rather than in `common`, and mean the same by it."""
+        props = {"via": "image", "alpha": 0.4, "opts": {}}
+        assert portable_encodings(Symbology(props=props))["opacity"].resolve() == 0.4
+
+    def test_a_colour_that_names_a_value_dimension_is_a_column_not_a_colour(self):
+        """HoloViews reads a colour naming a dimension as "colour by that column"."""
+        props = {"vdims": ("pop",), "common": {"color": "pop", "colorbar": True}}
+        assert sorted(portable_encodings(Symbology(props=props))) == []
+
+    def test_a_colour_naming_no_dimension_is_the_colour_it_looks_like(self):
+        """The complement, so the rule above cannot pass by dropping every colour."""
+        props = {"vdims": None, "opts": {"color": "#cc4444"}}
+        assert (
+            portable_encodings(Symbology(props=props))["color"].resolve() == "#cc4444"
+        )
+
+    def test_a_container_is_never_lifted_into_the_description(self):
+        """The hazard this rule exists for: a container can be carrying a credential.
+
+        Test scenario:
+            An `xyzservices.TileProvider` **is** a mapping, and one of its values is the caller's API key.
+            A lift that copied a container into a layer's description would write that key into every saved
+            figure. Only a scalar a channel can hold is lifted, so a mapping under a channel keyword is
+            passed over however it is spelled.
+        """
+        provider = {
+            "url": "https://tiles.example/{z}/{x}/{y}.png",
+            "apikey": "NOT-REAL",
+        }
+        lifted = portable_encodings(Symbology(props={"common": {"color": provider}}))
+        assert sorted(lifted) == [], lifted
+
+    def test_a_value_no_figure_could_be_written_with_is_not_lifted(self):
+        """JSON has no NaN, so lifting one would turn a drawable layer into an unsavable figure."""
+        lifted = portable_encodings(Symbology(props={"common": {"size": float("nan")}}))
+        assert sorted(lifted) == [], lifted
+
+    def test_an_engine_option_that_drives_no_channel_stays_an_engine_option(self):
+        """`cmap` and `colorbar` have no portable reading, and claiming one would invent a channel."""
+        props = {"common": {"cmap": "viridis", "colorbar": True, "clabel": "m"}}
+        assert sorted(portable_encodings(Symbology(props=props))) == []

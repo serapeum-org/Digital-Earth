@@ -6,7 +6,9 @@ not list it and `remove_layer` raised. These cover the description that replaces
 the caller chooses, and the one rule for a figure whose object is not here.
 """
 
+import importlib
 import json
+import logging
 
 import pytest
 
@@ -125,7 +127,12 @@ class TestALayerThatDescribesACustomObject:
 
 
 class TestAMissingObject:
-    """One rule for a figure that names a custom layer whose object is not here (contract C7)."""
+    """One rule for a figure that names a custom layer whose object is not here — contract C7.
+
+    The clause is stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`. A missing object is
+    its *nothing to draw* half; `TestWhatC7DoesNotCover` pins the other half, a kind the tier does not draw
+    at all, which is refused by name rather than skipped (#320).
+    """
 
     @staticmethod
     def _loaded():
@@ -173,6 +180,125 @@ class TestAMissingObject:
         """A figure with a dozen layers needs to say which one was skipped."""
         with pytest.raises(MissingObject, match="'wells'"):
             held_object("wells", "custom:pyvista", {}, engine="pyvista", backend="3d")
+
+
+class TestWhatC7DoesNotCover:
+    """The two situations C7 used to be read for, pinned apart so neither drifts into the other (#320).
+
+    Both halves of the clause are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`. The
+    *nothing to draw* half is pinned by the rest of this file and by each tier's contract file; this class
+    exists to keep the other half, because the text once read as if ``strict=`` governed it too, and
+    softening it would swallow a typo'd or cross-backend kind in silence.
+
+    Both halves are asked of one lenient scene, so a future change cannot satisfy one by breaking the other.
+    """
+
+    #: The layer id every figure here uses, named once so the assertions and the builder cannot drift.
+    LAYER_ID = "wells"
+
+    #: A kind each tier does **not** draw, with the module its `drawer_for` lives in. Every module imports
+    #: without its engine: `drawer_for` refuses a kind before it imports any builder behind one, which is
+    #: what lets all four tiers be asked from the engine-free base env.
+    UNDRAWN_PER_TIER = [
+        ("static", "digitalearth.static.renderer", "terrain"),
+        ("interactive", "digitalearth.interactive.renderer", "terrain"),
+        ("3d", "digitalearth.three_d.renderer", "choropleth"),
+        ("web", "digitalearth.web.renderer", "mesh"),
+    ]
+
+    @classmethod
+    def _figure(cls, kind):
+        """Return a one-layer figure naming `kind` and carrying no object for it.
+
+        Args:
+            kind: The layer kind to name.
+
+        Returns:
+            The figure.
+        """
+        layer = LayerSpec(
+            cls.LAYER_ID, kind, symbology=Symbology(props={"via": "custom"})
+        )
+        return FigureSpec(
+            sources={},
+            layers=LayerTree((layer,)),
+            panels=(PanelSpec("map", layers=(cls.LAYER_ID,)),),
+        )
+
+    @pytest.mark.parametrize(
+        ("tier", "module_name", "kind"),
+        UNDRAWN_PER_TIER,
+        ids=[row[0] for row in UNDRAWN_PER_TIER],
+    )
+    def test_a_kind_the_tier_does_not_draw_is_refused_by_name(
+        self, tier, module_name, kind
+    ):
+        """All four tiers refuse it, and none of them has a scene to be lenient with.
+
+        Args:
+            tier: The tier's name, for the parametrisation id.
+            module_name: The module its `drawer_for` lives in.
+            kind: A kind that tier does not draw.
+
+        Test scenario:
+            `drawer_for` is a module function: there is no scene, so no ``strict`` flag can reach it and
+            lenience is not expressible. That is the point — the refusal is unconditional by construction,
+            not by a branch someone could later put a ``strict`` test in.
+        """
+        drawer_for = importlib.import_module(module_name).drawer_for
+        with pytest.raises(KeyError, match=f"does not draw '{kind}'"):
+            drawer_for(kind)
+
+    def test_the_refusal_reaches_a_lenient_scene_unchanged(self):
+        """A figure naming an undrawable kind raises on a scene that skips everything else.
+
+        Test scenario:
+            Asked through the render path rather than of `drawer_for` directly, on a `Map` left at its
+            default ``strict=False``. A caller who sent a 3-D figure to the static tier is told which kind
+            it was; the alternative is a blank figure that claims a layer.
+        """
+        from digitalearth.static import Map
+
+        undrawable = self._figure("terrain")
+        with Map(crs=4326) as scene:
+            assert scene.strict is False, "the probe must be a lenient scene"
+            with pytest.raises(KeyError, match="does not draw 'terrain'"):
+                scene._renderer.draw_layer(undrawable, self.LAYER_ID)
+
+    def test_a_layer_with_nothing_to_draw_still_skips_on_that_same_scene(self, caplog):
+        """The half the decision must not have broken: nothing to draw is still a warning, not a raise.
+
+        Args:
+            caplog: Captures the warning the skip logs.
+
+        Test scenario:
+            The same lenient `Map`, the same shape of figure — but a kind the tier *does* draw, whose
+            object this process never held. C7 applies, so the layer is skipped and the render carries on.
+        """
+        from digitalearth.static import Map
+
+        with Map(crs=4326) as scene:
+            figure = self._figure(custom_kind("matplotlib"))
+            with caplog.at_level(logging.WARNING):
+                drawn = scene._renderer.draw_layer(figure, self.LAYER_ID)
+        assert drawn is None, f"a layer with nothing to draw must draw nothing: {drawn}"
+        assert "this figure does not carry" in caplog.text, (
+            f"the skip was not reported: {caplog.text!r}"
+        )
+
+    def test_and_the_same_layer_raises_under_strict(self):
+        """``strict=True`` is the dial for C7's case, and it still turns the skip back into an error.
+
+        Test scenario:
+            Only the flag differs from the test above, so this pins that the dial is read — a skip that
+            ignored ``strict`` would pass the previous test just as well.
+        """
+        from digitalearth.static import Map
+
+        with Map(crs=4326, strict=True) as scene:
+            figure = self._figure(custom_kind("matplotlib"))
+            with pytest.raises(MissingObject, match="this figure does not carry"):
+                scene._renderer.draw_layer(figure, self.LAYER_ID)
 
 
 class TestTheDiffOfACustomLayer:

@@ -5,9 +5,10 @@ globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
 
 import os
+import warnings
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Sequence, Tuple, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
 
@@ -17,10 +18,117 @@ from digitalearth.static import projections
 from digitalearth.static.renderer import DrawnLayer, artists_added
 from digitalearth.static.scene import LayerRecord
 
+#: The meridian and parallel spacing a graticule is drawn at when the caller names neither, in degrees —
+#: the same default the interactive and web tiers take (#263). The two arguments default to ``None`` rather
+#: than to this so that a step the caller wrote can be told from one they did not, which is what lets
+#: :meth:`ProjectionMixin.graticule` say when ``spacing=`` has just discarded one (review R2-L3).
+DEFAULT_GRATICULE_STEP: float = 30.0
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+class _GraticuleSteps(NamedTuple):
+    """The meridian and parallel spacing one :meth:`ProjectionMixin.graticule` call settles on, in degrees.
+
+    Three arguments, one decision. ``lon_step``, ``lat_step`` and ``spacing`` are the only values that travel
+    together through the front of that method, and the only thing done to them is to collapse them into these
+    two — with a warning when the caller wrote arguments the collapse throws away. Lifting them out with that
+    rule is most of what took `graticule` under the cognitive-complexity bar (`python:S3776`), and it makes
+    the rule testable without a map: the collapse is a pure function of what the caller wrote.
+
+    :meth:`symbology` is here for the same reason — the props a graticule layer is described by are these two
+    steps and nothing else, and `draw_graticule` reads exactly the keys this writes.
+
+    Attributes:
+        lon: Meridian spacing in degrees.
+        lat: Parallel spacing in degrees.
+    """
+
+    lon: float
+    lat: float
+
+    @classmethod
+    def asked(
+        cls,
+        lon_step: Optional[float],
+        lat_step: Optional[float],
+        spacing: Optional[float],
+    ) -> "_GraticuleSteps":
+        """Collapse what a caller wrote into the two steps a graticule is drawn at.
+
+        Args:
+            lon_step: Meridian spacing the caller named, or ``None``.
+            lat_step: Parallel spacing the caller named, or ``None``.
+            spacing: One step for both, which outranks the other two.
+
+        Returns:
+            The two steps, each falling back to :data:`DEFAULT_GRATICULE_STEP`.
+
+        Warns:
+            UserWarning: when ``spacing`` is given beside either step, because the call has then had two of
+                its own arguments thrown away (review R2-L3). ``stacklevel=3`` so it still names the line
+                that called ``graticule()``: this frame and ``graticule``'s both sit under it.
+        """
+        if spacing is not None:
+            if lon_step is not None or lat_step is not None:
+                warnings.warn(
+                    f"graticule() was given spacing={spacing!r} together with "
+                    f"lon_step={lon_step!r}/lat_step={lat_step!r}; spacing sets both, so those two are "
+                    "discarded. Pass one or the other.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            return cls(spacing, spacing)
+        lon = DEFAULT_GRATICULE_STEP if lon_step is None else lon_step
+        lat = DEFAULT_GRATICULE_STEP if lat_step is None else lat_step
+        return cls(lon, lat)
+
+    def symbology(self) -> Symbology:
+        """Return the symbology a graticule layer is described by.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Symbology` carrying the drawer key and the two steps — the
+            props :func:`draw_graticule` reads back.
+        """
+        return Symbology(
+            props={"via": "graticule", "lon_step": self.lon, "lat_step": self.lat}
+        )
+
+
+class _GraticuleEdit(NamedTuple):
+    """What one :meth:`ProjectionMixin.graticule` call did to the description, and how to put it back.
+
+    A graticule is described *before* it is drawn, and a draw that raises must leave no layer the map is not
+    drawing behind (round 2, M1). These three values are what the undo needs and the only reason any of them
+    outlives the describe step — so they travel as one value with :meth:`undo` on it, rather than as three
+    locals threaded through the method that would otherwise have to hold all three branches at once.
+
+    Attributes:
+        held: The id the graticule is described under now, and the one the drawer is handed.
+        was: The layer as it stood before this call, or ``None`` when this call created it.
+        pointer: The id the map pointed at before this call. Not always ``was.id``: ``_reset_layers`` clears
+            the tree between animation frames while the lines survive, so a remembered id can outlive its
+            layer, and then the call creates a layer while ``pointer`` still names the dead one.
+    """
+
+    held: str
+    was: Optional[LayerSpec]
+    pointer: Optional[str]
+
+    def undo(self, scene: Any) -> None:
+        """Put the description back as this call found it.
+
+        Args:
+            scene: The map whose description was edited.
+        """
+        if self.was is None:
+            scene._forget_layer(self.held)
+            scene._graticule_id = self.pointer
+        else:
+            scene._layer_tree = scene._layer_tree.replace(self.was)
 
 
 def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -171,17 +279,52 @@ class ProjectionMixin(_MixinBase):
 
     # ------------------------------------------------------------------ globe / projection frame
 
-    def graticule(self, lon_step: float = 30.0, lat_step: float = 30.0) -> None:
+    def graticule(
+        self,
+        lon_step: Optional[float] = None,
+        lat_step: Optional[float] = None,
+        *,
+        spacing: Optional[float] = None,
+        name: Optional[str] = None,
+        visible: Optional[bool] = None,
+    ) -> None:
         """Add a lon/lat graticule to a projected map (drawn when the frame is applied).
 
         A second call **replaces** the first — the map holds one set of graticule lines, so it draws one
         graticule — and the description follows: the layer keeps its id and its place in the tree and only
-        its spacing changes. Describing the second call as a second layer would say the map draws two grids
-        where it draws one.
+        what the replacing call named changes. Describing the second call as a second layer would say the
+        map draws two grids where it draws one — and that is also why a ``name`` on a *replacing* call
+        names nothing: the layer already has its id, and taking a new one would break every caller holding
+        the old one. ``visible`` is the same story from the other side: a call that does not name it is
+        asking for a different spacing, not for a hidden grid to come back (review R-L5).
 
         Args:
-            lon_step: Meridian spacing in degrees.
-            lat_step: Parallel spacing in degrees.
+            lon_step: Meridian spacing in degrees; ``None`` (default) means
+                :data:`DEFAULT_GRATICULE_STEP`.
+            lat_step: Parallel spacing in degrees; ``None`` (default) means
+                :data:`DEFAULT_GRATICULE_STEP`.
+            spacing: One step for both, for a caller who wants a square grid; it overrides the two
+                above, and **warns** when it does, because a call that names all three has had two of
+                its own arguments thrown away (review R2-L3). The same **keyword** the web and
+                interactive tiers take, so one call draws one grid on every tier that draws a graticule
+                at all (#324). The **values** are each engine's own: this tier generates its meridians,
+                so any positive step draws, and so does the web tier — while the interactive tier draws
+                Natural Earth's pre-cut layers and honours only ``1``, ``5``, ``10``, ``15``, ``20`` and
+                ``30``. ``spacing=7.5`` draws here and raises there (review R-L10).
+            name: The caller's own name for the layer, used as its id and its label on the call that
+                **creates** it; ``None`` (default) generates one from the kind (#321). A *replacing*
+                call cannot rename the layer, so one that names a different name **warns** rather than
+                dropping it in silence (review R2-L3).
+            visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327). ``None`` (default)
+                leaves the flag as it is: on the call that creates the layer that means drawn, and on a
+                *replacing* call it means whatever the caller last chose, so restyling a hidden graticule
+                does not put it back on screen (review R-L5).
+
+        Warns:
+            UserWarning: when ``spacing`` is given beside either step, which discards the step; and when a
+                *replacing* call names a ``name`` the layer does not already carry, which is discarded
+                because the id is the one thing a replacement cannot change (review R2-L3).
 
         Raises:
             Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
@@ -189,36 +332,80 @@ class ProjectionMixin(_MixinBase):
                 layer that was not drawn, and a refused *replacement* must not restyle the graticule the
                 map is still drawing (round 2, M1).
         """
-        symbology = Symbology(
-            props={"via": "graticule", "lon_step": lon_step, "lat_step": lat_step}
-        )
+        steps = _GraticuleSteps.asked(lon_step, lat_step, spacing)
+        edit = self._describe_graticule(steps.symbology(), name=name, visible=visible)
+        # Described first, then drawn — but through the renderer directly rather than through
+        # `Scene._draw`, because a second call replaces the layer it already has rather than adding one,
+        # and the funnel only knows how to add. The undo the funnel owns is therefore spelled by the edit,
+        # which is the only thing that knows which of the two shapes this call took.
+        try:
+            self._renderer.draw_layer(self.figure_spec, edit.held)
+        except BaseException:
+            edit.undo(self)
+            raise
+
+    def _describe_graticule(
+        self,
+        symbology: Symbology,
+        *,
+        name: Optional[str],
+        visible: Optional[bool],
+    ) -> _GraticuleEdit:
+        """Describe the one graticule layer, replacing the map's own rather than adding a second.
+
+        Split from :meth:`graticule` because the two halves answer to different things: this one is the
+        description — which layer the map already has, what a replacement may and may not change — while its
+        caller is the draw and the undo. Keeping them in one method is what put four of that method's
+        branches at a nesting level they did not need (`python:S3776`).
+
+        Args:
+            symbology: What the graticule is drawn at, from :meth:`_GraticuleSteps.symbology`.
+            name: The caller's own name for the layer, honoured only on the call that creates it.
+            visible: Whether the graticule is drawn, or ``None`` to leave the flag as it is — which means
+                drawn on a creating call, and whatever the caller last chose on a replacing one.
+
+        Returns:
+            The edit, carrying what it takes to put the description back if the draw then raises.
+
+        Warns:
+            UserWarning: when a *replacing* call names a ``name`` the layer does not already carry, which is
+                discarded because the id is the one thing a replacement cannot change (review R2-L3).
+                ``stacklevel=3`` so it still names the line that called ``graticule()``.
+        """
         pointer = self._graticule_id
         # `_reset_layers` clears the tree between animation frames while the lines themselves survive, so the
         # remembered id can outlive its layer; the membership test is what keeps that from raising.
         was: Optional[LayerSpec] = None
         if pointer is not None and pointer in self._layer_tree.ids:
             was = self._layer_tree.get(pointer)
-        if was is not None:
-            held = was.id
-            self._layer_tree = self._layer_tree.replace(
-                with_fields(was, symbology=symbology)
+        if was is None:
+            held = self._describe_layer(
+                LayerRecord(
+                    "graticule",
+                    name=name,
+                    visible=True if visible is None else visible,
+                    symbology=symbology,
+                )
             )
-        else:
-            held = self._describe_layer(LayerRecord("graticule", symbology=symbology))
             self._graticule_id = held
-        # Described first, then drawn — but through the renderer directly rather than through
-        # `Scene._draw`, because a second call replaces the layer it already has rather than adding one,
-        # and the funnel only knows how to add. The undo the funnel owns is therefore spelled here, in the
-        # two shapes this method has: an added layer is forgotten, a replaced one is put back as it was.
-        try:
-            self._renderer.draw_layer(self.figure_spec, held)
-        except BaseException:
-            if was is None:
-                self._forget_layer(held)
-                self._graticule_id = pointer
-            else:
-                self._layer_tree = self._layer_tree.replace(was)
-            raise
+            return _GraticuleEdit(held, None, pointer)
+        held = was.id
+        if name is not None and name != held:
+            warnings.warn(
+                f"graticule(name={name!r}) is discarded: this call replaces the graticule already "
+                f"described as {held!r}, and a replacement keeps the id every caller holding it "
+                "knows. Name it on the call that creates it.",
+                UserWarning,
+                stacklevel=3,
+            )
+        self._layer_tree = self._layer_tree.replace(
+            with_fields(
+                was,
+                symbology=symbology,
+                visible=was.visible if visible is None else visible,
+            )
+        )
+        return _GraticuleEdit(held, was, pointer)
 
     def _frame(self) -> tuple:
         """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).

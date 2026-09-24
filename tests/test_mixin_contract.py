@@ -15,7 +15,7 @@ That gives mypy the composed-class contract the mixin's methods reach through ``
 class hierarchy exactly as it was. The whole construction is only safe as long as the ``else`` branch keeps
 winning at runtime, and the failure mode is silent in the one backend where it matters most: if the guard were
 dropped, ``digitalearth.interactive``/``web``/``three_d`` would raise a *loud* MRO ``TypeError`` at import, but
-``static.map.Map`` lists ``GeoLayerBase`` last, so C3 would still linearise to the very same nine class **names**
+``static.map.Map`` lists ``GeoLayerBase`` last, so the MRO would still linearise to the very same nine class **names**
 that ``tests/static/test_map_composition.py`` pins — while every mixin quietly gained a real base class, and with it a
 different ``super()`` chain and a different ``__init__``. Nothing else in the suite compares ``__bases__``, so
 this file does.
@@ -269,8 +269,8 @@ class TestComposedClassMro:
 
     All four backends list their capability mixins first and their backend base last. That order is load
     bearing rather than stylistic: with the mixins typed against that base (see :mod:`digitalearth.web.base`
-    and friends), listing the base *first* puts it both before and after its own subclasses, and C3 cannot
-    linearize it — mypy then falls back to ``[cls, object]`` and every attribute on the class silently
+    and friends), listing the base *first* puts it both before and after its own subclasses, and the MRO
+    algorithm cannot linearize it — mypy then falls back to ``[cls, object]`` and every attribute silently
     becomes ``Any``. ``static.Map`` always had the working order; the other three were corrected to match.
     """
 

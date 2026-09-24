@@ -20,7 +20,9 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    List,
     Mapping,
+    NamedTuple,
     NoReturn,
     Optional,
     Tuple,
@@ -33,6 +35,8 @@ T = TypeVar("T")
 
 __all__ = [
     "FrozenDict",
+    "MAX_TRAVELLING_DEPTH",
+    "MAX_TRAVELLING_ELEMENTS",
     "frozen_value",
     "as_list",
     "as_mapping",
@@ -44,6 +48,7 @@ __all__ = [
     "refuse_unknown",
     "require",
     "to_json_value",
+    "travels_in_a_figure",
     "true_or_false",
 ]
 
@@ -350,7 +355,7 @@ def _json_scalar(value: Any, where: str) -> Any:
 
     Returns:
         `None` or a boolean unchanged; a string — a `numpy.str_` included — as `str`; a finite number, Python's or
-        numpy's, as a Python number; `_NOT_A_SCALAR` otherwise.
+        numpy's, as a plain Python `int` or `float`; `_NOT_A_SCALAR` otherwise.
 
     Raises:
         ValueError: for a non-finite number.
@@ -363,7 +368,14 @@ def _json_scalar(value: Any, where: str) -> Any:
     if isinstance(value, (int, float)) and not isinstance(value, np.generic):
         # `np.float64` subclasses `float`, so without the second test it came back as numpy, not as the Python float
         # the dict promises — `json` copes, but YAML, TOML and msgpack writers do not.
-        return _finite(value, where)
+        #
+        # Through `int()`/`float()`, for that same argument one step further (`R2-M2`). A subclass came back live:
+        # a units library's quantity, and — the case that reads worst — an `int`-valued `enum` member, sitting
+        # inside the plain mapping `Symbology.to_dict` promises. `str` was flattened here from the beginning; its
+        # number siblings were not, and the round trip hid it because `json` flattens a number on its own. A
+        # flattening that moved the *value* is caught by `_written_back_equal`, which compares what came out.
+        plain = int(value) if isinstance(value, int) else float(value)
+        return _finite(plain, where)
     if isinstance(value, np.generic):
         native = value.item()
         if isinstance(native, (bool, int, float, str)):
@@ -475,6 +487,357 @@ def _finite(value: Any, where: str) -> Any:
             f"{where} is {value!r}, which has no JSON form; strict JSON readers refuse NaN and Infinity"
         )
     return value
+
+
+#: What :func:`_written_back_equal` tells the writer it is asking about. The refusal's message is thrown away —
+#: only the yes or no is used — but `to_json_value` names a field in every message it raises, and every caller
+#: of the oracle is asking on behalf of a layer's recorded properties.
+_ASKING_FOR: str = "Symbology.props"
+
+
+def _written_back_equal(value: Any) -> bool:
+    """Whether the figure writer takes `value` **and** writes something equal to it.
+
+    The oracle is the writer itself — :func:`to_json_value`, which `Symbology.to_dict` applies — so the answer
+    cannot drift from what a figure actually accepts. It is what refuses `nan` and the infinities, a `datetime`,
+    a set, a mapping with a non-string key, and every live object.
+
+    Acceptance alone is not enough, and one scalar proves it. The writer flattens a scalar subclass to its plain
+    counterpart, which is almost always the *same value* — ``np.float64(2.5)`` writes ``2.5``, a `str` subclass
+    writes its characters. A `str`-valued `enum.Enum` member is the exception: flattening goes through `str`,
+    which on a mixin enumeration is `Enum.__str__`, so ``Linestyle.SOLID`` writes ``'Linestyle.SOLID'`` where its
+    value ``'solid'`` belongs — a layer that reloads with a linestyle no engine has heard of. Comparing what came
+    out against what went in catches that by measurement rather than by naming `enum`, so any scalar whose
+    flattening moves the value is refused the same way.
+
+    Args:
+        value: A scalar a layer is about to record.
+
+    Returns:
+        `True` when the writer would take it and give back an equal value.
+    """
+    try:
+        written = to_json_value(value, _ASKING_FOR)
+    except (TypeError, ValueError):
+        return False
+    return bool(written == value)
+
+
+#: How many values one description may carry for a single keyword, counting every value at every depth —
+#: the list itself, each item, and each item's items. The bound is stated rather than implied, because it is
+#: the second of the two reasons a container might not travel and the type gate used to hide it: refusing
+#: every container refused the big ones as a side effect, and widening the gate would have let a per-pixel
+#: `alpha` through with nothing left to stop it.
+#:
+#: Measured on the full record path (freeze, hash, write, `json.dumps`) for a flat list of floats:
+#: 256 values ~0.6 ms / 1.6 KB, 1,000 ~2.2 ms / 6.7 KB, 10,000 ~31 ms / 77 KB, 1,000,000 ~3.0 s / 9.4 MB.
+#: Every style container a caller really writes sits far below the bound — a 256-entry palette, a colour
+#: ramp, a classifier's edges, a list of columns — and the thing the bound exists to refuse, a per-pixel
+#: `alpha` on a 1000 x 1000 raster, is a thousand times above it. There is no realistic value in between,
+#: which is why one flat number is enough and why it is a round one.
+MAX_TRAVELLING_ELEMENTS: int = 1000
+
+#: How many containers deep one described value may nest. A second bound, and a much smaller number, because
+#: it answers a different question: :data:`MAX_TRAVELLING_ELEMENTS` bounds what a figure is willing to *carry*,
+#: and this bounds what the record path can *reach*.
+#:
+#: The path is recursive where the gate is not — `frozen_value`, `hashable_value`, `to_json_value` and
+#: `thawed_value` each walk the value with the interpreter's stack — so counting depth against the element
+#: budget promised a depth the writers cannot survive (`R2-M1`). Measured here, on a fresh 1,000-frame
+#: recursion limit, as the shallowest nesting each one raises `RecursionError` at: `hashable_value` 497,
+#: `frozen_value` 499, `to_json_value` 995, `json.dumps` of its output 995. The gate admitted 999.
+#:
+#: 32, not "a little under 497", because 497 is not a property of this package. It moves with
+#: `sys.setrecursionlimit` and with how many frames the caller has already spent before the builder is
+#: reached, so a bound close to it would hold on the machine that measured it and nowhere else. 32 costs
+#: about 64 frames of whatever stack is left, which any caller has, and it is an order of magnitude above
+#: every real style value: a palette nests 1 deep, a dash pattern 2, a dict of per-class colour lists 3.
+#:
+#: Making the four writers iterative instead was the other way to make the two agree, and it loses: it is
+#: four rewrites on the hot record path, it trades a stated bound for an unstated one (whatever stack is
+#: left at the call site), and it would leave the gate promising a depth that still cannot be written down.
+#: Hardening `to_json_value` against its own recursion remains worth doing for callers that reach it
+#: directly — that is #335, and it is not this.
+MAX_TRAVELLING_DEPTH: int = 32
+
+
+class _Carried(NamedTuple):
+    """What a description makes of one value: whether it carries it, and what that value holds.
+
+    The **type** half of the walk, lifted out of it. Two independent questions were interleaved in one loop
+    and each read as a qualification of the other (`python:S3776`): *which* values a description carries is
+    about types — a `dict` but not a `dict` subclass, a numpy scalar but not a numpy array — while *how many*
+    of them and *how deep* is about the two budgets. Read apart, the depth rule stops looking like a special
+    case: it applies to a container and not to a leaf because that is a property of the value, and
+    :meth:`refused_at` is the only place that says so.
+
+    Nothing here is stateful and nothing here counts, so this answers the same for a value wherever in a
+    figure it sits — which is what lets :func:`_travelling_budget` be only the two budgets.
+
+    Attributes:
+        travels: Whether a description carries this value at all. `False` is the refusal, whatever its
+            cause: a writer that refuses the scalar or writes it back as a different value, a type the round
+            trip re-types (a tuple, an array, a `list`/`dict` **subclass**), a live object, or a mapping with
+            a non-string key.
+        holds: The values inside it, which the walk puts back one level deeper. Empty for a leaf **and** for
+            an empty container; `nests` is what tells those two apart.
+        nests: Whether this value is a container, so :data:`MAX_TRAVELLING_DEPTH` bounds where it may sit. A
+            leaf is exempt deliberately — the leaves of the deepest admitted container are plain values the
+            recursive writers reach in one frame.
+    """
+
+    travels: bool
+    holds: Tuple[Any, ...] = ()
+    nests: bool = False
+
+    @classmethod
+    def of(cls, value: Any) -> "_Carried":
+        """Read one value the way the round trip will.
+
+        Args:
+            value: The value, or a part of one.
+
+        Returns:
+            What a description makes of it — :data:`_CARRIED_LEAF` or :data:`_CARRIED_REFUSED` for a value
+            that holds nothing, so walking a list of colours allocates none of these.
+        """
+        # `np.generic` is every numpy *scalar* and no array, so it admits the whole family at once rather
+        # than naming its members. Enumerating them is what let `np.bool_` fall through while `np.float64`
+        # travelled (#329): a numpy float and int register as `numbers.Real` and a numpy str subclasses
+        # `str`, but a numpy bool is neither, so it missed a gate it belonged in. Membership is not the
+        # decision — the writer still is, and it refuses `datetime64`, `complex128` and `timedelta64`.
+        if value is None or isinstance(value, (bool, str, Real, np.generic)):
+            return _CARRIED_LEAF if _written_back_equal(value) else _CARRIED_REFUSED
+        # `list` and `dict` **exactly**, not `isinstance`: those two are what the round trip returns as
+        # themselves, and a subclass is re-typed by it exactly as a tuple is. That is not a technicality —
+        # an `xyzservices.TileProvider` *is* a dict, of plain strings, one of which is the caller's API key,
+        # and `isinstance` wrote it into the figure. A dict subclass is an engine object wearing a dict; the
+        # type check that refuses a tuple is what keeps it, and the key in it, out.
+        if type(value) is list:
+            return cls(True, tuple(value), True)
+        if type(value) is dict:
+            # Every key, before any value: one non-string key refuses the mapping whole, so which of its
+            # values would have travelled never matters.
+            if not all(isinstance(key, str) for key in value):
+                return _CARRIED_REFUSED
+            return cls(True, tuple(value.values()), True)
+        return _CARRIED_REFUSED
+
+    def refused_at(self, depth: int) -> bool:
+        """Whether a description refuses this value where it sits.
+
+        Args:
+            depth: How many containers this value sits inside.
+
+        Returns:
+            `True` when a description cannot carry it at all, or when it is a container nested deeper than
+            :data:`MAX_TRAVELLING_DEPTH` allows.
+        """
+        return not self.travels or (self.nests and depth >= MAX_TRAVELLING_DEPTH)
+
+
+#: A value the description carries and that holds nothing — every scalar that survives the round trip.
+#: Shared rather than rebuilt per value because the walk is mostly scalars: a style value is a colour, a
+#: width or a dash name far more often than a container. The saving is small and was measured rather than
+#: assumed — on ``{"a": 1, "b": [1, 2, 3]}``, one gate call costs 12.6 µs sharing these two and 13.3 µs
+#: building one per value, against 7.3 µs for the single loop they replaced. Microseconds either way, on a
+#: gate a figure asks a few dozen times; it is free, so it is taken.
+_CARRIED_LEAF = _Carried(True)
+
+#: A value no description carries, whatever the reason. It holds nothing for the same reason a refusal
+#: needs no detail: the walk answers ``-1`` and stops.
+_CARRIED_REFUSED = _Carried(False)
+
+
+def _travelling_budget(value: Any, budget: int) -> int:
+    """Return what is left of `budget` after `value`, or ``-1`` when `value` cannot travel.
+
+    The walk behind :func:`travels_in_a_figure`. It counts as it goes, so a container too large to describe
+    is refused after :data:`MAX_TRAVELLING_ELEMENTS` values rather than after all of them: the gate costs
+    the same whether a caller passes a 3-element list or a million-element one.
+
+    The walk carries its own stack rather than the interpreter's, and that is not a style choice (`R-M1`).
+    `MAX_TRAVELLING_ELEMENTS` is 1,000 and CPython's default recursion limit is 1,000, so a recursive walk
+    raised `RecursionError` before the budget could refuse a deeply nested container — and a builder that
+    raises loses the value outright, where the tier's promise is to *hold* what this refuses beside the
+    layer.
+
+    **Depth is counted separately, and much lower** (:data:`MAX_TRAVELLING_DEPTH`, `R2-M1`). Counting it
+    against the element budget only moved the raise: the gate accepted a container nested 999 deep, and
+    `frozen_value` — recursive, like every other step of the record path — raised on it at 499. A value
+    this admits has to be one the tier can then *record*, so the bound that decides has to be one the
+    recursive half survives. It also ends a cycle sooner than the element budget did: a container holding
+    itself is over the depth bound after `MAX_TRAVELLING_DEPTH` visits, so no cycle memory is needed.
+
+    What is left here is the two budgets and nothing else: :class:`_Carried` answers what each value *is*,
+    and the loop only spends the element budget on it and asks whether it sits too deep. Every value costs
+    exactly one, container or leaf, so the number this returns does not depend on the order the stack pops.
+
+    Args:
+        value: The value, or a part of one.
+        budget: How many values may still be counted.
+
+    Returns:
+        The budget left, or ``-1`` for a value the description cannot carry — one the writer refuses or
+        writes back as a different value, a tuple or an array (which JSON reads back as a list), a mapping
+        with a non-string key, a live object, or a container that exhausts either bound, whether by holding
+        too many values, by nesting too deep, or by holding itself.
+    """
+    pending: List[Tuple[Any, int]] = [(value, 0)]
+    while pending:
+        if budget <= 0:
+            return -1
+        item, depth = pending.pop()
+        carried = _Carried.of(item)
+        if carried.refused_at(depth):
+            return -1
+        budget -= 1
+        pending.extend((held, depth + 1) for held in carried.holds)
+    return budget
+
+
+def travels_in_a_figure(value: Any) -> bool:
+    """Whether a figure's description carries `value`, or the tier must hold it beside the layer.
+
+    The one rule the tiers share, so that "what can a figure carry?" has a single answer rather than one per
+    backend (#322) — which tier asks it, and how, is at the foot of this docstring. The rule is two-sided,
+    and it is stated that way because it is enforced that way:
+
+    * **A scalar travels when the round trip gives back an equal value.** Its class need not survive, and for
+      a subclass it does not: the trip flattens every one of them to the plain counterpart the writer spells.
+    * **A container travels when the round trip gives back an equal value of the same class**, at every depth.
+
+    So: a string, a boolean, a finite number or `None`, and a `list` or `dict` built out of those — up to
+    :data:`MAX_TRAVELLING_ELEMENTS` values, nested no more than :data:`MAX_TRAVELLING_DEPTH` containers
+    deep. That is what a reader on another machine can act on, and — the second bound's whole job — what
+    the recursive record path behind this can then write down without raising (`R2-M1`).
+
+    The asymmetry is not an oversight, and it is the half a single-sentence "an equal value of the same kind"
+    got wrong (`R-H1`, `R-M5`). A container's class is load-bearing twice over — flattening a tuple changes the
+    *value* into one matplotlib refuses, and flattening a `dict` subclass copies its contents, the API key
+    included, into the figure. A scalar carries nothing but itself, so flattening it moves no payload and,
+    where the value survives, costs the drawer nothing: ``np.float64(2.5)`` is handed on as ``2.5``, which every
+    engine takes in its place. Where the value does *not* survive the flattening the scalar is refused too —
+    see :func:`_written_back_equal` for the `str`-valued enumeration that makes the point.
+
+    It is **narrower than the writer**, and the boundary is measured rather than argued. Taking the whole
+    record-to-draw path — `frozen_value` into the spec, `to_json_value` out to JSON, back in, `thawed_value`
+    at the drawer — here is each kind, and what the trip does to it:
+
+    * **A list or a dict of plain values comes back as itself.** ``['#ff0000', '#00ff00']``, ``[4, 4]``,
+      ``[0.0, 0.5, 1.0]``, ``['fid']`` and ``{'a': 1}`` each return equal, and as the same type, through both
+      the freeze and the JSON trip. So a graduated choropleth's ``color_levels`` and a categorical palette
+      travel, and a figure reloaded elsewhere still redraws in the colours it was built with (#330).
+    * **A tuple does not.** JSON has no tuple, so a matplotlib dash pattern written as ``(0, (5, 5))`` comes
+      back ``[0, [5, 5]]``, which matplotlib refuses outright (``ValueError: Unrecognized linestyle``).
+      Describing it would trade a layer that redraws with the engine's defaults for one that cannot redraw at
+      all. The loss is inherent to the **tuple**, not to the container: a tuple nested inside a list re-types
+      the same way, so ``[1, (2, 3)]`` is held too.
+    * **An array does not either**, and for a second reason: it is re-typed like a tuple *and* it is
+      unbounded. An array is the layer's data; a description is not the place to copy it to.
+    * **An engine object has no JSON form at all** — a ``Normalize``, a ``FontProperties``, a ``Colormap``, a
+      Datashader reduction — so a figure holding one could not be written down. The writer is the oracle for
+      every scalar and every leaf, so that refusal is not re-spelled here.
+    * **A `list` or `dict` *subclass* does not travel either**, and for the same reason a tuple does not: the
+      trip returns a plain `list` or `dict`, which is a different type. It is the subclasses that make this
+      matter rather than the principle — an ``xyzservices.TileProvider`` *is* a dict, of plain strings, one
+      of which is the caller's API key, and a figure is not a place to write a credential.
+    * **A *scalar* subclass does travel**, and comes back as its plain counterpart — flattened by the writer
+      itself, not by `json` on the way out (`R2-M2`). ``np.float64(2.5)`` returns ``2.5``, ``np.bool_(True)``
+      returns ``True``, a `str` subclass returns its characters as `str` and an `int`-valued `enum` member
+      returns the number it stands for rather than the member. The value
+      is the same one, and it is the one the drawer would have been handed anyway, so refusing it would hold a
+      numpy flag out of a figure for a change no engine can observe (#329). Nothing else rides along: unlike a
+      container subclass, a scalar has no contents for the trip to copy. The exception is the one scalar whose
+      *value* moves — a `str`-valued `enum.Enum` member, flattened through `Enum.__str__` — and that is refused
+      on the same measurement rather than by name.
+
+    The other half of the rule is the asking tier's to keep, and it is two-sided:
+
+    * A value this refuses must still reach the drawer, or the engine silently draws its own default in its
+      place. The tier holds what is refused under the layer's id and merges it back before drawing.
+    * A value this accepts is stored frozen — `Symbology` turns every list into a tuple so a spec still
+      hashes — so the tier **thaws the described half at its read boundary**. Because only a `list` ever
+      travels, thawing is the exact inverse of that freeze; a genuine tuple is in the held half, which is
+      merged on afterwards and never thawed.
+
+    **Which tiers ask, and which do not.** Measured: the two that hand a caller's keywords straight to their
+    engine ask it per value and keep both halves — the static tier in
+    :func:`~digitalearth.static.scene.described_opts` (held in ``Scene._layer_opts``) and the interactive
+    tier in :func:`~digitalearth.interactive.base.describe` (held in ``InteractiveMapBase._layer_held``).
+    The web and 3-D tiers take named, typed parameters and resolve them into their engine's own spelling
+    before recording, so they have no caller keyword to split and no held half of their own; the web drawer
+    thaws what it reads all the same (``web/renderer.py``), and the 3-D tier calls no thaw at all.
+
+    **Three** of the four also reach this rule *indirectly*, through
+    :func:`~digitalearth.base.spec.style.portable_constants`, which asks it of any value before lifting it
+    onto a channel: the two above, and the web tier through its own ``portable_encodings``. The 3-D tier
+    reaches it by **no** path — measured, nothing under ``three_d/`` names this function,
+    ``portable_constants``, ``asked_constants`` or ``portable_encodings`` — so that tier publishes no
+    channel and asks this rule of nothing. "Every tier" was the reading this paragraph was rewritten to
+    stop, and the sentence that followed the rewrite put it back (`R2-N1`).
+
+    Args:
+        value: The caller's value for one keyword.
+
+    Returns:
+        `True` when the layer's description carries it; `False` when the tier must hold it beside the layer.
+
+    Examples:
+        - A scalar travels, and so does a list or a dict of scalars:
+            ```python
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure(0.25), travels_in_a_figure("solid"), travels_in_a_figure(None)
+            (True, True, True)
+            >>> travels_in_a_figure(["#ff0000", "#00ff00"]), travels_in_a_figure({"a": 1})
+            (True, True)
+
+            ```
+        - A tuple does not, wherever it sits, because JSON reads it back as a list:
+            ```python
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure((0, (5, 5))), travels_in_a_figure([1, (2, 3)])
+            (False, False)
+
+            ```
+        - A scalar the writer itself refuses does not travel, inside a container or out of one:
+            ```python
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure(float("nan")), travels_in_a_figure([1.0, float("nan")])
+            (False, False)
+
+            ```
+        - A numpy scalar travels wherever its Python counterpart does, and the array around it does not:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import travels_in_a_figure
+            >>> travels_in_a_figure(np.bool_(True)), travels_in_a_figure(np.float64(2.5))
+            (True, True)
+            >>> travels_in_a_figure(np.array([1.0, 2.0]))
+            False
+
+            ```
+        - A container is bounded by the values in it, however they are nested:
+            ```python
+            >>> from digitalearth.base.spec._serial import MAX_TRAVELLING_ELEMENTS, travels_in_a_figure
+            >>> travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS - 1)))
+            True
+            >>> travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS)))
+            False
+
+            ```
+        - And by how deeply they are nested, which is the bound the record path sets:
+            ```python
+            >>> from digitalearth.base.spec._serial import MAX_TRAVELLING_DEPTH, travels_in_a_figure
+            >>> deep = "leaf"
+            >>> for _ in range(MAX_TRAVELLING_DEPTH):
+            ...     deep = [deep]
+            >>> travels_in_a_figure(deep), travels_in_a_figure([deep])
+            (True, False)
+
+            ```
+    """
+    return _travelling_budget(value, MAX_TRAVELLING_ELEMENTS) >= 0
 
 
 def frozen_value(value: Any) -> Any:

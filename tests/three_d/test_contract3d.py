@@ -2,17 +2,24 @@
 
 The four rendering tiers are supposed to agree on the handful of names and behaviours a caller moves between
 them with. This file pins the 3-D tier's side of that agreement, so a later refactor that quietly reverts one
-of them fails here rather than in a user's notebook:
+of them fails here rather than in a user's notebook.
 
-* **C1** — ``save()`` returns a :class:`pathlib.Path`; the ``np.ndarray`` it used to return lives on
+The clauses themselves are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`, so amending
+one is an edit in ``base/`` rather than one per tier (#326). This tier is held to C1, C2, C3, C4, C7 and
+C13, and each class below names its clause and adds only what is peculiar to drawing in three dimensions:
+
+* **C1** — the ``np.ndarray`` ``save()`` used to return did not vanish; it moved to
   :meth:`~digitalearth.three_d.base.Scene3DBase.screenshot`.
-* **C2** — the frame rate is ``fps``, defaulting to ``3.0``, with ``framerate=`` a deprecated alias on both
-  :meth:`~digitalearth.three_d.animation.AnimationMixin.orbit` and
-  :meth:`~digitalearth.three_d.animation.AnimationMixin.animate`.
-* **C3** — marker size is ``size``, with ``point_size=`` a deprecated alias.
-* **C4** — a classifiable layer takes ``scheme`` + ``k``, computing the same classes as the 2-D tiers.
-* **C7** — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``.
-* **C13** — this tier declares that it has no display CRS.
+* **C2** — both entry points are covered: :meth:`~digitalearth.three_d.animation.AnimationMixin.orbit` and
+  :meth:`~digitalearth.three_d.animation.AnimationMixin.animate`, with ``framerate=`` the alias each kept.
+* **C3** — ``point_size=`` is the alias this tier kept.
+* **C4** — the classes are compared against the 2-D tiers' rather than merely accepted.
+* **C7** — the ways a 3-D layer ends up with nothing to draw: an off-limb raster, an empty point table, an
+  empty vector table, and a custom layer whose object this process does not hold. The clause's other half —
+  ``choropleth`` here, a kind this tier does not draw at all — is pinned by `TestTheDeclaration` and
+  `test_seam3d.py` (#320).
+* **C13** — what this tier reports: ``None`` until a layer or the constructor names a CRS, and that CRS
+  afterwards (#291).
 
 Every deprecated alias is tested three ways over: that it still works, that it warns while it does,
 and that passing it alongside the new spelling is a ``TypeError`` naming both — the one answer all
@@ -72,7 +79,7 @@ def _points(n=20):
 
 
 class TestC1SaveReturnsPath:
-    """C1 — ``save()`` returns the ``Path`` it wrote; ``screenshot()`` keeps the array."""
+    """C1 on the 3-D tier — ``save()`` on every branch, and the array ``screenshot()`` kept."""
 
     @pytest.mark.parametrize("name", ["frame.png", "scene.gltf", "page.html"])
     def test_save_returns_the_path_it_wrote(self, scene, tmp_path, name):
@@ -116,7 +123,7 @@ class TestC1SaveReturnsPath:
 
 
 class TestC2Fps:
-    """C2 — the frame rate is ``fps``, defaults to ``3.0``, and ``framerate=`` is a deprecated alias."""
+    """C2 on the 3-D tier — ``orbit`` and ``animate``, and the ``framerate=`` alias each one kept."""
 
     def test_the_shared_default_is_three(self):
         """Both animation entry points default to the one cross-tier frame rate.
@@ -216,7 +223,7 @@ class TestC2Fps:
 
 
 class TestC3Size:
-    """C3 — marker size is ``size``, with ``point_size=`` a deprecated alias."""
+    """C3 on the 3-D tier — the point builders, and the ``point_size=`` alias they kept."""
 
     def test_size_sets_the_marker_size(self, scene):
         """``size=`` reaches PyVista as the point size.
@@ -269,7 +276,7 @@ class TestC3Size:
 
 
 class TestC4SchemeAndK:
-    """C4 — a classifiable 3-D layer takes ``scheme`` + ``k``, computing the 2-D tiers' classes."""
+    """C4 on the 3-D tier — the classifiable layers here, cut against the 2-D tiers' own breaks."""
 
     def test_no_scheme_is_a_continuous_ramp(self, scene):
         """``scheme=None`` (the default) leaves the raw values on the mesh.
@@ -520,7 +527,11 @@ class TestC4SchemeAndK:
 
 
 class TestC7SkipAndWarn:
-    """C7 — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``."""
+    """C7 on the 3-D tier — every layer here has a drawer and nothing for it to draw.
+
+    The clause's other half, a kind this tier has **no** drawer for, is pinned by `TestTheDeclaration` and
+    `test_seam3d.py` (#320).
+    """
 
     #: ``(method name, argument builder)`` for every layer that can end up with nothing to place.
     EMPTY_LAYERS = {
@@ -606,7 +617,7 @@ class TestC7SkipAndWarn:
 
 
 class TestC13TheDisplayCrs:
-    """C13 — the 3-D tier declares the display CRS it draws every layer in (rewritten for #291)."""
+    """C13 on the 3-D tier — ``None`` until a layer or the constructor names one, and that CRS after."""
 
     def test_a_scene_given_no_crs_declares_none_until_a_layer_does(self, scene):
         """``display_crs`` is readable, and ``None`` until a layer carrying a CRS is added.

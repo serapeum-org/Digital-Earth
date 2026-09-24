@@ -6,6 +6,10 @@ signature- and behaviour-level rather than render-level — the point is that ``
 ``k``, ``cmap=None``, ``big_data_threshold`` and ``save() -> Path`` mean here exactly what they mean on
 static / web / three_d.
 
+The clauses themselves are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`. Each class
+below names the clause it pins and then says only what *this* tier brings to it, so amending a clause is one
+edit in ``base/`` rather than one per tier (#326).
+
 Every rename in the batch keeps its old spelling working for one release, so each deprecated alias is
 tested three ways: that it still does its job, that it warns while doing it, and that passing it
 alongside the new spelling is a ``TypeError`` naming both — the one answer all four tiers give, from
@@ -112,7 +116,7 @@ def _source(variable: str, values: np.ndarray = None) -> Source:
 
 
 class TestSaveReturnsPath:
-    """C1 (#248) — every tier's ``save`` hands back the ``pathlib.Path`` it wrote."""
+    """C1 on the interactive tier — ``save``, including the string argument a caller may hand it."""
 
     def test_save_returns_a_path(self, m, tmp_path):
         """``save`` returns a ``Path``, not the string it was handed.
@@ -166,7 +170,7 @@ class TestSaveReturnsPath:
 
 
 class TestFrameRate:
-    """C2 (#256) — the animation entry points take ``fps: float`` with the shared default ``3.0``."""
+    """C2 on the interactive tier — both animation entry points, ``play`` and ``save_animation``."""
 
     @pytest.mark.parametrize(
         "method",
@@ -192,7 +196,7 @@ class TestFrameRate:
 
 
 class TestMarkerSize:
-    """C3 (#251) — ``size`` means the marker size, and nothing else, anywhere in the tier."""
+    """C3 on the interactive tier — every builder here that takes a ``size``, and the style it records."""
 
     def test_points_size_reaches_the_style(self, m, point_fc):
         """``points(size=...)`` is recorded as the marker size the glyph draws with."""
@@ -220,7 +224,7 @@ class TestMarkerSize:
 
 
 class TestClassification:
-    """C4 (#246) — ``scheme: str | None = None`` + ``k: int = 5`` wherever a layer is classified."""
+    """C4 on the interactive tier — the builders here that classify, and the breaks they record."""
 
     def test_signature_defaults(self):
         """``scheme`` defaults to ``None`` (continuous) and ``k`` to 5, as on every other tier."""
@@ -252,7 +256,7 @@ class TestClassification:
 
 
 class TestAutoCmap:
-    """C5 (#249) — ``cmap=None`` on a raster builder resolves through ``auto_style``."""
+    """C5 on the interactive tier — every raster builder, ``image`` through ``timecube``."""
 
     @pytest.mark.parametrize(
         "builder", ["image", "quadmesh", "large_image", "timecube"]
@@ -322,7 +326,7 @@ class TestAutoCmap:
 
 
 class TestAutoLevelsAndUnits:
-    """C6 (#230) — ``auto_style``'s ``levels`` and ``units`` are consumed, not just its ``cmap``."""
+    """C6 on the interactive tier — where the lookup's ``levels`` and ``units`` land in a HoloViews option."""
 
     def test_units_label_the_colorbar(self, m):
         """A recognised variable's ``units`` become the colorbar label when the caller gave none."""
@@ -377,7 +381,11 @@ class TestAutoLevelsAndUnits:
 
 
 class TestOffLimbIsSkipped:
-    """C7 (#257) — data the display CRS cannot place skips the layer and warns; ``strict`` raises."""
+    """C7 on the interactive tier — data the display CRS cannot place, and the ``strict`` dial over it.
+
+    The clause's other half, a kind this tier does not draw at all, is pinned for every tier in
+    ``tests/base/test_custom_layers.py::TestWhatC7DoesNotCover`` rather than again per tier.
+    """
 
     def test_the_layer_is_skipped_and_the_map_still_chains(self, dataset, off_limb):
         """A skipped layer registers nothing and still returns the map.
@@ -467,7 +475,7 @@ class TestOffLimbIsSkipped:
 
 
 class TestBigDataThreshold:
-    """C8 (#250) — one ``big_data_threshold``: an attribute, a per-call override, one deprecated alias."""
+    """C8 on the interactive tier — the cutoff that routes a vector layer to datashader."""
 
     def test_default_and_constructor(self):
         """The cutoff is 50 000 by default and settable at construction."""
@@ -565,7 +573,7 @@ class TestDeprecatedAliases:
 
 
 class TestBasemapDefault:
-    """C9 (#247) — the default provider is read from ``base/basemaps.py``, not spelled here."""
+    """C9 on the interactive tier — ``tiles()``'s default, which used to be this tier's own literal."""
 
     def test_tiles_defaults_to_the_shared_constant(self):
         """``tiles()``'s default *is* the shared constant object, not a copy of its value."""
@@ -602,7 +610,7 @@ class TestBasemapDefault:
 
 
 class TestKeyedBasemapCoverage:
-    """C10 (#233) — a keyed provider's ``bounds`` are declared to the engine."""
+    """C10 on the interactive tier — where a preset's coverage reaches the HoloViews element."""
 
     @pytest.fixture(autouse=True)
     def _fake_key(self, monkeypatch):
@@ -695,7 +703,7 @@ class TestKeyedBasemapCoverage:
 
 
 class TestNamedNaturalEarthFeatures:
-    """C12 (#253) — the six named layers, delegating to the ``features(...)`` flags that stay."""
+    """C12 on the interactive tier — the six named layers over the ``features(...)`` flags that stay."""
 
     @pytest.mark.parametrize(
         "name, flag",
@@ -715,6 +723,13 @@ class TestNamedNaturalEarthFeatures:
             name: The named method.
             flag: The ``features`` keyword it must set.
             monkeypatch: pytest's attribute patcher.
+
+        Test scenario:
+            The forwarded keywords are compared in full rather than by the flag alone, because what each of
+            these adds beyond its flag is the whole question. `name=` and `visible=` are among them since
+            #321/#327: each named method draws exactly one feature, so it passes a caller's name straight
+            through and the layer takes it — which is what `features()` itself cannot promise, since it may
+            draw five layers from one call.
         """
         seen = {}
 
@@ -732,7 +747,12 @@ class TestNamedNaturalEarthFeatures:
 
         monkeypatch.setattr(m, "features", _record)
         assert getattr(m, name)(resolution="50m") is m
-        assert seen == {flag: True, "resolution": "50m"}, seen
+        assert seen == {
+            flag: True,
+            "resolution": "50m",
+            "name": None,
+            "visible": True,
+        }, seen
 
     def test_coastlines_is_one_of_the_six_and_still_draws(self, m):
         """``coastlines`` completes the six and keeps its own element (no Natural-Earth flag for it)."""

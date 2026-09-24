@@ -6,12 +6,21 @@ on one; and eight names meant two different things depending on which facade you
 the agreement that ends that, and these are what hold the tiers to it — including the honest half, which is
 what a tier has *not* built and which order builds it.
 
-The tiers whose seams have landed (web, 3-D) must answer to every Core name they can draw; interactive and
-static carry pending lists their own seams (#300, #303) empty.
+The tiers that adopted the Core names (web, 3-D) must answer to every one they can draw; interactive and
+static carry pending lists, each entry naming the roadmap order that empties it.
+
+The **keywords** are held the same way, on every tier and over both tiers of the contract — which they were
+not (#324). :class:`TestTheKeywordsAreThePromiseToo` was scoped to the two tiers that already passed it, read
+`CORE` alone, and stepped over any member that was not `callable`; what a tier is still short of now lives in
+:data:`KEYWORD_SHORTFALLS`, one row per gap, each naming the issue or roadmap order that settles it and each
+guarded so it cannot outlive the gap.
 """
 
 import inspect
+import re
 import warnings
+from types import MappingProxyType
+from typing import Mapping, Tuple
 
 import pytest
 
@@ -19,11 +28,14 @@ from digitalearth.base.contract import (
     ALIASES,
     CORE,
     PENDING,
+    ROADMAP_ORDERS,
     TIER2,
     alias_table,
-    core_method,
+    orders_named_in,
     pending_for,
+    roadmap_order,
 )
+from tests.open_issues import KNOWN_OPEN_ISSUES, issues_named_in
 
 #: The facades, by the backend name `quickmap` spells them with. Each is imported lazily, so a missing extra
 #: skips that tier rather than failing the file.
@@ -36,6 +48,117 @@ FACADES = {
 
 #: The tiers whose renderer seam has landed, and which therefore answer to the Core now.
 SEAMED = ("web", "3d")
+
+#: Every tier there is, read off :data:`FACADES` rather than written down a second time.
+#:
+#: This is the scope of the keyword check below, and it is derived rather than listed **because the listed
+#: version went stale silently** (#324): the check was scoped to :data:`SEAMED`, Wave 6 seamed static and
+#: interactive, and nobody widened the tuple — so the two tiers with the most divergence were the two the
+#: check skipped, and it passed. A scope read off the facades cannot drift that way: a tier is in it the
+#: moment it has a facade, and leaving it out means deleting the facade.
+EVERY_TIER: Tuple[str, ...] = tuple(sorted(FACADES))
+
+#: What a tier's methods are still short of, as `{(backend, method): (missing keywords, who owns the gap)}`.
+#:
+#: Wave 7 closed the `name`/`visible` columns of this table on both 2-D tiers (#321, #327) and, with them,
+#: `text`, `labels` and `graticule`. What is left is **tracked divergence**: every row names an open issue or
+#: the roadmap order that settles it, and the one row nothing schedules says so in that word — the rule
+#: :data:`~digitalearth.base.contract.PENDING` already documents for a reason a user reads.
+#:
+#: The keywords are listed **exactly**, not as a floor, because
+#: :meth:`TestTheKeywordsAreThePromiseToo.test_a_listed_shortfall_is_still_exactly_that`
+#: compares both ways: a tier that gains one of these, or loses another, fails until the row is corrected.
+#: That is what stops the list outliving what it excuses, the same shape as `CANNOT_HIDE_AT_BUILD` and
+#: `UNDRAWN_KINDS` elsewhere in the suite.
+KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
+    MappingProxyType(
+        {
+            ("matplotlib", "choropleth"): (
+                ("opacity",),
+                "spelled alpha here, which reaches cleopatra through **opts; adopting the Core spelling "
+                "is order 27a",
+            ),
+            ("matplotlib", "colorbar"): (
+                ("layer_id", "visible"),
+                "keyed by position (layer=-1) and drawn when called rather than toggled — #261, order 24",
+            ),
+            ("matplotlib", "legend"): (
+                ("layer_id", "title", "visible"),
+                "takes the colours and labels themselves rather than a layer id — #261, order 24",
+            ),
+            ("matplotlib", "basemap"): (
+                ("provider",),
+                "the provider is spelled source= here — #268",
+            ),
+            ("matplotlib", "set_title"): (
+                ("subtitle",),
+                "one axes title, with no second line to carry a subtitle — #265",
+            ),
+            ("interactive", "points"): (
+                ("column", "opacity"),
+                "column is spelled value_column, and opacity is spelled alpha through **opts — order 27a",
+            ),
+            ("interactive", "polygons"): (
+                ("k", "opacity", "scheme"),
+                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all and "
+                "that half is unscheduled; opacity is spelled alpha through **opts — order 27a",
+            ),
+            ("interactive", "choropleth"): (
+                ("opacity",),
+                "spelled alpha here, which reaches HoloViews through **opts — order 27a",
+            ),
+            ("interactive", "colorbar"): (
+                ("label", "layer_id", "visible"),
+                "a show= toggle on the layer added last, not a builder keyed by id — #261, order 24",
+            ),
+            ("interactive", "legend"): (
+                ("labels", "layer_id", "title", "visible"),
+                "the same show= toggle as its colorbar — #261, order 24",
+            ),
+            ("interactive", "tiles"): (
+                ("url",),
+                "a name and a URL both arrive through one overloaded provider= — #268",
+            ),
+            ("interactive", "contours"): (
+                ("filled", "interval"),
+                "the filled variant is a separate filled_contours() here, and interval is not offered "
+                "at all — #262",
+            ),
+            ("interactive", "layer_control"): (
+                ("layers", "position"),
+                "shares not one parameter with the web tier's — #264",
+            ),
+            ("web", "labels"): (
+                ("crs",),
+                "places labels in EPSG:4326 only, so a column in another CRS cannot be labelled — #265",
+            ),
+            ("web", "layer_control"): (
+                ("layers",),
+                "the layers to include are spelled layer_ids= here — #264",
+            ),
+        }
+    )
+)
+
+#: What a shortfall's reason must name: an open issue, a roadmap order, or — where neither exists — the word
+#: that says so. Written as one pattern because the three are alternatives to each other, and because a reason
+#: that names none of them is a shrug rather than a plan.
+OWNER_PATTERN = re.compile(r"#\d+|order \d+|unscheduled")
+
+
+def _every_user_facing_reason() -> Tuple[str, ...]:
+    """Return every reason the suite shows a *user*, from both tables that carry one.
+
+    `PENDING` answers "when does this tier get the method"; :data:`KEYWORD_SHORTFALLS` answers "why does this
+    tier spell the keyword differently". They are the two consumers of the shared open-issue allowlist, so a
+    check over that allowlist has to read both or it reports every row the other table owns as stale.
+
+    Returns:
+        The reason strings, `PENDING`'s first.
+    """
+    pending = tuple(reason for table in PENDING.values() for reason in table.values())
+    shortfalls = tuple(owner for _, owner in KEYWORD_SHORTFALLS.values())
+    return pending + shortfalls
 
 
 def _facade(backend: str):
@@ -161,11 +284,96 @@ class TestTheSeamedTiersAnswerToTheCore:
             )
 
 
-class TestTheKeywordsAreThePromiseToo:
-    """Review L12 — the contract declares keywords, and nothing checked them."""
+def _declared_methods():
+    """Return every method the contract declares, both tiers of it.
 
-    @pytest.mark.parametrize("backend", SEAMED)
-    def test_every_core_method_takes_its_declared_keywords(self, backend):
+    Returns:
+        `CORE + TIER2`. The keyword check used to iterate `CORE` alone, so every keyword `TIER2` declares —
+        `text(crs=)`, `labels(column=)`, `graticule(spacing=)`, `layer_control(layers=)` — was checked on no
+        tier at all, which is precisely where a Tier 2 name is *allowed* to be absent and so most needs its
+        arguments held to one spelling where it is present (#324).
+    """
+    return CORE + TIER2
+
+
+def _keyword_shortfall(facade, backend: str, method) -> Tuple[str, ...]:
+    """Return the keywords one tier's method does not take but the contract declares.
+
+    Args:
+        facade: The tier's facade class.
+        backend: The tier, for its pending list.
+        method: The declared :class:`~digitalearth.base.contract.Method`.
+
+    Returns:
+        The missing keywords, sorted, or `()` when there are none. `()` also for a name the tier does not
+        have — Tier 2 is "agree wherever it appears", and a Core name it lacks is either pending, which the
+        name checks cover, or already failing them — and for a name answered by a **property**, which is
+        held to the stricter rule in
+        :meth:`TestTheKeywordsAreThePromiseToo.test_a_name_answered_by_a_property_declares_no_keywords`
+        instead. A property was silently dropped by a `not callable(...)` guard before, which is why the
+        skip is now stated rather than implied: `layer_ids` is a property on all three 2-D tiers, and the
+        day the contract declares a keyword against it nothing would have said so (#324).
+    """
+    held = inspect.getattr_static(facade, method.name, None)
+    if held is None or method.name in pending_for(backend):
+        return ()
+    if isinstance(held, property):
+        return ()
+    bound = getattr(facade, method.name)
+    if not callable(bound):
+        return ()
+    taken = set(inspect.signature(bound).parameters)
+    return tuple(sorted(method.keywords - taken))
+
+
+def _measured(backend: str) -> dict:
+    """Return everything one tier is short of, keyed by method name.
+
+    Args:
+        backend: The tier to measure.
+
+    Returns:
+        `{method: missing}` for the methods that are short of something, empty for a tier that is short of
+        nothing.
+    """
+    facade = _facade(backend)
+    found = {}
+    for method in _declared_methods():
+        missing = _keyword_shortfall(facade, backend, method)
+        if missing:
+            found[method.name] = missing
+    return found
+
+
+def _listed(backend: str) -> dict:
+    """Return the shortfalls :data:`KEYWORD_SHORTFALLS` records for one tier.
+
+    Args:
+        backend: The tier to look up.
+
+    Returns:
+        `{method: missing}`, in the same shape :func:`_measured` returns, so the two compare directly.
+    """
+    return {
+        method: missing
+        for (tier, method), (missing, _) in KEYWORD_SHORTFALLS.items()
+        if tier == backend
+    }
+
+
+class TestTheKeywordsAreThePromiseToo:
+    """Review L12 and #324 — the contract declares keywords, and almost nothing checked them.
+
+    Three holes, all of them the same shape: the check was narrower than the thing it checked, and nothing
+    said so. It ran on :data:`SEAMED`, the two tiers that passed it, while Wave 6 seamed the other two; it
+    iterated `CORE`, so `TIER2`'s keywords were held against no tier; and it skipped a member that was not
+    `callable`, which is every property. What replaces it runs on :data:`EVERY_TIER`, over both tiers of the
+    contract, and answers for a property rather than stepping over it — and what it still cannot hold a tier
+    to is written down in :data:`KEYWORD_SHORTFALLS` with the issue or order that owns it.
+    """
+
+    @pytest.mark.parametrize("backend", EVERY_TIER)
+    def test_every_declared_keyword_is_taken_or_owned(self, backend):
         """A name that takes different arguments on each tier is not one name.
 
         Args:
@@ -174,23 +382,188 @@ class TestTheKeywordsAreThePromiseToo:
         Test scenario:
             The contract test checked that the *name* existed and never looked at `Method.keywords`.
             `WebMap.legend` was `(title, position, labels)` against a declaration of `{layer_id, title,
-            labels, visible}`, and `field` had no `limits` — two of the names this PR froze not answering
-            to what was frozen (review L12).
+            labels, visible}`, and `field` had no `limits`. Widened here from the two tiers that already
+            passed to all four, and from `CORE` to `CORE + TIER2` — which is what surfaced the rest of
+            :data:`KEYWORD_SHORTFALLS`. A tier short of something no row owns fails here, so the only way
+            past this check is to fix the tier or to name who will.
+        """
+        unowned = {
+            method: missing
+            for method, missing in _measured(backend).items()
+            if _listed(backend).get(method) != missing
+        }
+        assert unowned == {}, (
+            f"{backend} is short of declared keywords nothing owns: {unowned}; take the keyword, or add a "
+            "row to KEYWORD_SHORTFALLS naming the issue or order that will"
+        )
 
-            Scoped to the seamed tiers, as the alias checks are: an unseamed tier keeps its own signatures
-            until its seam adopts the Core's, which is the same promise `PENDING` makes about the names.
+    @pytest.mark.parametrize("backend", EVERY_TIER)
+    def test_a_listed_shortfall_is_still_exactly_that(self, backend):
+        """The drift guard: a row that no longer describes the tier has to come off.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The half that keeps the allowlist honest, and the reason the rows list their keywords exactly
+            rather than as a floor. A tier that gains `opacity`, or that loses `cmap`, stops matching its
+            row and fails here — so the list is corrected in the change that moved the tier, not years
+            later. Without it a row would outlive the gap it excuses and go on excusing nothing, which is
+            how the `SEAMED` tuple this class replaces went stale in the first place.
+        """
+        measured = _measured(backend)
+        stale = {
+            method: (missing, measured.get(method, ()))
+            for method, missing in _listed(backend).items()
+            if measured.get(method, ()) != missing
+        }
+        assert stale == {}, (
+            f"{backend} no longer matches KEYWORD_SHORTFALLS — {{method: (listed, measured)}}: {stale}; "
+            "correct the row, or take it off now that the tier answers"
+        )
+
+    def test_every_listed_shortfall_names_who_settles_it(self):
+        """A row is a plan, not a shrug — the same rule `PENDING` is held to.
+
+        Test scenario:
+            The point of the table is to turn invisible divergence into *tracked* divergence, and a reason
+            naming neither an issue nor a roadmap order tracks nothing. Where genuinely nothing schedules
+            the work the reason has to say `unscheduled` in that word, which is a statement a reader can act
+            on rather than a silence they have to interpret.
+        """
+        vague = sorted(
+            f"{tier}.{method}"
+            for (tier, method), (_, owner) in KEYWORD_SHORTFALLS.items()
+            if OWNER_PATTERN.search(owner) is None
+        )
+        assert vague == [], f"no issue, order or 'unscheduled' against {vague}"
+
+    def test_every_issue_a_shortfall_names_is_one_the_suite_vouches_for(self):
+        """An issue reference is only a plan while the issue is open, and this table never asked.
+
+        Test scenario:
+            The rows above were held to a *shape* — an issue, an order, or the word "unscheduled" — and a
+            row naming a closed issue satisfies that shape perfectly (review R-L2). It is the defect #319
+            fixed for `PENDING`, left unfixed one table over: a reader follows `#261` expecting to find out
+            when `colorbar` gains `layer_id`, and a closed issue answers "it already did". The allowlist is
+            shared with `PENDING`'s check rather than copied, so the two tables cannot vouch for different
+            sets of issues.
+        """
+        unvouched = sorted(
+            f"{tier}.{method} -> #{number}"
+            for (tier, method), (_, owner) in KEYWORD_SHORTFALLS.items()
+            for number in issues_named_in(owner)
+            if number not in KNOWN_OPEN_ISSUES
+        )
+        assert unvouched == [], (
+            f"a KEYWORD_SHORTFALLS reason names an issue nothing vouches for: {unvouched}. Name the "
+            "roadmap order that settles it, or add the issue to tests/open_issues.py with its title if it "
+            "is still open."
+        )
+
+    def test_every_order_a_shortfall_names_is_one_the_contract_declares(self):
+        """An order reference is a pointer into a plan, and nothing checked the other end (review R-L3).
+
+        Test scenario:
+            The same hole as the issue half, one table over: `OWNER_PATTERN` accepts any `order \\d+`, so a
+            row naming order 99 would read as tracked divergence. `ROADMAP_ORDERS` is the contract's own
+            vendored list of the orders it points at, and both tables are now held to it — a shortfall
+            cannot promise a step of a plan that has no such step.
+        """
+        invented = sorted(
+            f"{tier}.{method} -> {order!r}"
+            for (tier, method), (_, owner) in KEYWORD_SHORTFALLS.items()
+            for order in orders_named_in(owner)
+            if order not in ROADMAP_ORDERS
+        )
+        assert invented == [], (
+            f"a KEYWORD_SHORTFALLS reason names an order the contract does not declare: {invented}. Add it "
+            "to ROADMAP_ORDERS with what it builds, or correct the citation."
+        )
+
+    def test_the_allowlist_holds_nothing_either_table_stopped_naming(self):
+        """An allowlist outliving its reasons is the next stale pointer, one indirection further away.
+
+        Test scenario:
+            The reverse half of the check above, and of `PENDING`'s. It lives here because the allowlist now
+            has two consumers and an entry is stale only when *neither* names it — asked of one table alone
+            it would fail for every issue the other one owns. An issue that closes is taken off the list,
+            which fails the forward checks until each row that named it is corrected; an issue whose row
+            goes away is taken off here.
+        """
+        named = {
+            number
+            for reason in _every_user_facing_reason()
+            for number in issues_named_in(reason)
+        }
+        unused = sorted(set(KNOWN_OPEN_ISSUES) - named)
+        assert unused == [], (
+            f"tests/open_issues.py vouches for {unused}, which no PENDING reason and no KEYWORD_SHORTFALLS "
+            "row names any more"
+        )
+
+    @pytest.mark.parametrize("backend", EVERY_TIER)
+    def test_a_name_answered_by_a_property_declares_no_keywords(self, backend):
+        """A property takes no arguments, so a keyword declared against one can never be met.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The skip that used to be silent, stated and enforced. `layer_ids` is a property on all three
+            2-D tiers and the check stepped over it as "not callable"; it declares no keywords today, so
+            nothing was being missed — but nothing would have said so if it had. Declaring a keyword
+            against a name a tier answers with a property is a contradiction in the *contract* rather than
+            a gap in the tier, so it is reported as one: either the contract stops declaring it, or the
+            tier stops answering with a property.
         """
         facade = _facade(backend)
-        pending = set(pending_for(backend))
-        short = {}
-        for method in CORE:
-            held = getattr(facade, method.name, None)
-            if method.name in pending or held is None or not callable(held):
-                continue
-            missing = sorted(method.keywords - set(inspect.signature(held).parameters))
-            if missing:
-                short[method.name] = missing
-        assert short == {}, f"{backend} is short of declared keywords: {short}"
+        impossible = {
+            method.name: sorted(method.keywords)
+            for method in _declared_methods()
+            if isinstance(inspect.getattr_static(facade, method.name, None), property)
+            and method.keywords
+        }
+        assert impossible == {}, (
+            f"{backend} answers {sorted(impossible)} with a property, which can take no keywords, while "
+            f"the contract declares {impossible}"
+        )
+
+
+class TestWhatARoadmapOrderPromises:
+    """An order reference is a pointer into a plan the repository does not hold, so the number has to resolve.
+
+    :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they say
+    "order 26" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
+    above ask whether a cited order is *in* the table; nothing asked what following one gives back, so a
+    lookup that returned the key, or that let a bare `KeyError` out with no message, would still leave both
+    guards green while the pointer answered nothing.
+    """
+
+    def test_an_order_the_contract_names_says_what_it_builds(self):
+        """Following a pointer gives the line that tells a waiting caller what they are waiting for.
+
+        Test scenario:
+            `order 26` is what `interactive.set_bounds` is pending on. A lookup answering the key back, or
+            the short handle, would read as a plan while saying nothing a reader can act on.
+        """
+        built = roadmap_order("order 26")
+        assert built.startswith("auto-framing and camera round-trip"), built
+
+    def test_an_order_nobody_wrote_down_is_refused_with_the_ones_there_are(self):
+        """A number that is not a step of the plan fails loudly rather than reading as one (review R-L3).
+
+        Test scenario:
+            The defect this table was added for: every guard accepted any `order \\d+`, so a reason naming
+            order 99 passed all three checks in `TestAPendingReasonPointsAtLiveWork`. The refusal has to
+            name the bad order *and* list the real ones — a bare `KeyError('order 99')` would be the
+            unhelpful answer this replaces, and would still satisfy a check that only asserted it raised.
+        """
+        with pytest.raises(KeyError) as refused:
+            roadmap_order("order 99")
+        message = refused.value.args[0]
+        assert "'order 99' is not a roadmap order" in message, message
+        assert "order 26" in message, message
 
 
 class TestAPlannedRenameIsNotAnAlias:
@@ -233,7 +606,11 @@ class TestAPlannedRenameIsNotAnAlias:
 
 
 class TestTheUnseamedTiersDeclareTheirGap:
-    """interactive and static, whose seams are #300 and #303."""
+    """interactive and static, which answer to less of the Core than the two tiers that adopted its names.
+
+    Their seams (#300, #303) landed with Wave 6 and left these lists standing, because rendering a figure from
+    its description and calling the builders what the Core calls them were never the same job (#319).
+    """
 
     @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
     def test_what_is_missing_is_listed_rather_than_discovered(self, backend):
@@ -250,6 +627,22 @@ class TestTheUnseamedTiersDeclareTheirGap:
             if not hasattr(facade, method.name) and method.name not in pending
         ]
         assert missing == [], f"{backend} is missing {missing} without saying so"
+
+    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
+    def test_nothing_pending_is_quietly_present(self, backend):
+        """A name the tier does have is not pending, whatever the list says.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The seamed tiers have been held to this since the contract froze; these two were not, and both
+            listed `layer_ids` as pending while Wave 6 was giving every tier the property (#319). Nothing in
+            the suite noticed, because the check stopped at the tiers that had adopted the Core names.
+        """
+        facade = _facade(backend)
+        built = [name for name in pending_for(backend) if hasattr(facade, name)]
+        assert built == [], f"{backend} lists {built} as pending, but has them"
 
     @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
     def test_each_pending_name_says_which_seam_or_order_builds_it(self, backend):

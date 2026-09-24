@@ -10,12 +10,22 @@ grammar allows one namespace (#288). The object itself stays with the renderer t
 ``{layer_id: object}`` table, and is never written to the figure.
 
 So a figure can name a layer whose object is not here: one loaded from a dict, or one handed to another backend.
-:func:`held_object` is the single rule for that case, and it says which of the two it is. The tier decides what to
-do with it, as contract C7 asks — skip the layer with a warning, or raise under ``strict``.
+:func:`held_object` is the single rule for that case, and it says which of the two it is. The tier then answers
+it the way contract C7 asks, stated once in :data:`digitalearth.base.contract_clauses.CLAUSES`. What it raises is
+:class:`MissingObject`, which is an :class:`~digitalearth.base.crs.OffLimbError`: one catchable type for a layer
+that could not be drawn, whichever way it could not (#325).
+
+**Which half of C7 a missing object is (#320).** This module does not restate the clause; it says only where a
+missing object falls under it. A missing object is a *layer with nothing to draw* — a fact about the data, not
+about the call — which is why leniency is useful here and ``strict=True`` is how a caller opts out of it. A kind
+the tier does not draw at all (``terrain`` asked of the static tier, ``choropleth`` asked of the 3-D one) is the
+clause's other half: ``drawer_for`` refuses it by name before anything reaches this module. That one is a caller
+error, and a silent one costs more than it saves — the figure claims a layer, nothing appears, nothing says why.
 """
 
 from typing import Any, Mapping, Optional
 
+from digitalearth.base.crs import OffLimbError
 from digitalearth.base.registry import KIND_PATTERN
 
 __all__ = [
@@ -31,14 +41,44 @@ __all__ = [
 CUSTOM_PREFIX: str = "custom:"
 
 
-class MissingObject(LookupError):
+class MissingObject(OffLimbError, LookupError):
     """Raised when a custom layer's engine object is not here to draw.
 
-    A `LookupError`, because it is a lookup in the renderer's table of held objects that came back empty —
-    and one a tier is expected to catch and turn into its own skip-or-raise answer, not an error that should
-    reach a caller unhandled.
+    **An `OffLimbError`, so every tier answers "this layer could not be drawn" with one catchable type
+    (#325).** A caller does not care *how* a layer came to have nothing in it — off-limb data, an empty
+    geometry set, an engine object a figure read back from a dict cannot carry — only that the layer drew
+    nothing and whether that is fatal. The 3-D and web tiers already said so: they catch this and re-raise
+    through their own ``_skip_empty``/``_skipped``, which raises `OffLimbError` under ``strict``. The static
+    tier re-raises *this class*, and static is the default tier — so before this base was added,
+    ``except OffLimbError`` covered three tiers out of four and silently missed the one most callers use.
+
+    **The base is not only for a caller's own `except`.** Every ``except OffLimbError`` already written in
+    the package now reaches this too, and one of them is a guard the interactive tier puts on its builders
+    (``_skips_off_limb``). So a builder that meets a missing object skips the layer with a warning on a
+    lenient map and re-raises *this class*, with its own message, on a ``strict=True`` one — measured, not
+    inferred (`R2-L9`). That is the answer this module already prescribes two paragraphs down: a missing
+    object is a layer with nothing to draw, a fact about the data, and leniency is the useful default with
+    ``strict`` as the way out. It is latent today, because no builder that draws a custom layer carries the
+    guard, and `tests/base/test_undrawable_layer.py` pins it for the day one does.
+
+    **Still a `LookupError`**, because that is what it is: a lookup in the renderer's table of held objects
+    that came back empty. Nothing in the package catches it that way today — it is kept because narrowing a
+    public exception's bases breaks callers that nothing in this repo can see, and because the reading is
+    true. The two bases linearise to `MissingObject` -> `OffLimbError` -> `RuntimeError` -> `LookupError` ->
+    `Exception`, so a clause naming any of them catches it.
+
+    It is still an error a tier is expected to catch and turn into its own skip-or-raise answer, rather than
+    one that reaches a caller unhandled from a lenient map.
 
     Examples:
+        - One ``except`` clause now reaches both ways a layer can have nothing to draw:
+            ```python
+            >>> from digitalearth.base.crs import OffLimbError
+            >>> from digitalearth.base.custom import MissingObject
+            >>> issubclass(MissingObject, OffLimbError), issubclass(MissingObject, LookupError)
+            (True, True)
+
+            ```
         - The message says which case it is, so a caller is not left guessing:
             ```python
             >>> from digitalearth.base.custom import MissingObject, held_object

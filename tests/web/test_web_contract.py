@@ -4,19 +4,18 @@ One class per contract point, each proving the tier behaves the way every other 
 rename, that the old spelling still works **and** warns, so no caller is broken in this batch, **and**
 that passing both spellings at once is a ``TypeError`` naming both (the shared
 :func:`~digitalearth.base.deprecation.renamed_parameter` rule; this tier used to prefer the old one
-silently):
+silently).
 
-* **C1** ``save()`` returns :class:`pathlib.Path`;
-* **C2** ``animate(fps=3.0)`` is canonical, ``to_gif`` and ``duration=`` deprecated (``duration`` converted);
-* **C3** ``size`` is marker size, ``text_size`` is text size, ``radius``/``point_size`` deprecated;
-* **C4** ``scheme=None`` (continuous) with ``k=5`` wherever a layer classifies;
-* **C5** ``cmap=None`` resolves through ``auto_style``;
-* **C6** ``auto_style``'s ``levels`` and ``units`` are consumed, never guessed;
-* **C7** an unplaceable layer is skipped with a warning, and raises only under ``strict=True``;
-* **C8** ``big_data_threshold`` as an instance attribute **and** a per-call override;
-* **C9** the basemap default comes from ``base/basemaps.py``;
-* **C10** a keyed provider's coverage reaches the MapLibre source's ``bounds``;
-* **C13** the display CRS is EPSG:4326 and anything else is refused.
+The clauses themselves are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`, so amending
+one is an edit in ``base/`` rather than one per tier (#326). This tier is held to C1 through C10 and C13;
+each class below names its clause, and what is peculiar to drawing into a MapLibre style is:
+
+* **C2** ``to_gif`` and ``duration=`` are the spellings this tier kept, with ``duration`` converted to a rate;
+* **C3** ``radius`` and ``point_size`` are the aliases this tier kept;
+* **C7** the clause's other half — a kind this tier does not draw at all, ``mesh`` or ``vectors`` — is pinned
+  by ``test_web_capabilities.py`` rather than here (#320);
+* **C10** the engine that is told is the MapLibre source, through its ``bounds``;
+* **C13** the CRS this tier declares is EPSG:4326, because inline data is placed by lon/lat degrees.
 
 Engine-dependent tests ``importorskip`` maplibre, so this file runs whole in the ``web`` env
 (``pixi run -e web test-web``).
@@ -191,7 +190,7 @@ def _sources_of(web_map) -> list:
 
 
 class TestC1SaveReturnsAPath:
-    """Every tier's ``save`` hands back the :class:`pathlib.Path` it wrote."""
+    """C1 on the web tier — ``save`` for the HTML page, which is what this tier writes."""
 
     def test_saving_html_returns_the_path_object(self, tmp_path):
         """A string return made a caller re-wrap it before they could stat or read it.
@@ -210,7 +209,7 @@ class TestC1SaveReturnsAPath:
 
 
 class TestC2FrameRateIsFps:
-    """``fps`` is the rate on every tier; ``to_gif`` and ``duration=`` survive as deprecated spellings."""
+    """C2 on the web tier — the hold between frames, and the two spellings this tier kept."""
 
     def test_the_default_frame_rate_is_the_shared_one(self, monkeypatch, tmp_path):
         """One default across the package, so a series animates at one speed whoever renders it.
@@ -364,7 +363,7 @@ class TestC2FrameRateIsFps:
 
 
 class TestC3SizeIsMarkerSizeAndTextSizeIsText:
-    """``size`` means one thing — the visual size of a marker — so text got its own name."""
+    """C3 on the web tier — the marker builders, the label builders, and the aliases each kept."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
@@ -492,7 +491,7 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
 
 
 class TestC4SchemeAndK:
-    """``scheme=None`` means a continuous ramp, and ``k=5`` is the class count when a scheme is given."""
+    """C4 on the web tier — every classifying builder, including the ``choropleth`` that was the odd one."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
@@ -525,7 +524,7 @@ class TestC4SchemeAndK:
 
 
 class TestC5CmapResolvesThroughAutostyle:
-    """``cmap=None`` is a lookup, never a bare literal in the signature."""
+    """C5 on the web tier — the raster builders, and the fallback behind the lookup."""
 
     @pytest.mark.parametrize("builder", ["field", "contours"])
     def test_the_raster_builders_default_to_none(self, builder):
@@ -569,7 +568,7 @@ class TestC5CmapResolvesThroughAutostyle:
 
 
 class TestC6LevelsAndUnitsAreConsumed:
-    """``auto_style`` carries more than a colormap, and the tier now reads the rest of it."""
+    """C6 on the web tier — where the lookup's ``levels`` and ``units`` land in a style and a legend."""
 
     def test_levels_come_from_the_library_when_the_caller_gave_none(self):
         """An operational field carries the levels its community draws it with."""
@@ -775,7 +774,11 @@ class TestC6LevelsAndUnitsAreConsumed:
 
 
 class TestC7OffLimbSkipsAndWarns:
-    """Data the display CRS cannot place is a skipped layer, not a lost map."""
+    """C7 on the web tier — data the display CRS cannot place, on every builder that can meet it.
+
+    The clause's other half, a kind this tier does not draw at all (``mesh``, ``vectors``), never reaches a
+    drawer to be skipped; `test_web_capabilities.py` pins that half (#320).
+    """
 
     def test_strict_defaults_to_off(self):
         """Skipping is the default because a builder chain may have a dozen layers in it."""
@@ -958,7 +961,7 @@ class TestC7OffLimbSkipsAndWarns:
 
 
 class TestC8TheBigDataCutoff:
-    """One name, two reaches: the map's attribute and a single call's override."""
+    """C8 on the web tier — the cutoff that routes a vector layer to a deck.gl layer."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
@@ -1006,7 +1009,7 @@ class TestC8TheBigDataCutoff:
 
 
 class TestC9TheBasemapDefaultIsShared:
-    """The default provider is one constant, not a literal per tier."""
+    """C9 on the web tier — ``basemap()``'s default, which used to be this tier's own ``CartoDark``."""
 
     def test_basemap_defaults_to_the_shared_constant(self):
         """``CartoDark`` was hard-coded here while the interactive tier hard-coded ``CartoLight``."""
@@ -1031,7 +1034,7 @@ class TestC9TheBasemapDefaultIsShared:
 
 
 class TestC10KeyedCoverageReachesTheSource:
-    """Where a keyed provider declares its coverage, MapLibre is told."""
+    """C10 on the web tier — where a keyed preset's coverage lands in the MapLibre source."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self, monkeypatch):
@@ -1066,7 +1069,7 @@ class TestC10KeyedCoverageReachesTheSource:
 
 
 class TestC13TheDisplayCrsIsDeclared:
-    """Inline data is placed by lon/lat degrees, so 4326 is the only display CRS that works."""
+    """C13 on the web tier — 4326, the spellings it accepts, and the refusal of anything else."""
 
     def test_the_default_is_4326(self):
         """The tier has always reprojected to lon/lat; now it says so."""

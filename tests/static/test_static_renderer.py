@@ -57,7 +57,7 @@ def layered_map(dataset):
         dataset: The raster fixture both layers draw.
 
     Yields:
-        The map, whose layers are ``raster-1`` then ``mesh-2``.
+        The map, whose layers are ``raster-1`` then ``mesh-1``.
     """
     canvas = Map(crs=dataset.epsg)
     canvas.imshow(dataset)
@@ -584,7 +584,7 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):
             layered_map._renderer.apply(figure, refused)
-        assert list(layered_map._renderer.drawn) == ["raster-1", "mesh-2"]
+        assert list(layered_map._renderer.drawn) == ["raster-1", "mesh-1"]
 
     def test_a_restored_layer_keeps_its_place_in_the_colorbar_registry(
         self, layered_map
@@ -601,9 +601,9 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         drawn = layered_map._renderer.drawn
         assert [mappable for _, mappable in layered_map.layers] == [
             drawn["raster-1"].artist,
-            drawn["mesh-2"].artist,
+            drawn["mesh-1"].artist,
         ], layered_map.layers
-        assert layered_map.colorbar().mappable is drawn["mesh-2"].artist
+        assert layered_map.colorbar().mappable is drawn["mesh-1"].artist
 
     def test_a_restored_layer_is_drawn_where_it_was(self, dataset):
         """Between artists of one z-order, matplotlib draws in insertion order, so that is restored too.

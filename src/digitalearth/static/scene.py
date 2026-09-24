@@ -28,7 +28,6 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
-from numbers import Real
 from pathlib import Path
 from typing import (
     Any,
@@ -63,8 +62,10 @@ from digitalearth.base.spec import (
     PanelSpec,
     Symbology,
     Viewport,
+    free_layer_id,
 )
-from digitalearth.base.spec._serial import to_json_value
+from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
+from digitalearth.base.spec.layer import layer_name
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import DrawnLayer, Renderer, drawing_opts
 
@@ -82,59 +83,6 @@ ENGINE: str = "matplotlib"
 #: ``props``, so a caller's ``zorder=`` can never overwrite the one a builder recorded about the layer itself.
 DRAWING_OPTS_KEY: str = "opts"
 
-#: Where :func:`_writer_takes` says it is asking about, for the message a refusal would carry.
-_WRITER_FIELD: str = f"Symbology.props[{DRAWING_OPTS_KEY!r}]"
-
-
-def _writer_takes(value: Any) -> bool:
-    """Whether the figure writer accepts a value as it stands.
-
-    The oracle is :func:`~digitalearth.base.spec._serial.to_json_value`, which ``Symbology.to_dict`` itself
-    applies, so this cannot drift from what a figure accepts — it is what refuses ``nan`` and the infinities.
-
-    Args:
-        value: A value a layer is about to record.
-
-    Returns:
-        ``True`` when the description can carry it.
-    """
-    try:
-        to_json_value(value, _WRITER_FIELD)
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def travels_in_a_figure(value: Any) -> bool:
-    """Whether one of the caller's engine keywords belongs in the description rather than beside the layer.
-
-    The rule is **a plain value JSON reads back as the very same value**: a string, a boolean, a finite
-    number, or ``None``. That is what the shared vocabulary already models — ``vmin``/``vmax`` are a
-    ``Scale``'s bounds, ``color``, ``width``, ``size`` and ``opacity`` are declared channels — and it is
-    what a reader on another machine can act on.
-
-    Everything else stays beside the layer, and each exclusion is a defect this tier has already had:
-
-    * A **container** is not read back as itself. JSON has no tuple, so a dash pattern written as
-      ``(0, (5, 5))`` comes back ``[0, [5, 5]]``, which matplotlib refuses outright
-      (``ValueError: Unrecognized linestyle``) — describing it would trade a layer that redraws with the
-      engine's defaults for one that cannot redraw at all (round 1, H3).
-    * An **array** is the layer's data, not its description. Writing one costs a conversion per cell and
-      freezing one costs a copy per cell, which is what made a ``1000 x 1000`` per-pixel ``alpha`` take ten
-      times the render it belonged to (round 1, L6).
-    * An **engine object** — a ``Normalize``, a ``FontProperties``, a ``Colormap`` — has no JSON form at
-      all, and a figure holding one could not be saved.
-
-    Args:
-        value: The caller's value for one keyword.
-
-    Returns:
-        ``True`` when the layer's description carries it.
-    """
-    if value is None or isinstance(value, (bool, str, Real)):
-        return _writer_takes(value)
-    return False
-
 
 def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Return the half of a caller's engine keywords that a figure carries.
@@ -143,8 +91,9 @@ def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         opts: Everything the caller passed through ``**opts``, or ``None``.
 
     Returns:
-        The keywords :func:`travels_in_a_figure` accepts, in the order they were given. Empty for a layer
-        whose keywords are all engine objects, which records no ``opts`` property at all.
+        The keywords :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts, in the order they
+        were given. Empty for a layer whose keywords are all engine objects, which records no ``opts``
+        property at all.
     """
     return {
         key: value for key, value in (opts or {}).items() if travels_in_a_figure(value)
@@ -176,18 +125,25 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     """Return every engine keyword a layer is drawn with: the described half under the held half.
 
     The pair :func:`~digitalearth.static.renderer.drawing_opts` alone used to be. A description carries the
-    plain keywords (see :func:`travels_in_a_figure`) so a figure read back on another scene still draws the
-    caller's ``vmin``, ``alpha``, ``color`` and ``title`` rather than the engine's defaults; the scene that
-    built the layer holds all of them, as the very objects passed, and those win — so on the scene that
-    built it a layer is drawn with exactly what it always was, frozen copies included nowhere.
+    plain keywords (see :func:`~digitalearth.base.spec._serial.travels_in_a_figure`) so a figure read back on
+    another scene still draws the caller's ``vmin``, ``alpha``, ``color`` and ``title`` rather than the
+    engine's defaults; the scene that built the layer holds all of them, as the very objects passed, and
+    those win — so on the scene that built it a layer is drawn with exactly what it always was, frozen
+    copies included nowhere.
+
+    This is **the tier's read boundary for a caller's keywords**, so it is where the described half is
+    thawed. A spec freezes every list to a tuple so it still hashes, and matplotlib reads the two spellings
+    as two different requests. Only a `list` is ever described — the shared rule holds a tuple back for
+    exactly that reason — so thawing is the exact inverse of that freeze, and the held half, which is where
+    a genuine tuple such as a dash pattern lives, is laid over it untouched.
 
     Args:
         scene: The scene the layer is drawn on, which holds the caller's own objects.
         layer: The layer being drawn.
 
     Returns:
-        A fresh dict a drawer may pop and set keys on, holding the description's keywords overlaid with
-        whatever the scene holds.
+        A fresh dict a drawer may pop and set keys on, holding the description's keywords — thawed —
+        overlaid with whatever the scene holds.
 
     Examples:
         - A scene that holds nothing draws a described layer with what its figure carries:
@@ -203,7 +159,7 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
 
             ```
     """
-    described = dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {})
+    described = thawed_value(dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {}))
     return {**described, **drawing_opts(scene, layer)}
 
 
@@ -246,7 +202,8 @@ class LayerRecord:
             ``None`` for every layer that needs none, which is nearly all of them.
         opts: The caller's **engine keywords** — whatever they passed through ``**opts`` to cleopatra or
             matplotlib — held on the scene exactly as passed. All of them are held; the plain ones are
-            *also* written into the layer's description (:func:`travels_in_a_figure`), and
+            *also* written into the layer's description
+            (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`), and
             :func:`drawing_style` lets the held copy win, so the scene that built the layer draws it with
             the very objects passed rather than with a frozen copy. What stays here alone is what a
             description would have spoiled: a dash pattern is a tuple matplotlib refuses as a list, and a
@@ -383,7 +340,9 @@ class Scene(WatermarkMixin):
         # mint `raster-1`, and one process-global object table would have the second silently re-point the
         # first figure's captured source at its own data.
         self._objects_ns: str = object_namespace()
-        self._id_counter: int = 0
+        #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
+        #: within its kind rather than within the figure (review R2-M10).
+        self._id_counters: Dict[str, int] = {}
         self._issued_ids: Set[str] = set()
         # What a drawer needs that the figure cannot carry — a clip boundary, a basemap credential — keyed
         # by layer id. Deliberately not part of `symbology`: a figure is written to JSON and read back, and
@@ -405,25 +364,55 @@ class Scene(WatermarkMixin):
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
 
-    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+    def _layer_id(self, prefix: str, name: Any = None) -> str:
         """Return a unique layer id: the caller's name when they gave one, else a generated one.
 
         Args:
             prefix: What a generated id counts — the kind, usually.
-            name: The caller's own name for the layer, used as its id when it is free.
+            name: The caller's own name for the layer, used as its id when it is free. Normalised by
+                :func:`~digitalearth.base.spec.layer.layer_name`, so surrounding whitespace is dropped and a
+                blank name means no name (review R2-H4).
 
         Returns:
-            The id. A caller's name that collides with one already issued is suffixed, because two layers
-            sharing an id makes the second unaddressable.
+            The id. A caller's name that is already issued is suffixed ``-2``, ``-3``, … by
+            :func:`~digitalearth.base.spec.layer.free_layer_id` — the rule all four tiers share (#321) —
+            because two layers sharing an id makes the second unaddressable. An unnamed layer is numbered
+            **within its kind**, so two kinds interleaved give ``points-1``, ``text-1``, ``points-2``,
+            ``text-2`` (review R2-M10).
+
+        Raises:
+            TypeError: if `name` is neither a string nor `None`.
         """
-        candidate = name or ""
-        while not candidate or candidate in self._issued_ids:
-            self._id_counter += 1
-            candidate = (
-                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
-            )
+        asked = layer_name(name)
+        if asked is not None:
+            candidate = free_layer_id(asked, self._issued_ids.__contains__)
+        else:
+            candidate = self._generated_id(prefix)
         self._issued_ids.add(candidate)
         return candidate
+
+    def _generated_id(self, prefix: str) -> str:
+        """Return the next generated id for one kind, stepping over any a caller already holds.
+
+        One counter per prefix, not one per scene (review R2-M10). A single scene-wide counter numbered the
+        *figure*: ``scatter, text, scatter, text`` came back as ``points-1, text-2, points-3, text-4``, which
+        reads as if two layers had gone missing — and disagreed with the 3-D tier, which has always counted
+        within the kind, and with what this tier's own :attr:`layer_ids` docstring claimed (review R2-L2).
+
+        Args:
+            prefix: What the id counts — the kind, with any engine namespace already removed.
+
+        Returns:
+            ``f"{prefix}-{n}"`` with the lowest ``n`` this scene has not issued. The counter stays where the
+            search ended, so the next layer of the same kind does not re-walk the ids it stepped over.
+        """
+        number = self._id_counters.get(prefix, 0)
+        while True:
+            number += 1
+            candidate = f"{prefix}-{number}"
+            if candidate not in self._issued_ids:
+                self._id_counters[prefix] = number
+                return candidate
 
     def _index_layer(
         self,
@@ -440,7 +429,9 @@ class Scene(WatermarkMixin):
 
         Args:
             layer_id: The layer's id, as :attr:`layer_ids` reports it.
-            label: What a layer switcher should call it; `None` falls back to the id.
+            label: What a layer switcher should call it; `None` — or a name that is nothing but
+                whitespace — falls back to the id. Normalised with
+                :func:`~digitalearth.base.spec.layer.layer_name`, so it agrees with the id it came from.
             kind: The registered, engine-neutral kind — `"raster"`, `"points"`, `"choropleth"` — not the
                 matplotlib artist class, which cannot tell a choropleth from a plain polygon fill.
             visible: Whether the layer was built visible.
@@ -459,7 +450,10 @@ class Scene(WatermarkMixin):
                 kind,
                 source_id=layer_id if source is not None else None,
                 symbology=Symbology() if symbology is None else symbology,
-                label=label or layer_id,
+                # Normalised like the id it falls back to: the two come from one `name=`, and a label
+                # that kept padding the id had dropped was the same invisible difference in the other
+                # field — two layers a switcher captions identically (review R2-H4).
+                label=layer_name(label) or layer_id,
                 # By truthiness, because a builder decides visibility the same loose way it decides every
                 # other flag, and `LayerSpec` takes only a real boolean.
                 visible=bool(visible),
@@ -476,8 +470,9 @@ class Scene(WatermarkMixin):
         it.
 
         The caller's engine keywords go **both** ways, which is deliberate. The plain ones are written into
-        the layer's description (see :func:`travels_in_a_figure`), so a figure read back elsewhere draws the
-        ``vmin``, ``alpha``, ``color`` or ``title`` the caller asked for instead of the engine's defaults.
+        the layer's description (see :func:`~digitalearth.base.spec._serial.travels_in_a_figure`), so a figure
+        read back elsewhere draws the ``vmin``, ``alpha``, ``color`` or ``title`` the caller asked for
+        instead of the engine's defaults.
         All of them — plain or not — stay held on the scene as the very objects passed, and
         :func:`drawing_style` lets those win, so a layer on the scene that built it is drawn with exactly
         what it always was rather than with a frozen copy.
@@ -487,10 +482,36 @@ class Scene(WatermarkMixin):
 
         Returns:
             The layer's id, which a caller-supplied name becomes when it is free.
+
+        Raises:
+            Exception: whatever recording the layer raises — `LayerSpec` validation, `DataRef.of`,
+                `LayerTree.add` — after the id and everything filed under it have been given back again.
+                The mint sat outside every ``try`` in this tier, so a description that refused left the id
+                reserved on a scene that draws no such layer, and the next call under the same name was
+                suffixed past it; the interactive tier already rolled its own back (review R2-M11). Rolling
+                back here rather than in :meth:`_draw` covers the builders that describe without drawing —
+                ``graticule`` is one — which a ``try`` in :meth:`_draw` would not reach.
         """
         # A generated id counts the kind, so `custom:matplotlib` numbers `custom-1`: a colon cannot appear in
         # the middle of an id, and the engine name is not what a reader is counting anyway.
         layer_id = self._layer_id(record.kind.split(":")[0], record.name)
+        try:
+            self._record_layer(layer_id, record)
+        except BaseException:
+            self._forget_layer(layer_id)
+            raise
+        return layer_id
+
+    def _record_layer(self, layer_id: str, record: LayerRecord) -> None:
+        """File one layer's description, data, key and keywords under an id already minted for it.
+
+        Split out of :meth:`_describe_layer` so the mint sits outside the body that can raise and the
+        rollback can be written once (review R2-M11).
+
+        Args:
+            layer_id: The id :meth:`_layer_id` handed out for this layer.
+            record: What the builder drew, as :class:`LayerRecord` describes it.
+        """
         if record.key is not None:
             self._layer_keys[layer_id] = record.key
         if record.held is not None:
@@ -508,7 +529,6 @@ class Scene(WatermarkMixin):
             source=record.source,
             symbology=_with_described_opts(record.symbology, record.opts),
         )
-        return layer_id
 
     def _draw(self, record: LayerRecord) -> Any:
         """Record a layer and draw it, returning whatever its drawer handed back.
@@ -550,9 +570,17 @@ class Scene(WatermarkMixin):
         they asked for rather than a suffixed one.
 
         Args:
-            layer_id: The layer to forget. One already gone is ignored.
+            layer_id: The layer to forget. One already gone is ignored — as this docstring already promised
+                and the unguarded `LayerTree.remove` below did not, since that call raises `KeyError` for an
+                id it does not hold (review R2-L11). Named by what it is rather than by a line number: the
+                number this sentence carried was already pointing at a docstring's closing quotes by the
+                time the same wave split :meth:`_record_layer` out (`R2-N2`). That matters now rather than
+                later: :meth:`_describe_layer` rolls back a
+                description that refused, and the refusal may have come from `LayerTree.add` itself — so the
+                rollback would have raised over the very exception it was unwinding.
         """
-        self._layer_tree = self._layer_tree.remove(layer_id)
+        if layer_id in self._layer_tree:
+            self._layer_tree = self._layer_tree.remove(layer_id)
         self._issued_ids.discard(layer_id)
         self._forget_layer_data(layer_id)
 
@@ -578,8 +606,11 @@ class Scene(WatermarkMixin):
         """The ids of the layers this scene draws, in draw order, bottom first.
 
         Returns:
-            One id per described layer. A layer the caller named carries that name; an unnamed one gets a
-            generated id counting the layers of its kind.
+            One id per described layer. A layer the caller named carries that name, with surrounding
+            whitespace removed; an unnamed one gets a generated id counting the layers of its kind —
+            ``scatter, text, scatter, text`` is ``points-1, points-2, text-1, text-2``, listed in draw
+            order. It counted the *figure* until review R2-M10, while this sentence already said otherwise
+            (review R2-L2).
         """
         return list(self._layer_tree.ids)
 
@@ -592,7 +623,8 @@ class Scene(WatermarkMixin):
             the tree in draw order and whose sources are what each builder was given.
 
             It carries the plain half of the caller's styling and no more: a keyword passed through
-            ``**opts`` is described when :func:`travels_in_a_figure` accepts it, and held beside the layer
+            ``**opts`` is described when :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts
+            it, and held beside the layer
             (:attr:`LayerRecord.opts`) when it does not — so a figure drawn on another scene draws the
             described ``vmin``, ``alpha``, ``color`` or ``title``, and the engine's defaults in place of a
             dash tuple, a per-pixel array or a ``Normalize``.
@@ -669,7 +701,15 @@ class Scene(WatermarkMixin):
                 del self._layer_labels[index]
                 return
 
-    def _add_layer(self, glyph: Any, mappable: Any, label: Optional[str] = None) -> Any:
+    def _add_layer(
+        self,
+        glyph: Any,
+        mappable: Any,
+        label: Optional[str] = None,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Any:
         """Register an artist the caller built themselves, and describe it as a custom layer.
 
         Not the builders' path: an artist somebody built by hand has no source to reference and no
@@ -685,6 +725,11 @@ class Scene(WatermarkMixin):
             glyph: The cleopatra glyph instance that was drawn on :attr:`ax`, or ``None``.
             mappable: The matplotlib mappable/artist to register.
             label: Optional default colorbar label for this layer.
+            name: The caller's own name for the layer, used as its id; ``None`` (default) generates
+                ``custom-1``, ``custom-2``, … A name already on the figure is suffixed ``-2``, ``-3``, …
+                (#321).
+            visible: Whether the layer is drawn. ``False`` registers it hidden **and** describes it
+                hidden (#327).
 
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
@@ -692,6 +737,8 @@ class Scene(WatermarkMixin):
         return self._draw(
             LayerRecord(
                 custom_kind(ENGINE),
+                name=name,
+                visible=visible,
                 symbology=Symbology(props={"via": "custom"}),
                 held=(glyph, mappable, label),
             )
@@ -717,7 +764,7 @@ class Scene(WatermarkMixin):
         self._layer_keys = {}
         self._layer_opts = {}
         self._held_objects = {}
-        self._id_counter = 0
+        self._id_counters = {}
         self._issued_ids = set()
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
         # than removable: it is dropped, not removed.

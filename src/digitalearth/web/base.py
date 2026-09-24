@@ -61,7 +61,12 @@ from digitalearth.base.spec import (
     Viewport,
 )
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.base.spec.layer import LayerSpec, LayerTree
+from digitalearth.base.spec.layer import (
+    LayerSpec,
+    LayerTree,
+    free_layer_id,
+    layer_name,
+)
 from digitalearth.base.symbology import sample_cmap
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
@@ -364,8 +369,14 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
             backend="web",
         )
     except MissingObject as error:
-        # Contract C7: a figure that names an object this process does not hold is skipped with a warning
-        # naming the layer and its engine, and raised under `strict`. The same answer the 3-D tier gives.
+        # Contract C7, stated once in `digitalearth.base.contract_clauses.CLAUSES` (#326). This site does not
+        # restate it; it records only which half of it a missing object is, and that this tier answers the way
+        # the other three do.
+        #
+        # A missing object is a *layer with nothing to draw* — a fact about the data, not about the call —
+        # so it is skipped with a warning here and raised under `strict`. A *kind this tier does not draw at
+        # all* (`mesh`, `vectors`) is C7's other half and never reaches a drawer: `drawer_for` refuses it by
+        # name in every mode (#320).
         web_map._skipped(layer.id, str(error))
         return None
     return DrawnLayer(source_id=None, source_spec=None, layer=obj)
@@ -627,8 +638,9 @@ class WebMapBase:
         # Created once and kept: what it holds is what `layers` reports and what `_build_map_widget`
         # adds, so a layer drawn when its builder ran is still there at render time.
         self._renderer = _new_renderer(self)
-        #: Monotonic counter handing out unique source/layer ids (see :meth:`_uid`).
-        self._id_counter = 0
+        #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
+        #: within its kind rather than within the figure (see :meth:`_uid`; review R2-M10).
+        self._id_counters: Dict[str, int] = {}
         #: Every id this map has minted, named or generated. Both allocators reserve from it, so a caller
         #: name shaped like a generated id (``"circle-5"``) cannot later be handed out a second time.
         self._issued_ids: set = set()
@@ -1354,7 +1366,9 @@ class WebMapBase:
 
         Args:
             layer_id: The MapLibre layer id.
-            label: What a layer switcher should call it; `None` falls back to the id.
+            label: What a layer switcher should call it; `None` — or a name that is nothing but
+                whitespace — falls back to the id. Normalised with
+                :func:`~digitalearth.base.spec.layer.layer_name`, so it agrees with the id it came from.
             kind: What sort of layer it is — a registered, engine-neutral kind such as `"raster"`,
                 `"choropleth"` or `"points"` (:func:`~digitalearth.base.registry.kinds`), not the MapLibre layer
                 type — so the tree describes the layer rather than only naming it.
@@ -1392,8 +1406,9 @@ class WebMapBase:
             KeyError: when `kind` is not a registered layer kind — a builder passing a name the registry cannot
                 look up, which no caller input reaches.
             ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
-                the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
-                whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
+                the tree. A builder reaches none of these: its `name=` becomes the id with surrounding
+                whitespace removed (review R2-H4), and `_layer_id` generates an id for a blank name and
+                suffixes a repeated one.
                 Also when a drawn kind's `symbology` carries none of the props its drawer reads, which a
                 description built by hand can miss.
             OffLimbError: when the map is `strict` and the drawer found nothing it could place. Without
@@ -1416,6 +1431,24 @@ class WebMapBase:
             self._sources[layer_id] = DataRef.of(
                 source, name=f"{self._objects_ns}:{layer_id}"
             )
+        # Imported here, not at module scope: `digitalearth.web.renderer` is reached through the package,
+        # whose `__init__` builds the map this module defines.
+        from digitalearth.web.renderer import DRAWN_KINDS, portable_encodings
+
+        recorded = Symbology() if symbology is None else symbology
+        # The same style said twice: MapLibre's `paint` stays exactly as the builder wrote it, because that
+        # is what the drawer rebuilds the layer from, and the declared channels it drives are recorded
+        # beside it so another tier can read the layer's style at all (#328). Laid *over* the derived half,
+        # so an encoding a builder wrote itself — `popup()`'s `tooltip` — outranks anything lifted here.
+        #
+        # `kind` is what tells the lift which builder's defaults to subtract. Without it the tables could
+        # only be keyed by the resolved style itself, and three builders write the same three fill keys —
+        # so each was charged with the others' defaults and `polygons(opacity=0.85)`, an explicit
+        # non-default ask, published nothing (review R2-H2). This is the one place every builder passes
+        # its own kind, which is why the argument is threaded from here rather than guessed at there.
+        recorded = recorded.merged_over(
+            Symbology(encodings=portable_encodings(recorded, kind))
+        )
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
             # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
@@ -1423,16 +1456,17 @@ class WebMapBase:
                 layer_id,
                 kind,
                 source_id=layer_id if source is not None else None,
-                symbology=Symbology() if symbology is None else symbology,
-                label=label or layer_id,
+                symbology=recorded,
+                # Normalised like the id it falls back to: the two come from one `name=`, and a label
+                # that kept padding the id had dropped was the same invisible difference in the other
+                # field — two layers a switcher captions identically (review R2-H4).
+                label=layer_name(label) or layer_id,
                 visible=bool(visible),
                 band=band,
             )
         )
         # Drawn as it is recorded, for the kinds the renderer owns: what it holds is what `layers` reports
         # and what the widget is built from, so a description and its drawing cannot drift apart.
-        from digitalearth.web.renderer import DRAWN_KINDS
-
         if kind in DRAWN_KINDS:
             try:
                 drawn = self._renderer.draw_layer(
@@ -1648,6 +1682,10 @@ class WebMapBase:
             so after removing one layer of several they still describe the removed one; call
             :meth:`set_bounds` or rebuild the legend if that matters.
 
+            The **id** is not one of those: it goes back to the pool, so a name removed and asked for again
+            is handed back unsuffixed. That is the lifetime all four tiers share —
+            :func:`~digitalearth.base.spec.layer.free_layer_id` states it.
+
         Raises:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
                 look exactly like a layer that refused to go away.
@@ -1671,11 +1709,22 @@ class WebMapBase:
 
                 ```
         """
+        from digitalearth.web.renderer import derived_ids
+
         present = self.layer_ids
         if layer_id not in present:
             raise KeyError(
                 f"no layer {layer_id!r} on this map; added layers are {present}"
             )
+        # The id is free again the moment it addresses nothing — the lifetime
+        # :func:`~digitalearth.base.spec.layer.free_layer_id` states, and the one the 3-D tier already had
+        # by reading its ids off the live tree. This tier reserved a removed layer's id for the life of the
+        # map, so `remove_layer("wells")` followed by a new `wells` drew `wells-2` with nothing called
+        # `wells` on the map — and on this tier the id is the caption the layer switcher shows (review
+        # R2-M9). The ids its drawer derived were reserved with it, so they go back with it too.
+        self._issued_ids.difference_update(
+            (layer_id, *derived_ids(self._layer_tree.get(layer_id).kind, layer_id))
+        )
         self._layer_tree = self._layer_tree.remove(layer_id)
         # A caller's own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker
         # attribute the builders' closures carry, so there is nothing on it to compare by id.
@@ -1757,7 +1806,7 @@ class WebMapBase:
             self._temporal = None  # one step is not a series
 
     def _layer_id(
-        self, prefix: str, name: Optional[str] = None, *, kind: Optional[str] = None
+        self, prefix: str, name: Any = None, *, kind: Optional[str] = None
     ) -> str:
         """Return the id a new layer should take, preferring the caller's own name.
 
@@ -1768,25 +1817,40 @@ class WebMapBase:
 
         Args:
             prefix: The kind tag used when there is no name (``"circle"``, ``"raster"``, …).
-            name: The caller's name for the layer, if any.
+            name: The caller's name for the layer, if any. Normalised by
+                :func:`~digitalearth.base.spec.layer.layer_name`, so surrounding whitespace is dropped and a
+                blank name means no name. This tier was the one that *kept* the padding — it drew
+                ``name="roads "`` as a layer whose switcher row reads ``roads``, where the other three
+                crashed on it — so a script moved between tiers got a different id either way (review R2-H4).
             kind: The layer's kind, when its drawer adds MapLibre layers under ids derived from this one
                 (:data:`~digitalearth.web.renderer.DERIVED_SUFFIXES`). Those ids are reserved with it, and a
                 candidate one of whose derived ids is taken is passed over like a taken id (review M5).
 
         Returns:
             The name (suffixed ``-2``, ``-3``, … if that name, or an id derived from it, is already on the
-            map), or a generated ``"<prefix>-<n>"`` when unnamed.
+            map — through :func:`~digitalearth.base.spec.layer.free_layer_id`, the rule all four tiers
+            share), or a generated ``"<prefix>-<n>"`` when unnamed.
+
+        Raises:
+            TypeError: if `name` is neither a string nor `None`.
         """
-        if not name:
+        asked = layer_name(name)
+        if asked is None:
             return self._uid(prefix, kind=kind)
-        candidate, suffix = name, 2
-        while not self._reserve(candidate, kind):
-            candidate = f"{name}-{suffix}"
-            suffix += 1
-        return candidate
+        # `_reserve` claims the id when it takes it, so "is this one taken?" is its negation — which is why
+        # the shared rule asks a predicate rather than reading a set: this tier has derived ids to claim
+        # with the one the caller named, and the other three do not.
+        return free_layer_id(
+            asked, lambda candidate: not self._reserve(candidate, kind)
+        )
 
     def _uid(self, prefix: str, *, kind: Optional[str] = None) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
+
+        One counter per prefix, not one per map (review R2-M10). A single map-wide counter numbered the
+        *figure*, so ``points, text, points, text`` came back as ``circle-1, symbol-2, circle-3, symbol-4``
+        — gaps that read as missing layers, and a different answer from the 3-D tier, which has always
+        counted within the kind.
 
         Args:
             prefix: A short kind tag (``"fill"``, ``"circle"``, ``"raster"``, …).
@@ -1794,15 +1858,17 @@ class WebMapBase:
                 reserved with it, as :meth:`_layer_id` does.
 
         Returns:
-            ``f"{prefix}-{n}"`` with a counter that increments on every call, so two builders never
+            ``f"{prefix}-{n}"`` with the lowest ``n`` this prefix has not issued, so two builders never
             collide on a MapLibre source/layer id.
         """
-        self._id_counter += 1
-        # A caller name can look exactly like a generated id, and two layers sharing a MapLibre id makes
-        # addLayer drop the second one with only a console error.
-        while not self._reserve(f"{prefix}-{self._id_counter}", kind):
-            self._id_counter += 1
-        return f"{prefix}-{self._id_counter}"
+        number = self._id_counters.get(prefix, 0)
+        while True:
+            number += 1
+            # A caller name can look exactly like a generated id, and two layers sharing a MapLibre id makes
+            # addLayer drop the second one with only a console error.
+            if self._reserve(f"{prefix}-{number}", kind):
+                self._id_counters[prefix] = number
+                return f"{prefix}-{number}"
 
     def _reserve(self, candidate: str, kind: Optional[str]) -> bool:
         """Reserve an id and every id its drawer derives from it, when none of them is taken.

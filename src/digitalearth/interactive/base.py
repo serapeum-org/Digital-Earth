@@ -29,7 +29,7 @@ from digitalearth.base.bigdata import (
     validate_big_data_threshold,
 )
 from digitalearth.base.crs import OffLimbError
-from digitalearth.base.custom import custom_kind
+from digitalearth.base.custom import MissingObject, custom_kind
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
@@ -51,9 +51,11 @@ from digitalearth.base.spec import (
     PanelSpec,
     Symbology,
     Viewport,
+    free_layer_id,
 )
-from digitalearth.base.spec._serial import to_json_value
+from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.bounds import same_crs
+from digitalearth.base.spec.layer import layer_name
 from digitalearth.interactive.capabilities import CAPABILITIES
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
@@ -178,26 +180,6 @@ def _skips_off_limb(builder: Callable) -> Callable:
     return guarded
 
 
-def is_json_value(value: Any) -> bool:
-    """Whether a figure holding `value` in its description can be written down.
-
-    The oracle is the writer itself — :func:`~digitalearth.base.spec._serial.to_json_value`, which
-    `Symbology.to_dict` applies — so this cannot drift from what a figure actually accepts. A colormap
-    object, a Datashader reduction, a `pandas.Timestamp` and a `nan` are all refused there.
-
-    Args:
-        value: A value a builder is about to record.
-
-    Returns:
-        `True` when the description can carry it as it is.
-    """
-    try:
-        to_json_value(value, "Symbology.props")
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
 def cmap_name(cmap: Any) -> Optional[str]:
     """Return the name a colormap object can be written down as, or `None` for one that cannot.
 
@@ -232,28 +214,28 @@ OPTS_KEY = "opts"
 def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, Any]:
     """Describe a builder's `**opts` bag, keeping what a figure can carry and holding the rest.
 
-    The bag that goes round the rule. :func:`describe` asks `is_json_value` per value, which is round 1's
-    decision — a figure keeps everything JSON can carry and the map holds only what it cannot — but every
-    builder recorded its `**opts` wholesale into `held`, untested. So which of the caller's keywords a
-    figure kept was decided by which ones the builder happened to name in its signature:
-    `image(alpha=0.25)` survived because `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not,
-    although both are plain floats and both are channels the shared vocabulary declares. A figure read back
-    elsewhere then drew the engine's defaults where the caller's styling had been, silently (review M3).
+    The bag that goes round the rule. :func:`describe` asks
+    :func:`~digitalearth.base.spec._serial.travels_in_a_figure` per value — but every builder used to record
+    its `**opts` wholesale into `held`, untested. So which of the caller's keywords a figure kept was decided
+    by which ones the builder happened to name in its signature: `image(alpha=0.25)` survived because
+    `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
+    channels the shared vocabulary declares. A figure read back elsewhere then drew the engine's defaults
+    where the caller's styling had been, silently (review M3).
 
-    The split is now by what JSON can carry, per value, exactly as everywhere else on this tier. A
+    The split is now per value, by the rule every tier shares, exactly as everywhere else on this tier. A
     colormap object is spelled by its registered name where it has one, as :func:`describe_style` spells
-    the builders' own; anything else with no JSON form is described as not given and handed to the drawer
+    the builders' own; anything that cannot travel is described as not given and handed to the drawer
     through the map, which is what keeps a figure writable and key-free.
 
     A held keyword is left **out** of the bag rather than recorded as `None`, which is where this differs
     from :func:`describe_style`. A style dict is read by a drawer, which knows a `None` means "not given";
     this bag is the caller's raw keywords and is splatted straight into `element.opts(**opts)`, where a
     `None` is a value the engine is handed — `hooks=None` is not the same as passing no `hooks` at all. So
-    a keyword with no JSON form simply is not in the figure, and a reader without the held object draws
+    a keyword that cannot travel simply is not in the figure, and a reader without the held object draws
     the layer without it, which is what such a reader could do anyway.
 
     Args:
-        held: The values being held beside this layer; the bag's unwritable half is added to it, under the
+        held: The values being held beside this layer; the half that cannot travel is added to it, under the
             same key the description writes, because that is the key :func:`held_props` merges back.
         opts: The caller's raw keywords.
 
@@ -265,8 +247,8 @@ def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, An
     for key, value in dict(opts or {}).items():
         spelling = cmap_name(value) if key == "cmap" else None
         recorded = describe(bucket, key, value, spelling)
-        # `key not in bucket` is how a JSON-safe value is told from a held one, rather than by testing the
-        # result: a caller who wrote `cmap=None` passed a value JSON carries, and it is recorded as given.
+        # `key not in bucket` is how a described value is told from a held one, rather than by testing the
+        # result: a caller who wrote `cmap=None` passed a value that travels, and it is recorded as given.
         if key not in bucket or recorded is not None:
             described[key] = recorded
     if bucket:
@@ -308,7 +290,9 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
     others. Going through one helper is what keeps the two from disagreeing again.
 
     Args:
-        held: The values being held beside this layer; anything with no JSON form is added to it.
+        held: The values being held beside this layer; anything
+            :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses is added to it — which is
+            narrower than "has no JSON form", because a tuple has one and is still held (#322).
         style: The resolved style, as the builder computed it.
 
     Returns:
@@ -326,16 +310,24 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
 
 
 def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
-    """Record a builder argument if a figure can be written with it; otherwise hold it beside the layer.
+    """Record a builder argument if a figure can travel with it; otherwise hold it beside the layer.
 
-    The tier's answer to engine values in a description (review C1/H2/H3/M9): a figure is written to JSON
-    and read back, so it carries **plain values only**. Anything else — a colormap object, an
-    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp —
-    is handed to the drawer through the map instead, keyed by layer id, and the description keeps the
-    JSON-safe rendering of it that `spelling` gives, or nothing.
+    The tier's answer to engine values in a description (review R-C1/R-H2/R-H3/R-M9): a figure is written to JSON
+    and read back, so it carries only what comes back unchanged. Anything else — a colormap object, an
+    `xyzservices.TileProvider` (whose fields include an API key), a Datashader reduction, a timestamp, a
+    tuple, an array — is handed to the drawer through the map instead, keyed by layer id, and the
+    description keeps the JSON-safe rendering of it that `spelling` gives, or nothing.
+
+    The rule is :func:`~digitalearth.base.spec._serial.travels_in_a_figure`, the one this tier and the
+    static one both ask of a caller's keywords (#322). This tier used to ask its own `is_json_value`, which
+    stopped at what the writer accepts and so described a tuple: a caller's `line_dash=(0, (5, 5))` was
+    written down and read back as `[0, [5, 5]]`, which matplotlib refuses. The shared rule is narrower than
+    the writer for exactly that reason and no wider — a **list** of plain values comes back as itself, so a
+    palette and a classifier's edges travel and a figure reloaded elsewhere keeps its colours (#330). See
+    its docstring for the round trip behind it.
 
     Args:
-        held: The values being held beside this layer; a value with no JSON form is added to it.
+        held: The values being held beside this layer; a value that cannot travel is added to it.
         name: The property's name, under which the drawer reads it back.
         value: The caller's value.
         spelling: What to describe a held value as — a registered colormap's name, a timestamp's ISO
@@ -344,7 +336,7 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
     Returns:
         The value to record in `Symbology.props`.
     """
-    if is_json_value(value):
+    if travels_in_a_figure(value):
         return value
     held[name] = value
     return spelling
@@ -353,22 +345,35 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
 def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
     """Return a layer's recorded properties with the values held beside it merged back in.
 
-    What every drawer reads instead of `layer.symbology.props`: the description carries the JSON-safe
-    half, the map carries the engine values :func:`describe` kept out of it, and a drawer wants both. A
+    What every drawer reads instead of `layer.symbology.props`: the description carries the half that
+    travels, the map carries what :func:`describe` kept out of it, and a drawer wants both. A
     figure loaded from disk — or drawn on another map — has nothing held, so the drawer sees the
     description alone and draws the layer with what it can.
+
+    This is also **the tier's one read boundary**, so it is where the described half is thawed. A spec
+    freezes every list to a tuple so it still hashes, and HoloViews reads the two spellings as two
+    different requests — a tuple of dimensions is a ``(name, label)`` pair, and `color_levels` is a
+    `ClassSelector` of ``(int, list, range)`` that refuses a tuple outright. Each drawer used to thaw the
+    keys it happened to know about (`vdims` here, `cmap`/`color_levels` in the vector drawer, `levels` in
+    the contour one), so a newly described list reached the engine as a tuple until someone added it to a
+    list of names. Thawing once covers every key, present and future.
+
+    Only the described half is thawed. A **tuple** is exactly what the shared rule refuses to describe, so
+    a genuine tuple is always in the held half — a caller's ``line_dash=(0, (5, 5))``, a ``clim`` pair —
+    and that half is merged on afterwards, untouched, as the caller's own object.
 
     Args:
         interactive_map: The map being drawn, which holds the engine values.
         layer: The layer's description.
 
     Returns:
-        The merged properties. A held value replaces the described one under the same key, **except**
-        where both are mappings: those are merged one level deep, described first, so a held style value
-        joins the ones the builder described rather than replacing the whole dict they sit in. Nesting
-        deeper than one level is not merged — the inner mapping is taken from the held side whole.
+        The merged properties, the described half thawed. A held value replaces the described one under the
+        same key, **except** where both are mappings: those are merged one level deep, described first, so
+        a held style value joins the ones the builder described rather than replacing the whole dict they
+        sit in. Nesting deeper than one level is not merged — the inner mapping is taken from the held side
+        whole.
     """
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     for key, value in interactive_map._held_for(layer.id).items():
         described = props.get(key)
         if isinstance(value, Mapping) and isinstance(described, Mapping):
@@ -521,14 +526,16 @@ class InteractiveMapBase:
         self._renderer = _new_renderer(self)
         self._sources: Dict[str, DataRef] = {}
         self._objects_ns: str = object_namespace()
-        self._id_counter: int = 0
+        #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
+        #: within its kind rather than within the figure (review R2-M10).
+        self._id_counters: Dict[str, int] = {}
         self._issued_ids: set = set()
         # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
         # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
         self._layer_keys: Dict[str, Any] = {}
         # The engine values a layer's drawer needs that a description cannot carry, by layer id: the
         # caller's raw HoloViews keywords, a colormap object, a tile provider, a Datashader reduction
-        # (review C1/H2/H3/M9). Held here for the same reason the credentials are — a figure written to
+        # (review R-C1/R-H2/R-H3/R-M9). Held here for the same reason the credentials are — a figure written to
         # JSON holds plain values — and let go with the layer and on `close()`.
         self._layer_held: Dict[str, Dict[str, Any]] = {}
         # The layer the caller added last — what `colorbar`, `legend`, `hover` and `on_tap` act on by
@@ -581,25 +588,55 @@ class InteractiveMapBase:
             **placement,
         )
 
-    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+    def _layer_id(self, prefix: str, name: Any = None) -> str:
         """Return a unique layer id: the caller's name when they gave one, else a generated one.
 
         Args:
             prefix: What a generated id counts — the kind, usually.
-            name: The caller's own name for the layer, used as its id when it is free.
+            name: The caller's own name for the layer, used as its id when it is free. Normalised by
+                :func:`~digitalearth.base.spec.layer.layer_name`, so surrounding whitespace is dropped and a
+                blank name means no name (review R2-H4).
 
         Returns:
-            The id. A caller's name that collides with one already issued is suffixed, because two layers
-            sharing an id makes the second unaddressable.
+            The id. A caller's name that is already issued is suffixed ``-2``, ``-3``, … by
+            :func:`~digitalearth.base.spec.layer.free_layer_id` — the rule all four tiers share (#321) —
+            because two layers sharing an id makes the second unaddressable. An unnamed layer is numbered
+            **within its kind**, so two kinds interleaved give ``points-1``, ``text-1``, ``points-2``,
+            ``text-2`` (review R2-M10).
+
+        Raises:
+            TypeError: if `name` is neither a string nor `None`.
         """
-        candidate = name or ""
-        while not candidate or candidate in self._issued_ids:
-            self._id_counter += 1
-            candidate = (
-                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
-            )
+        asked = layer_name(name)
+        if asked is not None:
+            candidate = free_layer_id(asked, self._issued_ids.__contains__)
+        else:
+            candidate = self._generated_id(prefix)
         self._issued_ids.add(candidate)
         return candidate
+
+    def _generated_id(self, prefix: str) -> str:
+        """Return the next generated id for one kind, stepping over any a caller already holds.
+
+        One counter per prefix, not one per map (review R2-M10). A single map-wide counter numbered the
+        *figure*: ``points, text, points, text`` came back as ``points-1, text-2, points-3, text-4``, which
+        reads as if two layers had gone missing — and disagreed with the 3-D tier, which has always counted
+        within the kind, and with what this tier's own :attr:`layer_ids` docstring claimed (review R2-L2).
+
+        Args:
+            prefix: What the id counts — the kind, with any engine namespace already removed.
+
+        Returns:
+            ``f"{prefix}-{n}"`` with the lowest ``n`` this map has not issued. The counter stays where the
+            search ended, so the next layer of the same kind does not re-walk the ids it stepped over.
+        """
+        number = self._id_counters.get(prefix, 0)
+        while True:
+            number += 1
+            candidate = f"{prefix}-{number}"
+            if candidate not in self._issued_ids:
+                self._id_counters[prefix] = number
+                return candidate
 
     def _index_layer(
         self,
@@ -616,7 +653,9 @@ class InteractiveMapBase:
 
         Args:
             layer_id: The layer's id, as `layer_ids` reports it.
-            label: What a layer switcher should call it; `None` falls back to the id.
+            label: What a layer switcher should call it; `None` — or a name that is nothing but
+                whitespace — falls back to the id. Normalised with
+                :func:`~digitalearth.base.spec.layer.layer_name`, so it agrees with the id it came from.
             kind: The registered, engine-neutral kind — `"raster"`, `"points"`, `"choropleth"` — not the
                 HoloViews element type, which cannot tell a choropleth from a plain polygon draw.
             visible: Whether the layer was built visible.
@@ -629,13 +668,28 @@ class InteractiveMapBase:
             self._sources[layer_id] = DataRef.of(
                 source, name=f"{self._objects_ns}:{layer_id}"
             )
+        # Imported here, not at module scope: `digitalearth.interactive.style_fold` is reached through the
+        # package, whose `__init__` builds the map this module defines.
+        from digitalearth.interactive.style_fold import portable_encodings
+
+        recorded = Symbology() if symbology is None else symbology
+        # The same style said twice: the resolved HoloViews options stay exactly where every drawer reads
+        # them, and the declared channels they drive are recorded beside them so another tier can read the
+        # layer's style at all (#328). Laid *over* the derived half, so an encoding a builder wrote itself
+        # outranks anything lifted here.
+        recorded = recorded.merged_over(
+            Symbology(encodings=portable_encodings(recorded))
+        )
         self._layer_tree = self._layer_tree.add(
             LayerSpec(
                 layer_id,
                 kind,
                 source_id=layer_id if source is not None else None,
-                symbology=Symbology() if symbology is None else symbology,
-                label=label or layer_id,
+                symbology=recorded,
+                # Normalised like the id it falls back to: the two come from one `name=`, and a label
+                # that kept padding the id had dropped was the same invisible difference in the other
+                # field — two layers a switcher captions identically (review R2-H4).
+                label=layer_name(label) or layer_id,
                 visible=bool(visible),
                 band=band,
             )
@@ -646,8 +700,11 @@ class InteractiveMapBase:
         """The ids of the layers this map draws, in draw order, bottom first.
 
         Returns:
-            One id per described layer. A layer the caller named carries that name; an unnamed one gets a
-            generated id counting the layers of its kind.
+            One id per described layer. A layer the caller named carries that name, with surrounding
+            whitespace removed; an unnamed one gets a generated id counting the layers of its kind —
+            ``points, text, points, text`` is ``points-1, points-2, text-1, text-2``, listed in draw order.
+            It counted the *map* until review R2-M10, while this sentence already said otherwise
+            (review R2-L2).
 
         Examples:
             - A named layer keeps its name; an unnamed one is numbered after what it is:
@@ -684,9 +741,12 @@ class InteractiveMapBase:
             A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`, whose layers are the
             tree in draw order and whose sources are what each builder was given.
 
-            It carries the JSON-safe half of the styling only. A colormap object, a Datashader reduction,
-            a tile provider and a timestamp are held beside the layer instead (:func:`describe`), so a
-            figure read back elsewhere draws each layer with what the description alone can say.
+            It carries only the half of the styling that travels
+            (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`). A colormap object, a Datashader
+            reduction, a tile provider, a timestamp, a tuple such as a dash pattern and an array are held
+            beside the layer instead (:func:`describe`), so a figure read back elsewhere draws each layer
+            with what the description alone can say. A `list` or `dict` of plain values is not one of
+            those — it comes back from JSON as itself, so it is described (#330).
 
             A map built from a GeoDataFrame or a dataset already in memory can be handed straight to a
             renderer, but not written: `to_dict()` refuses an `object:` source, since a reference into this
@@ -1039,28 +1099,46 @@ class InteractiveMapBase:
         return to_display_source(data, self.crs, band=band)
 
     def _skip_off_limb(self, layer: str, error: OffLimbError) -> Self:
-        """Answer a layer whose data the display CRS cannot place: skip it, or raise under ``strict``.
+        """Answer a layer that could not be drawn: skip it with a warning, or raise under ``strict``.
 
         The default is a **warning**, not a debug line: unlike the static tier there is no clipped globe
         here — the display CRS is Web Mercator or another unclipped projection — so a warp that places
         *none* of the data almost always means the source's CRS or geo-transform is wrong, and the only
         other symptom would be a layer that silently never appears.
 
+        **Two causes arrive here, and the warning names the one it met** (review R2-L9). Since #325,
+        :class:`~digitalearth.base.custom.MissingObject` is an `OffLimbError`, so `_skips_off_limb` catches
+        a custom layer whose engine object is not in this process as well as a warp that placed nothing.
+        Catching both is right — either way the layer has nothing to draw, which is the leniency
+        :mod:`digitalearth.base.custom` prescribes — but the message was written for one of them and stated
+        it as a fact, so a figure read back without its holoviews object was reported as
+        ``none of the data could be placed in crs=3857``. That sends a caller to check a projection that is
+        fine. The two are already distinguishable by type, so the cause is asked rather than assumed.
+
         Args:
             layer: The public builder that drew nothing, named in the log line.
-            error: The off-limb error the reprojection raised.
+            error: The error the builder raised — a `MissingObject` for an engine object this process does
+                not hold, any other `OffLimbError` for a warp that placed none of the data. Its own message
+                is quoted in the warning, and for a missing object that is the only place the layer id and
+                the engine appear.
 
         Returns:
             The same map instance, so the skipped call still chains.
 
         Raises:
-            OffLimbError: when the map was built with ``strict=True``.
+            OffLimbError: when the map was built with ``strict=True`` — the error itself, so a caller
+                catching `MissingObject` still catches that.
         """
         if self.strict:
             raise error
+        cause = (
+            "the object this layer draws is not in this process"
+            if isinstance(error, MissingObject)
+            else f"none of the data could be placed in crs={self.crs!r}"
+        )
         logger.warning(
-            f"{layer}: none of the data could be placed in crs={self.crs!r}, so the layer was skipped "
-            f"({error}). Build the map with InteractiveMap(strict=True) to raise instead."
+            f"{layer}: {cause}, so the layer was skipped ({error}). "
+            "Build the map with InteractiveMap(strict=True) to raise instead."
         )
         return self
 

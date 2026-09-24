@@ -499,6 +499,40 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
+  # The only job that carries MapLibre, HoloViz and PyVista at once. Every other tier job installs exactly one
+  # engine, so nothing else can prove the three load together — a solve only proves their versions agree — and
+  # nothing else can run the map conformance suite with both 2-D tier classes live in one process.
+  backends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: all
+          activate-environment: all
+          cache: true
+          version: v0.73.0
+
+      - name: Run the cross-backend checks
+        # PyVista needs a display even to construct a Scene3D, so this runs under xvfb like tests-3d does.
+        run: |
+          xvfb-run -a pixi run -e all test-backends
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        # The one upload in this workflow that carries a flag. Every other job runs a whole tier's suite, so
+        # its report is a fair sample of the tree; `test-backends` runs two modules, and an untagged
+        # two-module report merged into the project total moves the reported figure with nothing on the
+        # report saying which job moved it (review R-N3). The flag does not keep it out of the total — every
+        # upload for a commit is merged — it makes this one attributable in the Codecov UI and addressable by
+        # name in a future `codecov.yml`.
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          flags: backends
+
   # The web notebook gallery, rendered headless in the web env (anywidget -> HTML; no browser needed).
   notebooks-web:
     runs-on: ubuntu-latest

@@ -10,7 +10,7 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Optional, Self
 
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.interactive.base import (
@@ -153,7 +153,14 @@ class ProjectionMixin(_MixinBase):
         return factory()
 
     def graticule(
-        self, lon_step: float = 30.0, lat_step: float = 30.0, **opts: Any
+        self,
+        lon_step: float = 30.0,
+        lat_step: float = 30.0,
+        *,
+        spacing: Optional[float] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Add a longitude/latitude graticule at the requested spacing (parity with ``Map.graticule``).
 
@@ -166,6 +173,17 @@ class ProjectionMixin(_MixinBase):
         Args:
             lon_step: Meridian spacing in degrees; one of :data:`_GRATICULE_STEPS`.
             lat_step: Parallel spacing in degrees; must equal ``lon_step``.
+            spacing: One step for both, for a caller who wants a square grid; it overrides the two
+                above. The same **keyword** the static and web tiers take, so one call draws one grid on
+                every tier that draws a graticule at all (#324) — but its **value** domain is this
+                engine's, not theirs: only the shipped steps listed above are honoured, so
+                ``spacing=7.5`` raises here while it draws on both of them (review R-L10).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the grid feature.
 
         Returns:
@@ -189,11 +207,15 @@ class ProjectionMixin(_MixinBase):
         # Validated here, because the message names the caller's own arguments. The grid itself is built by
         # `draw_graticule` from exactly what this records, so the figure describes the graticule rather
         # than holding one somebody else built.
+        if spacing is not None:
+            lon_step = lat_step = spacing
         step = self._graticule_step(lon_step, lat_step)
         held: dict = {}
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="graticule",
             held=held,
             symbology=Symbology(

@@ -7,6 +7,7 @@ These cover the description that replaces that, and the tree that orders it.
 import json
 import re
 
+import numpy as np
 import pytest
 
 from digitalearth.base.spec import (
@@ -16,7 +17,9 @@ from digitalearth.base.spec import (
     Scale,
     Selection,
     Symbology,
+    free_layer_id,
 )
+from digitalearth.base.spec.layer import SUFFIX_LIMIT, layer_name
 
 #: Work the counting doubles below record — equality comparisons made against a layer id, and reads of the layer a
 #: layer is draped over. The scaling test resets it before the change it measures.
@@ -711,3 +714,233 @@ class TestLayerTreeSerialisation:
         stored = {"layers": [], "order": ["a"]}
         with pytest.raises(ValueError, match=r"unknown keys \['order'\]"):
             LayerTree.from_dict(stored)
+
+
+class TestFreeLayerId:
+    """`free_layer_id` — the one answer to a name a caller uses twice (#321).
+
+    Written as its own class because all four tiers reach it and none of them owns it: the web and 3-D tiers
+    counted the name, the static and interactive tiers counted the *scene*, and the id is what a caller holds
+    afterwards. The rule is checked here once and the tiers are checked against each other in
+    `tests/base/test_map_conformance.py`.
+    """
+
+    def test_a_free_name_is_taken_as_it_is(self):
+        """No suffix where none is needed, or every first layer would be called `roads-2`."""
+        assert free_layer_id("roads", {"rivers", "roads-2"}.__contains__) == "roads"
+
+    def test_a_taken_name_counts_from_two(self):
+        """The second layer under one name is `-2`, which is where the tiers already agreed."""
+        assert free_layer_id("roads", {"roads"}.__contains__) == "roads-2"
+
+    def test_the_count_follows_the_name_and_not_the_figure(self):
+        """The divergence this settles: the suffix counts *this name*, not the layers drawn so far.
+
+        Test scenario:
+            The static and interactive tiers minted a colliding name from a scene-wide counter, so a name
+            reused after three other layers came back as `roads-4` while the web and 3-D tiers answered
+            `roads-2` to the very same script. Nine other ids are on the figure here and none of them is a
+            suffix of `roads`, so a rule that counted the figure could not answer `roads-2`.
+        """
+        taken = {"roads"} | {f"points-{index}" for index in range(1, 10)}
+        assert free_layer_id("roads", taken.__contains__) == "roads-2"
+
+    def test_it_keeps_counting_past_a_taken_suffix(self):
+        """A caller who names three layers alike gets three ids, not two ids and a collision."""
+        assert free_layer_id("roads", {"roads", "roads-2"}.__contains__) == "roads-3"
+
+    def test_a_name_that_looks_like_a_suffix_is_still_only_a_name(self):
+        """`roads-2` asked for by name is an id of its own, free until something takes it."""
+        assert free_layer_id("roads-2", {"roads"}.__contains__) == "roads-2"
+
+    def test_the_predicate_is_asked_once_per_candidate_in_order(self):
+        """The web tier's `taken` reserves as it answers, so the order of the asking is the contract.
+
+        Test scenario:
+            `WebMap._layer_id` passes a predicate that claims the id (and every id its drawer derives from
+            it) the moment it finds one free, so a rule that probed out of order, or probed a candidate it
+            then did not use, would reserve ids no layer holds. Recording the asking is what pins that.
+        """
+        asked = []
+
+        def taken(candidate):
+            asked.append(candidate)
+            return candidate in {"roads", "roads-2"}
+
+        free_layer_id("roads", taken)
+        assert asked == ["roads", "roads-2", "roads-3"], asked
+
+    def test_a_free_name_is_probed_once_and_taken(self):
+        """The other half of the order contract: the common path asks `taken` exactly once.
+
+        Test scenario:
+            The spy above returns `True` for its first two candidates, so nothing observes what the rule
+            does when the **first** one is free — a mutant that probed `taken()` a second time before
+            returning would survive every other assertion here and would corrupt the web tier's ids, whose
+            predicate reserves what it is asked about (review round 2, Tests gap 7).
+        """
+        asked = []
+
+        def taken(candidate):
+            """Record the candidate and report it free.
+
+            Args:
+                candidate: The id the rule is asking about.
+
+            Returns:
+                `False`, always — this spy is the free-name path.
+            """
+            asked.append(candidate)
+            return False
+
+        minted = free_layer_id("roads", taken)
+        assert (minted, asked) == ("roads", ["roads"]), (minted, asked)
+
+    def test_padding_is_not_an_id_of_its_own(self):
+        """`"roads "` and `"roads"` are one name, so the second of them is suffixed (review R2-H4).
+
+        Test scenario:
+            The mint kept the padding, so the two spellings were two ids — and the padded one was then
+            registered as an object key that `DataRef` stripped straight back off, which is what made
+            `Map.scatter(features, name="roads ")` a `KeyError`. Comparing after the strip is what makes
+            the two spellings collide instead.
+        """
+        assert free_layer_id("roads ", {"roads"}.__contains__) == "roads-2"
+
+    def test_a_name_that_is_not_a_string_is_refused_here_too(self):
+        """The docstring promised "a non-empty string" and enforced nothing (review R2-L1).
+
+        Test scenario:
+            Handed `123` the rule used to hand back the `int` `123` from a function annotated `-> str`,
+            which reached `_issued_ids` on the static tier and broke `sorted()` over a mixed set.
+        """
+        with pytest.raises(TypeError, match=r"must be a string; got int"):
+            free_layer_id(123, {"roads"}.__contains__)
+
+    def test_a_name_that_is_nothing_but_whitespace_is_refused(self):
+        """There is no id to suffix, so the refusal says so rather than minting `"  -2"`."""
+        with pytest.raises(
+            ValueError, match=r"must hold a character that is not whitespace"
+        ):
+            free_layer_id("   ", {"roads"}.__contains__)
+
+    def test_no_name_at_all_is_refused_as_a_type(self):
+        """`None` means "unnamed" to `layer_name`, and means "nothing to suffix" here."""
+        with pytest.raises(TypeError, match=r"must be a string; got NoneType"):
+            free_layer_id(None, {"roads"}.__contains__)
+
+    def test_a_predicate_that_never_yields_is_bounded_rather_than_endless(self):
+        """The search had no ceiling at all, so a broken predicate hung the process (review R2-L1).
+
+        Test scenario:
+            A `taken` that answers `True` to everything is what a tier with a broken reservation looks
+            like. Unbounded, this call never returns and the traceback the caller eventually kills says
+            nothing; bounded, it names the name and the bound.
+        """
+        with pytest.raises(
+            RuntimeError,
+            match=r"no free id for layer name 'roads' after \d+ candidates",
+        ):
+            free_layer_id("roads", lambda candidate: True)
+
+    def test_the_bound_is_the_declared_one(self):
+        """The ceiling is `SUFFIX_LIMIT`, not a number buried in the loop.
+
+        Test scenario:
+            Counting the probes is what tells a real bound from a `while True` that happens to exit: the
+            rule asks once for the bare name and once per suffix, `SUFFIX_LIMIT` candidates in all.
+        """
+        probed = []
+
+        def taken(candidate):
+            """Record the candidate and report it taken.
+
+            Args:
+                candidate: The id the rule is asking about.
+
+            Returns:
+                `True`, always — this spy is the never-yields path.
+            """
+            probed.append(candidate)
+            return True
+
+        with pytest.raises(RuntimeError):
+            free_layer_id("roads", taken)
+        assert len(probed) == SUFFIX_LIMIT, len(probed)
+
+
+class TestTheNameACallerAsksFor:
+    """`layer_name` — the one normalisation every tier's `name=` goes through (review R2-H4).
+
+    The crash it closes: a padded name was minted as the layer id, the id became the key an in-memory
+    source was registered under, and `DataRef.__post_init__` stripped the uri it was handed — so the
+    reference no longer reached the object registered a line earlier, and three of the four tiers raised a
+    `KeyError` naming neither the layer nor the name. The fourth kept the padding all the way through,
+    which made it a cross-tier divergence as well.
+    """
+
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [
+            ("roads", "roads"),
+            ("roads ", "roads"),
+            (" roads", "roads"),
+            ("  roads  ", "roads"),
+            ("roads\t", "roads"),
+            ("\nroads", "roads"),
+            ("roads\tlane", "roads\tlane"),
+        ],
+    )
+    def test_surrounding_whitespace_goes_and_inner_whitespace_stays(
+        self, given, expected
+    ):
+        """One name is one id; whitespace inside it is part of the name the caller chose.
+
+        Args:
+            given: What the caller passed as `name=`.
+            expected: The id it asks for.
+        """
+        assert layer_name(given) == expected, given
+
+    @pytest.mark.parametrize("given", [None, "", "   ", "\t", "\n "])
+    def test_a_blank_name_is_no_name(self, given):
+        """All of these mean "I did not name this layer", so the tier generates an id.
+
+        Args:
+            given: What the caller passed as `name=`.
+        """
+        assert layer_name(given) is None, given
+
+    @pytest.mark.parametrize("given", [123, 0, True, 2.5, ["roads"]])
+    def test_a_name_that_is_not_a_string_is_refused(self, given):
+        """Refused at the mint, by type, rather than by `LayerSpec` four frames later — or not at all.
+
+        Args:
+            given: What the caller passed as `name=`.
+
+        Test scenario:
+            The three 2-D tiers raised a `ValueError` from `LayerSpec` phrased about an *id*, and the 3-D
+            tier ignored the argument and generated `terrain-1` (review R2-L1). One answer now, named
+            after the keyword the caller wrote.
+        """
+        with pytest.raises(TypeError, match=r"a layer name must be a string"):
+            layer_name(given)
+
+    def test_a_numpy_string_comes_back_as_a_plain_one(self):
+        """An id is written into a figure that has to be plain JSON, and `numpy.str_.strip()` is not.
+
+        Test scenario:
+            `numpy.str_` passes `isinstance(x, str)`, so a name read out of a dataframe column reached the
+            id unflattened and a described figure carried a numpy object where a `str` was promised.
+        """
+        assert type(layer_name(np.str_("roads"))) is str
+
+    def test_a_long_name_is_kept_whole(self):
+        """No length cap: an id is a name, and truncating one silently would make two layers collide.
+
+        Test scenario:
+            Part of the R2-H4 census — a very long name was one of the values asked about. Measured, a
+            300-character name reaches the id intact on all four tiers, so nothing here needs a limit.
+        """
+        long_name = "w" * 300
+        assert layer_name(long_name) == long_name

@@ -11,12 +11,26 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 import contextlib
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from functools import lru_cache
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    FrozenSet,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
 from cleopatra.basemap.tiles import add_tiles
+from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
+from matplotlib.font_manager import font_family_aliases, fontManager
+from matplotlib.text import Text
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.base.basemaps import (
@@ -47,6 +61,201 @@ _NATURAL_EARTH_STYLE: Dict[str, Dict[str, Any]] = {
     "lakes": {"color": "#cfe6f5", "edgecolor": "none"},
     "rivers": {"color": "#5a8fcf", "linewidth": 0.4},
 }
+
+#: The canonical :class:`matplotlib.text.Text` properties that set a font family. Every keyword matplotlib
+#: accepts for one — ``family``, ``font``, ``font_properties``, ``name`` and the three spellings below — is
+#: an alias of one of these, so :func:`_a_font_is_already_chosen` asks
+#: :func:`matplotlib.cbook.normalize_kwargs` rather than matching against a list of spellings. The list this
+#: replaces was short by one: ``font_properties=`` was not on it, the layer's name went on as ``fontname=``
+#: — which ``Text`` applies *after* ``fontproperties`` — and the caller's font was discarded with nothing
+#: said (review R2-H5). Naming the three properties instead means a spelling matplotlib adds later is
+#: covered by the alias table it ships with, not by an edit here.
+_FONT_FAMILY_PROPERTIES = frozenset({"fontfamily", "fontname", "fontproperties"})
+
+
+def _a_font_is_already_chosen(opts: Dict[str, Any]) -> bool:
+    """Say whether a text call's own keywords name a font family, under any spelling matplotlib takes.
+
+    This decides **priority**, and only priority: a layer's name is read as a font solely when the call
+    itself named none. It is not, as this once claimed, what keeps matplotlib from being handed the same
+    family twice — measured, ``Axes.text(fontname=..., fontfamily=...)`` and
+    ``Axes.text(fontname=..., family=...)`` both draw, with the later keyword winning. The only pairs that
+    raise ``TypeError: Got both`` are two aliases of *one* property (``family=`` beside ``fontfamily=``,
+    ``name=`` beside ``fontname=``), which only the caller can write, and ``name=`` never reaches these
+    keywords at all (review R2-L5).
+
+    Args:
+        opts: The keywords the call will hand the text artist.
+
+    Returns:
+        ``True`` when any of them canonicalises to one of :data:`_FONT_FAMILY_PROPERTIES`, or when
+        matplotlib refuses the set outright — both of which mean the layer's name stays out of it.
+
+    Examples:
+        - Each spelling of a family is recognised as one, including the one a list of spellings missed:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _a_font_is_already_chosen
+            >>> [
+            ...     _a_font_is_already_chosen({key: "DejaVu Sans"})
+            ...     for key in ("font", "font_properties", "fontproperties", "family", "fontname")
+            ... ]
+            [True, True, True, True, True]
+
+            ```
+        - A call that styles the label some other way has chosen no font:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _a_font_is_already_chosen
+            >>> _a_font_is_already_chosen({"fontsize": 12, "color": "red"})
+            False
+
+            ```
+    """
+    try:
+        chosen = normalize_kwargs(opts, Text)
+    except TypeError:
+        # Two aliases of one property. `Axes.text` raises on exactly this set, so the call is going to
+        # fail whatever is decided here; what matters is not adding a third spelling to the pile first.
+        return True
+    return bool(_FONT_FAMILY_PROPERTIES.intersection(chosen))
+
+
+@lru_cache(maxsize=4)
+def _families_matplotlib_has(_registered: int) -> FrozenSet[str]:
+    """Return the case-folded name of every font family matplotlib has registered.
+
+    Args:
+        _registered: ``len(fontManager.ttflist)``. Unread — it is here to be part of the cache key, so a
+            family added with ``fontManager.addfont`` after the first call is seen rather than missed for
+            the life of the process.
+
+    Returns:
+        Every registered family name, case-folded, because matplotlib matches a family case-insensitively.
+    """
+    return frozenset(entry.name.casefold() for entry in fontManager.ttflist)
+
+
+def _names_a_font_family(name: str) -> bool:
+    """Say whether a string is the name of a font family matplotlib can draw in.
+
+    A **membership test**, deliberately, and not a resolution. The resolution this replaces asked
+    ``findfont(FontProperties(family=name), fallback_to_default=False)``, where a lone string is parsed as
+    a *fontconfig pattern*: ``-`` separates the size and ``,`` the families. So ``"DejaVu Serif-2"``
+    resolved — as 2-point DejaVu Serif — and was then forwarded verbatim, where matplotlib reads it as
+    one literal family and finds nothing. That string is exactly what the id allocator mints for a second
+    layer with the same name, so the check produced the `findfont: ... not found` it exists to avoid, on
+    names this package generates (review R2-H6). What decides and what is forwarded are one thing here:
+    both are the literal family name.
+
+    It is also what the resolution cost. Reading the registry is a set lookup, where ``findfont`` scored
+    every registered font against the pattern; and because a name that is no font raises rather than
+    returns, matplotlib's own ``lru_cache`` never held the answer, so every distinct layer name paid the
+    scan again (review R2-L8). The scan could also rebuild the global ``fontManager`` from the filesystem
+    — ``findfont``'s ``rebuild_if_missing`` defaults to ``True`` — from inside a layer builder.
+
+    Args:
+        name: The string to test, as the caller spelled it.
+
+    Returns:
+        ``True`` when ``name`` is a registered family or one of matplotlib's generic aliases
+        (``serif``, ``sans-serif``, ``monospace``, ...), matched case-insensitively as matplotlib matches
+        them.
+
+    Examples:
+        - A family matplotlib ships, whatever case it is written in, and a generic alias:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _names_a_font_family
+            >>> (_names_a_font_family("DejaVu Serif"), _names_a_font_family("dejavu serif"))
+            (True, True)
+            >>> (_names_a_font_family("sans-serif"), _names_a_font_family("monospace"))
+            (True, True)
+
+            ```
+        - A layer name, and a string that is only a *pattern* for a family:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _names_a_font_family
+            >>> (_names_a_font_family("wells"), _names_a_font_family("DejaVu Serif-2"))
+            (False, False)
+
+            ```
+    """
+    folded = name.casefold()
+    if folded in font_family_aliases:
+        return True
+    return folded in _families_matplotlib_has(len(fontManager.ttflist))
+
+
+def _font_family_a_name_still_stands_for(
+    name: Optional[str], opts: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Return the font keyword a text layer's ``name`` also means, or an empty mapping.
+
+    ``matplotlib.axes.Axes.text`` and ``.annotate`` document ``name=`` as an alias of the font family, and
+    ``Text``/``Annotation`` are the only two of matplotlib's artists that answer to it — so of the
+    thirty-six builders #321 gave a ``name=`` on this tier (counted: the public methods of ``Map`` whose
+    signature takes one), these are the only two where the keyword was already taken.
+    Giving the layer that name without this would drop the caller's font on the floor: ``text(...,
+    name="DejaVu Serif")`` named a layer and drew in sans-serif, with nothing said (review R-M2).
+
+    Both readings are kept instead of one being chosen: the layer takes the name, and the name is drawn in
+    as the font as well **when it is the name of a family matplotlib has** — which is
+    :func:`_names_a_font_family`, a membership test rather than a resolution, so the string that decides is
+    the string that is drawn with (review R2-H6). That condition is what separates the two intents without
+    guessing: a name naming no family would have rendered in the default font anyway, so passing it on
+    would change no pixel and cost a ``findfont: Font family 'wells' not found.`` on every named label.
+
+    It is the **drawers** that ask this, not the builders, so the answer never reaches the description.
+    Whether this machine has a family is a property of the machine: writing the answer into the layer's
+    keywords made one call describe itself two ways, carrying ``{"fontname": ...}`` where the family was
+    installed and nothing where it was not (review R2-M3). A figure records the name the caller wrote; the
+    font is read off that name wherever it is drawn.
+
+    Args:
+        name: The name the layer carries — its label, which is what the caller asked for, rather than its
+            id, which a duplicate name suffixes ``-2`` into a string that is no family. ``None`` for a
+            layer with no name at all.
+        opts: The keywords the artist is about to be drawn with, read for a font family they already
+            choose — under any spelling matplotlib takes for one, which is what
+            :func:`_a_font_is_already_chosen` answers.
+
+    Returns:
+        ``{"fontname": name}`` when ``name`` is the name of a font family this machine has and the
+        keywords name no other one; an empty mapping otherwise, which draws the label in whatever the
+        keywords and matplotlib's defaults say.
+
+    Examples:
+        - A family matplotlib ships is read as the font as well as the layer's name:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> _font_family_a_name_still_stands_for("DejaVu Serif", {})
+            {'fontname': 'DejaVu Serif'}
+
+            ```
+        - An ordinary layer name is not a font, and a call that already chose one is left alone:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> _font_family_a_name_still_stands_for("wells", {})
+            {}
+            >>> _font_family_a_name_still_stands_for("DejaVu Serif", {"fontname": "DejaVu Sans"})
+            {}
+            >>> _font_family_a_name_still_stands_for("DejaVu Serif", {"font_properties": "DejaVu Sans"})
+            {}
+
+            ```
+        - A name that is only a fontconfig *pattern* for a family is not that family, which matters
+          because ``-2`` is what a duplicate name is suffixed with:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> _font_family_a_name_still_stands_for("DejaVu Serif-2", {})
+            {}
+
+            ```
+    """
+    if not isinstance(name, str) or _a_font_is_already_chosen(opts):
+        return {}
+    if not _names_a_font_family(name):
+        return {}
+    return {"fontname": name}
+
 
 #: Natural-Earth layers that ``cleopatra.basemap.reference`` renders as filled polygons (vs. line layers); used to
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
@@ -292,6 +501,11 @@ def _resolve_tile_source(source: Any) -> Any:
 def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     """Place the text label a described layer asks for, at the lon/lat it recorded.
 
+    The label's font is read from its **name** here, which is where that belongs: matplotlib documents
+    ``name=`` as an alias of the font family, so a layer named for a family is drawn in it as well as
+    called it (review R-M2), but whether a family is installed is a fact about the machine drawing rather
+    than about the figure (review R2-M3). See :func:`_font_family_a_name_still_stands_for`.
+
     Args:
         scene: The map being drawn on.
         _data: The source slot every drawer takes, unread here — a label draws from a coordinate pair and
@@ -307,12 +521,17 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
     if xy is None:
         return None
-    drawn = scene.ax.text(xy[0], xy[1], props["s"], **drawing_style(scene, layer))
+    style = drawing_style(scene, layer)
+    style.update(_font_family_a_name_still_stands_for(layer.label, style))
+    drawn = scene.ax.text(xy[0], xy[1], props["s"], **style)
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
 def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     """Annotate the lon/lat a described layer recorded, optionally with an arrow.
+
+    An ``Annotation`` is a ``Text``, so its name reads as a font family here exactly as in
+    :func:`draw_text`, and for the same reason.
 
     Args:
         scene: The map being drawn on.
@@ -327,9 +546,9 @@ def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLay
     xy = scene._reproject_point(props["lon"], props["lat"], props["crs"])
     if xy is None:
         return None
-    drawn = scene.ax.annotate(
-        props["s"], xy=xy, xytext=props["xytext"], **drawing_style(scene, layer)
-    )
+    style = drawing_style(scene, layer)
+    style.update(_font_family_a_name_still_stands_for(layer.label, style))
+    drawn = scene.ax.annotate(props["s"], xy=xy, xytext=props["xytext"], **style)
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
@@ -548,7 +767,17 @@ class DecorationMixin(_MixinBase):
             return None
         return x[0], y[0]
 
-    def text(self, lon: float, lat: float, s: str, *, crs: Any = 4326, **kwargs) -> Any:
+    def text(
+        self,
+        lon: float,
+        lat: float,
+        s: str,
+        *,
+        crs: Any = 4326,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Place a text label at a ``lon``/``lat`` location (reprojected to the display CRS).
 
         The point is reprojected from ``crs`` (lon/lat by default) into the display CRS via pyramids, then
@@ -560,7 +789,20 @@ class DecorationMixin(_MixinBase):
             lat: Latitude (y) of the label, in ``crs``.
             s: The text to draw.
             crs: CRS of ``lon``/``lat`` (default ``4326`` = WGS84 lon/lat).
-            **kwargs: Forwarded to ``Axes.text`` (e.g. ``ha``, ``va``, ``fontsize``, ``color``).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321). ``Axes.text`` reads ``name=`` as an alias of the font family,
+                and that reading is kept: a name that is the name of a family this machine has is drawn
+                in as well, unless the call chooses a font itself (review R-M2). That is applied when the
+                label is drawn and is not part of what the figure records, so a figure describes the name
+                and not the machine's font list (review R2-M3). Say ``fontname=`` to pick the font
+                independently of what the layer is called.
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **kwargs: Forwarded to ``Axes.text`` (e.g. ``ha``, ``va``, ``fontsize``, ``color``). A font
+                family given here outranks the layer's name, under every spelling matplotlib takes for
+                one — ``font``, ``font_properties``, ``fontproperties``, ``fontfamily``, ``family`` and
+                ``fontname``.
 
         Returns:
             The :class:`matplotlib.text.Text`, or ``None`` if the point is off the visible globe.
@@ -568,6 +810,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 "text",
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "text",
@@ -591,6 +835,8 @@ class DecorationMixin(_MixinBase):
         *,
         xytext: Any = None,
         crs: Any = 4326,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs,
     ) -> Any:
         """Annotate a ``lon``/``lat`` location (reprojected), optionally with an arrow.
@@ -606,7 +852,20 @@ class DecorationMixin(_MixinBase):
             xytext: Optional text position (in the coordinate system given by ``textcoords``/``kwargs``); with
                 ``arrowprops`` an arrow is drawn from there to the point.
             crs: CRS of ``lon``/``lat`` (default ``4326``).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321). ``Axes.annotate`` reads ``name=`` as an alias of the font
+                family — an ``Annotation`` is a ``Text`` — and that reading is kept: a name that is the
+                name of a family this machine has is drawn in as well, unless the call chooses a font
+                itself (review R-M2). That is applied when the annotation is drawn and is not part of
+                what the figure records (review R2-M3). Say ``fontname=`` to pick the font independently
+                of the layer's name.
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``Axes.annotate`` (e.g. ``arrowprops``, ``textcoords``, ``fontsize``).
+                A font family given here outranks the layer's name, under every spelling matplotlib takes
+                for one — ``font``, ``font_properties``, ``fontproperties``, ``fontfamily``, ``family``
+                and ``fontname``.
 
         Returns:
             The :class:`matplotlib.text.Annotation`, or ``None`` if the point is off the visible globe.
@@ -614,6 +873,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 "text",
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "annotate",
@@ -634,6 +895,8 @@ class DecorationMixin(_MixinBase):
         *,
         zorder: float = -3.0,
         cmap: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs,
     ) -> Any:
         """Draw a background raster (a "stock image" backdrop) beneath all data layers.
@@ -655,6 +918,11 @@ class DecorationMixin(_MixinBase):
                 one from the backdrop's own variable via
                 :func:`~digitalearth.base.autostyle.auto_style` — so a DEM backdrop is coloured as terrain
                 — falling back to :data:`STOCK_IMG_CMAP` when the lookup has no opinion.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`imshow` (raster) or :meth:`basemap` (tiles).
 
         Returns:
@@ -663,7 +931,7 @@ class DecorationMixin(_MixinBase):
         """
         if dataset is None:
             try:
-                return self.basemap(**kwargs)
+                return self.basemap(name=name, visible=visible, **kwargs)
             except Exception as exc:  # tile servers unavailable — best-effort backdrop
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
@@ -674,6 +942,8 @@ class DecorationMixin(_MixinBase):
             im = self.imshow(
                 dataset,
                 cmap=cmap,
+                name=name,
+                visible=visible,
                 default_cmap=STOCK_IMG_CMAP,
                 draw_band="underlay",
                 zorder=zorder,
@@ -783,6 +1053,8 @@ class DecorationMixin(_MixinBase):
         *,
         polygon: bool = False,
         zorder: float = 0.5,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs,
     ) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
@@ -801,6 +1073,11 @@ class DecorationMixin(_MixinBase):
             resolution: Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
             zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Style overrides, laid over the layer's defaults (:data:`_NATURAL_EARTH_STYLE`) when it
                 is drawn. Held beside the layer exactly as passed, and the plain ones described as well, so
                 a figure read back elsewhere still draws them (see
@@ -815,6 +1092,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 _NATURAL_EARTH_KINDS[layer],
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": layer,
@@ -829,11 +1108,23 @@ class DecorationMixin(_MixinBase):
             )
         )
 
-    def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -844,13 +1135,27 @@ class DecorationMixin(_MixinBase):
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
             on a flat map).
         """
-        return self._natural_earth("coastline", resolution, zorder=2.5, **kwargs)
+        return self._natural_earth(
+            "coastline", resolution, zorder=2.5, name=name, visible=visible, **kwargs
+        )
 
-    def borders(self, resolution: str = "110m", **kwargs) -> Any:
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Overlay Natural-Earth country borders.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -861,9 +1166,18 @@ class DecorationMixin(_MixinBase):
             The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth("borders", resolution, zorder=2.5, **kwargs)
+        return self._natural_earth(
+            "borders", resolution, zorder=2.5, name=name, visible=visible, **kwargs
+        )
 
-    def land(self, resolution: str = "110m", **kwargs) -> Any:
+    def land(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Fill Natural-Earth land polygons.
 
         On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
@@ -872,6 +1186,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -883,10 +1202,23 @@ class DecorationMixin(_MixinBase):
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "land", resolution, polygon=True, zorder=-1.5, **kwargs
+            "land",
+            resolution,
+            polygon=True,
+            zorder=-1.5,
+            name=name,
+            visible=visible,
+            **kwargs,
         )
 
-    def ocean(self, resolution: str = "110m", **kwargs) -> Any:
+    def ocean(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Fill Natural-Earth ocean polygons.
 
         On a **globe** map, ``ocean`` fills the whole projection disc (the boundary ring) with the ocean
@@ -895,6 +1227,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -911,11 +1248,26 @@ class DecorationMixin(_MixinBase):
             # drawer reads the globe flag off the scene, so what differs here is only the draw order this
             # layer is recorded with.
             return self._natural_earth(
-                "ocean", resolution, polygon=True, zorder=-2.0, **kwargs
+                "ocean",
+                resolution,
+                polygon=True,
+                zorder=-2.0,
+                name=name,
+                visible=visible,
+                **kwargs,
             )
-        return self._natural_earth("ocean", resolution, **kwargs)
+        return self._natural_earth(
+            "ocean", resolution, name=name, visible=visible, **kwargs
+        )
 
-    def lakes(self, resolution: str = "110m", **kwargs) -> Any:
+    def lakes(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Fill Natural-Earth lake polygons.
 
         Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
@@ -923,6 +1275,11 @@ class DecorationMixin(_MixinBase):
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -934,14 +1291,32 @@ class DecorationMixin(_MixinBase):
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "lakes", resolution, polygon=True, zorder=-1.4, **kwargs
+            "lakes",
+            resolution,
+            polygon=True,
+            zorder=-1.4,
+            name=name,
+            visible=visible,
+            **kwargs,
         )
 
-    def rivers(self, resolution: str = "110m", **kwargs) -> Any:
+    def rivers(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Style overrides laid over this layer's Natural-Earth defaults
                 (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is
                 written into the layer's description as well, so a figure drawn on another scene keeps it;
@@ -952,7 +1327,9 @@ class DecorationMixin(_MixinBase):
             The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
             flat map).
         """
-        return self._natural_earth("rivers", resolution, zorder=2.4, **kwargs)
+        return self._natural_earth(
+            "rivers", resolution, zorder=2.4, name=name, visible=visible, **kwargs
+        )
 
     def basemap(
         self,
@@ -960,6 +1337,8 @@ class DecorationMixin(_MixinBase):
         *,
         api_key: Optional[str] = None,
         preset: Optional[dict] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **kwargs: Any,
     ) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
@@ -982,6 +1361,11 @@ class DecorationMixin(_MixinBase):
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
                 ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to
                 ``add_tiles``, and the three tiers take presets the same way.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
             **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
@@ -1026,7 +1410,9 @@ class DecorationMixin(_MixinBase):
                     f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
                     f"only to a keyed preset such as 'Planet.NICFI'"
                 )
-        return self._describe_basemap(source, preset, api_key, kwargs)
+        return self._describe_basemap(
+            source, preset, api_key, kwargs, name=name, visible=visible
+        )
 
     def _describe_basemap(
         self,
@@ -1034,6 +1420,8 @@ class DecorationMixin(_MixinBase):
         preset: Optional[dict],
         api_key: Optional[str],
         options: dict,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Any:
         """Record the basemap this map should draw and let :func:`draw_basemap` fetch it.
 
@@ -1058,6 +1446,11 @@ class DecorationMixin(_MixinBase):
             preset: The keyed preset's own keywords, or ``None``.
             api_key: The credential for a keyed preset, or ``None`` to read it from the environment.
             options: The keywords forwarded to ``add_tiles``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
 
         Returns:
             Whatever ``add_tiles`` returned. Not ``None``: tiles that cannot be fetched raise, and the
@@ -1076,6 +1469,8 @@ class DecorationMixin(_MixinBase):
         return self._draw(
             LayerRecord(
                 "basemap",
+                name=name,
+                visible=visible,
                 symbology=Symbology(
                     props={
                         "via": "basemap",

@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
-from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -39,18 +38,6 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
-
-
-#: The style options HoloViews takes as a `list` and refuses as a tuple. These are the builder's **own**
-#: resolved values — a sampled colour ramp, a classifier's edges — which the description carries and so
-#: stores as tuples: a ramp read back from one is spelled `("#440154", ...)`, which `color_levels` rejects
-#: outright (`ClassSelector` of `(int, list, range)`) and which makes a palette harder to read wherever a
-#: style is printed. Everything else keeps the spelling it was stored in, `clim` included: that one *is* a
-#: pair, and HoloViews reads it as one. The caller's own keywords go through the freeze too, since M3 began
-#: describing the JSON-safe half of them: a `cmap=["#ff0000", "#00ff00"]` is stored, and handed to
-#: HoloViews, as `("#ff0000", "#00ff00")`. Only the builder's own resolved values are thawed back here —
-#: the keys this names — so a caller's tuple-spelled list reaches the engine as a tuple.
-_AS_LISTS: Tuple[str, ...] = ("cmap", "color_levels")
 
 
 def _classifiable(features: Any) -> Any:
@@ -164,17 +151,13 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     element = interactive_map._vector_element(
         props["hv_type"],
         gdf,
-        # Thawed, because the description stores every sequence as a tuple and HoloViews reads a tuple of
-        # dimensions as a `(name, label)` pair — the stored `("fid",)` is refused where `["fid"]` is not.
-        # Only this property: a `clim` is a pair, and reaches Bokeh as the pair it was written as.
-        vdims=thawed_value(props.get("vdims")),
+        # Already a list: `held_props` thaws the described half once, for every key, so this drawer no
+        # longer names the ones HoloViews refuses as a tuple (`vdims`, `cmap`, `color_levels`).
+        vdims=props.get("vdims"),
     )
     # The builder's own resolved style, then the caller's raw keywords over it — the precedence the
     # builder applied before the two were split (the description carries the first, the map the second).
-    common = {
-        key: thawed_value(value) if key in _AS_LISTS else value
-        for key, value in dict(props.get("common") or {}).items()
-    }
+    common = dict(props.get("common") or {})
     common.update(dict(props.get("opts") or {}))
     element = interactive_map._styled(
         element, common=common or None, bokeh={"tools": ["hover"]}
@@ -530,6 +513,8 @@ class VectorMixin(_MixinBase):
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
         rasterize_threshold: Optional[int] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a point layer, optionally coloured by an attribute column.
@@ -559,6 +544,12 @@ class VectorMixin(_MixinBase):
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
                 for one release; passing it together with ``big_data_threshold`` is a
                 ``TypeError``, since they name one cutoff (#250).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element. Anything written here **wins**
                 over the option a ``scheme`` derived — the same precedence :meth:`choropleth` applies — so
                 ``colorbar=False`` drops the colorbar on a classified point layer just as it does on a
@@ -640,6 +631,8 @@ class VectorMixin(_MixinBase):
         common: dict = {"size": size, **styling}
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="points",
             source=features,
             held=held,
@@ -653,12 +646,25 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def path(self, features: Any, **opts: Any) -> Self:
+    def path(
+        self,
+        features: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
         """Add a line layer (LineString / MultiLineString features).
 
         Args:
             features: A pyramids ``FeatureCollection`` of line geometries; reprojected through
                 pyramids when needed.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -679,6 +685,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="lines",
             source=features,
             held=held,
@@ -695,6 +703,8 @@ class VectorMixin(_MixinBase):
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
         rasterize_threshold: Optional[int] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a polygon layer — outlines only, or filled by an attribute column.
@@ -715,6 +725,12 @@ class VectorMixin(_MixinBase):
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
                 for one release; passing it together with ``big_data_threshold`` is a
                 ``TypeError``, since they name one cutoff (#250).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -754,6 +770,8 @@ class VectorMixin(_MixinBase):
             cmap=cmap,
             rasterize=rasterize,
             threshold=threshold,
+            name=name,
+            visible=visible,
             **opts,
         )
 
@@ -766,6 +784,8 @@ class VectorMixin(_MixinBase):
         cmap: str,
         rasterize: Any,
         threshold: int,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Draw polygons outlined or filled by a column, described under the kind the caller asked for.
@@ -784,6 +804,12 @@ class VectorMixin(_MixinBase):
             cmap: Colormap used when ``column`` is given.
             rasterize: ``"auto"``, ``True`` or ``False``, as the public builders take it.
             threshold: The resolved row count above which ``"auto"`` routes through Datashader.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -821,6 +847,8 @@ class VectorMixin(_MixinBase):
                 aggregator="mean" if column else "count",
                 column=column,
                 cmap=cmap,
+                name=name,
+                visible=visible,
                 **opts,
             )
         held: Dict[str, Any] = {}
@@ -838,6 +866,8 @@ class VectorMixin(_MixinBase):
             common["fill_alpha"] = 0.0
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind=kind,
             source=features,
             held=held,
@@ -847,7 +877,14 @@ class VectorMixin(_MixinBase):
         )
 
     def _categorical_polygons(
-        self, features: Any, column: str, *, cmap: str = "viridis", **opts: Any
+        self,
+        features: Any,
+        column: str,
+        *,
+        cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
 
@@ -869,6 +906,12 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
             column: The attribute to colour by (any hashable value; assumed single-dtype — see above).
             cmap: A qualitative colormap name (defaults to ``"tab10"`` when left at the continuous default).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options.
 
         Returns:
@@ -882,6 +925,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="choropleth",
             source=features,
             held=held,
@@ -1015,6 +1060,8 @@ class VectorMixin(_MixinBase):
         scheme: Any,
         k: int,
         cmap: str,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Fill polygons by classified value — one flat colour per class (the graduated scheme).
@@ -1032,6 +1079,12 @@ class VectorMixin(_MixinBase):
                 ``"fisher_jenks"``/… or an explicit edge sequence).
             k: Number of classes.
             cmap: Colormap name sampled once per class.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options.
 
         Returns:
@@ -1049,6 +1102,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="choropleth",
             source=features,
             held=held,
@@ -1071,6 +1126,8 @@ class VectorMixin(_MixinBase):
         k: int = 5,
         cmap: str = "viridis",
         clim: Optional[Tuple[float, float]] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a choropleth — polygons filled and coloured by ``column`` (hover shows the value).
@@ -1100,6 +1157,12 @@ class VectorMixin(_MixinBase):
             cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
                 left at the default); sampled once per class for a graduated scheme.
             clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1127,12 +1190,21 @@ class VectorMixin(_MixinBase):
                 f"choropleth column {column!r} not found in the feature attributes"
             )
         if isinstance(scheme, str) and scheme.lower() == "categorical":
-            return self._categorical_polygons(features, column, cmap=cmap, **opts)
+            return self._categorical_polygons(
+                features, column, cmap=cmap, name=name, visible=visible, **opts
+            )
         if scheme is not None:
             if clim is not None:
                 opts = {"clim": clim, **opts}
             return self._graduated_polygons(
-                features, column, scheme=scheme, k=k, cmap=cmap, **opts
+                features,
+                column,
+                scheme=scheme,
+                k=k,
+                cmap=cmap,
+                name=name,
+                visible=visible,
+                **opts,
             )
         # Continuous ramp: no discrete breaks — clear any recorded from a prior categorical call.
         self.last_breaks = None
@@ -1153,6 +1225,8 @@ class VectorMixin(_MixinBase):
             cmap=cmap,
             rasterize=opts.pop("rasterize", "auto"),
             threshold=threshold,
+            name=name,
+            visible=visible,
             **opts,
         )
 
@@ -1193,6 +1267,8 @@ class VectorMixin(_MixinBase):
         density: float = 1.0,
         color_by: Optional[str] = "magnitude",
         cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a u/v vector field as interactive arrows (parity with ``Map.quiver``, recipe I6).
@@ -1204,6 +1280,12 @@ class VectorMixin(_MixinBase):
             density: Keep-fraction in ``(0, 1]`` controlling arrow density (``1.0`` = every cell).
             color_by: ``"magnitude"`` colours arrows by speed; ``None`` draws uniform arrows.
             cmap: Colormap used when ``color_by="magnitude"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1217,6 +1299,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="vectors",
             # The pair is the source: a field is not drawable from either component alone.
             source=(u, v),
@@ -1235,7 +1319,15 @@ class VectorMixin(_MixinBase):
 
     @_skips_off_limb
     def streamlines(
-        self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
+        self,
+        u: Any,
+        v: Any,
+        *,
+        band: int = 1,
+        density: float = 1.0,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Add streamlines of a u/v field via the matplotlib backend (parity with ``Map.streamplot``).
 
@@ -1249,6 +1341,12 @@ class VectorMixin(_MixinBase):
             band: 1-based band read from each component.
             density: Keep-fraction in ``(0, 1]`` subsampling the field before streamline
                 integration (same meaning as :meth:`vectorfield`'s ``density``).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1268,6 +1366,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="streamlines",
             source=(u, v),
             held=held,
@@ -1282,7 +1382,15 @@ class VectorMixin(_MixinBase):
         )
 
     def barbs(
-        self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
+        self,
+        u: Any,
+        v: Any,
+        *,
+        band: int = 1,
+        density: float = 1.0,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Add wind barbs of a u/v field — **matplotlib backend only** (parity with ``Map.barbs``).
 
@@ -1295,6 +1403,12 @@ class VectorMixin(_MixinBase):
             band: 1-based band read from each component.
             density: Keep-fraction in ``(0, 1]`` subsampling the field before drawing barbs (same
                 meaning as :meth:`vectorfield`'s ``density``; ``1.0`` keeps every cell).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1321,6 +1435,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="vectors",
             source=(u, v),
             held=held,
@@ -1344,6 +1460,8 @@ class VectorMixin(_MixinBase):
         big_data_threshold: Optional[int] = None,
         rasterize_threshold: Optional[int] = None,
         cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add an unstructured triangular mesh (parity with ``Map.tricontour``/``tripcolor``, recipe I7).
@@ -1369,6 +1487,12 @@ class VectorMixin(_MixinBase):
                 for one release; passing it together with ``big_data_threshold`` is a
                 ``TypeError``, since they name one cutoff (#250).
             cmap: Colormap name.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1447,13 +1571,17 @@ class VectorMixin(_MixinBase):
                     " — rasterizing the mesh to a density image"
                 )
             trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
-            return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
+            return self.rasterize(
+                trimesh, dynamic=True, cmap=cmap, name=name, visible=visible, **opts
+            )
         self._built_mesh = (data, value_column, built)
         try:
             held: Dict[str, Any] = {}
             described_opts = describe_opts(held, opts)
             return self.add_element(
                 None,
+                name=name,
+                visible=visible,
                 kind="unstructured",
                 source=data,
                 held=held,
@@ -1522,6 +1650,8 @@ class VectorMixin(_MixinBase):
         aggregator: str = "mean",
         column: Optional[str] = None,
         cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add an equal-area hex-bin density layer (honest no-overplot density, recipe I7).
@@ -1533,6 +1663,12 @@ class VectorMixin(_MixinBase):
                 ``column``.
             column: Value column aggregated per bin (required for non-``count`` aggregators).
             cmap: Colormap name.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1543,6 +1679,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="heatmap",
             source=features,
             held=held,
@@ -1565,6 +1703,8 @@ class VectorMixin(_MixinBase):
         *,
         filled: bool = True,
         cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a 2-D kernel-density layer of point positions (parity with ``Map.kde``, recipe I7).
@@ -1573,6 +1713,12 @@ class VectorMixin(_MixinBase):
             features: A point ``FeatureCollection``; reprojected through pyramids.
             filled: Fill the density bands (``True``) or draw contour lines (``False``).
             cmap: Colormap name.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1583,6 +1729,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="heatmap",
             source=features,
             held=held,
@@ -1606,6 +1754,8 @@ class VectorMixin(_MixinBase):
         bundle: bool = False,
         node_id: str = "id",
         cmap: str = "viridis",
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Add a network / origin-destination flow map (parity-plus for ``Map.sankey``, recipe I9).
@@ -1621,6 +1771,12 @@ class VectorMixin(_MixinBase):
                 cheap ``connect_edges``.
             node_id: The node-id column name on ``nodes``.
             cmap: Colormap used when ``weight`` is given.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -1631,6 +1787,8 @@ class VectorMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="flow",
             # One source, because the layer draws the join of the two: neither the node table nor the
             # edge table describes it on its own.
@@ -1649,7 +1807,14 @@ class VectorMixin(_MixinBase):
         )
 
     def flow(
-        self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any
+        self,
+        nodes: Any,
+        edges: Any,
+        *,
+        weight: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
     ) -> Self:
         """Spatial-flow alias of :meth:`graph` mirroring ``Map.sankey``'s framing (DI.15).
 
@@ -1657,9 +1822,16 @@ class VectorMixin(_MixinBase):
             nodes: A point ``FeatureCollection`` of flow endpoints.
             edges: ``(src_id, dst_id[, weight])`` tuples.
             weight: Optional flow-magnitude column.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Forwarded to :meth:`graph`.
 
         Returns:
             The same map instance, so builder calls chain.
         """
-        return self.graph(nodes, edges, weight=weight, **opts)
+        return self.graph(
+            nodes, edges, weight=weight, name=name, visible=visible, **opts
+        )

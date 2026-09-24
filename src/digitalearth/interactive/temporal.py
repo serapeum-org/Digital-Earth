@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.clim import sample_evenly, stack_clim
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.base.spec._serial import thawed_value
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
@@ -24,6 +23,7 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
+from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 
 
 def _iso_labels(labels: Optional[Sequence]) -> Optional[list]:
@@ -72,7 +72,9 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     members = data.datasets
     # One colour range and one colormap for the whole cube, resolved from the collection and its first
     # member, so the colorbar on the last frame is the colorbar on the first.
-    clim = props.get("clim")
+    # `_engine_pair` restores HoloViews' own spelling: the option is declared as a `(low, high)` tuple,
+    # and the figure carries the JSON-safe list (review R2-M13).
+    clim = _engine_pair(props.get("clim"))
     frozen_clim = clim if clim is not None else interactive_map._global_clim(data, band)
     cmap = props.get("cmap")
     if cmap is None and members:
@@ -81,9 +83,10 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         )
     cmap = cmap or "viridis"
     labels = props.get("labels")
-    # Only the slider keys are thawed: a symbology stores every sequence as a tuple, and `clim` beside
-    # them *is* a pair — HoloViews reads it as one, and a list where a tuple belongs is not honoured.
-    keys = thawed_value(labels) if labels is not None else list(range(len(members)))
+    # `held_props` is this tier's one read boundary and thaws the described half there, so the labels
+    # arrive as a list whichever half they came from — the caller's own, or thawed back out of a frozen
+    # description (#330). Copied rather than thawed, so the slider's keys are not the held list itself.
+    keys = list(labels) if labels is not None else list(range(len(members)))
     key_to_index = {key: index for index, key in enumerate(keys)}
     common = {
         "cmap": cmap,
@@ -172,6 +175,8 @@ class TemporalMixin(_MixinBase):
         cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
         colorbar: bool = True,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts: Any,
     ) -> Self:
         """Render a ``DatasetCollection`` as an interactive time-slider map.
@@ -192,6 +197,12 @@ class TemporalMixin(_MixinBase):
                 once, from at most :data:`~digitalearth.base.clim.DEFAULT_CLIM_SCAN_CAP` members sampled
                 evenly across it.
             colorbar: Whether to draw a colorbar.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to every frame.
 
         Returns:
@@ -244,6 +255,8 @@ class TemporalMixin(_MixinBase):
         described_opts = describe_opts(held, opts)
         return self.add_element(
             None,
+            name=name,
+            visible=visible,
             kind="raster",
             source=collection,
             held=held,
@@ -257,7 +270,15 @@ class TemporalMixin(_MixinBase):
                     "labels": describe(held, "labels", kept, _iso_labels(kept)),
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
-                    "clim": describe(held, "clim", clim),
+                    # Normalised to the spelling a figure can be written with, as `image` records it:
+                    # the documented `(low, high)` is a tuple, and a tuple is exactly what
+                    # `travels_in_a_figure` refuses — so the documented form was held beside the layer and
+                    # dropped from every saved figure while the undocumented list form travelled
+                    # (review R2-M13). The cost here is worse than a restyle: a reloaded cube with no
+                    # `clim` sends `draw_timecube` back to `_global_clim`, which rescans the members to
+                    # invent one, so the figure both looks different and pays for the scan this keyword
+                    # was passed to avoid.
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
                     "colorbar": colorbar,
                     "opts": described_opts,
                 }

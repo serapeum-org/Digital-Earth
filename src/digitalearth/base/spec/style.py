@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from difflib import get_close_matches
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+import numpy as np
+
 from digitalearth.base.spec._serial import (
     FrozenDict,
     as_mapping,
@@ -38,10 +40,17 @@ from digitalearth.base.spec._serial import (
     read_entry,
     refuse_unknown,
     to_json_value,
+    travels_in_a_figure,
 )
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
-__all__ = ["StyleKey", "StyleSchema", "Symbology"]
+__all__ = [
+    "PORTABLE_VALUES",
+    "StyleKey",
+    "StyleSchema",
+    "Symbology",
+    "portable_constants",
+]
 
 
 @dataclass(frozen=True)
@@ -425,6 +434,180 @@ class Symbology:
             },
             props=as_mapping("Symbology", "props", data.get("props", {})),
         )
+
+
+#: The value types one channel may portably carry as a constant.
+#:
+#: What a caller writes for a channel is a number, a colour string or a flag. Everything else a tier keeps in
+#: its own style bucket is that engine's machinery — a MapLibre paint expression such as
+#: ``("step", ("get", "pop"), "#440154", "#fde725")``, a per-class colormap list, a Datashader reduction, a
+#: tile provider — and it means nothing to another engine, so claiming it as a portable constant would
+#: describe the layer wrongly rather than describe it at all.
+#:
+#: Restricting the lift to a scalar also keeps a container out of the figure — but it is the **second** line
+#: of that defence and not the first, which is worth saying plainly so nobody reads this tuple as the thing
+#: standing between a figure and an API key. An ``xyzservices.TileProvider`` **is** a mapping and one of its
+#: values is the caller's key; since `ec56fb6e`/`0ee874c6`,
+#: :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses it at the shared gate, by
+#: ``type(item) is dict`` rather than by ``isinstance``, so a `dict` subclass never reaches a description at
+#: all (pinned by `tests/base/test_serialisation.py`). What this tuple adds is the narrower question — is
+#: this one *channel's* constant — which is what also refuses a palette list and an engine expression
+#: (review R2-N5).
+#:
+#: ``np.generic`` is every numpy *scalar* and no array, so the family answers as one. Without it the tuple
+#: was a per-type accident (`R-L9`): ``np.float64`` subclasses `float` and lifted, while ``np.int64``,
+#: ``np.bool_``, ``np.float32`` and ``np.uint8`` subclass nothing here, so a tier that recorded a numpy
+#: number or flag published no channel at all and its layer crossed unstyled. Membership is not the whole
+#: gate — :func:`~digitalearth.base.spec._serial.travels_in_a_figure` is, and it is what still refuses
+#: ``datetime64``, a non-finite number and anything else no figure can be written with.
+PORTABLE_VALUES: Tuple[type, ...] = (bool, int, float, str, np.generic)
+
+
+def portable_constants(
+    flat: Mapping[str, Any], channels: Mapping[str, str]
+) -> Dict[str, Encoding]:
+    """Lift a tier's own flat style values onto the declared channels they drive.
+
+    The half of :meth:`StyleSchema.route` a backend needs when it has *already* resolved a caller's keywords
+    into its engine's own spelling and wants the portable reading of them as well. A tier keeps recording
+    what its renderer rebuilds from — MapLibre's ``paint``, HoloViews' resolved options — and calls this to
+    say the same thing a second time in the vocabulary every other tier can read.
+
+    Args:
+        flat: The tier's own style values, keyed the way that engine spells them.
+        channels: Which declared channel each of those keys drives. Keys absent from it are the engine's own
+            business and are passed over; a key that drives no channel simply has no row.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that both
+        name a channel and carry a value a channel can portably hold (see :data:`PORTABLE_VALUES`). A
+        ``None`` is a caller declining a key rather than binding one, so it lifts nothing — the same reading
+        :meth:`StyleSchema.route` gives it.
+
+    Examples:
+        - A tier lifts its own spelling onto the channel, and keeps the spelling:
+            ```python
+            >>> from digitalearth.base.spec.style import portable_constants
+            >>> lifted = portable_constants({"circle-radius": 7.0}, {"circle-radius": "size"})
+            >>> sorted(lifted), lifted["size"].resolve()
+            (['size'], 7.0)
+
+            ```
+        - An engine's compiled expression is not a style value, so nothing is claimed for that channel:
+            ```python
+            >>> from digitalearth.base.spec.style import portable_constants
+            >>> paint = {"fill-color": ("step", ("get", "pop"), "#440154", "#fde725")}
+            >>> portable_constants(paint, {"fill-color": "color"})
+            {}
+
+            ```
+    """
+    lifted: Dict[str, Encoding] = {}
+    for keyword, value in flat.items():
+        channel = channels.get(keyword)
+        if channel is None or value is None:
+            continue
+        if not isinstance(value, PORTABLE_VALUES):
+            continue
+        if not travels_in_a_figure(value):
+            # The two gates ask different questions and neither subsumes the other. `PORTABLE_VALUES` asks
+            # whether this is one channel's constant at all, which is what refuses a palette and a tile
+            # provider; the shared rule asks whether a figure can be written with it, which is what refuses
+            # NaN, the infinities and `datetime64`. Lifting one of those would turn a drawable layer into a
+            # figure `Symbology.to_dict` refuses outright — and asking the rule rather than re-deriving it
+            # here is what keeps this module and `travels_in_a_figure` from drifting apart again (`R-L9`).
+            continue
+        lifted[channel] = Encoding.constant(channel, value)
+    return lifted
+
+
+def is_a_tier_default(value: Any, defaults: Tuple[Any, ...]) -> bool:
+    """Say whether a resolved style value is one a tier's builders write when nobody asked.
+
+    The one comparison both 2-D tiers subtract their defaults with. It lived twice, spelled
+    ``type(value) is type(default) and value == default``, which made the published style depend on how a
+    caller *spelled* a number: on the interactive tier, which records what it was handed rather than
+    coercing it, ``points(size=6)`` published ``{'size': 6}`` and ``points(size=6.0)`` published nothing
+    (review R2-M4).
+
+    Args:
+        value: What the tier resolved the style to.
+        defaults: The values that tier's builders write for this key unasked. Empty for a key no builder
+            defaults, which is always the caller's.
+
+    Returns:
+        `True` when `value` is one of `defaults`, comparing numerically. `bool` is the one type held
+        apart, in both directions: `True == 1.0` and `False == 0` in Python, so without the guard a flag a
+        caller really did set would be read as a numeric default and dropped.
+
+    Examples:
+        - The two spellings of one number answer alike, and a key nobody defaults is always an ask:
+            ```python
+            >>> from digitalearth.base.spec.style import is_a_tier_default
+            >>> is_a_tier_default(6, (6.0,)), is_a_tier_default(6.0, (6.0,))
+            (True, True)
+            >>> is_a_tier_default(7.0, (6.0,)), is_a_tier_default(7.0, ())
+            (False, False)
+
+            ```
+        - A boolean is never read as the number it equals:
+            ```python
+            >>> from digitalearth.base.spec.style import is_a_tier_default
+            >>> is_a_tier_default(True, (1.0,)), is_a_tier_default(0, (False,))
+            (False, False)
+
+            ```
+    """
+    return any(
+        isinstance(value, bool) == isinstance(default, bool) and value == default
+        for default in defaults
+    )
+
+
+def asked_constants(
+    flat: Mapping[str, Any],
+    channels: Mapping[str, str],
+    unasked: Mapping[str, Tuple[Any, ...]],
+) -> Dict[str, Encoding]:
+    """Lift a tier's flat style onto its channels, minus the values its builders wrote unasked.
+
+    :func:`portable_constants` with the one subtraction both 2-D tiers need. A builder resolves its
+    defaults before it records anything, so the recorded style cannot tell an ask from a default;
+    publishing it wholesale made an unstyled layer claim one tier's defaults as the caller's own intent and
+    repaint itself when the figure was carried elsewhere (review R-H2). Which defaults are chargeable to
+    *this* layer is the tier's question — it is the tier that knows which builder wrote the values — so it
+    is passed in rather than decided here.
+
+    Args:
+        flat: The tier's own style values, keyed the way that engine spells them.
+        channels: Which declared channel each of those keys drives.
+        unasked: The defaults chargeable to this layer, per key, as the tier resolved them.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that
+        name a channel, carry a portable value, and are not one of `unasked`.
+
+    Examples:
+        - A default is passed over and an explicit value is published, for the same key:
+            ```python
+            >>> from digitalearth.base.spec.style import asked_constants
+            >>> channels = {"circle-radius": "size"}
+            >>> unasked = {"circle-radius": (5.0,)}
+            >>> sorted(asked_constants({"circle-radius": 5.0}, channels, unasked))
+            []
+            >>> asked_constants({"circle-radius": 12.0}, channels, unasked)["size"].resolve()
+            12.0
+
+            ```
+    """
+    return portable_constants(
+        {
+            key: value
+            for key, value in flat.items()
+            if not is_a_tier_default(value, unasked.get(key, ()))
+        },
+        channels,
+    )
 
 
 @dataclass(frozen=True)

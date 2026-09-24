@@ -139,7 +139,11 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the data lies entirely outside what the display CRS shows. The builder answers
             it by skipping the layer (or, under ``strict``, letting it out).
     """
-    props = dict(layer.symbology.props)
+    # Thawed whole rather than key by key: a spec freezes every list to a tuple so it still hashes, and
+    # `levels` was the one key this drawer knew to thaw back. Nothing held is in `props` on this tier —
+    # the scene holds the caller's own objects, and `drawing_style` lays them over the description — so
+    # every container here is a described list, and thawing is the exact inverse of the freeze.
+    props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
     src = scene._prepare(data, props["band"])
@@ -157,7 +161,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     opts["cmap"] = auto_cmap(
         src, requested, props["default_cmap"], lookup=lambda _: style
     )
-    levels = thawed_value(props["levels"])
+    levels = props["levels"]
     if levels is None and kind in _CONTOUR_KINDS:
         levels = style.get("levels")  # the variable's canonical contour levels
     if levels is not None:
@@ -257,7 +261,7 @@ def draw_rgb_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
     """
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     opts = drawing_style(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
@@ -286,7 +290,7 @@ def draw_hsv_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     from matplotlib.colors import hsv_to_rgb
 
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     opts = drawing_style(scene, layer)
     ds, stretched = _composite_bands(scene, data, props)
     rgb = hsv_to_rgb(stretched)  # (rows, cols, 3) RGB
@@ -325,6 +329,8 @@ class RasterMixin(_MixinBase):
         default_cmap: str = DEFAULT_FIELD_CMAP,
         draw_band: Optional[str] = None,
         zorder: Optional[float] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Render a raster ``dataset`` on the shared axes via ``cleopatra.ArrayGlyph`` (the canonical recipe).
@@ -355,6 +361,11 @@ class RasterMixin(_MixinBase):
                 recorded for the same reason: a backdrop drawn again from its description — a redraw, a
                 rollback, a figure read back — has to come back *behind* the data rather than at the
                 default 0.
+            name: The caller's own name for the layer, used as its id and its label. ``None`` (default)
+                generates one from the kind. A name already on the figure is suffixed ``-2``, ``-3``, …
+                (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it hidden,
+                so a switcher reading the figure agrees with what is on the axes (#327).
             **opts: The caller's own engine keywords, handed to ``ArrayGlyph`` as passed. The plain ones
                 are described as well as held; the rest are held beside the layer alone (see the class
                 docstring), so a figure drawn on a scene that does not hold them draws those with the
@@ -376,7 +387,9 @@ class RasterMixin(_MixinBase):
         record = LayerRecord(
             FIELD_KINDS[kind],
             source=dataset,
+            name=name,
             band=draw_band,
+            visible=visible,
             symbology=Symbology(
                 props={
                     "via": kind,
@@ -399,12 +412,24 @@ class RasterMixin(_MixinBase):
             self._skipped_off_limb(kind)
             return None
 
-    def imshow(self, dataset: Any, **kwargs) -> Any:
+    def imshow(
+        self,
+        dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
                 ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
                 left over is the caller's own engine styling, split between the layer's description and
@@ -418,14 +443,26 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(dataset, kind="imshow", **kwargs)
+        return self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
 
-    def contourf(self, dataset: Any, **kwargs) -> Any:
+    def contourf(
+        self,
+        dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
                 one this render reads. Anything left over is the caller's own engine styling, split
                 between the layer's description and the scene (see the class docstring).
@@ -438,14 +475,28 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(dataset, kind="contourf", **kwargs)
+        return self._field(
+            dataset, kind="contourf", name=name, visible=visible, **kwargs
+        )
 
-    def contour(self, dataset: Any, **kwargs) -> Any:
+    def contour(
+        self,
+        dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
                 one this render reads. Anything left over is the caller's own engine styling, split
                 between the layer's description and the scene (see the class docstring).
@@ -458,14 +509,28 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(dataset, kind="contour", **kwargs)
+        return self._field(
+            dataset, kind="contour", name=name, visible=visible, **kwargs
+        )
 
-    def pcolormesh(self, dataset: Any, **kwargs) -> Any:
+    def pcolormesh(
+        self,
+        dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
                 the caller's own engine styling, split between the layer's description and the scene
                 (see the class docstring).
@@ -478,9 +543,18 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(dataset, kind="pcolormesh", **kwargs)
+        return self._field(
+            dataset, kind="pcolormesh", name=name, visible=visible, **kwargs
+        )
 
-    def block(self, dataset: Any, **kwargs) -> Any:
+    def block(
+        self,
+        dataset: Any,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
         """Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.
 
         ``block`` is meant for *discrete* per-cell rectangles aligned to cell **edges**. cleopatra's
@@ -492,6 +566,11 @@ class RasterMixin(_MixinBase):
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
                 first). Only a path-backed layer can be written down.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
                 the caller's own engine styling, split between the layer's description and the scene
                 (see the class docstring).
@@ -504,7 +583,9 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(dataset, kind="pcolormesh", **kwargs)
+        return self._field(
+            dataset, kind="pcolormesh", name=name, visible=visible, **kwargs
+        )
 
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
@@ -547,6 +628,8 @@ class RasterMixin(_MixinBase):
         *,
         mask_nodata: bool = True,
         limits: Optional[ChannelLimits] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
@@ -615,7 +698,14 @@ class RasterMixin(_MixinBase):
         """
         require_three_bands("rgb_composite", bands)
         return self._composite(
-            "rgb_composite", dataset, bands, mask_nodata, limits, opts
+            "rgb_composite",
+            dataset,
+            bands,
+            mask_nodata,
+            limits,
+            opts,
+            name=name,
+            visible=visible,
         )
 
     def _composite(
@@ -626,6 +716,8 @@ class RasterMixin(_MixinBase):
         mask_nodata: bool,
         limits: Optional[ChannelLimits],
         opts: dict,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Any:
         """Record a three-band composite and draw it, answering an off-limb warp with a skipped layer.
 
@@ -640,8 +732,12 @@ class RasterMixin(_MixinBase):
             mask_nodata: Whether each band's nodata cells are excluded from the stretch.
             limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
             opts: The caller's styling keywords, as they were written — described where
-                :func:`~digitalearth.static.scene.travels_in_a_figure` accepts them, held beside the layer
+                :func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts them, held beside the layer
                 otherwise.
+            name: The caller's own name for the layer, used as its id and its label; ``None`` generates
+                one from the kind (#321).
+            visible: Whether the layer is drawn — ``False`` builds it hidden and describes it hidden
+                (#327).
 
         Returns:
             The image mappable, or ``None`` when the data lies outside what the display CRS shows.
@@ -649,6 +745,8 @@ class RasterMixin(_MixinBase):
         record = LayerRecord(
             "rgb",
             source=dataset,
+            name=name,
+            visible=visible,
             symbology=Symbology(
                 props={
                     "via": via,
@@ -672,6 +770,8 @@ class RasterMixin(_MixinBase):
         *,
         mask_nodata: bool = True,
         limits: Optional[ChannelLimits] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
         **opts,
     ) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
@@ -737,10 +837,25 @@ class RasterMixin(_MixinBase):
         """
         require_three_bands("hsv_composite", bands)
         return self._composite(
-            "hsv_composite", dataset, bands, mask_nodata, limits, opts
+            "hsv_composite",
+            dataset,
+            bands,
+            mask_nodata,
+            limits,
+            opts,
+            name=name,
+            visible=visible,
         )
 
-    def spaghetti(self, collection: Any, band: int = 1, **opts) -> List[Any]:
+    def spaghetti(
+        self,
+        collection: Any,
+        band: int = 1,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts,
+    ) -> List[Any]:
         """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).
 
         Args:
@@ -748,6 +863,11 @@ class RasterMixin(_MixinBase):
                 single-raster builders this takes no path: a collection is a set of rasters rather
                 than one file.
             band: 1-based band read from each member.
+            name: The caller's own name for the layers, used as their ids and labels; ``None``
+                (default) generates one per member. One call draws **one layer per member**, so a
+                single name is shared and the second and later take ``-2``, ``-3``, … (#321).
+            visible: Whether the members are drawn. ``False`` builds them hidden **and** describes
+                them hidden (#327).
             **opts: Styling kwargs forwarded to the per-member contour call.
 
         Returns:
@@ -758,7 +878,15 @@ class RasterMixin(_MixinBase):
             individually if a per-member legend needs to know which is which.
         """
         drawn = [
-            self._field(member, kind="contour", band=band, add_colorbar=False, **opts)
+            self._field(
+                member,
+                kind="contour",
+                band=band,
+                add_colorbar=False,
+                name=name,
+                visible=visible,
+                **opts,
+            )
             for member in collection.datasets
         ]
         return [artist for artist in drawn if artist is not None]

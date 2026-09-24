@@ -14,10 +14,13 @@ layer rather than a rebuild of the scene around it.
 **Two things the description deliberately leaves out**, so "round-trips" is read for what it is. ``to_dict``
 refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
 one built from data already in memory is handed to a renderer directly instead. And of the caller's own
-engine keywords only the plain half is described — a string, a boolean, a finite number or ``None``, which
-is what :func:`~digitalearth.static.scene.travels_in_a_figure` accepts. A container, an array or an engine
-object stays on the scene beside the layer (:func:`drawing_opts`) and nowhere else, so a figure read back
-elsewhere draws *those* with the engine's defaults in their place.
+engine keywords only the half a figure carries is described — a string, a boolean, a finite number or
+``None``, and a ``list`` or ``dict`` built out of those, which is what
+:func:`~digitalearth.base.spec._serial.travels_in_a_figure` accepts. A tuple (which JSON reads back as a
+list), an array or an engine object stays on the scene beside the layer (:func:`drawing_opts`) and nowhere
+else, so a figure read back elsewhere draws *those* with the engine's defaults in their place. Measured:
+``described_opts`` describes ``levels=[0.0, 0.5, 1.0]`` and ``ticks={'a': 1}`` and holds
+``figsize=(8, 6)``.
 
 **This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
 :meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
@@ -71,7 +74,7 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     This is the *held* half of the pair: every keyword the scene was given, as the very object it was given
     (see :attr:`~digitalearth.static.scene.LayerRecord.opts`), so matplotlib gets the caller's own objects
     and never a frozen copy. The layer's description carries the plain ones as well
-    (:func:`~digitalearth.static.scene.travels_in_a_figure`), and a drawer asks
+    (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`), and a drawer asks
     :func:`~digitalearth.static.scene.drawing_style` for the two composed rather than calling this directly.
     Round-tripping the rest broke them both ways: a dash pattern came back a list matplotlib refuses, and an
     object with no JSON form — a ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — made the
@@ -282,8 +285,12 @@ def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional["DrawnLaye
         elsewhere carries the description and not the artist.
 
     Raises:
-        MissingObject: when the object is not here and the scene is ``strict``, which is the same
-            skip-or-raise answer every other layer gives for data it cannot draw.
+        MissingObject: when the object is not here and the scene is ``strict`` — the same skip-or-raise
+            answer every other layer gives for data it cannot draw, and since #325 the same *type* as
+            well. `MissingObject` derives from :class:`~digitalearth.base.crs.OffLimbError`, so the one
+            ``except OffLimbError`` that catches a strict off-limb raster on this tier catches this too.
+            It did not before: this was a bare `LookupError` while the 3-D and web tiers raised
+            `OffLimbError` for the same case, so a caller who handled one was not handling the other.
     """
     try:
         glyph, artist, label = held_object(
@@ -750,7 +757,7 @@ class Renderer:
         **A restyle expressed only in a value the description does not carry is invisible to this path.**
         The difference between two figures is read off their descriptions, and of a caller's engine
         keywords only the plain half is described — a string, a boolean, a finite number or ``None``
-        (:func:`~digitalearth.static.scene.travels_in_a_figure`). A colormap built on the spot, a
+        (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`). A colormap built on the spot, a
         ``Normalize``, a dash tuple, a per-pixel ``alpha`` array: each is held on the scene beside the
         layer instead (:func:`drawing_opts`), and two layers differing only in one of them compare
         **equal** — ``diff`` reports no restyle and nothing is redrawn, although the two draw different

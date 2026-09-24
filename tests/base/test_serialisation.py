@@ -8,6 +8,7 @@ the pairs `Bounds`, `Selection`, `Scale`, `Encoding` and `Symbology` gained, and
 import copy
 import dataclasses
 import datetime
+import enum
 import json
 import pickle
 import re
@@ -34,12 +35,17 @@ from digitalearth.base.spec import (
     ViewRequest,
 )
 from digitalearth.base.spec._serial import (
+    MAX_TRAVELLING_DEPTH,
+    MAX_TRAVELLING_ELEMENTS,
     FrozenDict,
     crs_to_json,
     finite_number,
+    frozen_value,
     hashable_value,
     read_entry,
+    thawed_value,
     to_json_value,
+    travels_in_a_figure,
 )
 
 #: A minimal valid panel list, for the figure reads that fail on another field.
@@ -1422,3 +1428,799 @@ class TestAMappingHashesByItsItemsAndNothingElse:
             "so they must hash alike; a set keyed on style would otherwise hold both"
         )
         assert len({one_way, other_way}) == 1, "and a set must hold them once"
+
+
+#: A matplotlib dash pattern in its ``(offset, (on, off))`` form — the container the shared rule is argued from,
+#: and the one whose round trip the rule's docstring cites.
+_DASH_PATTERN = (0, (5, 5))
+
+#: A graduated choropleth's class edges and a categorical palette, as a builder resolves them. Both are
+#: lists, both are far below the size bound, and losing them is the regression #330 reports: a figure
+#: reloaded on another map redrew in the tier's default colours while its classification survived.
+_COLOR_LEVELS = [0.0, 0.25, 0.5, 1.0]
+_PALETTE = ["#440154", "#21918c", "#fde725"]
+
+
+#: The types the oracle holds to their exact class. A container is the half of the rule where the type is
+#: load-bearing: a tuple flattened to a list is a value matplotlib refuses outright, and a `dict` subclass
+#: flattened to a `dict` has had its contents — an `xyzservices.TileProvider`'s API key — copied into the
+#: figure. Neither is true of a scalar, which carries nothing but itself.
+_CONTAINERS = (list, tuple, dict, set, frozenset, np.ndarray)
+
+
+def _comes_back_the_same(left, right):
+    """Whether the trip returned `left` as `right` under the rule the code actually makes.
+
+    Two comparisons, not one, because the rule is two-sided (`R-M5`). A **container** must come back as the
+    same class as well as equal — plain `==` would call a tuple equal to nothing, but a `list` holding a
+    `tuple` one level down compares equal to the list holding a list it becomes, and that is the loss the
+    rule exists to catch. A **scalar** is compared by value alone, because the trip flattens every scalar
+    subclass to its plain counterpart and that counterpart is what the drawer is handed.
+
+    Args:
+        left: The value a builder recorded.
+        right: What came back from the trip.
+
+    Returns:
+        `True` when the two are equal, and — wherever either side is a container — of the same class, at
+        every depth.
+    """
+    if isinstance(left, _CONTAINERS) or isinstance(right, _CONTAINERS):
+        if type(left) is not type(right):
+            return False
+        if isinstance(left, np.ndarray):
+            return bool(np.array_equal(left, right))
+        if isinstance(left, dict):
+            if set(left) != set(right):
+                return False
+            return all(_comes_back_the_same(left[key], right[key]) for key in left)
+        if len(left) != len(right):
+            return False
+        return all(_comes_back_the_same(one, other) for one, other in zip(left, right))
+    return bool(left == right)
+
+
+def _survives_the_trip(value):
+    """Whether the record-to-draw path gives `value` back equal, and a container back as its own class.
+
+    The oracle the rule is measured against, rather than a second spelling of the rule: it runs the real
+    path a described value takes — `frozen_value` into the spec, `to_json_value` out, `json` there and
+    back, `frozen_value` on read, `thawed_value` at the drawer — and compares what comes out.
+
+    Args:
+        value: The value a builder would record.
+
+    Returns:
+        `True` when both the in-process freeze and the stored JSON trip return a value that satisfies
+        :func:`_comes_back_the_same`; `False` when either loses it or the writer refuses it outright.
+    """
+    try:
+        after_freeze = thawed_value(frozen_value(value))
+        written = to_json_value(frozen_value(value), "Symbology.props")
+        after_json = thawed_value(frozen_value(json.loads(json.dumps(written))))
+    except (TypeError, ValueError):
+        return False
+    if not _comes_back_the_same(value, after_freeze):
+        return False
+    return _comes_back_the_same(value, after_json)
+
+
+#: A nesting no record path here survives, for the case a builder used to lose outright (`R2-M1`). Stated
+#: rather than measured because the measurement moves with the recursion limit and with how deep the caller
+#: already is: `frozen_value` gave out at depth 499 on a fresh 1,000-frame limit, and lower under pytest's
+#: own stack, so anything past 500 is past it wherever this runs. The gate refuses it far earlier.
+_PAST_THE_RECORD_PATH = 600
+
+
+def _nested_list(depth):
+    """Return a value wrapped in `depth` nested lists.
+
+    Args:
+        depth: How many lists to wrap the leaf in.
+
+    Returns:
+        The outermost list.
+    """
+    value = "leaf"
+    for _ in range(depth):
+        value = [value]
+    return value
+
+
+def _record_path_carries(depth):
+    """Whether the record path survives a container nested `depth` deep.
+
+    Args:
+        depth: How deep to nest.
+
+    Returns:
+        `True` when the trip returns an answer of any kind, `False` when it raises `RecursionError`. A
+        value the trip *refuses* still counts as carried: refusing is an answer, and the gate is free to
+        disagree with it. Only the raise is the failure mode this measures.
+    """
+    try:
+        _survives_the_trip(_nested_list(depth))
+    except RecursionError:
+        return False
+    return True
+
+
+def _record_path_ceiling(limit=4096):
+    """Measure the shallowest nesting the record path cannot carry.
+
+    The ceiling is measured rather than written down because it is not a property of this package: it moves
+    with `sys.setrecursionlimit` and with how many frames the caller has already spent, so a number pinned
+    here would be a number about the machine that pinned it.
+
+    Args:
+        limit: How deep to look before giving up.
+
+    Returns:
+        The shallowest depth that raises `RecursionError`, or `limit` when every depth up to there is
+        carried. The limit rather than `None`, so a caller comparing against a bound needs one comparison:
+        a path that survives everything is trivially past any bound.
+    """
+    if _record_path_carries(limit):
+        return limit
+    low, high = 1, limit
+    while low + 1 < high:
+        middle = (low + high) // 2
+        if _record_path_carries(middle):
+            low = middle
+        else:
+            high = middle
+    return high
+
+
+class _KeyedProvider(dict):
+    """A `dict` subclass carrying a credential, standing in for an `xyzservices.TileProvider`.
+
+    Declared here rather than imported so the rule is checked without the tile stack installed; the real
+    provider is checked by the static tier's own seam suite.
+    """
+
+
+class _TaggedList(list):
+    """A `list` subclass, standing for any sequence a library hands back with behaviour attached."""
+
+
+class _TaggedStr(str):
+    """A `str` subclass with nothing added, standing for any string a library hands back as its own type."""
+
+
+class _TaggedInt(int):
+    """An `int` subclass with nothing added, the counterpart of `_TaggedStr` on the number side."""
+
+
+class _TaggedFloat(float):
+    """A `float` subclass with nothing added — a units library's quantity, or a `Decimal`-ish wrapper."""
+
+
+class _Weight(int, enum.Enum):
+    """A caller's `int`-valued enumeration of a style keyword's allowed values.
+
+    The sibling of :class:`_Linestyle` on the number side, and the one the round-1 fix did not reach: `str`
+    flattens a `str`-valued member (to the wrong text, which is why it is refused), while an `int`-valued
+    member was returned live because the writer flattened no number at all (`R2-M2`).
+    """
+
+    BOLD = 700
+
+
+class _Opacity(float, enum.Enum):
+    """The same on the `float` side, so the rule is read off the class and not off one member's type."""
+
+    HALF = 0.5
+
+
+#: Every shape of non-numpy scalar subclass a caller can hand a builder, with the plain value the figure is
+#: supposed to carry in its place. Enumerated as a class rather than as the one case that was reported: the
+#: writer's rule is "a scalar subclass is flattened to its plain counterpart", and `str` was the only one it
+#: kept (`R2-M2`). A `bool` has no subclasses to add — the type is final — and a numpy scalar is a separate
+#: branch, checked by the cases beside these.
+_SCALAR_SUBCLASSES = [
+    (_TaggedInt(3), 3),
+    (_TaggedFloat(2.5), 2.5),
+    (_Weight.BOLD, 700),
+    (_Opacity.HALF, 0.5),
+]
+
+
+class _Linestyle(str, enum.Enum):
+    """A caller's `str`-valued enumeration of a style keyword's allowed values.
+
+    The one scalar whose flattening changes the **value** rather than only the type: `str` on a mixin
+    enumeration is `Enum.__str__`, so the writer stores the member's name where its value belongs.
+    """
+
+    SOLID = "solid"
+
+
+class TestWhatTravelsInAFigure:
+    """One rule, in one place, for what a figure's description carries (#322).
+
+    Two tiers used to answer this separately: static asked `travels_in_a_figure` and kept plain scalars only,
+    while interactive asked its own `is_json_value` and kept everything the writer accepts. The rule is now
+    shared, and it is drawn where the **round trip** puts it rather than where either tier had guessed: a
+    value travels when the path back gives it back equal, and — for a container, where the class is what
+    carries the loss — as the same class too.
+
+    Holding every container was the over-correction in between (#330). It is true of a tuple and was
+    generalised to the containers beside it without being re-measured, so a graduated choropleth's
+    `color_levels` and a categorical palette — both plain lists, both lossless — were held beside the layer
+    and lost the moment the figure was read anywhere else.
+    """
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, True, False, "solid", 0.25, 7, np.float64(2.5), np.str_("solid")],
+        ids=["none", "true", "false", "text", "float", "int", "np-float", "np-str"],
+    )
+    def test_a_plain_scalar_travels(self, value):
+        """A string, a boolean, a finite number or `None` is what a reader on another machine can act on.
+
+        Args:
+            value: The scalar under test.
+        """
+        assert travels_in_a_figure(value), (
+            f"{value!r} is a plain scalar, so a figure's description carries it"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [np.bool_(True), np.float64(2.5), np.int64(5), np.float32(1.5), np.uint8(3)],
+        ids=["np-bool", "np-float64", "np-int64", "np-float32", "np-uint8"],
+    )
+    def test_every_numpy_scalar_the_writer_takes_travels(self, value):
+        """The numpy family answers as one, rather than per type.
+
+        Args:
+            value: The numpy scalar under test.
+
+        Test scenario:
+            `np.bool_` was held while `np.float64` beside it travelled (#329) — not by decision, but because
+            the gate named types and a numpy bool is neither `bool` nor `numbers.Real`, so it fell off before
+            the writer was asked. A flag from any numpy comparison is an ordinary thing to hand a builder.
+            Parametrised across the family so a type added later is not a fresh special case.
+        """
+        assert travels_in_a_figure(value), (
+            f"{value!r} is a numpy scalar the writer accepts, so a figure carries it"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [np.datetime64("2024-01-01"), np.complex128(1 + 2j), np.timedelta64(5, "D")],
+        ids=["np-datetime64", "np-complex128", "np-timedelta64"],
+    )
+    def test_a_numpy_scalar_the_writer_refuses_still_does_not_travel(self, value):
+        """Admitting the family did not admit what it cannot write down.
+
+        Args:
+            value: The numpy scalar under test.
+
+        Test scenario:
+            The gate lets every `np.generic` reach the writer, so the writer is what still refuses these. The
+            counterpart to the check above: widening membership must not widen the answer.
+        """
+        assert not travels_in_a_figure(value), (
+            f"the writer has no JSON form for {value!r}, so the tier holds it beside the layer"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            _PALETTE,
+            _COLOR_LEVELS,
+            [4, 4],
+            ["fid"],
+            {"a": 1},
+            [[1, 2], [3, 4]],
+            {"a": ["x", "y"]},
+            [],
+            {},
+        ],
+        ids=[
+            "palette",
+            "color-levels",
+            "dash-list",
+            "columns",
+            "mapping",
+            "nested-lists",
+            "mapping-of-lists",
+            "empty-list",
+            "empty-mapping",
+        ],
+    )
+    def test_a_list_or_a_mapping_of_plain_values_travels(self, value):
+        """A list and a dict come back as themselves, so a figure carries them.
+
+        Args:
+            value: The container under test.
+
+        Test scenario:
+            This is the half #330 lost. Holding a palette meant the map that drew it merged the held copy
+            back and rendered correctly, while a figure reloaded anywhere else redrew in the tier's default
+            colours — the classification surviving, the colours not.
+        """
+        assert travels_in_a_figure(value), (
+            f"{value!r} comes back from the trip as itself, so a figure's description carries it"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [_DASH_PATTERN, (1, 2), [1, (2, 3)], {"dash": (5, 5)}, np.array([1.0, 2.0])],
+        ids=["dash-pattern", "pair", "tuple-in-a-list", "tuple-in-a-mapping", "array"],
+    )
+    def test_a_tuple_or_an_array_does_not(self, value):
+        """JSON has no tuple, so anything holding one is held beside the layer instead.
+
+        Args:
+            value: The container under test.
+
+        Test scenario:
+            The loss is the tuple's, not the container's, so it has to be found wherever the tuple sits —
+            alone, inside a list, or inside a mapping. A rule that only looked at the outermost type would
+            describe `[1, (2, 3)]` and hand the engine `[1, [2, 3]]`, which is the defect holding
+            containers existed to prevent.
+        """
+        assert not travels_in_a_figure(value), (
+            f"{value!r} is re-typed by the trip, so the tier holds it beside the layer"
+        )
+
+    def test_a_dict_subclass_does_not_travel_either(self):
+        """A tile provider *is* a dict, and a figure is not a place to write an API key.
+
+        Test scenario:
+            The one case where the same-type half of the rule is not a technicality. An
+            `xyzservices.TileProvider` is a `dict` of plain strings, one of which is the caller's
+            credential, so an `isinstance` gate wrote the key into the figure — measured, as a real
+            failure of `tests/static/test_static_seam.py`, while this rule was being widened. The trip
+            returns a plain `dict`, a different type, so the same check that refuses a tuple refuses this.
+        """
+        provider = _KeyedProvider(
+            {"name": "Thunderforest", "apikey": "FAKE-KEY-NOT-REAL"}
+        )
+        assert not travels_in_a_figure(provider), (
+            "a dict subclass is an engine object wearing a dict, so the tier holds it beside the layer"
+        )
+
+    @pytest.mark.parametrize(
+        "value,plain",
+        [
+            (np.float64(2.5), 2.5),
+            (np.bool_(True), True),
+            (np.int64(7), 7),
+            (_TaggedStr("solid"), "solid"),
+            (_TaggedInt(3), 3),
+        ],
+        ids=["np-float64", "np-bool", "np-int64", "str-subclass", "int-subclass"],
+    )
+    def test_a_scalar_subclass_travels_as_its_plain_counterpart(self, value, plain):
+        """The loss the rule accepts, written down rather than left to be discovered (`R-M5`).
+
+        Args:
+            value: The scalar subclass a builder recorded.
+            plain: The plain value the drawer is handed in its place.
+
+        Test scenario:
+            The rule says "same class" for a container and only "equal" for a scalar, and the difference
+            was stated as one rule, so a reader could not tell the flattening was intended. It is: the
+            value survives, nothing rides along with it — a scalar has no contents to copy, which is the
+            whole of the `TileProvider` argument on the container side — and the plain value is what every
+            engine would have received anyway.
+        """
+        written = to_json_value(frozen_value(value), "Symbology.props")
+        drawn = thawed_value(frozen_value(json.loads(json.dumps(written))))
+        assert drawn == value, (
+            f"{value!r} must come back equal, and came back {drawn!r}"
+        )
+        assert type(drawn) is type(plain), (
+            f"and as a plain {type(plain).__name__}, not a {type(drawn).__name__}"
+        )
+
+    @pytest.mark.parametrize(
+        "value,plain",
+        _SCALAR_SUBCLASSES,
+        ids=["int-subclass", "float-subclass", "int-enum", "float-enum"],
+    )
+    def test_a_scalar_subclass_is_flattened_by_the_writer_and_not_by_json(
+        self, value, plain
+    ):
+        """The flattening has to happen where the value is written down (`R2-M2`).
+
+        Args:
+            value: The scalar subclass a builder recorded.
+            plain: The plain value the figure is supposed to carry.
+
+        Test scenario:
+            The trip test above passes a subclass through `json.dumps`/`json.loads`, and `json` flattens a
+            number of its own accord — so it measured `json`'s behaviour, not the writer's, and the writer
+            returned the live object. `to_dict()` is a boundary of its own: a caller reads it, hashes it,
+            or hands it to a YAML, TOML or msgpack writer, none of which cope with a subclass the way
+            `json` does. `str` was flattened here from the start; its number siblings were not.
+        """
+        written = to_json_value(value, "Symbology.props")
+        assert type(written) is type(plain), (
+            f"the writer returned a {type(written).__name__} for {value!r}, not a "
+            f"{type(plain).__name__}"
+        )
+
+    @pytest.mark.parametrize(
+        "value,plain",
+        _SCALAR_SUBCLASSES,
+        ids=["int-subclass", "float-subclass", "int-enum", "float-enum"],
+    )
+    def test_a_described_symbology_is_a_plain_mapping_of_plain_values(
+        self, value, plain
+    ):
+        """`to_dict` is the boundary that yields plain values, so it must not yield a live one (`R2-M2`).
+
+        Args:
+            value: The scalar subclass a builder recorded.
+            plain: The plain value the description is supposed to hold.
+
+        Test scenario:
+            Measured before the fix: `Symbology(props={"k": Weight.BOLD}).to_dict()` came back holding
+            `<_Weight.BOLD: 700>` — an enumeration member, alive, inside the mapping whose stated job is to
+            be dead data. The gate says the value travels, so this is the path it travels by.
+        """
+        described = Symbology(props={"k": value}).to_dict()["props"]["k"]
+        assert type(described) is type(plain), (
+            f"to_dict() described {value!r} as a {type(described).__name__}"
+        )
+
+    def test_a_scalar_whose_value_moves_in_the_writing_does_not_travel(self):
+        """Equal is the whole of the scalar rule, so a flattening that changes the value is refused.
+
+        Test scenario:
+            `str` on a mixin enumeration is `Enum.__str__`, so the writer stores ``'_Linestyle.SOLID'``
+            where the member's value ``'solid'`` belongs — a figure that reloads with a linestyle no
+            engine has heard of. Asking only whether the writer *accepts* a scalar admitted it; asking
+            whether the writer gives back an equal value refuses it, and refuses by measurement anything
+            else whose flattening moves the value.
+        """
+        assert (
+            to_json_value(_Linestyle.SOLID, "Symbology.props") == "_Linestyle.SOLID"
+        ), "the writer accepts the member and stores its name, not its value"
+        assert not travels_in_a_figure(_Linestyle.SOLID), (
+            "so the tier holds it beside the layer and hands the drawer the member itself"
+        )
+
+    def test_a_list_subclass_does_not_travel_either(self):
+        """The same holds on the sequence side, so the rule needs no list of blessed subclasses.
+
+        Test scenario:
+            A subclass carries behaviour the trip cannot restore — it comes back a plain `list` — so it is
+            re-typed exactly as a tuple is, and answering by type rather than by name means a subclass
+            nobody has heard of yet is already handled.
+        """
+        assert not travels_in_a_figure(_TaggedList(_PALETTE)), (
+            "a list subclass comes back as a plain list, so the tier holds it beside the layer"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            _PALETTE,
+            _COLOR_LEVELS,
+            ["fid"],
+            {"a": 1},
+            _DASH_PATTERN,
+            [1, (2, 3)],
+            np.array([1.0, 2.0]),
+            [1.0, float("nan")],
+            {1: "a"},
+            _KeyedProvider({"apikey": "FAKE-KEY-NOT-REAL"}),
+            _TaggedList([1, 2]),
+            0.25,
+            "solid",
+            None,
+            float("nan"),
+            np.float64(2.5),
+            np.bool_(True),
+            np.int64(7),
+            np.str_("solid"),
+            [np.float64(2.5)],
+            {"width": np.int64(1)},
+            _TaggedStr("solid"),
+            _TaggedInt(3),
+            _Linestyle.SOLID,
+        ],
+        ids=[
+            "palette",
+            "color-levels",
+            "columns",
+            "mapping",
+            "dash-pattern",
+            "tuple-in-a-list",
+            "array",
+            "nan-in-a-list",
+            "non-string-key",
+            "keyed-provider",
+            "list-subclass",
+            "float",
+            "text",
+            "none",
+            "nan",
+            "np-float64",
+            "np-bool",
+            "np-int64",
+            "np-str",
+            "np-float-in-a-list",
+            "np-int-in-a-mapping",
+            "str-subclass",
+            "int-subclass",
+            "str-enum",
+        ],
+    )
+    def test_the_rule_answers_what_the_round_trip_measures(self, value):
+        """The rule is not a taste: for anything inside the size bound it *is* the measured trip.
+
+        Args:
+            value: The value under test.
+
+        Test scenario:
+            Holding every container was justified by one measurement — a dash pattern — generalised to
+            every container beside it without re-measuring. This compares the rule against the trip
+            itself, case by case, so the next generalisation has to survive the same comparison.
+
+            The parametrisation carried no numpy scalar and no scalar subclass, which is exactly where the
+            rule and the oracle disagreed, so the comparison could not fail (`R-H1`). They are here now, and
+            with them the `str`-valued enumeration whose trip changes the value rather than only the type.
+        """
+        assert travels_in_a_figure(value) is _survives_the_trip(value), (
+            f"the rule and the measured round trip disagree about {value!r}"
+        )
+
+    def test_a_described_list_reaches_the_drawer_as_the_list_it_was(self):
+        """The whole point of describing it: what the drawer is handed is what the builder recorded.
+
+        Test scenario:
+            Describing without thawing hands the engine a tuple — HoloViews' `color_levels` is a
+            `ClassSelector` of `(int, list, range)` and refuses one outright — so the rule and the read
+            boundary have to land together. This pins the value half; the tier suites pin the engine half.
+        """
+        written = to_json_value(frozen_value(_PALETTE), "Symbology.props")
+        drawn = thawed_value(frozen_value(json.loads(json.dumps(written))))
+        assert drawn == _PALETTE, f"the palette came back as {drawn!r}"
+        assert isinstance(drawn, list), f"and as a {type(drawn).__name__}, not a list"
+
+    def test_a_container_of_the_bounded_size_travels(self):
+        """The bound is inclusive, so the biggest describable container really is describable.
+
+        Test scenario:
+            Stated as a rule rather than left implicit. Refusing every container bounded the cost as a
+            side effect; describing lists has to keep that bound on purpose, and a bound nobody can reach
+            from either side is not a bound that has been checked.
+
+            The `- 1` is not an off-by-one, and it is worth a sentence because it reads like one (`R-N4`).
+            The bound counts the list itself as well as its items, so 999 items plus the list is exactly
+            1,000 values and the budget comes back at 0 — spent, not overspent. One item more is 1,001
+            values, which is the case below.
+        """
+        assert travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS - 1))), (
+            "a container holding exactly the bounded number of values must travel"
+        )
+
+    def test_a_container_over_the_bound_does_not(self):
+        """A per-pixel `alpha` is the layer's data, and a description is not where data is copied.
+
+        Test scenario:
+            Measured on the full record path: 1,000 values cost ~2 ms and ~7 KB, 1,000,000 cost ~3 s and
+            ~9 MB. The second is a 1000 x 1000 raster's worth of per-pixel alpha, and it is many times the
+            render it belonged to.
+        """
+        assert not travels_in_a_figure(list(range(MAX_TRAVELLING_ELEMENTS))), (
+            "a container one value over the bound — 1,000 items and the list — must be held beside the layer"
+        )
+
+    def test_the_bound_counts_every_value_at_every_depth(self):
+        """Nesting cannot be used to smuggle a big container past a bound that counted only the top level.
+
+        Test scenario:
+            `[[0, 0], [1, 1], ...]` has few entries and many values. A bound on `len()` would wave through
+            an arbitrarily large payload one level down, which is the cost the bound exists to refuse.
+        """
+        pairs = [[index, index] for index in range(MAX_TRAVELLING_ELEMENTS // 2)]
+        assert len(pairs) < MAX_TRAVELLING_ELEMENTS, (
+            "the outer list is well inside the bound, so only its depth can refuse it"
+        )
+        assert not travels_in_a_figure(pairs), (
+            "and it holds half as many values again as the bound allows, so it must not travel"
+        )
+
+    @staticmethod
+    def _nested(depth):
+        """Return a list nested `depth` deep, each level holding only the next.
+
+        Args:
+            depth: How many lists to build.
+
+        Returns:
+            The outermost list. It holds `depth` values in total — one per level — so the depth is what
+            the size bound is counting.
+        """
+        innermost = []
+        outermost = innermost
+        for _ in range(depth - 1):
+            outermost = [outermost]
+        return outermost
+
+    def test_a_container_nested_inside_the_bound_travels_however_deep_it_is(self):
+        """Depth is counted by a bound of its own, not by the interpreter's stack (`R-M1`, `R2-M1`).
+
+        Test scenario:
+            Depth used to be counted against `MAX_TRAVELLING_ELEMENTS`, which is 1,000 — and CPython's
+            default recursion limit is 1,000 too, so a recursive walk raised `RecursionError` before the
+            budget could answer. Making the walk iterative reached the bound and made the gate admit
+            depths the recursive record path cannot survive, which is what :data:`MAX_TRAVELLING_DEPTH`
+            now answers. The deepest admitted container is checked here from the inside; the test below
+            checks it from the outside, and the two tests after that check it against the record path.
+        """
+        assert travels_in_a_figure(self._nested(MAX_TRAVELLING_DEPTH)), (
+            "the deepest container the gate admits must travel, or the bound is unreachable"
+        )
+
+    def test_a_container_nested_past_the_bound_is_refused_rather_than_raising(self):
+        """The gate answers; it does not throw (`R-M1`).
+
+        Test scenario:
+            A builder calls this on a caller's style value, and the tier's promise is that a refused value
+            is *held* beside the layer rather than lost. Raising breaks that promise in the worst way — the
+            builder call itself fails, so nothing is drawn at all — and it was a new failure mode: before
+            the rule was widened, every container was refused by type in O(1) and no caller value recursed.
+        """
+        assert not travels_in_a_figure(self._nested(MAX_TRAVELLING_DEPTH + 1)), (
+            "a container nested one level past the bound must be refused, not raise"
+        )
+
+    def test_the_deepest_container_the_gate_admits_survives_the_record_path(self):
+        """What the gate admits, the record path has to carry (`R2-M1`).
+
+        Test scenario:
+            The gate is asked *before* a value is recorded, so "this travels" is a promise about what
+            `frozen_value`, `hashable_value`, `to_json_value` and `thawed_value` will then do with it.
+            They are recursive, and none of them was asked whether it could survive the depth the gate
+            was admitting.
+        """
+        assert _survives_the_trip(self._nested(MAX_TRAVELLING_DEPTH)), (
+            "the deepest admitted container must come back from the full record-to-draw path"
+        )
+
+    def test_the_gate_stops_short_of_where_the_record_path_gives_out(self):
+        """The two budgets agree, measured rather than asserted by hand (`R2-M1`).
+
+        Test scenario:
+            Round 1 made the walk iterative so the depth half of the element bound could be reached, and
+            reaching it moved the `RecursionError` downstream: the gate said "describe it" at depth 999
+            while `frozen_value` gave out around 499 and `to_json_value` around 996 — so for every depth
+            in between, a builder lost the value outright with a traceback naming neither the keyword nor
+            the bound. The ceiling is measured here rather than written down because it moves with the
+            recursion limit and with how deep the caller already is; the bound has to sit clear of it.
+        """
+        ceiling = _record_path_ceiling()
+        assert ceiling > MAX_TRAVELLING_DEPTH, (
+            f"the record path gives out at depth {ceiling}, at or under the bound the gate admits: "
+            f"MAX_TRAVELLING_DEPTH is {MAX_TRAVELLING_DEPTH}"
+        )
+        assert not travels_in_a_figure(_nested_list(ceiling)), (
+            f"the gate must refuse depth {ceiling}, where the record path raises rather than answers"
+        )
+
+    def test_a_value_the_gate_refuses_is_held_by_the_builder_rather_than_lost(self):
+        """The tier's promise for a refused value, over the split a builder actually makes (`R2-M1`).
+
+        Test scenario:
+            `Map.text(**opts)` is the reachable path the round-2 review measured: at depth 600 the gate
+            answered `True`, and the `Symbology` the builder then built raised `RecursionError` — so the
+            call that was meant to *hold* the value failed outright, with a traceback naming neither the
+            keyword nor the bound. The split is spelled out here rather than reached through a tier, so
+            the measurement is of the rule and not of matplotlib, which refuses an unknown keyword of its
+            own accord at draw time.
+        """
+        deep = self._nested(_PAST_THE_RECORD_PATH)
+        described = {
+            keyword: value
+            for keyword, value in {"deep": deep}.items()
+            if travels_in_a_figure(value)
+        }
+        recorded = Symbology(props={"opts": described})
+        assert recorded.props["opts"] == {}, (
+            "a value past the depth the record path survives must be held, not described"
+        )
+
+    def test_a_self_referential_list_is_refused_rather_than_raising(self):
+        """A container that holds itself is over every bound, so the budget is what ends the walk.
+
+        Test scenario:
+            The walk has no cycle memory and needs none: each visit to the list spends one value, so a
+            cycle exhausts the budget in `MAX_TRAVELLING_ELEMENTS` steps and is refused as the unbounded
+            container it is.
+        """
+        cyclic = []
+        cyclic.append(cyclic)
+        assert not travels_in_a_figure(cyclic), (
+            "a list holding itself must be refused, not raise"
+        )
+
+    def test_a_self_referential_mapping_is_refused_rather_than_raising(self):
+        """The same on the mapping side, which walks a second code path.
+
+        Test scenario:
+            The dict branch checks its keys before descending, so it is worth its own case: a cycle reached
+            through a value must end the same way one reached through a list item does.
+        """
+        cyclic = {}
+        cyclic["self"] = cyclic
+        assert not travels_in_a_figure(cyclic), (
+            "a mapping holding itself must be refused, not raise"
+        )
+
+    def test_a_leaf_the_writer_refuses_sinks_the_container_around_it(self):
+        """The writer is still the oracle for every leaf, reached however deep it sits.
+
+        Test scenario:
+            A `nan` written into a figure is read back by `JSON.parse` as a `SyntaxError`, so a list
+            holding one is no more writable than the bare `nan` is.
+        """
+        assert not travels_in_a_figure({"levels": [1.0, float("nan")]}), (
+            "a mapping holding a value JSON cannot spell must be held beside the layer"
+        )
+
+    def test_the_rule_is_narrower_than_the_writer_on_purpose(self):
+        """The writer takes the dash pattern; the rule refuses it anyway.
+
+        Test scenario:
+            This is the one divergence between the two tiers' old oracles, so it is the assertion that would
+            have caught them disagreeing. Reading only the rule, refusing a value the writer accepts looks
+            like a bug — the round trip below is why it is not.
+        """
+        assert to_json_value(_DASH_PATTERN, "Symbology.props") == [0, [5, 5]], (
+            "the writer takes the dash pattern, so the rule is not simply asking the writer"
+        )
+
+    def test_the_container_it_refuses_would_not_read_back_as_itself(self):
+        """JSON has no tuple, so a described dash pattern comes back as nested lists.
+
+        Test scenario:
+            `(0, (5, 5))` read back is `[0, [5, 5]]`, which matplotlib refuses with
+            `ValueError: Unrecognized linestyle`. Describing the container would trade a layer that redraws
+            with the engine's defaults for one that cannot redraw at all, which is why the rule stops at
+            scalars rather than at whatever `json.dumps` will write.
+        """
+        read_back = json.loads(
+            json.dumps(to_json_value(_DASH_PATTERN, "Symbology.props"))
+        )
+        assert read_back != _DASH_PATTERN, (
+            "the round trip must lose the tuple, or holding the container would buy nothing"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "inf", "-inf"],
+    )
+    def test_a_number_json_cannot_spell_does_not_travel(self, value):
+        """A scalar still has to survive the writer, and JSON has no spelling for these three.
+
+        Args:
+            value: The non-finite number under test.
+        """
+        assert not travels_in_a_figure(value), (
+            f"{value!r} has no JSON form, so a figure holding it could not be written down"
+        )
+
+    @pytest.mark.parametrize(
+        "value",
+        [datetime.datetime(2024, 1, 1), {"a", "b"}, object()],
+        ids=["datetime", "set", "object"],
+    )
+    def test_a_live_object_does_not_travel(self, value):
+        """An engine value has no JSON form at all, so it is held rather than described.
+
+        Args:
+            value: The object under test.
+        """
+        assert not travels_in_a_figure(value), (
+            f"{value!r} has no JSON form, so the tier holds it beside the layer"
+        )

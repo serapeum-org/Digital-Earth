@@ -21,16 +21,26 @@ the tier accepts, and that must not cost a backend import.
 """
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Dict, FrozenSet, Mapping, Tuple
 
 from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec.style import asked_constants, portable_constants
 
 __all__ = [
+    "ASKED_BUCKET",
+    "CHANNEL_KEYWORDS",
     "CHANNEL_OPTIONS",
+    "DERIVED_BUCKET",
     "INTERACTIVE_STYLE_SCHEMA",
+    "STYLE_BUCKETS",
+    "TIER_BUCKET",
+    "UNASKED_STYLE",
     "ChannelOption",
+    "builder_of",
     "allowed_options",
     "fold_symbology",
+    "portable_encodings",
     "route_flat_style",
 ]
 
@@ -51,7 +61,12 @@ INTERACTIVE_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     ),
     # -- how a field-driven colour is drawn
     StyleKey("cmap", "Colormap a field-driven colour is ramped through."),
-    StyleKey("clim", "Colour limits, as (low, high)."),
+    StyleKey(
+        "clim",
+        "Colour limits, as (low, high). A list is taken too, and is the spelling a figure carries: a "
+        "tuple is what the travel rule refuses, so the documented pair was dropped from every saved "
+        "figure while the list survived (review R2-M13).",
+    ),
     StyleKey("color_levels", "Class edges a classified colour is drawn with."),
     StyleKey("cnorm", "How colour values are normalised — linear, log, eq_hist."),
     StyleKey("colorbar", "Whether a colour key is drawn beside the layer."),
@@ -257,6 +272,229 @@ def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]
         encodings=dict(symbology.encodings),
         props={**dict(symbology.props), **leftover},
     ), {}
+
+
+#: Which declared visual channel each of this tier's own style keywords drives.
+#:
+#: The inverse view of :data:`INTERACTIVE_STYLE_SCHEMA`, derived from it rather than written out again, so a
+#: keyword cannot be tied to one channel for routing and another for recording. Only the keywords that drive
+#: a channel appear; `cmap`, `clim` and the rest are engine options with no portable reading.
+CHANNEL_KEYWORDS: Mapping[str, str] = MappingProxyType(
+    {
+        key.name: key.channel
+        for key in INTERACTIVE_STYLE_SCHEMA.keys.values()
+        if key.channel is not None
+    }
+)
+
+#: The bucket a builder files its **resolved parameters** under — defaults included, so a value here is not
+#: by itself evidence that anyone asked for it.
+#:
+#: ``points(size=7.0)`` and ``points(features)`` both land here as ``{"size": …}``, which is why the
+#: subtraction below exists at all: the bucket records what the parameter *resolved to* and not whether it
+#: was passed. :data:`UNASKED_STYLE` is the only attribution available until a builder records the ask
+#: itself (#334).
+DERIVED_BUCKET: str = "common"
+
+#: The bucket a builder files the caller's **own** ``**opts`` under. Every key here was written by the
+#: caller, which is what makes it liftable without a second question.
+#:
+#: The invariant is load bearing — :func:`portable_encodings` lifts this bucket **unfiltered** — and it was
+#: broken once: ``spaghetti`` passed its per-member colour cycle through ``**opts``, so three unstyled
+#: ensemble members published three different colours as three caller intents (review R2-H3). Style a
+#: builder works out for itself belongs in :data:`TIER_BUCKET`, which nothing lifts;
+#: ``tests/interactive/test_interactive_unasked_style.py`` holds every builder to that.
+ASKED_BUCKET: str = "opts"
+
+#: The bucket a builder files style **it** invented under — never a parameter, never an ask, never lifted.
+#:
+#: The third case the two buckets above could not hold. ``spaghetti`` colours each ensemble member from a
+#: cycle so the strands are distinguishable: that colour is neither a keyword the caller wrote
+#: (:data:`ASKED_BUCKET`) nor a parameter of the builder that happened to resolve to it
+#: (:data:`DERIVED_BUCKET`) — no caller can pass it, and it exists only because the tier drew several
+#: layers from one call. It reaches the element like any other option and is absent from
+#: :data:`STYLE_BUCKETS`, so :func:`portable_encodings` never publishes it and no table has to enumerate
+#: the ten colours to keep it out (review R2-H3).
+TIER_BUCKET: str = "tier"
+
+#: The props a builder files its resolved HoloViews style under, in the precedence the drawer applies.
+#:
+#: A builder writes the style it derived into ``common`` and the caller's own keywords into ``opts``, and
+#: every drawer merges the second over the first — so an explicit keyword outranks a derived one, and the
+#: lift below must read them in the same order. A few builders (``image``, ``rgb``) write their flat style
+#: at the top level of ``props`` instead, which is why the mapping itself is read first.
+STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
+
+#: What each of this tier's builders derives when the caller styled nothing, by the builder that wrote it.
+#:
+#: **Why this table has to exist.** :data:`ASKED_BUCKET` is the caller's own, but a builder also writes its
+#: resolved parameters into :data:`DERIVED_BUCKET` and into the flat top level — ``points`` writes ``size``
+#: there whether or not ``size=`` was passed, and ``image`` writes ``alpha`` the same way. Publishing those
+#: made an unstyled ``points(features)`` claim ``{'size': 6.0}`` as the caller's own style, against the web
+#: tier's ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` for the same call — two tiers publishing two
+#: sets of defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
+#:
+#: **Why it is keyed by builder.** The first version was keyed by style keyword, with every builder's
+#: defaults pooled under one tuple, so each builder was also charged with its siblings' (review R2-H2). This
+#: tier can do better than the web tier can, because every builder already records **which builder it was**:
+#: ``props["via"]``, with ``hv_type`` separating the five kinds that share the geometry funnel. So a row is
+#: looked up rather than guessed at, and adding a builder with its own default cannot silently swallow
+#: another's explicit ask.
+#:
+#: **What is listed.** Measured by drawing every builder on this tier that records a layer with no style
+#: keywords at all — **twenty-seven** of them, the twenty-three data builders and the four decorations, as
+#: ``tests/interactive/test_interactive_unasked_style.py`` enumerates them — and reading back
+#: ``symbology.props``: only two derive anything that drives a declared channel — ``points`` records
+#: ``common['size'] == 6.0`` and ``image`` records a flat ``alpha == 1.0``. ``rgb`` is **not** one of them
+#: (it records ``via``/``bands``/``limits``/``opts`` and no ``alpha``), ``polygons`` derives
+#: ``fill_alpha``, which drives no channel, and a classified ``color`` is a value dimension and is refused
+#: below. ``tests/interactive/test_interactive_unasked_style.py`` re-measures every builder, so a row that
+#: stops matching fails rather than rots (review R2-M5).
+#:
+#: **What it costs, deliberately.** A caller who asks for exactly the default — ``points(size=6.0)`` —
+#: publishes no ``size``, so a figure carried elsewhere is drawn at that tier's own default. The conformance
+#: suite already calls that acceptable: "Which default a tier picks is not what a round trip has to agree
+#: about". Publishing it anyway is not, because it repaints a layer nobody styled. A caller who writes the
+#: same value through ``**opts`` is unaffected — that bucket is never filtered.
+UNASKED_STYLE: Mapping[Tuple[str, str], Mapping[str, Any]] = MappingProxyType(
+    {
+        ("geometry", "Points"): MappingProxyType({"size": 6.0}),
+        ("image", ""): MappingProxyType({"alpha": 1.0}),
+    }
+)
+
+
+def builder_of(props: Mapping[str, Any]) -> Tuple[str, str]:
+    """Return the key :data:`UNASKED_STYLE` is looked up by, for one recorded style.
+
+    Args:
+        props: A layer's recorded `Symbology.props`.
+
+    Returns:
+        ``(via, hv_type)``. Five builders share ``via == "geometry"`` — the vector funnel records the
+        HoloViews element type beside it, which is what tells a point layer from a path — and every other
+        builder's ``via`` is its own, so the second half is an empty string there. A description carrying
+        no ``via`` at all answers ``("", "")``, which matches no row and is therefore charged nothing.
+
+    Note:
+        **Deliberately not the layer's `kind`,** which is what the web tier's table is keyed by. A kind is
+        coarser than a builder here: ``image``, ``large_image`` and ``rasterize`` all record ``"raster"``,
+        ``hexbin`` and ``kde`` both record ``"heatmap"``, and ``points`` and ``datashade`` both record
+        ``"points"``. Keying on it would pool those builders' defaults — the exact defect keying by kind
+        *removes* on the web tier, where one kind has one builder (review R2-H2). So the two tiers look
+        asymmetric and are answering the same question: which builder wrote this style.
+
+    Examples:
+        - The geometry funnel is told apart by its element type; every other builder by its own name:
+            ```python
+            >>> from digitalearth.interactive.style_fold import builder_of
+            >>> builder_of({"via": "geometry", "hv_type": "Points"})
+            ('geometry', 'Points')
+            >>> builder_of({"via": "image"})
+            ('image', '')
+
+            ```
+    """
+    return (str(props.get("via") or ""), str(props.get("hv_type") or ""))
+
+
+def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
+    """Return the declared channels an interactive layer's recorded options say the **caller** asked for.
+
+    Additive by construction: the resolved HoloViews options stay exactly where every drawer reads them, and
+    this writes a second, portable reading of the same style beside them — the one another tier, and
+    `to_backend()`, can act on (#328). Nothing here renames a keyword: `alpha` is still `alpha` in the
+    props a drawer applies, and the channel it drives is recorded as `opacity` because that is what the
+    vocabulary calls it.
+
+    The three buckets are read differently, because they mean different things. :data:`ASKED_BUCKET` holds
+    the caller's own ``**opts`` and is lifted as it stands; :data:`DERIVED_BUCKET` and the flat top level
+    hold the builder's *resolved parameters*, defaults included, so a value :data:`UNASKED_STYLE` names for
+    **that builder** is passed over rather than published; and :data:`TIER_BUCKET` holds style the tier
+    invented for itself and is not read at all. The figure records no list of the keywords a caller named,
+    so the comparison against the builder's own defaults is the only attribution available — and publishing
+    an unattributed value as an `Encoding` is what made an unstyled layer carry one tier's defaults onto
+    another (review R-H2).
+
+    Args:
+        symbology: The layer's recorded style, as the builder wrote it.
+
+    Returns:
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the style values
+        that drive a declared channel and are constants a channel can portably hold.
+
+        A `color` that names one of the layer's value dimensions is **not** one of them. HoloViews reads a
+        colour naming a dimension as "colour by that column", so recording it as a constant would say the
+        layer is painted the literal string `"pop"`; the classification behind it is published portably as
+        ``last_breaks`` instead.
+
+    Examples:
+        - A marker size and an opacity read back as the channels a caller asked for:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> props = {"via": "geometry", "hv_type": "Points", "common": {"size": 7.0}}
+            >>> lifted = portable_encodings(Symbology(props=dict(props, opts={"alpha": 0.5})))
+            >>> sorted(lifted), lifted["size"].resolve(), lifted["opacity"].resolve()
+            (['opacity', 'size'], 7.0, 0.5)
+
+            ```
+        - The same options as `points()` writes them when nobody styled the layer publish nothing at all:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> unstyled = {"via": "geometry", "hv_type": "Points", "common": {"size": 6.0}, "opts": {}}
+            >>> sorted(portable_encodings(Symbology(props=unstyled)))
+            []
+
+            ```
+        - 6.0 is `points`' default and nobody else's, so the same number from another builder is an ask:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> other = {"via": "trimesh", "common": {"size": 6.0}}
+            >>> portable_encodings(Symbology(props=other))["size"].resolve()
+            6.0
+
+            ```
+        - The caller's own bucket is never filtered, so asking for the default there still publishes it:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> asked = portable_encodings(Symbology(props={"via": "image", "opts": {"alpha": 1.0}}))
+            >>> sorted(asked), asked["opacity"].resolve()
+            (['opacity'], 1.0)
+
+            ```
+        - A colour that names a value dimension is a column, not a colour, so it is left unclaimed:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> classified = {"vdims": ("pop",), "common": {"color": "pop", "colorbar": True}}
+            >>> sorted(portable_encodings(Symbology(props=classified)))
+            []
+
+            ```
+    """
+    props = dict(symbology.props)
+    unasked = {
+        key: (default,)
+        for key, default in UNASKED_STYLE.get(builder_of(props), {}).items()
+    }
+    lifted = asked_constants(props, CHANNEL_KEYWORDS, unasked)
+    for bucket in STYLE_BUCKETS:
+        held = props.get(bucket)
+        if not isinstance(held, dict):
+            continue
+        if bucket == ASKED_BUCKET:
+            lifted.update(portable_constants(held, CHANNEL_KEYWORDS))
+        else:
+            lifted.update(asked_constants(held, CHANNEL_KEYWORDS, unasked))
+    coloured = lifted.get("color")
+    dimensions = {str(name) for name in (props.get("vdims") or ())}
+    if coloured is not None and coloured.value in dimensions:
+        del lifted["color"]
+    return lifted
 
 
 def allowed_options(

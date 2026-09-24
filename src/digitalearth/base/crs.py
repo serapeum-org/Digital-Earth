@@ -209,6 +209,14 @@ class OffLimbError(RuntimeError):
     is nothing to draw here" and render an empty frame; it is a distinct type so that a caller can tell it
     apart from a real projection failure.
 
+    **It is also the one type a caller catches "this layer could not be drawn" by (#325).** Off-limb data is
+    not the only way a layer ends up with nothing to draw: a custom layer's engine object can be absent, and
+    a figure read back from a dict carries the layer's description without it. That case raises
+    :class:`~digitalearth.base.custom.MissingObject`, which **derives from this class**, so one
+    ``except OffLimbError`` covers every tier's answer to both. It did not before: the static tier — the
+    default one — re-raised a bare `LookupError` there while the 3-D and web tiers re-raised this, so a
+    caller who handled the off-limb raster was silently not handling the missing object.
+
     Examples:
         - Callers rarely see it: the layer methods answer it by drawing nothing:
             ```python
@@ -234,6 +242,17 @@ class OffLimbError(RuntimeError):
             >>> from digitalearth.static import OffLimbError as FromBackend
             >>> OffLimbError is FromBackend
             True
+
+            ```
+        - The clause that catches an off-limb raster catches a missing custom object too:
+            ```python
+            >>> from digitalearth.base.crs import OffLimbError
+            >>> from digitalearth.base.custom import MissingObject
+            >>> try:
+            ...     raise MissingObject("layer 'wells' is a maplibre object this figure does not carry")
+            ... except OffLimbError as error:
+            ...     print(type(error).__name__)
+            MissingObject
 
             ```
     """

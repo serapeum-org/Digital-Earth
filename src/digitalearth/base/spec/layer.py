@@ -51,11 +51,180 @@ from digitalearth.base.spec._serial import (
 from digitalearth.base.spec.selection import Selection
 from digitalearth.base.spec.style import Symbology
 
-__all__ = ["LAYER_REFERENCE", "LayerSpec", "LayerTree"]
+__all__ = [
+    "LAYER_REFERENCE",
+    "SUFFIX_LIMIT",
+    "LayerSpec",
+    "LayerTree",
+    "free_layer_id",
+    "layer_name",
+]
 
 #: The prefix a ``z_source`` takes when a layer's elevation comes from **another layer** rather than from a source —
 #: imagery draped over terrain (#202). ``"layer:dem"`` names the layer ``dem``; anything else names a source.
 LAYER_REFERENCE = "layer:"
+
+#: How many suffixes :func:`free_layer_id` tries before it decides the ``taken`` predicate it was handed is
+#: broken rather than the figure crowded.
+#:
+#: The search was unbounded (review R2-L1): a predicate that answers "taken" to every candidate — a tier whose
+#: reservation always refuses, a spy in a test — spun the interpreter with no traceback, no message and no
+#: ceiling. Ten thousand layers under one name is not a figure anybody built, so reaching the bound is a bug in
+#: the caller and is reported as one.
+SUFFIX_LIMIT: int = 10_000
+
+
+def layer_name(name: Any) -> Optional[str]:
+    """Return the id a caller's ``name=`` asks for, normalised — or ``None`` when they asked for no name.
+
+    The **one** place a caller-supplied name is turned into an id, shared by all four tiers, and the reason it
+    exists is review R2-H4: ``name="roads "`` crashed the static, interactive and 3-D tiers with a ``KeyError``
+    naming neither the layer nor the name. The mint kept the padding, so the layer was registered under
+    ``object:<ns>:roads `` — and :class:`~digitalearth.base.spec.dataref.DataRef` stripped its uri, so the
+    reference no longer reached the object it had just registered. The web tier kept the padding all the way
+    through instead, which made it a cross-tier divergence as well as a crash.
+
+    Normalising here rather than patching the ``DataRef`` strip alone is the deliberate choice: a trailing
+    space is invisible in a traceback, invisible in a layer switcher (HTML collapses it) and invisible in the
+    ``layer_ids`` list a caller reads, so two ids that differ only by padding are two layers nobody can tell
+    apart. ``LayerSpec`` still *accepts* a padded id, because a figure written by an older version carries
+    one; no tier mints one any more.
+
+    Args:
+        name: Whatever the caller passed as ``name=`` — a string, or `None` for an unnamed layer.
+
+    Returns:
+        The name with surrounding whitespace removed, as a plain `str`; `None` when `name` is `None`, empty,
+        or nothing but whitespace — all three mean "I did not name this layer", and the tier generates an id.
+
+    Raises:
+        TypeError: for anything that is not a string. The three 2-D tiers raised a `ValueError` from
+            `LayerSpec` here — late, and phrased about an id the caller never wrote — and the 3-D tier
+            **silently ignored** it and generated an id instead (review R2-L1).
+
+    Examples:
+        - Surrounding whitespace is dropped, so one name is one id:
+            ```python
+            >>> from digitalearth.base.spec.layer import layer_name
+            >>> layer_name("roads "), layer_name(" roads"), layer_name("roads")
+            ('roads', 'roads', 'roads')
+
+            ```
+        - A blank name is no name, exactly as ``name=None`` is:
+            ```python
+            >>> from digitalearth.base.spec.layer import layer_name
+            >>> layer_name("   ") is None, layer_name("") is None, layer_name(None) is None
+            (True, True, True)
+
+            ```
+        - Anything that is not a string says so, naming the type:
+            ```python
+            >>> from digitalearth.base.spec.layer import layer_name
+            >>> layer_name(123)
+            Traceback (most recent call last):
+                ...
+            TypeError: a layer name must be a string; got int (123)
+
+            ```
+    """
+    if name is None:
+        return None
+    if not isinstance(name, str):
+        raise TypeError(
+            f"a layer name must be a string; got {type(name).__name__} ({name!r})"
+        )
+    # `str(...)` as well as `.strip()`: a `numpy.str_` is a `str` subclass whose `strip` hands back another
+    # `numpy.str_`, and an id is written into a figure that has to be plain JSON.
+    return str(name).strip() or None
+
+
+def free_layer_id(name: str, taken: Any) -> str:
+    """Return the id a layer the caller named should take: ``name``, or the first free suffix of it.
+
+    The one answer to "what happens when a caller names two layers the same thing", shared by all four tiers
+    (#321). It has to be shared because it is the id a caller holds afterwards — ``remove_layer``,
+    ``get_layer`` and a layer switcher all key on it — and two tiers answering differently means the same
+    script addresses a different layer depending on the backend it drew with. The web and 3-D tiers already
+    counted the **name**; the static and interactive tiers counted the *scene*, so a name reused after three
+    other layers became ``roads-4`` rather than ``roads-2``.
+
+    Suffixing rather than replacing is the other half of the answer: two layers under one id makes the second
+    unaddressable, and overwriting the first silently drops a layer the caller drew.
+
+    **How long an id is reserved: exactly as long as the layer is on the figure** (review R2-M9). The tiers
+    disagreed — the web tier kept a removed layer's id reserved for the map's life, so ``remove_layer("wells")``
+    followed by a new ``wells`` produced ``wells-2`` with nothing called ``wells`` on the map, while the 3-D
+    tier read its ids off the live tree and handed ``wells`` straight back. The live tree wins, on all four:
+    an id that addresses nothing is free again, on removal as it already was on a rollback
+    (``_forget_layer``). What makes that safe is that a stale id addresses *nothing* until it is re-used:
+    every one of the methods that takes an id refuses one the tree no longer holds, with a `KeyError`.
+    Measured, that is five methods rather than twelve — ``get_layer`` and ``remove_layer`` on the web tier,
+    and ``get_layer``, ``set_visible`` and ``remove_layer`` on the 3-D one. The static and interactive tiers
+    have none of the three at all, and the web tier has no ``set_visible``, which is what
+    :data:`~digitalearth.base.contract.PENDING` lists against order 23; a tier cannot be addressed by a
+    stale id it offers no way to address. Reserving forever, meanwhile, is silently wrong in the one place
+    the id is a caption: the web tier's layer switcher captions each row with the layer id itself.
+
+    Args:
+        name: The caller's own name. Normalise it with :func:`layer_name` first; this refuses what that
+            function would have.
+        taken: Answers whether a candidate id is unavailable. A plain ``in`` test over the ids in hand on the
+            tiers that have them; on the web tier a reservation that also claims the ids its drawer derives
+            from this one, and so must be called once per candidate in order.
+
+    Returns:
+        ``name`` when it is free, else ``f"{name}-2"``, ``f"{name}-3"``, … — the first that is not.
+
+    Raises:
+        TypeError: if `name` is not a string.
+        ValueError: if `name` is empty or nothing but whitespace — there is no id to suffix.
+        RuntimeError: if `taken` refuses :data:`SUFFIX_LIMIT` candidates in a row — the bare name and
+            the suffixes up to it. The docstring used to
+            promise a non-empty string and enforce none of it, and the search had no ceiling at all
+            (review R2-L1).
+
+    Examples:
+        - A free name is taken as it is:
+            ```python
+            >>> from digitalearth.base.spec.layer import free_layer_id
+            >>> free_layer_id("roads", {"rivers"}.__contains__)
+            'roads'
+
+            ```
+        - A name already on the figure counts from two, whatever else the figure holds:
+            ```python
+            >>> from digitalearth.base.spec.layer import free_layer_id
+            >>> free_layer_id("roads", {"roads", "roads-2", "points-9"}.__contains__)
+            'roads-3'
+
+            ```
+        - Padding is not an id of its own — it is removed before anything is compared:
+            ```python
+            >>> from digitalearth.base.spec.layer import free_layer_id
+            >>> free_layer_id("roads ", {"roads"}.__contains__)
+            'roads-2'
+
+            ```
+    """
+    if name is None:
+        # `layer_name` reads `None` as "the caller named nothing", which is a tier's business and not a
+        # failure; here there is no name to suffix, and the type is what went wrong.
+        raise TypeError("a layer name must be a string; got NoneType (None)")
+    stem = layer_name(name)
+    if stem is None:
+        raise ValueError(
+            f"a layer name must hold a character that is not whitespace; got {name!r}"
+        )
+    candidate, suffix = stem, 2
+    while taken(candidate):
+        if suffix > SUFFIX_LIMIT:
+            raise RuntimeError(
+                f"no free id for layer name {stem!r} after {SUFFIX_LIMIT} candidates; the caller's `taken` "
+                "predicate answered that every one of them was already in use"
+            )
+        candidate = f"{stem}-{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _optional_text(owner: str, name: str, value: Any) -> None:
@@ -69,6 +238,8 @@ def _optional_text(owner: str, name: str, value: Any) -> None:
     Raises:
         ValueError: for a non-string, or an empty string. Whitespace is kept, as it is in an id: these strings are
             compared exactly, and the web tier passes a caller's layer name through as the label verbatim.
+            Kept, not minted — :func:`layer_name` strips a caller's ``name=`` before it becomes either
+            (review R2-H4); what survives here is a value read back from a figure an older version wrote.
     """
     if value is None:
         return
@@ -178,7 +349,9 @@ class LayerSpec:
             ValueError: as described on the class.
         """
         # Compared exactly and kept exactly: the web tier issues a caller's layer name verbatim as its MapLibre id,
-        # padding included, and refusing it turned `name=" amsterdam"` from a working call into a ValueError.
+        # and refusing a padded one would refuse a figure an older version wrote. No tier mints one any more —
+        # `layer_name` strips a caller's `name=` at the mint, because a padded id crashed three of the four
+        # tiers on the way back out of the object registry (review R2-H4).
         if not isinstance(self.id, str) or not self.id:
             raise ValueError(
                 f"LayerSpec needs an id that is a non-empty string; got {self.id!r}"

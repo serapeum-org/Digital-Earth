@@ -11,11 +11,15 @@ symbology as values — and the drawer here rebuilds the element from that descr
 **Two things the description deliberately leaves out**, so "round-trips" is read for what it is. ``to_dict``
 refuses an ``object:`` source, so only a figure whose builders were given paths or URLs can be written down;
 one built from a `FeatureCollection` or a dataset already in memory is drawn from its description in this
-process and handed to a renderer directly. And a caller's keyword that JSON cannot carry — a colormap built
-on the spot, a callable hook — is held on the map beside the layer rather than in its description
-(:func:`~digitalearth.interactive.base.describe_opts`), so a figure read back elsewhere draws that layer
-with the engine's default in its place. The static tier's module docstring states the same two, for the same
-reasons; both tiers lose exactly what the writer refuses, and nothing else.
+process and handed to a renderer directly. And a caller's keyword that does not travel in a figure — a
+colormap built on the spot, a callable hook, a tuple such as a dash pattern, an array — is held on the map
+beside the layer rather than in its description (:func:`~digitalearth.interactive.base.describe_opts`), so a
+figure read back elsewhere draws that layer with the engine's default in its place. A ``list`` or ``dict``
+of plain values is **not** in that half: JSON reads it back as itself, so it is described, which is what
+keeps a reloaded figure's palette (#330). Measured: ``describe_opts`` describes
+``color_levels=[0.0, 0.5, 1.0]`` and holds ``line_dash=(0, (5, 5))``. The static tier's module docstring
+states the same two, for the same reasons; both tiers lose exactly what
+:func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses, and nothing else.
 
 **This tier composes rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
 place; HoloViews elements are immutable values composed into an overlay on every `render()`. So
@@ -380,14 +384,17 @@ class Renderer:
     Examples:
         - A map's renderer holds what it drew, keyed by the same ids
           :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` lists, in the order the
-          layers were drawn:
+          layers were drawn. Each generated id counts **within its kind**, so the second layer of a
+          second kind is ``-1`` and not ``-2``: this example said ``graticule-2`` until review R2-M10
+          gave the tier one counter per prefix, and it is the drawn ids themselves that say otherwise
+          (`R2-N3`):
             ```python
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
             >>> from digitalearth.interactive import InteractiveMap
             >>> wells = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
             >>> list(InteractiveMap().points(wells).graticule()._renderer.drawn)
-            ['points-1', 'graticule-2']
+            ['points-1', 'graticule-1']
 
             ```
     """
@@ -486,13 +493,14 @@ class Renderer:
         this yet; wiring it into the map is Wave 7 (order 23).
 
         **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
-        difference between two figures is read off their descriptions, and a keyword JSON cannot write
-        down — a colormap built on the spot, a callable hook — is held on the map beside the layer rather
-        than described (:func:`~digitalearth.interactive.base.describe_opts`). Two layers differing only in
-        one of those therefore compare **equal**: `diff` reports no restyle, :meth:`_reaches_holoviews`
-        answers `False`, and nothing is redrawn, although the two draw different pictures. A plainly
-        JSON-safe keyword is described and does reach here, so this is now exactly the set the writer itself
-        refuses, and no wider (review M3, M5).
+        difference between two figures is read off their descriptions, and a keyword that does not travel in
+        one — a colormap built on the spot, a callable hook, a dash pattern — is held on the map beside the
+        layer rather than described (:func:`~digitalearth.interactive.base.describe_opts`). Two layers
+        differing only in one of those therefore compare **equal**: `diff` reports no restyle,
+        :meth:`_reaches_holoviews` answers `False`, and nothing is redrawn, although the two draw different
+        pictures. A plain scalar is described and does reach here, so this is exactly the set
+        :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses, and no wider (review M3, M5;
+        #322).
 
         Args:
             before: The figure the record currently holds.
