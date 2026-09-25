@@ -6,12 +6,19 @@ and placed by its lon/lat corner coordinates. This is the offline, size-limited 
 COG/XYZ-tile path (pyramids ``to_cog``/``to_xyz``) is a follow-up — it needs a tile server or PMTiles and is
 tracked in the plan (DW.1b risks).
 
-matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazily inside the methods, so importing
-the tier needs neither the ``web`` extra nor matplotlib at module load.
+``rgb_composite`` and ``hsv_composite`` put *three* bands on the map the same way, and are one builder and one
+drawer with the recipe recorded beside the layer: they share every step but what the three stretched channels
+mean (#266). The stretch itself is ``digitalearth.base.stretch``'s, which states the rule both follow — "a
+composite (RGB or HSV) turns three bands into an image by stretching each channel into ``[0, 1]``" — so a
+composite looks the same here as on the static tier.
+
+matplotlib (the colormap → RGBA → PNG encoding, and the HSV → RGB conversion) and numpy are imported lazily
+inside the methods, so importing the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
 import math
-from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
@@ -22,6 +29,20 @@ from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
 _LARGE_RASTER_PIXELS = 4_000_000
+
+#: The recipe that maps the three stretched channels straight to red, green and blue. It is also what an
+#: ``rgb`` layer whose description records no recipe at all means: every figure written before this tier had a
+#: second composite is one of those, and read as anything else they would be refused or quietly recoloured.
+_RGB_RECIPE = "rgb_composite"
+
+#: The recipe that reads the same three channels as hue, saturation and value.
+_HSV_RECIPE = "hsv_composite"
+
+#: The composites this tier draws, each mapped to the prefix its generated layer ids take. One structure, so
+#: the recipes the tier *has* and the ids it mints for them cannot come to name different sets.
+_COMPOSITE_RECIPES: Mapping[str, str] = MappingProxyType(
+    {_RGB_RECIPE: "rgb", _HSV_RECIPE: "hsv"}
+)
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -201,6 +222,38 @@ def _stretch_limits(limits: Any) -> Any:
     ]
 
 
+def _composed_rgb(via: str, unit_stack: Any) -> Any:
+    """Return three stretched channels as the RGB the image source is encoded from.
+
+    The one step the two composites do not share. Everything up to here — one warp, one band stack, one
+    per-channel stretch into ``[0, 1]`` — is :mod:`digitalearth.base.stretch`'s shared rule for both; what
+    differs is only what those three numbers per cell *mean*.
+
+    Args:
+        via: The layer's recorded recipe, one of :data:`_COMPOSITE_RECIPES`.
+        unit_stack: The ``(rows, cols, 3)`` stretched stack; NaN marks a cell a band has no value for.
+
+    Returns:
+        The stack unchanged for an RGB composite. For an HSV one, the same three channels read as hue,
+        saturation and value and converted to RGB — with every cell that was incomplete left NaN, so the
+        encoder still draws it transparent.
+    """
+    if via != _HSV_RECIPE:
+        return unit_stack
+    import numpy as np
+    from matplotlib.colors import hsv_to_rgb
+
+    stack = np.asarray(unit_stack, dtype=float)
+    complete = np.isfinite(stack).all(axis=-1)[..., None]
+    # Masked before the conversion and restored after it, rather than handed over as it is. `hsv_to_rgb` reads
+    # the hue with `(h * 6.0).astype(int)`, and casting NaN yields a garbage index rather than NaN, so a cell
+    # with no hue comes back *finite* — measured: `(0.0, 0.0, 0.0)` at full saturation and value,
+    # `(0.5, 1.04e-311, 1.04e-311)` at half — and therefore opaque, with only a RuntimeWarning about an
+    # invalid cast to say anything had happened. The tier's NoData contract (a cell missing any band is
+    # transparent) has to survive the colour space.
+    return np.where(complete, hsv_to_rgb(np.where(complete, stack, 0.0)), np.nan)
+
+
 def _placed_corners(web_map: Any, source: Any, caller: str) -> Any:
     """Return a raster's lon/lat corners and frame the map on them, or report that it cannot be placed.
 
@@ -315,8 +368,38 @@ def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     return _image_layer(web_map, layer, url, coordinates)
 
 
+def _drawn_recipe(layer: LayerSpec, props: dict) -> str:
+    """Return which composite a description asks for, refusing one this tier does not draw.
+
+    Args:
+        layer: The layer being drawn, named in the refusal.
+        props: Its recorded props, already thawed.
+
+    Returns:
+        The recorded recipe, or :data:`_RGB_RECIPE` when the description records none — which is every
+        ``rgb`` layer written before this tier had a second composite.
+
+    Raises:
+        ValueError: when the recipe is one this tier has no composite for. Falling back to the default
+            instead would draw a figure written by another version as something it does not claim to be;
+            the static renderer refuses an unknown recipe the same way.
+    """
+    via = props.get("via", _RGB_RECIPE)
+    if via not in _COMPOSITE_RECIPES:
+        raise ValueError(
+            f"layer {layer.id!r} records {via!r} as how its composite was drawn; the web tier draws one of "
+            f"{sorted(_COMPOSITE_RECIPES)}"
+        )
+    return str(via)
+
+
 def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
-    """Encode three bands as an RGB image and place it on the map.
+    """Encode three bands as one colour composite image and place it on the map.
+
+    Both composites are drawn here — the recipe is the layer's own, recorded under ``via`` — because they
+    differ in one step out of six: the warp, the band stack, the stretch, the north-up flip, the PNG and the
+    placement are the same work either way. It keeps the name it is registered under in
+    :func:`~digitalearth.web.renderer.drawer_for`.
 
     Args:
         web_map: The map being drawn.
@@ -333,11 +416,11 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Raises:
         ValueError: when the description records none of the values the composite is built from — its
             three bands, its stretch limits or whether NoData is masked — naming the layer, its kind and
-            what is missing; when it records a band count other than three, in
-            :func:`~digitalearth.base.stretch.require_three_bands`' words; when the recorded limits do not
-            hold one `(lo, hi)` pair per band; or when no pixel is finite in all three, since there is
-            nothing to draw and an empty image would read as a rendering failure rather than as an empty
-            input.
+            what is missing; when it records a recipe this tier has no composite for; when it records a band
+            count other than three, in :func:`~digitalearth.base.stretch.require_three_bands`' words; when
+            the recorded limits do not hold one `(lo, hi)` pair per band; or when no pixel is finite in all
+            three, since there is nothing to draw and an empty image would read as a rendering failure
+            rather than as an empty input.
         OffLimbError: when the map is `strict` and the composite cannot be placed, in place of the `None`.
     """
     import numpy as np
@@ -346,16 +429,17 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.web.renderer import required_props
 
     props = required_props(layer, "bands", "mask_nodata", "limits", "opacity")
+    via = _drawn_recipe(layer, props)
     bands = list(props["bands"])
     # The same guard the builder runs, because this is the other way in: a figure is drawn from its
     # description — by a redraw onto another view, or from JSON written elsewhere — with no builder in front
     # of it. Without it the count reaches `get_stack`, which answers with numpy's "could not broadcast input
     # array from shape (4,9,2) into shape (4,9,3)": a complaint about an array the caller never named.
-    require_three_bands("rgb_composite", bands)
+    require_three_bands(via, bands)
     # One warp for both halves: the pixels are read from the warped dataset and the corners are taken from
     # that same grid. Stacking `data` itself drew the source-CRS grid stretched over the warped grid's
     # extent — a different shape at a different resolution (review H1).
-    data = web_map._display_raster_or_skip(data, layer="rgb_composite")
+    data = web_map._display_raster_or_skip(data, layer=via)
     if data is None:
         return None
     stack = get_stack(data, bands, mask=props["mask_nodata"])
@@ -367,9 +451,10 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.base.stretch import stretch_to_unit
 
     url = web_map._composite_png_datauri(
-        stretch_to_unit(stack, _stretch_limits(props["limits"]))
+        _composed_rgb(via, stretch_to_unit(stack, _stretch_limits(props["limits"]))),
+        caller=via,
     )
-    coordinates = _placed_corners(web_map, source, "rgb_composite")
+    coordinates = _placed_corners(web_map, source, via)
     if coordinates is None:
         return None
     return _image_layer(web_map, layer, url, coordinates)
@@ -540,6 +625,9 @@ class RasterMixin(_MixinBase):
         colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code
         the static tier's ``rgb_composite`` uses — so the same three bands look the same on both tiers.
 
+        The three channels are read straight as red, green and blue; :meth:`hsv_composite` reads the same
+        three as hue, saturation and value.
+
         Args:
             dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).
                 A path or URL to one is taken too, and is the only input this layer can be
@@ -576,32 +664,158 @@ class RasterMixin(_MixinBase):
                 ```
 
         See Also:
+            digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.
             digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
             digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.
         """
-        opacity = as_finite(opacity, "opacity", "WebMap.rgb_composite()")
+        return self._composite(
+            _RGB_RECIPE,
+            dataset,
+            bands,
+            mask_nodata=mask_nodata,
+            limits=limits,
+            opacity=opacity,
+            visible=visible,
+            name=name,
+        )
+
+    def hsv_composite(
+        self,
+        dataset: Any,
+        bands: Any = DEFAULT_COMPOSITE_BANDS,
+        *,
+        mask_nodata: bool = True,
+        limits: Optional[Any] = None,
+        opacity: float = 1.0,
+        visible: bool = True,
+        name: Optional[str] = None,
+    ) -> Self:
+        """Overlay three bands as an HSV composite — hue, saturation and value → RGB (#266).
+
+        The static tier has drawn both composites since it drew one, and this tier drew only RGB without
+        declaring HSV absent, so it was missing rather than refused. It is the same concept through this
+        tier's own engine: the three bands are stretched into ``[0, 1]`` by the shared
+        :mod:`digitalearth.base.stretch` — "a composite (RGB or HSV) turns three bands into an image by
+        stretching each channel into ``[0, 1]``" — then read as hue, saturation and value and encoded as the
+        one RGBA PNG a MapLibre image source takes.
+
+        It is the natural reading for a magnitude-and-direction pair (direction as hue, magnitude as value)
+        and for anything whose interesting variable is a *ratio* rather than a colour.
+
+        Args:
+            dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
+            bands: The three 1-based band numbers, in hue-saturation-value order.
+            mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value. A cell
+                missing *any* of the three has no colour and is drawn transparent, as in ``rgb_composite``
+                — including a missing hue, which the conversion would otherwise turn into a real colour.
+            limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this
+                image; pass a fixed set to keep a series comparable across frames.
+            opacity: Raster layer opacity in ``[0, 1]``.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+
+        Returns:
+            The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
+            in the display CRS, or with corners that will not express as lon/lat — is skipped with a
+            warning instead, unless the map was built with ``strict=True``.
+
+        Raises:
+            ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the
+                composite has no finite pixels to draw, or when ``opacity`` is not a finite number —
+                refused at this call, because a figure holding NaN or infinity could not be written down.
+            FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
+                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
+
+        Examples:
+            - Three bands read as hue, saturation and value (needs the ``web`` extra, so the block is
+              skipped without it):
+                ```python
+                >>> from digitalearth.web import WebMap                       # doctest: +SKIP
+                >>> WebMap().basemap().hsv_composite(ds, bands=(1, 2, 3))     # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.raster.RasterMixin.rgb_composite: the same three bands as red/green/blue.
+            digitalearth.static.maps.raster.RasterMixin.hsv_composite: the matplotlib tier's counterpart,
+                which this answers to on every parameter the two share.
+        """
+        return self._composite(
+            _HSV_RECIPE,
+            dataset,
+            bands,
+            mask_nodata=mask_nodata,
+            limits=limits,
+            opacity=opacity,
+            visible=visible,
+            name=name,
+        )
+
+    def _composite(
+        self,
+        via: str,
+        dataset: Any,
+        bands: Any,
+        *,
+        mask_nodata: bool,
+        limits: Optional[Any],
+        opacity: float,
+        visible: bool,
+        name: Optional[str],
+    ) -> Self:
+        """Record a three-band composite and draw it, in whichever colour space ``via`` names.
+
+        Everything the two composites do before the colour space is here: the argument checks, the one warp
+        that refuses an off-limb dataset before anything is recorded, the size warning and the description.
+        The recipe goes into that description rather than staying on the map, because a figure is redrawn
+        without its builder — a redraw that fell back to RGB would be a different image with no other symptom
+        (see :func:`_composed_rgb`).
+
+        Args:
+            via: The recipe, one of :data:`_COMPOSITE_RECIPES`. It names the builder in every message the
+                call can raise or log, and is what the drawer reads back.
+            dataset: The multiband source, as the caller gave it.
+            bands: The three 1-based band numbers, in the order the recipe reads them.
+            mask_nodata: Whether NoData becomes NaN (and so transparent).
+            limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
+            opacity: Raster layer opacity in ``[0, 1]``.
+            visible: Whether the layer starts visible.
+            name: The caller's name for the layer; ``None`` generates one under the recipe's own prefix.
+
+        Returns:
+            The map, so builder calls chain.
+        """
+        opacity = as_finite(opacity, "opacity", f"WebMap.{via}()")
         _require_layer_api()
-        require_three_bands("rgb_composite", bands)
+        require_three_bands(via, bands)
         # Warped here only so an off-limb dataset is refused before anything is recorded, and so the first
         # draw is handed the warped dataset rather than warping it again. The stack, the size warning, the
         # north-up flip and the placement are all the drawer's, which is the one place they are computed
         # (review M8).
-        data = self._display_raster_or_skip(dataset, layer="rgb_composite")
+        data = self._display_raster_or_skip(dataset, layer=via)
         if data is None:
             return self
         # At the call, like `field`'s: the drawer runs again on every redraw, and the size of the input is
         # the caller's one-time choice (review N7).
-        _warn_if_large("rgb_composite", "composite", _grid_pixels(data))
-        layer_id = self._layer_id("rgb", name)
+        _warn_if_large(via, "composite", _grid_pixels(data))
+        layer_id = self._layer_id(_COMPOSITE_RECIPES[via], name)
         if self._index_layer(
             layer_id,
             name,
+            # The engine-neutral kind for a multi-band colour composite, which is what both of these are —
+            # the recipe below says which. The static tier records both under it too.
             kind="rgb",
             visible=visible,
             source=dataset,
             placed=data,
             symbology=Symbology(
                 props={
+                    "via": via,
                     "bands": tuple(int(band) for band in bands),
                     # A bound the caller's freeze could not measure is recorded as `None`, not as the NaN
                     # `channel_limits` answers with: a description holds only what a figure can be written
@@ -616,11 +830,14 @@ class RasterMixin(_MixinBase):
         return self
 
     @staticmethod
-    def _composite_png_datauri(unit_stack: Any) -> str:
+    def _composite_png_datauri(unit_stack: Any, *, caller: str = "a composite") -> str:
         """Encode a stretched ``(rows, cols, 3)`` stack as a ``data:image/png;base64,`` URI.
 
         Args:
-            unit_stack: Channel values already stretched to ``[0, 1]``; NaN marks NoData.
+            unit_stack: Channel values already stretched to ``[0, 1]`` and read as red, green and blue by
+                here (an HSV composite has been converted — see :func:`_composed_rgb`); NaN marks NoData.
+            caller: What to name in the refusal below. Both composites reach this encoder, so a builder
+                written into the message would send the reader of the other one's failure to the wrong call.
 
         Returns:
             The PNG data-URI string.
@@ -639,7 +856,7 @@ class RasterMixin(_MixinBase):
         valid = np.isfinite(stack).all(axis=-1)
         if not valid.any():
             raise ValueError(
-                "rgb_composite got a stack with no pixel finite in all three bands"
+                f"{caller} got a stack with no pixel finite in all three bands"
             )
         rgba = np.zeros(stack.shape[:2] + (4,), dtype=float)
         rgba[..., :3] = np.clip(np.where(np.isfinite(stack), stack, 0.0), 0.0, 1.0)

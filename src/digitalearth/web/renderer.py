@@ -367,9 +367,12 @@ UNASKED_PROPS: Tuple[UnaskedStyle, ...] = (
         MappingProxyType({"opacity": 1.0}),
     ),
     UnaskedStyle(
+        # Two builders record this kind — `rgb_composite` and `hsv_composite` (#266) — and `via` is which
+        # of them did. It has no default here because it is never unasked: a caller chooses the recipe by
+        # choosing the builder, and there is no keyword under it to attribute either way.
         "rgb",
-        "rgb_composite",
-        frozenset({"bands", "limits", "opacity", "mask_nodata"}),
+        "rgb_composite / hsv_composite",
+        frozenset({"via", "bands", "limits", "opacity", "mask_nodata"}),
         MappingProxyType({"opacity": 1.0}),
     ),
     UnaskedStyle(

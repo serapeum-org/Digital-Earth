@@ -1,9 +1,14 @@
-"""RGB composites on the web tier (#190).
+"""Colour composites on the web tier (#190, #266).
 
 The encoder is a pure helper, tested without the engine (numpy/matplotlib are core deps via cleopatra);
-``rgb_composite`` itself ``importorskip``s maplibre and runs on the shared ``dataset`` fixture. The stretch
+the builders themselves ``importorskip`` maplibre and run on the shared ``dataset`` fixture. The stretch
 is asserted to be the *same* one the static tier applies, which is the point of sharing
 ``digitalearth.base.stretch``.
+
+``hsv_composite`` (#266) is the second composite, and what it draws is checked against a composite whose
+answer can be **written down**: hues 0, 1/3 and 2/3 at full saturation and value are pure red, green and
+blue, whatever code produces them. The same fixture is then drawn on the static tier and the two images
+compared, because "the tiers agree" is a claim about output, not about both calling the same helper.
 """
 
 import base64
@@ -21,6 +26,54 @@ from digitalearth.web import WebMap
 from digitalearth.web import raster as web_raster
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+#: Stretch limits that pass the band values through unchanged, one pair per channel. The 2-98 percentile
+#: default would rewrite the hue fixture's values into something no reader could check by hand.
+_UNIT_LIMITS = [(0.0, 1.0)] * 3
+
+#: What the hue fixture *is*, in RGB: hue 0, 1/3 and 2/3 at full saturation and value are pure red, green
+#: and blue. Written out rather than derived, so the checks below cannot agree with the code by construction.
+_PURE_HUES = np.array([[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]] * 2)
+
+#: The three bands every composite check reads, one per channel so a swapped channel shows.
+_BANDS = (1, 2, 3)
+
+#: 8-bit tolerance: the tier encodes a PNG, so every comparison against float channels allows one step.
+_ONE_LEVEL = 1 / 255
+
+
+def _hue_dataset(hue):
+    """Return a 2 x 3 lon/lat raster whose bands are hue, saturation and value.
+
+    Already EPSG:4326, so the display warp leaves the grid alone and the encoded image is the cells as
+    given — the comparison is then about colour, with no resampling in it.
+
+    Args:
+        hue: The hue band, as a ``(2, 3)`` array.
+
+    Returns:
+        A three-band pyramids ``Dataset`` with saturation and value at 1.0 and ``-9999`` as NoData.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+
+    ones = np.ones((2, 3), dtype="float32")
+    return Dataset.from_array(
+        arr=np.stack([np.asarray(hue, dtype="float32"), ones, ones]),
+        geo_ref=GeoReference(geo=(4.0, 0.5, 0.0, 52.0, 0.0, -0.5), epsg=4326),
+        no_data_value=-9999.0,
+    )
+
+
+@pytest.fixture
+def hue_wheel():
+    """A raster whose HSV composite is pure red, green and blue, hand-derivable cell by cell."""
+    return _hue_dataset([[0.0, 1.0 / 3.0, 2.0 / 3.0]] * 2)
+
+
+@pytest.fixture
+def hue_wheel_with_a_gap():
+    """The same raster with its first cell's **hue** missing, which is the channel a NaN ruins quietly."""
+    return _hue_dataset([[-9999.0, 1.0 / 3.0, 2.0 / 3.0], [0.0, 1.0 / 3.0, 2.0 / 3.0]])
 
 
 def _decode(uri):
@@ -638,10 +691,15 @@ class TestNorthUpOrientation:
         captured = {}
         encoder = WebMap._composite_png_datauri
 
-        def spy(unit_stack):
-            """Record the stack handed to the encoder, then encode it normally."""
+        def spy(unit_stack, *, caller=web_raster._RGB_RECIPE):
+            """Record the stack handed to the encoder, then encode it normally.
+
+            Args:
+                unit_stack: The stretched channels the drawer built.
+                caller: The builder the drawer names for the encoder's own refusal, forwarded as given.
+            """
             captured["stack"] = np.array(unit_stack, copy=True)
-            return encoder(unit_stack)
+            return encoder(unit_stack, caller=caller)
 
         monkeypatch.setattr(WebMap, "_composite_png_datauri", staticmethod(spy))
 
@@ -740,4 +798,318 @@ class TestACompositeTheViewCannotPlace:
         )
         assert web_map._renderer.draw_layer(figure, "rgb") is None, (
             "a composite whose data cannot be placed must be skipped, not drawn"
+        )
+
+
+class TestTheHsvComposite:
+    """#266 — the tier's second composite: the three bands read as hue, saturation and value.
+
+    The static tier has had both composites since it had one; this tier had only RGB, and did not declare
+    HSV absent either — so it was missing rather than refused. It arrives as the same concept through this
+    tier's own engine: three bands, each stretched by ``base/stretch.py``, composed in HSV space and encoded
+    as the one PNG a MapLibre image source takes.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _drawn(web_map, layer_id="hsv"):
+        """Return the image the widget was handed for one layer.
+
+        The renderer's record is what ``render()`` builds the widget from, so this is the drawn image rather
+        than the description of it — two different questions, and only the second is cheap to get right.
+
+        Args:
+            web_map: The map that drew it.
+            layer_id: Which layer to read.
+
+        Returns:
+            The decoded RGBA image.
+        """
+        return _decode(web_map._renderer.drawn[layer_id].source_spec["url"])
+
+    def test_the_image_the_widget_receives_is_the_hue_wheel(self, hue_wheel):
+        """Three bands read as hue/saturation/value draw pure red, green and blue.
+
+        Args:
+            hue_wheel: The raster whose HSV composite is written down in :data:`_PURE_HUES`.
+
+        Test scenario:
+            The expectation is the colour theory, not a second run of the tier's own code path: hue 0, 1/3
+            and 2/3 at full saturation and value are the primaries. A composite that read the bands as RGB,
+            or that mapped them to the wrong channels, lands somewhere else.
+        """
+        web_map = WebMap().hsv_composite(
+            hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+        )
+        image = self._drawn(web_map)[..., :3]
+        assert np.allclose(image, _PURE_HUES, atol=_ONE_LEVEL), image
+
+    def test_it_draws_something_other_than_the_rgb_composite(self, hue_wheel):
+        """The same bands through the two builders must not encode the same pixels.
+
+        Args:
+            hue_wheel: The three-band raster both builders read.
+
+        Test scenario:
+            The failure this catches is an HSV builder that records its recipe and is then drawn by the RGB
+            path anyway — every other check about the layer still passes, and the image is a plausible false
+            colour nobody can spot.
+        """
+        hsv = self._drawn(
+            WebMap().hsv_composite(
+                hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+            )
+        )
+        rgb = self._drawn(
+            WebMap().rgb_composite(
+                hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+            )
+        )
+        assert not np.allclose(hsv, rgb, atol=_ONE_LEVEL), (
+            "the HSV composite encoded the RGB image, so its recipe was not read"
+        )
+
+    def test_a_cell_missing_its_hue_stays_transparent(self, hue_wheel_with_a_gap):
+        """NoData in any channel means no colour, in HSV space as in RGB.
+
+        Args:
+            hue_wheel_with_a_gap: The hue wheel with its first cell's hue set to NoData.
+
+        Test scenario:
+            This is the trap the colour space sets. ``matplotlib.colors.hsv_to_rgb`` reads the hue with
+            ``(h * 6).astype(int)``, and casting NaN gives a garbage index rather than NaN, so fed the masked
+            stack directly it answers a **finite** triple for that cell — measured, ``(0.0, 0.0, 0.0)`` for
+            this fixture's full saturation and value, ``(0.5, 1.04e-311, 1.04e-311)`` for a half-saturated
+            one — and a finite triple is drawn opaque, with only a ``RuntimeWarning`` to say anything
+            happened.
+        """
+        web_map = WebMap().hsv_composite(
+            hue_wheel_with_a_gap, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+        )
+        alpha = self._drawn(web_map)[..., 3]
+        assert alpha[0, 0] == pytest.approx(0.0), (
+            f"a cell with no hue was drawn, at alpha {alpha[0, 0]}"
+        )
+        assert alpha[1, 0] == pytest.approx(1.0), (
+            "the complete cell below it went transparent too"
+        )
+
+    def test_the_figure_records_the_recipe_under_the_shared_kind(self, hue_wheel):
+        """The layer is an ``rgb`` layer — the vocabulary's word for a multi-band colour composite.
+
+        Args:
+            hue_wheel: The three-band raster.
+
+        Test scenario:
+            ``base/registry.py`` defines ``rgb`` as "a multi-band colour composite", naming static's
+            ``hsv_composite`` among the builders that draw it, and the static tier records both composites
+            under it with the recipe in ``via``. A private new kind here would be a fifth vocabulary.
+        """
+        web_map = WebMap().hsv_composite(
+            hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+        )
+        layer = web_map.figure_spec.layers.get("hsv")
+        assert layer.kind == "rgb", layer.kind
+        assert layer.symbology.props["via"] == "hsv_composite", layer.symbology.props
+
+    def test_the_kind_is_declared_and_drawn(self, hue_wheel):
+        """The kind the builder records is in the tier's declaration and in its drawer table.
+
+        Args:
+            hue_wheel: The three-band raster.
+
+        Test scenario:
+            ``drawer_for`` refuses a kind that is not in ``DRAWN_KINDS``, and the tier's capability check
+            reads ``CAPABILITIES.kinds``: a composite recorded under a kind missing from either is a layer
+            that cannot be drawn back from its own figure.
+        """
+        from digitalearth.web.capabilities import CAPABILITIES
+        from digitalearth.web.renderer import DRAWN_KINDS, drawer_for
+
+        web_map = WebMap().hsv_composite(
+            hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+        )
+        kind = web_map.figure_spec.layers.get("hsv").kind
+        assert kind in CAPABILITIES.kinds, sorted(CAPABILITIES.kinds)
+        assert kind in DRAWN_KINDS, sorted(DRAWN_KINDS)
+        assert drawer_for(kind) is web_raster.draw_rgb_composite
+
+    def test_the_figure_can_be_written_and_redrawn(self, hue_wheel):
+        """A stored HSV figure comes back as the same image, through the drawer alone.
+
+        Args:
+            hue_wheel: The three-band raster.
+
+        Test scenario:
+            The builder warps and records; a redraw has no builder, so it warps and composes for itself. If
+            the recipe were held on the map rather than in the description, the redraw would fall back to
+            RGB — and the only symptom is a different image.
+        """
+        web_map = WebMap().hsv_composite(
+            hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+        )
+        figure = web_map.figure_spec
+        json.dumps(figure.layers.get("hsv").symbology.to_dict())
+        redrawn = web_map._renderer.draw_layer(figure, "hsv").source_spec["url"]
+        assert redrawn == web_map._renderer.drawn["hsv"].source_spec["url"], (
+            "the redraw encoded a different image"
+        )
+
+    def test_a_description_with_no_recipe_still_draws_the_rgb_composite(
+        self, hue_wheel
+    ):
+        """A figure written before this tier had two composites means the one it had.
+
+        Args:
+            hue_wheel: The three-band raster.
+
+        Test scenario:
+            Every stored ``rgb`` layer predating ``hsv_composite`` carries no ``via`` at all. Read as
+            "unknown recipe" it would refuse figures that used to draw; read as HSV it would silently redraw
+            them in another colour space.
+        """
+        described = LayerSpec(
+            "rgb",
+            "rgb",
+            symbology=Symbology(
+                props={
+                    "bands": _BANDS,
+                    "mask_nodata": True,
+                    "limits": _UNIT_LIMITS,
+                    "opacity": 1.0,
+                }
+            ),
+        )
+        without_a_recipe = web_raster.draw_rgb_composite(
+            WebMap(), hue_wheel, described
+        ).source_spec["url"]
+        built = WebMap().rgb_composite(
+            hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="rgb"
+        )
+        assert without_a_recipe == built._renderer.drawn["rgb"].source_spec["url"]
+
+    def test_a_recipe_this_tier_does_not_draw_is_refused(self, hue_wheel):
+        """A description naming a composite the tier has no path for says so, rather than drawing RGB.
+
+        Args:
+            hue_wheel: The three-band raster.
+
+        Test scenario:
+            The same answer the static renderer gives an unknown ``via``. Silently drawing the default
+            instead would make a figure from a newer version render as something it does not claim to be.
+        """
+        described = LayerSpec(
+            "rgb",
+            "rgb",
+            symbology=Symbology(
+                props={
+                    "bands": _BANDS,
+                    "mask_nodata": True,
+                    "limits": None,
+                    "opacity": 1.0,
+                    "via": "cmyk_composite",
+                }
+            ),
+        )
+        with pytest.raises(ValueError, match="cmyk_composite"):
+            web_raster.draw_rgb_composite(WebMap(), hue_wheel, described)
+
+    def test_three_bands_are_required_here_too(self, hue_wheel):
+        """The shared guard names this builder, not its sibling.
+
+        Args:
+            hue_wheel: The three-band raster.
+        """
+        with pytest.raises(ValueError, match=r"hsv_composite\(\) needs exactly three"):
+            WebMap().hsv_composite(hue_wheel, bands=(1, 2))
+
+    def test_an_empty_composite_names_this_builder(self):
+        """A stack with nothing to draw is refused in the name of the call that was made.
+
+        Test scenario:
+            The encoder's refusal read ``rgb_composite got a stack with no pixel finite …`` whichever
+            builder reached it. Naming the wrong sibling sends the reader to the wrong call.
+        """
+        empty = _hue_dataset([[-9999.0] * 3] * 2)
+        with pytest.raises(
+            ValueError, match=r"hsv_composite got a stack with no pixel"
+        ):
+            WebMap().hsv_composite(empty, bands=_BANDS)
+
+    def test_an_oversized_composite_warns_in_its_own_name(self, hue_wheel, monkeypatch):
+        """The size advice names the builder the caller used.
+
+        Args:
+            hue_wheel: The three-band raster.
+            monkeypatch: pytest's patcher, used to lower the ceiling rather than build a huge raster.
+
+        Test scenario:
+            The warning is built from the builder's name, which the sibling passed as a literal. Left as it
+            was, a caller of ``hsv_composite`` would be advised about ``rgb_composite``.
+        """
+        from loguru import logger
+
+        monkeypatch.setattr(web_raster, "_LARGE_RASTER_PIXELS", 1)
+        records = []
+        sink_id = logger.add(records.append, level="WARNING")
+        try:
+            WebMap().hsv_composite(hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS)
+        finally:
+            logger.remove(sink_id)
+        assert any("hsv_composite" in str(record) for record in records), records
+
+    def test_the_two_tiers_agree_on_the_shared_parameters(self):
+        """Every parameter both tiers' ``hsv_composite`` take is spelled and defaulted the same.
+
+        Test scenario:
+            The issue's first condition is that the tiers agree on the name and the parameter names. The
+            defaults are compared too, since ``mask_nodata=False`` on one tier and ``True`` on the other
+            would be the same divergence one level down. What each tier adds of its own — this tier's
+            ``opacity``, the static tier's ``**opts`` — is outside the shared set and left alone.
+        """
+        from digitalearth.static.maps.raster import RasterMixin as StaticRaster
+
+        here = inspect.signature(WebMap.hsv_composite).parameters
+        there = inspect.signature(StaticRaster.hsv_composite).parameters
+        shared = [name for name in there if name in here and name != "self"]
+        assert shared == [
+            "dataset",
+            "bands",
+            "mask_nodata",
+            "limits",
+            "name",
+            "visible",
+        ]
+        assert [(name, here[name].default) for name in shared] == [
+            (name, there[name].default) for name in shared
+        ]
+
+    def test_the_two_tiers_draw_the_same_composite(self, hue_wheel):
+        """The same call on both tiers produces the same pixels, run side by side.
+
+        Args:
+            hue_wheel: A raster already in lon/lat, so neither tier resamples and the only difference left
+                would be the composite itself.
+
+        Test scenario:
+            "The tiers agree" is a claim about output. Both are handed the same dataset, the same bands and
+            the same frozen limits; the static tier's image comes off its axes and this tier's out of the
+            PNG the widget was given, and the two are compared to one 8-bit level.
+        """
+        from digitalearth.static import Map
+
+        with Map(crs=4326) as static_map:
+            static_map.hsv_composite(hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS)
+            drawn_there = np.asarray(static_map.ax.images[-1].get_array())
+        drawn_here = self._drawn(
+            WebMap().hsv_composite(
+                hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"
+            )
+        )[..., :3]
+        assert np.allclose(drawn_there, drawn_here, atol=_ONE_LEVEL), (
+            f"static drew\n{drawn_there}\nweb drew\n{drawn_here}"
         )
