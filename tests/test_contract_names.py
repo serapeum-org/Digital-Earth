@@ -608,7 +608,50 @@ class TestWhatARoadmapOrderPromises:
 
 
 class TestAPlannedRenameIsNotAnAlias:
-    """Review M5 — `ALIASES` promises the old name works; a rename nobody has adopted promises nothing."""
+    """Review M5 — `ALIASES` promises the old name works; a rename nobody has adopted promises nothing.
+
+    **`PLANNED_RENAMES` is empty as of order 27a**, which adopted all six rows it held. The two checks over
+    the live table therefore iterate nothing and cannot fail — and a check that cannot fail is a finding
+    rather than a convenience, because the day a seventh rename is agreed it ships under a guard nobody has
+    seen work. So each is paired with the same predicate applied to a **synthetic** one-row table, which is
+    what keeps the rule itself exercised while the real table is empty. The synthetic rows are deliberately
+    built from a live alias (`Map.imshow -> field`), so they describe a shape the package really has: a
+    method present under its old name, and one present under both.
+    """
+
+    #: A planned rename that does describe the tier, for the predicate checks: `Map` has `imshow`, so a row
+    #: naming it as the *old* spelling of something the tier does **not** have is well-formed.
+    UNADOPTED = {"imshow": "a_name_no_tier_has"}
+
+    #: A planned rename that no longer describes the tier: `Map` has both `imshow` and `field`, so the row
+    #: has been adopted and belongs in `ALIASES`.
+    ADOPTED = {"imshow": "field"}
+
+    @staticmethod
+    def _missing(facade, table) -> list:
+        """Return the old spellings a table names that the facade does not have.
+
+        Args:
+            facade: The tier's facade class.
+            table: A `{old: new}` mapping.
+
+        Returns:
+            The old names, so a row naming nothing is reported.
+        """
+        return [old for old in table if not hasattr(facade, old)]
+
+    @staticmethod
+    def _adopted(facade, table) -> list:
+        """Return the rows whose *new* spelling the facade already answers to.
+
+        Args:
+            facade: The tier's facade class.
+            table: A `{old: new}` mapping.
+
+        Returns:
+            The old names, so a row the tier has already adopted is reported.
+        """
+        return [old for old, new in table.items() if hasattr(facade, new)]
 
     @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
     def test_the_old_name_is_what_the_tier_still_calls_it(self, backend):
@@ -616,12 +659,30 @@ class TestAPlannedRenameIsNotAnAlias:
 
         Args:
             backend: The tier under test.
+
+        Test scenario:
+            Vacuous while `PLANNED_RENAMES` is empty, and kept for the row that comes next;
+            :meth:`test_the_predicate_reports_a_row_naming_a_method_nobody_has` is what shows the predicate
+            still works.
         """
         from digitalearth.base.contract import planned_renames
 
         facade = _facade(backend)
-        missing = [old for old in planned_renames(backend) if not hasattr(facade, old)]
+        missing = self._missing(facade, planned_renames(backend))
         assert missing == [], f"{backend} has no {missing}, so the rename names nothing"
+
+    def test_the_predicate_reports_a_row_naming_a_method_nobody_has(self):
+        """The check above, run against a table that really breaks the rule.
+
+        Test scenario:
+            The rule is "an unadopted rename's *old* name is what the tier calls the method today". A row
+            whose old spelling is absent names nothing, and has to be reported — asked of a synthetic table
+            because the real one is empty.
+        """
+        facade = _facade("matplotlib")
+        assert self._missing(facade, {"a_name_no_tier_has": "field"}) == [
+            "a_name_no_tier_has"
+        ]
 
     @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
     def test_a_planned_rename_is_not_claimed_as_live(self, backend):
@@ -631,19 +692,42 @@ class TestAPlannedRenameIsNotAnAlias:
             backend: The tier under test.
 
         Test scenario:
-            This is the guard that makes the split self-correcting. When a tier's seam lands and adopts a
-            rename, moving the entry to `ALIASES` is what makes the liveness tests above cover it — and
-            leaving it here is what this test refuses once the new name exists.
+            This is the guard that makes the split self-correcting, and it is the one that fired when order
+            27a adopted the six ("matplotlib has adopted ['imshow', 'scatter', 'shapes']; move them to
+            ALIASES so their liveness is checked"). Vacuous now that the table is empty, so
+            :meth:`test_the_predicate_reports_a_row_the_tier_has_already_adopted` keeps the predicate itself
+            under test.
         """
         from digitalearth.base.contract import planned_renames
 
         facade = _facade(backend)
-        adopted = [
-            old for old, new in planned_renames(backend).items() if hasattr(facade, new)
-        ]
+        adopted = self._adopted(facade, planned_renames(backend))
         assert adopted == [], (
             f"{backend} has adopted {adopted}; move them to ALIASES so their liveness is checked"
         )
+
+    def test_the_predicate_reports_a_row_the_tier_has_already_adopted(self):
+        """And the same for the overlap rule, against a table that really breaks it.
+
+        Test scenario:
+            `Map` answers to both `imshow` and `field` — the first as a live alias for the second — so a
+            `PLANNED_RENAMES` row saying `imshow` is *to become* `field` would be claiming the rename has
+            not happened. That is what the predicate has to report.
+        """
+        facade = _facade("matplotlib")
+        assert self._adopted(facade, self.ADOPTED) == ["imshow"]
+
+    def test_the_unadopted_shape_is_reported_as_neither(self):
+        """The negative control: a well-formed unadopted row must trip neither predicate.
+
+        Test scenario:
+            Two checks that reported every table would pass the two above and be useless. A row whose old
+            spelling the tier has and whose new spelling it does not is exactly what `PLANNED_RENAMES` is
+            for, and it has to come back clean from both.
+        """
+        facade = _facade("matplotlib")
+        assert self._missing(facade, self.UNADOPTED) == []
+        assert self._adopted(facade, self.UNADOPTED) == []
 
 
 class TestTheUnseamedTiersDeclareTheirGap:

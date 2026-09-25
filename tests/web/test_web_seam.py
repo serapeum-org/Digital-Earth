@@ -346,6 +346,12 @@ PATH_BACKED_BUILDERS = {
         RASTER_PATH,
         lambda m, path: m.rgb_composite(path, bands=(1, 1, 1)),
     ),
+    # Added with #266: a composite takes a path exactly as its sibling does, and a web figure that cannot be
+    # written down from one is a figure that cannot leave the process that made it.
+    "hsv_composite": (
+        RASTER_PATH,
+        lambda m, path: m.hsv_composite(path, bands=(1, 1, 1)),
+    ),
     "points": (VECTOR_PATH, lambda m, path: m.points(path)),
     "lines": (VECTOR_PATH, lambda m, path: m.lines(path)),
     "polygons": (VECTOR_PATH, lambda m, path: m.polygons(path)),
@@ -612,6 +618,14 @@ _RASTER_BUILDERS = [
     pytest.param(
         lambda m, ds: m.rgb_composite(ds, bands=(1, 1, 1), name="dem"),
         id="rgb_composite",
+    ),
+    # `hsv_composite` landed with #266 and draws through the same recipe as `rgb_composite`, so every
+    # promise below — a declined layer letting its data go, a refused one giving back its name — is one it
+    # makes too. It was missing here while its own module covered the equivalent properties; both composites
+    # are in the list now, so the two cannot diverge on what a dropped layer leaves behind.
+    pytest.param(
+        lambda m, ds: m.hsv_composite(ds, bands=(1, 1, 1), name="dem"),
+        id="hsv_composite",
     ),
 ]
 

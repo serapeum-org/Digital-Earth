@@ -35,7 +35,7 @@ from digitalearth.base.capabilities import Capabilities
 __all__ = ["CAPABILITIES"]
 
 #: The static tier's declaration. The kinds are the builders `Map` composes — the registry's own
-#: descriptions name them (`raster` is "static imshow", `flow` is "static sankey") — and the schemes are the
+#: descriptions name them (`raster` is "static field", `flow` is "static sankey") — and the schemes are the
 #: shared classifier's, so one `scheme`/`k` pair paints the same classes here as on every other tier
 #: (contract C4). `categorical` is among them for the vector glyphs; cleopatra's `ArrayGlyph` refuses it,
 #: since a raster's cells are a continuous field rather than nominal labels.
@@ -113,7 +113,7 @@ CAPABILITIES = Capabilities(
             "a sequence over time is written out as an animation here rather than scrubbed, which is what "
             "`animate` is"
         ),
-        "navigation": "there is no viewport to pan: the extent is set by `set_extent` before drawing",
+        "navigation": "there is no viewport to pan: the extent is set by `set_bounds` before drawing",
         "fullscreen": "a saved image has no screen to fill; its size is the figure's",
         "measure": "there is no pointer to measure with; a distance is drawn as a layer of its own",
         "attribution": (

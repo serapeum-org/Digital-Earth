@@ -186,7 +186,10 @@ def _clauses() -> tuple[Clause, ...]:
             title="one big_data_threshold, two reaches",
             rule=(
                 "One `big_data_threshold` over one shared default: an attribute on the map and a per-call "
-                "override on the builder, with one deprecated alias."
+                "override of the same name on the builder. Where a tier already spelled that cutoff another "
+                "way, the old spelling keeps working for one release and warns, naming this one; a tier that "
+                "never had another spelling keeps the clause by having no alias, rather than by inventing a "
+                "keyword in order to deprecate it."
             ),
             issues=(250,),
         ),

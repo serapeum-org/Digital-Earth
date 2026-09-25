@@ -517,7 +517,7 @@ class TestBuilderChaining:
         [
             ("digitalearth.web.map", "WebMap", "add_layer"),
             ("digitalearth.web.map", "WebMap", "add_underlay"),
-            ("digitalearth.interactive.map", "InteractiveMap", "add_element"),
+            ("digitalearth.interactive.map", "InteractiveMap", "add_layer"),
         ],
         ids=["web-add_layer", "web-add_underlay", "interactive-add_element"],
     )

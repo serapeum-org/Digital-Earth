@@ -257,22 +257,78 @@ class TestTheRenamesNobodyHasAdopted:
             answers to when a caller gets it. A row belongs here only when the tier already draws the thing
             and the spelling is all that is missing, which is exactly what `_drawn_as` says; a row whose
             reason says something else is a capability gap wearing a rename's clothes.
+
+            **Vacuous while `PLANNED_RENAMES` is empty** (order 27a adopted all six), and kept because it is
+            what the seventh row will be held to.
+            :meth:`test_the_pairing_rule_refuses_a_row_whose_core_name_is_pending_for_another_reason` keeps
+            the rule itself exercised meanwhile, against a synthetic table — a check that cannot fail is a
+            guard nobody has seen work.
+        """
+        assert self._pairing(PLANNED_RENAMES) == ({}, {})
+
+    @staticmethod
+    def _pairing(table, pending=None):
+        """Return the pairing this rule compares: what `PENDING` states, and what the renames imply.
+
+        Args:
+            table: A `{backend: {old: new}}` mapping in `PLANNED_RENAMES`' shape.
+            pending: The `{backend: {name: reason}}` mapping to read the stated reasons from; the real
+                :data:`~digitalearth.base.contract.PENDING` when omitted. Taken as an argument so the two
+                checks below can pair a synthetic rename against a synthetic reason and show the rule
+                answering both ways while the live table is empty.
+
+        Returns:
+            `(stated, expected)` — the reason filed against each Core name, and the `_drawn_as` reason its
+            rename implies. Equal when the two tables date the same arrival the same way.
         """
         from digitalearth.base.contract import _drawn_as
 
+        filed = PENDING if pending is None else pending
         stated = {
-            (backend, new): PENDING.get(backend, {}).get(new)
-            for backend, table in PLANNED_RENAMES.items()
-            for new in table.values()
+            (backend, new): filed.get(backend, {}).get(new)
+            for backend, renames in table.items()
+            for new in renames.values()
         }
         expected = {
             (backend, new): _drawn_as(old)
-            for backend, table in PLANNED_RENAMES.items()
-            for old, new in table.items()
+            for backend, renames in table.items()
+            for old, new in renames.items()
         }
+        return stated, expected
+
+    def test_the_pairing_rule_refuses_a_row_whose_core_name_is_pending_for_another_reason(
+        self,
+    ):
+        """The rule above, run against a table that really breaks it.
+
+        Test scenario:
+            The defect R-L4 named: a rename claiming the tier draws the thing already, while `PENDING` dates
+            the Core name at a *capability* order instead. `lines` is pending on the static tier for #226 —
+            "line features on the static tier" — so a row claiming `lines` is merely `path` renamed would
+            pair a `_drawn_as` reason against an issue about building it, and the two sides must differ.
+        """
+        stated, expected = self._pairing({"matplotlib": {"path": "lines"}})
+        assert stated != expected, (
+            f"a rename whose Core name is pending for a capability reason paired cleanly: {stated}"
+        )
+
+    def test_the_pairing_rule_accepts_a_row_whose_reason_is_the_rename(self):
+        """The negative control, so the check above is not passing by refusing everything.
+
+        Test scenario:
+            A rule that reported every table would satisfy the check above and be useless. The same
+            synthetic rename is paired against a synthetic `PENDING` that gives the reason `_drawn_as` says
+            it should — "drawn as path() here" — and the two sides have to agree.
+        """
+        from digitalearth.base.contract import _drawn_as
+
+        stated, expected = self._pairing(
+            {"matplotlib": {"path": "lines"}},
+            {"matplotlib": {"lines": _drawn_as("path")}},
+        )
         assert stated == expected, (
-            "a planned rename's Core name is not pending for the reason the rename gives; either the tier "
-            "draws it under the old name, or the entry does not belong in PLANNED_RENAMES"
+            f"a rename whose Core name is pending for the rename's own reason did not pair: {stated} vs "
+            f"{expected}"
         )
 
 
