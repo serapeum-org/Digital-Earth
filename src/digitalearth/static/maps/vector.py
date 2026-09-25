@@ -53,6 +53,10 @@ _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streaml
 #: deprecated-alias resolution all speak for the same public call, so they share the one spelling.
 _POINTS_CALLER = "Map.points()"
 
+#: The public method the opacity channel's rename is attributed to. Named once because the resolver's
+#: message quotes it and a second spelling of the same method name would read as a second method.
+_CHOROPLETH_CALLER = "Map.choropleth()"
+
 #: The frame :func:`_skips_off_limb` puts between a builder it wraps and that builder's caller. A deprecation
 #: warning raised inside such a builder counts it, or it lands on the wrapper's line instead of the caller's —
 #: and Python's default filters show a ``DeprecationWarning`` only when it is attributed to ``__main__``, so a
@@ -1688,6 +1692,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: Optional[Any] = None,
+        opacity: Optional[float] = None,
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
@@ -1713,6 +1718,13 @@ class VectorMixin(_MixinBase):
                 ramp has no classes and is left to matplotlib.
             k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
                 ``"categorical"``).
+            opacity: How opaque the fill is, in ``[0, 1]``. This is the spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                matplotlib's own ``alpha`` is the deprecated spelling of it, still accepted (with a
+                ``DeprecationWarning``) for one release; passing both is a ``TypeError``. ``None`` (default)
+                sets no opacity at all, which is not the same as ``1.0``: it leaves the colormap's own alpha
+                channel in force.
             cmap: The colormap the fill is drawn with, forwarded to ``PolygonGlyph`` exactly as a
                 ``cmap=`` in ``**opts`` always was. Named in the signature because the Core declares it
                 as a keyword of ``choropleth`` on every tier, and a keyword that works but is not
@@ -1767,6 +1779,19 @@ class VectorMixin(_MixinBase):
             # Straight back into the caller's keywords: this is where `cmap=` has always travelled, so
             # naming it in the signature documents the keyword without moving it.
             opts["cmap"] = cmap
+        # The channel is named `opacity` here and `alpha` where it reaches matplotlib, so it is resolved at
+        # the public boundary and travels on under the engine's own spelling — exactly where a caller's
+        # `alpha=` always went. `+ _GUARD_FRAMES` because `_skips_off_limb` sits between this and the call.
+        resolved = renamed_parameter(
+            new="opacity",
+            value=opacity,
+            old="alpha",
+            alias=opts.pop("alpha", None),
+            caller=_CHOROPLETH_CALLER,
+            stacklevel=3 + _GUARD_FRAMES,
+        )
+        if resolved is not None:
+            opts["alpha"] = resolved
         return self._draw(
             LayerRecord(
                 # A column is required, so the polygons are always filled by a value: a choropleth.

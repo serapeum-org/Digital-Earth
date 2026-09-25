@@ -73,11 +73,6 @@ EVERY_TIER: Tuple[str, ...] = tuple(sorted(FACADES))
 KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
     MappingProxyType(
         {
-            ("matplotlib", "choropleth"): (
-                ("opacity",),
-                "spelled alpha here, which reaches cleopatra through **opts; adopting the Core spelling "
-                "is order 27a",
-            ),
             # The five rows the Core renames surfaced. Each of these methods answered to the tier's own
             # spelling until order 27a, so `pending_for` excused it from this check entirely and the
             # divergence was invisible — adopting the Core name is what makes the keywords measurable.
@@ -133,20 +128,12 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 "the Core name and the chainable return landed at order 27a; padding, and the None that "
                 "fits the figure to its data, are auto-framing — order 26",
             ),
-            ("interactive", "points"): (
-                ("column", "opacity"),
-                "column is spelled value_column, and opacity is spelled alpha through **opts — order 27a",
-            ),
             ("interactive", "polygons"): (
-                ("k", "opacity", "scheme"),
+                ("k", "scheme"),
                 # This said the scheme/k half was "unscheduled", and #331 — open, and titled for exactly
-                # this gap — schedules it. A reason may say `unscheduled` only where nothing does.
-                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all — "
-                "#331; opacity is spelled alpha through **opts — order 27a",
-            ),
-            ("interactive", "choropleth"): (
-                ("opacity",),
-                "spelled alpha here, which reaches HoloViews through **opts — order 27a",
+                # this gap — schedules it. A reason may say `unscheduled` only where nothing does. The
+                # `opacity` half came off when order 27a took the keyword (#332).
+                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all — #331",
             ),
             ("interactive", "colorbar"): (
                 ("label", "layer_id", "visible"),

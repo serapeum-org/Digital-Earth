@@ -135,14 +135,18 @@ SIZE = 7.0
 OPACITY = 0.25
 COLOUR = "#cc4444"
 
-#: The same three channels, in each tier's own keyword spelling.
+#: The three channels, in the one keyword spelling both tiers now take.
 #:
-#: The web tier's opacity keyword is `opacity=` and the interactive tier's is `alpha=`. That disagreement is
-#: filed as #332 and is **not** reconciled here: the promise this probe holds is that the two describe one
-#: *channel*, whatever each calls the keyword that sets it, so the two spellings sit side by side.
+#: **They used to differ**: the web tier's opacity keyword was `opacity=` and the interactive tier's was
+#: `alpha=`, and this table carried both side by side because the promise being held is that the two describe
+#: one *channel* whatever each calls the keyword. Order 27a closed that (#332) — `opacity=` is the Core
+#: spelling on both, with `alpha=` a deprecated alias on the interactive tier for one release — so the table
+#: is one dict per tier of the same keywords. It stays keyed by tier rather than collapsing to one dict,
+#: because the next divergence the probe has to straddle will need it again, and because the probe's point is
+#: that two tiers are asked *separately* and answer alike.
 CROSS_TIER_STYLE: dict[str, dict] = {
     "web": {"size": SIZE, "opacity": OPACITY, "color": COLOUR},
-    "interactive": {"size": SIZE, "alpha": OPACITY, "color": COLOUR},
+    "interactive": {"size": SIZE, "opacity": OPACITY, "color": COLOUR},
 }
 
 #: What either tier must say the styled layer draws: channel -> the value the caller asked for, sorted.
@@ -1326,10 +1330,11 @@ class TestOneStyledLayerDescribesOneChannelOnBothTiers:
     could not fail on its own, since in the only environment where it ran both sides had already been
     asserted equal to that constant (review R2-L10).
 
-    The layer is styled explicitly, in each tier's own keyword spelling (:data:`CROSS_TIER_STYLE`): the web
-    tier's opacity keyword is `opacity=` and the interactive tier's is `alpha=` (#332). The promise is not
-    that the keywords match — it is that both describe the same *channel*, which is the whole reason a
-    channel vocabulary exists.
+    The layer is styled explicitly, through :data:`CROSS_TIER_STYLE`. The web tier's opacity keyword was
+    `opacity=` and the interactive tier's was `alpha=`, and the promise held here was never that the keywords
+    match — it is that both describe the same *channel*, which is the whole reason a channel vocabulary
+    exists. Order 27a made the keywords match too (#332), so the table now carries one spelling; the promise
+    is unchanged, and it is the one that would survive the next divergence.
 
     The declaration check runs in **every** environment, so this class cannot become the thing this module
     was written to prevent: a contract that reads green because nothing collected it.

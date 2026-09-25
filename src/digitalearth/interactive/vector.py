@@ -19,7 +19,7 @@ import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
-from digitalearth.base.deprecation import renamed_method
+from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
 from digitalearth.base.symbology import sample_cmap
@@ -88,6 +88,54 @@ def _as_labels(gdf: Any, column: str, missing: str) -> Any:
     absent = gdf[column].isna()
     gdf[column] = gdf[column].astype(str).mask(absent, missing)
     return gdf
+
+
+#: Frames between `renamed_parameter` and the caller when a builder resolves a keyword **itself**:
+#: helper -> builder -> `_skips_off_limb`'s wrapper -> the caller. Named once because a hand-copied number is
+#: one refactor away from blaming this module instead of the notebook cell that wrote the deprecated keyword.
+INLINE_STACKLEVEL = 4
+
+#: And one more when a shared resolver sits in between — helper -> resolver -> builder -> wrapper -> caller.
+#: The same count `_resolve_big_data_threshold` passes, for the same reason and with the same shape.
+RESOLVER_STACKLEVEL = INLINE_STACKLEVEL + 1
+
+
+def resolve_opacity(
+    opacity: Optional[float], opts: dict, *, caller: str
+) -> Optional[float]:
+    """Resolve the opacity channel from either spelling, taking the deprecated one out of ``opts``.
+
+    ``opacity`` is what :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract call it, and
+    what the web and 3-D tiers take; HoloViews reads ``alpha``, which is the spelling this tier forwarded
+    through ``**opts`` (#332). Both are accepted for one release, through the one rename rule every backend
+    shares, so two spellings of one channel are refused here exactly as they are everywhere else.
+
+    Args:
+        opacity: What the caller passed under the Core name; ``None`` means "not passed".
+        opts: The caller's remaining engine keywords, mutated: a deprecated ``alpha`` is removed from it, so
+            the builder can put the resolved value back under the engine's own spelling without the two
+            colliding.
+        caller: The public builder the keywords were written on, named in the warning and the error.
+
+    Returns:
+        The opacity to draw with, or ``None`` when neither spelling was given — which is **not** the same as
+        ``1.0``: it leaves the engine's own default in force, and leaves a colormap's alpha channel alone.
+
+    Raises:
+        TypeError: when both spellings are passed. They name one channel, so two values for it cannot both
+            be honoured.
+
+    Warns:
+        DeprecationWarning: when ``alpha=`` was the spelling used, naming ``opacity=`` as its replacement.
+    """
+    return renamed_parameter(
+        new="opacity",
+        value=opacity,
+        old="alpha",
+        alias=opts.pop("alpha", None),
+        caller=caller,
+        stacklevel=RESOLVER_STACKLEVEL,
+    )
 
 
 def _vector_symbology(
@@ -506,11 +554,13 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
+        column: Optional[str] = None,
         value_column: Optional[str] = None,
         scheme: Optional[Any] = None,
         k: int = 5,
         size: float = 6.0,
         cmap: str = "viridis",
+        opacity: Optional[float] = None,
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
         rasterize_threshold: Optional[int] = None,
@@ -524,7 +574,18 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
                 display CRS through pyramids when needed. A path or URL naming one is taken too, and is
                 the only input a figure carrying this layer can be written down with.
-            value_column: Optional numeric column colouring the points (also shown on hover).
+            column: The column colouring the points (also shown on hover). The Core spelling, and the one
+                ``polygons`` and ``choropleth`` on this tier already used — ``value_column`` was a second
+                name for one concept (#332). ``value_column`` keeps working for one release and warns;
+                passing both is a ``TypeError``.
+            value_column: **Deprecated** spelling of ``column``.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews' own ``alpha`` is the deprecated spelling of it, still accepted (with a
+                ``DeprecationWarning``) for one release; passing both is a ``TypeError``. ``None`` (default)
+                hands the engine no opacity at all, which is not ``1.0``: it leaves a colormap's own alpha
+                channel in force.
             scheme: Optional classification scheme for ``value_column`` — ``None`` (the default) is a
                 continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts it into ``k``
@@ -584,6 +645,19 @@ class VectorMixin(_MixinBase):
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
+        value_column = renamed_parameter(
+            new="column",
+            value=column,
+            old="value_column",
+            alias=value_column,
+            caller="InteractiveMap.points()",
+            stacklevel=INLINE_STACKLEVEL,
+        )
+        resolved_opacity = resolve_opacity(
+            opacity, opts, caller="InteractiveMap.points()"
+        )
+        if resolved_opacity is not None:
+            opts["alpha"] = resolved_opacity
         if scheme is not None and not value_column:
             # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
             # styling request, which is exactly what this tier stopped doing elsewhere (review M2).
@@ -705,6 +779,7 @@ class VectorMixin(_MixinBase):
         *,
         column: Optional[str] = None,
         cmap: str = "viridis",
+        opacity: Optional[float] = None,
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
         rasterize_threshold: Optional[int] = None,
@@ -718,6 +793,13 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
                 pyramids when needed. A path or URL naming one is taken too, and is the only input a
                 figure carrying this layer can be written down with.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews' own ``alpha`` is the deprecated spelling of it, still accepted (with a
+                ``DeprecationWarning``) for one release; passing both is a ``TypeError``. ``None`` (default)
+                hands the engine no opacity at all, which is not ``1.0``: it leaves a colormap's own alpha
+                channel in force.
             column: Optional numeric column filling the polygons (also shown on hover); ``None``
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
@@ -765,6 +847,11 @@ class VectorMixin(_MixinBase):
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
                 ``big_data_threshold=``.
         """
+        resolved_opacity = resolve_opacity(
+            opacity, opts, caller="InteractiveMap.polygons()"
+        )
+        if resolved_opacity is not None:
+            opts["alpha"] = resolved_opacity
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.polygons()"
         )
@@ -1130,6 +1217,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[str] = None,
         k: int = 5,
         cmap: str = "viridis",
+        opacity: Optional[float] = None,
         clim: Optional[Tuple[float, float]] = None,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1161,6 +1249,13 @@ class VectorMixin(_MixinBase):
                 ``5`` is the shared cross-tier default (#246).
             cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
                 left at the default); sampled once per class for a graduated scheme.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews' own ``alpha`` is the deprecated spelling of it, still accepted (with a
+                ``DeprecationWarning``) for one release; passing both is a ``TypeError``. ``None`` (default)
+                hands the engine no opacity at all, which is not ``1.0``: it leaves a colormap's own alpha
+                channel in force.
             clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
@@ -1194,6 +1289,11 @@ class VectorMixin(_MixinBase):
             raise KeyError(
                 f"choropleth column {column!r} not found in the feature attributes"
             )
+        resolved_opacity = resolve_opacity(
+            opacity, opts, caller="InteractiveMap.choropleth()"
+        )
+        if resolved_opacity is not None:
+            opts["alpha"] = resolved_opacity
         if isinstance(scheme, str) and scheme.lower() == "categorical":
             return self._categorical_polygons(
                 features, column, cmap=cmap, name=name, visible=visible, **opts
