@@ -43,6 +43,7 @@ from digitalearth.base.spec import (
 )
 from digitalearth.three_d.layer import next_layer_id, stored_props
 from digitalearth.three_d.renderer import Renderer3D
+from digitalearth.three_d.views import named_view
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
@@ -1536,18 +1537,7 @@ class Scene3DBase:
                 vertical_exaggeration=self.vertical_exaggeration,
                 crs=self.display_crs,
             )
-        live = self._plotter.camera
-        parallel = bool(live.parallel_projection)
-        return Camera(
-            position=_vector3(live.position),
-            focal_point=_vector3(live.focal_point),
-            view_up=_vector3(live.up),
-            view_angle=float(live.view_angle),
-            parallel=parallel,
-            parallel_scale=float(live.parallel_scale) if parallel else None,
-            vertical_exaggeration=self.vertical_exaggeration,
-            crs=self.display_crs,
-        )
+        return self._live_camera()
 
     @camera.setter
     def camera(self, camera: Camera) -> None:
@@ -1599,6 +1589,84 @@ class Scene3DBase:
         live.parallel_projection = bool(self._camera.parallel)
         if self._camera.parallel and self._camera.parallel_scale is not None:
             live.parallel_scale = float(self._camera.parallel_scale)
+
+    def _live_camera(self) -> Camera:
+        """Read the plotter's current viewpoint as a :class:`~digitalearth.base.spec.Camera`.
+
+        The read half of the round-trip, split out of :attr:`camera` because :meth:`view` needs it too: a named
+        view is applied by PyVista and then has to be *captured*, or :meth:`_apply_camera` would write the
+        scene's own camera back over it before the next frame.
+
+        Returns:
+            The live view, carrying the scene's vertical exaggeration and display CRS.
+        """
+        live = self.plotter.camera
+        parallel = bool(live.parallel_projection)
+        return Camera(
+            position=_vector3(live.position),
+            focal_point=_vector3(live.focal_point),
+            view_up=_vector3(live.up),
+            view_angle=float(live.view_angle),
+            parallel=parallel,
+            parallel_scale=float(live.parallel_scale) if parallel else None,
+            vertical_exaggeration=self.vertical_exaggeration,
+            crs=self.display_crs,
+        )
+
+    def view(self, name: str) -> Self:
+        """Look at the scene from a named view — ``"top"``, ``"front"``, ``"isometric"``, ….
+
+        The one-word half of the camera API. :attr:`camera` says exactly where to stand; this says it the way a
+        figure caption does, over PyVista's own ``view_*`` methods, which frame the scene's current bounds from
+        a direction. The names are a table a caller can add to
+        (:func:`~digitalearth.three_d.views.register_view`), not a fixed list of methods.
+
+        The view is **captured**, not only applied: PyVista aims its camera, the scene reads the result back as
+        a `Camera` and stores it. That is what makes the viewpoint survive the next render — which writes the
+        stored camera onto the plotter — and what puts it on the figure's panel, in `to_dict()`, and anywhere
+        else the view is read.
+
+        Args:
+            name: The view's name, as :func:`~digitalearth.three_d.views.view_names` lists it.
+
+        Returns:
+            The scene, so a view chains with the builders.
+
+        Raises:
+            KeyError: for a name nothing registered; the message lists the names that do exist.
+
+        Examples:
+            - Look at a DEM from straight above, and read the viewpoint back:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(dem))
+                >>> camera = scene.view("top").camera
+                >>> camera.position[2] > camera.focal_point[2]
+                True
+                >>> scene.close()
+
+                ```
+            - The presets are absolute viewpoints, not turns, so the last one wins:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> position = scene.view("top").view("front").camera.position
+                >>> position[1] < 0.0, round(position[2], 6)
+                (True, 0.0)
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            digitalearth.three_d.views: the table, and how to put a view of your own in it.
+        """
+        named_view(name).apply(self.plotter)
+        self.camera = self._live_camera()
+        return self
 
     def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
