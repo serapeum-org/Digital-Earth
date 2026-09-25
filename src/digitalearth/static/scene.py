@@ -36,6 +36,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Self,
     Sequence,
     Set,
     Tuple,
@@ -963,7 +964,7 @@ class Scene(WatermarkMixin):
         """
         return disjoint_legend(self.ax, colors, labels, **kwargs)
 
-    def set_title(self, title: str, **kwargs) -> None:
+    def set_title(self, title: str, **kwargs) -> Self:
         """Set the axes title.
 
         Figure-level decoration rather than a layer: it draws straight onto :attr:`ax` and is not described,
@@ -972,8 +973,14 @@ class Scene(WatermarkMixin):
         Args:
             title: The text to place above the axes.
             **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …).
+
+        Returns:
+            This scene, so figure decoration reads as one expression. The Core declares
+            ``returns="self"`` for this name and the web tier already answers that way; returning ``None``
+            here meant the same line chained on one tier and raised on the other (order 27a, #265).
         """
         self.ax.set_title(title, **kwargs)
+        return self
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the figure (delegates to cleopatra's ``WatermarkMixin.stamp_mark``).
