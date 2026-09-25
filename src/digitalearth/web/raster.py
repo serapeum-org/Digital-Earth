@@ -118,6 +118,31 @@ def _warn_if_large(caller: str, noun: str, pixels: Optional[int]) -> None:
     )
 
 
+def _limit_pairs(limits: Any) -> Optional[List[Tuple[Any, ...]]]:
+    """Return per-channel limits as a list of pairs, or `None` when they are not shaped like any.
+
+    The one guard both limit translators need, and the one each had its own copy of. Neither of them is the
+    place a malformed ``limits=`` is diagnosed: :func:`~digitalearth.base.stretch.stretch_to_unit` owns that
+    message and names the argument, so a value this cannot read is handed back to the caller untouched to
+    reach it — rather than failing here, on iterating a float or unpacking a triple, as a `TypeError` about a
+    private helper nobody called.
+
+    Args:
+        limits: The caller's `limits=`, already known not to be `None`.
+
+    Returns:
+        One tuple per channel when `limits` is an iterable of two-element pairs; `None` for anything else,
+        including a bare number and a sequence of triples.
+    """
+    try:
+        pairs = [tuple(pair) for pair in limits]
+    except TypeError:
+        return None
+    if any(len(pair) != 2 for pair in pairs):
+        return None
+    return pairs
+
+
 def _recorded_limits(limits: Any) -> Any:
     """Return per-channel stretch limits in the spelling a figure can be written in.
 
@@ -138,11 +163,8 @@ def _recorded_limits(limits: Any) -> Any:
     """
     if limits is None:
         return None
-    try:
-        pairs = [tuple(pair) for pair in limits]
-    except TypeError:
-        return limits
-    if any(len(pair) != 2 for pair in pairs):
+    pairs = _limit_pairs(limits)
+    if pairs is None:
         return limits
     try:
         return tuple(
@@ -170,11 +192,8 @@ def _stretch_limits(limits: Any) -> Any:
     """
     if limits is None:
         return None
-    try:
-        pairs = [tuple(pair) for pair in limits]
-    except TypeError:
-        return limits
-    if any(len(pair) != 2 for pair in pairs):
+    pairs = _limit_pairs(limits)
+    if pairs is None:
         return limits
     return [
         tuple(float("nan") if value is None else value for value in pair)
