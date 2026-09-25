@@ -81,6 +81,44 @@ class ContourInterval:
             )
 
 
+#: How many levels `contours` traces when the caller names none and the band's variable carries none. Ten,
+#: which is what the interactive tier has always fallen back to and what matplotlib's own `levels=10` means,
+#: so the same call describes the same number of levels on either tier (#262).
+DEFAULT_CONTOUR_LEVELS = 10
+
+
+def _even_levels(source: Any, count: int) -> list:
+    """Return ``count`` levels evenly spaced strictly inside a band's finite range.
+
+    **Strictly inside** on purpose: a level sitting exactly on the minimum or the maximum traces the frame's
+    edge or nothing at all, so `count` levels between the two extremes is `count` contours a reader can see.
+    That is also what matplotlib's own `levels=<int>` produces in effect, and what the interactive tier's
+    fallback hands HoloViews.
+
+    Args:
+        source: The display-CRS :class:`~digitalearth.base.sources.source.Source` for the band being traced.
+        count: How many levels to cut the range into.
+
+    Returns:
+        The levels, as plain floats so a figure can be written down with them.
+
+    Raises:
+        ValueError: when the band has no finite values, or they are all the same — there is genuinely
+            nothing to contour, and guessing a level would draw a line the data does not support.
+    """
+    import numpy as np
+
+    values = np.asarray(source.z.values, dtype="float64")
+    finite = values[np.isfinite(values)]
+    if finite.size == 0 or float(finite.min()) == float(finite.max()):
+        raise ValueError(
+            "contours() has no range to cut into levels: the band is empty or constant. Pass interval= or "
+            "levels= if the values are meaningful, or contour a band that varies."
+        )
+    edges = np.linspace(float(finite.min()), float(finite.max()), count + 2)
+    return [float(level) for level in edges[1:-1]]
+
+
 def _as_interval(
     interval: Union[float, ContourInterval, None],
 ) -> Optional[ContourInterval]:
@@ -551,10 +589,11 @@ class VectorMixin(_MixinBase):
             return None
         resolved = self._auto_levels(source, levels)
         if resolved is None:
-            raise ValueError(
-                "contours() needs interval= or levels=: neither was given, and the band's variable "
-                f"({source.metadata('variable')!r}) is not one auto_style carries levels for."
-            )
+            # The tier used to refuse here, while the interactive tier fell back to ten from the same call —
+            # one call, two answers, from tiers a caller is told are interchangeable (#262). Ten evenly
+            # spaced levels is what that tier has always done and what matplotlib's own `levels=10` means,
+            # so falling back is the tiers agreeing rather than a third behaviour.
+            resolved = _even_levels(source, DEFAULT_CONTOUR_LEVELS)
         return resolved
 
     def _draw_contour_features(
