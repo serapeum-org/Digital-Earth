@@ -212,7 +212,7 @@ class ProjectionMixin(_MixinBase):
         step = self._graticule_step(lon_step, lat_step)
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,

@@ -78,6 +78,37 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 "spelled alpha here, which reaches cleopatra through **opts; adopting the Core spelling "
                 "is order 27a",
             ),
+            # The five rows the Core renames surfaced. Each of these methods answered to the tier's own
+            # spelling until order 27a, so `pending_for` excused it from this check entirely and the
+            # divergence was invisible — adopting the Core name is what makes the keywords measurable.
+            # Every keyword below was probed against the live builder rather than read off a signature: a
+            # name the glyph takes through `**opts` is listed because the *signature* does not name it (the
+            # rule #324 set), a name that raises is listed because the tier has no such keyword at all.
+            ("matplotlib", "field"): (
+                ("band", "cmap", "limits", "opacity"),
+                "band and cmap reach the render through **kwargs unnamed; limits is spelled vmin/vmax, "
+                "and opacity alpha — #332, order 27a",
+            ),
+            ("matplotlib", "points"): (
+                ("cmap", "column", "k", "opacity", "scheme", "size"),
+                "cmap, scheme, k and size reach ScatterGlyph through **opts unnamed; this tier's points "
+                "have no colour column at all, and opacity is spelled alpha — #332, order 27a",
+            ),
+            ("matplotlib", "polygons"): (
+                ("cmap", "column", "k", "opacity", "scheme"),
+                "cmap, scheme and k reach PolygonGlyph through **opts unnamed; a classified fill is "
+                "choropleth() here, so there is no column, and opacity is spelled alpha — #332, order 27a",
+            ),
+            ("interactive", "field"): (
+                ("limits", "opacity"),
+                "limits is spelled clim here, and opacity alpha — #332, order 27a",
+            ),
+            ("interactive", "lines"): (
+                ("cmap", "column", "k", "opacity", "scheme", "width"),
+                "cmap reaches HoloViews through **opts unnamed; a line layer carries no value here, so "
+                "column, scheme and k classify nothing; opacity is spelled alpha, and a bare width= is "
+                "HoloViews' own plot width rather than the line's — #332, order 27a",
+            ),
             ("matplotlib", "colorbar"): (
                 ("layer_id", "visible"),
                 "keyed by position (layer=-1) and drawn when called rather than toggled — #261, order 24",
@@ -100,8 +131,10 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
             ),
             ("interactive", "polygons"): (
                 ("k", "opacity", "scheme"),
-                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all and "
-                "that half is unscheduled; opacity is spelled alpha through **opts — order 27a",
+                # This said the scheme/k half was "unscheduled", and #331 — open, and titled for exactly
+                # this gap — schedules it. A reason may say `unscheduled` only where nothing does.
+                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all — "
+                "#331; opacity is spelled alpha through **opts — order 27a",
             ),
             ("interactive", "choropleth"): (
                 ("opacity",),

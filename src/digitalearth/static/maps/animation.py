@@ -126,12 +126,19 @@ _COMPOSITE_KINDS = ("rgb_composite", "hsv_composite")
 
 #: Render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
 _ANIMATION_KINDS = (
+    "field",
     "imshow",
     "contourf",
     "contour",
     "pcolormesh",
     "block",
 ) + _COMPOSITE_KINDS
+
+#: Where the method that draws a ``kind`` is spelled differently from the kind itself. A ``kind`` is the
+#: *renderer* a caller names, and the Core rename (order 27a) moved the method it dispatches to — so
+#: dispatching on the kind alone would reach the deprecated alias and warn the caller about a spelling they
+#: never wrote. ``"imshow"`` stays in the vocabulary because it is what a caller may already have written.
+_KIND_METHODS = {"imshow": "field"}
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -738,7 +745,7 @@ class AnimationMixin(_MixinBase):
         """
         if ocean and self.globe:
             self.ocean()
-        getattr(self, kind)(data, **opts)
+        getattr(self, _KIND_METHODS.get(kind, kind))(data, **opts)
         if coastlines:
             try:
                 self.coastlines()

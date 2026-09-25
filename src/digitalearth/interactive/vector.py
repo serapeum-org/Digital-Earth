@@ -19,6 +19,7 @@ import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
 from digitalearth.base.symbology import sample_cmap
@@ -46,7 +47,7 @@ def _classifiable(features: Any) -> Any:
     Every builder on this tier takes a path as well as an opened object, and a path is the only input a
     figure can be *written* with: `DataRef.of` records a path as a path and anything else as an `object:`
     reference, which `FigureSpec.to_dict` refuses. The unclassified branches never had to read the data
-    themselves — they hand the caller's argument to `add_element` and the renderer opens it at draw time —
+    themselves — they hand the caller's argument to `add_layer` and the renderer opens it at draw time —
     but classifying is different: the class edges or the distinct values have to be known before the layer
     is described, because they are part of the description. Indexing the argument itself answered
     `TypeError: string indices must be integers` for the one input that yields a storable figure
@@ -629,7 +630,7 @@ class VectorMixin(_MixinBase):
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         common: dict = {"size": size, **styling}
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -646,7 +647,7 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def path(
+    def lines(
         self,
         features: Any,
         *,
@@ -673,7 +674,7 @@ class VectorMixin(_MixinBase):
                 >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> reaches = FeatureCollection.read_file("reaches.geojson")    # doctest: +SKIP
-                >>> InteractiveMap().path(reaches).save("reaches.html").name    # doctest: +SKIP
+                >>> InteractiveMap().lines(reaches).save("reaches.html").name    # doctest: +SKIP
                 'reaches.html'
 
                 ```
@@ -683,7 +684,7 @@ class VectorMixin(_MixinBase):
         """
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -692,6 +693,10 @@ class VectorMixin(_MixinBase):
             held=held,
             symbology=_vector_symbology("Path", None, {}, None, described_opts),
         )
+
+    #: The tier's own spelling of :meth:`lines`, kept working for one release. The layer's kind is already
+    #: the engine-neutral ``"lines"``, so nothing a figure records changes with the method's name.
+    path = renamed_method(new="lines", old="path", owner="InteractiveMap")
 
     @_skips_off_limb
     def polygons(
@@ -864,7 +869,7 @@ class VectorMixin(_MixinBase):
             )
         elif "fill_alpha" not in opts:
             common["fill_alpha"] = 0.0
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -923,7 +928,7 @@ class VectorMixin(_MixinBase):
         self.last_breaks = categories
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1100,7 +1105,7 @@ class VectorMixin(_MixinBase):
         self.last_breaks = list(classified["color_levels"])
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1297,7 +1302,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1364,7 +1369,7 @@ class VectorMixin(_MixinBase):
         )
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1433,7 +1438,7 @@ class VectorMixin(_MixinBase):
         )
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1578,7 +1583,7 @@ class VectorMixin(_MixinBase):
         try:
             held: Dict[str, Any] = {}
             described_opts = describe_opts(held, opts)
-            return self.add_element(
+            return self.add_layer(
                 None,
                 name=name,
                 visible=visible,
@@ -1677,7 +1682,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1727,7 +1732,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1785,7 +1790,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,

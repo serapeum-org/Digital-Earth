@@ -844,9 +844,9 @@ def _draw(m: Map, method: str, points, polygons, lines):
         Whatever the builder returned.
     """
     calls = {
-        "scatter": lambda: m.scatter(points),
+        "points": lambda: m.points(points),
         "choropleth": lambda: m.choropleth(polygons, column="v"),
-        "shapes": lambda: m.shapes(polygons),
+        "polygons": lambda: m.polygons(polygons),
         "voronoi": lambda: m.voronoi(points, column="v"),
         "cartogram": lambda: m.cartogram(polygons, scale="v", column="v"),
         "quadtree": lambda: m.quadtree(points, column="v", nmax=1),
@@ -858,9 +858,12 @@ def _draw(m: Map, method: str, points, polygons, lines):
 
 #: Every validating vector builder — the eight that share the ``_vector_input`` preamble.
 VECTOR_BUILDERS = [
-    "scatter",
+    # The Core spellings adopted at order 27a. `points` and `polygons`, not `scatter` and `shapes`: the
+    # off-limb signal names the *builder* that drew nothing, so the name a caller is shown is the name of
+    # the method they called, and the aliases forward here.
+    "points",
     "choropleth",
-    "shapes",
+    "polygons",
     "voronoi",
     "cartogram",
     "quadtree",
@@ -986,8 +989,8 @@ class TestOffLimbVectorLayers:
 
         m = Map(crs=projections.orthographic(lon=-175, lat=15), figsize=(4, 4))
         with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
-            assert m.scatter(points) is None
-        assert any("scatter" in record.getMessage() for record in caplog.records), (
+            assert m.points(points) is None
+        assert any("points" in record.getMessage() for record in caplog.records), (
             f"the warning must name the layer, got {[r.getMessage() for r in caplog.records]}"
         )
 

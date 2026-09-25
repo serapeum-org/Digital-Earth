@@ -209,7 +209,7 @@ class InteractionMixin(_MixinBase):
                 f"unknown draw kind {kind!r}; choose 'box'/'poly'/'point'/'freehand'"
             )
         self._draw_stream = stream
-        self.add_element(
+        self.add_layer(
             layer,
             name=name,
             visible=visible,

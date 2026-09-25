@@ -358,6 +358,15 @@ def _add_colorbar(scene: Map) -> Any:
         return None
 
 
+#: The static tier's renderer for each raster ``kind`` whose method is spelled differently, plus ``"auto"``.
+#:
+#: The companion of :data:`_INTERACTIVE_RASTER_KINDS`, and here for the same reason: a ``kind`` is the
+#: renderer a caller names, and the static tier's Core rename (order 27a) moved the method it dispatches to.
+#: Dispatching on the kind alone would reach the deprecated ``Map.imshow`` alias and warn a caller about a
+#: spelling they never wrote. A kind not listed here is the method's own name (``contourf``, ``pcolormesh``).
+_STATIC_RASTER_KINDS = {"auto": "field", "imshow": "field"}
+
+
 def _vector_kind(data: FeatureCollection, caller: str) -> str:
     """Classify a vector input as the family of renderer it needs, refusing an empty collection.
 
@@ -408,7 +417,7 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
             if column is not None:
                 scene.choropleth(data, column=column, **kwargs)
             else:
-                scene.shapes(data, **kwargs)
+                scene.polygons(data, **kwargs)
             return
         if "column" in kwargs:
             # `Map.scatter` has no fill column: it sizes markers by `size_column` and colours them from
@@ -418,10 +427,10 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
                 f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
                 "size the markers with size_column=, or drop column="
             )
-        scene.scatter(data, **kwargs)
+        scene.points(data, **kwargs)
         return
     if isinstance(data, Dataset):
-        method = "imshow" if kind == "auto" else kind
+        method = _STATIC_RASTER_KINDS.get(kind, kind)
         getattr(scene, method)(data, **kwargs)
         return
     raise TypeError(f"quickmap cannot draw a {type(data).__name__}")
@@ -701,8 +710,8 @@ def quickplot(data: PlottableData, **kwargs) -> Any:
 #: The interactive tier's renderer for each ``kind`` `quickmap` accepts. A kind absent from this table is
 #: refused by name rather than drawn as something the caller did not ask for.
 _INTERACTIVE_RASTER_KINDS = {
-    "auto": "image",
-    "imshow": "image",
+    "auto": "field",
+    "imshow": "field",
     "contourf": "filled_contours",
     "contour": "contours",
     "pcolormesh": "quadmesh",

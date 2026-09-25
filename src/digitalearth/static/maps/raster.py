@@ -12,6 +12,7 @@ from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 from matplotlib import colormaps
 
 from digitalearth.base.autostyle import auto_style
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
@@ -412,7 +413,7 @@ class RasterMixin(_MixinBase):
             self._skipped_off_limb(kind)
             return None
 
-    def imshow(
+    def field(
         self,
         dataset: Any,
         *,
@@ -420,7 +421,7 @@ class RasterMixin(_MixinBase):
         visible: bool = True,
         **kwargs,
     ) -> Any:
-        """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
+        """Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
@@ -444,6 +445,11 @@ class RasterMixin(_MixinBase):
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         return self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
+
+    #: The tier's own spelling of :meth:`field`, kept working for one release. The Core name is what every
+    #: other tier calls it, and the recipe key underneath (``via="imshow"``) is unchanged — a figure written
+    #: before the rename reads back into the same drawer.
+    imshow = renamed_method(new="field", old="imshow", owner="Map")
 
     def contourf(
         self,

@@ -939,7 +939,7 @@ class DecorationMixin(_MixinBase):
             # `draw_band="underlay"` is the description's half of `zorder`: one says where the
             # backdrop sits among the figure's layers, the other where it sits on the axes. Both are
             # recorded, so a backdrop drawn again from its description comes back behind the data.
-            im = self.imshow(
+            im = self.field(
                 dataset,
                 cmap=cmap,
                 name=name,

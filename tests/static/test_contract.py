@@ -321,8 +321,12 @@ class TestMarkerSizeAndColumn:
 #: whole class, not a sample: `scatter` is wrapped by `_skips_off_limb`, `grid_points` is not, and
 #: `point_cloud` delegates to `grid_points`, so each sits a different number of frames from the caller.
 DEPRECATED_SPELLINGS = {
-    "scatter(point_size=)": lambda fc, ds: Map(crs=fc.epsg).scatter(fc, point_size=5),
-    "scatter(scale=)": lambda fc, ds: Map(crs=fc.epsg).scatter(fc, scale="fid"),
+    # Called under the Core spelling `points`, not the deprecated `scatter`: this table is about a
+    # deprecated **parameter**'s stacklevel, and going through the method alias as well would raise a second
+    # warning that has nothing to do with what is being measured. The alias is asked the same question, with
+    # both warnings live, by `TestADeprecatedParameterOnADeprecatedMethod` below.
+    "points(point_size=)": lambda fc, ds: Map(crs=fc.epsg).points(fc, point_size=5),
+    "points(scale=)": lambda fc, ds: Map(crs=fc.epsg).points(fc, scale="fid"),
     "grid_points(point_size=)": lambda fc, ds: Map(crs=ds.epsg).grid_points(
         ds, point_size=5
     ),
@@ -359,6 +363,48 @@ class TestADeprecationWarningPointsAtTheCaller:
         assert len(deprecations) == 1, [str(w.message) for w in deprecations]
         warned = deprecations[0]
         assert warned.filename == __file__, f"{warned.filename}:{warned.lineno}"
+
+
+class TestADeprecatedParameterOnADeprecatedMethod:
+    """Both warnings have to land on the caller's line, and one of them is counted through the other.
+
+    A caller with an old script writes `Map.scatter(fc, point_size=5)`, and order 27a made *both* halves of
+    that deprecated: the method is an alias for `points` now, and `point_size=` was already an alias for
+    `size=`. The alias forwards, which puts a frame between the caller and the builder that resolves the
+    parameter — so a `stacklevel` counted for a direct call would blame `base/deprecation.py` instead of the
+    user. `_ALIAS_DEPTH` is what closes that, and until this rename no static builder exercised it.
+    """
+
+    def test_both_warnings_name_the_callers_file(self, points_fc):
+        """Two deprecations, one call, and both must point at the line that made it.
+
+        Args:
+            points_fc: The committed point fixture.
+        """
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Map(crs=points_fc.epsg).scatter(points_fc, point_size=5)
+        blamed = sorted(
+            {w.filename for w in caught if issubclass(w.category, DeprecationWarning)}
+        )
+        assert blamed == [__file__], blamed
+
+    def test_the_two_warnings_name_the_two_spellings_to_change(self, points_fc):
+        """And a reader has to be told about both, not just the outer one.
+
+        Args:
+            points_fc: The committed point fixture.
+        """
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Map(crs=points_fc.epsg).scatter(points_fc, point_size=5)
+        said = sorted(
+            str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+        )
+        assert [text.split(" is deprecated")[0] for text in said] == [
+            "Map.points(): point_size=",
+            "Map.scatter()",
+        ], said
 
 
 class TestClassification:
@@ -774,7 +820,7 @@ def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
     """
     with warnings.catch_warnings():
         warnings.simplefilter("always")
-        Map(crs=points_fc.epsg).scatter(points_fc, size_column="fid", size=30)
+        Map(crs=points_fc.epsg).points(points_fc, size_column="fid", size=30)
     assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)], (
         "the modern spellings must not warn"
     )
@@ -784,8 +830,13 @@ def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
 #: wherever a pyramids object is — and a path-backed layer is the only kind a figure can be written from —
 #: so the argument's own documentation has to say so (round 2, L8). `spaghetti` is deliberately absent: it
 #: takes a `DatasetCollection`, which is a set of rasters rather than one file, and refuses a path.
+#:
+#: The three Core spellings adopted at order 27a are listed under those names — `field`, `points`,
+#: `polygons` — because that is where the documentation lives. Their deprecated aliases (`imshow`,
+#: `scatter`, `shapes`) carry the one-line docstring `renamed_method` generates, whose whole job is to name
+#: the replacement; documenting the data argument twice is what the rename exists to stop.
 PATH_TAKING_BUILDERS = {
-    "imshow": "dataset",
+    "field": "dataset",
     "contour": "dataset",
     "contourf": "dataset",
     "pcolormesh": "dataset",
@@ -802,8 +853,8 @@ PATH_TAKING_BUILDERS = {
     "tricontour": "data",
     "tricontourf": "data",
     "tripcolor": "data",
-    "scatter": "features",
-    "shapes": "features",
+    "points": "features",
+    "polygons": "features",
     "choropleth": "features",
     "voronoi": "features",
     "cartogram": "features",

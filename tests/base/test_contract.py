@@ -182,14 +182,63 @@ class TestRenamingAMethod:
 
 
 class TestTheRenamesNobodyHasAdopted:
-    """Review M5 — `PLANNED_RENAMES` is read through its own accessor."""
+    """Review M5 — `PLANNED_RENAMES` is read through its own accessor.
 
-    def test_a_tier_that_has_agreed_a_rename_names_it(self):
-        """The static tier's raster builder is `imshow`, and is to become `field`."""
-        from digitalearth.base.contract import planned_renames
+    **The table is empty**, because order 27a adopted all six rows it held. This class used to assert one of
+    them by name (`planned_renames("matplotlib")["imshow"] == "field"`), which is why it is the first thing
+    the adoption broke. What replaces that is the positive statement the emptiness has to mean: each of the
+    six is a *live alias* now, which is what puts it under `TestAnAliasIsAPromiseToTwoCallers` and
+    `tests/test_contract_names.py`'s liveness checks. The two guards below are kept, deliberately vacuous
+    while the table is empty, because they are what the **next** agreed-but-unadopted row will be held to —
+    and a guard deleted for being vacuous is a guard the next row ships without.
+    """
 
-        assert planned_renames("matplotlib")["imshow"] == "field", planned_renames(
-            "matplotlib"
+    #: The six adopted at order 27a, as `{backend: {old: new}}`. Written out rather than read from `ALIASES`,
+    #: which carries older aliases too: this is the claim that *these* moved, so reading the table it moved
+    #: into would assert nothing.
+    ADOPTED = {
+        "matplotlib": {"imshow": "field", "scatter": "points", "shapes": "polygons"},
+        "interactive": {
+            "image": "field",
+            "path": "lines",
+            "add_element": "add_layer",
+        },
+    }
+
+    def test_nothing_is_still_waiting_to_be_renamed(self):
+        """The emptiness itself, stated where a reader of this class will look for it.
+
+        Test scenario:
+            `PLANNED_RENAMES` is not empty because nobody ever agreed a rename — it is empty because every
+            rename that was agreed has been adopted. Saying so here is what stops the two checks below being
+            read as "there were never any".
+        """
+        assert dict(PLANNED_RENAMES) == {}, (
+            f"PLANNED_RENAMES holds {dict(PLANNED_RENAMES)}; this class's docstring says it is empty"
+        )
+
+    @pytest.mark.parametrize("backend", sorted(ADOPTED))
+    def test_every_adopted_rename_is_a_live_alias_instead(self, backend):
+        """Where the six went, and the reason the emptiness above is a result and not an omission.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            A row leaving `PLANNED_RENAMES` has exactly one legitimate destination: `ALIASES`, where the old
+            spelling is promised to work, to warn, and to name its replacement. A row that simply vanished
+            would empty the table just as well and would drop the promise to the caller who already wrote the
+            old name, and no check compares the two tables across time — so this is what compares them.
+        """
+        adopted = self.ADOPTED[backend]
+        misfiled = {
+            old: alias_table(backend).get(old)
+            for old, new in adopted.items()
+            if alias_table(backend).get(old) != new
+        }
+        assert misfiled == {}, (
+            f"{backend} adopted {sorted(adopted)} and ALIASES records {misfiled} for them; an adopted "
+            "rename belongs in ALIASES pointing at its Core name"
         )
 
     def test_a_tier_with_none_answers_empty(self):
@@ -378,11 +427,22 @@ class TestAPendingReasonPointsAtLiveWork:
         """The other direction: a vendored order nothing points at is the next thing to go stale.
 
         Test scenario:
-            :data:`ROADMAP_ORDERS` is a copy of four lines of a document that lives elsewhere, which is
+            :data:`ROADMAP_ORDERS` is a copy of a few lines of a document that lives elsewhere, which is
             exactly the shape that rots. An order stops being cited when the work lands and its `PENDING`
             rows come off — and the entry describing it should come off in the same change, not survive as
             a description of something already built.
+
+            **It reads `KEYWORD_SHORTFALLS` as well**, because the forward check in
+            `tests/test_contract_names.py` already requires a shortfall's order to be *in* this table
+            (`test_every_order_a_shortfall_names_is_one_the_contract_declares`). Read over `PENDING` alone,
+            the two contradicted each other: order 27a's `PENDING` rows came off as the static and
+            interactive tiers adopted their Core spellings, while the keyword divergence that adoption
+            exposed cites the same order — so one check demanded the entry stay and the other demanded it
+            go. The reverse check has to see every table the forward checks let cite an order, which is the
+            same reason the shared open-issue allowlist's reverse check reads both tables.
         """
+        from tests.test_contract_names import KEYWORD_SHORTFALLS
+
         cited = {order for _, _, order in _orders_named_in_reasons()}
         cited |= {
             order
@@ -390,8 +450,13 @@ class TestAPendingReasonPointsAtLiveWork:
             if method.builds_in
             for order in orders_named_in(method.builds_in)
         }
+        cited |= {
+            order
+            for _, owner in KEYWORD_SHORTFALLS.values()
+            for order in orders_named_in(owner)
+        }
         orphaned = sorted(set(ROADMAP_ORDERS) - cited)
         assert orphaned == [], (
-            f"ROADMAP_ORDERS describes {orphaned}, which no PENDING reason and no declared build order "
-            "names any more; take each off now that nothing is waiting on it"
+            f"ROADMAP_ORDERS describes {orphaned}, which no PENDING reason, no declared build order and no "
+            "KEYWORD_SHORTFALLS row names any more; take each off now that nothing is waiting on it"
         )

@@ -66,7 +66,7 @@ class Map(
             >>> from digitalearth.static import Map
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> m = Map(crs=ds.epsg)          # same CRS -> no reprojection
-            >>> _ = m.imshow(ds)
+            >>> _ = m.field(ds)
             >>> len(m.layers)
             1
 

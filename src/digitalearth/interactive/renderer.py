@@ -90,7 +90,7 @@ class DrawnLayer:
 #:
 #: Every kind this tier declares in :data:`~digitalearth.interactive.capabilities.CAPABILITIES` is here, so
 #: a kind is built by its drawer and never by its builder. The one kind outside it is `custom:holoviews` —
-#: an element a caller built and handed to `add_element`, which has no description to rebuild it from and
+#: an element a caller built and handed to `add_layer`, which has no description to rebuild it from and
 #: so is drawn by being kept.
 DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",

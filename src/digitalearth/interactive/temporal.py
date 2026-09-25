@@ -253,7 +253,7 @@ class TemporalMixin(_MixinBase):
         kept = None if labels is None else list(labels)
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,

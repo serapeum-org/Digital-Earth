@@ -23,7 +23,7 @@ from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
-from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DataRef, LayerSpec, Symbology
@@ -51,7 +51,7 @@ _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streaml
 
 #: How a scatter layer names itself in a warning or refusal. The builder, the drawer that replays it and the
 #: deprecated-alias resolution all speak for the same public call, so they share the one spelling.
-_SCATTER_CALLER = "Map.scatter()"
+_POINTS_CALLER = "Map.points()"
 
 #: The frame :func:`_skips_off_limb` puts between a builder it wraps and that builder's caller. A deprecation
 #: warning raised inside such a builder counts it, or it lands on the wrapper's line instead of the caller's —
@@ -175,7 +175,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
     # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
-    plot_style = relocate_flat_style(opts, marker_size_for=_SCATTER_CALLER)
+    plot_style = relocate_flat_style(opts, marker_size_for=_POINTS_CALLER)
     glyph = ScatterGlyph(
         src.x.values,
         src.y.values,
@@ -965,7 +965,7 @@ class VectorMixin(_MixinBase):
         return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
 
     @_skips_off_limb
-    def scatter(
+    def points(
         self,
         features: Any,
         *,
@@ -1021,12 +1021,12 @@ class VectorMixin(_MixinBase):
             value=size_column,
             old="scale",
             alias=scale,
-            caller=_SCATTER_CALLER,
+            caller=_POINTS_CALLER,
             stacklevel=3 + _GUARD_FRAMES,
         )
         # Resolved here rather than in the drawer so the deprecation warning lands on the caller's own
         # line: the drawer sits four frames further down, and a `stacklevel` counted that deep is brittle.
-        resolve_marker_size(opts, caller=_SCATTER_CALLER, depth=4 + _GUARD_FRAMES)
+        resolve_marker_size(opts, caller=_POINTS_CALLER, depth=4 + _GUARD_FRAMES)
         return self._draw(
             LayerRecord(
                 "points",
@@ -1042,6 +1042,10 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+
+    #: The tier's own spelling of :meth:`points`, kept working for one release. The recipe key underneath
+    #: (``via="scatter"``) is unchanged, so a figure written before the rename reads back into the same drawer.
+    scatter = renamed_method(new="points", old="scatter", owner="Map")
 
     def grid_points(
         self,
@@ -1785,7 +1789,7 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def shapes(
+    def polygons(
         self,
         features: Any,
         *,
@@ -1820,6 +1824,10 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+
+    #: The tier's own spelling of :meth:`polygons`, kept working for one release. The recipe key underneath
+    #: (``via="shapes"``) is unchanged, so a figure written before the rename reads back into the same drawer.
+    shapes = renamed_method(new="polygons", old="shapes", owner="Map")
 
     def _clip_geometry(self, clip: Any) -> Any:
         """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.

@@ -339,23 +339,18 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
             }
         ),
         "3d": MappingProxyType({"animate": "record"}),
-    }
-)
-
-#: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
-#: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
-#: it will be called once the tier adopts it, at order 27a.
-#:
-#: This said the renames arrive "when its seam lands". Both seams have since landed — #300 (interactive) and
-#: #303 (static) closed with Wave 6 — and none of the renames came with them, because adopting a Core spelling
-#: was never part of a seam's work. That is why every one of these names explains itself in :data:`PENDING` by
-#: the order that adopts it rather than by a seam.
-#:
-#: Kept in the contract because the agreement is part of it — a tier that seams later should not have to
-#: re-decide the spelling — and kept apart from :data:`ALIASES` because "you may still write this" and "we
-#: intend to rename this" are answers to different questions.
-PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
-    {
+        # The six adopted at order 27a. Each was in `PLANNED_RENAMES` — agreed and not adopted — and moving
+        # it here is what turns the liveness checks on: the old spelling has to exist, warn, and name its
+        # replacement. Every recipe key underneath is unchanged (`via="imshow"`, `"scatter"`, `"shapes"`,
+        # `"image"`; the interactive line layer's kind was already the neutral `"lines"`), so a figure
+        # written before the rename still reads back into the drawer that made it.
+        "matplotlib": MappingProxyType(
+            {
+                "imshow": "field",
+                "scatter": "points",
+                "shapes": "polygons",
+            }
+        ),
         "interactive": MappingProxyType(
             {
                 "image": "field",
@@ -363,26 +358,32 @@ PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "add_element": "add_layer",
             }
         ),
-        "matplotlib": MappingProxyType(
-            {
-                "imshow": "field",
-                "scatter": "points",
-                "shapes": "polygons",
-                # `set_extent` is not listed, and used to be. It is not `set_bounds` under an older name:
-                # measured, it is `set_extent(bbox) -> None`, which takes no `padding`, has no `None` that
-                # fits the data, and returns nothing where the Core name returns `self`. So the two tables
-                # dated the same arrival differently — a rename at order 27a here, a capability at order 26
-                # in `PENDING` — and a caller reading `PLANNED_RENAMES` was told the method existed under
-                # another spelling (review R-L4). The roadmap agrees: order 27a carries `imshow`, `scatter`
-                # and `shapes`, and order 26 is where a figure learns to frame itself.
-                #
-                # `point_cloud` is not listed either: it is a second *current* spelling of `grid_points`,
-                # which the tier offers and deprecates neither of. A rename is a name on its way out, and
-                # nothing has been agreed about that one (review M5).
-            }
-        ),
     }
 )
+
+#: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
+#: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
+#: it will be called once the tier adopts it.
+#:
+#: **It is empty, and that is a result rather than an omission.** It held six — `image`/`path`/`add_element` on
+#: the interactive tier and `imshow`/`scatter`/`shapes` on the static one — and all six were adopted at order
+#: 27a, which moved them to :data:`ALIASES` where their liveness is checked. `alias_table` is where a caller
+#: looks now; this is where the *next* agreed-but-unadopted spelling is recorded, kept because the agreement
+#: is part of the contract — a tier should not have to re-decide a spelling — and kept apart from
+#: :data:`ALIASES` because "you may still write this" and "we intend to rename this" are answers to different
+#: questions. :func:`_drawn_as` is the `PENDING` reason such a row explains itself by, and has no caller for
+#: the same reason: nothing is waiting.
+#:
+#: Two names deliberately never joined it, and the reasons outlive the rows:
+#:
+#: - `set_extent` is **not** `set_bounds` under an older name. Measured, it was `set_extent(bbox) -> None`,
+#:   which took no `padding`, had no `None` that fits the data, and returned nothing where the Core name
+#:   returns `self`. Listing it dated the same arrival two ways — a rename here, a capability at order 26 in
+#:   `PENDING` — and told a caller the method already existed under another spelling (review R-L4).
+#: - `point_cloud` is a second *current* spelling of `grid_points`, which the static tier offers and
+#:   deprecates neither of. A rename is a name on its way out, and nothing has been agreed about that one
+#:   (review M5).
+PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
 #: What a tier has not built yet, as `{backend: {name: why}}`. This is the honest half of the contract: a name
 #: absent because the tier cannot draw it at all reads differently from one absent because nobody has written
@@ -424,9 +425,9 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "interactive": MappingProxyType(
             {
-                "field": _drawn_as("image"),
-                "lines": _drawn_as("path"),
-                "add_layer": _drawn_as("add_element"),
+                # `field`, `lines` and `add_layer` were listed here, each `_drawn_as` the tier's own
+                # spelling. All three are adopted at order 27a: the tier answers to the Core name and the old
+                # spelling is a live alias, so neither is pending any more.
                 "get_layer": _PENDING_IDENTITY,
                 "remove_layer": _PENDING_IDENTITY,
                 "set_visible": _PENDING_LAYERS,
@@ -437,10 +438,10 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "matplotlib": MappingProxyType(
             {
-                "field": _drawn_as("imshow"),
-                "points": _drawn_as("scatter"),
+                # `field`, `points` and `polygons` were listed here, each `_drawn_as` the tier's own
+                # spelling. All three are adopted at order 27a: the tier answers to the Core name and the old
+                # spelling is a live alias, so neither is pending any more.
                 "lines": "line features on the static tier — #226",
-                "polygons": _drawn_as("shapes"),
                 "add_layer": _PENDING_IDENTITY,
                 "get_layer": _PENDING_IDENTITY,
                 "remove_layer": _PENDING_IDENTITY,

@@ -29,7 +29,7 @@ from digitalearth.base.capabilities import Capabilities
 __all__ = ["CAPABILITIES"]
 
 #: The interactive tier's declaration. The kinds are the builders `InteractiveMap` composes — HoloViews and
-#: GeoViews elements — plus `custom:holoviews` for an element a caller builds and hands to `add_element`
+#: GeoViews elements — plus `custom:holoviews` for an element a caller builds and hands to `add_layer`
 #: (#293). The schemes are the shared classifier's, so one `scheme`/`k` pair paints the same classes here as on
 #: every other tier (contract C4).
 CAPABILITIES = Capabilities(

@@ -163,7 +163,7 @@ class DashboardMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> app = InteractiveMap().image(dem).dashboard(widgets=("cmap", "alpha"))  # doctest: +SKIP
+                >>> app = InteractiveMap().field(dem).dashboard(widgets=("cmap", "alpha"))  # doctest: +SKIP
                 >>> sorted({w.name for w in app.select()} & {"Colormap", "Opacity"})  # doctest: +SKIP
                 ['Colormap', 'Opacity']
 
@@ -374,7 +374,7 @@ class DashboardMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> InteractiveMap().image(dem).save_app("app.html").name     # doctest: +SKIP
+                >>> InteractiveMap().field(dem).save_app("app.html").name     # doctest: +SKIP
                 'app.html'
 
                 ```
@@ -458,7 +458,7 @@ class DashboardMixin(_MixinBase):
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).points(fc)                 # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).points(fc)                 # doctest: +SKIP
                 >>> panel = m.layer_control()                                  # doctest: +SKIP
                 >>> panel[0][0].options                                        # doctest: +SKIP
                 ['0: Image', '1: Points']
@@ -468,7 +468,7 @@ class DashboardMixin(_MixinBase):
               reorder by, and silently ignoring the flag was how the control looked inert:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem)                            # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem)                            # doctest: +SKIP
                 >>> try:                                                       # doctest: +SKIP
                 ...     m.layer_control(reorder=True)
                 ... except NotImplementedError as error:
@@ -481,10 +481,10 @@ class DashboardMixin(_MixinBase):
               drawn misaligned:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> mercator = InteractiveMap().image(dem).layer_control()     # doctest: +SKIP
+                >>> mercator = InteractiveMap().field(dem).layer_control()     # doctest: +SKIP
                 >>> len(mercator[0])                                           # doctest: +SKIP
                 3
-                >>> other = InteractiveMap(crs=4326).image(dem)                 # doctest: +SKIP
+                >>> other = InteractiveMap(crs=4326).field(dem)                 # doctest: +SKIP
                 >>> len(other.layer_control()[0])                              # doctest: +SKIP
                 2
 

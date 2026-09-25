@@ -152,7 +152,7 @@ def test_interactive_basemap_branches_reach_the_tier(
     """
     interactive = pytest.importorskip("digitalearth.interactive")
     tiles = mocker.patch.object(interactive.InteractiveMap, "tiles")
-    mocker.patch.object(interactive.InteractiveMap, "image")
+    mocker.patch.object(interactive.InteractiveMap, "field")
     qp.quickmap(dataset, backend="interactive", basemap=basemap)
     assert tiles.call_args.args == expected_args, (
         f"basemap={basemap!r} must call tiles{expected_args}, got {tiles.call_args!r}"

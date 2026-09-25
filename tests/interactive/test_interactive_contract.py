@@ -259,7 +259,7 @@ class TestAutoCmap:
     """C5 on the interactive tier — every raster builder, ``image`` through ``timecube``."""
 
     @pytest.mark.parametrize(
-        "builder", ["image", "quadmesh", "large_image", "timecube"]
+        "builder", ["field", "quadmesh", "large_image", "timecube"]
     )
     def test_no_raster_builder_hard_codes_a_colormap(self, builder):
         """Every raster builder's ``cmap`` default is ``None``, never a bare string.
@@ -408,10 +408,10 @@ class TestOffLimbIsSkipped:
         messages = []
         handle = logger.add(messages.append, level="WARNING")
         try:
-            InteractiveMap().image(dataset)
+            InteractiveMap().field(dataset)
         finally:
             logger.remove(handle)
-        assert any("image" in text for text in messages), messages
+        assert any("field" in text for text in messages), messages
         assert any("skipped" in text for text in messages), messages
 
     def test_strict_raises_instead(self, dataset, off_limb):
@@ -439,14 +439,16 @@ class TestOffLimbIsSkipped:
     @pytest.mark.parametrize(
         "builder",
         [
-            "image",
+            # The Core spellings adopted at order 27a: the guard is a decorator on the *builder*, and
+            # `image`/`path` are `renamed_method` aliases now, which carry no `__wrapped__` of their own.
+            "field",
             "rgb",
             "quadmesh",
             "contours",
             "filled_contours",
             "large_image",
             "points",
-            "path",
+            "lines",
             "polygons",
             "choropleth",
             "trimesh",

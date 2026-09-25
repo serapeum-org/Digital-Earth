@@ -28,7 +28,7 @@ __all__ = ["ISSUE_REFERENCE", "KNOWN_OPEN_ISSUES", "issues_named_in"]
 ISSUE_REFERENCE = re.compile(r"#(\d+)")
 
 #: The issues a user-facing reason may name, with the title each carried when it was last checked against
-#: the tracker **by hand, on 2026-09-23**. Checked with ``gh issue view <n> --json state,title``; every one
+#: the tracker **by hand, on 2026-09-25**. Checked with ``gh issue view <n> --json state,title``; every one
 #: below answered ``OPEN``.
 KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
     {
@@ -47,6 +47,13 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
         268: (
             "refactor(api): tiles() takes a name on one tier and a URL on another, through one "
             "overloaded provider="
+        ),
+        331: (
+            "feat(interactive): polygons() cannot classify — no scheme= or k=, unlike the web tier"
+        ),
+        332: (
+            "refactor(api): static and interactive builders spell opacity and column differently from "
+            "the Core contract"
         ),
     }
 )

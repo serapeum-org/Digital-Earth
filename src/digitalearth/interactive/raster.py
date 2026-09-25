@@ -19,6 +19,7 @@ in the tier plan's feature-parity matrix.
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.sources.view import SourceView
 from digitalearth.base.spec import (
     Bounds,
@@ -293,7 +294,7 @@ class RasterMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def image(
+    def field(
         self,
         data: Any,
         *,
@@ -337,7 +338,7 @@ class RasterMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem, cmap="terrain", clim=(0, 60))  # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="terrain", clim=(0, 60))  # doctest: +SKIP
                 >>> len(m.layers)                                               # doctest: +SKIP
                 1
 
@@ -351,7 +352,7 @@ class RasterMixin(_MixinBase):
         # the layer, because a figure is saved as JSON.
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -371,6 +372,10 @@ class RasterMixin(_MixinBase):
                 }
             ),
         )
+
+    #: The tier's own spelling of :meth:`field`, kept working for one release. The recipe key underneath
+    #: (``via="image"``) is unchanged, so a figure written before the rename reads back into the same drawer.
+    image = renamed_method(new="field", old="image", owner="InteractiveMap")
 
     @_skips_off_limb
     def rgb(
@@ -422,7 +427,7 @@ class RasterMixin(_MixinBase):
         require_three_bands("rgb", bands)
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -491,7 +496,7 @@ class RasterMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -663,7 +668,7 @@ class RasterMixin(_MixinBase):
         }
         if tier_held:
             held[TIER_BUCKET] = tier_held
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -863,7 +868,7 @@ class RasterMixin(_MixinBase):
             )
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,

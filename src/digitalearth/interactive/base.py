@@ -4,7 +4,7 @@
 (``figure_spec``), and the HoloViews elements those descriptions were drawn into, in draw order — the display-CRS
 reproject-through-pyramids plumbing, and the render/save/show lifecycle. Capability mixins (raster, vector,
 big-data, temporal, decoration, interaction, projection, animation, dashboard) live in sibling modules and add
-``image()`` / ``points()`` / … builder methods that call ``self.add_element(...)``; the public
+``image()`` / ``points()`` / … builder methods that call ``self.add_layer(...)``; the public
 :class:`digitalearth.interactive.map.InteractiveMap` composes the base with those mixins — exactly mirroring the
 2-D ``Map(GeoLayerBase, RasterMixin, …)`` and 3-D ``Scene3D(Scene3DBase, TerrainMixin, …)`` patterns.
 
@@ -30,7 +30,7 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.custom import MissingObject, custom_kind
-from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
@@ -710,7 +710,7 @@ class InteractiveMapBase:
             - A named layer keeps its name; an unnamed one is numbered after what it is:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> InteractiveMap().add_element("dem", name="elevation").add_element("obs").layer_ids
+                >>> InteractiveMap().add_layer("dem", name="elevation").add_layer("obs").layer_ids
                 ['elevation', 'holoviews-1']
 
                 ```
@@ -718,8 +718,8 @@ class InteractiveMapBase:
               because that is where it is drawn:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> m = InteractiveMap().add_element("obs", name="obs")
-                >>> m.add_element("grid", name="grid", band="reference").layer_ids
+                >>> m = InteractiveMap().add_layer("obs", name="obs")
+                >>> m.add_layer("grid", name="grid", band="reference").layer_ids
                 ['grid', 'obs']
 
                 ```
@@ -757,7 +757,7 @@ class InteractiveMapBase:
             - The panel names the layers it draws, and each layer says what it is:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> figure = InteractiveMap().add_element("dem", name="elevation").figure_spec
+                >>> figure = InteractiveMap().add_layer("dem", name="elevation").figure_spec
                 >>> figure.panels[0].id, figure.panels[0].layers
                 ('main', ('elevation',))
                 >>> figure.layers.get("elevation").kind
@@ -821,7 +821,7 @@ class InteractiveMapBase:
         """
         return Viewport(crs=self.crs)
 
-    def add_element(
+    def add_layer(
         self,
         element: Any,
         *,
@@ -873,7 +873,7 @@ class InteractiveMapBase:
                 description says everything about it.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer
+            The same map instance, so builder calls chain: ``m.field(dem).tiles().coastlines()``. A drawer
             that declined to draw the layer leaves the map as it was — the description, the registered
             source, the held key and the id are all let go again, so nothing names a layer that was never
             drawn.
@@ -893,7 +893,7 @@ class InteractiveMapBase:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
                 >>> m = InteractiveMap()
-                >>> m.add_element("raster-layer").add_element("vector-layer") is m
+                >>> m.add_layer("raster-layer").add_layer("vector-layer") is m
                 True
                 >>> m.layers
                 ['raster-layer', 'vector-layer']
@@ -903,8 +903,8 @@ class InteractiveMapBase:
               registered second is drawn beneath the data layer registered first:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> m = InteractiveMap().add_element("observations")
-                >>> m = m.add_element("grid", name="grid", band="reference")
+                >>> m = InteractiveMap().add_layer("observations")
+                >>> m = m.add_layer("grid", name="grid", band="reference")
                 >>> m.layers
                 ['grid', 'observations']
                 >>> m.layer_ids
@@ -915,7 +915,7 @@ class InteractiveMapBase:
                 ```python
                 >>> import holoviews as hv                       # doctest: +SKIP
                 >>> m = InteractiveMap()                         # doctest: +SKIP
-                >>> m.add_element(hv.Points([(0, 0)])).layers    # doctest: +SKIP
+                >>> m.add_layer(hv.Points([(0, 0)])).layers    # doctest: +SKIP
                 [:Points   [x,y]]
 
                 ```
@@ -963,6 +963,13 @@ class InteractiveMapBase:
         self.layers.insert(self._layer_tree.ids.index(layer_id), element)
         self._note_last_layer(layer_id)
         return self
+
+    #: The tier's own spelling of :meth:`add_layer`, kept working for one release. The Core name is what
+    #: every other tier calls it; the kind an unnamed custom layer is filed under (``custom:holoviews``) is
+    #: unchanged, so a figure written before the rename reads back the same way.
+    add_element = renamed_method(
+        new="add_layer", old="add_element", owner="InteractiveMap"
+    )
 
     def _note_last_layer(self, layer_id: str) -> None:
         """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
@@ -1020,7 +1027,7 @@ class InteractiveMapBase:
     def _forget_layer(self, layer_id: str) -> None:
         """Drop a layer that was described but never drawn, and everything it registered.
 
-        What :meth:`add_element` calls for a layer its drawer declined or refused. Taking the entry out of the tree is
+        What :meth:`add_layer` calls for a layer its drawer declined or refused. Taking the entry out of the tree is
         not enough on its own: the source sits in the process-global object table, which holds a strong
         reference for the life of the process, and `figure_spec.sources` is filtered to the tree's ids, so
         nothing a caller reads would show it was still there. The id goes back to the pool too, so a caller
@@ -1406,7 +1413,7 @@ class InteractiveMapBase:
         Returns:
             dict: ``{"common": {...}, "bokeh": {...}}`` — the backend-agnostic options and the Bokeh-only
             frame. Both are empty for a layer that never went through :meth:`_styled` (a tile basemap, a
-            Natural-Earth feature, a raw element passed to :meth:`add_element`).
+            Natural-Earth feature, a raw element passed to :meth:`add_layer`).
 
         Raises:
             IndexError: when ``layer`` is an integer outside the registered layer range.
@@ -1417,7 +1424,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
                 >>> m.style_of(0)["common"]["cmap"]                             # doctest: +SKIP
                 'magma'
 
@@ -1447,7 +1454,7 @@ class InteractiveMapBase:
               path records nothing (the registry does not inspect what it is handed):
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> m = InteractiveMap().add_element("raster-layer").add_element("vector-layer")
+                >>> m = InteractiveMap().add_layer("raster-layer").add_layer("vector-layer")
                 >>> len(m.layer_styles) == len(m.layers)
                 True
                 >>> m.layer_styles
@@ -1466,7 +1473,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
                 >>> [style["common"]["cmap"] for style in m.layer_styles]      # doctest: +SKIP
                 ['magma']
 
@@ -1536,8 +1543,8 @@ class InteractiveMapBase:
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
                 >>> m = InteractiveMap()                                     # doctest: +SKIP
-                >>> _ = m.add_element(hv.Points([(0, 0)]))                   # doctest: +SKIP
-                >>> _ = m.add_element(hv.Points([(1, 1)]))                   # doctest: +SKIP
+                >>> _ = m.add_layer(hv.Points([(0, 0)]))                   # doctest: +SKIP
+                >>> _ = m.add_layer(hv.Points([(1, 1)]))                   # doctest: +SKIP
                 >>> overlay = m.render()                                     # doctest: +SKIP
                 >>> len(overlay)                                             # doctest: +SKIP
                 2
@@ -1619,7 +1626,7 @@ class InteractiveMapBase:
                 ```python
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
-                >>> m = InteractiveMap().add_element(hv.Points([(0, 0)]))    # doctest: +SKIP
+                >>> m = InteractiveMap().add_layer(hv.Points([(0, 0)]))    # doctest: +SKIP
                 >>> m.save("map.html").name                                  # doctest: +SKIP
                 'map.html'
                 >>> m.save("map.png").suffix                                 # doctest: +SKIP
