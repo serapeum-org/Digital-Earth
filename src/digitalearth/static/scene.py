@@ -361,6 +361,17 @@ class Scene(WatermarkMixin):
         # one keeps replacing, so a scene handed an axes another figure was drawn on — including one an
         # earlier scene drew — still supersedes it rather than stacking on top of it silently.
         self._drew_on_axes: bool = False
+        #: The class edges of the most recent **graduated** layer, read off the ``BoundaryNorm`` its mappable
+        #: is coloured through — the same reading the web and interactive tiers publish under this name, so a
+        #: caller building a key out of band gets one answer whichever tier drew the map
+        #: (``tests/base/test_map_conformance.py``).
+        #:
+        #: ``None`` when nothing has classified yet, when the most recent colour-mapped layer was a
+        #: continuous ramp, and for a **categorical** fill — whose norm bins the class *codes* cleopatra
+        #: assigned (measured: ``[-0.5, 0.5, 1.5]`` for two categories) rather than the caller's own values,
+        #: so reporting them as class edges would be reporting a wrong answer. A categorical key is the
+        #: swatch legend the glyph draws on this tier.
+        self.last_breaks: Optional[List[float]] = None
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
 
@@ -560,7 +571,35 @@ class Scene(WatermarkMixin):
         if drawn is None:
             self._forget_layer(layer_id)
             return None
+        self._record_class_edges(drawn)
         return drawn.artist
+
+    def _record_class_edges(self, drawn: Any) -> None:
+        """Publish the class edges of a layer that colours by value, on :attr:`last_breaks`.
+
+        Read off the artist rather than recomputed beside it: cleopatra does the classifying, and the
+        ``BoundaryNorm`` it leaves on the mappable is what matplotlib actually colours through — so a record
+        taken from anywhere else could disagree with the picture, which is the failure mode this tier has had
+        before. Done here, in the one funnel every drawn layer passes through, because ``scheme=`` is a
+        declared parameter of :meth:`~digitalearth.static.maps.vector.VectorMixin.choropleth` and travels in
+        ``**opts`` on every other classifying builder; a record written into one of them would have left the
+        rest silent.
+
+        Args:
+            drawn: What the drawer handed back, as ``DrawnLayer`` describes it.
+        """
+        norm = getattr(drawn.artist, "norm", None)
+        if norm is None:
+            # Nothing on this layer maps a value to a colour — a graticule, a label, a coastline — so it has
+            # no opinion about class edges and must not clear the layer that had one.
+            return
+        edges = getattr(norm, "boundaries", None)
+        if edges is None or getattr(drawn.glyph, "category_legend", None) is not None:
+            # A continuous ramp cut nothing; a categorical fill's norm bins the codes cleopatra assigned, not
+            # the caller's categories, so neither has class edges to publish (see :attr:`last_breaks`).
+            self.last_breaks = None
+            return
+        self.last_breaks = [float(edge) for edge in edges]
 
     def _forget_layer(self, layer_id: str) -> None:
         """Drop a layer from the description, and with it whatever it registered.
