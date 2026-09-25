@@ -15,15 +15,25 @@ tier: they call the Core names (`points`, `choropleth`, `graticule`) and read `f
 whole point of the contract those names were frozen into.
 
 **Which tiers subclass it, and why the other two cannot yet.** The package has four —
-:data:`ALL_TIERS` — and `web` and `interactive` are the two that sign here. The **static** tier is the
-*default* one and is still absent: `points` and `choropleth` are `PENDING` under the Core spelling on it
-(they are `scatter`, and a `choropleth` with a different signature), so probes written against the frozen
-names cannot run against it until order 27a. The **3-D** tier draws a scene rather than a map and has no
-`points`/`graticule` at all. Saying that nowhere is what let :data:`NO_PORTABLE_CHANNELS` sit empty beside
-two tiers that record no portable channel, reading as a statement about the package when it was one about
-the subset (review R-M4). Both are named in the tables now, and
-:class:`TestTheTablesDescribeThePackage` re-asks them the questions those tables answer for — so an entry
+:data:`ALL_TIERS` — and **three of them sign here**: `web`, `interactive` and, since order 27a, the
+default `matplotlib` tier. The static tier could not before, and the reason was a spelling and nothing
+else: `points` was `PENDING` under the Core name on it because the builder was called `scatter`, so probes
+written against the frozen names had nothing to call. Order 27a adopted `field`/`points`/`polygons` there,
+and `points` was the only name standing between this suite and the tier that draws most of the package's
+figures — measured, its `choropleth` and `graticule` already took the arguments these probes pass, and its
+seed figure already described exactly :data:`EXPECTED_SEED`.
+
+The **3-D** tier draws a scene rather than a map and has no `points`/`graticule` at all, so it is held to
+the drift tables instead, through :data:`ABSENT_TIERS`. Saying that nowhere is what let
+:data:`NO_PORTABLE_CHANNELS` sit empty beside two tiers that record no portable channel, reading as a
+statement about the package when it was one about the subset (review R-M4); it is named in the tables now,
+and :class:`TestTheTablesDescribeThePackage` re-asks it the questions those tables answer for — so an entry
 cannot outlive the defect it excuses on an unsubclassed tier either (review R-L7).
+
+**A tier that signs may still be named in a drift table**, and the static tier is the first to be both: it
+records no portable channel, so it stays on :data:`NO_PORTABLE_CHANNELS`, and the probes hold it to
+recording none — which is a stronger guard than the reverse branch that covered it while it was absent,
+because the probe runs on every other question too.
 
 **About `to_backend()`.** The brief this was written from calls for a minimal `to_backend` round trip, web to
 interactive. `to_backend()` does not exist yet — it is **order 33 (U-6)**, and building it is explicitly not
@@ -228,16 +238,33 @@ NO_PORTABLE_CHANNELS: dict[str, str] = {
 #:
 #: Read by :class:`TestEveryTierIsReallyCollected`, which is the whole reason this is written down: the
 #: renderer contract's classes were gated on an engine no collecting job had, and nothing said so. A tier is
-#: really covered only when its task names this module **and** the environment that task is run in carries
+#: really covered only when its task collects this module **and** the environment that task is run in carries
 #: the feature that installs its engine.
+#:
+#: The static tier's row is a different shape from the other two and says so honestly. Its job is the `main`
+#: matrix, which passes pytest **no path at all** and so collects `testpaths` — the whole `tests/` tree, this
+#: module included. The single-backend tasks name their directories explicitly, which is exactly why they had
+#: to name this module too. :func:`_task_collects_the_module` is what tells the two cases apart rather than
+#: demanding the module be named in a command that needs no paths. Its feature is `dev`, the only one the
+#: `dev` environment carries: matplotlib and cleopatra are core dependencies here, not an extra, which is the
+#: same thing said the other way round — the default tier is the one no feature gates.
 TIER_JOBS: dict[str, tuple[str, str, str]] = {
+    "matplotlib": ("main", "dev", "dev"),
     "web": ("test-web", "web", "web"),
     "interactive": ("test-interactive", "interactive", "interactive"),
 }
 
 #: Each tier's engine, as the module whose absence gates the tier's class. The collection guard asks whether
 #: it is importable to decide whether this environment is one where that tier must contribute items.
-TIER_ENGINES: dict[str, str] = {"web": "maplibre", "interactive": "geoviews"}
+#:
+#: The static tier's is `matplotlib`, which is never absent — so its class is gated on nothing and its row
+#: here means "this tier must contribute items in every environment". That is the intended reading: a job
+#: that collects this module at all has to collect the default tier's probes.
+TIER_ENGINES: dict[str, str] = {
+    "matplotlib": "matplotlib",
+    "web": "maplibre",
+    "interactive": "geoviews",
+}
 
 #: The tiers whose **figure** carries no class edges, each with what carries them instead.
 #:
@@ -446,28 +473,6 @@ def _static_map():
     return Map(crs=4326)
 
 
-def _static_styled(drawn) -> None:
-    """Draw one explicitly styled point layer on the static tier.
-
-    Args:
-        drawn: The static map to draw on.
-
-    Note:
-        `scatter`, not `points`: the Core spelling is `PENDING` on this tier, which is the reason it does
-        not subclass :class:`MapConformanceBase` and is held here instead.
-    """
-    drawn.scatter(_points(), size=SIZE)
-
-
-def _static_hidden(drawn) -> None:
-    """Ask the static tier for a point layer that starts hidden.
-
-    Args:
-        drawn: The static map to draw on.
-    """
-    drawn.scatter(_points(), visible=False)
-
-
 def _scene_3d():
     """Return an empty 3-D scene.
 
@@ -502,8 +507,8 @@ class OutsideTheSuite:
     """How to reach a tier that does not subclass :class:`MapConformanceBase`.
 
     The tables above excuse a tier from a promise, and an excuse is only honest while something re-asks the
-    question. The subclassed tiers are re-asked by the base class; these two had nothing asking, so an entry
-    for them would have been a claim rather than a measurement (review R-M4/R-L7).
+    question. The subclassed tiers are re-asked by the base class; the one that is not had nothing asking, so
+    an entry for it would have been a claim rather than a measurement (review R-M4/R-L7).
 
     Attributes:
         engine: The module whose absence means this tier cannot be exercised here, for `importorskip`.
@@ -518,16 +523,17 @@ class OutsideTheSuite:
     hidden: Callable[[Any], None]
 
 
-#: The two tiers the probes above do not reach, and how to ask them the questions the tables answer for.
+#: The tier the probes above do not reach, and how to ask it the questions the tables answer for.
 #:
-#: The static tier's `points`/`choropleth` are `PENDING` under the Core spelling (they are `scatter` and
-#: `choropleth` with a different signature), and the 3-D tier draws a scene rather than a map — neither can
-#: inherit probes written against the frozen Core names. That is why they are not subclasses, and it is
-#: why they need this.
+#: The 3-D tier draws a scene rather than a map and has no `points` or `graticule` under any spelling, so it
+#: cannot inherit probes written against the frozen Core names. That is why it is not a subclass, and it is
+#: why it needs this.
+#:
+#: **The static tier came off.** It was here for one reason — `points` was `PENDING` under the Core spelling,
+#: because the builder was called `scatter` — and order 27a adopted the spelling, so it signs the contract
+#: directly now (:class:`TestMatplotlibMapConformance`). Its reverse branches were the two checks below; the
+#: probes it inherits ask the same questions, and eleven more.
 ABSENT_TIERS: dict[str, OutsideTheSuite] = {
-    "matplotlib": OutsideTheSuite(
-        "matplotlib", _static_map, _static_styled, _static_hidden
-    ),
     "3d": OutsideTheSuite("pyvista", _scene_3d, _cloud_styled, _cloud_hidden),
 }
 
@@ -582,6 +588,43 @@ def _class_edges(symbology) -> tuple:
     encoding = dict(symbology.encodings).get("color")
     scale = getattr(encoding, "scale", None)
     return tuple(getattr(scale, "breaks", None) or ())
+
+
+def _task_collects_the_module(command: str, manifest: dict) -> bool:
+    """Say whether a pixi task's pytest command really collects this module.
+
+    Two shapes of task collect it, and only one of them names it. The single-backend tasks pass explicit
+    directories (`pytest -vvv tests/web …`), so pytest collects those and nothing else — which is how the
+    renderer contract went uncollected in every job for its whole life, and why naming this module in the
+    command was the fix. The `main` matrix passes **no** path, so pytest falls back to `testpaths` and
+    collects the whole tree, this module with it. Demanding the module be named there would demand a
+    redundant argument; assuming a task collects everything would excuse the very defect this guards.
+
+    Naming the module is not sufficient on its own either: nothing in it is marked, so a task that
+    *selects* a marker (`-m mpl`) collects this module and deselects every item in it. Only a negated
+    expression (`-m 'not mpl'`, `-m 'not image3d'`) leaves an unmarked item standing, which is what the real
+    tier tasks use.
+
+    Args:
+        command: The task's command line, as the manifest spells it.
+        manifest: The parsed `pyproject.toml`, for `testpaths`.
+
+    Returns:
+        `True` when the items here survive both the paths and the marker expression. `False` otherwise —
+        which covers the two cases that matter: a command that names some `tests/` paths and not this one,
+        and one that selects a marker nothing here carries.
+    """
+    tokens = command.split()
+    if "-m" in tokens:
+        selected = command.split("-m", 1)[1].lstrip().lstrip("'\"")
+        if not selected.startswith("not "):
+            return False
+    if MODULE_PATH in command:
+        return True
+    if any(token.startswith("tests") for token in tokens):
+        return False
+    covered = manifest["tool"]["pytest"]["ini_options"]["testpaths"]
+    return any(MODULE_PATH.startswith(f"{root.rstrip('/')}/") for root in covered)
 
 
 def _classification_excuse(backend: str) -> Optional[str]:
@@ -1066,6 +1109,31 @@ needs_geoviews = pytest.mark.skipif(
 )
 
 
+class TestMatplotlibMapConformance(MapConformanceBase):
+    """The static (matplotlib) tier — the default one, and the one that draws most of the package.
+
+    Gated on nothing, because matplotlib is a core dependency rather than an extra: this class collects in
+    every environment that collects this module, which is what makes the default tier the one tier no job can
+    silently drop.
+
+    It signs from order 27a. The only thing that had kept it out was a spelling — its point builder was
+    `scatter`, so `points` was `PENDING` and the probes had nothing to call. Measured before the rename, with
+    `scatter -> points` simulated, it already answered ten of the twelve probes; of the two that failed, one
+    was the classification guard reading a single table (#337) and the other was a real gap, `last_breaks`,
+    which this tier now publishes off the norm its polygons are coloured through.
+    """
+
+    backend = "matplotlib"
+
+    def make(self):
+        """Return an empty static map.
+
+        Returns:
+            The tier's `Map`, in EPSG:4326 — the display CRS the other tiers' probes draw in.
+        """
+        return _static_map()
+
+
 @needs_maplibre
 class TestWebMapConformance(MapConformanceBase):
     """The web (MapLibre + deck.gl) tier."""
@@ -1120,7 +1188,7 @@ class TestEveryTierIsReallyCollected:
 
     @pytest.mark.parametrize("backend", sorted(TIER_JOBS))
     def test_the_tiers_job_collects_this_module(self, backend):
-        """A tier's task must name this module, or the job runs none of its probes.
+        """A tier's task must collect this module, or the job runs none of its probes.
 
         Args:
             backend: The tier under test.
@@ -1129,11 +1197,16 @@ class TestEveryTierIsReallyCollected:
             `test-web` collects `tests/web` and `test-interactive` collects `tests/interactive`; neither
             reaches `tests/base` on its own. That is exactly how the renderer contract went uncollected, and
             it was fixed the same way — by naming the module in the task's own command.
+
+            The static tier's job is the `main` matrix, which names no path and so collects `testpaths`.
+            :func:`_task_collects_the_module` answers for both shapes off the manifest, and refuses the one
+            that matters: a task that names *some* `tests/` paths and not this one.
         """
         task, _, _ = TIER_JOBS[backend]
-        defined = self._manifest()["tool"]["pixi"]["tasks"][task]
+        manifest = self._manifest()
+        defined = manifest["tool"]["pixi"]["tasks"][task]
         command = defined["cmd"] if isinstance(defined, dict) else defined
-        assert MODULE_PATH in command, (
+        assert _task_collects_the_module(command, manifest), (
             f"the {task!r} task does not collect {MODULE_PATH}, so the {backend} tier's probes never run: "
             f"{command}"
         )
@@ -1190,6 +1263,50 @@ class TestEveryTierIsReallyCollected:
         assert empty == [], (
             f"{empty} have their engine installed here and collected no items from {MODULE_PATH}; "
             f"collected {len(collected)} items in total"
+        )
+
+
+class TestWhatCountsAsCollectingThisModule:
+    """The helper the collection guard leans on, held to its own answers.
+
+    :func:`_task_collects_the_module` widened that guard from "the command names this module" to "the command
+    really collects it", which is the shape of change that can quietly turn a guard into a rubber stamp. So
+    the four answers it has to give are asserted directly, including the two `False` ones — a helper that
+    answered `True` for everything would leave `test_the_tiers_job_collects_this_module` passing for a task
+    that runs none of these probes, which is precisely the defect that guard exists for.
+    """
+
+    @staticmethod
+    def _manifest() -> dict:
+        """Return the parsed `pyproject.toml`.
+
+        Returns:
+            The manifest, as a dict — the helper reads `testpaths` out of it.
+        """
+        return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    def test_a_command_that_names_this_module_collects_it(self):
+        """The original rule, and the one the single-backend tasks satisfy."""
+        assert _task_collects_the_module(
+            f"pytest -vvv tests/web {MODULE_PATH}", self._manifest()
+        )
+
+    def test_a_command_with_no_path_falls_back_to_testpaths(self):
+        """The `main` matrix's shape: no path, so pytest collects the whole configured tree."""
+        assert _task_collects_the_module(
+            "pytest -vvv -m 'not mpl' --cov=src", self._manifest()
+        )
+
+    def test_a_command_that_names_other_test_paths_only_does_not(self):
+        """The defect the guard was written for: explicit paths that leave this module out."""
+        assert not _task_collects_the_module(
+            "pytest -vvv tests/web tests/ops", self._manifest()
+        )
+
+    def test_a_command_that_selects_a_marker_does_not(self):
+        """Nothing here is marked, so a positive `-m` collects this module and deselects every item."""
+        assert not _task_collects_the_module(
+            f"pytest -m mpl --mpl {MODULE_PATH}", self._manifest()
         )
 
 
@@ -1537,99 +1654,51 @@ class TestATierMayBringAProbeOfItsOwn:
         )
 
 
-class TestTheClassificationGuardExcusesWhatTheTablesExcuse:
-    """The guard read one table where this module's prose names two (#337).
+class TestAnExcuseComesFromATableAndNotFromItsAbsence:
+    """The half of the #337 fix that no tier's own probe can cover.
 
-    The comment on :data:`NO_PORTABLE_CLASSIFICATION` closes by excusing the static and 3-D tiers
-    "wholesale by :data:`NO_PORTABLE_CHANNELS` — a tier that publishes no encoding publishes no scale
-    either", and
     :meth:`MapConformanceBase.test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such` read
-    `NO_PORTABLE_CLASSIFICATION` alone. Nothing had fired, because the only tiers that subclass the suite
-    are `web` and `interactive` and both are named in that one table — so the excuse the prose grants was
-    never exercised.
+    :data:`NO_PORTABLE_CLASSIFICATION` alone, while the comment on that table excuses the tiers on
+    :data:`NO_PORTABLE_CHANNELS` "wholesale — a tier that publishes no encoding publishes no scale either".
+    Nothing had fired because the only tiers signing the suite were the two named in the first table; the
+    static tier's Core rename made it a subclass, and against the unfixed guard its probe failed with
+    "the matplotlib tier's figure carries () for a graduated choropleth; publish the Scale on the colour
+    encoding, or name the tier in NO_PORTABLE_CLASSIFICATION" — a classification defect reported against a
+    tier that publishes no colour encoding for a `Scale` to hang on.
 
-    The static tier's Core renames (order 27a) let it subclass, which is what would surface this: measured
-    against the unfixed guard, the probe failed for it with "publish the Scale on the colour encoding, or
-    name the tier in NO_PORTABLE_CLASSIFICATION" — a classification defect reported against a tier that
-    publishes no colour encoding for a `Scale` to hang on, which is the very thing
-    :data:`NO_PORTABLE_CHANNELS` already records about it.
-
-    Asked here of a make-believe subclass, because the tier that surfaces it does not sign the suite yet.
-    The subclass that replaces this is the next step of the same order, and this class goes when it lands.
+    **That direction is covered by the live tier now**: `TestMatplotlibMapConformance` runs the probe, in
+    every environment, and its passing is the fix. What no tier covers is the *other* direction — that
+    widening the guard's reading from one table to two did not excuse tiers no table names, which would make
+    every tier's class-edge probe vacuous. That is what is asked here.
     """
 
-    @staticmethod
-    def _as_if_the_static_tier_signed():
-        """Return the static tier as a subclass of the suite, without collecting its other probes.
-
-        Returns:
-            The class. Its name does not begin with `Test`, so pytest collects nothing from it — the point
-            is the one probe's answer about a tier :data:`NO_PORTABLE_CHANNELS` names, not the eleven
-            probes the tier cannot answer until the renames land.
-        """
-
-        class _AsIfSigned(MapConformanceBase):
-            """The matplotlib tier, under the name its own `Capabilities` spells."""
-
-            backend = "matplotlib"
-
-            def make(self):
-                """Return an empty static map.
-
-                Returns:
-                    The tier's `Map`, in the display CRS the other tiers' probes use.
-                """
-                return _static_map()
-
-        return _AsIfSigned
-
-    def test_the_tier_asked_here_is_excused_by_one_table_and_not_the_other(self):
-        """The premise, so the probe below cannot pass for the wrong reason.
-
-        Test scenario:
-            A check that held only while both tables named the tier would pass by being vacuous — the
-            failure mode a narrowed assertion is. The tier asked below has to be one the prose excuses and
-            the guard did not: named in :data:`NO_PORTABLE_CHANNELS`, absent from
-            :data:`NO_PORTABLE_CLASSIFICATION`.
-        """
-        backend = self._as_if_the_static_tier_signed().backend
-        assert backend in NO_PORTABLE_CHANNELS, (
-            f"{backend} is no longer excused from recording portable channels, so the probe below is not "
-            "asking about the gap this class exists for"
-        )
-        assert backend not in NO_PORTABLE_CLASSIFICATION, (
-            f"{backend} is named in NO_PORTABLE_CLASSIFICATION now, which excuses it under the guard's own "
-            "reading and makes the check below vacuous"
-        )
-
     def test_a_tier_no_table_names_is_excused_from_nothing(self):
-        """The over-broad direction: an excuse comes from a table, never from the absence of one.
+        """An excuse comes from a table, never from the absence of one.
 
         Test scenario:
-            Widening the guard's reading from one table to two is only safe while a tier in *neither* is
-            still held to :data:`EXPECTED_BREAKS`. A helper that answered with a reason for every name would
-            pass the check below and excuse the whole package, which is the shape of a check narrowed until
-            it passes rather than fixed.
+            A helper that answered with a reason for every name would pass the live tiers' probes and excuse
+            the whole package — the shape of a check narrowed until it passes rather than fixed. Measured
+            against that mutation: removing :func:`_classification_excuse`'s `return None` branch fails here
+            with `'it publishes no encoding at all for a Scale to hang on - None' =
+            _classification_excuse('make-believe')`.
         """
         assert _classification_excuse(MAKE_BELIEVE) is None, (
             f"{MAKE_BELIEVE} is named in neither table and was excused anyway, so no tier is held to its "
             "class edges any more"
         )
 
-    def test_a_tier_that_publishes_no_encoding_is_not_asked_to_publish_a_scale(self):
-        """A tier with nowhere to put a `Scale` must not be failed for not putting one there.
+    def test_every_tier_the_package_ships_is_excused_by_a_named_table(self):
+        """And the complement: each shipped tier's excuse, or lack of one, is traceable to a table.
 
         Test scenario:
-            The probe is called directly, on a real map of the tier the prose excuses, so what is measured
-            is the guard's own branch rather than a restatement of the tables. Before the fix this raised
-            `AssertionError: the matplotlib tier's figure carries () for a graduated choropleth; publish
-            the Scale on the colour encoding, or name the tier in NO_PORTABLE_CLASSIFICATION`.
+            The reason the check above needs a tier name the package does not ship. Every tier it *does*
+            ship is named in one of the two tables today, so none of them exercises the unexcused branch —
+            stating that here is what stops a reader concluding the branch is dead code.
         """
-        probing = self._as_if_the_static_tier_signed()()
-        drawn = probing.make()
-        try:
-            probing.test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such(
-                drawn
-            )
-        finally:
-            _closed(drawn)
+        unexcused = sorted(
+            backend for backend in ALL_TIERS if _classification_excuse(backend) is None
+        )
+        assert unexcused == [], (
+            f"{unexcused} are held to EXPECTED_BREAKS on their figure now; that branch is live, so the "
+            "make-believe tier above is no longer the only thing exercising it"
+        )
