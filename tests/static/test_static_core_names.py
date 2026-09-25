@@ -208,7 +208,7 @@ class TestNoInternalCallerReachesADeprecatedSpelling:
         Args:
             kind: The kind token under test.
         """
-        resolved = _KIND_METHODS.get(kind, kind)
+        resolved, _ = _KIND_METHODS.get(kind, (kind, {}))
         assert hasattr(Map, resolved), (
             f"animation kind {kind!r} resolves to Map.{resolved}(), which does not exist"
         )
@@ -224,7 +224,7 @@ class TestNoInternalCallerReachesADeprecatedSpelling:
         Args:
             kind: The kind token under test.
         """
-        resolved = _STATIC_RASTER_KINDS.get(kind, kind)
+        resolved, _ = _STATIC_RASTER_KINDS.get(kind, (kind, {}))
         assert hasattr(Map, resolved), (
             f"quickmap kind {kind!r} resolves to Map.{resolved}(), which does not exist"
         )

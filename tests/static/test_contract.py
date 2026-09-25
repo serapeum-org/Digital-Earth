@@ -837,8 +837,9 @@ def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
 #: the replacement; documenting the data argument twice is what the rename exists to stop.
 PATH_TAKING_BUILDERS = {
     "field": "dataset",
-    "contour": "dataset",
-    "contourf": "dataset",
+    # `contours`, not `contour`/`contourf`: those two are translating aliases now (#262) and carry the
+    # one-line docstring that names the `filled=` to write instead, which is the whole of their job.
+    "contours": "dataset",
     "pcolormesh": "dataset",
     "block": "dataset",
     "rgb_composite": "dataset",

@@ -358,13 +358,23 @@ def _add_colorbar(scene: Map) -> Any:
         return None
 
 
-#: The static tier's renderer for each raster ``kind`` whose method is spelled differently, plus ``"auto"``.
+#: The static tier's renderer for each raster ``kind`` whose method is spelled differently, as
+#: ``{kind: (method, keywords)}``.
 #:
 #: The companion of :data:`_INTERACTIVE_RASTER_KINDS`, and here for the same reason: a ``kind`` is the
-#: renderer a caller names, and the static tier's Core rename (order 27a) moved the method it dispatches to.
-#: Dispatching on the kind alone would reach the deprecated ``Map.imshow`` alias and warn a caller about a
-#: spelling they never wrote. A kind not listed here is the method's own name (``contourf``, ``pcolormesh``).
-_STATIC_RASTER_KINDS = {"auto": "field", "imshow": "field"}
+#: renderer a caller names, and the static tier's Core renames (order 27a) moved the methods it dispatches
+#: to. Dispatching on the kind alone would reach a deprecated alias and warn a caller about a spelling they
+#: never wrote.
+#:
+#: The keywords are why this is a pair rather than a name. ``contour`` and ``contourf`` are one method now,
+#: told apart by ``filled=`` (#262), so the kind carries the argument that picks the render. A kind not
+#: listed here is the method's own name with no keywords — ``pcolormesh``, ``block``.
+_STATIC_RASTER_KINDS = {
+    "auto": ("field", {}),
+    "imshow": ("field", {}),
+    "contour": ("contours", {"filled": False}),
+    "contourf": ("contours", {"filled": True}),
+}
 
 
 def _vector_kind(data: FeatureCollection, caller: str) -> str:
@@ -430,8 +440,8 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
         scene.points(data, **kwargs)
         return
     if isinstance(data, Dataset):
-        method = _STATIC_RASTER_KINDS.get(kind, kind)
-        getattr(scene, method)(data, **kwargs)
+        method, picked = _STATIC_RASTER_KINDS.get(kind, (kind, {}))
+        getattr(scene, method)(data, **picked, **kwargs)
         return
     raise TypeError(f"quickmap cannot draw a {type(data).__name__}")
 

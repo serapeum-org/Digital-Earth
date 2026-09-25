@@ -134,11 +134,17 @@ _ANIMATION_KINDS = (
     "block",
 ) + _COMPOSITE_KINDS
 
-#: Where the method that draws a ``kind`` is spelled differently from the kind itself. A ``kind`` is the
-#: *renderer* a caller names, and the Core rename (order 27a) moved the method it dispatches to — so
-#: dispatching on the kind alone would reach the deprecated alias and warn the caller about a spelling they
-#: never wrote. ``"imshow"`` stays in the vocabulary because it is what a caller may already have written.
-_KIND_METHODS = {"imshow": "field"}
+#: Where the method that draws a ``kind`` differs from the kind itself, as ``{kind: (method, keywords)}``.
+#:
+#: A ``kind`` is the *renderer* a caller names, and order 27a moved the methods it dispatches to — so
+#: dispatching on the kind alone would reach a deprecated alias and warn the caller about a spelling they
+#: never wrote. The old kinds stay in the vocabulary because they are what a caller may already have
+#: written; the keywords are what tells ``contour`` and ``contourf`` apart now that they are one method.
+_KIND_METHODS = {
+    "imshow": ("field", {}),
+    "contour": ("contours", {"filled": False}),
+    "contourf": ("contours", {"filled": True}),
+}
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -745,7 +751,8 @@ class AnimationMixin(_MixinBase):
         """
         if ocean and self.globe:
             self.ocean()
-        getattr(self, _KIND_METHODS.get(kind, kind))(data, **opts)
+        method, picked = _KIND_METHODS.get(kind, (kind, {}))
+        getattr(self, method)(data, **picked, **opts)
         if coastlines:
             try:
                 self.coastlines()

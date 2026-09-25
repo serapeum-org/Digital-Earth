@@ -353,6 +353,11 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # Core method under an older name (see that table). Order 27a adopted the *name* anyway, so
                 # the old spelling is live here and the capability gap is a keyword shortfall.
                 "set_extent": "set_bounds",
+                # Translating aliases, not plain renames: the old names carry the `filled=` the Core name
+                # takes as an argument (#262), which is why they are hand-written rather than built by
+                # `renamed_method` — the same shape `web`'s `globe` has, for the same reason.
+                "contour": "contours",
+                "contourf": "contours",
             }
         ),
         "interactive": MappingProxyType(

@@ -4,6 +4,7 @@ Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into c
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
 
+import warnings
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
@@ -122,6 +123,48 @@ def _drawing_limits(limits: Any) -> Any:
     ]
 
 
+def _levels_every(values: Any, interval: float) -> List[float]:
+    """Return the multiples of ``interval`` that fall inside a band's finite range.
+
+    The static counterpart of what ``interval=`` means on the web tier, where pyramids walks the band by the
+    same spacing. Only the multiples *inside* the range are returned: a level at or beyond an extreme traces
+    the frame's edge or nothing, so handing matplotlib one would add a contour a reader cannot see.
+
+    Args:
+        values: The band's values, as the drawer read them.
+        interval: The spacing between levels, in the band's own units.
+
+    Returns:
+        The levels, ascending.
+
+    Raises:
+        ValueError: when ``interval`` is not a positive, finite number, or when no multiple of it lies
+            inside the band — either of which would otherwise surface from inside matplotlib as a complaint
+            about an empty level list.
+    """
+    if not isfinite(interval) or interval <= 0:
+        raise ValueError(
+            f"contours() takes interval= as a positive spacing in the band's units; got {interval!r}"
+        )
+    finite = np.asarray(values, dtype="float64")
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        raise ValueError(
+            "contours(interval=) has no values to space levels through: the band is empty"
+        )
+    low, high = float(finite.min()), float(finite.max())
+    first = np.floor(low / interval) + 1.0
+    last = np.ceil(high / interval) - 1.0
+    steps = np.arange(first, last + 1.0) * interval
+    inside = [float(level) for level in steps if low < level < high]
+    if not inside:
+        raise ValueError(
+            f"contours(interval={interval!r}) crosses no level inside the band's range "
+            f"({low!r} to {high!r}); pass a smaller interval, or levels= instead"
+        )
+    return inside
+
+
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -164,7 +207,15 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     levels = props["levels"]
     if levels is None and kind in _CONTOUR_KINDS:
-        levels = style.get("levels")  # the variable's canonical contour levels
+        # A caller's `interval=` wins over the variable's canonical levels, because it is the one the caller
+        # wrote. Resolved here rather than in the builder: "one level every N" is a fact about the band's
+        # range, and the builder records a description without reading the data.
+        interval = props.get("interval")
+        levels = (
+            _levels_every(z_values, interval)
+            if interval is not None
+            else style.get("levels")  # the variable's canonical contour levels
+        )
     if levels is not None:
         opts["levels"] = levels
     # Geo-reference the data. cleopatra honours `extent` only for imshow (bbox order
@@ -326,6 +377,7 @@ class RasterMixin(_MixinBase):
         band: int = 1,
         cmap: Optional[str] = None,
         levels: Any = None,
+        interval: Optional[float] = None,
         add_colorbar: bool = False,
         default_cmap: str = DEFAULT_FIELD_CMAP,
         draw_band: Optional[str] = None,
@@ -351,6 +403,9 @@ class RasterMixin(_MixinBase):
             cmap: Colormap name, or ``None`` (default) to resolve one from the variable via ``auto_style``.
             levels: Discrete levels (int or sequence of edges), or ``None`` to take the canonical levels
                 ``auto_style`` resolved for the variable — on a contour render only.
+            interval: Spacing between contour levels — "one level every N" — resolved against the band's own
+                range by the drawer, which is the only place the data is read. Give at most one of this or
+                ``levels``; ``None`` (default) leaves the levels to ``levels``/``auto_style``.
             add_colorbar: When ``False`` (default) the Scene owns the colorbar, not the glyph.
             default_cmap: Colormap used when ``cmap`` is ``None`` *and* ``auto_style`` resolves none.
             draw_band: Where the layer is drawn in the figure's description, overriding the band its kind
@@ -397,6 +452,7 @@ class RasterMixin(_MixinBase):
                     "band": band,
                     "cmap": recorded_cmap,
                     "levels": levels,
+                    "interval": interval,
                     "add_colorbar": add_colorbar,
                     "default_cmap": default_cmap,
                     "zorder": zorder,
@@ -451,6 +507,70 @@ class RasterMixin(_MixinBase):
     #: before the rename reads back into the same drawer.
     imshow = renamed_method(new="field", old="imshow", owner="Map")
 
+    def contours(
+        self,
+        dataset: Any,
+        *,
+        levels: Any = None,
+        interval: Optional[float] = None,
+        filled: bool = False,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **kwargs,
+    ) -> Any:
+        """Trace iso-value lines through a raster band, or fill between them.
+
+        One method for both renders, which is what the Tier-2 contract declares and what the web and
+        interactive tiers offer. This tier had two — ``contour`` and ``contourf`` — so ``filled=`` meant
+        nothing here and a script moving between tiers had to know which of the two to write. Both old
+        spellings keep working for one release and warn, naming the ``filled=`` to pass instead.
+
+        Args:
+            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
+                first). Only a path-backed layer can be written down.
+            levels: The iso-values to trace — an int (a count) or a sequence of values. ``None``
+                (default) takes the variable's canonical levels from ``auto_style``, and leaves the choice
+                to matplotlib when it carries none. Give at most one of this or ``interval``.
+            interval: Spacing between levels — one level every N, in the band's own units. Resolved
+                against the band's range when it is drawn, so only the multiples *inside* the data are
+                traced. Give at most one of this or ``levels``.
+            filled: ``False`` (default) draws the levels as lines; ``True`` fills the bands between them.
+                The two are different matplotlib renders, so this is the argument that picks one.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is
+                the caller's own engine styling, split between the layer's description and the scene
+                (see the class docstring).
+
+        Returns:
+            The contour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
+
+        Raises:
+            ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one
+                thing, so neither can be silently preferred; when ``interval`` is not a positive finite
+                spacing or crosses no level inside the band; or from ``ArrayGlyph`` for a styling keyword
+                it does not accept.
+        """
+        if levels is not None and interval is not None:
+            raise ValueError(
+                "contours() takes at most one of interval= or levels=; "
+                f"got interval={interval!r} and levels={levels!r}"
+            )
+        return self._field(
+            dataset,
+            kind="contourf" if filled else "contour",
+            levels=levels,
+            interval=interval,
+            name=name,
+            visible=visible,
+            **kwargs,
+        )
+
     def contourf(
         self,
         dataset: Any,
@@ -459,31 +579,32 @@ class RasterMixin(_MixinBase):
         visible: bool = True,
         **kwargs,
     ) -> Any:
-        """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``).
+        """Deprecated spelling of :meth:`contours` with ``filled=True``; it forwards there and warns.
+
+        Written out rather than built by
+        :func:`~digitalearth.base.deprecation.renamed_method` because this is a **translating** alias, not a
+        plain rename: the old name carries the ``filled=True`` the new one takes as an argument, and that
+        helper forwards arguments unchanged. ``WebMap.globe`` is the same shape for the same reason.
 
         Args:
-            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
-                first). Only a path-backed layer can be written down.
-            name: The caller's own name for the layer, used as its id and its label; ``None``
-                (default) generates one from the kind, and a name already on the figure is suffixed
-                ``-2``, ``-3``, … (#321).
-            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
-                hidden, so a switcher reading the figure agrees with the drawing (#327).
-            **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
-                one this render reads. Anything left over is the caller's own engine styling, split
-                between the layer's description and the scene (see the class docstring).
+            dataset: As :meth:`contours` takes it.
+            name: As :meth:`contours` takes it.
+            visible: As :meth:`contours` takes it.
+            **kwargs: Passed straight through.
 
         Returns:
-            The filled-contour mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            Whatever :meth:`contours` returns.
 
-        Raises:
-            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
+        Warns:
+            DeprecationWarning: naming ``contours(filled=True)`` as its replacement, on the caller's line.
         """
-        return self._field(
-            dataset, kind="contourf", name=name, visible=visible, **kwargs
+        warnings.warn(
+            "Map.contourf() is deprecated and will be removed in a future release; "
+            "use Map.contours(filled=True) instead",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return self.contours(dataset, filled=True, name=name, visible=visible, **kwargs)
 
     def contour(
         self,
@@ -493,30 +614,30 @@ class RasterMixin(_MixinBase):
         visible: bool = True,
         **kwargs,
     ) -> Any:
-        """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``).
+        """Deprecated spelling of :meth:`contours` with ``filled=False``; it forwards there and warns.
+
+        Translating, and hand-written, for the reason :meth:`contourf` records.
 
         Args:
-            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
-                first). Only a path-backed layer can be written down.
-            name: The caller's own name for the layer, used as its id and its label; ``None``
-                (default) generates one from the kind, and a name already on the figure is suffixed
-                ``-2``, ``-3``, … (#321).
-            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
-                hidden, so a switcher reading the figure agrees with the drawing (#327).
-            **kwargs: Forwarded to :meth:`_field`, which documents the named ones — ``levels`` is the
-                one this render reads. Anything left over is the caller's own engine styling, split
-                between the layer's description and the scene (see the class docstring).
+            dataset: As :meth:`contours` takes it.
+            name: As :meth:`contours` takes it.
+            visible: As :meth:`contours` takes it.
+            **kwargs: Passed straight through.
 
         Returns:
-            The line-contour mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            Whatever :meth:`contours` returns.
 
-        Raises:
-            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
+        Warns:
+            DeprecationWarning: naming ``contours(filled=False)`` as its replacement, on the caller's line.
         """
-        return self._field(
-            dataset, kind="contour", name=name, visible=visible, **kwargs
+        warnings.warn(
+            "Map.contour() is deprecated and will be removed in a future release; "
+            "use Map.contours(filled=False) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.contours(
+            dataset, filled=False, name=name, visible=visible, **kwargs
         )
 
     def pcolormesh(
