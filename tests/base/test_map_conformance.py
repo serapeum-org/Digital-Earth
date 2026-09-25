@@ -84,7 +84,7 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import pytest
 
@@ -252,7 +252,10 @@ TIER_ENGINES: dict[str, str] = {"web": "maplibre", "interactive": "geoviews"}
 #: retires itself the day a tier publishes the `Scale` on its colour encoding.
 #:
 #: This table is about the two tiers that record encodings at all. The static and 3-D tiers are excused
-#: wholesale by :data:`NO_PORTABLE_CHANNELS` — a tier that publishes no encoding publishes no scale either.
+#: wholesale by :data:`NO_PORTABLE_CHANNELS` — a tier that publishes no encoding publishes no scale either —
+#: and that second excuse is granted by :func:`_classification_excuse`, which the guard reads. It said so
+#: here and the guard read this table alone, which nothing had noticed because the two tiers that sign the
+#: suite are the two named here (#337).
 NO_PORTABLE_CLASSIFICATION: dict[str, str] = {
     "web": (
         "the edges become a MapLibre step expression in paint['fill-color'], which carries the interior "
@@ -308,6 +311,11 @@ ALL_TIERS: tuple[str, ...] = _shipped_tiers()
 #: four tiers now give, through :func:`~digitalearth.base.spec.layer.free_layer_id` (#321).
 ASKED_NAME = "wells"
 SUFFIXED_NAME = "wells-2"
+
+#: A tier name the package does not ship, for the checks that are about what the tables say rather than about
+#: a tier. Written once because two classes want it: the one that proves a subclass may bring a probe of its
+#: own, and the one that proves an excuse is granted by a table rather than by default.
+MAKE_BELIEVE = "make-believe"
 
 # ---------------------------------------------------------------------------------------------------------
 # The seam D-11 left behind, and closed. `points()` took no `name=` on either 2-D tier — the web tier's did,
@@ -574,6 +582,32 @@ def _class_edges(symbology) -> tuple:
     encoding = dict(symbology.encodings).get("color")
     scale = getattr(encoding, "scale", None)
     return tuple(getattr(scale, "breaks", None) or ())
+
+
+def _classification_excuse(backend: str) -> Optional[str]:
+    """Return why a tier's figure carries no class edges, or `None` when it must carry them.
+
+    **Two tables can excuse a tier and the guard read one of them** (#337). A `Scale` lives on a layer's
+    `color` encoding, so a tier that publishes no encoding at all has nowhere to put one — which is why the
+    comment on :data:`NO_PORTABLE_CLASSIFICATION` excuses the tiers on :data:`NO_PORTABLE_CHANNELS`
+    "wholesale". The guard did not, and nothing said so, because the only tiers signing the suite were the
+    two named in the first table. Resolving both here means the two readings cannot diverge again.
+
+    Args:
+        backend: The tier's name, as its `Capabilities` spells it.
+
+    Returns:
+        The reason the tier is excused — its own row in :data:`NO_PORTABLE_CLASSIFICATION` where it has one,
+        and otherwise the :data:`NO_PORTABLE_CHANNELS` reason with what follows from it spelled out — or
+        `None` for a tier that must publish :data:`EXPECTED_BREAKS`.
+    """
+    named = NO_PORTABLE_CLASSIFICATION.get(backend)
+    if named is not None:
+        return named
+    unpublished = NO_PORTABLE_CHANNELS.get(backend)
+    if unpublished is None:
+        return None
+    return f"it publishes no encoding at all for a Scale to hang on — {unpublished}"
 
 
 def _described(figure) -> tuple:
@@ -875,18 +909,23 @@ class MapConformanceBase:
             A drift guard over the gap the probe above leaves, in both directions.
             :class:`~digitalearth.base.spec.scale.Scale` on the layer's `color` encoding is where class
             edges would have to live for `to_backend()` to carry them, and :func:`_class_edges` looks
-            exactly there. A tier on :data:`NO_PORTABLE_CLASSIFICATION` must carry none; a tier off it must
-            carry :data:`EXPECTED_BREAKS`, so the day a tier publishes its classification the entry comes
-            off and this becomes the cross-seam check the classification probe was mistaken for.
+            exactly there. A tier :func:`_classification_excuse` excuses must carry none; a tier it does not
+            must carry :data:`EXPECTED_BREAKS`, so the day a tier publishes its classification the entry
+            comes off and this becomes the cross-seam check the classification probe was mistaken for.
+
+            The excuse is resolved through that helper rather than read off
+            :data:`NO_PORTABLE_CLASSIFICATION` here, because a tier that records **no** encoding has nowhere
+            to hang a `Scale` and was excused in that table's prose and by nothing in this branch (#337).
         """
         drawn.choropleth(_polygons(), COLUMN, scheme=SCHEME, k=CLASSES)
         figure = drawn.figure_spec
         symbology = figure.layers.get(figure.layers.ids[-1]).symbology
         carried = _class_edges(symbology)
-        if self.backend in NO_PORTABLE_CLASSIFICATION:
+        excuse = _classification_excuse(self.backend)
+        if excuse is not None:
             assert carried == (), (
-                f"the {self.backend} tier's figure now carries {carried}; take it off "
-                "NO_PORTABLE_CLASSIFICATION so the cross-tier check holds it"
+                f"the {self.backend} tier's figure now carries {carried}, and it is excused because "
+                f"{excuse}; take it off the table that excuses it so the cross-tier check holds it"
             )
             return
         assert carried == EXPECTED_BREAKS, (
@@ -1432,7 +1471,7 @@ class TestATierMayBringAProbeOfItsOwn:
         class _WithItsOwn(MapConformanceBase):
             """A tier that answers every shared question and one of its own."""
 
-            backend = "make-believe"
+            backend = MAKE_BELIEVE
 
             def test_something_only_this_tier_can_answer(self):
                 """A probe a single tier is entitled to add, which is what the check must tolerate."""
@@ -1496,3 +1535,101 @@ class TestATierMayBringAProbeOfItsOwn:
         assert _shadowed_probes(self._with_its_own()) == [], (
             "an untouched subclass answers every declared probe with the contract's own function"
         )
+
+
+class TestTheClassificationGuardExcusesWhatTheTablesExcuse:
+    """The guard read one table where this module's prose names two (#337).
+
+    The comment on :data:`NO_PORTABLE_CLASSIFICATION` closes by excusing the static and 3-D tiers
+    "wholesale by :data:`NO_PORTABLE_CHANNELS` — a tier that publishes no encoding publishes no scale
+    either", and
+    :meth:`MapConformanceBase.test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such` read
+    `NO_PORTABLE_CLASSIFICATION` alone. Nothing had fired, because the only tiers that subclass the suite
+    are `web` and `interactive` and both are named in that one table — so the excuse the prose grants was
+    never exercised.
+
+    The static tier's Core renames (order 27a) let it subclass, which is what would surface this: measured
+    against the unfixed guard, the probe failed for it with "publish the Scale on the colour encoding, or
+    name the tier in NO_PORTABLE_CLASSIFICATION" — a classification defect reported against a tier that
+    publishes no colour encoding for a `Scale` to hang on, which is the very thing
+    :data:`NO_PORTABLE_CHANNELS` already records about it.
+
+    Asked here of a make-believe subclass, because the tier that surfaces it does not sign the suite yet.
+    The subclass that replaces this is the next step of the same order, and this class goes when it lands.
+    """
+
+    @staticmethod
+    def _as_if_the_static_tier_signed():
+        """Return the static tier as a subclass of the suite, without collecting its other probes.
+
+        Returns:
+            The class. Its name does not begin with `Test`, so pytest collects nothing from it — the point
+            is the one probe's answer about a tier :data:`NO_PORTABLE_CHANNELS` names, not the eleven
+            probes the tier cannot answer until the renames land.
+        """
+
+        class _AsIfSigned(MapConformanceBase):
+            """The matplotlib tier, under the name its own `Capabilities` spells."""
+
+            backend = "matplotlib"
+
+            def make(self):
+                """Return an empty static map.
+
+                Returns:
+                    The tier's `Map`, in the display CRS the other tiers' probes use.
+                """
+                return _static_map()
+
+        return _AsIfSigned
+
+    def test_the_tier_asked_here_is_excused_by_one_table_and_not_the_other(self):
+        """The premise, so the probe below cannot pass for the wrong reason.
+
+        Test scenario:
+            A check that held only while both tables named the tier would pass by being vacuous — the
+            failure mode a narrowed assertion is. The tier asked below has to be one the prose excuses and
+            the guard did not: named in :data:`NO_PORTABLE_CHANNELS`, absent from
+            :data:`NO_PORTABLE_CLASSIFICATION`.
+        """
+        backend = self._as_if_the_static_tier_signed().backend
+        assert backend in NO_PORTABLE_CHANNELS, (
+            f"{backend} is no longer excused from recording portable channels, so the probe below is not "
+            "asking about the gap this class exists for"
+        )
+        assert backend not in NO_PORTABLE_CLASSIFICATION, (
+            f"{backend} is named in NO_PORTABLE_CLASSIFICATION now, which excuses it under the guard's own "
+            "reading and makes the check below vacuous"
+        )
+
+    def test_a_tier_no_table_names_is_excused_from_nothing(self):
+        """The over-broad direction: an excuse comes from a table, never from the absence of one.
+
+        Test scenario:
+            Widening the guard's reading from one table to two is only safe while a tier in *neither* is
+            still held to :data:`EXPECTED_BREAKS`. A helper that answered with a reason for every name would
+            pass the check below and excuse the whole package, which is the shape of a check narrowed until
+            it passes rather than fixed.
+        """
+        assert _classification_excuse(MAKE_BELIEVE) is None, (
+            f"{MAKE_BELIEVE} is named in neither table and was excused anyway, so no tier is held to its "
+            "class edges any more"
+        )
+
+    def test_a_tier_that_publishes_no_encoding_is_not_asked_to_publish_a_scale(self):
+        """A tier with nowhere to put a `Scale` must not be failed for not putting one there.
+
+        Test scenario:
+            The probe is called directly, on a real map of the tier the prose excuses, so what is measured
+            is the guard's own branch rather than a restatement of the tables. Before the fix this raised
+            `AssertionError: the matplotlib tier's figure carries () for a graduated choropleth; publish
+            the Scale on the colour encoding, or name the tier in NO_PORTABLE_CLASSIFICATION`.
+        """
+        probing = self._as_if_the_static_tier_signed()()
+        drawn = probing.make()
+        try:
+            probing.test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such(
+                drawn
+            )
+        finally:
+            _closed(drawn)
