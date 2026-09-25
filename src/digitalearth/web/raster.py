@@ -17,7 +17,7 @@ from loguru import logger
 
 from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.spec import DEFAULT_BAND, Bounds, LayerSpec, Scale, Symbology
-from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS
+from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
 from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
@@ -314,9 +314,11 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Raises:
         ValueError: when the description records none of the values the composite is built from — its
             three bands, its stretch limits or whether NoData is masked — naming the layer, its kind and
-            what is missing; when the recorded limits do not hold one `(lo, hi)` pair per band; or when no
-            pixel is finite in all three, since there is nothing to draw and an empty image would read as
-            a rendering failure rather than as an empty input.
+            what is missing; when it records a band count other than three, in
+            :func:`~digitalearth.base.stretch.require_three_bands`' words; when the recorded limits do not
+            hold one `(lo, hi)` pair per band; or when no pixel is finite in all three, since there is
+            nothing to draw and an empty image would read as a rendering failure rather than as an empty
+            input.
         OffLimbError: when the map is `strict` and the composite cannot be placed, in place of the `None`.
     """
     import numpy as np
@@ -326,6 +328,11 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     props = required_props(layer, "bands", "mask_nodata", "limits", "opacity")
     bands = list(props["bands"])
+    # The same guard the builder runs, because this is the other way in: a figure is drawn from its
+    # description — by a redraw onto another view, or from JSON written elsewhere — with no builder in front
+    # of it. Without it the count reaches `get_stack`, which answers with numpy's "could not broadcast input
+    # array from shape (4,9,2) into shape (4,9,3)": a complaint about an array the caller never named.
+    require_three_bands("rgb_composite", bands)
     # One warp for both halves: the pixels are read from the warped dataset and the corners are taken from
     # that same grid. Stacking `data` itself drew the source-CRS grid stretched over the warped grid's
     # extent — a different shape at a different resolution (review H1).
@@ -553,8 +560,6 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
             digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.
         """
-        from digitalearth.base.stretch import require_three_bands
-
         opacity = as_finite(opacity, "opacity", "WebMap.rgb_composite()")
         _require_layer_api()
         require_three_bands("rgb_composite", bands)

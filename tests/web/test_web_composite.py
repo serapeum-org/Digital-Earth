@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from matplotlib import image as mpimage
 
-from digitalearth.base.spec import DEFAULT_BAND
+from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS
 from digitalearth.web import WebMap
 from digitalearth.web import raster as web_raster
@@ -210,6 +210,73 @@ class TestTheCompositeOnTheMap:
         assert uri.split(",", 1)[1] in html, (
             "the drawn composite is not the shared stretch"
         )
+
+
+class TestTheBandCountGuardIsTheSharedOne:
+    """#266 — one helper answers "is this three bands?", on both ways into a composite.
+
+    ``base/stretch.py``'s ``require_three_bands`` says why it is checked up front: any other count
+    otherwise "surfaces deep inside the renderer". A builder is not the only way in — a figure is drawn from
+    its description, by a redraw onto another view or from JSON written elsewhere, and that path has no
+    builder in front of it.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _described_with(bands):
+        """Return a composite description naming ``bands``, as a stored figure would carry it.
+
+        Args:
+            bands: The band tuple to record.
+
+        Returns:
+            A `LayerSpec` of kind ``rgb`` with the four props the drawer reads.
+        """
+        return LayerSpec(
+            "rgb",
+            "rgb",
+            symbology=Symbology(
+                props={
+                    "bands": bands,
+                    "mask_nodata": True,
+                    "limits": None,
+                    "opacity": 1.0,
+                }
+            ),
+        )
+
+    def test_the_builder_refuses_in_the_shared_words(self, dataset):
+        """The builder's refusal is the shared helper's message, not one this tier writes.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            The half that was already right, pinned so the extraction below cannot quietly replace it with a
+            locally worded check again.
+        """
+        with pytest.raises(ValueError, match=r"needs exactly three bands, got 2"):
+            WebMap().rgb_composite(dataset, bands=(1, 2))
+
+    def test_the_drawer_refuses_in_the_same_words(self, mercator_rgb):
+        """A described composite with two bands is refused by count, not by array shape.
+
+        Args:
+            mercator_rgb: A three-band EPSG:3857 raster, so the drawer really warps and reads it.
+
+        Test scenario:
+            Without the guard the bands reach ``get_stack``, which fails with numpy's ``could not broadcast
+            input array from shape (4,9,2) into shape (4,9,3)`` — a message about an array the caller never
+            named, from inside a renderer they did not call.
+        """
+        with pytest.raises(ValueError, match=r"needs exactly three bands, got 2"):
+            web_raster.draw_rgb_composite(
+                WebMap(), mercator_rgb, self._described_with((1, 2))
+            )
 
 
 class TestACompositeTheWarpReshapes:
