@@ -8,10 +8,20 @@ import os
 import warnings
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    NamedTuple,
+    Optional,
+    Self,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from cleopatra.basemap.projection import apply_projection_frame
 
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.domains import DomainLike, resolve_domain
 from digitalearth.base.spec import Bounds, LayerSpec, Symbology
 from digitalearth.static import projections
@@ -174,8 +184,8 @@ class ProjectionMixin(_MixinBase):
         digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
-    def set_extent(self, bbox: Union[Bounds, Sequence[float]]) -> None:
-        """Set the axes extent.
+    def set_bounds(self, bbox: Union[Bounds, Sequence[float]]) -> Self:
+        """Frame the figure on a region — the Core contract's name for setting the axes extent.
 
         Args:
             bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to the
@@ -184,10 +194,20 @@ class ProjectionMixin(_MixinBase):
                 form is accepted because that ordering was this method's contract; prefer `Bounds`, which
                 states both the ordering and the CRS instead of leaving them to position and assumption.
 
+        Returns:
+            This map, so the call chains (``Map(crs=3857).set_bounds(bbox).coastlines()``). The Core
+            declares ``returns="self"`` for this name and the web and 3-D tiers already answer that way;
+            ``set_extent`` returned ``None``, so the same line worked on one tier and raised on another.
+
         Raises:
             ValueError: if the sequence form does not hold exactly four values.
 
         Notes:
+            **This takes no** ``padding`` **and no** ``None`` **that fits the data**, which the Core
+            declares alongside the name. Those are auto-framing and arrive at order 26; order 27a settled
+            the *spelling*, and `KEYWORD_SHORTFALLS` in `tests/test_contract_names.py` records the gap
+            against that order so the rename cannot be mistaken for the capability.
+
             A **flipped** pair is honoured in the sequence form: ``[10, 0, 0, 10]`` inverts the x axis, which
             is how matplotlib expresses ``invert_xaxis`` through the limits. A `Bounds` cannot express that —
             it refuses corners the wrong way round, because for a rectangle handed to pyramids or cleopatra
@@ -201,7 +221,7 @@ class ProjectionMixin(_MixinBase):
                 >>> from digitalearth import Map
                 >>> from digitalearth.base.spec import Bounds
                 >>> m = Map(crs=3857)
-                >>> m.set_extent(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+                >>> _ = m.set_bounds(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
                 >>> round(m.ax.get_xlim()[1])
                 111319
 
@@ -212,7 +232,7 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=3857)
-                >>> m.set_extent([0.0, 100.0, 0.0, 50.0])
+                >>> _ = m.set_bounds([0.0, 100.0, 0.0, 50.0])
                 >>> [float(v) for v in m.ax.get_xlim()], [float(v) for v in m.ax.get_ylim()]
                 ([0.0, 100.0], [0.0, 50.0])
 
@@ -227,11 +247,17 @@ class ProjectionMixin(_MixinBase):
             values = [float(value) for value in bbox]
             if len(values) != 4:
                 raise ValueError(
-                    f"set_extent needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
+                    f"set_bounds needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
                 )
             xmin, xmax, ymin, ymax = values
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
+        return self
+
+    #: The tier's own spelling of :meth:`set_bounds`, kept working for one release. It returns what
+    #: `set_bounds` returns, so a caller who ignored the old ``None`` is unaffected and one who chains gets
+    #: the map.
+    set_extent = renamed_method(new="set_bounds", old="set_extent", owner="Map")
 
     def set_domain(self, domain: Optional[DomainLike] = None) -> None:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
@@ -275,7 +301,7 @@ class ProjectionMixin(_MixinBase):
                 "(west, south, east, north) in EPSG:4326, and cannot express a region crossing the "
                 f"antimeridian — split it into two, or set the extent directly ({error})"
             ) from error
-        self.set_extent(box.to_crs(self.crs))
+        self.set_bounds(box.to_crs(self.crs))
 
     # ------------------------------------------------------------------ globe / projection frame
 
@@ -426,7 +452,7 @@ class ProjectionMixin(_MixinBase):
     def set_global(self) -> None:
         """Set the axes extent to the full projection domain (the whole globe/world)."""
         _, xlim, ylim = self._frame()
-        self.set_extent([xlim[0], xlim[1], ylim[0], ylim[1]])
+        self.set_bounds([xlim[0], xlim[1], ylim[0], ylim[1]])
 
     def _apply_frame(self) -> Any:
         """Draw the projection boundary + graticule and clip the layers to it (once, at render time).

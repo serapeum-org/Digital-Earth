@@ -349,6 +349,10 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "imshow": "field",
                 "scatter": "points",
                 "shapes": "polygons",
+                # Not one of the six: `set_extent` was never a `PLANNED_RENAMES` row, because it was not the
+                # Core method under an older name (see that table). Order 27a adopted the *name* anyway, so
+                # the old spelling is live here and the capability gap is a keyword shortfall.
+                "set_extent": "set_bounds",
             }
         ),
         "interactive": MappingProxyType(
@@ -376,10 +380,12 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
 #:
 #: Two names deliberately never joined it, and the reasons outlive the rows:
 #:
-#: - `set_extent` is **not** `set_bounds` under an older name. Measured, it was `set_extent(bbox) -> None`,
-#:   which took no `padding`, had no `None` that fits the data, and returned nothing where the Core name
-#:   returns `self`. Listing it dated the same arrival two ways — a rename here, a capability at order 26 in
-#:   `PENDING` — and told a caller the method already existed under another spelling (review R-L4).
+#: - `set_extent` was **not** `set_bounds` under an older name, and listing it as one told a caller the
+#:   method already existed under another spelling while `PENDING` dated it at order 26 — the same arrival,
+#:   two answers (review R-L4). Order 27a resolved that by splitting the two claims rather than by adopting
+#:   the row: the tier answers to `set_bounds` now, returning `self`, with `set_extent` a live alias in
+#:   :data:`ALIASES`; the `padding` it still does not take, and the `None` that would fit the data, are
+#:   auto-framing at order 26 and are recorded as a keyword shortfall against that order.
 #: - `point_cloud` is a second *current* spelling of `grid_points`, which the static tier offers and
 #:   deprecates neither of. A rename is a name on its way out, and nothing has been agreed about that one
 #:   (review M5).
@@ -448,9 +454,11 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "set_visible": _PENDING_LAYERS,
                 "move_layer": _PENDING_LAYERS,
                 "replace_layer": _PENDING_LAYERS,
-                "set_bounds": (
-                    f"framed by set_extent(bbox) here, which neither pads nor fits the data — {_FRAMING_ORDER}"
-                ),
+                # `set_bounds` was listed here, "framed by set_extent(bbox) here, which neither pads nor
+                # fits the data". Order 27a took the *name*: the tier answers to `set_bounds` and returns
+                # `self`, and `set_extent` is a live alias. What it still does not take is `padding`, and it
+                # has no `None` that fits the data — that half is auto-framing, and `KEYWORD_SHORTFALLS`
+                # records it against the framing order so the rename cannot be read as the capability.
             }
         ),
     }
@@ -514,10 +522,17 @@ def alias_table(backend: str) -> Mapping[str, str]:
             'field'
 
             ```
-        - A tier whose seam has not landed has renamed nothing yet:
+        - The static tier's was `imshow`, since order 27a adopted the Core spelling there:
             ```python
             >>> from digitalearth.base.contract import alias_table
-            >>> dict(alias_table("matplotlib"))
+            >>> alias_table("matplotlib")["imshow"]
+            'field'
+
+            ```
+        - A tier that has renamed nothing answers empty, rather than raising:
+            ```python
+            >>> from digitalearth.base.contract import alias_table
+            >>> dict(alias_table("nobody"))
             {}
 
             ```
@@ -536,14 +551,16 @@ def planned_renames(backend: str) -> Mapping[str, str]:
         the tier still calls the method.
 
     Examples:
-        - The static tier's raster builder is still `imshow`, and is to become `field`:
+        - **Every tier answers empty right now**, because order 27a adopted all six rows this table held;
+          they are live aliases in :data:`ALIASES` instead, which is where a caller looks for what still
+          works. The next agreed-but-unadopted spelling is recorded here:
             ```python
             >>> from digitalearth.base.contract import planned_renames
-            >>> planned_renames("matplotlib")["imshow"]
-            'field'
+            >>> dict(planned_renames("matplotlib"))
+            {}
 
             ```
-        - A tier that has adopted its renames has none planned:
+        - A tier the table has never held answers the same way, rather than raising:
             ```python
             >>> from digitalearth.base.contract import planned_renames
             >>> dict(planned_renames("web"))

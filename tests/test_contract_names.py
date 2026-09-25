@@ -125,6 +125,14 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 ("subtitle",),
                 "one axes title, with no second line to carry a subtitle — #265",
             ),
+            ("matplotlib", "set_bounds"): (
+                ("padding",),
+                # The row that keeps order 27a's rename from reading as order 26's capability. The name and
+                # the chainable return landed at 27a; padding and the `None` that fits the data are
+                # auto-framing, which is what `PENDING` used to date this whole method at.
+                "the Core name and the chainable return landed at order 27a; padding, and the None that "
+                "fits the figure to its data, are auto-framing — order 26",
+            ),
             ("interactive", "points"): (
                 ("column", "opacity"),
                 "column is spelled value_column, and opacity is spelled alpha through **opts — order 27a",
