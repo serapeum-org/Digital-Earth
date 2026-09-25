@@ -7,6 +7,7 @@ is asserted to be the *same* one the static tier applies, which is the point of 
 """
 
 import base64
+import inspect
 import io
 import json
 
@@ -14,7 +15,10 @@ import numpy as np
 import pytest
 from matplotlib import image as mpimage
 
+from digitalearth.base.spec import DEFAULT_BAND
+from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS
 from digitalearth.web import WebMap
+from digitalearth.web import raster as web_raster
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -32,6 +36,55 @@ def _decode(uri):
     raw = base64.b64decode(uri.split(",", 1)[1])
     assert raw[:8] == _PNG_MAGIC, "decoded payload must be a real PNG"
     return mpimage.imread(io.BytesIO(raw))
+
+
+class TestTheBandDefaultsAreTheSharedOnes:
+    """#266 — a builder called without bands means what ``base/`` says it means, not its own literal.
+
+    The defaults are read off the signature rather than from a call: a caller who names no bands gets
+    exactly the object written there, and a literal that happens to equal the shared constant today is
+    precisely what lets the two drift tomorrow. That drift is the finding.
+    """
+
+    def test_the_composite_default_is_the_shared_tuple(self):
+        """``rgb_composite``'s ``bands`` default *is* :data:`DEFAULT_COMPOSITE_BANDS`.
+
+        Test scenario:
+            ``is`` rather than ``==``: the tier wrote ``(1, 2, 3)`` inline, which compares equal to the
+            shared tuple while being a different object, so only identity tells the shared constant from a
+            copy of today's value. The static and interactive tiers already answer ``True`` here.
+        """
+        default = inspect.signature(WebMap.rgb_composite).parameters["bands"].default
+        assert default is DEFAULT_COMPOSITE_BANDS, (
+            f"rgb_composite defaults to its own {default!r}, not to the shared constant"
+        )
+
+    def test_the_module_reads_the_shared_single_band(self):
+        """``web/raster.py`` reads :data:`DEFAULT_BAND` — the sibling instance of the same finding.
+
+        Test scenario:
+            ``field(band=1)`` hardcodes the number ``base/spec/selection.py`` declares as "the band a
+            builder reads when the caller names none". Identity cannot catch this one — ``DEFAULT_BAND`` is
+            ``1`` and CPython caches small integers, so ``default is DEFAULT_BAND`` holds for a hardcoded
+            literal too. What is checkable is whether the module reads the name at all: the attribute
+            exists only if it was imported.
+        """
+        assert web_raster.DEFAULT_BAND is DEFAULT_BAND, (
+            "web/raster.py does not import the shared DEFAULT_BAND"
+        )
+
+    def test_the_field_signature_defaults_to_that_name(self):
+        """The imported name is what ``field`` defaults to, rather than an import nothing uses.
+
+        Test scenario:
+            The pair to the check above, and the reason it is read from the source: with the integers
+            identical there is no runtime difference between reading the constant and rewriting its value,
+            so the only evidence is the signature itself.
+        """
+        source = inspect.getsource(web_raster.RasterMixin.field)
+        assert "band: int = DEFAULT_BAND," in source, (
+            "field's band default is a literal, not the shared constant it imports"
+        )
 
 
 class TestTheCompositeEncoder:

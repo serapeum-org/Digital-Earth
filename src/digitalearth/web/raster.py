@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_method
-from digitalearth.base.spec import Bounds, LayerSpec, Scale, Symbology
+from digitalearth.base.spec import DEFAULT_BAND, Bounds, LayerSpec, Scale, Symbology
+from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS
 from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
@@ -355,7 +356,7 @@ class RasterMixin(_MixinBase):
         self,
         data: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         cmap: Any = None,
         units: Optional[str] = None,
         opacity: float = 1.0,
@@ -499,7 +500,7 @@ class RasterMixin(_MixinBase):
     def rgb_composite(
         self,
         dataset: Any,
-        bands: Any = (1, 2, 3),
+        bands: Any = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
         limits: Optional[Any] = None,
