@@ -23,6 +23,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.three_d.bigdata import report_unreduced
 from digitalearth.three_d.capabilities import CAPABILITIES
 
 __all__ = ["Renderer3D", "drawer_for"]
@@ -216,6 +217,10 @@ class Renderer3D:
         )
         if drawn is None:
             return None
+        # The kinds that *can* reduce did so in their drawer, where the mesh was built. This is the other half
+        # (#207): a kind with no reduction route is drawn whole, and saying so here — once, for every kind —
+        # is what stops "too big" being a hung notebook instead of a line in the log.
+        report_unreduced(layer.kind, drawn[0], self.scene.big_data_threshold)
         self._drawn[layer_id] = drawn
         if not figure.layers.is_visible(layer_id):
             _set_visible(drawn[1], False)

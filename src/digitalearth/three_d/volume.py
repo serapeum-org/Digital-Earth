@@ -20,6 +20,12 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from digitalearth.three_d.bigdata import (
+    DEFAULT_CELL_BUDGET,
+    reduce_surface,
+    reduce_volume,
+)
+
 #: Attribute name the field scalar is stored under on the generated grids.
 FIELD = "field"
 
@@ -110,6 +116,7 @@ class VolumeMixin(_MixinBase):
         name: Any = None,
         cmap: str = "viridis",
         opacity: Any = "sigmoid",
+        big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
         """Ray-cast a 3-D scalar field as a volume and register it as a layer.
@@ -119,10 +126,18 @@ class VolumeMixin(_MixinBase):
             cmap: Colormap for the field.
             opacity: Opacity transfer function — a named ramp (``"sigmoid"``, ``"linear"``, ``"geom"`` …), a
                 scalar, or an array. Controls how much of the field is see-through.
+            big_data_threshold: Voxels above which the cube is resampled to fewer per axis before it is
+                ray-cast (#207). ``None`` (the default) uses the scene's
+                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cube at or under the budget
+                is drawn at full resolution. Resampling is output-driven, so it costs the same fraction of a
+                second whatever it is given — see :mod:`digitalearth.three_d.bigdata`.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_volume`.
 
         Returns:
             The registered volume actor.
+
+        Raises:
+            ValueError: if ``big_data_threshold`` is negative or not a whole number of cells.
 
         Examples:
             - Volume-render a synthetic 3-D Gaussian blob:
@@ -146,6 +161,9 @@ class VolumeMixin(_MixinBase):
             name=name,
             cmap=cmap,
             opacity=opacity,
+            big_data_threshold=self._resolve_big_data_threshold(
+                big_data_threshold, caller="Scene3D.volume()"
+            ),
             **kwargs,
         )
 
@@ -156,6 +174,7 @@ class VolumeMixin(_MixinBase):
         name: Any = None,
         isosurfaces: Sequence[float] | None = None,
         cmap: str = "viridis",
+        big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
         """Extract and render isosurfaces (shells of constant value) from a 3-D field as a layer.
@@ -164,10 +183,18 @@ class VolumeMixin(_MixinBase):
             data: A 3-D numpy cube, or a pyramids ``DatasetCollection`` whose ``.values`` is a 3-D stack.
             isosurfaces: Iso-values to extract; ``None`` lets PyVista pick 10 levels across the data range.
             cmap: Colormap for the extracted surfaces.
+            big_data_threshold: Cells above which the extracted shells are simplified with ``decimate_pro``
+                before they are drawn (#207). ``None`` (the default) uses the scene's
+                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`. The budget applies to the
+                **shells**, which is what reaches the plotter; the contour is still extracted from the full
+                cube, so this bounds what is carried rather than what the extraction costs.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
 
         Returns:
             The registered :class:`pyvista.Actor` for the isosurface mesh.
+
+        Raises:
+            ValueError: if ``big_data_threshold`` is negative or not a whole number of cells.
 
         Examples:
             - Two iso-shells of a Gaussian blob:
@@ -191,6 +218,9 @@ class VolumeMixin(_MixinBase):
             name=name,
             isosurfaces=isosurfaces,
             cmap=cmap,
+            big_data_threshold=self._resolve_big_data_threshold(
+                big_data_threshold, caller="Scene3D.isosurface()"
+            ),
             **kwargs,
         )
 
@@ -207,11 +237,18 @@ def draw_volume(scene: Any, data: Any, layer: LayerSpec) -> Any:
         The `(grid, actor)` pair.
     """
     props = drawing_props(layer.symbology.props)
+    budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
     # SSAA (the house theme's anti-aliasing) supersamples the frame, which washes a ray-cast volume out to
     # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
     # on other scenes — this only affects a plotter that's actually showing a volume).
     scene.plotter.disable_anti_aliasing()
-    grid = _volume_grid(_cube(data))
+    grid = reduce_volume(
+        _volume_grid(_cube(data)),
+        budget,
+        kind="volume",
+        scalars=FIELD,
+        preference="cell",
+    )
     return grid, scene.plotter.add_volume(grid, **props)
 
 
@@ -228,7 +265,10 @@ def draw_isosurface(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """
     props = drawing_props(layer.symbology.props)
     isosurfaces = props.pop("isosurfaces", None)
+    budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
     grid = _point_grid(_cube(data))
     contour_kwargs = {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
-    mesh = grid.contour(scalars=FIELD, **contour_kwargs)
+    mesh = reduce_surface(
+        grid.contour(scalars=FIELD, **contour_kwargs), budget, kind="isosurface"
+    )
     return mesh, scene.plotter.add_mesh(mesh, scalars=FIELD, **props)

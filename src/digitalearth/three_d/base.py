@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import numpy as np
 
+from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
@@ -41,6 +42,7 @@ from digitalearth.base.spec import (
     Selection,
     Symbology,
 )
+from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
 from digitalearth.three_d.layer import next_layer_id, stored_props
 from digitalearth.three_d.renderer import Renderer3D
 from digitalearth.three_d.views import named_view
@@ -553,6 +555,11 @@ class Scene3DBase:
         self.strict: bool = strict
         #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
         self.display_crs: Any = crs
+        #: Cells above which a layer takes this tier's big-data route (#207, contract C8). The scene-wide reach
+        #: of the cutoff: every builder that can reduce reads it, and each takes its own
+        #: `big_data_threshold=` for one call without changing this. **Cells, not rows** — see
+        #: :data:`~digitalearth.three_d.bigdata.DEFAULT_CELL_BUDGET`.
+        self.big_data_threshold: int = DEFAULT_CELL_BUDGET
 
     @property
     def plotter(self) -> "pv.Plotter":
@@ -1440,6 +1447,36 @@ class Scene3DBase:
                 self._renderer.apply(candidate, before)
             raise
         self._figure = candidate
+
+    def _resolve_big_data_threshold(
+        self, big_data_threshold: Optional[int] = None, *, caller: str
+    ) -> int:
+        """Resolve a builder's cell budget: the per-call value, else the scene's attribute (#207, C8).
+
+        The tier's half of the one cutoff every backend spells `big_data_threshold` — an attribute on the scene
+        and an override on the builder. The per-call value goes through
+        :func:`~digitalearth.base.bigdata.validate_big_data_threshold`, the guard the interactive and web tiers
+        apply, so a negative or fractional cutoff is refused the same way on all three rather than raising on
+        two and reducing everything on this one.
+
+        There is **no deprecated alias** here, unlike the interactive tier's `rasterize_threshold`: nothing on
+        this tier ever spelled the cutoff another way, and shipping a keyword already deprecated would deprecate
+        something nobody has written. The web tier has no alias either, for the same reason.
+
+        Args:
+            big_data_threshold: The per-call override, or `None` to use the scene's attribute.
+            caller: The builder the keyword was written on, named in the error so the message points at the
+                call rather than at this helper.
+
+        Returns:
+            The cell count above which the calling builder takes its reduction route.
+
+        Raises:
+            ValueError: when the per-call cutoff is negative, or is not a whole number of cells.
+        """
+        if big_data_threshold is None:
+            return int(self.big_data_threshold)
+        return validate_big_data_threshold(big_data_threshold, caller=caller)
 
     def _add_described_layer(
         self,
