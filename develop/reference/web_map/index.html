@@ -7759,7 +7759,7 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 
 
 <h3 id="digitalearth.web.map.WebMap.rgb_composite" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.rgb_composite" class="toclink">
-            <code class="highlight language-python"><span class="n">rgb_composite</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="o">*</span><span class="p">,</span> <span class="n">mask_nodata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">limits</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">rgb_composite</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">mask_nodata</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">limits</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </a><a href="#digitalearth.web.map.WebMap.rgb_composite" class="headerlink" title="Permanent link">#</a></h3>
 
@@ -7770,6 +7770,8 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <p>Satellite imagery is a headline use of a web map, and the tier could only draw one band through a
 colormap. The stretch comes from :mod:<code>digitalearth.base.stretch</code> — the same engine-neutral code
 the static tier's <code>rgb_composite</code> uses — so the same three bands look the same on both tiers.</p>
+<p>The three channels are read straight as red, green and blue; :meth:<code>hsv_composite</code> reads the same
+three as hue, saturation and value.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7817,7 +7819,7 @@ the figure records.</p>
               </div>
             </td>
             <td>
-                  <code>(1, 2, 3)</code>
+                  <code><span title="digitalearth.base.stretch.DEFAULT_COMPOSITE_BANDS">DEFAULT_COMPOSITE_BANDS</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -7995,197 +7997,152 @@ is registered for its URL scheme — from :meth:<code>~digitalearth.web.base.Web
 
 <details class="see-also" open>
   <summary>See Also</summary>
-  <p>digitalearth.base.stretch.channel_limits: derives the <code>limits</code> this accepts.
+  <p>digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.
+digitalearth.base.stretch.channel_limits: derives the <code>limits</code> this accepts.
 digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.</p>
 </details>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-499">499</a></span>
-<span class="normal"><a href="#__codelineno-0-500">500</a></span>
-<span class="normal"><a href="#__codelineno-0-501">501</a></span>
-<span class="normal"><a href="#__codelineno-0-502">502</a></span>
-<span class="normal"><a href="#__codelineno-0-503">503</a></span>
-<span class="normal"><a href="#__codelineno-0-504">504</a></span>
-<span class="normal"><a href="#__codelineno-0-505">505</a></span>
-<span class="normal"><a href="#__codelineno-0-506">506</a></span>
-<span class="normal"><a href="#__codelineno-0-507">507</a></span>
-<span class="normal"><a href="#__codelineno-0-508">508</a></span>
-<span class="normal"><a href="#__codelineno-0-509">509</a></span>
-<span class="normal"><a href="#__codelineno-0-510">510</a></span>
-<span class="normal"><a href="#__codelineno-0-511">511</a></span>
-<span class="normal"><a href="#__codelineno-0-512">512</a></span>
-<span class="normal"><a href="#__codelineno-0-513">513</a></span>
-<span class="normal"><a href="#__codelineno-0-514">514</a></span>
-<span class="normal"><a href="#__codelineno-0-515">515</a></span>
-<span class="normal"><a href="#__codelineno-0-516">516</a></span>
-<span class="normal"><a href="#__codelineno-0-517">517</a></span>
-<span class="normal"><a href="#__codelineno-0-518">518</a></span>
-<span class="normal"><a href="#__codelineno-0-519">519</a></span>
-<span class="normal"><a href="#__codelineno-0-520">520</a></span>
-<span class="normal"><a href="#__codelineno-0-521">521</a></span>
-<span class="normal"><a href="#__codelineno-0-522">522</a></span>
-<span class="normal"><a href="#__codelineno-0-523">523</a></span>
-<span class="normal"><a href="#__codelineno-0-524">524</a></span>
-<span class="normal"><a href="#__codelineno-0-525">525</a></span>
-<span class="normal"><a href="#__codelineno-0-526">526</a></span>
-<span class="normal"><a href="#__codelineno-0-527">527</a></span>
-<span class="normal"><a href="#__codelineno-0-528">528</a></span>
-<span class="normal"><a href="#__codelineno-0-529">529</a></span>
-<span class="normal"><a href="#__codelineno-0-530">530</a></span>
-<span class="normal"><a href="#__codelineno-0-531">531</a></span>
-<span class="normal"><a href="#__codelineno-0-532">532</a></span>
-<span class="normal"><a href="#__codelineno-0-533">533</a></span>
-<span class="normal"><a href="#__codelineno-0-534">534</a></span>
-<span class="normal"><a href="#__codelineno-0-535">535</a></span>
-<span class="normal"><a href="#__codelineno-0-536">536</a></span>
-<span class="normal"><a href="#__codelineno-0-537">537</a></span>
-<span class="normal"><a href="#__codelineno-0-538">538</a></span>
-<span class="normal"><a href="#__codelineno-0-539">539</a></span>
-<span class="normal"><a href="#__codelineno-0-540">540</a></span>
-<span class="normal"><a href="#__codelineno-0-541">541</a></span>
-<span class="normal"><a href="#__codelineno-0-542">542</a></span>
-<span class="normal"><a href="#__codelineno-0-543">543</a></span>
-<span class="normal"><a href="#__codelineno-0-544">544</a></span>
-<span class="normal"><a href="#__codelineno-0-545">545</a></span>
-<span class="normal"><a href="#__codelineno-0-546">546</a></span>
-<span class="normal"><a href="#__codelineno-0-547">547</a></span>
-<span class="normal"><a href="#__codelineno-0-548">548</a></span>
-<span class="normal"><a href="#__codelineno-0-549">549</a></span>
-<span class="normal"><a href="#__codelineno-0-550">550</a></span>
-<span class="normal"><a href="#__codelineno-0-551">551</a></span>
-<span class="normal"><a href="#__codelineno-0-552">552</a></span>
-<span class="normal"><a href="#__codelineno-0-553">553</a></span>
-<span class="normal"><a href="#__codelineno-0-554">554</a></span>
-<span class="normal"><a href="#__codelineno-0-555">555</a></span>
-<span class="normal"><a href="#__codelineno-0-556">556</a></span>
-<span class="normal"><a href="#__codelineno-0-557">557</a></span>
-<span class="normal"><a href="#__codelineno-0-558">558</a></span>
-<span class="normal"><a href="#__codelineno-0-559">559</a></span>
-<span class="normal"><a href="#__codelineno-0-560">560</a></span>
-<span class="normal"><a href="#__codelineno-0-561">561</a></span>
-<span class="normal"><a href="#__codelineno-0-562">562</a></span>
-<span class="normal"><a href="#__codelineno-0-563">563</a></span>
-<span class="normal"><a href="#__codelineno-0-564">564</a></span>
-<span class="normal"><a href="#__codelineno-0-565">565</a></span>
-<span class="normal"><a href="#__codelineno-0-566">566</a></span>
-<span class="normal"><a href="#__codelineno-0-567">567</a></span>
-<span class="normal"><a href="#__codelineno-0-568">568</a></span>
-<span class="normal"><a href="#__codelineno-0-569">569</a></span>
-<span class="normal"><a href="#__codelineno-0-570">570</a></span>
-<span class="normal"><a href="#__codelineno-0-571">571</a></span>
-<span class="normal"><a href="#__codelineno-0-572">572</a></span>
-<span class="normal"><a href="#__codelineno-0-573">573</a></span>
-<span class="normal"><a href="#__codelineno-0-574">574</a></span>
-<span class="normal"><a href="#__codelineno-0-575">575</a></span>
-<span class="normal"><a href="#__codelineno-0-576">576</a></span>
-<span class="normal"><a href="#__codelineno-0-577">577</a></span>
-<span class="normal"><a href="#__codelineno-0-578">578</a></span>
-<span class="normal"><a href="#__codelineno-0-579">579</a></span>
-<span class="normal"><a href="#__codelineno-0-580">580</a></span>
-<span class="normal"><a href="#__codelineno-0-581">581</a></span>
-<span class="normal"><a href="#__codelineno-0-582">582</a></span>
-<span class="normal"><a href="#__codelineno-0-583">583</a></span>
-<span class="normal"><a href="#__codelineno-0-584">584</a></span>
-<span class="normal"><a href="#__codelineno-0-585">585</a></span>
-<span class="normal"><a href="#__codelineno-0-586">586</a></span>
-<span class="normal"><a href="#__codelineno-0-587">587</a></span>
-<span class="normal"><a href="#__codelineno-0-588">588</a></span>
-<span class="normal"><a href="#__codelineno-0-589">589</a></span>
-<span class="normal"><a href="#__codelineno-0-590">590</a></span>
-<span class="normal"><a href="#__codelineno-0-591">591</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-499" name="__codelineno-0-499"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-507" name="__codelineno-0-507"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">            A path or URL to one is taken too, and is the only input this layer can be</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">            written down with — a pyramids object does not know where it came from. The reference</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            is opened at the display choke point</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">            (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller&#39;s own path is what</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">            the figure records.</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
-<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
-<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
-<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530"></a>
-<a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
-<a id="__codelineno-0-535" name="__codelineno-0-535"></a>
-<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the</span>
-<a id="__codelineno-0-538" name="__codelineno-0-538"></a><span class="sd">            composite has no finite pixels to draw, or when ``opacity`` is not a finite number —</span>
-<a id="__codelineno-0-539" name="__codelineno-0-539"></a><span class="sd">            refused at this call, because a figure holding NaN or infinity could not be written down.</span>
-<a id="__codelineno-0-540" name="__codelineno-0-540"></a><span class="sd">        FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver</span>
-<a id="__codelineno-0-541" name="__codelineno-0-541"></a><span class="sd">            is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.</span>
-<a id="__codelineno-0-542" name="__codelineno-0-542"></a>
-<a id="__codelineno-0-543" name="__codelineno-0-543"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-544" name="__codelineno-0-544"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
-<a id="__codelineno-0-545" name="__codelineno-0-545"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-546" name="__codelineno-0-546"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
-<a id="__codelineno-0-547" name="__codelineno-0-547"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
-<a id="__codelineno-0-548" name="__codelineno-0-548"></a>
-<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-550" name="__codelineno-0-550"></a>
-<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
-<a id="__codelineno-0-553" name="__codelineno-0-553"></a><span class="sd">        digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.</span>
-<a id="__codelineno-0-554" name="__codelineno-0-554"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-555" name="__codelineno-0-555"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.stretch</span><span class="w"> </span><span class="kn">import</span> <span class="n">require_three_bands</span>
-<a id="__codelineno-0-556" name="__codelineno-0-556"></a>
-<a id="__codelineno-0-557" name="__codelineno-0-557"></a>    <span class="n">opacity</span> <span class="o">=</span> <span class="n">as_finite</span><span class="p">(</span><span class="n">opacity</span><span class="p">,</span> <span class="s2">&quot;opacity&quot;</span><span class="p">,</span> <span class="s2">&quot;WebMap.rgb_composite()&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-558" name="__codelineno-0-558"></a>    <span class="n">_require_layer_api</span><span class="p">()</span>
-<a id="__codelineno-0-559" name="__codelineno-0-559"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
-<a id="__codelineno-0-560" name="__codelineno-0-560"></a>    <span class="c1"># Warped here only so an off-limb dataset is refused before anything is recorded, and so the first</span>
-<a id="__codelineno-0-561" name="__codelineno-0-561"></a>    <span class="c1"># draw is handed the warped dataset rather than warping it again. The stack, the size warning, the</span>
-<a id="__codelineno-0-562" name="__codelineno-0-562"></a>    <span class="c1"># north-up flip and the placement are all the drawer&#39;s, which is the one place they are computed</span>
-<a id="__codelineno-0-563" name="__codelineno-0-563"></a>    <span class="c1"># (review M8).</span>
-<a id="__codelineno-0-564" name="__codelineno-0-564"></a>    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_display_raster_or_skip</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-565" name="__codelineno-0-565"></a>    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-566" name="__codelineno-0-566"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="c1"># At the call, like `field`&#39;s: the drawer runs again on every redraw, and the size of the input is</span>
-<a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="c1"># the caller&#39;s one-time choice (review N7).</span>
-<a id="__codelineno-0-569" name="__codelineno-0-569"></a>    <span class="n">_warn_if_large</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="s2">&quot;composite&quot;</span><span class="p">,</span> <span class="n">_grid_pixels</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
-<a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a>        <span class="n">layer_id</span><span class="p">,</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573"></a>        <span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-574" name="__codelineno-0-574"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-576" name="__codelineno-0-576"></a>        <span class="n">source</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577"></a>        <span class="n">placed</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-580" name="__codelineno-0-580"></a>                <span class="s2">&quot;bands&quot;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">band</span><span class="p">)</span> <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="n">bands</span><span class="p">),</span>
-<a id="__codelineno-0-581" name="__codelineno-0-581"></a>                <span class="c1"># A bound the caller&#39;s freeze could not measure is recorded as `None`, not as the NaN</span>
-<a id="__codelineno-0-582" name="__codelineno-0-582"></a>                <span class="c1"># `channel_limits` answers with: a description holds only what a figure can be written</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583"></a>                <span class="c1"># as, and NaN has no JSON form (review M9&#39;s web instance).</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584"></a>                <span class="s2">&quot;limits&quot;</span><span class="p">:</span> <span class="n">_recorded_limits</span><span class="p">(</span><span class="n">limits</span><span class="p">),</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585"></a>                <span class="s2">&quot;opacity&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">),</span>
-<a id="__codelineno-0-586" name="__codelineno-0-586"></a>                <span class="s2">&quot;mask_nodata&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">mask_nodata</span><span class="p">),</span>
-<a id="__codelineno-0-587" name="__codelineno-0-587"></a>            <span class="p">}</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a>        <span class="p">),</span>
-<a id="__codelineno-0-589" name="__codelineno-0-589"></a>    <span class="p">):</span>
-<a id="__codelineno-0-590" name="__codelineno-0-590"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a>    <span class="k">return</span> <span class="bp">self</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-611">611</a></span>
+<span class="normal"><a href="#__codelineno-0-612">612</a></span>
+<span class="normal"><a href="#__codelineno-0-613">613</a></span>
+<span class="normal"><a href="#__codelineno-0-614">614</a></span>
+<span class="normal"><a href="#__codelineno-0-615">615</a></span>
+<span class="normal"><a href="#__codelineno-0-616">616</a></span>
+<span class="normal"><a href="#__codelineno-0-617">617</a></span>
+<span class="normal"><a href="#__codelineno-0-618">618</a></span>
+<span class="normal"><a href="#__codelineno-0-619">619</a></span>
+<span class="normal"><a href="#__codelineno-0-620">620</a></span>
+<span class="normal"><a href="#__codelineno-0-621">621</a></span>
+<span class="normal"><a href="#__codelineno-0-622">622</a></span>
+<span class="normal"><a href="#__codelineno-0-623">623</a></span>
+<span class="normal"><a href="#__codelineno-0-624">624</a></span>
+<span class="normal"><a href="#__codelineno-0-625">625</a></span>
+<span class="normal"><a href="#__codelineno-0-626">626</a></span>
+<span class="normal"><a href="#__codelineno-0-627">627</a></span>
+<span class="normal"><a href="#__codelineno-0-628">628</a></span>
+<span class="normal"><a href="#__codelineno-0-629">629</a></span>
+<span class="normal"><a href="#__codelineno-0-630">630</a></span>
+<span class="normal"><a href="#__codelineno-0-631">631</a></span>
+<span class="normal"><a href="#__codelineno-0-632">632</a></span>
+<span class="normal"><a href="#__codelineno-0-633">633</a></span>
+<span class="normal"><a href="#__codelineno-0-634">634</a></span>
+<span class="normal"><a href="#__codelineno-0-635">635</a></span>
+<span class="normal"><a href="#__codelineno-0-636">636</a></span>
+<span class="normal"><a href="#__codelineno-0-637">637</a></span>
+<span class="normal"><a href="#__codelineno-0-638">638</a></span>
+<span class="normal"><a href="#__codelineno-0-639">639</a></span>
+<span class="normal"><a href="#__codelineno-0-640">640</a></span>
+<span class="normal"><a href="#__codelineno-0-641">641</a></span>
+<span class="normal"><a href="#__codelineno-0-642">642</a></span>
+<span class="normal"><a href="#__codelineno-0-643">643</a></span>
+<span class="normal"><a href="#__codelineno-0-644">644</a></span>
+<span class="normal"><a href="#__codelineno-0-645">645</a></span>
+<span class="normal"><a href="#__codelineno-0-646">646</a></span>
+<span class="normal"><a href="#__codelineno-0-647">647</a></span>
+<span class="normal"><a href="#__codelineno-0-648">648</a></span>
+<span class="normal"><a href="#__codelineno-0-649">649</a></span>
+<span class="normal"><a href="#__codelineno-0-650">650</a></span>
+<span class="normal"><a href="#__codelineno-0-651">651</a></span>
+<span class="normal"><a href="#__codelineno-0-652">652</a></span>
+<span class="normal"><a href="#__codelineno-0-653">653</a></span>
+<span class="normal"><a href="#__codelineno-0-654">654</a></span>
+<span class="normal"><a href="#__codelineno-0-655">655</a></span>
+<span class="normal"><a href="#__codelineno-0-656">656</a></span>
+<span class="normal"><a href="#__codelineno-0-657">657</a></span>
+<span class="normal"><a href="#__codelineno-0-658">658</a></span>
+<span class="normal"><a href="#__codelineno-0-659">659</a></span>
+<span class="normal"><a href="#__codelineno-0-660">660</a></span>
+<span class="normal"><a href="#__codelineno-0-661">661</a></span>
+<span class="normal"><a href="#__codelineno-0-662">662</a></span>
+<span class="normal"><a href="#__codelineno-0-663">663</a></span>
+<span class="normal"><a href="#__codelineno-0-664">664</a></span>
+<span class="normal"><a href="#__codelineno-0-665">665</a></span>
+<span class="normal"><a href="#__codelineno-0-666">666</a></span>
+<span class="normal"><a href="#__codelineno-0-667">667</a></span>
+<span class="normal"><a href="#__codelineno-0-668">668</a></span>
+<span class="normal"><a href="#__codelineno-0-669">669</a></span>
+<span class="normal"><a href="#__codelineno-0-670">670</a></span>
+<span class="normal"><a href="#__codelineno-0-671">671</a></span>
+<span class="normal"><a href="#__codelineno-0-672">672</a></span>
+<span class="normal"><a href="#__codelineno-0-673">673</a></span>
+<span class="normal"><a href="#__codelineno-0-674">674</a></span>
+<span class="normal"><a href="#__codelineno-0-675">675</a></span>
+<span class="normal"><a href="#__codelineno-0-676">676</a></span>
+<span class="normal"><a href="#__codelineno-0-677">677</a></span>
+<span class="normal"><a href="#__codelineno-0-678">678</a></span>
+<span class="normal"><a href="#__codelineno-0-679">679</a></span>
+<span class="normal"><a href="#__codelineno-0-680">680</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-611" name="__codelineno-0-611"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a>
+<a id="__codelineno-0-624" name="__codelineno-0-624"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
+<a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">    The three channels are read straight as red, green and blue; :meth:`hsv_composite` reads the same</span>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">    three as hue, saturation and value.</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">            A path or URL to one is taken too, and is the only input this layer can be</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a><span class="sd">            written down with — a pyramids object does not know where it came from. The reference</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><span class="sd">            is opened at the display choke point</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="sd">            (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller&#39;s own path is what</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a><span class="sd">            the figure records.</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><span class="sd">            composite has no finite pixels to draw, or when ``opacity`` is not a finite number —</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a><span class="sd">            refused at this call, because a figure holding NaN or infinity could not be written down.</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a><span class="sd">        FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver</span>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a><span class="sd">            is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">        digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a>        <span class="n">_RGB_RECIPE</span><span class="p">,</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a>        <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a>        <span class="n">bands</span><span class="p">,</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a>        <span class="n">mask_nodata</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">,</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a>        <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
