@@ -532,64 +532,46 @@ def _source_with(y_values):
     return type("Source", (), {"x": x, "y": y})()
 
 
-class TestTheCompositeSizeWarning:
-    """The inline data-URI path has a ceiling, and a caller past it needs to hear about it."""
+class TestTheCompositeSizeCeiling:
+    """The inline data-URI path has a ceiling, and past it a composite is refused rather than warned about."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
         """Skip when the web extra is absent."""
         pytest.importorskip("maplibre")
 
-    @staticmethod
-    def _capture():
-        """Attach a loguru sink for warnings.
-
-        Returns:
-            ``(records, sink_id)`` — the list the sink fills, and the handle to remove it afterwards.
-        """
-        from loguru import logger
-
-        records = []
-        return records, logger.add(records.append, level="WARNING")
-
-    def test_an_oversized_composite_warns(self, dataset, monkeypatch):
-        """The warning is all that stands between a caller and a hundreds-of-MB page.
+    def test_an_oversized_composite_is_refused(self, dataset, monkeypatch):
+        """A warning was all that stood between a caller and a hundreds-of-MB page, and it stopped nothing.
 
         Args:
             dataset: The shared pyramids raster fixture.
             monkeypatch: pytest's patcher, used to lower the ceiling rather than build a huge raster.
 
         Test scenario:
-            Three bands inline as three times the data of one, so the check is on the stack's size.
+            Three bands inline as three times the data of one, so the check is on the stack's size. The
+            refusal names the builder and both tiled routes, since a caller who is refused has to be told
+            which parameter to reach for (#189).
         """
-        from loguru import logger
-
         from digitalearth.web import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
-        records, sink_id = self._capture()
-        try:
+        with pytest.raises(ValueError, match="rgb_composite") as refusal:
             WebMap().basemap().rgb_composite(dataset, bands=(1, 1, 1))
-        finally:
-            logger.remove(sink_id)
-        assert any("rgb_composite" in str(r) for r in records), records
+        message = str(refusal.value)
+        assert '"xyz"' in message, message
+        assert '"cog"' in message, message
 
-    def test_a_small_composite_stays_quiet(self, dataset):
-        """A warning on every composite would train the caller to ignore it.
+    def test_a_small_composite_is_drawn_as_it_always_was(self, dataset):
+        """A ceiling that fired on ordinary input would break every map already built.
 
         Args:
             dataset: The shared pyramids raster fixture, far below the ceiling.
         """
-        from loguru import logger
+        m = WebMap().basemap().rgb_composite(dataset, bands=(1, 1, 1))
+        spec = m._renderer.drawn[m._last_layer_id].source_spec
+        assert spec["type"] == "image", spec
 
-        records, sink_id = self._capture()
-        try:
-            WebMap().basemap().rgb_composite(dataset, bands=(1, 1, 1))
-        finally:
-            logger.remove(sink_id)
-        assert not [r for r in records if "rgb_composite" in str(r)], records
-
-    def test_the_warning_belongs_to_the_call_and_not_to_every_draw(
+    def test_the_refusal_belongs_to_the_call_and_not_to_every_draw(
         self, dataset, monkeypatch
     ):
         """Review N7 — a drawer runs again on every redraw; the size of the input was chosen once.
@@ -599,28 +581,20 @@ class TestTheCompositeSizeWarning:
             monkeypatch: pytest's patcher, used to lower the ceiling rather than build a huge raster.
 
         Test scenario:
-            `field` warns from its builder and `rgb_composite` warned from its drawer, so drawing a stored
-            composite back repeated the advice once per draw — and the two sibling builders answered the
-            same question from two different places.
+            A figure written before the ceiling existed already holds its pixels, so drawing it back must not
+            fail on a size its builder accepted. The check therefore stays with the builder — where it can
+            still offer a route — and the drawer never re-runs it.
         """
-        from loguru import logger
-
         from digitalearth.web import raster as raster_module
 
+        built = WebMap().rgb_composite(dataset, bands=(1, 1, 1))
+        figure = built.figure_spec
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
-        records, sink_id = self._capture()
-        try:
-            built = WebMap().rgb_composite(dataset, bands=(1, 1, 1))
-            after_building = len([r for r in records if "rgb_composite" in str(r)])
-            figure = built.figure_spec
-            WebMap()._renderer.draw_layer(figure, figure.layers.ids[0])
-            after_redrawing = len([r for r in records if "rgb_composite" in str(r)])
-        finally:
-            logger.remove(sink_id)
-        assert (after_building, after_redrawing) == (1, 1), records
+        redrawn = WebMap()._renderer.draw_layer(figure, figure.layers.ids[0])
+        assert redrawn is not None, "a stored composite must still draw back"
 
     def test_an_input_with_no_integer_grid_is_not_guessed_at(self, monkeypatch):
-        """A size that cannot be measured must produce no number and no warning.
+        """A size that cannot be measured must produce no number and no refusal.
 
         Args:
             monkeypatch: pytest's patcher, used to lower the ceiling to one pixel.
@@ -628,26 +602,102 @@ class TestTheCompositeSizeWarning:
         Test scenario:
             The composite builder reads the grid rather than a band, because reading a band only to
             measure it costs a whole band read. Anything that does not report `rows`/`columns` as plain
-            integers therefore has no measurable size — and a fallback that guessed one would warn about
-            a page weight nobody measured. With the ceiling at one pixel, any guess at all warns.
+            integers therefore has no measurable size — and a fallback that guessed one would refuse a page
+            weight nobody measured. With the ceiling at one pixel, any guess at all refuses.
         """
-        from loguru import logger
-
         from digitalearth.web import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         unmeasurable = type("Grid", (), {"rows": "many", "columns": 3})()
-        records, sink_id = self._capture()
-        try:
-            measured = raster_module._grid_pixels(unmeasurable)
-            raster_module._warn_if_large("rgb_composite", "composite", measured)
-        finally:
-            logger.remove(sink_id)
+        measured = raster_module._grid_pixels(unmeasurable)
         assert measured is None, (
             f"an unmeasurable grid must answer None; got {measured}"
         )
-        assert records == [], (
-            f"nothing measurable means nothing to warn about: {records}"
+        raster_module._refuse_if_large("rgb_composite", "composite", measured)
+
+
+class TestTheTiledCompositeRoutes:
+    """#189 — the composites share the inline path, so they share the way out of it."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    def test_rgb_composite_writes_a_pyramid_the_widget_reads_as_a_raster_source(
+        self, dataset, tmp_path
+    ):
+        """What the map draws is the source spec, not what the figure records.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+        """
+        import io
+
+        from matplotlib import image as mpimage
+
+        m = WebMap().rgb_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "scene",
+            zooms=(9, 9),
+        )
+        spec = m._renderer.drawn[m._last_layer_id].source_spec
+        assert spec["tiles"] == ["scene/{z}/{x}/{y}.png"], spec
+        written = sorted((tmp_path / "scene").rglob("*.png"))
+        assert written, "the route has to leave a pyramid behind"
+        tile = mpimage.imread(io.BytesIO(written[0].read_bytes()))
+        assert tile.shape == (256, 256, 4), tile.shape
+
+    def test_a_tiled_composite_clears_the_ceiling(self, dataset, tmp_path, monkeypatch):
+        """The ceiling is the inline path's, so naming a route has to clear it for a composite too.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory.
+            monkeypatch: pytest's patcher, used to lower the ceiling.
+        """
+        from digitalearth.web import raster as raster_module
+
+        monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        m = WebMap().hsv_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="cog",
+            tiles_path=tmp_path / "scene.tif",
+            limits=[(0.0, 90.0)] * 3,
+        )
+        spec = m._renderer.drawn[m._last_layer_id].source_spec
+        assert spec["url"] == "cog://scene.tif", spec
+
+    def test_the_stretch_is_measured_once_for_the_whole_pyramid(
+        self, dataset, tmp_path
+    ):
+        """Every tile has to be stretched on the same bounds, or neighbours disagree at their shared edge.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory.
+
+        Test scenario:
+            The recorded ``limits`` are what the description hands every later draw, so they are the evidence
+            the stretch was frozen rather than re-derived per tile. A caller's own freeze is kept as given;
+            an absent one is measured from a decimated read, and either way it is one set of bounds.
+        """
+        m = WebMap().rgb_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "scene",
+            zooms=(9, 9),
+        )
+        figure = m.figure_spec
+        recorded = figure.layers.get(figure.layers.ids[0]).symbology.props["limits"]
+        assert len(recorded) == 3, recorded
+        assert len(set(recorded)) == 1, (
+            f"three copies of one band must freeze to one pair: {recorded}"
         )
 
 
@@ -1040,27 +1090,22 @@ class TestTheHsvComposite:
         ):
             WebMap().hsv_composite(empty, bands=_BANDS)
 
-    def test_an_oversized_composite_warns_in_its_own_name(self, hue_wheel, monkeypatch):
-        """The size advice names the builder the caller used.
+    def test_an_oversized_composite_is_refused_in_its_own_name(
+        self, hue_wheel, monkeypatch
+    ):
+        """The size refusal names the builder the caller used.
 
         Args:
             hue_wheel: The three-band raster.
             monkeypatch: pytest's patcher, used to lower the ceiling rather than build a huge raster.
 
         Test scenario:
-            The warning is built from the builder's name, which the sibling passed as a literal. Left as it
-            was, a caller of ``hsv_composite`` would be advised about ``rgb_composite``.
+            The message is built from the builder's name, which the sibling passed as a literal. Left as it
+            was, a caller of ``hsv_composite`` would be sent to ``rgb_composite``.
         """
-        from loguru import logger
-
         monkeypatch.setattr(web_raster, "_LARGE_RASTER_PIXELS", 1)
-        records = []
-        sink_id = logger.add(records.append, level="WARNING")
-        try:
+        with pytest.raises(ValueError, match="hsv_composite"):
             WebMap().hsv_composite(hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS)
-        finally:
-            logger.remove(sink_id)
-        assert any("hsv_composite" in str(record) for record in records), records
 
     def test_the_two_tiers_agree_on_the_shared_parameters(self):
         """Every parameter both tiers' ``hsv_composite`` take is spelled and defaulted the same.
