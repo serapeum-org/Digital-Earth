@@ -987,7 +987,7 @@ def _quickmap_3d(
             default (a bar iff the layer carries scalars).
         crs: The scene's display CRS; ``None`` takes the data's own.
         **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
-            ``column``, ``height``, ``point_size``).
+            ``column``, ``height``, ``size``).
 
     Returns:
         The built :class:`~digitalearth.three_d.scene3d.Scene3D`.
