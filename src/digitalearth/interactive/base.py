@@ -830,6 +830,8 @@ class InteractiveMapBase:
                 from the tree — so a caller may hand in a tree wrapped by either.
 
         Raises:
+            CapabilityError: when the change would have to build a layer of a kind this tier keeps rather
+                than draws (:data:`~digitalearth.interactive.renderer.KEPT_KINDS`).
             KeyError: when a layer names a kind this tier does not draw.
         """
         candidate = self._figure_with(figure.layers)
@@ -997,6 +999,12 @@ class InteractiveMapBase:
         This is how a layer is restyled or re-pointed after it has been drawn: the drawer builds the element
         again from the new description, since a HoloViews element carries the options it was built with.
 
+        **A layer of the caller's own is the exception**, because there is no description to build it from. A
+        replacement that changes only what the figure *says* about such a layer — its label, its band,
+        whether it is drawn — is honoured, and one that changes what the element *is* is refused: its kind,
+        its source, its slice, its symbology, its filter or its group. Hand the new object to
+        :meth:`add_layer` instead (:data:`~digitalearth.interactive.renderer.KEPT_KINDS`).
+
         Args:
             layer: The new description. Its id names the layer it replaces.
 
@@ -1007,6 +1015,8 @@ class InteractiveMapBase:
             CapabilityError: if the replacement names a kind this tier does not draw, naming the kind and the
                 backend that has no drawer for it. Raised off the declaration, before a description is built
                 or the engine is touched. It subclasses ``ValueError``, so a caller catching that catches this.
+                Also for a layer this tier *keeps* rather than draws, as above — refused before the first
+                layer is drawn, so a refused replacement leaves the map exactly as it was.
             KeyError: if no layer has that id, naming the ids that do.
             ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
                 the drawers read the source out of the figure, and a missing one reaches the drawer as

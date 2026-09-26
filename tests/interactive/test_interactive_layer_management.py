@@ -15,6 +15,7 @@ from dataclasses import replace as with_fields
 import pytest
 
 from digitalearth.base.capabilities import CapabilityError
+from digitalearth.base.spec import Symbology
 from digitalearth.interactive import InteractiveMap
 
 pytest.importorskip(
@@ -169,6 +170,56 @@ class TestACallersOwnElement:
         """
         held.replace_layer(with_fields(held.get_layer(BOTTOM), label="Lower"))
         assert held.layers == ["lower-element", "upper-element"], held.layers
+
+    def test_regrouping_it_is_refused_rather_than_sent_to_a_drawer(self, held):
+        """Review H7: the gate passed on the declaration, then the drawer table refused the same kind.
+
+        Args:
+            held: The map under test.
+
+        Test scenario:
+            A group change is one the tier classes as reaching HoloViews, so the reconcile rebuilt the layer
+            — and there is nothing to rebuild a caller's own element from. The refusal came out of
+            `drawer_for` as a bare `KeyError` naming a kind this tier's own `Capabilities` declares, which is
+            the refusal `Capabilities.require` was added to remove.
+        """
+        regrouped = with_fields(held.get_layer(BOTTOM), group="observations")
+        with pytest.raises(CapabilityError) as refusal:
+            held.replace_layer(regrouped)
+        assert "custom:holoviews" in str(refusal.value), refusal.value
+
+    def test_the_refusal_says_the_element_is_the_callers_own(self, held):
+        """A refusal a caller can act on names the reason, not only the kind.
+
+        Args:
+            held: The map under test.
+
+        Test scenario:
+            The reason is the tier's own — the one `INTERACTIVE_UNDRAWN_KINDS` records — so a reader who
+            hits the refusal learns what to do instead: hand the new object to `add_layer`.
+        """
+        restyled = with_fields(
+            held.get_layer(BOTTOM), symbology=Symbology(props={"size": 9})
+        )
+        with pytest.raises(CapabilityError) as refusal:
+            held.replace_layer(restyled)
+        assert "add_layer" in str(refusal.value), refusal.value
+
+    def test_a_refused_replacement_leaves_the_map_as_it_was(self, held):
+        """Refused up front means refused before a drawer runs, so nothing is half-applied.
+
+        Args:
+            held: The map under test.
+        """
+        restyled = with_fields(
+            held.get_layer(BOTTOM), symbology=Symbology(props={"size": 9})
+        )
+        with pytest.raises(CapabilityError):
+            held.replace_layer(restyled)
+        assert (held.layer_ids, held.layers) == (
+            [BOTTOM, TOP],
+            ["lower-element", "upper-element"],
+        ), (held.layer_ids, held.layers)
 
     def test_hiding_it_is_described_although_no_element_can_say_so(self, held):
         """Honest half-measure: the description records it, and the overlay cannot express it.

@@ -432,13 +432,18 @@ class TestARefusalLeavesTheRecordAsItWas:
         Test scenario:
             `apply` is `_reconcile` wrapped in a rollback. Calling the inner method is the same run with
             the rollback removed, which is how the check above is shown to have teeth: this asserts the
-            half-drawn state exists, so restoring the wrapper is what makes it go away.
+            half-drawn state exists, so restoring the wrapper is what makes it go away. The difference and
+            the draw list are read the way `apply` reads them, so this is that call with one wrapper off
+            rather than a different call.
         """
         figure = drawn_map.figure_spec
         refused = _refused_figure(drawn_map)
+        renderer = drawn_map._renderer
+        change = figure.diff(refused)
+        asked = renderer._would_draw(figure, refused, change)
         with pytest.raises(KeyError):
-            drawn_map._renderer._reconcile(figure, refused)
-        assert "second" in drawn_map._renderer.drawn, sorted(drawn_map._renderer.drawn)
+            renderer._reconcile(refused, change, asked)
+        assert "second" in renderer.drawn, sorted(renderer.drawn)
 
 
 class TestApplyReachesTheOverlay:

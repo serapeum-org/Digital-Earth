@@ -40,10 +40,13 @@ element, because `.opts()` writes into HoloViews' global `Store` against the obj
 
 import warnings
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from digitalearth.base.capabilities import CapabilityError
+from digitalearth.base.custom import custom_kind
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec import FigureDiff, FigureSpec, LayerSpec
 from digitalearth.interactive.capabilities import CAPABILITIES
 
 
@@ -117,6 +120,22 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "borders",
     "rivers",
     "lakes",
+)
+
+
+#: The kinds this tier **declares and keeps** rather than draws, each with the reason — the other half of
+#: :data:`DRAWN_KINDS`, and the same pair `INTERACTIVE_UNDRAWN_KINDS` in the shared renderer conformance
+#: suite holds. `Capabilities.require` cannot answer for these: the tier does support the kind, which is how
+#: `add_layer` accepts one, and what it cannot do is build a second element from a description that never
+#: described the first. So a change that would need one built is refused against this table, before a drawer
+#: is asked (review H7); `CAPABILITIES.absent` stays for the kinds the tier does not support at all.
+KEPT_KINDS: Mapping[str, str] = MappingProxyType(
+    {
+        custom_kind("holoviews"): (
+            "a caller's own element, drawn by being kept: add_layer() holds no description to rebuild it "
+            "from"
+        ),
+    }
 )
 
 
@@ -510,17 +529,28 @@ class Renderer:
             after: The figure it should hold.
 
         Raises:
-            KeyError: when a layer names a kind this tier does not draw. The record **and** the overlay are
-                rolled back to what they held before the call, so a refusal part-way through leaves no layer
-                drawn that no figure owns.
+            CapabilityError: when the change would have to build a layer of a kind this tier **keeps**
+                rather than draws — a caller's own element, which has no description to rebuild it from
+                (:data:`KEPT_KINDS`). Refused before the first layer is drawn, so nothing is rolled back.
+            KeyError: when a layer names a kind this tier does not draw at all. The record **and** the
+                overlay are rolled back to what they held before the call, so a refusal part-way through
+                leaves no layer drawn that no figure owns.
         """
+        change = before.diff(after)
+        asked = self._would_draw(before, after, change)
+        # Before the first draw, not from the drawer table part-way through one: the gate on
+        # `replace_layer` passes for `custom:holoviews`, because the tier *declares* that kind, and the
+        # refusal then came out of `drawer_for` as a bare `KeyError` naming a kind the declaration lists
+        # (review H7). Asked of the same list `_reconcile` draws from, so the two cannot disagree about
+        # which layers a drawer is asked for.
+        self._refuse_what_it_cannot_rebuild(after, asked)
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third has already drawn the
         # first two. Rolling back only the caller's description would leave this record holding layers no
         # figure owns — the defect the shared conformance contract states, and which the other tiers hit too.
         held = dict(self._drawn)
         overlay = list(self._map.layers)
         try:
-            self._reconcile(before, after)
+            self._reconcile(after, change, asked)
             # Inside the `try`, as the web tier's is, so the restore below is a live path rather than a
             # comment about one (review L4). The arrangement is where the record and the overlay are brought
             # back into agreement, so a failure in it leaves the record describing `after` while the overlay
@@ -577,7 +607,64 @@ class Renderer:
                 arranged.append(now.element)
         self._map.layers[:] = arranged
 
-    def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
+    def _would_draw(
+        self, before: FigureSpec, after: FigureSpec, change: FigureDiff
+    ) -> Tuple[str, ...]:
+        """Return the layers a reconcile of this difference asks a drawer for, in the order it asks.
+
+        Read once and handed to both :meth:`_refuse_what_it_cannot_rebuild` and :meth:`_reconcile`, so the
+        refusal cannot be asked of a different set of layers than the one that would be drawn.
+
+        Args:
+            before: The figure the map currently draws.
+            after: The figure it should draw.
+            change: The difference between them.
+
+        Returns:
+            The ids, rebuilt first, then the restyles that reach HoloViews, then the added layers.
+        """
+        # A rebuilt layer is one whose *data* changed — its kind, source or slice — and every one of those
+        # means a new element. Only a restyle is worth asking about, because `diff` groups a change of
+        # `label` with a change of colour and one of those never reaches HoloViews.
+        return (
+            *change.rebuilt,
+            *(
+                layer_id
+                for layer_id in change.restyled
+                if self._reaches_holoviews(before, after, layer_id)
+            ),
+            *change.added,
+        )
+
+    def _refuse_what_it_cannot_rebuild(
+        self, after: FigureSpec, asked: Tuple[str, ...]
+    ) -> None:
+        """Refuse a change that would have to build a layer of a kind this tier only keeps.
+
+        Args:
+            after: The figure the map should draw, which holds the kinds being asked for.
+            asked: The layers a drawer would be asked for — :meth:`_would_draw`'s answer.
+
+        Raises:
+            CapabilityError: for the first such layer, naming it, its kind and why the tier has nothing to
+                rebuild it from. A `ValueError`, which is the class the tier refuses every other
+                "this backend cannot do that" with.
+        """
+        for layer_id in asked:
+            kind = after.layers.get(layer_id).kind
+            reason = KEPT_KINDS.get(kind)
+            if reason is None:
+                continue
+            raise CapabilityError(
+                f"the interactive tier keeps {kind!r} layers rather than drawing them, so layer "
+                f"{layer_id!r} cannot be built again from a description — {reason}. Re-describe only what "
+                f"the figure says about it (its label, its band, whether it is drawn), or remove it and "
+                f"hand the new object to add_layer()"
+            )
+
+    def _reconcile(
+        self, after: FigureSpec, change: FigureDiff, asked: Tuple[str, ...]
+    ) -> None:
         """Draw the difference between two figures, layer by layer.
 
         Removed, rebuilt, restyled and added layers pass through this renderer's record; shown and hidden
@@ -585,8 +672,10 @@ class Renderer:
         `apply` is not record-only (see :meth:`apply`).
 
         Args:
-            before: The figure the map currently draws.
-            after: The figure it should draw.
+            after: The figure the map should draw.
+            change: The difference between the figure it draws and that one.
+            asked: The layers to draw again — :meth:`_would_draw`'s answer, read before the first draw so
+                the refusal above and this loop agree on which layers a drawer is asked for.
 
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
@@ -595,21 +684,12 @@ class Renderer:
             UserWarning: for a shown or hidden layer whose element has no way to say it — see
                 :func:`_show`.
         """
-        change = before.diff(after)
         for layer_id in change.removed:
             self.remove(layer_id)
-        # A rebuilt layer is one whose *data* changed — its kind, source or slice — and every one of those
-        # means a new element. Only a restyle is worth asking about, because `diff` groups a change of
-        # `label` with a change of colour and one of those never reaches HoloViews.
-        for layer_id in change.rebuilt:
+        for layer_id in asked:
+            # `remove` before the draw for an added layer too: nothing is recorded under its id, so the
+            # pop is a no-op there and the two cases need no branch between them.
             self.remove(layer_id)
-            self.draw_layer(after, layer_id)
-        for layer_id in change.restyled:
-            if not self._reaches_holoviews(before, after, layer_id):
-                continue
-            self.remove(layer_id)
-            self.draw_layer(after, layer_id)
-        for layer_id in change.added:
             self.draw_layer(after, layer_id)
         for layer_id in change.shown:
             self.set_visible(layer_id, True)
