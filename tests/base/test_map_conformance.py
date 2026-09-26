@@ -10,9 +10,21 @@ makes the call.
 
 So this is the other half. A tier supplies three things — its name, a way to hand back an empty map, and
 whatever it legitimately cannot do — and inherits every probe below. **Adding a tier is a subclass**, and
-the two that sign here are a `backend` string and a `make()` and nothing else. The probes never mention a
-tier: they call the Core names (`points`, `choropleth`, `graticule`) and read `figure_spec`, which is the
-whole point of the contract those names were frozen into.
+what the three that sign here write is a `backend` string, a `make()`, and — for the two framing probes
+alone — a row in :data:`FRAME_READERS`. The probes never mention a tier: they call the Core names (`points`,
+`choropleth`, `graticule`) and read `figure_spec`, which is the whole point of the contract those names were
+frozen into.
+
+**The two framing probes read the engine, not the figure.** `set_bounds` leaves no layer behind, so there is
+nothing in `figure_spec` to read — and every tier *records* the rectangle it was asked for (`_frame_bounds`
+on the two 2-D tiers, `_fit` on the web one), so a probe reading that record back would agree with the
+caller whether or not the frame ever reached the engine. That is how two `move_layer` probes on this branch
+passed over a feature that does not reach the picture (review H5/H6), and it is why :data:`FRAME_READERS`
+goes to matplotlib's axes limits, to the plot options of the *rendered* HoloViews object, and to the
+``fitBounds`` call in the page a browser is handed. It is a table row rather than a method on the subclass so
+that a fourth tier signing without one fails a statement about the package
+(:meth:`TestTheTablesDescribeThePackage.test_every_tier_that_signs_can_have_its_frame_read`) rather than
+failing two probes in the one job that carries its engine.
 
 **Which tiers subclass it, and why the other two cannot yet.** The package has four —
 :data:`ALL_TIERS` — and **three of them sign here**: `web`, `interactive` and, since order 27a, the
@@ -161,6 +173,25 @@ CROSS_TIER_JOB = ("test-backends", "all")
 #: :class:`~digitalearth.base.spec.scale.Scale`, so both must publish these — which is the one symbology
 #: value portable enough to compare across tiers today.
 EXPECTED_BREAKS = (1.0, 5.0, 9.0)
+
+#: The bare four-value sequence the framing probes hand every tier, in the one order a sequence has here:
+#: bbox order, ``(west, south, east, north)``.
+#:
+#: That is the order :class:`~digitalearth.base.spec.bounds.Bounds` holds its own four numbers in, the order
+#: its `from_bbox` reads and its `as_bbox` writes, and the order the interactive and web tiers already took.
+#: The static tier read the *same* sequence as matplotlib's ``[xmin, xmax, ymin, ymax]``, because the rename
+#: to the Core name kept `set_extent`'s argument — so one call framed two different rectangles and neither
+#: tier complained (review H2). Nothing here declared the ordering, and no probe made the call, which is why
+#: a name test could pass on both tiers throughout.
+#:
+#: The numbers are chosen so the two orderings disagree about them **without** either answer being
+#: degenerate: read as matplotlib's this is x 0→10 / y 20→30, read as bbox it is x 0→20 / y 10→30. A
+#: sequence whose wrong reading collapses to a zero-width box would have been caught by anything that merely
+#: refused degenerate frames, which is not the promise being held.
+#:
+#: The four numbers are in each tier's **own display CRS**, which is the only thing a bare sequence can mean:
+#: the probe is about which edge each position names, not about where on the planet the rectangle lands.
+FRAME_ASKED = (0.0, 10.0, 20.0, 30.0)
 
 #: What :func:`_seed` must describe, on any tier: `(kind, band, visible)` per layer, in draw order.
 #:
@@ -504,6 +535,88 @@ def _cloud_hidden(drawn) -> None:
         drawn: The scene to draw on.
     """
     drawn.point_cloud(_point_cloud(), visible=False)
+
+
+def _static_frame(drawn) -> tuple:
+    """Return the rectangle matplotlib was left holding, as ``(west, south, east, north)``.
+
+    Args:
+        drawn: The static tier's map, already framed.
+
+    Returns:
+        The axes limits, re-ordered off matplotlib's own ``(xmin, xmax)`` / ``(ymin, ymax)`` pairs. Read from
+        the axes rather than from `viewport`, because the axes are what every artist is drawn against.
+    """
+    xmin, xmax = drawn.ax.get_xlim()
+    ymin, ymax = drawn.ax.get_ylim()
+    return float(xmin), float(ymin), float(xmax), float(ymax)
+
+
+def _interactive_frame(drawn) -> tuple:
+    """Return the rectangle HoloViews was left holding, as ``(west, south, east, north)``.
+
+    Args:
+        drawn: The interactive tier's map, already framed.
+
+    Returns:
+        The ``xlim`` / ``ylim`` plot options of the **rendered** object — what the tier's `_projected` hook
+        put on it, and what Bokeh opens the figure at.
+    """
+    import holoviews as hv
+
+    options = hv.Store.lookup_options("bokeh", drawn.render(), "plot").kwargs
+    xmin, xmax = options["xlim"]
+    ymin, ymax = options["ylim"]
+    return float(xmin), float(ymin), float(xmax), float(ymax)
+
+
+def _web_frame(drawn) -> tuple:
+    """Return the rectangle the exported page frames itself on, as ``(west, south, east, north)``.
+
+    Args:
+        drawn: The web tier's map, already framed.
+
+    Returns:
+        The first argument of the page's ``fitBounds`` call, out of the ``var data = {...}`` payload the
+        browser is handed. The page inlines the whole MapLibre library, which names ``fitBounds`` in its own
+        source, so the payload is parsed rather than the page searched.
+
+    Raises:
+        AssertionError: when the page carries no call payload, or carries no ``fitBounds`` call in it.
+    """
+    import json
+
+    page = drawn.to_html()
+    marker = page.rfind("var data = ")
+    assert marker != -1, "the exported page carries no call payload"
+    opening = marker + len("var data = ")
+    payload = json.loads(page[opening : page.index("};", opening) + 1])
+    for name, arguments in payload["calls"]:
+        if name == "fitBounds":
+            west, south, east, north = arguments[0]
+            return float(west), float(south), float(east), float(north)
+    raise AssertionError(f"the exported page never frames itself: {payload['calls']}")
+
+
+#: How to read the frame each tier was left holding, by backend.
+#:
+#: **The read has to reach the engine, and that is why this is per tier rather than one probe.** Every tier
+#: also *records* what `set_bounds` was asked for — `_frame_bounds` on the two 2-D tiers, `_fit` on the web
+#: one — and reading that record back is the trap two of this branch's other findings fell into: a probe that
+#: asserts on a request passes while the engine ignores it (review H5/H6, both `move_layer`). So each reader
+#: goes to where the frame lands: matplotlib's axes limits, the plot options of the *rendered* HoloViews
+#: object, and the ``fitBounds`` call in the page a browser is handed.
+#:
+#: Keyed by the tiers that subclass :class:`MapConformanceBase`, and held to that by
+#: :meth:`TestTheTablesDescribeThePackage.test_every_tier_that_signs_can_have_its_frame_read` — so a fourth
+#: tier signing the suite cannot inherit the framing probes with nothing to read them with. The 3-D tier is
+#: absent on purpose and says so in `PENDING`: a scene is framed by its camera, not by an extent, and it has
+#: no `set_bounds` under any spelling.
+FRAME_READERS: dict[str, Callable[[Any], tuple]] = {
+    "matplotlib": _static_frame,
+    "interactive": _interactive_frame,
+    "web": _web_frame,
+}
 
 
 @dataclass(frozen=True)
@@ -1072,6 +1185,67 @@ class MapConformanceBase:
             "caller's own style; a value its builder defaulted to is the tier's business, not a portable ask"
         )
 
+    def _framed(self, drawn) -> tuple:
+        """Return the rectangle this tier's engine was left holding.
+
+        Args:
+            drawn: The map under test, already framed.
+
+        Returns:
+            ``(west, south, east, north)``, read out of the engine by this tier's row in
+            :data:`FRAME_READERS`.
+        """
+        reader = FRAME_READERS.get(self.backend)
+        assert reader is not None, (
+            f"the {self.backend} tier signs this suite and FRAME_READERS has no row for it, so the framing "
+            "probes have nothing to read the engine with"
+        )
+        return reader(drawn)
+
+    def test_one_sequence_frames_one_rectangle_on_every_tier(self, drawn):
+        """``set_bounds`` on a bare sequence has to mean the same four edges wherever it is called.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The probe that was missing while the name was declared (review H2). The static tier read the
+            sequence as matplotlib's ``[xmin, xmax, ymin, ymax]`` and the other two as bbox
+            ``(west, south, east, north)``, so `set_bounds([0, 10, 0, 50])` framed x 0→10 / y 0→50 on one
+            tier and x 0→0 — a degenerate frame, accepted in silence — on the next. `CORE` declares the
+            method's *keyword set* and nothing about the first positional parameter, so no name test could
+            see it, and this module made no framing call at all.
+
+            Read out of the engine rather than off the map's own record of the request: `_frame_bounds` and
+            `_fit` would have agreed with the caller on every tier while the figure disagreed, which is the
+            way two `move_layer` probes on this branch passed over a broken feature (review H5/H6).
+        """
+        drawn.set_bounds(list(FRAME_ASKED))
+        framed = self._framed(drawn)
+        assert framed == FRAME_ASKED, (
+            f"the {self.backend} tier was handed {list(FRAME_ASKED)} as (west, south, east, north) and "
+            f"framed {framed}"
+        )
+
+    def test_the_framing_argument_is_spelled_the_same_way_on_every_tier(self, drawn):
+        """The same keyword call has to reach `set_bounds` on any tier, not just positionally.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The other half of the same finding. The static tier's parameter was `bbox` and the other two
+            tiers' was `bounds`, so `set_bounds(bounds=...)` raised `TypeError` on one and
+            `set_bounds(bbox=...)` raised it on the others — a Core name whose argument ported in neither
+            direction. Passed by keyword on purpose: positionally this probe would pass whatever the
+            parameter were called, which is exactly why the frame is checked again afterwards.
+        """
+        drawn.set_bounds(bounds=list(FRAME_ASKED))
+        framed = self._framed(drawn)
+        assert framed == FRAME_ASKED, (
+            f"the {self.backend} tier took bounds={list(FRAME_ASKED)} and framed {framed}"
+        )
+
     def test_this_tier_contributes_a_non_zero_count_of_probes(self):
         """A tier whose class is live must really bring every probe with it.
 
@@ -1495,6 +1669,22 @@ class TestTheTablesDescribeThePackage:
         assert unheld == [], (
             f"{unheld} neither subclass MapConformanceBase nor appear in NO_PORTABLE_CHANNELS, so nothing "
             "in this module says anything about them"
+        )
+
+    def test_every_tier_that_signs_can_have_its_frame_read(self):
+        """A tier the framing probes run on needs a way to read the frame out of its engine.
+
+        Test scenario:
+            :data:`FRAME_READERS` is the one table a tier cannot inherit its way out of: the two framing
+            probes read the engine rather than the map's record of the request, and how to reach the engine
+            differs per tier. A fourth tier subclassing the base with no row here would inherit both probes
+            and fail them on the missing reader — this says so from the table instead, in every environment,
+            rather than only in the job that carries that tier's engine.
+        """
+        unreadable = sorted(set(TIER_JOBS) - set(FRAME_READERS))
+        assert unreadable == [], (
+            f"{unreadable} subclass MapConformanceBase and have no row in FRAME_READERS, so the framing "
+            "probes have no way to read what their engine was left holding"
         )
 
     def test_every_tier_a_table_excuses_can_be_re_asked_the_question(self):
