@@ -461,12 +461,13 @@ class TestTheInlineCeilingIsARefusal:
         from digitalearth.web import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        not_a_number = float("nan")
         m = WebMap()
         with pytest.raises(ValueError) as ceiling:
             m.field(dataset)
         other = WebMap()
         with pytest.raises(ValueError) as sibling:
-            other.field(dataset, opacity=float("nan"))
+            other.field(dataset, opacity=not_a_number)
         assert str(ceiling.value).startswith("WebMap.field()"), str(ceiling.value)
         assert str(sibling.value).startswith("WebMap.field()"), str(sibling.value)
 
@@ -775,10 +776,11 @@ class TestTheTiledRasterRoutes:
             ``AttributeError: 'numpy.ndarray' object has no attribute 'bbox'`` from inside the extent
             (review R2-L12). The refusal now names the call, the route and what it needs.
         """
+        target = make(dataset)
         destination = tmp_path / "acc"
         m = WebMap()
         with pytest.raises(TypeError, match="needs a raster it can window"):
-            m.field(make(dataset), tiles="xyz", tiles_path=destination, zooms=(9, 9))
+            m.field(target, tiles="xyz", tiles_path=destination, zooms=(9, 9))
         assert not destination.exists(), sorted(destination.rglob("*"))
 
     def test_the_inline_route_still_draws_the_input_the_tiled_one_refuses(self, dataset):
