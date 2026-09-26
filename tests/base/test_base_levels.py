@@ -12,7 +12,6 @@ is the point of the function living in ``base/`` at all.
 """
 
 import math
-import time
 
 import numpy as np
 import pytest
@@ -163,20 +162,26 @@ class TestAnIntervalTooFineToDrawIsRefused:
             f"the refusal must name the {self.ASKED} levels it would have cut, got: {excinfo.value}"
         )
 
-    def test_it_is_refused_before_the_array_is_built(self):
+    def test_it_is_refused_before_the_array_is_built(self, monkeypatch):
         """The guard reads two floats, so the interval that would exhaust memory costs nothing to refuse.
 
+        Args:
+            monkeypatch: Replaces `numpy.arange` with a spy for the duration of the call.
+
         Test scenario:
-            A ceiling checked after `np.arange` would still allocate what it then complains about. Timing is
-            the only way to tell the two apart, and the margin is enormous: the unguarded walk over this band
-            at this interval took ~2 s, against a refusal that reads `low`, `high` and divides.
+            A ceiling checked after `np.arange` would still allocate what it then complains about. This used
+            to be inferred from the clock — `spent < 0.5` against an unguarded walk of ~2 s — which is a flake
+            on a loaded runner and measures the cost rather than the ordering (review R2-L7). The allocation
+            itself is watched instead: `np.arange` is replaced by a spy, so if the guard ever moves behind it
+            the spy records the call *and* returns `None`, which makes the line after it raise a `TypeError`
+            the `pytest.raises(ValueError)` does not catch. Either way the test is red for the right reason.
         """
-        started = time.perf_counter()
-        with pytest.raises(ValueError):
+        reached = []
+        monkeypatch.setattr(np, "arange", lambda *args, **kwargs: reached.append(args))
+        with pytest.raises(ValueError) as refused:
             levels_every(self.DEM, 1e-6)
-        spent = time.perf_counter() - started
-        assert spent < 0.5, (
-            f"refusing an interval of 1e-06 took {spent:.3f}s, so the array was built first"
+        assert reached == [], (
+            f"the ceiling was checked after np.arange{reached[0]} had already allocated: {refused.value}"
         )
 
     def test_a_count_at_the_ceiling_still_draws(self):
