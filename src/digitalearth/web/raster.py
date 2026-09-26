@@ -77,6 +77,11 @@ _MERCATOR_LIMIT = 85.05112878
 #: decimated read — reading the band whole to measure it is the cost the route exists to avoid.
 _LIMIT_SCAN_BUDGET = 250_000
 
+#: How the single-band builder names itself in a refusal. The colour-limit check, the opacity check, the
+#: route check and the tiled writer all speak for the same public call, so they share the one spelling —
+#: named once, because a second spelling of the same method name would read as a second method.
+_FIELD_CALLER = "WebMap.field()"
+
 #: The recipe that maps the three stretched channels straight to red, green and blue. It is also what an
 #: ``rgb`` layer whose description records no recipe at all means: every figure written before this tier had a
 #: second composite is one of those, and read as anything else they would be refused or quietly recoloured.
@@ -278,10 +283,17 @@ def _native_zoom(bounds: Bounds, columns: Any) -> int:
 
     Returns:
         The zoom, clamped into ``[0, _MAX_TILE_ZOOM]``. Zero for an extent or a column count that cannot be
-        measured, which is the one answer that asks for no tiles that do not exist.
+        measured, which is the one answer that asks for no tiles that do not exist. A width that is not a
+        finite positive number is one of those: ``Bounds`` guarantees each edge is finite, not that their
+        difference is, and a width of zero or one that overflows to infinity asks for ``log2`` of zero.
     """
     span = float(bounds.xmax) - float(bounds.xmin)
-    if not isinstance(columns, int) or columns < 1 or not span > 0.0:
+    if (
+        not isinstance(columns, int)
+        or columns < 1
+        or not math.isfinite(span)
+        or span <= 0.0
+    ):
         return 0
     per_cell = span / columns
     zoom = math.ceil(math.log2(360.0 / (_TILE_SIZE * per_cell)))
@@ -1314,9 +1326,9 @@ class RasterMixin(_MixinBase):
             digitalearth.web.raster.RasterMixin.rgb_composite: the three-band composite path.
             digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
         """
-        vmin, vmax = _colour_limits(limits, vmin, vmax, caller="WebMap.field()")
-        opacity = as_finite(opacity, "opacity", "WebMap.field()")
-        route = _tile_route(tiles, "WebMap.field()")
+        vmin, vmax = _colour_limits(limits, vmin, vmax, caller=_FIELD_CALLER)
+        opacity = as_finite(opacity, "opacity", _FIELD_CALLER)
+        route = _tile_route(tiles, _FIELD_CALLER)
         _require_layer_api()
         if route is not None:
             return self._tiled_field(
@@ -1414,7 +1426,7 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: as :meth:`field` documents for a tiled route.
         """
-        caller = "WebMap.field()"
+        caller = _FIELD_CALLER
         dataset = self._opened(data)
         styling = _styling_source(dataset, band)
         cmap_name = self._auto_cmap(styling, cmap)
