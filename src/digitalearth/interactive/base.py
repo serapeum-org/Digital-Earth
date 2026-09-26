@@ -1004,7 +1004,10 @@ class InteractiveMapBase:
             This map (chainable).
 
         Raises:
-            KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
+            CapabilityError: if the replacement names a kind this tier does not draw, naming the kind and the
+                backend that has no drawer for it. Raised off the declaration, before a description is built
+                or the engine is touched. It subclasses ``ValueError``, so a caller catching that catches this.
+            KeyError: if no layer has that id, naming the ids that do.
             ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
                 the drawers read the source out of the figure, and a missing one reaches the drawer as
                 `None` and fails somewhere it cannot explain.
@@ -1021,7 +1024,15 @@ class InteractiveMapBase:
 
                 ```
         """
-        self._require_layer(getattr(layer, "id", None))
+        # By type before by id: `getattr(layer, "id", None)` made the id lookup fail first, so a caller who
+        # passed the id where the description belongs was answered "no layer None on this map" — an id they
+        # never wrote, about an argument that was not a description at all (review M9, the static tier's L1).
+        if not isinstance(layer, LayerSpec):
+            raise ValueError(
+                f"{type(self).__name__}.replace_layer needs a LayerSpec — the new description, not an id; "
+                f"got {type(layer).__name__}"
+            )
+        self._require_layer(layer.id)
         # The first production caller of `Capabilities.require` (D-10). A replacement is the one
         # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
         # something it does not have — and refusing here, off the declaration, refuses before a description

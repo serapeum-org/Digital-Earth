@@ -10,8 +10,11 @@ a viewer sees. Until order 23 only the builders wrote it and `Renderer.apply` re
 record beside it — so a change reached a record and never the picture (review M1). The probes read the list.
 """
 
+from dataclasses import replace as with_fields
+
 import pytest
 
+from digitalearth.base.capabilities import CapabilityError
 from digitalearth.interactive import InteractiveMap
 
 pytest.importorskip(
@@ -164,8 +167,6 @@ class TestACallersOwnElement:
             the layer and must not drop the object — which is what rebuilding the overlay from the
             renderer's record alone would have done.
         """
-        from dataclasses import replace as with_fields
-
         held.replace_layer(with_fields(held.get_layer(BOTTOM), label="Lower"))
         assert held.layers == ["lower-element", "upper-element"], held.layers
 
@@ -199,3 +200,57 @@ class TestACallersOwnElement:
         """
         held.remove_layer(TOP)
         assert held._last_layer_index("colorbar") == 0, held._last_layer_id
+
+
+class TestWhatReplaceLayerRefusesAndSaysItRefuses:
+    """`replace_layer`'s refusals, and the docstring a caller writes their `except` clause from.
+
+    The class the static tier settled in round 1 (`tests/static/test_static_layer_management.py`), in this
+    tier's terms. Review M9 measured four tiers answering one mistake with four exception classes — this one
+    said `KeyError: "no layer None on this map"`, about an id the caller never wrote — and three docstrings
+    promising a class the code does not raise.
+    """
+
+    def test_the_refusal_class_the_docstring_promises_is_the_one_raised(self, held):
+        """A `Raises:` block naming the wrong class is an `except` clause the exception walks straight past.
+
+        Args:
+            held: The map under test.
+
+        Test scenario:
+            The gate became `Capabilities.require`, which raises `CapabilityError`, while the docstring went
+            on promising `KeyError` for a kind the tier cannot draw. The two readings are built differently
+            on purpose — one by running the call, one by reading what it says about itself.
+        """
+        replacement = with_fields(held.get_layer(BOTTOM), kind="custom:pyvista")
+        with pytest.raises(CapabilityError) as refusal:
+            held.replace_layer(replacement)
+        raised = type(refusal.value).__name__
+        assert raised in (InteractiveMap.replace_layer.__doc__ or ""), (
+            f"replace_layer raises {raised} and its docstring does not name it"
+        )
+
+    def test_a_replacement_that_is_not_a_spec_is_refused_by_type(self, held):
+        """An id passed where the description belongs is the caller's mistake, named as such.
+
+        Args:
+            held: The map under test.
+
+        Test scenario:
+            `getattr(layer, "id", None)` made the id lookup fail first, so the message named `None` — an id
+            the caller never passed — and said nothing about the argument that was actually wrong.
+        """
+        with pytest.raises(ValueError, match=r"needs a LayerSpec.*got str"):
+            held.replace_layer(BOTTOM)
+
+    def test_the_refusal_names_what_was_passed_rather_than_a_missing_id(self, held):
+        """The message a caller reads has to point at the argument, not at the layer list.
+
+        Args:
+            held: The map under test.
+        """
+        with pytest.raises(ValueError) as refusal:
+            held.replace_layer(42)
+        assert "no layer" not in str(refusal.value), (
+            f"the refusal blamed a missing layer: {refusal.value}"
+        )
