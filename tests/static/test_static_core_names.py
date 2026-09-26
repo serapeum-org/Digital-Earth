@@ -167,8 +167,9 @@ class TestTheOldSpellingStillDrawsTheSamePicture:
         """
         scene = Map(crs=4326)
         try:
+            alias, argument = getattr(scene, old), DATA[core]()
             with pytest.warns(DeprecationWarning) as caught:
-                getattr(scene, old)(DATA[core]())
+                alias(argument)
         finally:
             scene.close()
         said = str(caught[0].message)
@@ -184,8 +185,9 @@ class TestTheOldSpellingStillDrawsTheSamePicture:
         """
         scene = Map(crs=4326)
         try:
+            alias, argument = getattr(scene, old), DATA[core]()
             with pytest.warns(DeprecationWarning) as caught:
-                getattr(scene, old)(DATA[core]())
+                alias(argument)
         finally:
             scene.close()
         assert caught[0].filename == __file__, caught[0].filename

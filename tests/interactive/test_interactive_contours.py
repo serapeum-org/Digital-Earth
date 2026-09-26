@@ -157,8 +157,9 @@ class TestAnIntervalIsSpacing:
         Args:
             drawn: The map under test.
         """
+        raster = _raster()
         with pytest.raises(ValueError) as refused:
-            drawn.contours(_raster(), levels=LEVELS, interval=100.0)
+            drawn.contours(raster, levels=LEVELS, interval=100.0)
         assert "at most one of interval= or levels=" in str(refused.value), (
             refused.value
         )
@@ -169,9 +170,9 @@ class TestAnIntervalIsSpacing:
         Args:
             drawn: The map under test.
         """
-        flat = np.full((20, 20), 5.0, dtype="float32")
+        constant = _raster(np.full((20, 20), 5.0, dtype="float32"))
         with pytest.raises(ValueError) as refused:
-            drawn.contours(_raster(flat), interval=100.0)
+            drawn.contours(constant, interval=100.0)
         assert "crosses no level inside the band's range" in str(refused.value), (
             refused.value
         )
@@ -182,7 +183,7 @@ class TestAnIntervalIsSpacing:
         Args:
             drawn: The map under test.
         """
-        flat = np.full((20, 20), 5.0, dtype="float32")
+        constant = _raster(np.full((20, 20), 5.0, dtype="float32"))
         with pytest.raises(ValueError):
-            drawn.contours(_raster(flat), interval=100.0)
+            drawn.contours(constant, interval=100.0)
         assert drawn.layer_ids == []

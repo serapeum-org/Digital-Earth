@@ -99,6 +99,11 @@ INLINE_STACKLEVEL = 4
 #: The same count `_resolve_big_data_threshold` passes, for the same reason and with the same shape.
 RESOLVER_STACKLEVEL = INLINE_STACKLEVEL + 1
 
+#: How a point layer names itself in a warning or refusal. The renamed-keyword resolution, the opacity
+#: channel's, the big-data threshold's and the refusal of an unclassifiable `scheme=` all speak for the same
+#: public call, so they share the one spelling — as `Map.points()` does on the static tier.
+_POINTS_CALLER = "InteractiveMap.points()"
+
 
 def resolve_opacity(
     opacity: Optional[float], opts: dict, *, caller: str
@@ -662,23 +667,21 @@ class VectorMixin(_MixinBase):
             value=column,
             old="value_column",
             alias=value_column,
-            caller="InteractiveMap.points()",
+            caller=_POINTS_CALLER,
             stacklevel=INLINE_STACKLEVEL,
         )
-        resolved_opacity = resolve_opacity(
-            opacity, opts, caller="InteractiveMap.points()"
-        )
+        resolved_opacity = resolve_opacity(opacity, opts, caller=_POINTS_CALLER)
         if resolved_opacity is not None:
             opts["alpha"] = resolved_opacity
         if scheme is not None and not value_column:
             # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
             # styling request, which is exactly what this tier stopped doing elsewhere (review M2).
             raise ValueError(
-                "InteractiveMap.points(): scheme= classifies value_column=, which was not given; "
+                f"{_POINTS_CALLER}: scheme= classifies value_column=, which was not given; "
                 "name the column to classify, or drop scheme="
             )
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold, caller="InteractiveMap.points()"
+            big_data_threshold, rasterize_threshold, caller=_POINTS_CALLER
         )
         # Nothing here is reprojected: the drawer warps what it draws, and what the description needs — the
         # row count and a column's values — is the same before a warp as after it. Warping here as well did

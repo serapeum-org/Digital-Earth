@@ -118,8 +118,9 @@ class TestAnIntervalIsSpacing:
         Args:
             drawn: The map under test.
         """
+        raster = _raster()
         with pytest.raises(ValueError) as refused:
-            drawn.contours(_raster(), levels=LEVELS, interval=100.0)
+            drawn.contours(raster, levels=LEVELS, interval=100.0)
         assert "at most one of interval= or levels=" in str(refused.value), (
             refused.value
         )
@@ -156,8 +157,9 @@ class TestTheOldSpellingsStillDraw:
             drawn: The map under test.
             old: The deprecated spelling.
         """
+        alias, raster = getattr(drawn, old), _raster()
         with pytest.warns(DeprecationWarning) as caught:
-            getattr(drawn, old)(_raster(), levels=LEVELS)
+            alias(raster, levels=LEVELS)
         assert "use Map.contours(" in str(caught[0].message), caught[0].message
 
     @pytest.mark.parametrize("old", ["contour", "contourf"])
@@ -173,8 +175,9 @@ class TestTheOldSpellingsStillDraw:
             get lines where they had bands. The message says which `filled=` to pass, because that is the
             edit they have to make.
         """
+        alias, raster = getattr(drawn, old), _raster()
         with pytest.warns(DeprecationWarning) as caught:
-            getattr(drawn, old)(_raster(), levels=LEVELS)
+            alias(raster, levels=LEVELS)
         wanted = "filled=True" if old == "contourf" else "filled=False"
         assert wanted in str(caught[0].message), caught[0].message
 
@@ -186,8 +189,9 @@ class TestTheOldSpellingsStillDraw:
             drawn: The map under test.
             old: The deprecated spelling.
         """
+        alias, raster = getattr(drawn, old), _raster()
         with pytest.warns(DeprecationWarning) as caught:
-            getattr(drawn, old)(_raster(), levels=LEVELS)
+            alias(raster, levels=LEVELS)
         assert caught[0].filename == __file__, (
             f"{caught[0].filename}:{caught[0].lineno}"
         )

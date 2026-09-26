@@ -177,8 +177,10 @@ class TestTheOldSpellingStillBuildsTheSameLayer:
             core: The Core name it forwards to.
         """
         scene = InteractiveMap()
+        alias = getattr(scene, old)
+        argument = DATA[core]() if core in DATA else "an-element"
         with pytest.warns(DeprecationWarning) as caught:
-            getattr(scene, old)(DATA[core]() if core in DATA else "an-element")
+            alias(argument)
         said = str(caught[0].message)
         assert f"InteractiveMap.{core}()" in said, (
             f"InteractiveMap.{old}() warned {said!r}"
@@ -193,8 +195,10 @@ class TestTheOldSpellingStillBuildsTheSameLayer:
             core: The Core name it forwards to.
         """
         scene = InteractiveMap()
+        alias = getattr(scene, old)
+        argument = DATA[core]() if core in DATA else "an-element"
         with pytest.warns(DeprecationWarning) as caught:
-            getattr(scene, old)(DATA[core]() if core in DATA else "an-element")
+            alias(argument)
         assert caught[0].filename == __file__, caught[0].filename
 
 

@@ -13,7 +13,12 @@ cannot report is the half that was missing.
 """
 
 import geopandas as gpd
+import numpy as np
 import pytest
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
+from matplotlib.text import Text
+from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point
 
@@ -44,6 +49,18 @@ def _points(corners):
         gpd.GeoDataFrame(
             geometry=[Point(*corner) for corner in corners], crs="EPSG:4326"
         )
+    )
+
+
+def _raster():
+    """Return a small single-band raster in EPSG:4326, covering 4.0-4.4E by 52.6-53.0N.
+
+    Returns:
+        Dataset: a pyramids raster, whose own ``bbox`` is what a frame fitted to it has to equal.
+    """
+    return Dataset.from_array(
+        np.arange(400, dtype="float32").reshape(20, 20),
+        geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
     )
 
 
@@ -140,6 +157,94 @@ class TestNoneFitsTheData:
         flat.coastlines()
         with pytest.raises(ValueError, match="nothing to frame on"):
             flat.set_bounds(None)
+
+    def test_a_raster_layer_is_framed_on_the_image_it_drew(self, flat):
+        """A raster states the region it covers, where a scatter only has the points it drew.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            Every other fit here goes through a point layer, whose artist is a collection. A field draws an
+            image instead, and an image is asked a different question — it *states* its extent rather than
+            having one derived from vertices — so a raster is the input that reaches that reader at all.
+            Checked against the raster's own rectangle as pyramids reports it, not against the artist, so a
+            reader that read the wrong pair off ``get_extent()`` is what fails.
+        """
+        raster = _raster()
+        flat.field(raster)
+        flat.set_bounds(None)
+        west, south, east, north = raster.bbox
+        (xmin, xmax), (ymin, ymax) = _limits(flat)
+        assert (xmin, xmax, ymin, ymax) == pytest.approx((west, east, south, north)), (
+            _limits(flat)
+        )
+
+    def test_a_positioned_artist_pulls_the_frame_out_to_its_point(self, flat):
+        """An artist that covers a point rather than an area still moves the frame.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            ``add_layer`` files a caller's own artist in the ``data`` band, which is how an artist that is
+            neither an image nor a collection reaches the fit at all. A ``Text`` answers only where it sits,
+            so the region it contributes is a zero-size rectangle there — and a fit that skipped it would
+            frame on the points and leave the label outside the figure.
+        """
+        flat.points(_points(NORTH_WEST))
+        flat.add_layer(flat.ax.add_artist(Text(20.0, 20.0, "mine")))
+        flat.set_bounds(None)
+        assert _limits(flat) == ((0.0, 20.0), (0.0, 20.0)), _limits(flat)
+
+    def test_a_line_layer_is_framed_on_the_vertices_it_drew(self, flat):
+        """A line has no stated extent and no data limits, only the points it runs through.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            The third question the reader table asks, and the only artist that answers it. Drawn to run
+            down and to the right of the other layers' rectangles so a fit that dropped it would be visibly
+            smaller rather than coincidentally right.
+        """
+        flat.add_layer(flat.ax.add_artist(Line2D([0.0, 40.0], [0.0, -5.0])))
+        flat.set_bounds(None)
+        assert _limits(flat) == ((0.0, 40.0), (-5.0, 0.0)), _limits(flat)
+
+    def test_a_data_layer_that_drew_nothing_is_passed_over(self, flat):
+        """An artist with no vertices states no region, which is not the same as an error.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            A layer whose artist drew nothing has no rectangle to contribute, and the fit has to go on with
+            the layers that do. Refusing here — or framing on the empty line's null box, whose edges are
+            infinite — would make one silent no-op layer take the whole figure with it.
+        """
+        flat.points(_points(NORTH_WEST))
+        flat.add_layer(flat.ax.add_artist(Line2D([], [])))
+        flat.set_bounds(None)
+        assert _limits(flat) == ((0.0, 10.0), (0.0, 10.0)), _limits(flat)
+
+    def test_an_artist_the_table_cannot_question_is_passed_over(self, flat):
+        """The readers are questions, and an artist answering none of them contributes nothing.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            A ``Rectangle`` answers none of the four — it has no ``get_extent``, ``get_datalim``,
+            ``get_xydata`` or ``get_position`` — so it is a caller's own artist the fit cannot measure.
+            It is passed over rather than raising, which is what lets a third-party artist be added to the
+            ``data`` band at all. Placed clear of the point layer so a frame that *had* measured it would
+            be wider than the one asserted.
+        """
+        flat.points(_points(NORTH_WEST))
+        flat.add_layer(flat.ax.add_patch(Rectangle((20.0, 20.0), 5.0, 5.0)))
+        flat.set_bounds(None)
+        assert _limits(flat) == ((0.0, 10.0), (0.0, 10.0)), _limits(flat)
 
 
 class TestPadding:
@@ -279,6 +384,20 @@ class TestAFlippedAxisSurvives:
         """
         flat.set_bounds([10.0, 0.0, 0.0, 10.0])
         assert _limits(flat) == ((10.0, 0.0), (0.0, 10.0)), _limits(flat)
+
+    def test_the_other_axis_runs_backwards_on_its_own(self, flat):
+        """``[0, 10, 10, 0]`` inverts y, and only y.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            The two directions are separate flags on the frame the method settles on, so one of them can be
+            honoured while the other is dropped. Asked here without inverting x, which is the half every
+            other check in this class leaves untested.
+        """
+        flat.set_bounds([0.0, 10.0, 10.0, 0.0])
+        assert _limits(flat) == ((0.0, 10.0), (10.0, 0.0)), _limits(flat)
 
     def test_padding_grows_a_backwards_axis_outwards(self, flat):
         """Growing it must widen the view, not narrow it.

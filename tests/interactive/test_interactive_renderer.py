@@ -462,8 +462,10 @@ class TestApplyReachesTheOverlay:
             figure owns, which is the first defect the shared renderer contract states.
         """
         held = list(drawn_map.layers)
+        figure = drawn_map.figure_spec
+        refused = _refused_figure(drawn_map)
         with pytest.raises(KeyError):
-            drawn_map._renderer.apply(drawn_map.figure_spec, _refused_figure(drawn_map))
+            drawn_map._renderer.apply(figure, refused)
         assert drawn_map.layers == held, drawn_map.layers
 
 

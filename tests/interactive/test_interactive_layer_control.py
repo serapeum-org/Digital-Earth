@@ -163,8 +163,9 @@ class TestTheLayersToInclude:
 
     def test_a_map_with_no_layers_is_still_refused(self):
         """An empty control in the corner explains nothing — unchanged by the rename."""
+        empty = InteractiveMap()
         with pytest.raises(ValueError, match="at least one layer"):
-            InteractiveMap().layer_control()
+            empty.layer_control()
 
 
 class TestWherTheControlSits:
