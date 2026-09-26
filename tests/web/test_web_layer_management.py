@@ -758,3 +758,68 @@ class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
         undescribed.move_layer(BOTTOM, 1)
         drawn = _page_layer_ids(undescribed)
         assert drawn == [TOP, "deck-scatter-1", BOTTOM], drawn
+
+
+@pytest.fixture
+def draped():
+    """Yield a map whose second label takes its elevation from the first, so the first cannot be removed.
+
+    `LayerTree.remove` refuses a layer another one is draped over — a removal that would leave the second
+    reading an elevation nothing provides — and that is the one refusal `WebMap.remove_layer` can meet after
+    it has already started taking the layer apart.
+
+    Yields:
+        The map.
+    """
+    from dataclasses import replace as with_fields
+
+    built = WebMap().text(4.9, 52.4, "Amsterdam", name=BOTTOM)
+    built.text(2.35, 48.86, "Paris", name=TOP)
+    built.replace_layer(with_fields(built.get_layer(TOP), z_source=f"layer:{BOTTOM}"))
+    yield built
+    built.close()
+
+
+class TestARefusedRemovalGivesNoIdBack:
+    """A removal that cannot go through must leave the id pool exactly as it found it.
+
+    The ids were freed before the tree was asked, so a refused `remove_layer` left the pool one id short of
+    the tree: the layer was still on the map under a name the map no longer counted as taken (review R2-M8).
+    """
+
+    def test_the_refusal_names_the_layers_draped_over_it(self, draped):
+        """The refusal itself, so a fix that stopped refusing could not pass the two probes below.
+
+        Args:
+            draped: The map under test.
+        """
+        with pytest.raises(ValueError, match="take their elevation from it"):
+            draped.remove_layer(BOTTOM)
+
+    def test_the_layer_that_did_not_go_is_still_on_the_map(self, draped):
+        """Nothing else may have moved either — the tree, the renderer and the page all still hold it.
+
+        Args:
+            draped: The map under test.
+        """
+        with pytest.raises(ValueError, match="take their elevation from it"):
+            draped.remove_layer(BOTTOM)
+        assert draped.layer_ids == [BOTTOM, TOP], draped.layer_ids
+        assert _page_layer_ids(draped) == [BOTTOM, TOP], _page_layer_ids(draped)
+
+    def test_the_name_is_still_taken_so_the_next_builder_suffixes_it(self, draped):
+        """The consequence a caller meets: a name still on the map has to be generated around, not reused.
+
+        Args:
+            draped: The map under test.
+
+        Test scenario:
+            Freeing the id first made the next `text(name=BOTTOM)` collide inside `LayerTree.add` — "a layer
+            with id 'lower' is already in the tree", an internal message about a name the map had just told
+            itself was free. The suffix is what every other tier gives, and what this tier gives when the
+            removal really happens.
+        """
+        with pytest.raises(ValueError, match="take their elevation from it"):
+            draped.remove_layer(BOTTOM)
+        draped.text(0.0, 0.0, "again", name=BOTTOM)
+        assert draped.layer_ids == [BOTTOM, TOP, f"{BOTTOM}-2"], draped.layer_ids

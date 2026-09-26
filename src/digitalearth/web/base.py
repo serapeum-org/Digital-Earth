@@ -1983,10 +1983,15 @@ class WebMapBase:
         # map, so `remove_layer("wells")` followed by a new `wells` drew `wells-2` with nothing called
         # `wells` on the map — and on this tier the id is the caption the layer switcher shows (review
         # R2-M9). The ids its drawer derived were reserved with it, so they go back with it too.
-        self._issued_ids.difference_update(
-            (layer_id, *derived_ids(self._layer_tree.get(layer_id).kind, layer_id))
-        )
+        freed = (layer_id, *derived_ids(self._layer_tree.get(layer_id).kind, layer_id))
+        # Read above but given back below, because the removal can still be refused: `LayerTree.remove` turns
+        # down a layer another one takes its elevation from. Freeing the ids first left the pool one id short
+        # of a tree that still held the layer, so the next builder call under that name died inside
+        # `LayerTree.add` — "already in the tree" — instead of being suffixed the way every other tier
+        # suffixes it (review R2-M8). The other three tiers evaluate the tree change inside the `_change(...)`
+        # argument, which is what keeps the question in one place there.
         self._layer_tree = self._layer_tree.remove(layer_id)
+        self._issued_ids.difference_update(freed)
         # A caller's own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker
         # attribute the builders' closures carry, so there is nothing on it to compare by id.
         held = self._custom.pop(layer_id, None)
