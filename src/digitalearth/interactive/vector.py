@@ -601,7 +601,8 @@ class VectorMixin(_MixinBase):
             rasterize: ``"auto"`` (default) routes through Datashader above
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
-                (default) uses the map's ``big_data_threshold`` attribute (#250).
+                (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
+                as given, so a path is measured as a string rather than as rows — see the note below.
             rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
                 for one release; passing it together with ``big_data_threshold`` is a
@@ -616,6 +617,17 @@ class VectorMixin(_MixinBase):
                 over the option a ``scheme`` derived — the same precedence :meth:`choropleth` applies — so
                 ``colorbar=False`` drops the colorbar on a classified point layer just as it does on a
                 classified polygon one.
+
+        Note:
+            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
+            for a path that is the length of the string — so a layer named by the 25-character path
+            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
+            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
+            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
+            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
+            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
+            it yourself. The routing log line always names the number the decision used, so a wrong one is
+            visible rather than silent.
 
         Examples:
             - Colour gauging stations by an attribute column:
@@ -672,6 +684,10 @@ class VectorMixin(_MixinBase):
         # row count and a column's values — is the same before a warp as after it. Warping here as well did
         # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
         # still refused, by the drawer, and `_skips_off_limb` answers it as before.
+        # The count is `len(features)`, and `features` may be a path: a path's length is its character
+        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
+        # than worked around here — pyramids has no cheap count-from-path to ask
+        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
         if rasterize is True or (
             rasterize == "auto"
             and _route_through_rasterize("points", len(features), threshold)
@@ -807,7 +823,8 @@ class VectorMixin(_MixinBase):
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
                 Polygon datashading needs the optional ``spatialpandas`` package.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
-                (default) uses the map's ``big_data_threshold`` attribute (#250).
+                (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
+                as given, so a path is measured as a string rather than as rows — see the note below.
             rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
                 for one release; passing it together with ``big_data_threshold`` is a
@@ -819,6 +836,17 @@ class VectorMixin(_MixinBase):
                 hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
                 element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
+
+        Note:
+            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
+            for a path that is the length of the string — so a layer named by the 25-character path
+            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
+            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
+            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
+            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
+            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
+            it yourself. The routing log line always names the number the decision used, so a wrong one is
+            visible rather than silent.
 
         Examples:
             - Outline catchment polygons over a basemap:
@@ -914,6 +942,10 @@ class VectorMixin(_MixinBase):
 
         # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
         # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
+        # The count is `len(features)`, and `features` may be a path: a path's length is its character
+        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
+        # than worked around here — pyramids has no cheap count-from-path to ask
+        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
         if rasterize is True or (
             rasterize == "auto"
             and _route_through_rasterize(kind, len(features), threshold)
