@@ -5,7 +5,7 @@ Three deliverables on top of a built scene:
 - :meth:`orbit` — sweep the camera around the scene on a circular path and write each frame to a GIF/MP4.
   The path is shapeable: ``factor`` sets its radius and ``shift`` lifts it along ``viewup``, which together
   decide whether near-flat terrain is looked down on or seen edge-on.
-- :meth:`animate` — drive a frame-by-frame animation from a sequence of states (e.g. a ``DatasetCollection``
+- :meth:`record` — drive a frame-by-frame animation from a sequence of states (e.g. a ``DatasetCollection``
   time stack), via a user ``update`` callback, to a GIF/MP4.
 - :meth:`jupyter` — switch PyVista to the trame backend so the scene displays interactively in a notebook.
   That backend is process-wide, not per scene.
@@ -24,9 +24,9 @@ from digitalearth.base.animation import DEFAULT_FPS
 
 # `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
 # defaults to lives in `digitalearth.base.animation`, so one `fps` means one speed whichever backend rendered
-# the clip. This tier used to default to 12 (orbit) and 8 (animate) — two speeds in one tier, and neither
-# matching the others. It stays importable from this module because that is where this tier's callers and
-# tests already reach for it.
+# the clip. This tier used to default to 12 (orbit) and 8 (`record`, then spelled `animate`) — two speeds in
+# one tier, and neither matching the others. It stays importable from this module because that is where this
+# tier's callers and tests already reach for it.
 
 #: An up vector: three floats, as a sequence or a numpy array. numpy is the natural way to spell one and
 #: is not a ``typing.Sequence``, so both are accepted rather than adding to the mypy arg-type baseline.
@@ -154,7 +154,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class AnimationMixin(_MixinBase):
-    """Adds :meth:`orbit`, :meth:`animate`, and :meth:`jupyter` to a :class:`Scene3D`.
+    """Adds :meth:`orbit`, :meth:`record`, and :meth:`jupyter` to a :class:`Scene3D`.
 
     A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
     class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
