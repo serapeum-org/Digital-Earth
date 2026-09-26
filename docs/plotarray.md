@@ -88,24 +88,26 @@ m.field(dataset, color_scale="power", gamma=0.5, cmap="terrain")
 
 ## Cell-value annotations
 
-Display each cell's value as text on top of the map:
+!!! warning "Does not work on a `Map` — upstream bug"
+
+    `Map.field` accepts `display_cell_value`, `num_size` and `background_color_threshold` and forwards them to
+    cleopatra, but **the labels do not appear.** cleopatra's `ArrayGlyph` places each one with
+    `ax.text(col, row, ...)` — array index coordinates — while a `Map` draws the raster at its projected extent,
+    so every label lands outside the axes. Measured on a projected raster: 89 text artists, **0 of 89** inside
+    the frame, sitting at `(5, 1)`, `(6, 1)`, … against an xlim spanning millions of metres.
+
+    There is a second, less visible consequence: `savefig(bbox_inches="tight")` expands the canvas to enclose
+    the off-frame artists, so a saved figure is wrong even though the displayed one merely looks unannotated.
+
+    Tracked upstream as [cleopatra#378](https://github.com/serapeum-org/cleopatra/issues/378). The keywords are
+    documented here because they are accepted, not because they do anything — do not reach for them until that
+    issue lands.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `display_cell_value` | bool | `False` | annotate cells with their value |
+| `display_cell_value` | bool | `False` | accepted; intended to annotate cells with their value |
 | `num_size` | int | `8` | font size of the cell numbers |
 | `background_color_threshold` | float | `None` | threshold deciding black vs. white text; `max/2` if `None` |
-
-```python
-m = Map(crs=dataset.epsg)
-m.field(
-    dataset,
-    display_cell_value=True,
-    num_size=8,
-    background_color_threshold=None,
-    ticks_spacing=500,
-)
-```
 
 ## Plotting points
 
@@ -118,7 +120,7 @@ from pyramids.feature import FeatureCollection
 points = FeatureCollection.read_file("tests/data/points.geojson")
 
 m = Map(crs=dataset.epsg)
-m.field(dataset, display_cell_value=True, ticks_spacing=500)
+m.field(dataset, ticks_spacing=500)
 m.points(points, size=100)
 ```
 
