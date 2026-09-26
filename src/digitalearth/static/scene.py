@@ -969,7 +969,10 @@ class Scene(WatermarkMixin):
             This scene (chainable).
 
         Raises:
-            KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
+            CapabilityError: if the replacement names a kind this tier does not draw, naming the kind and the
+                backend that has no drawer for it. Raised off the declaration, before a description is built
+                or the axes is touched. It subclasses ``ValueError``, so a caller catching that catches this.
+            KeyError: if no layer has that id, naming the ids that do.
             ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
                 the drawers read the source out of the figure, and a missing one reaches the drawer as
                 ``None`` and fails somewhere it cannot explain.

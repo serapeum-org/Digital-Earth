@@ -19,10 +19,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from dataclasses import replace as with_fields
+
 import pytest
 from matplotlib.text import Text
 from pyramids.feature import FeatureCollection
 
+from digitalearth.base.capabilities import CapabilityError
 from digitalearth.static import Map
 from digitalearth.static.renderer import _painted
 from tests.base.layer_management import (
@@ -389,3 +392,40 @@ class TestAnArtistTheCallerBuiltThemselves:
         artist = blank.ax.add_artist(Text(0.0, 0.0, "mine"))
         with pytest.raises(ValueError):
             blank.add_layer(artist, band="on-top-of-everything")
+
+
+@pytest.fixture
+def labelled(blank):
+    """Yield a map holding one text layer named `ams`, the id every refusal below names.
+
+    Args:
+        blank: An empty map.
+
+    Returns:
+        The map, with the layer drawn.
+    """
+    blank.text(4.9, 52.4, "Amsterdam", name="ams")
+    return blank
+
+
+class TestWhatReplaceLayerRefusesAndSaysItRefuses:
+    """`replace_layer`'s two refusals, and the docstring a caller writes their `except` clause from."""
+
+    def test_the_refusal_class_the_docstring_promises_is_the_one_raised(self, labelled):
+        """A `Raises:` block naming the wrong class is an `except` clause the exception walks straight past.
+
+        Args:
+            labelled: A map with one text layer.
+
+        Test scenario:
+            Review M1: the gate became `Capabilities.require`, which raises `CapabilityError`, while the
+            docstring still promised `KeyError` for a kind the tier cannot draw. The two readings are built
+            differently on purpose — one by running the call, one by reading what it says about itself.
+        """
+        replacement = with_fields(labelled.get_layer("ams"), kind="custom:pyvista")
+        with pytest.raises(CapabilityError) as refusal:
+            labelled.replace_layer(replacement)
+        raised = type(refusal.value).__name__
+        assert raised in (Map.replace_layer.__doc__ or ""), (
+            f"replace_layer raises {raised} and its docstring does not name it"
+        )
