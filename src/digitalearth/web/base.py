@@ -3133,7 +3133,7 @@ class WebMapBase:
         """Save the map — a standalone HTML page or a PNG snapshot — and return its path (DW.6).
 
         The output kind is ``fmt`` if given, else inferred from the suffix: ``.png`` renders a snapshot,
-        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.animate`, which
+        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.save_animation`, which
         needs a temporal map and a headless browser), anything else writes the HTML page.
         HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
         cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
@@ -3154,7 +3154,7 @@ class WebMapBase:
 
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
-            ValueError: propagated from :meth:`~digitalearth.web.export.ExportMixin.animate` for a
+            ValueError: propagated from :meth:`~digitalearth.web.export.ExportMixin.save_animation` for a
                 ``.gif`` destination on a map that carries no renderable time series.
 
         Examples:
@@ -3179,7 +3179,7 @@ class WebMapBase:
 
                 ```
             - The suffix, not a flag, picks the branch: ``.gif`` hands the call to
-              :meth:`~digitalearth.web.export.ExportMixin.animate`, which says so when the map has
+              :meth:`~digitalearth.web.export.ExportMixin.save_animation`, which says so when the map has
               nothing to animate. That dispatch needs no engine, so it runs here:
                 ```python
                 >>> from digitalearth.web import WebMap

@@ -45,9 +45,9 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
         loop: Repeat count; ``0`` loops forever.
 
     Raises:
-        ValueError: when there are no frames to write. ``animate`` cannot reach this — it refuses a series
-            of fewer than two steps first — but this function is the encoder for any frame list, so it
-            checks rather than writing a GIF with nothing in it.
+        ValueError: when there are no frames to write. ``save_animation`` cannot reach this — it refuses a
+            series of fewer than two steps first — but this function is the encoder for any frame list, so
+            it checks rather than writing a GIF with nothing in it.
     """
     from PIL import Image
 
@@ -170,7 +170,7 @@ class ExportMixin(_MixinBase):
             title: HTML document title.
             **kwargs: Reserved for headless-browser options, and not forwarded to ``to_html``. Two keys
                 are recognised: ``widget``, a pre-built map widget to render instead of building a fresh
-                one (how :meth:`animate` renders a frame with one step visible), and ``kind``, the export
+                one (how :meth:`save_animation` renders a frame with one step visible), and ``kind``, the export
                 name quoted in the missing-browser error so a GIF failure does not talk about PNG.
 
         Returns:
