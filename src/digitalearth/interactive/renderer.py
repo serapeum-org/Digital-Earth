@@ -521,6 +521,12 @@ class Renderer:
         overlay = list(self._map.layers)
         try:
             self._reconcile(before, after)
+            # Inside the `try`, as the web tier's is, so the restore below is a live path rather than a
+            # comment about one (review L4). The arrangement is where the record and the overlay are brought
+            # back into agreement, so a failure in it leaves the record describing `after` while the overlay
+            # still holds `before` — and `_change` installs no figure for a call that raised, so that record
+            # is one no figure owns.
+            self._arrange(before, after, held, overlay)
         except BaseException:
             # `BaseException`, the same class the static tier catches: what the record must survive is a
             # change stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
@@ -528,7 +534,6 @@ class Renderer:
             self._drawn = held
             self._map.layers[:] = overlay
             raise
-        self._arrange(before, after, held, overlay)
 
     def _arrange(
         self,

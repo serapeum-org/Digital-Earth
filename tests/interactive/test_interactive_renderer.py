@@ -77,6 +77,57 @@ def _refused_figure(interactive_map):
     return with_fields(figure, layers=tree)
 
 
+def _with_a_second_drawable_layer(interactive_map):
+    """Return a figure holding the map's layers plus another copy of the drawn one.
+
+    Args:
+        interactive_map: The map whose figure is extended.
+
+    Returns:
+        A `FigureSpec` this tier can draw every layer of, so the only way `apply` can stop part-way is a
+        failure in the arrangement rather than a refused kind.
+    """
+    figure = interactive_map.figure_spec
+    drawable = figure.layers.get(interactive_map.layer_ids[-1])
+    return with_fields(
+        figure, layers=figure.layers.add(with_fields(drawable, id="second"))
+    )
+
+
+class _RefusesTheFirstWrite(list):
+    """A layer list that raises once when it is written to, and behaves afterwards.
+
+    `_arrange` is one slice-assignment into the map's layer list, so stopping that write is how the
+    arrangement is stopped part-way. Only the *first* write raises: the rollback's restore is a write into
+    the same list, and it has to go through or the check would be measuring the stand-in instead.
+    """
+
+    def __init__(self, *args):
+        """Wrap the elements the map already overlays.
+
+        Args:
+            *args: Passed to `list`.
+        """
+        super().__init__(*args)
+        #: How many writes have been refused, so the refusal happens exactly once.
+        self.refusals = 0
+
+    def __setitem__(self, index, value):
+        """Refuse the first write, then assign.
+
+        Args:
+            index: The index or slice being written.
+            value: What to write there.
+
+        Raises:
+            RuntimeError: on the first write only.
+        """
+        if self.refusals == 0:
+            self.refusals += 1
+            raise RuntimeError("the arrangement could not be written")
+        super().__setitem__(index, value)
+
+
 def _all_hidden(figure):
     """Return the same figure with every layer switched off.
 
@@ -467,6 +518,93 @@ class TestApplyReachesTheOverlay:
         with pytest.raises(KeyError):
             drawn_map._renderer.apply(figure, refused)
         assert drawn_map.layers == held, drawn_map.layers
+
+
+class TestARefusalWhileArrangingTheOverlay:
+    """The arrangement is part of the change, so a failure in it rolls back with the rest (review L4).
+
+    The web tier put its `_arrange` inside the rollback `try` deliberately, with the comment that this makes
+    the restore "a live path rather than a comment about one"; this tier left it outside. The arrangement is
+    where the record the renderer keeps and the elements the map overlays are brought back into agreement, so
+    a failure there is exactly the state the rollback exists to undo: `drawn` describing `after` while the
+    overlay still holds `before`.
+    """
+
+    @staticmethod
+    def _overlaid(interactive_map):
+        """Return the identity of every element the map currently overlays.
+
+        Args:
+            interactive_map: The map to read.
+
+        Returns:
+            The `id()` of each overlaid element, as a set — identity rather than equality, because two
+            separately built elements of the same layer compare equal while carrying different options.
+        """
+        return {id(element) for element in interactive_map.layers}
+
+    @staticmethod
+    def _recorded(interactive_map):
+        """Return the identity of every element the renderer's record holds.
+
+        Args:
+            interactive_map: The map to read.
+
+        Returns:
+            The `id()` of each drawn element, as a set.
+        """
+        return {id(drawn.element) for drawn in interactive_map._renderer.drawn.values()}
+
+    def test_the_record_rolls_back_when_the_arrangement_fails(self, drawn_map):
+        """`_arrange` sat outside the `try`, so a failure in it left the record ahead of the figure.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            Every layer in the figure below is drawable, so `_reconcile` succeeds and the only thing left to
+            fail is the arrangement — provoked by a layer list that refuses its first write. What must
+            survive that is the record: `apply` returns to `_change` without installing the new figure, so a
+            record holding `second` is one no figure owns.
+        """
+        held = dict(drawn_map._renderer.drawn)
+        figure = drawn_map.figure_spec
+        drawn_map.layers = _RefusesTheFirstWrite(drawn_map.layers)
+        with pytest.raises(RuntimeError):
+            drawn_map._renderer.apply(figure, _with_a_second_drawable_layer(drawn_map))
+        after = dict(drawn_map._renderer.drawn)
+        assert after == held, f"the record kept {sorted(after)}, was {sorted(held)}"
+
+    def test_the_overlay_and_the_record_still_agree(self, drawn_map):
+        """The two halves of "what is drawn" must not be left describing different pictures.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            Read as two sets of element identities, built from the two places that answer the question, so
+            the check fails whichever of them the refusal left behind. Without the rollback the record held
+            the element `second` was drawn as and the overlay did not.
+        """
+        figure = drawn_map.figure_spec
+        drawn_map.layers = _RefusesTheFirstWrite(drawn_map.layers)
+        with pytest.raises(RuntimeError):
+            drawn_map._renderer.apply(figure, _with_a_second_drawable_layer(drawn_map))
+        assert self._recorded(drawn_map) == self._overlaid(drawn_map), (
+            f"record {self._recorded(drawn_map)} against overlay {self._overlaid(drawn_map)}"
+        )
+
+    def test_the_stand_in_really_refused_the_arrangement(self, drawn_map):
+        """So the two checks above are not passing because nothing was ever written.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        figure = drawn_map.figure_spec
+        drawn_map.layers = _RefusesTheFirstWrite(drawn_map.layers)
+        with pytest.raises(RuntimeError):
+            drawn_map._renderer.apply(figure, _with_a_second_drawable_layer(drawn_map))
+        assert drawn_map.layers.refusals == 1, drawn_map.layers.refusals
 
 
 class TestRemovingALayer:
