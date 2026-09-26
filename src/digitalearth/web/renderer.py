@@ -594,6 +594,59 @@ def _shown(drawn: DrawnLayer) -> bool:
     )
 
 
+def _relaid(segment: Any, wanted: Any, marker: type) -> list:
+    """Return one band of the queue with its described markers replaced by `wanted`, in order.
+
+    Everything that is not a marker keeps its place, because a closure is not addressed by a layer id and a
+    reorder has nothing to say about where it goes. The markers are laid into the slots markers already
+    occupied; when there are fewer markers than slots the extra slots close up, and when there are more the
+    remainder is appended — which is where :meth:`~digitalearth.web.base.WebMapBase._queue_in_band` puts a
+    layer a builder has just drawn.
+
+    Args:
+        segment: The band's queue entries, in order.
+        wanted: The markers the band should hold afterwards, in draw order.
+        marker: The described-layer marker class, passed in because it belongs to the module that defines the
+            queue rather than to this one.
+
+    Returns:
+        The band's new entries.
+
+    Examples:
+        - A closure keeps its place while the markers around it are reordered:
+            ```python
+            >>> from dataclasses import dataclass
+            >>> from digitalearth.web.renderer import _relaid
+            >>> @dataclass
+            ... class Mark:
+            ...     layer_id: str
+            >>> _relaid([Mark("a"), "tiles", Mark("b")], [Mark("b"), Mark("a")], Mark)
+            [Mark(layer_id='b'), 'tiles', Mark(layer_id='a')]
+
+            ```
+        - A layer the tree no longer holds gives its slot up:
+            ```python
+            >>> from dataclasses import dataclass
+            >>> from digitalearth.web.renderer import _relaid
+            >>> @dataclass
+            ... class Mark:
+            ...     layer_id: str
+            >>> _relaid([Mark("a"), Mark("b")], [Mark("b")], Mark)
+            [Mark(layer_id='b')]
+
+            ```
+    """
+    remaining = list(wanted)
+    relaid = []
+    for entry in segment:
+        if not isinstance(entry, marker):
+            relaid.append(entry)
+        elif remaining:
+            relaid.append(remaining.pop(0))
+    relaid.extend(remaining)
+    return relaid
+
+
 def _custom_drawer() -> Any:
     """Return the drawer for a caller's own MapLibre layer.
 
@@ -879,18 +932,25 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring the renderer's record of what is drawn from one figure to another, or leave it as it was.
+        """Bring what the page is built from one figure to another, or leave it as it was.
 
-        **Record-only on this tier, for this wave.** It reconciles :attr:`drawn` and nothing else: the queue
-        the widget is built from and the figure `figure_spec` reports are the map's own, and neither follows.
-        Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
+        **It reaches the queue, since order 23.** The widget is built by replaying `WebMap._queued`, and only
+        the builders and `remove_layer` wrote that list: `apply` reconciled :attr:`drawn` and nothing a viewer
+        would see, so a layer it added was never queued and never appeared, and one it removed stayed on the
+        page (review M1). :meth:`_arrange` brings the queue to `after`'s layers, in `after`'s draw order, so a
+        removed layer leaves the page, an added one enters it, and a moved one changes what MapLibre draws on
+        top.
+
+        The figure the map *reports* is still the map's own:
+        :meth:`~digitalearth.web.base.WebMapBase._change` installs that once this has returned, so a figure
+        this refuses is never one the map describes.
 
         Reconciling is not atomic — the layers are drawn one after another — so anything that stops it
         partway has already drawn the ones before it. Everything drawn in the attempt is therefore rolled
-        back before it is re-raised: a figure this declines leaves the record as it found it, which is the
-        contract the shared renderer conformance suite states for all four tiers. "Anything" is meant —
-        the rollback catches ``BaseException``, so a ``KeyboardInterrupt`` mid-reconcile puts the record
-        back exactly as an error does (review N2).
+        back before it is re-raised: a figure this declines leaves the record **and the queue** as it found
+        them, which is the contract the shared renderer conformance suite states for all four tiers.
+        "Anything" is meant — the rollback catches ``BaseException``, so a ``KeyboardInterrupt``
+        mid-reconcile puts both back exactly as an error does (review N2).
 
         Args:
             before: The figure the record currently holds.
@@ -903,24 +963,121 @@ class Renderer:
             OffLimbError: when the map is `strict` and a layer cannot be placed.
 
         Note:
-            Unlike the 3-D tier, nothing is mutated in place: MapLibre's widget is rebuilt on every render,
-            from the queue rather than from this record. The failure modes the record must still avoid are
-            the 3-D tier's, which is why the order below matches that tier's — removals first, then data
-            changes, then styling, then additions.
+            Unlike the 3-D tier, no engine object is mutated in place: MapLibre's widget is rebuilt on every
+            render, from the queue. The failure modes the record must still avoid are the 3-D tier's, which is
+            why the order below matches that tier's — removals first, then data changes, then styling, then
+            additions.
         """
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third layer has already
         # drawn the first two. Rolling back only the caller's description would leave this record holding
         # layers no figure owns — the same defect the 3-D tier fixed in its own `_change`, found here by
         # the shared conformance contract (#305).
         held = dict(self._drawn)
+        queued = list(self._map._queued)
+        bands = self._band_counts()
         try:
             self._reconcile(before, after)
+            # Inside the `try`, so the queue's restore below is a live path rather than a comment about one:
+            # the arrangement writes the list and the three counts in two steps, and anything that stops it
+            # between them would leave a count addressing a slot the list no longer has.
+            self._arrange(after)
         except BaseException:
             # `BaseException`, the same class the static tier catches: what the record must survive is a
             # change stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
             # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._drawn = held
+            self._map._queued[:] = queued
+            self._set_band_counts(bands)
             raise
+
+    def _band_counts(self) -> Tuple[int, int, int]:
+        """Return how many queue entries the map counts in each end-addressed band.
+
+        The queue is addressed by counts rather than by markers: the underlay and reference bands are counted
+        from the front and the overlay band from the back, and everything between is data. So a rollback has
+        to put the counts back with the list, or the next layer is queued into the wrong band.
+
+        Returns:
+            The underlay, reference and overlay counts.
+        """
+        return (
+            self._map._underlay_count,
+            self._map._reference_count,
+            self._map._overlay_count,
+        )
+
+    def _set_band_counts(self, counts: Tuple[int, int, int]) -> None:
+        """Set the map's band counts.
+
+        Args:
+            counts: The underlay, reference and overlay counts, as :meth:`_band_counts` reads them.
+        """
+        (
+            self._map._underlay_count,
+            self._map._reference_count,
+            self._map._overlay_count,
+        ) = counts
+
+    def _arrange(self, after: FigureSpec) -> None:
+        """Bring the queue the widget is built from to `after`'s layers, in `after`'s draw order.
+
+        The queue holds two sorts of entry. A **described** layer is a marker naming a layer this renderer
+        drew, which `WebMap.layers` and `_build_map_widget` resolve through :attr:`drawn`; anything else is a
+        closure or a caller's own object, queued by a builder the seam has not converted (the kinds named in
+        the renderer contract's `UNDRAWN_KINDS`) or handed in through `add_layer`. Only the described markers
+        are this method's to move: a closure is not addressed by a layer id, so a reorder has nothing to say
+        about where it goes.
+
+        Band by band, because the queue is addressed by counts from its two ends (see :meth:`_band_counts`)
+        and the tree already files a layer into the band its kind declares. Within a band the described
+        markers are re-laid into the slots they already occupied, in the tree's order; a layer the tree no
+        longer holds gives its slot up, and a new one is appended at the end of its band — which is where
+        `WebMap._queue_in_band` puts a layer a builder has just drawn.
+
+        Args:
+            after: The figure the map now draws.
+        """
+        # Imported here, not at module scope: `digitalearth.web.base` imports this module (deferred, for the
+        # same reason), and the marker is that module's own queue vocabulary.
+        from digitalearth.web.base import _Described
+
+        queued = self._map._queued
+        underlay, reference, overlay = self._band_counts()
+        data_end = len(queued) - overlay
+        segments = {
+            "underlay": queued[:underlay],
+            "reference": queued[underlay : underlay + reference],
+            "data": queued[underlay + reference : data_end],
+            "overlay": queued[data_end:],
+        }
+        markers = {
+            entry.layer_id: entry for entry in queued if isinstance(entry, _Described)
+        }
+        arranged: Dict[str, list] = {}
+        for band, segment in segments.items():
+            wanted = [
+                layer_id
+                for layer_id in after.layers.ids
+                if layer_id in self._drawn
+                and self.band_for(after.layers.get(layer_id)) == band
+            ]
+            arranged[band] = _relaid(
+                segment,
+                [markers.get(layer_id) or _Described(layer_id) for layer_id in wanted],
+                _Described,
+            )
+        queued[:] = [
+            entry
+            for band in ("underlay", "reference", "data", "overlay")
+            for entry in arranged[band]
+        ]
+        self._set_band_counts(
+            (
+                len(arranged["underlay"]),
+                len(arranged["reference"]),
+                len(arranged["overlay"]),
+            )
+        )
 
     def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
         """Draw the difference between two figures, layer by layer.

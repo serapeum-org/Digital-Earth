@@ -249,33 +249,62 @@ class TestReconcilingTwoFigures:
         )
 
 
-class TestApplyIsRecordOnly:
-    """Review M1: on this tier, for this wave, `apply` moves the renderer's record and nothing a viewer sees."""
+class TestApplyReachesTheQueue:
+    """Review M1, answered: `apply` moves the record **and** the queue the page is built from."""
 
-    def test_a_successful_apply_moves_the_record_and_not_the_map(self, drawn_map):
-        """What `apply` does here, stated as it is rather than as the module once promised.
+    @staticmethod
+    def _emptied(drawn_map):
+        """Return the map's figure with its one layer taken out.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Returns:
+            The figure, and the panel emptied with it so `FigureSpec` accepts it.
+        """
+        figure = drawn_map.figure_spec
+        panel = with_fields(figure.panels[0], layers=())
+        return with_fields(figure, layers=figure.layers.remove("obs"), panels=(panel,))
+
+    def test_a_successful_apply_takes_the_layer_out_of_the_queue(self, drawn_map):
+        """A removed layer has to leave the page, not only the record beside it.
 
         Args:
             drawn_map: A map with one drawn layer.
 
         Test scenario:
-            The module said "the next build draws it". It does not: the widget is built from the map's queue
-            and `figure_spec` from its tree, and `apply` touches neither. This pins that, so wiring `apply`
-            into the map (Wave 7) has to change this test on purpose rather than slip past it.
+            The module once said "the next build draws it", and it did not: the widget is built from the
+            map's queue, which `apply` never touched, so a layer it removed stayed on the page and one it
+            added never arrived. This is the same call, asked of the queue.
         """
-        figure = drawn_map.figure_spec
-        queued = list(drawn_map._queued)
-        panel = with_fields(figure.panels[0], layers=())
-        emptied = with_fields(
-            figure, layers=figure.layers.remove("obs"), panels=(panel,)
-        )
-        drawn_map._renderer.apply(figure, emptied)
-        reached = {
-            "record": sorted(drawn_map._renderer.drawn),
-            "figure_spec": list(drawn_map.figure_spec.layers.ids),
-            "queue": drawn_map._queued == queued,
-        }
-        assert reached == {"record": [], "figure_spec": ["obs"], "queue": True}, reached
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert drawn_map._queued == [], drawn_map._queued
+
+    def test_a_successful_apply_moves_the_record_too(self, drawn_map):
+        """So the check above is not passing because `apply` emptied the queue and nothing else.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert sorted(drawn_map._renderer.drawn) == [], drawn_map._renderer.drawn
+
+    def test_a_successful_apply_leaves_the_figure_the_map_reports_alone(
+        self, drawn_map
+    ):
+        """The description is the map's own, installed by `_change` once `apply` has returned.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The split matters: `apply` called directly — by a caller composing a figure of their own, or by
+            the conformance adapter — must not leave the map describing something nobody asked it to. That is
+            what makes "a figure this refuses is never one the map reports" true of the public methods, which
+            install the description themselves.
+        """
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert list(drawn_map.figure_spec.layers.ids) == ["obs"], drawn_map.layer_ids
 
 
 def _visibilities(drawn) -> list:

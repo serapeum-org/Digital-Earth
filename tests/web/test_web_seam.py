@@ -1224,20 +1224,20 @@ class TestTheAdaptersQueueReplayIsExercised:
 class WebContract(RendererContract):
     """The web tier's adapter for the shared renderer contract (#305).
 
-    **`apply` does not reach this tier's engine, nor the figure it reports.** The widget is built from the
-    map's queue, `_queued`, which only the builders and `remove_layer` write. `Renderer.apply` reconciles the
-    renderer's own record and stops there: a layer it adds is never queued, so the widget never adds it, and
-    a layer it removes stays queued (review M1). That is the decision for this wave — the renderer's module
-    docstring says so — and wiring `apply` through the map's own state is later work. So
-    `apply_reaches_engine` is `False` and the engine checks skip here rather than pass whatever `apply` did;
-    `apply_reaches_description` is `False` because `apply_figure` calls the renderer, which never touches
-    `figure_spec`. The rollback and the redraw guard are held to the renderer's record instead, which is the
-    one thing `apply` changes here.
+    **`apply` reaches this tier's engine, since order 23.** The widget is built from the map's queue,
+    `_queued`, and only the builders and `remove_layer` used to write it: `Renderer.apply` reconciled the
+    renderer's own record and stopped there, so a layer it added was never queued and the widget never added
+    it, and a layer it removed stayed queued (review M1). `Renderer._arrange` brings the queue to the new
+    figure's layers in its draw order, and rolls it back — with the band counts — when a change is refused,
+    so the engine checks run here rather than skipping.
+
+    `apply_figure` goes through `WebMapBase._change`, the path every public layer-management call takes, which
+    installs the description once the queue has moved. So both halves are checked.
     """
 
     backend = "web"
-    apply_reaches_engine = False
-    apply_reaches_description = False
+    apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an empty map.
@@ -1291,13 +1291,13 @@ class WebContract(RendererContract):
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:
-        """Move the map to `figure` through the renderer.
+        """Move the map to `figure` through the path every change goes through.
 
         Args:
             tier: The map.
             figure: The figure.
         """
-        tier._renderer.apply(tier.figure_spec, figure)
+        tier._change(figure)
 
     def engine_holds(self, tier):
         """Return what the widget is built from: the queue, replayed the way the widget build replays it.
@@ -1305,10 +1305,9 @@ class WebContract(RendererContract):
         `_build_map_widget` hands every queue entry to `_apply_layer`, so that is what this does, into a
         widget that records each call. A described layer resolves through the renderer's record only because
         its marker is in the queue — a layer the record holds and the queue does not is never added, which is
-        exactly what reading the record directly could not see. **No shared contract check reads this
-        while `apply_reaches_engine` is `False`**; it is what they will read once `apply` reaches the
-        queue. So that it cannot rot in the meantime, `TestTheAdaptersQueueReplayIsExercised` above
-        reads it here, read-only (review L4).
+        exactly what reading the record directly could not see, and what the engine checks read now that
+        `apply` reaches the queue. `TestTheAdaptersQueueReplayIsExercised` above also reads it here,
+        read-only, which is what kept it from rotting while nothing else did (review L4).
 
         Args:
             tier: The map.
