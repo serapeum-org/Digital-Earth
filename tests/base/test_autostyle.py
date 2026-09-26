@@ -84,12 +84,12 @@ def test_field_uses_auto_style_cmap(dataset):
     )
     t2m.band_names = ["t2m"]
     m = Map(crs=t2m.epsg)
-    m.contourf(t2m)
+    m.contours(t2m, filled=True)
     assert m.layers[0][0].default_options["cmap"] == "coolwarm"
 
 
 def test_explicit_cmap_overrides_auto_style(dataset):
     """An explicit cmap wins over the auto-style default."""
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset, cmap="magma")
+    m.field(dataset, cmap="magma")
     assert m.layers[0][0].default_options["cmap"] == "magma"

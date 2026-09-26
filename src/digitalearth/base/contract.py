@@ -7,14 +7,11 @@ facade you were holding. Every one of those was defensible where it grew and ind
 
 This module is the agreement that ends it, written down rather than described: :data:`CORE` is the vocabulary
 every tier answers to where it can draw the thing at all, :data:`TIER2` the names that must agree wherever they
-appear, :data:`ALIASES` what each tier used to call them, and :data:`PENDING` what a tier has not built yet and
-which roadmap order builds it. A contract test per tier reads this and compares; nothing here imports a
-renderer, so the comparison costs no engine.
+appear, and :data:`PENDING` what a tier has not built yet and which roadmap order builds it. A contract test
+per tier reads this and compares; nothing here imports a renderer, so the comparison costs no engine.
 
-**A spelling never changes meaning in the release that deprecates it.** An old name keeps working, warns once
-through :func:`~digitalearth.base.deprecation.renamed_method`, and names its replacement — and where the two
-would mean different things (`globe(True)` against `projection("globe")`), the tier translates rather than
-forwarding blindly.
+**A spelling never means two things.** Where a tier called a contract method something else, that spelling was
+deleted rather than kept working: nothing here is released, so there is no caller to keep a promise to.
 """
 
 import re
@@ -23,18 +20,14 @@ from types import MappingProxyType
 from typing import FrozenSet, Iterable, Mapping, Optional, Tuple
 
 __all__ = [
-    "ALIASES",
-    "PLANNED_RENAMES",
     "CORE",
     "PENDING",
     "ROADMAP_ORDERS",
     "TIER2",
     "Method",
-    "alias_table",
     "core_method",
     "orders_named_in",
     "pending_for",
-    "planned_renames",
     "roadmap_order",
 ]
 
@@ -62,11 +55,12 @@ class Method:
             ('self', True)
 
             ```
-        - A name nobody has built yet says which order builds it:
+        - Nothing is waiting: every Core name is drawn on at least one tier, so no `builds_in` is set. It
+          stays a field because the *next* name the contract declares ahead of its tiers needs one:
             ```python
-            >>> from digitalearth.base.contract import core_method
-            >>> core_method("move_layer").builds_in
-            'order 23'
+            >>> from digitalearth.base.contract import CORE
+            >>> [method.name for method in CORE if method.builds_in]
+            []
 
             ```
     """
@@ -78,40 +72,18 @@ class Method:
     builds_in: Optional[str] = None
 
 
-#: When the three live layer-management methods are built. Named once because it is one decision — the order
-#: that adds toggle, reorder and replace to the tiers still without them — rather than nine independent notes
-#: that happen to agree today.
-#:
-#: It names the **order** and not the wave. This said "Wave 5, order 23" until a wave was inserted ahead of it
-#: and every later wave renumbered, after which it told callers their methods were coming in a wave that had
-#: already shipped without them (#317). Orders keep their numbers when the plan moves; waves do not, so a wave
-#: number in a message a user reads is a fact with a shelf life.
-#:
-#: Three tiers are waiting, and only one of them has an open issue: #216 for the static half. The web half's
-#: issue, #188, is **closed** — it closed with the identity work, while `set_visible`, `move_layer` and
-#: `replace_layer` are still absent from `WebMap`, so nothing open tracks that half. The interactive half was
-#: never filed. The 3-D tier is not waiting at all: measured, `Scene3D` answers to all three already, which is
-#: why `PENDING` lists none of them against it. The issue numbers stay out of the reasons below deliberately —
-#: a reason is held to :data:`~tests.open_issues.KNOWN_OPEN_ISSUES`, and a closed issue could not pass it.
-_LAYER_MANAGEMENT_ORDER = "order 23"
+# `_LAYER_MANAGEMENT_ORDER`, and the three reasons interpolated into it — `_PENDING_LAYERS`,
+# `_PENDING_LIVE_LAYERS` and `_PENDING_IDENTITY` — stood here while nine `PENDING` rows and three `builds_in`
+# citations named order 23. That order has built them: `add_layer`, `get_layer`, `remove_layer`,
+# `set_visible`, `move_layer` and `replace_layer` are on all four facades, each over its tier's own renderer.
+# The constants go with the rows rather than staying as a spelling nobody interpolates, and the entry in
+# `ROADMAP_ORDERS` goes with them — a vendored order nothing cites is the next thing to go stale, which
+# `tests/base/test_contract.py::TestAPendingReasonPointsAtLiveWork` refuses.
 
-#: Why a tier has none of them yet. The two spellings differ in what "layer management" means on that tier:
-#: on a live page the layers are there to be toggled while the viewer watches, which is the harder half.
-_PENDING_LAYERS = f"layer management — {_LAYER_MANAGEMENT_ORDER}"
-_PENDING_LIVE_LAYERS = f"layer management on a live page — {_LAYER_MANAGEMENT_ORDER}"
-
-#: Why a tier cannot add, read back or drop a layer by id. The same order, because it is the same decision seen
-#: from its other side: every renderer already indexes its layers, so what order 23 adds is the **public**
-#: method on each tier rather than the machinery underneath it.
-_PENDING_IDENTITY = f"layer identity — {_LAYER_MANAGEMENT_ORDER}"
-
-#: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the "canonical
-#: names + deprecated aliases" half of the contract (DE-26, folded into U-3), which PR #304 froze without any
-#: tier adopting. :data:`PLANNED_RENAMES` is the record of what each tier agreed to call these.
+#: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the
+#: "canonical names" half of the contract (DE-26, folded into U-3), which PR #304 froze without any tier
+#: adopting.
 _RENAME_ORDER = "order 27a"
-
-#: Where a figure learns to frame itself: order 26, auto-framing and camera round-trip.
-_FRAMING_ORDER = "order 26"
 
 #: Where a colour key stops being the most recent classification and becomes a guide on its own layer's
 #: encoding. Named here so the two 3-D rows that cite it are held to the same table as every other citation.
@@ -129,7 +101,7 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: Every roadmap order a user-facing reason may name, with one line saying what it builds.
 #:
 #: **The roadmap is not in this repository** — it is the maintainer's planning document, and a reason naming
-#: `order 26` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
+#: `order 24` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
 #: "order 99" satisfied every guard, because the guards only ever asked whether the *form* was an order rather
 #: than a wave (review R-L3). Measured before this table: a `PENDING` row rewritten to name order 99 passed all
 #: three checks in `TestAPendingReasonPointsAtLiveWork`.
@@ -139,45 +111,25 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: orders this contract points at, and what each one builds. That is enough for a reader to know what they are
 #: being promised without going and finding the plan, and enough for the guard to refuse a number nobody wrote
 #: down. It is the bargain :data:`~tests.open_issues.KNOWN_OPEN_ISSUES` strikes for issue numbers, for the same
-#: reason and with the same cost: extending it is a deliberate act.
+#: reason and with the same cost: extending it is a deliberate act. **Taking a row out is the same act in
+#: reverse**, and is what finishing an order looks like here: the framing order held auto-framing and the
+#: camera round-trip, both of which are built, so nothing cites it any more and its row is gone.
+#: `TestAPendingReasonPointsAtLiveWork` is what makes that a requirement rather than tidying — it refuses a
+#: declared order no reason points at, in the same breath as a reason pointing at an order nobody declared.
 #:
 #: The keys are the constants above rather than repeated strings, so a citation and its entry cannot disagree.
 ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
     {
-        _LAYER_MANAGEMENT_ORDER: (
-            "layer management — the public toggle, reorder and replace on each tier, over the renderers' "
-            "own set_visible/is_visible that Wave 6 landed"
-        ),
         _GUIDES_ORDER: (
             "a legend and a colorbar that follow their own layer, as guides on its encoding rather than on "
             "the most recent classification"
         ),
-        _FRAMING_ORDER: (
-            "auto-framing and camera round-trip: a figure that frames itself on its data, and a viewport "
-            "that carries the bounds it was framed on"
-        ),
         _RENAME_ORDER: (
-            "the Core contract's remainder — the renames each tier has agreed to and not adopted "
-            "(:data:`PLANNED_RENAMES`), plus the divergences the frozen contract did not settle"
+            "the Core contract's remainder — the renames each tier agreed to and had not adopted, plus the "
+            "divergences the frozen contract did not settle"
         ),
     }
 )
-
-
-def _drawn_as(old: str) -> str:
-    """Say that only the spelling is missing, and where the Core one is adopted.
-
-    A tier that draws the thing under its own name is not missing the capability, and a reason that implies it
-    is sends the reader looking for work nobody is going to do. The old spelling is the one
-    :data:`PLANNED_RENAMES` records, so the two tables answer consistently.
-
-    Args:
-        old: What the tier calls the method today.
-
-    Returns:
-        The reason to list against the Core name.
-    """
-    return f"drawn as {old}() here; adopting the Core spelling is {_RENAME_ORDER}"
 
 
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
@@ -239,13 +191,11 @@ CORE: Tuple[Method, ...] = (
         "set_visible",
         "Show or hide a layer, by id.",
         frozenset({"visible"}),
-        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "move_layer",
         "Move a layer in draw order, by id.",
         frozenset({"index"}),
-        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "replace_layer",
@@ -255,7 +205,6 @@ CORE: Tuple[Method, ...] = (
             "belongs to, as adding it there would."
         ),
         frozenset(),
-        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "layer_ids",
@@ -317,73 +266,6 @@ TIER2: Tuple[Method, ...] = (
     Method("projection", "Draw in another projection, by name.", frozenset()),
 )
 
-#: What each tier used to call a contract name, as `{backend: {old: new}}`. **Every entry here is live**: the
-#: old spelling works, warns once and names its replacement, and a contract test holds each tier to that.
-#:
-#: A rename that has been agreed but not adopted lives in :data:`PLANNED_RENAMES` instead. Both were in this
-#: table once, with a docstring that claimed liveness in one sentence and disclaimed it in the next — so
-#: `alias_table("matplotlib")` told a caller that `imshow` was deprecated in favour of a `field` that does not
-#: exist, and `imshow` itself warned nobody (review M5). Two claims, two tables.
-ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
-    {
-        "web": MappingProxyType(
-            {
-                "add_raster": "field",
-                "fit_bounds": "set_bounds",
-                "title": "set_title",
-                "animate": "save_animation",
-                "to_gif": "save_animation",
-                "save_gif": "save_animation",
-                "terrain": "terrain_tiles",
-                "globe": "projection",
-            }
-        ),
-        "3d": MappingProxyType({"animate": "record"}),
-    }
-)
-
-#: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
-#: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
-#: it will be called once the tier adopts it, at order 27a.
-#:
-#: This said the renames arrive "when its seam lands". Both seams have since landed — #300 (interactive) and
-#: #303 (static) closed with Wave 6 — and none of the renames came with them, because adopting a Core spelling
-#: was never part of a seam's work. That is why every one of these names explains itself in :data:`PENDING` by
-#: the order that adopts it rather than by a seam.
-#:
-#: Kept in the contract because the agreement is part of it — a tier that seams later should not have to
-#: re-decide the spelling — and kept apart from :data:`ALIASES` because "you may still write this" and "we
-#: intend to rename this" are answers to different questions.
-PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
-    {
-        "interactive": MappingProxyType(
-            {
-                "image": "field",
-                "path": "lines",
-                "add_element": "add_layer",
-            }
-        ),
-        "matplotlib": MappingProxyType(
-            {
-                "imshow": "field",
-                "scatter": "points",
-                "shapes": "polygons",
-                # `set_extent` is not listed, and used to be. It is not `set_bounds` under an older name:
-                # measured, it is `set_extent(bbox) -> None`, which takes no `padding`, has no `None` that
-                # fits the data, and returns nothing where the Core name returns `self`. So the two tables
-                # dated the same arrival differently — a rename at order 27a here, a capability at order 26
-                # in `PENDING` — and a caller reading `PLANNED_RENAMES` was told the method existed under
-                # another spelling (review R-L4). The roadmap agrees: order 27a carries `imshow`, `scatter`
-                # and `shapes`, and order 26 is where a figure learns to frame itself.
-                #
-                # `point_cloud` is not listed either: it is a second *current* spelling of `grid_points`,
-                # which the tier offers and deprecates neither of. A rename is a name on its way out, and
-                # nothing has been agreed about that one (review M5).
-            }
-        ),
-    }
-)
-
 #: What a tier has not built yet, as `{backend: {name: why}}`. This is the honest half of the contract: a name
 #: absent because the tier cannot draw it at all reads differently from one absent because nobody has written
 #: it, and only the tier can say which. A contract test holds each facade against `CORE` minus its pending list.
@@ -398,9 +280,10 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "web": MappingProxyType(
             {
-                "set_visible": _PENDING_LIVE_LAYERS,
-                "move_layer": _PENDING_LIVE_LAYERS,
-                "replace_layer": _PENDING_LIVE_LAYERS,
+                # `set_visible`, `move_layer` and `replace_layer` were listed here against order 23, which
+                # has now built all three: the tier answers to each over its own renderer, through
+                # `WebMapBase._change`, and the queue the page is built from follows. The table is empty for
+                # this tier as a result, and stays here so the next unbuilt name has a home.
             }
         ),
         "3d": MappingProxyType(
@@ -424,32 +307,30 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "interactive": MappingProxyType(
             {
-                "field": _drawn_as("image"),
-                "lines": _drawn_as("path"),
-                "add_layer": _drawn_as("add_element"),
-                "get_layer": _PENDING_IDENTITY,
-                "remove_layer": _PENDING_IDENTITY,
-                "set_visible": _PENDING_LAYERS,
-                "move_layer": _PENDING_LAYERS,
-                "replace_layer": _PENDING_LAYERS,
-                "set_bounds": f"no framing method here under any spelling — {_FRAMING_ORDER}",
+                # `field`, `lines` and `add_layer` were listed here, each against the tier's own older
+                # spelling. All three are adopted at order 27a, so none is pending any more.
+                # `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer` were listed
+                # here against order 23, which has now built all five: the tier answers to each over its own
+                # renderer, through `InteractiveMapBase._change`.
+                # `set_bounds` was listed here, "no framing method here under any spelling", against the
+                # framing order — which has now built it: the tier frames on a region or on its own data,
+                # takes `padding`, and reports the region through its viewport. The table is empty for this
+                # tier as a result, and stays here so the next unbuilt name has a home.
             }
         ),
         "matplotlib": MappingProxyType(
             {
-                "field": _drawn_as("imshow"),
-                "points": _drawn_as("scatter"),
+                # `field`, `points` and `polygons` were listed here, each against the tier's own older
+                # spelling. All three are adopted at order 27a, so none is pending any more.
                 "lines": "line features on the static tier — #226",
-                "polygons": _drawn_as("shapes"),
-                "add_layer": _PENDING_IDENTITY,
-                "get_layer": _PENDING_IDENTITY,
-                "remove_layer": _PENDING_IDENTITY,
-                "set_visible": _PENDING_LAYERS,
-                "move_layer": _PENDING_LAYERS,
-                "replace_layer": _PENDING_LAYERS,
-                "set_bounds": (
-                    f"framed by set_extent(bbox) here, which neither pads nor fits the data — {_FRAMING_ORDER}"
-                ),
+                # `add_layer`, `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer`
+                # were listed here against order 23, which has now built all six: the tier answers to each
+                # over its own renderer, through `Scene._change`.
+                # `set_bounds` was listed here, "framed by set_extent(bbox) here, which neither pads nor
+                # fits the data". Order 27a took the *name*: the tier answers to `set_bounds` and returns
+                # `self`. What it still does not take is `padding`, and it
+                # has no `None` that fits the data — that half is auto-framing, and `KEYWORD_SHORTFALLS`
+                # records it against the framing order so the rename cannot be read as the capability.
             }
         ),
     }
@@ -494,65 +375,6 @@ def core_method(name: str) -> Method:
     )
 
 
-def alias_table(backend: str) -> Mapping[str, str]:
-    """Return what one tier used to call the contract's names.
-
-    Args:
-        backend: The tier, as `quickmap(backend=...)` spells it.
-
-    Returns:
-        `{old: new}` for the aliases that are **live** — every one of them forwards and warns. A tier whose
-        renames are agreed but unadopted answers `{}` here and names them through
-        :func:`planned_renames`, because a caller reads this table to know what still works.
-
-    Examples:
-        - The web tier's raster builder was `add_raster`:
-            ```python
-            >>> from digitalearth.base.contract import alias_table
-            >>> alias_table("web")["add_raster"]
-            'field'
-
-            ```
-        - A tier whose seam has not landed has renamed nothing yet:
-            ```python
-            >>> from digitalearth.base.contract import alias_table
-            >>> dict(alias_table("matplotlib"))
-            {}
-
-            ```
-    """
-    return ALIASES.get(backend, MappingProxyType({}))
-
-
-def planned_renames(backend: str) -> Mapping[str, str]:
-    """Return the renames one tier has agreed to and not yet adopted.
-
-    Args:
-        backend: The tier, as `quickmap(backend=...)` spells it.
-
-    Returns:
-        `{old: new}`, empty for a tier with none. Nothing here forwards or warns today: the old name is what
-        the tier still calls the method.
-
-    Examples:
-        - The static tier's raster builder is still `imshow`, and is to become `field`:
-            ```python
-            >>> from digitalearth.base.contract import planned_renames
-            >>> planned_renames("matplotlib")["imshow"]
-            'field'
-
-            ```
-        - A tier that has adopted its renames has none planned:
-            ```python
-            >>> from digitalearth.base.contract import planned_renames
-            >>> dict(planned_renames("web"))
-            {}
-
-            ```
-    """
-    return PLANNED_RENAMES.get(backend, MappingProxyType({}))
-
-
 def pending_for(backend: str) -> Mapping[str, str]:
     """Return the Core names one tier has not built, and why.
 
@@ -592,8 +414,8 @@ def orders_named_in(reason: str) -> Tuple[str, ...]:
         - A reason that names one:
             ```python
             >>> from digitalearth.base.contract import orders_named_in, pending_for
-            >>> orders_named_in(pending_for("interactive")["set_bounds"])
-            ('order 26',)
+            >>> orders_named_in(pending_for("3d")["colorbar"])
+            ('order 24',)
 
             ```
         - The letter is part of the number:
@@ -689,7 +511,7 @@ def roadmap_order(order: str) -> str:
     """Return what one roadmap order builds.
 
     Args:
-        order: The order, spelled as a reason names it — `"order 26"`.
+        order: The order, spelled as a reason names it — `"order 24"`.
 
     Returns:
         One line saying what that order builds.
@@ -700,11 +522,11 @@ def roadmap_order(order: str) -> str:
             reading as a plan (review R-L3).
 
     Examples:
-        - What a caller waiting on `set_bounds` is waiting for:
+        - What a caller waiting on a keyed `colorbar` is waiting for:
             ```python
             >>> from digitalearth.base.contract import roadmap_order
-            >>> roadmap_order("order 26").split(":")[0]
-            'auto-framing and camera round-trip'
+            >>> roadmap_order("order 24").split(",")[0]
+            'a legend and a colorbar that follow their own layer'
 
             ```
         - An order nobody wrote down is refused with the ones there are:
@@ -714,7 +536,7 @@ def roadmap_order(order: str) -> str:
             ...     roadmap_order("order 99")
             ... except KeyError as error:
             ...     print(error.args[0])
-            'order 99' is not a roadmap order this contract names; it names order 23, order 24, order 26, order 27a
+            'order 99' is not a roadmap order this contract names; it names order 24, order 27a
 
             ```
     """

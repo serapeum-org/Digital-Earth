@@ -4,7 +4,7 @@ Public surface::
 
     from digitalearth.interactive import InteractiveMap
     m = InteractiveMap()                       # constructing needs no engine
-    m.image(dem).tiles().save("map.html")      # builders lazy-import geoviews/holoviews
+    m.field(dem).tiles().save("map.html")      # builders lazy-import geoviews/holoviews
 
 HoloViz (GeoViews → HoloViews → Bokeh, + Datashader + Panel) is a **renderer, not a GIS engine**: every
 element is built from pyramids-sourced numpy / GeoDataFrames (``read_array``, ``Dataset.x/.y``,

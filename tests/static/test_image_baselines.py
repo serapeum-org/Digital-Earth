@@ -167,7 +167,7 @@ def test_imshow_field(dataset):
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
-    m.imshow(dataset, cmap="viridis")
+    m.field(dataset, cmap="viridis")
     return m.fig
 
 
@@ -183,7 +183,7 @@ def test_contourf_levels(dataset):
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
-    m.contourf(dataset, cmap="terrain", levels=6)
+    m.contours(dataset, cmap="terrain", levels=6, filled=True)
     return m.fig
 
 
@@ -195,7 +195,7 @@ def test_contour_lines(dataset):
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
-    m.contour(dataset, cmap="plasma")
+    m.contours(dataset, cmap="plasma")
     return m.fig
 
 
@@ -227,7 +227,7 @@ def test_reprojected_field(dataset):
         Figure: the rendered map.
     """
     m = Map(crs=3857, figsize=_FIGSIZE)
-    m.imshow(dataset, cmap="viridis")
+    m.field(dataset, cmap="viridis")
     return m.fig
 
 
@@ -243,7 +243,7 @@ def test_field_with_colorbar(dataset):
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
-    m.imshow(dataset, cmap="cividis")
+    m.field(dataset, cmap="cividis")
     m.colorbar(label="flow accumulation")
     return m.fig
 
@@ -256,7 +256,7 @@ def test_categorical_legend(dataset):
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
-    m.imshow(dataset, cmap="Greys")
+    m.field(dataset, cmap="Greys")
     m.legend(["#1f77b4", "#d62728", "#2ca02c"], ["river", "ridge", "plain"])
     return m.fig
 
@@ -281,7 +281,7 @@ def test_scatter_points(point_features):
         Figure: the rendered map.
     """
     m = Map(crs=point_features.epsg, figsize=_FIGSIZE)
-    m.scatter(point_features)
+    m.points(point_features)
     return m.fig
 
 
@@ -377,7 +377,7 @@ def test_globe_frame_with_graticule(global_raster):
         Figure: the rendered map.
     """
     m = Map(crs=projections.orthographic(lon=-9, lat=39), globe=True, figsize=_FIGSIZE)
-    m.imshow(global_raster, cmap="viridis")
+    m.field(global_raster, cmap="viridis")
     m.graticule(lon_step=30, lat_step=30)
     m.render()
     return m.fig
@@ -396,7 +396,7 @@ def test_globe_coastlines_and_borders(global_raster):
         Figure: the rendered map.
     """
     m = Map(crs=projections.orthographic(lon=10, lat=25), globe=True, figsize=_FIGSIZE)
-    m.imshow(global_raster, cmap="Greys")
+    m.field(global_raster, cmap="Greys")
     m.coastlines(resolution="110m")
     m.borders(resolution="110m")
     m.render()
@@ -434,8 +434,8 @@ def test_grid_panels_with_shared_colorbar(dataset):
         Figure: the shared figure.
     """
     fig, maps = grid(1, 2, crs=dataset.epsg, figsize=(6.0, 3.0))
-    first = maps[0].imshow(dataset, cmap="viridis")
-    maps[1].contourf(dataset, cmap="viridis", levels=6)
+    first = maps[0].field(dataset, cmap="viridis")
+    maps[1].contours(dataset, cmap="viridis", levels=6, filled=True)
     shared_colorbar(fig, first, maps, label="accumulation")
     return fig
 
@@ -448,13 +448,13 @@ def test_composed_field_and_contours(dataset):
         The other 18 baselines each put at most one clearing glyph on an axes — the multi-layer ones layer a
         graticule, a Natural-Earth overlay or a basemap over a single render, and the grid figure uses two
         axes. So none of them could catch a layer that silently replaced another, which is exactly what the
-        tier did before #313: `imshow` then `contour` left the raster gone and the isolines on white. This
+        tier did before #313: `field` then `contours` left the raster gone and the isolines on white. This
         is the case the visual suite could not see.
 
     Returns:
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
-    m.imshow(dataset, cmap="viridis")
-    m.contour(dataset, cmap="autumn", levels=6)
+    m.field(dataset, cmap="viridis")
+    m.contours(dataset, cmap="autumn", levels=6)
     return m.fig

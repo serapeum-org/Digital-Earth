@@ -121,7 +121,7 @@ def _resolve_threshold(tier: str, threshold: int) -> int:
         from digitalearth.interactive.map import InteractiveMap
 
         return InteractiveMap()._resolve_big_data_threshold(
-            threshold, None, caller="InteractiveMap.points()"
+            threshold, caller="InteractiveMap.points()"
         )
     from digitalearth.web.map import WebMap
 

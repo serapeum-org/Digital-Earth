@@ -1099,19 +1099,20 @@ class TestTheContractNames:
         assert scene.render() is scene.plotter, "render must hand back the plotter"
 
     def test_the_callback_loop_is_recorded_under_its_own_name(self, scene, tmp_path):
-        """`record` writes the frames; `animate` still forwards, warning once (#299).
+        """`record` writes the frames, and is the only name the loop answers to (#299).
 
         Args:
             scene: The scene under test.
             tmp_path: Where the GIF is written.
-        """
-        import warnings
 
+        Test scenario:
+            `animate` means a matplotlib ``FuncAnimation`` on the static tier and a written file on web, so
+            this tier's callback loop took a name of its own. What the tier must not do is answer to both.
+        """
         scene.terrain(get_source(_dem()))
         out = tmp_path / "grow.gif"
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            scene.animate([1.0], str(out), lambda s, frame: None)
-        messages = [str(record.message) for record in caught]
-        assert any("use Scene3D.record()" in message for message in messages), messages
-        assert out.stat().st_size > 0, "the alias must still write the file"
+        scene.record([1.0], str(out), lambda s, frame: None)
+        assert out.stat().st_size > 0, "record() must write the file"
+        assert not hasattr(scene, "animate"), (
+            "the loop must answer to record() alone, not to a second spelling"
+        )

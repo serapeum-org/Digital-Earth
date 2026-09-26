@@ -1,4 +1,4 @@
-"""Tests for value->size scaling + size legend on Map.scatter and Map.sankey (cleopatra CLEO-2)."""
+"""Tests for value->size scaling + size legend on Map.points and Map.sankey (cleopatra CLEO-2)."""
 
 import geopandas as gpd
 import numpy as np
@@ -32,26 +32,26 @@ def lines_fc(points_fc):
     return FeatureCollection(gdf)
 
 
-def test_scatter_column_sizes_span_limits(points_fc):
+def test_points_column_sizes_span_limits(points_fc):
     """column maps marker areas across size_limits (varying, monotone-bounded)."""
     m = Map(crs=points_fc.epsg)
-    pc = m.scatter(points_fc, size_column="fid", size_limits=(20, 200))
+    pc = m.points(points_fc, size_column="fid", size_limits=(20, 200))
     sizes = np.asarray(pc.get_sizes())
     assert sizes.min() == pytest.approx(20)
     assert sizes.max() == pytest.approx(200)
 
 
-def test_scatter_size_legend(points_fc):
+def test_points_size_legend(points_fc):
     """size_legend draws a legend on the axes."""
     m = Map(crs=points_fc.epsg)
-    m.scatter(points_fc, size_column="fid", size_legend=True)
+    m.points(points_fc, size_column="fid", size_legend=True)
     assert m.ax.get_legend() is not None
 
 
-def test_scatter_no_column_is_uniform(points_fc):
+def test_points_no_column_is_uniform(points_fc):
     """Without a size column, markers keep a single uniform size (backward compatible)."""
     m = Map(crs=points_fc.epsg)
-    pc = m.scatter(points_fc)
+    pc = m.points(points_fc)
     assert len(set(np.asarray(pc.get_sizes()).tolist())) == 1
 
 

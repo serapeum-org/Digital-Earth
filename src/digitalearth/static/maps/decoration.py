@@ -637,7 +637,7 @@ def _axes_extent(axes: Any) -> Optional[Tuple[float, float, float, float]]:
     """Return what an axes is looking at as ``(xmin, xmax, ymin, ymax)``, or ``None`` when it is unframed.
 
     The ordering is matplotlib's own — the one
-    :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_extent` takes — and the values are in
+    :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` takes — and the values are in
     the display CRS, so the frame is read and written back without a reprojection.
 
     Args:
@@ -923,7 +923,7 @@ class DecorationMixin(_MixinBase):
                 ``-2``, ``-3``, … (#321).
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the drawing (#327).
-            **kwargs: Forwarded to :meth:`imshow` (raster) or :meth:`basemap` (tiles).
+            **kwargs: Forwarded to :meth:`field` (raster) or :meth:`basemap` (tiles).
 
         Returns:
             The backdrop ``AxesImage`` (raster path), the tile artist, or ``None`` if a tile backdrop is
@@ -939,7 +939,7 @@ class DecorationMixin(_MixinBase):
             # `draw_band="underlay"` is the description's half of `zorder`: one says where the
             # backdrop sits among the figure's layers, the other where it sits on the axes. Both are
             # recorded, so a backdrop drawn again from its description comes back behind the data.
-            im = self.imshow(
+            im = self.field(
                 dataset,
                 cmap=cmap,
                 name=name,

@@ -10,10 +10,8 @@ The clauses themselves are stated once, in :data:`digitalearth.base.contract_cla
 below names the clause it pins and then says only what *this* tier brings to it, so amending a clause is one
 edit in ``base/`` rather than one per tier (#326).
 
-Every rename in the batch keeps its old spelling working for one release, so each deprecated alias is
-tested three ways: that it still does its job, that it warns while doing it, and that passing it
-alongside the new spelling is a ``TypeError`` naming both — the one answer all four tiers give, from
-:func:`~digitalearth.base.deprecation.renamed_parameter`.
+Every rename in the batch deleted the spelling it replaced, so each check reads what reaches the engine
+under the Core name rather than which of two names a call may use.
 
 Runs in the ``interactive`` pixi env (``pixi run -e interactive test-interactive``).
 """
@@ -126,7 +124,7 @@ class TestSaveReturnsPath:
             with a string, which is why the return type is part of the contract rather than a detail.
         """
         out = tmp_path / "m.html"
-        written = m.add_element(hv.Points([(0.0, 0.0)])).save(str(out))
+        written = m.add_layer(hv.Points([(0.0, 0.0)])).save(str(out))
         assert isinstance(written, pathlib.Path), (
             f"expected a Path, got {type(written)}"
         )
@@ -155,7 +153,7 @@ class TestSaveReturnsPath:
             tmp_path / "anim.html": InteractiveMap()
             .timecube(cube)
             .save_animation(str(tmp_path / "anim.html")),
-            tmp_path / "app.html": m.image(dataset).save_app(
+            tmp_path / "app.html": m.field(dataset).save_app(
                 str(tmp_path / "app.html"), widgets=("cmap",)
             ),
         }
@@ -259,7 +257,7 @@ class TestAutoCmap:
     """C5 on the interactive tier — every raster builder, ``image`` through ``timecube``."""
 
     @pytest.mark.parametrize(
-        "builder", ["image", "quadmesh", "large_image", "timecube"]
+        "builder", ["field", "quadmesh", "large_image", "timecube"]
     )
     def test_no_raster_builder_hard_codes_a_colormap(self, builder):
         """Every raster builder's ``cmap`` default is ``None``, never a bare string.
@@ -285,12 +283,12 @@ class TestAutoCmap:
         from digitalearth.base.autostyle import auto_style
 
         src = _source("t2m")
-        m.image(src)
+        m.field(src)
         assert m.style_of(0)["common"]["cmap"] == auto_style(src)["cmap"]
 
     def test_the_callers_colormap_always_wins(self, m):
         """An explicit ``cmap`` is never overridden by the lookup."""
-        m.image(_source("t2m"), cmap="magma")
+        m.field(_source("t2m"), cmap="magma")
         assert m.style_of(0)["common"]["cmap"] == "magma"
 
     def test_large_image_resolves_from_the_band_name(self, m):
@@ -330,17 +328,17 @@ class TestAutoLevelsAndUnits:
 
     def test_units_label_the_colorbar(self, m):
         """A recognised variable's ``units`` become the colorbar label when the caller gave none."""
-        m.image(_source("msl"))
+        m.field(_source("msl"))
         assert m.style_of(0)["common"]["clabel"] == "hPa", m.style_of(0)
 
     def test_a_caller_supplied_label_wins(self, m):
         """``clabel=`` is never overridden by the style library."""
-        m.image(_source("msl"), clabel="millibar")
+        m.field(_source("msl"), clabel="millibar")
         assert m.style_of(0)["common"]["clabel"] == "millibar"
 
     def test_an_unknown_variable_is_left_unlabelled(self, m):
         """Units are never guessed: an unrecognised field labels exactly as before (not at all)."""
-        m.image(_source("totally-unknown-field"))
+        m.field(_source("totally-unknown-field"))
         assert "clabel" not in m.style_of(0)["common"], m.style_of(0)
 
     def test_levels_come_from_the_style_library(self, m):
@@ -395,7 +393,7 @@ class TestOffLimbIsSkipped:
             off_limb: Makes the reprojection report the data as off-limb.
         """
         m = InteractiveMap()
-        assert m.image(dataset) is m, "a skipped builder must still chain"
+        assert m.field(dataset) is m, "a skipped builder must still chain"
         assert m.layers == [], f"nothing may be registered: {m.layers}"
 
     def test_the_skip_is_warned_about_and_names_the_layer(self, dataset, off_limb):
@@ -408,10 +406,10 @@ class TestOffLimbIsSkipped:
         messages = []
         handle = logger.add(messages.append, level="WARNING")
         try:
-            InteractiveMap().image(dataset)
+            InteractiveMap().field(dataset)
         finally:
             logger.remove(handle)
-        assert any("image" in text for text in messages), messages
+        assert any("field" in text for text in messages), messages
         assert any("skipped" in text for text in messages), messages
 
     def test_strict_raises_instead(self, dataset, off_limb):
@@ -423,7 +421,7 @@ class TestOffLimbIsSkipped:
         """
         strict_map = InteractiveMap(strict=True)
         with pytest.raises(OffLimbError):
-            strict_map.image(dataset)
+            strict_map.field(dataset)
 
     def test_a_vector_builder_is_guarded_too(self, point_fc, off_limb):
         """The policy is the tier's, not one builder's — a vector layer skips the same way.
@@ -439,14 +437,15 @@ class TestOffLimbIsSkipped:
     @pytest.mark.parametrize(
         "builder",
         [
-            "image",
+            # The Core spellings adopted at order 27a: the guard is a decorator on the *builder*, and
+            "field",
             "rgb",
             "quadmesh",
             "contours",
             "filled_contours",
             "large_image",
             "points",
-            "path",
+            "lines",
             "polygons",
             "choropleth",
             "trimesh",
@@ -504,72 +503,17 @@ class TestBigDataThreshold:
         )
 
     @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
-    def test_every_big_data_builder_takes_both_names(self, builder):
-        """All three call sites carry the new name plus the deprecated alias.
+    def test_every_big_data_builder_takes_the_cutoff(self, builder):
+        """All three call sites carry the Core name, with `None` as the "not passed" sentinel.
 
         Args:
             builder: The builder to inspect.
         """
         parameters = inspect.signature(getattr(InteractiveMap, builder)).parameters
         assert parameters["big_data_threshold"].default is None, builder
-        assert parameters["rasterize_threshold"].default is None, builder
-
-
-class TestDeprecatedAliases:
-    """Every rename keeps the old spelling working for one release — and says so while it does."""
-
-    def test_rasterize_threshold_still_works(self, m, point_fc):
-        """The deprecated alias routes exactly as ``big_data_threshold`` would."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            m.points(point_fc, rasterize_threshold=1)
-        assert isinstance(m.layers[0], hv.DynamicMap), type(m.layers[0])
-
-    @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
-    def test_rasterize_threshold_warns(self, builder, point_fc, polygon_fc):
-        """Using it emits a ``DeprecationWarning`` naming the replacement.
-
-        Args:
-            builder: The builder to call with the deprecated alias.
-            point_fc: The point fixture (``points``/``trimesh``).
-            polygon_fc: The polygon fixture (``polygons``).
-        """
-        data = polygon_fc if builder == "polygons" else point_fc
-        build = getattr(InteractiveMap(), builder)
-        with pytest.warns(DeprecationWarning, match="big_data_threshold"):
-            build(data, rasterize_threshold=10_000)
-
-    def test_the_new_name_does_not_warn(self, m, point_fc):
-        """Passing only the new name is silent — otherwise the warning trains users to ignore it."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            m.points(point_fc, big_data_threshold=10_000)
-
-    @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
-    def test_both_spellings_at_once_is_refused(self, builder, point_fc, polygon_fc):
-        """Both spellings of the cutoff at once is a ``TypeError`` naming both, on every builder.
-
-        Args:
-            builder: The builder called with the contradictory pair.
-            point_fc: The point fixture (``points``/``trimesh``).
-            polygon_fc: The polygon fixture (``polygons``).
-
-        Test scenario:
-            This tier used to resolve the pair silently in favour of the new name, which meant a caller who
-            set both got one of their two numbers honoured and no hint that the other was dropped. All four
-            tiers now refuse it through the shared
-            :func:`~digitalearth.base.deprecation.renamed_parameter`, and the message names both spellings
-            plus the one to keep.
-        """
-        data = polygon_fc if builder == "polygons" else point_fc
-        build = getattr(InteractiveMap(), builder)
-        with pytest.raises(TypeError) as excinfo:
-            build(data, big_data_threshold=10_000, rasterize_threshold=1)
-        message = str(excinfo.value)
-        assert "both big_data_threshold= and the deprecated rasterize_threshold=" in (
-            message
-        ), message
-        assert "pass only big_data_threshold=" in message, message
+        assert "rasterize_threshold" not in parameters, (
+            f"{builder} still takes the spelling big_data_threshold replaced"
+        )
 
 
 class TestBasemapDefault:
@@ -698,7 +642,7 @@ class TestKeyedBasemapCoverage:
             m: The map under test.
             dataset: A raster fixture well outside the tropics band.
         """
-        m.image(dataset).tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m.field(dataset).tiles("Planet.NICFI", preset={"date": "2024-01"})
         assert len(m.layers) == 2, m.layers
 
 

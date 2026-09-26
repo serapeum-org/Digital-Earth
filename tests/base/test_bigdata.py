@@ -6,6 +6,10 @@ bad value escape as a bare ``ValueError``/``TypeError`` from ``int`` itself, nam
 the call. A cutoff is a count of rows, so anything that is not one is now refused by name.
 """
 
+import importlib
+import inspect
+from pathlib import Path
+
 import pytest
 
 from digitalearth.base.bigdata import (
@@ -91,3 +95,183 @@ class TestAValueThatIsNotARowCountIsRefused:
         """A negative cutoff is a different mistake (an "unlimited" sentinel) and keeps its own wording."""
         with pytest.raises(ValueError, match="must not be negative"):
             validate_big_data_threshold(-1, caller=CALLER)
+
+
+#: Every tier that routes a layer by size, as `(module, facade)`. Written down rather than discovered, and
+#: `TestEveryTierWithTheCutoffIsListed` is what refuses a tier that gained the cutoff without joining it.
+CUTOFF_TIERS = (
+    ("digitalearth.web", "WebMap"),
+    ("digitalearth.interactive", "InteractiveMap"),
+    ("digitalearth.three_d", "Scene3D"),
+)
+
+#: The Core name for the cutoff, and the suffix every spelling of it carries.
+CUTOFF = "big_data_threshold"
+CUTOFF_SUFFIX = "_threshold"
+
+
+def _cutoff_builders(facade) -> dict:
+    """Return every public builder on a facade that takes a size cutoff, and the names it takes it under.
+
+    Args:
+        facade: The tier's facade class.
+
+    Returns:
+        `{builder: [parameter, ...]}` for the builders with at least one `*_threshold` parameter. Read off
+        signatures, so it costs no engine: all three facades import without theirs, which is what lets one
+        check ask all three tiers in the `main` matrix.
+    """
+    found = {}
+    for name in dir(facade):
+        if name.startswith("_"):
+            continue
+        held = getattr(facade, name, None)
+        if not callable(held):
+            continue
+        try:
+            parameters = inspect.signature(held).parameters
+        except (
+            TypeError,
+            ValueError,
+        ):  # pragma: no cover - a C-level callable has no signature
+            continue
+        spellings = [
+            parameter for parameter in parameters if parameter.endswith(CUTOFF_SUFFIX)
+        ]
+        if spellings:
+            found[name] = spellings
+    return found
+
+
+def _cutoff_facade(module: str, name: str):
+    """Return a tier's facade class, skipping the test when the package will not import.
+
+    Args:
+        module: The tier's package.
+        name: The facade's class name.
+
+    Returns:
+        The class.
+    """
+    return getattr(pytest.importorskip(module), name)
+
+
+class TestTheCutoffIsSpelledOneWayWhereverItAppears:
+    """Contract C8, held across every tier that has the cutoff.
+
+    The clause once ended "with one deprecated alias", which described the **interactive** tier's history as
+    though it were a universal rule: that tier really did carry a prior spelling (`rasterize_threshold`, on
+    `points`, `polygons` and `trimesh`), and `WebMap` and `Scene3D` never had one, so neither could keep the
+    clause without inventing a keyword purely in order to retire it. Nothing here is released, so the prior
+    spelling was deleted instead and the clause says what is left: the Core name everywhere, `None` as the
+    per-call sentinel, and **no** second spelling on any tier.
+    """
+
+    @pytest.mark.parametrize(("module", "name"), CUTOFF_TIERS, ids=lambda value: value)
+    def test_every_builder_takes_the_cutoff_under_the_core_name(self, module, name):
+        """A builder that routes by size takes `big_data_threshold`.
+
+        Args:
+            module: The tier's package.
+            name: The facade's class name.
+        """
+        facade = _cutoff_facade(module, name)
+        builders = _cutoff_builders(facade)
+        assert builders != {}, f"{name} has no builder taking a size cutoff"
+        wrong = {
+            builder: spellings
+            for builder, spellings in builders.items()
+            if CUTOFF not in spellings
+        }
+        assert wrong == {}, (
+            f"{name} routes by size under another name only: {wrong}; the cutoff is spelled {CUTOFF!r} on "
+            "every tier"
+        )
+
+    @pytest.mark.parametrize(("module", "name"), CUTOFF_TIERS, ids=lambda value: value)
+    def test_the_per_call_override_defers_to_the_map_when_unset(self, module, name):
+        """`None` is the sentinel that means "use the map's attribute" — the clause's second reach.
+
+        Args:
+            module: The tier's package.
+            name: The facade's class name.
+
+        Test scenario:
+            A signature default other than `None` would make the per-call override indistinguishable from
+            the map's own setting: the builder could not tell a caller's value from its own default, which is
+            the distinction the shared resolver exists to keep.
+        """
+        facade = _cutoff_facade(module, name)
+        defaults = {
+            builder: inspect.signature(getattr(facade, builder))
+            .parameters[CUTOFF]
+            .default
+            for builder in _cutoff_builders(facade)
+        }
+        wrong = {
+            builder: default
+            for builder, default in defaults.items()
+            if default is not None
+        }
+        assert wrong == {}, (
+            f"{name} defaults the per-call cutoff to a value rather than to the map: {wrong}"
+        )
+
+    @pytest.mark.parametrize(("module", "name"), CUTOFF_TIERS, ids=lambda value: value)
+    def test_no_builder_takes_a_second_spelling_of_it(self, module, name):
+        """The other half of "one way wherever it appears": there is no second name to pass instead.
+
+        Args:
+            module: The tier's package.
+            name: The facade's class name.
+
+        Test scenario:
+            The builders are read for **any** parameter ending in the cutoff's suffix, so a tier that grew a
+            second spelling — or kept its old one working beside the Core name — is reported with the builder
+            that takes it. That is what the clause's earlier wording allowed and what it no longer does.
+        """
+        facade = _cutoff_facade(module, name)
+        extra = {
+            builder: [spelling for spelling in spellings if spelling != CUTOFF]
+            for builder, spellings in _cutoff_builders(facade).items()
+            if any(spelling != CUTOFF for spelling in spellings)
+        }
+        assert extra == {}, (
+            f"{name} takes a second spelling of the cutoff beside {CUTOFF!r}: {extra}"
+        )
+
+
+class TestEveryTierWithTheCutoffIsListed:
+    """`CUTOFF_TIERS` is written down, so something has to refuse a tier that is missing from it."""
+
+    #: Every tier's facade, including the one with no size route, so the walk below can ask it.
+    FACADES = {
+        "digitalearth.static": "Map",
+        "digitalearth.web": "WebMap",
+        "digitalearth.interactive": "InteractiveMap",
+        "digitalearth.three_d": "Scene3D",
+    }
+
+    def test_no_shipped_tier_routes_by_size_unlisted(self):
+        """A tier that gained the cutoff would otherwise be held to none of the checks above.
+
+        Test scenario:
+            The static tier has no size route at all — it draws every row it is given — so it is
+            legitimately absent from `CUTOFF_TIERS`. Discovered by walking the packages that ship a
+            capability table rather than by trusting that, because "legitimately absent" is exactly the claim
+            that goes stale.
+        """
+        root = Path(__file__).resolve().parents[2] / "src" / "digitalearth"
+        listed = {module for module, _ in CUTOFF_TIERS}
+        unlisted = []
+        for path in sorted(root.glob("*/capabilities.py")):
+            module = f"digitalearth.{path.parent.name}"
+            if module in listed or module not in self.FACADES:
+                continue
+            facade = getattr(importlib.import_module(module), self.FACADES[module])
+            if _cutoff_builders(facade):
+                unlisted.append(module)
+        assert unlisted == [], (
+            f"{unlisted} route a layer by size and are not in CUTOFF_TIERS, so contract C8 is asserted of "
+            "them nowhere"
+        )

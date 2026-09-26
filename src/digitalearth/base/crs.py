@@ -230,7 +230,7 @@ class OffLimbError(RuntimeError):
             ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
             ... )
             >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
-            >>> hidden.imshow(ds) is None
+            >>> hidden.field(ds) is None
             True
             >>> len(hidden.ax.images)
             0

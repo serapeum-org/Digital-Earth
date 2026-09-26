@@ -28,14 +28,19 @@ drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as
 a figure is refused half-way — the web and interactive tiers rebuild their engine object on every render and
 can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
 
-**:meth:`Renderer.apply` is record-only in this wave.** It reaches the axes and this module's record of what
-is on it; it does not reach the scene's **description** — the layer tree, the sources, and so what
-:attr:`~digitalearth.static.scene.Scene.figure_spec` reports. (It does touch the scene's colorbar registry,
-because a drawer registers its mappable there and a rollback has to put that back.) Nothing in ``src/``
-calls it — a builder draws through
-:meth:`Renderer.draw_layer` — so a map's description is written by its builders and never by a reconcile.
-Wave 7 (order 23) routes a map-level change through it, and the scene's own state follows then. Until it
-does, read every ``apply`` here as "the artists and the record", never as "what the map reports".
+**:meth:`Renderer.apply` has a caller.** It reaches the axes and this module's record of what is on it,
+and it reached nothing else for a wave: no code in ``src/`` called it, so a map's description was written by
+its builders and never by a reconcile. :meth:`~digitalearth.static.scene.Scene._change` is that caller now —
+the path ``add_layer``, ``get_layer``, ``remove_layer``, ``set_visible``, ``move_layer`` and
+``replace_layer`` take — and it installs the scene's layer tree and its sources once this has returned, so a
+figure this refuses is never one the map describes. ``apply`` itself still writes only the artists, this
+record and the scene's colorbar registry (a drawer registers its mappable there, and a rollback has to put
+that back): read it as "the picture", and the description as what ``_change`` moves with it.
+
+**Draw order reaches the picture.** ``FigureDiff`` reports ``order`` and no renderer acted on it, so a
+reorder changed every tier's description and none of their figures. :meth:`Renderer._repaint` is this tier's
+half: matplotlib paints the artists of one z-order in the order they were added, so re-arranging that list
+re-arranges the picture.
 
 **The drawer table is keyed by kind and then by recipe.** Several builders draw one kind: ``imshow`` and
 ``block`` are both a field render, and ``choropleth``, ``voronoi``, ``cartogram``, ``quadtree`` and
@@ -681,6 +686,10 @@ class Renderer:
         """
         self._scene = scene
         self._drawn: Dict[str, DrawnLayer] = {}
+        #: The visibility asked of a layer that owns **no** artist to carry it, by layer id. A graticule is
+        #: the one that gets there (see :meth:`is_visible`); every other layer's flag lives on its artists,
+        #: where matplotlib reads it, and is not duplicated here.
+        self._asked: Dict[str, bool] = {}
 
     @property
     def drawn(self) -> Mapping[str, DrawnLayer]:
@@ -724,6 +733,10 @@ class Renderer:
         if drawn is None:
             partial.undo()
             return None
+        # Before the record, so a layer drawn again does not inherit what was asked of the one that held
+        # this id before it: the ask is only consulted for a layer with no artist, where nothing else could
+        # correct it.
+        self._asked.pop(layer_id, None)
         self._drawn[layer_id] = drawn
         if not figure.layers.is_visible(layer_id):
             self.set_visible(layer_id, False)
@@ -748,11 +761,11 @@ class Renderer:
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
         """Bring what the axes shows from one figure to another.
 
-        **Record-only, in this wave.** It reconciles the artists on the axes and this renderer's own
-        record of them, and nothing else: the scene's layer tree, its sources and what
-        :attr:`~digitalearth.static.scene.Scene.figure_spec` reports are untouched, so a map that has
-        applied a figure still describes the one its builders made. Nothing in ``src/`` calls this yet —
-        routing a map-level change through it is Wave 7 (order 23), and the description follows then.
+        **This is the picture, not the description.** It reconciles the artists on the axes and this
+        renderer's own record of them: the scene's layer tree and its sources are untouched, so a caller who
+        applies a figure through *this* method still has a map describing the one its builders made.
+        :meth:`~digitalearth.static.scene.Scene._change` is what pairs the two — it calls this and then
+        installs the description, so the figure the map reports is only ever one the axes was brought to.
 
         **A restyle expressed only in a value the description does not carry is invisible to this path.**
         The difference between two figures is read off their descriptions, and of a caller's engine
@@ -834,6 +847,51 @@ class Renderer:
             self.set_visible(layer_id, True)
         for layer_id in change.hidden:
             self.set_visible(layer_id, False)
+        if change.order is not None:
+            # Last, so the layers a redraw or an add has just appended are in the arrangement too.
+            self._repaint(change.order)
+
+    def _repaint(self, order: Tuple[str, ...]) -> None:
+        """Paint the layers this renderer holds in `order`, leaving every other artist where it is.
+
+        ``FigureDiff`` has reported ``order`` since the seam landed and no renderer acted on it, so a
+        reorder reached every tier's *description* and none of their pictures. On this tier it does reach
+        one: matplotlib draws the artists of a single z-order in the order they were added, and
+        :func:`_painted` is that order, so re-arranging the list re-arranges the painting.
+
+        The layers' own slots are refilled and nothing else moves. The axes' patch, its spines, a colorbar's
+        axes and anything a caller drew straight onto :attr:`Scene.ax` are not layers, and a reorder is not
+        licence to move them.
+
+        Args:
+            order: The layer ids in the draw order the figure now describes, bottom first.
+        """
+        painted = _painted(self._scene.ax)
+        if painted is None:
+            return
+        owner = {
+            id(artist): layer_id
+            for layer_id, drawn in self._drawn.items()
+            for artist in drawn.artists
+        }
+        slots = [index for index, artist in enumerate(painted) if id(artist) in owner]
+        blocks: Dict[str, List[Any]] = {}
+        for index in slots:
+            blocks.setdefault(owner[id(painted[index])], []).append(painted[index])
+        arranged = [artist for layer_id in order for artist in blocks.get(layer_id, ())]
+        if len(arranged) != len(slots):
+            # An artist owned by a layer the new order does not name would be dropped from the axes by the
+            # assignment below, and one named twice would be painted twice. Neither is reachable from
+            # `apply` — `order` is the new figure's full draw order — and leaving the axes alone is the
+            # answer that cannot lose a drawing.
+            logger.debug(
+                "not repainting: %d artists to place in %d slots",
+                len(arranged),
+                len(slots),
+            )
+            return
+        for slot, artist in zip(slots, arranged):
+            painted[slot] = artist
 
     def _rollback(self, held: _Held, before: FigureSpec) -> None:
         """Put the axes and this record back the way a refused :meth:`apply` found them.
@@ -867,6 +925,10 @@ class Renderer:
             if layer_id in self._drawn
         }
         self._restore_registry(held)
+        # The arrangement goes back with the artists. `_restore` puts a *re-drawn* layer back where it stood,
+        # but a refused change that reordered the layers it kept moved artists nothing re-drew — so the
+        # rollback has to say what the order was, which is what `before` is.
+        self._repaint(before.layers.ids)
 
     def _restore(self, layer_id: str, before: FigureSpec, held: _Held) -> None:
         """Draw one removed layer again and move what it drew back to where the layer stood on the axes.
@@ -975,6 +1037,9 @@ class Renderer:
             layer_id: The layer to remove. One that was never drawn — skipped, or described but not yet
                 rendered — is ignored, so removing a layer twice is harmless.
         """
+        # First, and unconditionally: a layer that never drew has no entry in `_drawn` to reach the body
+        # below, and its ask would outlive it and answer for whatever took the id next.
+        self._asked.pop(layer_id, None)
         drawn = self._drawn.pop(layer_id, None)
         if drawn is None:
             return
@@ -985,13 +1050,26 @@ class Renderer:
     def set_visible(self, layer_id: str, visible: bool) -> None:
         """Show or hide every artist drawn for a layer.
 
+        **Every** artist, not the first: a layer can own several — a limb-split coastline is one polyline per
+        piece — and they are one layer to a viewer, so a half-applied hide leaves part of the layer on the
+        figure while :meth:`is_visible` already answers ``False`` over the aggregate.
+
         Args:
             layer_id: The layer to toggle. An id nothing was drawn for is ignored.
-            visible: Whether it is drawn.
+            visible: Whether it is drawn. For a layer that owns **no** artist the request is *remembered*
+                rather than written anywhere, because there is nothing to write it to — see
+                :meth:`is_visible`.
         """
         drawn = self._drawn.get(layer_id)
         if drawn is None:
             return
+        if not drawn.artists:
+            # Nothing on the axes carries the flag, so the renderer carries it instead. Without this a
+            # layer asked to hide answered `True` when asked back, because `all(())` is `True` — and
+            # `Scene.set_visible`, whose whole contract is that this answer can be trusted, inherited that.
+            self._asked[layer_id] = bool(visible)
+            return
+        self._asked.pop(layer_id, None)
         for artist in drawn.artists:
             _set_visible(artist, visible)
 
@@ -1006,11 +1084,18 @@ class Renderer:
             layer_id: The layer to ask about.
 
         Returns:
-            ``True`` when every artist the layer owns is on. A layer that owns no artist answers ``True``
-            as well: there is nothing that could have been switched off. A graticule is the one that does —
-            its lines reach the axes with the globe frame, so it owns none until
-            :meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` has run, and none at
-            all on a flat map.
+            ``True`` when every artist the layer owns is on.
+
+            **A layer that owns no artist answers what was last asked of it**, and ``True`` when nothing has
+            been. A graticule is the one that gets there: its lines reach the axes with the globe frame, so it
+            owns none until
+            :meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` has run, and none at all
+            on a flat map. The answer used to be ``all(())`` — unconditionally ``True`` — so a flat graticule
+            described ``visible=False`` read back as drawn, and ``set_visible(id, False)`` followed by this
+            could answer ``True`` for the layer it had just hidden. Nothing was drawn either way, so no pixel
+            was wrong; the renderer's *answer* was, and that answer is what the behavioural conformance suite
+            and a layer switcher read. An unframed globe's grid still reads ``True``, because nobody asked for
+            it to be off — which is the case the empty aggregate got right.
 
         Raises:
             KeyError: when nothing was drawn for `layer_id`, naming it. A layer the axes does not hold has
@@ -1044,6 +1129,8 @@ class Renderer:
                 f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the static "
                 f"tier holds {sorted(self._drawn)}"
             )
+        if not drawn.artists:
+            return self._asked.get(layer_id, True)
         return all(_is_visible(artist) for artist in drawn.artists)
 
     def band_for(self, layer: LayerSpec) -> str:

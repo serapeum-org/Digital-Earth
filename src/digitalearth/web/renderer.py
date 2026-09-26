@@ -13,9 +13,12 @@ real figure rather than a label for one.
 
 **Which figures can be written, and which only drawn.** `to_dict` refuses an `object:` source, so a map whose
 builders were handed a GeoDataFrame or a dataset in memory describes itself and draws from that description,
-but cannot be stored; give a builder a path or a URL for a figure that survives leaving the process. The
-layers a description cannot rebuild at all — a basemap, a point cloud, terrain, a glTF model — are drawn
-straight onto the widget and are named in `DRAWN_KINDS`' own note below.
+but cannot be stored; give a builder a path or a URL for a figure that survives leaving the process.
+
+**Every kind the tier declares is drawn from its description.** A basemap, terrain, a point cloud and a glTF
+model were the last four to be drawn straight onto the widget by a closure their builder queued, which is
+what made them the four kinds layer management could not address at all. They are described now, and say how
+the widget takes them through :attr:`DrawnLayer.route` — see `DRAWN_KINDS`' own note below.
 
 **This tier rebuilds rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
 place, so :mod:`digitalearth.three_d.renderer` reconciles a diff against it. MapLibre's widget is built
@@ -24,12 +27,14 @@ against: :meth:`Renderer.apply` reconciles the renderer's own *record* of what i
 :attr:`Renderer.drawn` — and the contract it signs is the one the shared renderer conformance suite states
 for all four tiers.
 
-**On this tier, for this wave, `apply` is record-only.** It does not change what `WebMap` queues, which is
-what the widget is built from, and it does not change what `figure_spec` reports, which is the map's own
-layer tree. A layer it adds is in the record and never reaches the widget; a layer it removes leaves the
-record and stays on the widget. Nothing in the tier calls it: every builder draws through
-:meth:`Renderer.draw_layer`, one layer at a time. Wiring `apply` into the map's public state is Wave 7
-(order 23); until then a caller who applies a figure has moved the record and nothing a viewer sees.
+**`apply` reaches what the page is built from.** It was record-only for a wave: it changed neither what
+`WebMap` queues — which is what the widget is built from — nor what `figure_spec` reports, so a layer it
+added was in the record and never reached the widget, and one it removed left the record and stayed on the
+page. :meth:`Renderer._arrange` brings the queue to the applied figure's layers, in its draw order, band by
+band; and :meth:`~digitalearth.web.base.WebMapBase._change` — the path `set_visible`, `move_layer` and
+`replace_layer` take — installs the description once this has returned, so a figure `apply` refuses is never
+one the map describes. What `_arrange` does **not** move is a queue entry no layer id addresses: the one deck
+overlay marker, and whatever a caller queued through `add_layer` as a callable, keep their slots.
 """
 
 from dataclasses import dataclass, field
@@ -41,6 +46,19 @@ from digitalearth.base.spec import Encoding, FigureSpec, LayerSpec, Symbology
 from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.spec.style import asked_constants
 from digitalearth.web.capabilities import CAPABILITIES
+
+#: A drawing the widget takes as a MapLibre style layer: ``add_source``, then ``add_layer``. Every kind but
+#: the three below, which MapLibre does not draw as style layers at all.
+STYLE_ROUTE = "style"
+
+#: A drawing the widget takes by turning terrain on: the DEM source, then ``set_terrain``. MapLibre reads
+#: terrain from a ``raster-dem`` source and nothing else, so there is no style layer to add for it.
+TERRAIN_ROUTE = "terrain"
+
+#: A drawing the widget takes as one of the deck.gl JSON layers it composes into a single overlay. deck.gl
+#: owns one overlay per page — a second ``addDeckOverlay`` call replaces the first — so these are collected
+#: over the queue and handed over together (see `WebMapBase._build_map_widget`).
+DECK_ROUTE = "deck"
 
 
 @dataclass(frozen=True)
@@ -61,6 +79,12 @@ class DrawnLayer:
             addresses.
         extra_layers: Further layers drawn from the same source and owned by the same description, such as
             a graticule's degree labels. They follow `layer` and are removed with it.
+        route: How the widget takes this drawing. :data:`STYLE_ROUTE` — the default, and what every MapLibre
+            style layer answers with — means ``add_source`` then ``add_layer``. The other two are the kinds
+            MapLibre does not draw as style layers at all: :data:`TERRAIN_ROUTE` adds the DEM source and
+            turns terrain on with ``set_terrain``, and :data:`DECK_ROUTE`'s `layer` is a deck.gl JSON layer
+            that the page composes into its one deck overlay. A drawer says which route it built for, so the
+            widget builder still adds whatever came back without knowing which drawer made it.
 
     Examples:
         - A graticule is one description drawing two MapLibre layers off one source — the lines, and the
@@ -88,6 +112,7 @@ class DrawnLayer:
     source_spec: Any
     layer: Any
     extra_layers: Tuple[Any, ...] = field(default=())
+    route: str = STYLE_ROUTE
 
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
@@ -97,10 +122,14 @@ class DrawnLayer:
 #:
 #: Every kind a builder records is here: the seam is closed (#296), and contours — the last kinds still
 #: replayed from the queue — joined when they started recording under their own kind (review L3). A kind here
-#: is built by its drawer and must not also be queued by its builder. The kinds the tier declares and does
-#: not list — a basemap, a point cloud, terrain and a glTF model — are drawn straight onto the widget without
-#: a description, because they are the map's style or deck.gl/terrain objects rather than MapLibre layers a
-#: description can rebuild.
+#: is built by its drawer and must not also be queued by its builder.
+#:
+#: **This is now every kind the tier declares.** A basemap, terrain, a point cloud and a glTF model were the
+#: four that queued a closure and recorded no layer, which left them unaddressable by the layer management
+#: order 23 added — `set_visible`, `move_layer` and `replace_layer` address a layer by its id, and these had
+#: none. They are not MapLibre style layers, so each says how the widget takes it through
+#: :attr:`DrawnLayer.route`: a basemap is a raster style layer after all, terrain turns terrain on, and the
+#: two deck.gl kinds are composed into the page's one deck overlay.
 DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",
     "text",
@@ -116,8 +145,22 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "heatmap",
     "clusters",
     "extrusion",
+    "basemap",
+    "terrain",
+    "point_cloud",
+    "model",
     "custom:maplibre",
 )
+
+
+#: Kinds this tier draws from their description alone, although the registry says they take data.
+#:
+#: The registry names what a kind *is* across all four tiers: `terrain` takes a raster because the 3-D tier
+#: renders a surface from heights held in memory. MapLibre reads terrain from a **tile pyramid** and nothing
+#: else, so `WebMap.terrain_tiles` encodes a DEM to tiles when it is given one and the layer then draws from
+#: the tile-URL template its description carries. There is no figure source for a replacement to name, which
+#: is why :meth:`~digitalearth.web.base.WebMapBase.replace_layer` asks this before it demands a `source_id`.
+DESCRIPTION_ONLY_KINDS: FrozenSet[str] = frozenset({"terrain"})
 
 
 #: The MapLibre layer ids a kind's drawer adds beside the layer's own, as suffixes of that id — a graticule's
@@ -367,9 +410,12 @@ UNASKED_PROPS: Tuple[UnaskedStyle, ...] = (
         MappingProxyType({"opacity": 1.0}),
     ),
     UnaskedStyle(
+        # Two builders record this kind — `rgb_composite` and `hsv_composite` (#266) — and `via` is which
+        # of them did. It has no default here because it is never unasked: a caller chooses the recipe by
+        # choosing the builder, and there is no keyword under it to attribute either way.
         "rgb",
-        "rgb_composite",
-        frozenset({"bands", "limits", "opacity", "mask_nodata"}),
+        "rgb_composite / hsv_composite",
+        frozenset({"via", "bands", "limits", "opacity", "mask_nodata"}),
         MappingProxyType({"opacity": 1.0}),
     ),
     UnaskedStyle(
@@ -547,7 +593,14 @@ def _show(drawn: DrawnLayer, visible: bool) -> None:
         A caller's own layer may be a plain MapLibre spec dict rather than a `Layer`, so both shapes are
         set; a callable ``apply(widget)`` wires its own layers, has no layout to reach, and is left alone.
         The layout is replaced rather than edited in place, so a recorded mapping is never written through.
+
+        A deck.gl layer is the one drawing with no MapLibre `layout` at all — it is deck's own JSON, read by
+        deck and not by MapLibre — and it carries its own ``visible`` property instead. Writing a `layout`
+        into it would put a key deck.gl does not read into the page and leave the layer drawn.
     """
+    if drawn.route == DECK_ROUTE:
+        drawn.layer["visible"] = bool(visible)
+        return
     value = "visible" if visible else "none"
     for layer in (drawn.layer, *drawn.extra_layers):
         if isinstance(layer, dict):
@@ -573,22 +626,82 @@ def _layout_of(layer: Any) -> Mapping[str, Any]:
     return layout or {}
 
 
-def _shown(drawn: DrawnLayer) -> bool:
+def shown(drawn: DrawnLayer) -> bool:
     """Whether every MapLibre layer one drawing holds is currently drawn.
+
+    Public because the widget builder asks it too: a terrain drawing is hidden by **not making** the
+    ``setTerrain`` call, which is a decision at application time rather than a property on a layer object
+    (:meth:`~digitalearth.web.base.WebMapBase._apply_drawn`).
 
     Args:
         drawn: What a drawer produced — its own layer and the extra layers the same description owns.
 
     Returns:
-        `False` as soon as one of them carries ``layout.visibility == "none"``. A layer with no layout to
-        read — a callable ``apply(widget)`` wiring its own layers — cannot be hidden, so it is never
-        reported hidden, which is the same carve-out :func:`_show` makes when it writes.
+        `False` as soon as one of them carries ``layout.visibility == "none"``, or — for a deck.gl layer,
+        whose visibility is deck's own ``visible`` property rather than a MapLibre layout — when that
+        property is off. A layer with neither to read (a callable ``apply(widget)`` wiring its own layers)
+        cannot be hidden, so it is never reported hidden, which is the carve-out :func:`_show` also makes.
     """
+    if drawn.route == DECK_ROUTE:
+        return bool(drawn.layer.get("visible", True))
     return all(
         _layout_of(layer).get("visibility") != "none"
         for layer in (drawn.layer, *drawn.extra_layers)
         if layer is not None
     )
+
+
+def _relaid(segment: Any, wanted: Any, marker: type) -> list:
+    """Return one band of the queue with its described markers replaced by `wanted`, in order.
+
+    Everything that is not a marker keeps its place, because a closure is not addressed by a layer id and a
+    reorder has nothing to say about where it goes. The markers are laid into the slots markers already
+    occupied; when there are fewer markers than slots the extra slots close up, and when there are more the
+    remainder is appended — which is where :meth:`~digitalearth.web.base.WebMapBase._queue_in_band` puts a
+    layer a builder has just drawn.
+
+    Args:
+        segment: The band's queue entries, in order.
+        wanted: The markers the band should hold afterwards, in draw order.
+        marker: The described-layer marker class, passed in because it belongs to the module that defines the
+            queue rather than to this one.
+
+    Returns:
+        The band's new entries.
+
+    Examples:
+        - A closure keeps its place while the markers around it are reordered:
+            ```python
+            >>> from dataclasses import dataclass
+            >>> from digitalearth.web.renderer import _relaid
+            >>> @dataclass
+            ... class Mark:
+            ...     layer_id: str
+            >>> _relaid([Mark("a"), "tiles", Mark("b")], [Mark("b"), Mark("a")], Mark)
+            [Mark(layer_id='b'), 'tiles', Mark(layer_id='a')]
+
+            ```
+        - A layer the tree no longer holds gives its slot up:
+            ```python
+            >>> from dataclasses import dataclass
+            >>> from digitalearth.web.renderer import _relaid
+            >>> @dataclass
+            ... class Mark:
+            ...     layer_id: str
+            >>> _relaid([Mark("a"), Mark("b")], [Mark("b")], Mark)
+            [Mark(layer_id='b')]
+
+            ```
+    """
+    remaining = list(wanted)
+    relaid = []
+    for entry in segment:
+        if not isinstance(entry, marker):
+            relaid.append(entry)
+        elif remaining:
+            relaid.append(remaining.pop(0))
+    relaid.extend(remaining)
+    return relaid
 
 
 def _custom_drawer() -> Any:
@@ -643,13 +756,13 @@ def drawer_for(kind: str) -> Any:
             KeyError: "the web tier does not draw 'mesh' layers — a raster is drawn as an image ...
 
             ```
-        - A kind the tier has simply not reached yet carries no reason, because it declared none:
+        - A kind the tier neither draws nor decided against carries no reason, because it declared none:
             ```python
             >>> from digitalearth.web.renderer import drawer_for
-            >>> drawer_for("terrain")  # doctest: +ELLIPSIS
+            >>> drawer_for("volume")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "the web tier does not draw 'terrain' layers; it draws [...]"
+            KeyError: "the web tier does not draw 'volume' layers; it draws [...]"
 
             ```
     """
@@ -686,6 +799,12 @@ def drawer_for(kind: str) -> Any:
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
         "extrusion": threed.draw_extruded_polygons,
+        # The four that used to queue their own closure and record nothing. Each draws through a route of
+        # its own because none of them is an ordinary MapLibre style layer — bar the basemap, which is one.
+        "basemap": decoration.draw_tiles,
+        "terrain": threed.draw_terrain,
+        "point_cloud": threed.draw_point_cloud,
+        "model": threed.draw_model,
         "custom:maplibre": _custom_drawer(),
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
@@ -876,18 +995,25 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring the renderer's record of what is drawn from one figure to another, or leave it as it was.
+        """Bring what the page is built from one figure to another, or leave it as it was.
 
-        **Record-only on this tier, for this wave.** It reconciles :attr:`drawn` and nothing else: the queue
-        the widget is built from and the figure `figure_spec` reports are the map's own, and neither follows.
-        Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
+        **It reaches the queue, since order 23.** The widget is built by replaying `WebMap._queued`, and only
+        the builders and `remove_layer` wrote that list: `apply` reconciled :attr:`drawn` and nothing a viewer
+        would see, so a layer it added was never queued and never appeared, and one it removed stayed on the
+        page (review M1). :meth:`_arrange` brings the queue to `after`'s layers, in `after`'s draw order, so a
+        removed layer leaves the page, an added one enters it, and a moved one changes what MapLibre draws on
+        top.
+
+        The figure the map *reports* is still the map's own:
+        :meth:`~digitalearth.web.base.WebMapBase._change` installs that once this has returned, so a figure
+        this refuses is never one the map describes.
 
         Reconciling is not atomic — the layers are drawn one after another — so anything that stops it
         partway has already drawn the ones before it. Everything drawn in the attempt is therefore rolled
-        back before it is re-raised: a figure this declines leaves the record as it found it, which is the
-        contract the shared renderer conformance suite states for all four tiers. "Anything" is meant —
-        the rollback catches ``BaseException``, so a ``KeyboardInterrupt`` mid-reconcile puts the record
-        back exactly as an error does (review N2).
+        back before it is re-raised: a figure this declines leaves the record **and the queue** as it found
+        them, which is the contract the shared renderer conformance suite states for all four tiers.
+        "Anything" is meant — the rollback catches ``BaseException``, so a ``KeyboardInterrupt``
+        mid-reconcile puts both back exactly as an error does (review N2).
 
         Args:
             before: The figure the record currently holds.
@@ -900,24 +1026,121 @@ class Renderer:
             OffLimbError: when the map is `strict` and a layer cannot be placed.
 
         Note:
-            Unlike the 3-D tier, nothing is mutated in place: MapLibre's widget is rebuilt on every render,
-            from the queue rather than from this record. The failure modes the record must still avoid are
-            the 3-D tier's, which is why the order below matches that tier's — removals first, then data
-            changes, then styling, then additions.
+            Unlike the 3-D tier, no engine object is mutated in place: MapLibre's widget is rebuilt on every
+            render, from the queue. The failure modes the record must still avoid are the 3-D tier's, which is
+            why the order below matches that tier's — removals first, then data changes, then styling, then
+            additions.
         """
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third layer has already
         # drawn the first two. Rolling back only the caller's description would leave this record holding
         # layers no figure owns — the same defect the 3-D tier fixed in its own `_change`, found here by
         # the shared conformance contract (#305).
         held = dict(self._drawn)
+        queued = list(self._map._queued)
+        bands = self._band_counts()
         try:
             self._reconcile(before, after)
+            # Inside the `try`, so the queue's restore below is a live path rather than a comment about one:
+            # the arrangement writes the list and the three counts in two steps, and anything that stops it
+            # between them would leave a count addressing a slot the list no longer has.
+            self._arrange(after)
         except BaseException:
             # `BaseException`, the same class the static tier catches: what the record must survive is a
             # change stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
             # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._drawn = held
+            self._map._queued[:] = queued
+            self._set_band_counts(bands)
             raise
+
+    def _band_counts(self) -> Tuple[int, int, int]:
+        """Return how many queue entries the map counts in each end-addressed band.
+
+        The queue is addressed by counts rather than by markers: the underlay and reference bands are counted
+        from the front and the overlay band from the back, and everything between is data. So a rollback has
+        to put the counts back with the list, or the next layer is queued into the wrong band.
+
+        Returns:
+            The underlay, reference and overlay counts.
+        """
+        return (
+            self._map._underlay_count,
+            self._map._reference_count,
+            self._map._overlay_count,
+        )
+
+    def _set_band_counts(self, counts: Tuple[int, int, int]) -> None:
+        """Set the map's band counts.
+
+        Args:
+            counts: The underlay, reference and overlay counts, as :meth:`_band_counts` reads them.
+        """
+        (
+            self._map._underlay_count,
+            self._map._reference_count,
+            self._map._overlay_count,
+        ) = counts
+
+    def _arrange(self, after: FigureSpec) -> None:
+        """Bring the queue the widget is built from to `after`'s layers, in `after`'s draw order.
+
+        The queue holds two sorts of entry. A **described** layer is a marker naming a layer this renderer
+        drew, which `WebMap.layers` and `_build_map_widget` resolve through :attr:`drawn`; anything else is a
+        closure or a caller's own object, queued by a builder the seam has not converted (the kinds named in
+        the renderer contract's `UNDRAWN_KINDS`) or handed in through `add_layer`. Only the described markers
+        are this method's to move: a closure is not addressed by a layer id, so a reorder has nothing to say
+        about where it goes.
+
+        Band by band, because the queue is addressed by counts from its two ends (see :meth:`_band_counts`)
+        and the tree already files a layer into the band its kind declares. Within a band the described
+        markers are re-laid into the slots they already occupied, in the tree's order; a layer the tree no
+        longer holds gives its slot up, and a new one is appended at the end of its band — which is where
+        `WebMap._queue_in_band` puts a layer a builder has just drawn.
+
+        Args:
+            after: The figure the map now draws.
+        """
+        # Imported here, not at module scope: `digitalearth.web.base` imports this module (deferred, for the
+        # same reason), and the marker is that module's own queue vocabulary.
+        from digitalearth.web.base import _Described
+
+        queued = self._map._queued
+        underlay, reference, overlay = self._band_counts()
+        data_end = len(queued) - overlay
+        segments = {
+            "underlay": queued[:underlay],
+            "reference": queued[underlay : underlay + reference],
+            "data": queued[underlay + reference : data_end],
+            "overlay": queued[data_end:],
+        }
+        markers = {
+            entry.layer_id: entry for entry in queued if isinstance(entry, _Described)
+        }
+        arranged: Dict[str, list] = {}
+        for band, segment in segments.items():
+            wanted = [
+                layer_id
+                for layer_id in after.layers.ids
+                if layer_id in self._drawn
+                and self.band_for(after.layers.get(layer_id)) == band
+            ]
+            arranged[band] = _relaid(
+                segment,
+                [markers.get(layer_id) or _Described(layer_id) for layer_id in wanted],
+                _Described,
+            )
+        queued[:] = [
+            entry
+            for band in ("underlay", "reference", "data", "overlay")
+            for entry in arranged[band]
+        ]
+        self._set_band_counts(
+            (
+                len(arranged["underlay"]),
+                len(arranged["reference"]),
+                len(arranged["overlay"]),
+            )
+        )
 
     def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
         """Draw the difference between two figures, layer by layer.
@@ -1035,7 +1258,7 @@ class Renderer:
                 f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the web "
                 f"tier holds {sorted(self._drawn)}"
             )
-        return _shown(drawn)
+        return shown(drawn)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.

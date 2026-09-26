@@ -1,6 +1,6 @@
 """Naming and hiding an interactive layer as it is built (#321, #327).
 
-`InteractiveMap.add_element` has taken `name=` and `visible=` since the tier had a layer tree; **no builder
+`InteractiveMap.add_layer` has taken `name=` and `visible=` since the tier had a layer tree; **no builder
 passed either**. So `points(name="wells")` put the string into `**opts`, where HoloViews took it as a style
 option, and `points(visible=False)` did the same with the flag — which HoloViews *does* honour, so the element
 was drawn hidden while the figure went on describing the layer `visible=True`. A layer switcher reading that

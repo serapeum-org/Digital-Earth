@@ -632,7 +632,7 @@ class Bounds:
             from_crs=self.crs,
             to_crs=crs,
             # pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step
-            # into a degenerate one — and set_extent would hand matplotlib a singular limit.
+            # into a degenerate one — and set_bounds would hand matplotlib a singular limit.
             precision=None,
         )
         if not all(isfinite(value) for value in (*xs, *ys)):

@@ -101,7 +101,7 @@ class DataRef:
             # An `object:` uri is exempt because its tail is not a path but the **key**
             # `digitalearth.base.registry.register_object` stored, verbatim, whitespace included. Stripping
             # it here rewrote the reference away from the entry it had just been handed, so
-            # `Map.scatter(features, name="roads ")` raised a `KeyError` naming neither the layer nor the
+            # `Map.points(features, name="roads ")` raised a `KeyError` naming neither the layer nor the
             # name (review R2-H4). `layer_name` now keeps a padded key from ever being registered; this
             # keeps a reference honest even when something registers one anyway.
             object.__setattr__(self, "uri", self.uri.strip())

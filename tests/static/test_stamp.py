@@ -47,7 +47,7 @@ def test_stamp_honours_the_corner(mark):
 def test_stamp_is_inherited_by_map(dataset, mark):
     """Map is a Scene, so it gets the brand mark without its own implementation."""
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset)
+    m.field(dataset)
     before = len(m.fig.axes)
     m.stamp(mark, frac=0.1, shadow=False)
     assert len(m.fig.axes) == before + 1
@@ -56,7 +56,7 @@ def test_stamp_is_inherited_by_map(dataset, mark):
 def test_stamp_draws_above_the_data(dataset, mark):
     """A watermark that renders under the map is useless, so check the drawing order, not list order."""
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset)
+    m.field(dataset)
     mark_ax = m.stamp(mark, frac=0.1, shadow=False)
     assert mark_ax.get_zorder() >= m.ax.get_zorder(), (
         f"the mark axes (zorder {mark_ax.get_zorder()}) must not sit under the data "

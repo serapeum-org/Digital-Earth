@@ -25,7 +25,7 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.controls import check_control_position, resolved_controls
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
@@ -69,8 +69,10 @@ _BASEMAP_DISPLAY_NAMES = {
 #: py-maplibregl's two layer-switcher styles, validated here so a typo is not a pydantic traceback.
 _SWITCHER_THEMES = frozenset({"default", "simple"})
 
-#: The four legal MapLibre control corners.
-_CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
+#: What this tier's ``layer_control`` can actually build: one visibility row per layer, which is what
+#: py-maplibregl's switcher control is. An opacity slider or a basemap picker would each need a control the
+#: library does not ship, so naming either is refused rather than accepted and dropped.
+_OFFERED_CONTROLS = ("visibility",)
 
 
 #: Styling for the small floating panels this tier builds — the legend and the title — kept with the
@@ -287,18 +289,20 @@ def _graticule_line(value: float, suffix: str, coordinates: list) -> dict:
 
 
 def _check_position(position: str) -> None:
-    """Validate a control corner, raising ``ValueError`` for anything but the four legal MapLibre corners.
+    """Validate a control corner, raising ``ValueError`` for anything but the four legal corners.
+
+    The corners themselves are MapLibre's, and they are now
+    :data:`~digitalearth.base.controls.CONTROL_POSITIONS` — the same four the interactive tier anchors its
+    layer control to, so ``position=`` means one thing on both (#264). This stays as the module's own name
+    because seven builders here call it.
 
     Args:
         position: The requested corner placement.
 
     Raises:
-        ValueError: when ``position`` is not one of ``top-left``/``top-right``/``bottom-left``/``bottom-right``.
+        ValueError: when ``position`` is not one of :data:`~digitalearth.base.controls.CONTROL_POSITIONS`.
     """
-    if position not in _CONTROL_POSITIONS:
-        raise ValueError(
-            f"unknown control position {position!r}; choose one of {list(_CONTROL_POSITIONS)}"
-        )
+    check_control_position(position)
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -360,6 +364,44 @@ def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
                 "text-halo-color": props["halo_color"],
                 "text-halo-width": float(props["halo_width"]),
             },
+        ),
+    )
+
+
+def draw_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre raster source and layer for a tile basemap.
+
+    A basemap draws from no data in the figure: the XYZ service, its attribution, its tile size and whatever
+    coverage was declared for it are values the caller passed, recorded on its symbology, which is why
+    `_data` is unused. They are also plain JSON, so a map whose only layer is a basemap describes itself in a
+    figure that can be written down and read back.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — a basemap has no source in the figure to open.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the raster source and the raster layer
+        reading it. It is an ordinary style layer, so it takes the ordinary route.
+
+    Raises:
+        ValueError: when the description carries neither the MapLibre source the tiles are served from nor
+            the opacity they are drawn at, naming the layer, its kind and what is missing.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    props = required_props(layer, "source", "opacity")
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=dict(props["source"]),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.RASTER,
+            source=source_id,
+            paint={"raster-opacity": float(props["opacity"])},
         ),
     )
 
@@ -465,6 +507,7 @@ class DecorationMixin(_MixinBase):
         opacity: float = 1.0,
         max_zoom: Optional[int] = None,
         bounds: Optional[Any] = None,
+        name: Optional[str] = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -480,6 +523,9 @@ class DecorationMixin(_MixinBase):
                 to the MapLibre source's ``bounds``. It is a **declaration**, not a check: the map stays
                 pannable everywhere, and MapLibre simply stops requesting tiles outside the box instead
                 of collecting 404s across the rest of the world. ``None`` means global.
+            name: What the basemap is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``tiles-1``, ``tiles-2``, … as every other
+                unnamed layer is numbered.
 
         Returns:
             The same map instance, so builder calls chain; the basemap is registered as an underlay so
@@ -490,9 +536,10 @@ class DecorationMixin(_MixinBase):
                 ``bounds``, so the coverage would quietly go undeclared.
 
         Examples:
-            - Put an XYZ service on the ground. It draws, but it is not a *data* layer, so it
-              never shows up in the registry a layer switcher lists (needs the ``web`` extra, so
-              the block is skipped without it):
+            - Put an XYZ service on the ground. It is described and addressable like any other layer —
+              what keeps it out of a layer switcher is that
+              :meth:`~digitalearth.web.decoration.DecorationMixin.layer_control` offers the data layers
+              rather than every id (needs the ``web`` extra, so the block is skipped without it):
                 ```python
                 >>> from digitalearth.web import WebMap              # doctest: +SKIP
                 >>> m = WebMap().tiles(                              # doctest: +SKIP
@@ -500,7 +547,7 @@ class DecorationMixin(_MixinBase):
                 ...     attribution="© Example", max_zoom=12,
                 ... )
                 >>> len(m.layers), m.layer_ids                       # doctest: +SKIP
-                (1, [])
+                (1, ['tiles-1'])
 
                 ```
             - Call order does not decide draw order: tiles added *after* the data still land
@@ -535,9 +582,8 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.base.WebMapBase.add_underlay: the registration that keeps it at the
                 bottom of the stack.
         """
-        layer_cls, layer_types = _require_layer_api()
-        src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
-        source = {
+        _require_layer_api()
+        source: dict = {
             "type": "raster",
             "tiles": [url],
             "tileSize": int(tile_size),
@@ -553,18 +599,18 @@ class DecorationMixin(_MixinBase):
                     f"tiles(bounds=...) takes (west, south, east, north) in lon/lat; got {bounds!r}"
                 )
             source["bounds"] = box
-        layer = layer_cls(
-            id=layer_id,
-            type=layer_types.RASTER,
-            source=src_id,
-            paint={"raster-opacity": float(opacity)},
+        layer_id = self._layer_id("tiles", name)
+        # The service, as values: :func:`draw_tiles` builds the MapLibre source and the raster layer from
+        # exactly this, so the figure describes the basemap rather than naming one a closure drew elsewhere.
+        # The MapLibre source id is derived from the layer's, as it is for every other described kind, so
+        # the basemap no longer takes a second number beside itself (#296).
+        self._index_layer(
+            layer_id,
+            name,
+            kind="basemap",
+            symbology=Symbology(props={"source": source, "opacity": float(opacity)}),
         )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(layer)
-
-        return self.add_underlay(apply)
+        return self
 
     def basemap(
         self,
@@ -573,6 +619,7 @@ class DecorationMixin(_MixinBase):
         opacity: float = 1.0,
         api_key: Optional[str] = None,
         preset: Optional[dict] = None,
+        name: Optional[str] = None,
     ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
@@ -596,6 +643,8 @@ class DecorationMixin(_MixinBase):
                 ``mosaic``). A dict rather than loose keywords so that all three tiers take a preset the
                 same way, and so a mistyped style argument is an unexpected keyword rather than something
                 ``**preset`` silently swallows.
+            name: What the basemap is addressed by, forwarded to
+                :meth:`~digitalearth.web.decoration.DecorationMixin.tiles`.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -625,6 +674,7 @@ class DecorationMixin(_MixinBase):
                 opacity=opacity,
                 max_zoom=keyed.max_zoom,
                 bounds=keyed.bounds,
+                name=name,
             )
         if api_key is not None:
             # Dropping it silently would leave a caller believing they had authenticated.
@@ -645,7 +695,7 @@ class DecorationMixin(_MixinBase):
                 f"({', '.join(sorted(KEYED_BASEMAP_NAMES.values()))}), or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
-        return self.tiles(url, attribution=attribution, opacity=opacity)
+        return self.tiles(url, attribution=attribution, opacity=opacity, name=name)
 
     def legend(
         self,
@@ -738,8 +788,9 @@ class DecorationMixin(_MixinBase):
     def layer_control(
         self,
         *,
+        layers: Optional[list] = None,
         position: str = "top-right",
-        layer_ids: Optional[list] = None,
+        controls: Optional[list] = None,
         theme: str = "default",
     ) -> Self:
         """Add a switcher so a viewer can turn the data layers on and off.
@@ -748,12 +799,27 @@ class DecorationMixin(_MixinBase):
         single most common thing anyone does with a web map. The switch lists the data layers only:
         basemaps are the ground, not something a viewer toggles.
 
+        The three keywords are the ones the Tier-2 contract declares and the interactive tier now answers to
+        as well — the layers to include, the position, the controls to expose — so the same call adds a layer
+        control on either tier (#264). What was ``layer_ids=`` here is ``layers=``, the name that tier uses
+        for the same thing.
+
         Args:
-            position: One of the four MapLibre corners.
-            layer_ids: The layers to offer, defaulting to every data layer added so far
-                (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from
-                the switch without hiding them from the map.
-            theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles.
+            layers: The layers to offer, by id, defaulting to every data layer added so far — that is,
+                :attr:`~digitalearth.web.base.WebMapBase.layer_ids` without the basemaps, which are
+                addressable but are the ground rather than something a viewer toggles. Pass a subset to
+                hide the rest from the switch without hiding them from the map, or name a basemap to offer
+                it after all.
+            position: One of the four corners in
+                :data:`~digitalearth.base.controls.CONTROL_POSITIONS` — MapLibre's, and now both tiers'.
+            controls: Which controls to expose, from
+                :data:`~digitalearth.base.controls.LAYER_CONTROLS`. ``None`` (the default) offers everything
+                this tier can build, which is ``("visibility",)``: a py-maplibregl switcher is visibility
+                rows and nothing else. Naming ``"opacity"`` or ``"basemap"`` is therefore **refused** rather
+                than accepted and dropped — the interactive tier builds both, and a caller moving a call
+                here should hear that this tier cannot.
+            theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
+                keyword: it styles the switcher rather than choosing what the switcher contains.
 
         Note:
             A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
@@ -766,8 +832,9 @@ class DecorationMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``position`` is not one of the four legal MapLibre corners, when no data layer
-                has been added yet, or when an id was given that is not on this map.
+            ValueError: when ``position`` is not one of the four legal corners, when ``controls`` names
+                something outside the shared vocabulary or something this tier cannot build, when no data
+                layer has been added yet, or when an id was given that is not on this map.
 
         Examples:
             - Two layers and a switch between them:
@@ -784,20 +851,36 @@ class DecorationMixin(_MixinBase):
 
         See Also:
             digitalearth.web.base.WebMapBase.layer_ids: the ids this offers by default.
+            digitalearth.base.controls.resolved_controls: the shared control vocabulary.
         """
         _require_maplibre()
         _check_position(position)
+        if controls is not None:
+            resolved_controls(
+                controls,
+                offered=_OFFERED_CONTROLS,
+                caller="WebMap.layer_control()",
+            )
         if theme not in _SWITCHER_THEMES:
             raise ValueError(
                 f"layer_control(theme={theme!r}) must be one of {sorted(_SWITCHER_THEMES)}"
             )
         available = self.layer_ids
-        if not available:
+        # The default offers the *data* layers, not every id: a basemap is described and addressable like
+        # any other layer since it started recording one, and offering it here would put "turn the ground
+        # off" at the top of every switcher. A caller who means to offer it still can, by naming it in
+        # `layers=` — which is why the filter is on the default rather than on what is accepted.
+        offered = [
+            layer_id
+            for layer_id in available
+            if self._layer_tree.get(layer_id).kind != "basemap"
+        ]
+        if not offered:
             raise ValueError(
                 "layer_control() has nothing to switch: no data layer has been added yet. A basemap is "
                 "the ground rather than a layer a viewer toggles."
             )
-        wanted = list(layer_ids) if layer_ids is not None else available
+        wanted = list(layers) if layers is not None else offered
         unknown = [layer_id for layer_id in wanted if layer_id not in available]
         if unknown:
             raise ValueError(
@@ -824,13 +907,11 @@ class DecorationMixin(_MixinBase):
         s: Optional[str] = None,
         *,
         crs: Any = 4326,
-        text_size: Optional[float] = None,
+        text_size: float = 14.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
         name: Optional[str] = None,
-        size: Optional[float] = None,
-        string: Optional[str] = None,
     ) -> Self:
         """Place a single line of text at a coordinate.
 
@@ -844,24 +925,18 @@ class DecorationMixin(_MixinBase):
                 follow matplotlib's own spelling.
             crs: What `lon`/`lat` are measured in. EPSG:4326 by default; a point in another CRS is
                 reprojected into the CRS this tier places data in, exactly as a feature is (#260).
-            text_size: Text size in pixels (``14.0`` when omitted — the signature's ``None`` is the
-                "not passed" sentinel the deprecated spelling is resolved against). Named for the text
-                rather than ``size``, which means the visual size of a marker everywhere else.
+            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
+                visual size of a marker everywhere else.
             color: Text colour.
             halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
-            string: **Deprecated** spelling of `s`; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``string=`` will be removed in a future release.
             name: What a layer switcher calls this annotation; ``None`` uses its generated id.
-            size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``size=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one
-                parameter, so preferring either would silently drop the other.
+            TypeError: when the string to draw is not given.
             ValueError: when ``lon``, ``lat``, ``text_size`` or ``halo_width`` is not a finite number —
                 refused at this call, because a figure holding NaN or infinity could not be written
                 down.
@@ -879,13 +954,6 @@ class DecorationMixin(_MixinBase):
         """
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.text()"
-        s = renamed_parameter(
-            new="s",
-            value=s,
-            old="string",
-            alias=string,
-            caller=call,
-        )
         if s is None:
             raise TypeError(
                 "text() needs the string to draw; pass it as the third argument"
@@ -896,18 +964,7 @@ class DecorationMixin(_MixinBase):
             crs,
         )
         _require_layer_api()
-        text_size = as_finite(
-            renamed_parameter(
-                new="text_size",
-                value=text_size,
-                old="size",
-                alias=size,
-                caller=call,
-                default=14.0,
-            ),
-            "text_size",
-            call,
-        )
+        text_size = as_finite(text_size, "text_size", call)
         halo_width = as_finite(halo_width, "halo_width", call)
         layer_id = self._layer_id("text", name)
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
@@ -957,7 +1014,7 @@ class DecorationMixin(_MixinBase):
             - Title a saved map:
                 ```python
                 >>> from digitalearth.web import WebMap                            # doctest: +SKIP
-                >>> WebMap().basemap().title("Population, 2024")                   # doctest: +SKIP
+                >>> WebMap().basemap().set_title("Population, 2024")                   # doctest: +SKIP
 
                 ```
         """
@@ -1078,10 +1135,6 @@ class DecorationMixin(_MixinBase):
         # Reference geography says nothing about where to look, so it does not frame the map. Its band —
         # over the basemap, under the data — comes from the kind's registration, not from here.
         return self
-
-    #: Deprecated spelling of :meth:`set_title`, the contract's name for a figure's heading (#299). The
-    #: web tier's other `title=` -- the HTML document's -- is untouched: it names a different thing.
-    title = renamed_method(new="set_title", old="title", owner="WebMap")
 
     def navigation(
         self,

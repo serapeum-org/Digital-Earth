@@ -23,7 +23,6 @@ from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DataRef, LayerSpec, Symbology
@@ -33,7 +32,7 @@ from digitalearth.base.symbology import (
     resolve_categorical_cmap,
 )
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import relocate_flat_style, resolve_marker_size
+from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord, drawing_style
 
@@ -49,15 +48,9 @@ DEFAULT_QUADTREE_AGG = "mean"
 #: a vector field — while a streamplot integrates that field into flow lines, which is a different layer.
 _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streamlines"}
 
-#: How a scatter layer names itself in a warning or refusal. The builder, the drawer that replays it and the
-#: deprecated-alias resolution all speak for the same public call, so they share the one spelling.
-_SCATTER_CALLER = "Map.scatter()"
-
-#: The frame :func:`_skips_off_limb` puts between a builder it wraps and that builder's caller. A deprecation
-#: warning raised inside such a builder counts it, or it lands on the wrapper's line instead of the caller's —
-#: and Python's default filters show a ``DeprecationWarning`` only when it is attributed to ``__main__``, so a
-#: warning blamed on the wrapper is one no user sees.
-_GUARD_FRAMES = 1
+#: How a point layer names itself in a refusal. The builder and the drawer that replays it speak for the
+#: same public call, so they share the one spelling.
+_POINTS_CALLER = "Map.points()"
 
 
 def _polygon_kind(fill: Any) -> str:
@@ -167,7 +160,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     opts = drawing_style(scene, layer)
     # empty-guard; any geometry (centroid fallback) OK
-    fc = scene._vector_input(data, name="scatter")
+    fc = scene._vector_input(data, name="points")
     src = get_source(fc)
     size_column = layer.symbology.props.get("size_column")
     sizes = (
@@ -175,7 +168,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
     # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
-    plot_style = relocate_flat_style(opts, marker_size_for=_SCATTER_CALLER)
+    plot_style = relocate_flat_style(opts, folds_marker_size=True)
     glyph = ScatterGlyph(
         src.x.values,
         src.y.values,
@@ -205,9 +198,8 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     opts = drawing_style(scene, layer)
     xyz = scene._reproject(data).to_xyz()
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-    # The deprecated `point_size=` spelling was already resolved by the builder, so nothing here warns;
-    # this only folds the resolved `size` onto the constructor keyword cleopatra takes.
-    plot_style = relocate_flat_style(opts, marker_size_for="Map.grid_points()")
+    # This folds the `size` channel onto the constructor keyword cleopatra takes.
+    plot_style = relocate_flat_style(opts, folds_marker_size=True)
     glyph = ScatterGlyph(
         xyz.iloc[:, 0].to_numpy(),
         xyz.iloc[:, 1].to_numpy(),
@@ -396,7 +388,7 @@ def draw_shapes(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     gdf = scene._vector_input(
         data,
         geom_types=("Polygon", "MultiPolygon"),
-        name="shapes",
+        name="polygons",
         geom_label="polygon",
     )
     polygons, _ = scene._polygon_vertices(gdf.geometry)
@@ -965,12 +957,11 @@ class VectorMixin(_MixinBase):
         return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
 
     @_skips_off_limb
-    def scatter(
+    def points(
         self,
         features: Any,
         *,
         size_column: Optional[str] = None,
-        scale: Optional[str] = None,
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
@@ -984,9 +975,6 @@ class VectorMixin(_MixinBase):
                 ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
                 legend. ``None`` (default) uses a single uniform marker size — set that size with
                 ``size`` (which every backend spells the same way).
-            scale: Deprecated spelling of ``size_column``; it names a column, not a magnification, and ``size``
-                is what sets a marker's visual size on every backend. Still accepted (with a
-                ``DeprecationWarning``) for one release.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -994,39 +982,16 @@ class VectorMixin(_MixinBase):
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``k``, ``size``,
                 ``size_limits``, ``size_scale``, ``size_legend``, ``size_legend_values``, …).
-                ``size`` is the marker's visual size, spelled the same way on every backend;
-                cleopatra's own ``point_size`` is the deprecated spelling of it, still
-                accepted (with a ``DeprecationWarning``) for one release, and passing both
-                is a ``TypeError``.
+                ``size`` is the marker's visual size, spelled the same way on every backend, and
+                :func:`~digitalearth.static.render_compat._fold_marker_size` is the one place that knows
+                cleopatra's constructor calls it ``point_size``.
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
 
-        Raises:
-            TypeError: if both ``size_column`` and the deprecated ``scale`` are passed, or both
-                ``size`` and the deprecated ``point_size`` — each pair names one parameter,
-                so preferring one silently would drop the other.
-
-        Warns:
-            DeprecationWarning: when ``scale=`` is used instead of ``size_column=``, or when cleopatra's
-                ``point_size=`` is used instead of ``size=``. Both old spellings keep working
-                for one release.
         """
-        # Both counts add the `_skips_off_limb` wrapper's frame: `renamed_parameter`'s own default (3) and
-        # `resolve_marker_size`'s (4) assume a builder called straight from the user's line.
-        size_column = renamed_parameter(
-            new="size_column",
-            value=size_column,
-            old="scale",
-            alias=scale,
-            caller=_SCATTER_CALLER,
-            stacklevel=3 + _GUARD_FRAMES,
-        )
-        # Resolved here rather than in the drawer so the deprecation warning lands on the caller's own
-        # line: the drawer sits four frames further down, and a `stacklevel` counted that deep is brittle.
-        resolve_marker_size(opts, caller=_SCATTER_CALLER, depth=4 + _GUARD_FRAMES)
         return self._draw(
             LayerRecord(
                 "points",
@@ -1047,8 +1012,6 @@ class VectorMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        _alias_caller: str = "Map.grid_points()",
-        _alias_depth: int = 4,
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
@@ -1058,21 +1021,14 @@ class VectorMixin(_MixinBase):
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
                 first). Only a path-backed layer can be written down.
-            _alias_caller: Which method a ``DeprecationWarning`` raised on the way through names.
-                Defaults to ``"Map.grid_points()"``; :meth:`point_cloud` passes its own name, so the
-                warning blames the method the caller actually wrote.
-            _alias_depth: How many stack frames sit between that warning and the caller's line.
-                Defaults to ``4`` for a direct call; :meth:`point_cloud` passes ``5``, the one extra
-                frame its delegation adds.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options. ``size``
-                sets the marker size (the cross-backend spelling); cleopatra's ``point_size``
-                is its deprecated alias, accepted with a ``DeprecationWarning`` for one
-                release, and passing both raises.
+                sets the marker size — the cross-backend spelling, folded onto cleopatra's own
+                ``point_size`` constructor keyword by the one place that knows about it.
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
@@ -1094,9 +1050,6 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        # The caller and frame depth are parameters because :meth:`point_cloud` delegates here: a
-        # deprecation warning must name the method the user actually called, and point at their line.
-        resolve_marker_size(opts, caller=_alias_caller, depth=_alias_depth)
         record = LayerRecord(
             "points",
             source=dataset,
@@ -1116,10 +1069,6 @@ class VectorMixin(_MixinBase):
     ) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
 
-        A ``DeprecationWarning`` raised on the way through (cleopatra's ``point_size=`` instead of
-        ``size=``) names ``Map.point_cloud()`` and points at the caller's own line, rather than at the
-        method this delegates to.
-
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
                 first). Only a path-backed layer can be written down.
@@ -1135,14 +1084,7 @@ class VectorMixin(_MixinBase):
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
         """
-        return self.grid_points(
-            dataset,
-            name=name,
-            visible=visible,
-            _alias_caller="Map.point_cloud()",
-            _alias_depth=5,  # one frame further out than grid_points: this alias delegates to it
-            **opts,
-        )
+        return self.grid_points(dataset, name=name, visible=visible, **opts)
 
     def grid_cells(
         self,
@@ -1684,6 +1626,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: Optional[Any] = None,
+        opacity: Optional[float] = None,
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
@@ -1709,6 +1652,11 @@ class VectorMixin(_MixinBase):
                 ramp has no classes and is left to matplotlib.
             k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
                 ``"categorical"``).
+            opacity: How opaque the fill is, in ``[0, 1]``. This is the spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                matplotlib's own ``alpha`` is what it arrives as. ``None`` (default) sets no opacity at
+                all, which is not the same as ``1.0``: it leaves the colormap's own alpha channel in force.
             cmap: The colormap the fill is drawn with, forwarded to ``PolygonGlyph`` exactly as a
                 ``cmap=`` in ``**opts`` always was. Named in the signature because the Core declares it
                 as a keyword of ``choropleth`` on every tier, and a keyword that works but is not
@@ -1763,6 +1711,10 @@ class VectorMixin(_MixinBase):
             # Straight back into the caller's keywords: this is where `cmap=` has always travelled, so
             # naming it in the signature documents the keyword without moving it.
             opts["cmap"] = cmap
+        # The channel is named `opacity` here and `alpha` where it reaches matplotlib, so it travels on
+        # under the engine's own spelling — exactly where a caller's `alpha=` always went.
+        if opacity is not None:
+            opts["alpha"] = opacity
         return self._draw(
             LayerRecord(
                 # A column is required, so the polygons are always filled by a value: a choropleth.
@@ -1785,7 +1737,7 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def shapes(
+    def polygons(
         self,
         features: Any,
         *,

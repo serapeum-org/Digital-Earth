@@ -44,7 +44,7 @@ def _recorded(clim):
     """
     drawn = InteractiveMap()
     try:
-        drawn.image(_dem(), clim=clim)
+        drawn.field(_dem(), clim=clim)
         figure = drawn.figure_spec
         return figure.layers.get(figure.layers.ids[-1]).symbology.props.get("clim")
     finally:
@@ -93,7 +93,7 @@ class TestTheDocumentedSpellingIsTheOneThatTravels:
 
         drawn = InteractiveMap()
         try:
-            drawn.image(_dem(), clim=[0.0, 100.0])
+            drawn.field(_dem(), clim=[0.0, 100.0])
             applied = hv.Store.lookup_options("bokeh", drawn.layers[-1], "plot").kwargs
         finally:
             drawn.close()

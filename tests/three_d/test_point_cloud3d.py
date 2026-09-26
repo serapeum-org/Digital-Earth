@@ -61,7 +61,7 @@ def test_uncoloured_cloud_has_no_scalar():
 def test_point_cloud_from_geodataframe(points):
     """A GeoDataFrame of points (e.g. get_cell_points) renders via duck-typed coordinate reads."""
     scene = Scene3D(off_screen=True)
-    actor = scene.point_cloud(points, point_size=8.0)
+    actor = scene.point_cloud(points, size=8.0)
     assert actor is not None
     assert scene.layers[0][0].n_points == len(points)
     scene.close()

@@ -31,23 +31,26 @@ class TestTheAnimationRateIsTheSharedOne:
         assert animation3d.DEFAULT_FPS is DEFAULT_FPS
 
     @pytest.mark.parametrize("method", ["orbit", "record"])
-    def test_both_entry_points_resolve_to_the_shared_rate(self, method):
-        """``orbit`` and ``record`` fall back to the shared rate when ``fps`` is omitted.
+    def test_both_entry_points_default_to_the_shared_rate(self, method):
+        """``orbit`` and ``record`` start from the shared rate when ``fps`` is omitted.
 
         Args:
             method: The animation entry point to inspect.
 
         Test scenario:
-            Both take ``fps=None`` as the "not passed" sentinel and hand it to ``renamed_parameter`` with a
-            ``default=``; that default is the number a caller actually animates at, so it is what has to be
-            the shared one. This tier used to answer 12 for ``orbit`` and 8 for its callback loop, which
-            is ``record`` since #299.
+            The default is the number a caller actually animates at, so it is what has to be the shared
+            object rather than a literal that matches it today. This tier used to answer 12 for ``orbit``
+            and 8 for its callback loop, which is ``record`` since #299.
         """
         import inspect
 
-        source = inspect.getsource(getattr(animation3d.AnimationMixin, method))
-        assert "default=DEFAULT_FPS," in source, (
-            f"{method}() no longer falls back to the shared rate"
+        default = (
+            inspect.signature(getattr(animation3d.AnimationMixin, method))
+            .parameters["fps"]
+            .default
+        )
+        assert default is DEFAULT_FPS, (
+            f"{method}() falls back to {default!r}, not the shared rate"
         )
 
 

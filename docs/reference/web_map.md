@@ -12,7 +12,7 @@ from digitalearth.web import WebMap
     .choropleth(gdf, column="pop", name="Population")
     .legend(title="People per km²")
     .layer_control()
-    .title("Population, 2024", subtitle="Source: CBS")
+    .set_title("Population, 2024", subtitle="Source: CBS")
     .save("map.html")
 )
 ```
@@ -73,29 +73,35 @@ group; the layer switcher toggles only that main layer, because that is what py-
 step picker instead — the steps are labelled with the times you passed, because those labels become the layer
 ids. `save("out.gif")` writes the steps as an animation, which needs a headless browser (Playwright or
 Selenium); that is deliberately not part of `digitalearth[web]`. The method behind that suffix is
-`animate(path, fps=...)`; `to_gif` is a deprecated alias of it, kept for one release.
+`save_animation(path, fps=...)`. It was once spelled `animate`, `to_gif` and `save_gif` as well; those three
+are gone.
 
-## Keywords that were renamed
+## Names that were renamed
 
-The web tier's marker size is `size=` (was `radius=` on `points`/`deck_scatter`, `point_size=` on
-`point_cloud`), its font size is `text_size=` (was `size=` on `labels`/`text`), and its frame rate is
-`fps=` (was `duration=`, which held a frame for that many *seconds* — the reciprocal). Every old
-spelling still works for one release and warns at your call; see
-[Renamed keywords](renamed-keywords.md) for the table across all four backends.
+The web tier's marker size is `size=` (it was `radius=` on `points`/`deck_scatter` and `point_size=` on
+`point_cloud`), its font size is `text_size=` (it was `size=` on `labels`/`text`), and its frame rate is
+`fps=` (it was `duration=`, which held a frame for that many *seconds* — the reciprocal, so an old call needs
+`fps = 1 / duration`). The methods were renamed too: `field` for `add_raster`, `set_bounds` for `fit_bounds`,
+`set_title` for `title`, `save_animation` for `animate`, `terrain_tiles` for `terrain` and `projection` for
+`globe` — where `globe(True)` is now `projection("globe")`.
+
+**None of the old spellings still works.** Nothing in this package is released, so each was deleted rather
+than kept as a second name: a call that uses one raises `TypeError` for an unexpected keyword, or
+`AttributeError` for a method that is not there.
 
 ::: digitalearth.web.map.WebMap
     options:
       inherited_members: true
       members:
-        - fit_bounds
+        - set_bounds
         - layer_ids
         - layer_control
         - remove_layer
         - legend
-        - title
+        - set_title
         - text
         - labels
         - graticule
         - contours
         - rgb_composite
-        - animate
+        - save_animation

@@ -32,7 +32,7 @@ def _resolved_style(element) -> dict:
 @pytest.fixture
 def m(dataset) -> InteractiveMap:
     """A Web-Mercator map carrying one raster layer."""
-    return InteractiveMap().image(dataset)
+    return InteractiveMap().field(dataset)
 
 
 @pytest.fixture
@@ -160,17 +160,19 @@ class TestLayerControlAndTable:
         from pyramids.feature import FeatureCollection
 
         fc = FeatureCollection.read_file("tests/data/points.geojson")
-        return InteractiveMap().image(dataset).points(fc)
+        return InteractiveMap().field(dataset).points(fc)
 
     def test_layer_control_is_viewable_with_toggles(self, multi):
-        panel_obj = multi.layer_control()
+        panel_obj = multi.layer_control().layer_control_panel
         assert isinstance(panel_obj, pn.viewable.Viewable)
         groups = panel_obj.select(pn.widgets.CheckBoxGroup)
         assert groups, "one toggle per layer expected"
         assert len(groups[0].options) == 2, "one toggle per layer expected"
 
     def test_layer_control_has_opacity_and_basemap(self, multi):
-        panel_obj = multi.layer_control(opacity=True, basemap_switch=True)
+        panel_obj = multi.layer_control(
+            controls=("visibility", "opacity", "basemap")
+        ).layer_control_panel
         assert panel_obj.select(pn.widgets.FloatSlider), "opacity slider missing"
         assert panel_obj.select(pn.widgets.Select), "basemap switch missing"
 
@@ -218,7 +220,7 @@ class TestBasemapWidgetIsWired:
 
     @pytest.fixture
     def multi(self, dataset, point_fc):
-        return InteractiveMap().image(dataset).points(point_fc)
+        return InteractiveMap().field(dataset).points(point_fc)
 
     def test_dashboard_basemap_override_changes_the_tile_layer(self, m):
         """Picking a provider prepends that provider's tiles, not the same map twice."""
@@ -234,7 +236,7 @@ class TestBasemapWidgetIsWired:
 
     def test_dashboard_basemap_replaces_an_existing_basemap(self, dataset):
         """On a map that already called tiles(), the widget swaps the basemap instead of stacking."""
-        built = InteractiveMap().image(dataset).tiles("CartoLight")
+        built = InteractiveMap().field(dataset).tiles("CartoLight")
         out = built._render_with_overrides({"basemap": "OSM"})
         tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
         assert len(tiles) == 1, f"exactly one basemap expected, got {len(tiles)}"
@@ -255,7 +257,7 @@ class TestBasemapWidgetIsWired:
 
     def test_dashboard_basemap_refused_on_a_non_mercator_map(self, dataset):
         """Bokeh renders tiles in 3857 only, so the widget is refused rather than misaligned."""
-        non_mercator = InteractiveMap(crs=4326).image(dataset)
+        non_mercator = InteractiveMap(crs=4326).field(dataset)
         with pytest.raises(ValueError, match="Web-Mercator"):
             non_mercator.dashboard(widgets=("basemap",))
 
@@ -276,7 +278,9 @@ class TestBasemapWidgetIsWired:
 
     def test_layer_control_binds_its_basemap_select(self, multi):
         """The layer-control Select is passed to pn.bind, not merely laid out."""
-        panel_obj = multi.layer_control(basemap_switch=True)
+        panel_obj = multi.layer_control(
+            controls=("visibility", "basemap")
+        ).layer_control_panel
         bound = panel_obj.select(pn.param.ParamFunction)[0].object
         assert "basemap" in getattr(bound, "_dinfo", {}).get("kw", {}), (
             "the basemap Select must be bound to the layer-control view"
@@ -305,17 +309,21 @@ class TestBasemapWidgetIsWired:
             Nobody asked for a basemap here — ``layer_control()`` offers one unprompted — so a map that
             cannot carry tiles drops the widget (and logs why) instead of refusing the whole control.
         """
-        mercator = InteractiveMap().image(dataset).points(point_fc).layer_control()
+        built = InteractiveMap().field(dataset).points(point_fc).layer_control()
+        mercator = built.layer_control_panel
         assert [w for w in mercator.select(pn.widgets.Select) if w.name == "Basemap"], (
             "a Web-Mercator map must still get the switch by default"
         )
-        other = InteractiveMap(crs=4326).image(dataset).points(point_fc).layer_control()
+        elsewhere = (
+            InteractiveMap(crs=4326).field(dataset).points(point_fc).layer_control()
+        )
+        other = elsewhere.layer_control_panel
         assert not [
             w for w in other.select(pn.widgets.Select) if w.name == "Basemap"
         ], "a non-Mercator map must not offer a basemap switch"
 
     def test_explicit_switch_is_refused_off_mercator(self, dataset, point_fc):
-        """``basemap_switch=True`` is a request, and an impossible request is refused, not dropped.
+        """Naming ``"basemap"`` is a request, and an impossible request is refused, not dropped.
 
         Args:
             dataset: The raster fixture.
@@ -326,9 +334,9 @@ class TestBasemapWidgetIsWired:
             raised, ``layer_control`` logged and dropped — so a caller who asked outright got a control
             missing a widget and no error. The policy is now keyed on whether the basemap was asked for.
         """
-        non_mercator = InteractiveMap(crs=4326).image(dataset).points(point_fc)
+        non_mercator = InteractiveMap(crs=4326).field(dataset).points(point_fc)
         with pytest.raises(ValueError, match="Web-Mercator") as excinfo:
-            non_mercator.layer_control(basemap_switch=True)
+            non_mercator.layer_control(controls=("visibility", "basemap"))
         assert "4326" in str(excinfo.value), (
             f"the refusal must name the display CRS: {excinfo.value}"
         )
@@ -342,10 +350,12 @@ class TestBasemapWidgetIsWired:
         Test scenario:
             The tri-state default must not turn the opt-out into "offer it anyway".
         """
-        panel_obj = multi.layer_control(basemap_switch=False)
+        panel_obj = multi.layer_control(
+            controls=("visibility", "opacity")
+        ).layer_control_panel
         assert not [
             w for w in panel_obj.select(pn.widgets.Select) if w.name == "Basemap"
-        ], "basemap_switch=False must not build the switch"
+        ], "a control set without 'basemap' must not build the switch"
 
     def test_both_entry_points_refuse_an_explicit_request_alike(self, dataset):
         """One condition, one policy: both entry points refuse, and both name the CRS.
@@ -357,11 +367,11 @@ class TestBasemapWidgetIsWired:
             This is the finding itself — the same "not Web Mercator" condition had opposite answers in
             one module. Asserting the two messages agree is what keeps them from drifting apart again.
         """
-        non_mercator = InteractiveMap(crs=4326).image(dataset)
+        non_mercator = InteractiveMap(crs=4326).field(dataset)
         messages = []
         for call in (
             lambda: non_mercator.dashboard(widgets=("basemap",)),
-            lambda: non_mercator.layer_control(basemap_switch=True),
+            lambda: non_mercator.layer_control(controls=("visibility", "basemap")),
         ):
             with pytest.raises(ValueError) as excinfo:
                 call()
@@ -378,7 +388,7 @@ class TestBothOverridePathsRestyleTheSameElements:
         """A map carrying one of each element type an override reaches: ``Image``, ``QuadMesh``, ``RGB``."""
         return (
             InteractiveMap()
-            .image(dataset)
+            .field(dataset)
             .quadmesh(dataset)
             .rgb(dataset, bands=(1, 1, 1))
         )
@@ -465,19 +475,17 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
     """Review H9/H10 — a deferred basemap is a layer, and the labels are positional."""
 
     @staticmethod
-    def _labels(control) -> list:
+    def _labels(built) -> list:
         """Return the checkbox options a layer control built.
 
         Args:
-            control: What `layer_control()` returned.
+            built: The map `layer_control()` returned, which holds the panel (#264).
 
         Returns:
             The option strings, or an empty list when there are none.
         """
-        widgets = list(control[0]) if hasattr(control, "__getitem__") else list(control)
-        return next(
-            (w.options for w in widgets if hasattr(w, "options") and w.options), []
-        )
+        groups = built.layer_control_panel.select(pn.widgets.CheckBoxGroup)
+        return list(groups[0].options) if groups else []
 
     def test_the_labels_are_built_after_the_basemap_is_drawn(self, dataset):
         """`tiles()` inserts the basemap at index 0, and the labels are indices.
@@ -489,7 +497,7 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
             The labels were frozen before the flush, so every one of them named the layer to its left once
             the basemap arrived — and the control drew the basemap where the data should be (review H10).
         """
-        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
         labels = self._labels(m.layer_control())
         assert labels == ["0: WMTS", "1: Image"], labels
 
@@ -499,7 +507,7 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
         Args:
             dataset: The raster fixture.
         """
-        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
         labels = self._labels(m.layer_control())
         drawn = m._compose_visible_layers(list(labels))
         assert self._names(drawn) == ["WMTS", "Image"], self._names(drawn)
@@ -615,7 +623,7 @@ class TestTheOverrideBranchIsStillARender:
             taken on the *first* render — and it skipped the deferred-tiles flush entirely, leaving an
             `InteractiveMap(tiles="OSM")` dashboard with no basemap for the life of the map.
         """
-        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
         names = self._names(m._render_with_overrides({"cmap": "viridis", "alpha": 1.0}))
         assert "WMTS" in names, names
 
@@ -625,8 +633,8 @@ class TestTheOverrideBranchIsStillARender:
         Args:
             dataset: The raster fixture.
         """
-        with_override = InteractiveMap(crs=3857, tiles="OSM").image(dataset)
-        without = InteractiveMap(crs=3857, tiles="OSM").image(dataset)
+        with_override = InteractiveMap(crs=3857, tiles="OSM").field(dataset)
+        without = InteractiveMap(crs=3857, tiles="OSM").field(dataset)
         assert self._names(
             with_override._render_with_overrides({"alpha": 0.5})
         ) == self._names(without._render_with_overrides({})), "the branches must agree"
@@ -637,7 +645,7 @@ class TestInertFlagsAreRefused:
 
     @pytest.fixture
     def multi(self, dataset, point_fc):
-        return InteractiveMap().image(dataset).points(point_fc)
+        return InteractiveMap().field(dataset).points(point_fc)
 
     def test_layer_control_reorder_true_raises(self, multi):
         """#242 — ``reorder=True`` is refused (reordering needs stable layer identity)."""
@@ -652,9 +660,9 @@ class TestInertFlagsAreRefused:
         assert default.default is False, (
             f"reorder must default to False, got {default.default!r}"
         )
-        assert isinstance(multi.layer_control(), pn.viewable.Viewable), (
-            "the default call must keep working unchanged"
-        )
+        assert isinstance(
+            multi.layer_control().layer_control_panel, pn.viewable.Viewable
+        ), "the default call must keep working unchanged"
 
     def test_attribute_table_linked_true_raises(self, point_fc):
         """#243 — ``linked=True`` is refused (two-way linking needs link_selections)."""
@@ -689,8 +697,8 @@ class TestOverridesMergeOverRecordedStyle:
             The base used to be one dict merged across every colour-mapped layer; it is each layer's own
             record now, which is what stops two rasters sharing the last one's colours (#300).
         """
-        m = InteractiveMap().image(dataset, cmap="viridis", clim=(0.0, 10.0))
-        m.points(point_fc, value_column="fid", cmap="magma")
+        m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m.points(point_fc, column="fid", cmap="magma")
         raster = m._restyled_layers({"alpha": 0.5})[0]
         style = hv.Store.lookup_options("bokeh", raster, "style").kwargs
         plot = hv.Store.lookup_options("bokeh", raster, "plot").kwargs
@@ -703,7 +711,7 @@ class TestOverridesMergeOverRecordedStyle:
 
     def test_override_wins_over_the_recorded_style(self, dataset):
         """The widget value replaces the recorded entry; the untouched entries survive it."""
-        m = InteractiveMap().image(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
         out = m._render_with_overrides({"cmap": "magma"})
         style = hv.Store.lookup_options("bokeh", out, "style").kwargs
         plot = hv.Store.lookup_options("bokeh", out, "plot").kwargs

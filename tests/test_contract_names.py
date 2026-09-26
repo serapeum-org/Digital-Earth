@@ -2,9 +2,10 @@
 
 Four tiers grew four vocabularies: a raster field was `imshow`, `image`, `add_raster` and `terrain`; a colour
 key was a builder on two tiers and a toggle on a third; `render` returned the engine's object on two and `None`
-on one; and eight names meant two different things depending on which facade you held. `base/contract.py` is
-the agreement that ends that, and these are what hold the tiers to it — including the honest half, which is
-what a tier has *not* built and which order builds it.
+on one; and eight names meant two different things depending on which facade you held. Every one of those old
+spellings is deleted rather than aliased. `base/contract.py` is the agreement that ends that, and these are
+what hold the tiers to it — including the honest half, which is what a tier has *not* built and which order
+builds it.
 
 The tiers that adopted the Core names (web, 3-D) must answer to every one they can draw; interactive and
 static carry pending lists, each entry naming the roadmap order that empties it.
@@ -18,19 +19,16 @@ guarded so it cannot outlive the gap.
 
 import inspect
 import re
-import warnings
 from types import MappingProxyType
 from typing import Mapping, Tuple
 
 import pytest
 
 from digitalearth.base.contract import (
-    ALIASES,
     CORE,
     PENDING,
     ROADMAP_ORDERS,
     TIER2,
-    alias_table,
     orders_named_in,
     pending_for,
     roadmap_order,
@@ -73,10 +71,36 @@ EVERY_TIER: Tuple[str, ...] = tuple(sorted(FACADES))
 KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
     MappingProxyType(
         {
-            ("matplotlib", "choropleth"): (
-                ("opacity",),
-                "spelled alpha here, which reaches cleopatra through **opts; adopting the Core spelling "
-                "is order 27a",
+            # The five rows the Core renames surfaced. Each of these methods answered to the tier's own
+            # spelling until order 27a, so `pending_for` excused it from this check entirely and the
+            # divergence was invisible — adopting the Core name is what makes the keywords measurable.
+            # Every keyword below was probed against the live builder rather than read off a signature: a
+            # name the glyph takes through `**opts` is listed because the *signature* does not name it (the
+            # rule #324 set), a name that raises is listed because the tier has no such keyword at all.
+            ("matplotlib", "field"): (
+                ("band", "cmap", "limits", "opacity"),
+                "band and cmap reach the render through **kwargs unnamed; limits is spelled vmin/vmax, "
+                "and opacity alpha — #332, order 27a",
+            ),
+            ("matplotlib", "points"): (
+                ("cmap", "column", "k", "opacity", "scheme", "size"),
+                "cmap, scheme, k and size reach ScatterGlyph through **opts unnamed; this tier's points "
+                "have no colour column at all, and opacity is spelled alpha — #332, order 27a",
+            ),
+            ("matplotlib", "polygons"): (
+                ("cmap", "column", "k", "opacity", "scheme"),
+                "cmap, scheme and k reach PolygonGlyph through **opts unnamed; a classified fill is "
+                "choropleth() here, so there is no column, and opacity is spelled alpha — #332, order 27a",
+            ),
+            ("interactive", "field"): (
+                ("limits", "opacity"),
+                "limits is spelled clim here, and opacity alpha — #332, order 27a",
+            ),
+            ("interactive", "lines"): (
+                ("cmap", "column", "k", "opacity", "scheme", "width"),
+                "cmap reaches HoloViews through **opts unnamed; a line layer carries no value here, so "
+                "column, scheme and k classify nothing; opacity is spelled alpha, and a bare width= is "
+                "HoloViews' own plot width rather than the line's — #332, order 27a",
             ),
             ("matplotlib", "colorbar"): (
                 ("layer_id", "visible"),
@@ -94,18 +118,17 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 ("subtitle",),
                 "one axes title, with no second line to carry a subtitle — #265",
             ),
-            ("interactive", "points"): (
-                ("column", "opacity"),
-                "column is spelled value_column, and opacity is spelled alpha through **opts — order 27a",
-            ),
+            # `("matplotlib", "set_bounds")` was listed here against `("padding",)`, to keep order 27a's
+            # rename from reading as the capability behind it: the name and the chainable return landed at
+            # 27a, and `padding` with the `None` that fits the data did not. Both landed at the framing
+            # order, on this tier and on the interactive one, so the row is off and `set_bounds` is no
+            # longer short of anything the Core declares for it.
             ("interactive", "polygons"): (
-                ("k", "opacity", "scheme"),
-                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all and "
-                "that half is unscheduled; opacity is spelled alpha through **opts — order 27a",
-            ),
-            ("interactive", "choropleth"): (
-                ("opacity",),
-                "spelled alpha here, which reaches HoloViews through **opts — order 27a",
+                ("k", "scheme"),
+                # This said the scheme/k half was "unscheduled", and #331 — open, and titled for exactly
+                # this gap — schedules it. A reason may say `unscheduled` only where nothing does. The
+                # `opacity` half came off when order 27a took the keyword (#332).
+                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all — #331",
             ),
             ("interactive", "colorbar"): (
                 ("label", "layer_id", "visible"),
@@ -119,22 +142,9 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 ("url",),
                 "a name and a URL both arrive through one overloaded provider= — #268",
             ),
-            ("interactive", "contours"): (
-                ("filled", "interval"),
-                "the filled variant is a separate filled_contours() here, and interval is not offered "
-                "at all — #262",
-            ),
-            ("interactive", "layer_control"): (
-                ("layers", "position"),
-                "shares not one parameter with the web tier's — #264",
-            ),
             ("web", "labels"): (
                 ("crs",),
                 "places labels in EPSG:4326 only, so a column in another CRS cannot be labelled — #265",
-            ),
-            ("web", "layer_control"): (
-                ("layers",),
-                "the layers to include are spelled layer_ids= here — #264",
             ),
         }
     )
@@ -194,15 +204,6 @@ class TestTheContractIsWellFormed:
             f"names in both tiers of the contract: {sorted(overlap)}"
         )
 
-    def test_every_alias_points_at_a_name_the_contract_declares(self):
-        """An alias to nowhere would deprecate a spelling for a name nothing promises."""
-        declared = {method.name for method in CORE} | {method.name for method in TIER2}
-        # `record` and `terrain_tiles` are tier-native names a collision freed up, not contract names.
-        native = {"record", "terrain_tiles", "grid_points"}
-        for backend, table in ALIASES.items():
-            unknown = sorted(set(table.values()) - declared - native)
-            assert unknown == [], f"{backend} aliases point at {unknown}"
-
     def test_every_pending_entry_names_a_core_method(self):
         """A pending list is about the Core, so an entry outside it is a stale note."""
         declared = {method.name for method in CORE}
@@ -250,38 +251,6 @@ class TestTheSeamedTiersAnswerToTheCore:
         facade = _facade(backend)
         built = [name for name in pending_for(backend) if hasattr(facade, name)]
         assert built == [], f"{backend} lists {built} as pending, but has them"
-
-    @pytest.mark.parametrize("backend", sorted(FACADES))
-    def test_every_old_spelling_still_works(self, backend):
-        """An alias is a promise to the caller who already wrote the old name.
-
-        Args:
-            backend: The tier under test.
-        """
-        facade = _facade(backend)
-        broken = [old for old in alias_table(backend) if not hasattr(facade, old)]
-        assert broken == [], f"{backend} dropped {broken} instead of deprecating them"
-
-    @pytest.mark.parametrize("backend", sorted(FACADES))
-    def test_every_alias_warns_and_names_its_replacement(self, backend):
-        """The other half of the promise: the old name must not linger silently.
-
-        Args:
-            backend: The tier under test.
-
-        Test scenario:
-            The alias is read off the class rather than called, since calling one draws a map. What is checked
-            is that it is a deprecation shim at all — a plain method assigned to two names would pass every
-            other test here and warn nobody.
-        """
-        facade = _facade(backend)
-        for old, new in alias_table(backend).items():
-            held = inspect.getattr_static(facade, old)
-            source = inspect.getsource(held) if inspect.isfunction(held) else ""
-            assert "DeprecationWarning" in source, f"{backend}.{old} does not warn"
-            assert new in source or new in (held.__doc__ or ""), (
-                f"{backend}.{old} does not name {new} as its replacement"
-            )
 
 
 def _declared_methods():
@@ -534,7 +503,7 @@ class TestWhatARoadmapOrderPromises:
     """An order reference is a pointer into a plan the repository does not hold, so the number has to resolve.
 
     :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they say
-    "order 26" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
+    "order 24" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
     above ask whether a cited order is *in* the table; nothing asked what following one gives back, so a
     lookup that returned the key, or that let a bare `KeyError` out with no message, would still leave both
     guards green while the pointer answered nothing.
@@ -544,11 +513,12 @@ class TestWhatARoadmapOrderPromises:
         """Following a pointer gives the line that tells a waiting caller what they are waiting for.
 
         Test scenario:
-            `order 26` is what `interactive.set_bounds` is pending on. A lookup answering the key back, or
-            the short handle, would read as a plan while saying nothing a reader can act on.
+            `order 24` is what a keyed `colorbar` is pending on, across three tiers. A lookup answering
+            the key back, or the short handle, would read as a plan while saying nothing a reader can
+            act on.
         """
-        built = roadmap_order("order 26")
-        assert built.startswith("auto-framing and camera round-trip"), built
+        built = roadmap_order("order 24")
+        assert built.startswith("a legend and a colorbar"), built
 
     def test_an_order_nobody_wrote_down_is_refused_with_the_ones_there_are(self):
         """A number that is not a step of the plan fails loudly rather than reading as one (review R-L3).
@@ -563,46 +533,7 @@ class TestWhatARoadmapOrderPromises:
             roadmap_order("order 99")
         message = refused.value.args[0]
         assert "'order 99' is not a roadmap order" in message, message
-        assert "order 26" in message, message
-
-
-class TestAPlannedRenameIsNotAnAlias:
-    """Review M5 — `ALIASES` promises the old name works; a rename nobody has adopted promises nothing."""
-
-    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
-    def test_the_old_name_is_what_the_tier_still_calls_it(self, backend):
-        """A planned rename names a method that exists today under its old spelling.
-
-        Args:
-            backend: The tier under test.
-        """
-        from digitalearth.base.contract import planned_renames
-
-        facade = _facade(backend)
-        missing = [old for old in planned_renames(backend) if not hasattr(facade, old)]
-        assert missing == [], f"{backend} has no {missing}, so the rename names nothing"
-
-    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
-    def test_a_planned_rename_is_not_claimed_as_live(self, backend):
-        """The two tables must not overlap: one says "still works", the other says "will be called".
-
-        Args:
-            backend: The tier under test.
-
-        Test scenario:
-            This is the guard that makes the split self-correcting. When a tier's seam lands and adopts a
-            rename, moving the entry to `ALIASES` is what makes the liveness tests above cover it — and
-            leaving it here is what this test refuses once the new name exists.
-        """
-        from digitalearth.base.contract import planned_renames
-
-        facade = _facade(backend)
-        adopted = [
-            old for old, new in planned_renames(backend).items() if hasattr(facade, new)
-        ]
-        assert adopted == [], (
-            f"{backend} has adopted {adopted}; move them to ALIASES so their liveness is checked"
-        )
+        assert "order 24" in message, message
 
 
 class TestTheUnseamedTiersDeclareTheirGap:
@@ -663,19 +594,20 @@ class TestOneNamePerMeaning:
     """The collisions the contract settles, checked where they were live."""
 
     def test_the_web_tier_draws_a_field_under_that_name(self):
-        """`add_raster` is the alias now; `field` is the name every tier answers to."""
+        """`field` is the name every tier answers to, and the tier's own spelling is gone."""
         web = _facade("web")
         assert callable(web.field), "web must draw a field"
-        assert inspect.getattr_static(web, "add_raster") is not inspect.getattr_static(
-            web, "field"
-        ), "the alias must be a shim, not the same function under two names"
+        assert not hasattr(web, "add_raster"), (
+            "the spelling field replaced must be gone, not kept as a second name"
+        )
 
     def test_the_web_tier_switches_projection_by_name(self):
-        """`globe(True)` was a projection switch spelled as a layer builder."""
+        """The globe is a projection here, not a layer builder called `globe`."""
         web = _facade("web")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            assert web().projection("globe").viewport.globe is True, "globe by name"
+        assert web().projection("globe").viewport.globe is True, "globe by name"
+        assert not hasattr(web, "globe"), (
+            "the builder-shaped spelling must be gone from the web tier"
+        )
 
     def test_the_web_tier_writes_an_animation_under_the_shared_name(self):
         """`save_animation` is what static and interactive already called it."""
@@ -714,11 +646,10 @@ class TestTheAttachedIssues:
         web = _facade("web")
         assert "crs" in inspect.signature(web.text).parameters, "text() must take crs="
 
-    def test_web_text_still_accepts_the_old_keyword(self):
-        """The rename is a promise to the caller who already wrote `string=`."""
+    def test_web_text_takes_the_string_positionally(self):
+        """#260: the string is the third positional argument, as it is on the other tiers."""
         built = _facade("web")()
-        with pytest.warns(DeprecationWarning, match="string"):
-            drawn = built.text(4.9, 52.4, string="Amsterdam")
+        drawn = built.text(4.9, 52.4, "Amsterdam")
         assert drawn.layer_ids, drawn.layer_ids
 
     def test_web_graticule_takes_two_steps(self):
@@ -809,16 +740,22 @@ class TestTheAttachedIssues:
         assert web().colorbar(visible=False)._panels == {}, "no key was asked for"
 
 
-class TestTheDispatcherPassesUnderDeprecationErrors:
-    """Nothing the package calls itself may go through a deprecated spelling."""
+class TestTheDispatcherReachesNamesTheTiersHave:
+    """Nothing the package calls itself may go through a spelling that has been renamed away."""
 
     @pytest.mark.parametrize("backend", SEAMED)
     def test_quickmap_uses_the_canonical_names(self, backend, tmp_path):
-        """`quickmap` on a seamed backend raises no deprecation warning of its own.
+        """`quickmap` on a seamed backend draws rather than reaching a name its tier no longer has.
 
         Args:
             backend: The tier under test.
             tmp_path: Unused; keeps the signature uniform with the other cases.
+
+        Test scenario:
+            The dispatcher reaches its builders by name, so a table entry left on a spelling this wave
+            deleted raises `AttributeError` from inside the package. Running the dispatch is what catches
+            that; asserting the map came back is what stops the run passing for having raised nothing
+            *because* it drew nothing.
         """
         # The engine, not the tier: a tier imports without its engine (#290), so a missing extra would only
         # surface when the drawing started.
@@ -827,20 +764,9 @@ class TestTheDispatcherPassesUnderDeprecationErrors:
 
         from digitalearth import quickmap
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            drawn = quickmap(
-                Dataset.read_file("examples/data/acc4000.tif"), backend=backend
-            )
-        # Only this package's own warnings: PyVista and NumPy warn about things neither the caller nor this
-        # package can act on, and failing on those would make the gate about the installed versions.
-        ours = [
-            str(record.message)
-            for record in caught
-            if issubclass(record.category, DeprecationWarning)
-            and "digitalearth" in record.filename
-        ]
-        assert ours == [], f"quickmap reached a deprecated spelling: {ours}"
+        drawn = quickmap(
+            Dataset.read_file("examples/data/acc4000.tif"), backend=backend
+        )
         assert drawn is not None, "quickmap must draw"
         if hasattr(drawn, "close"):
             drawn.close()

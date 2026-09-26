@@ -50,7 +50,7 @@ class TestTiles:
     """``tiles`` — web-tile basemaps."""
 
     def test_tiles_is_wmts_underlay(self, m, dataset):
-        m.image(dataset).tiles("CartoLight")
+        m.field(dataset).tiles("CartoLight")
         assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
         assert isinstance(m.layers[1], hv.Image), (
             "tiles must insert beneath the data layers"
@@ -71,7 +71,7 @@ class TestTiles:
     def test_constructor_tiles_apply_once_at_render(self, dataset):
         """``InteractiveMap(tiles=...)`` prepends the basemap on first render only."""
         m = InteractiveMap(tiles="CartoLight")
-        m.image(dataset)
+        m.field(dataset)
         first = m.render()
         assert isinstance(first, hv.Overlay)
         assert len(first) == 2
@@ -81,7 +81,7 @@ class TestTiles:
 
     def test_explicit_tiles_supersede_constructor_tiles(self, dataset):
         """A constructor provider + an explicit .tiles() must not stack two basemaps (L2)."""
-        m = InteractiveMap(tiles="CartoLight").image(dataset).tiles("OSM")
+        m = InteractiveMap(tiles="CartoLight").field(dataset).tiles("OSM")
         overlay = m.render()
         wmts = [layer for layer in overlay if isinstance(layer, gv.element.WMTS)]
         assert len(wmts) == 1, f"expected exactly one basemap, got {len(wmts)}"
@@ -112,7 +112,7 @@ class TestTiles:
             m.tiles(providers[0])
 
     def test_overlay_level_puts_tiles_on_top(self, m, dataset):
-        m.image(dataset).tiles("CartoLight", level="overlay")
+        m.field(dataset).tiles("CartoLight", level="overlay")
         assert isinstance(m.layers[-1], gv.element.WMTS), (
             "overlay tiles must be the top layer"
         )
@@ -122,7 +122,7 @@ class TestCoastlinesAndFeatures:
     """``coastlines`` / ``features`` — Natural-Earth context layers."""
 
     def test_coastline_is_feature_overlay(self, m, dataset):
-        m.image(dataset).coastlines()
+        m.field(dataset).coastlines()
         assert isinstance(m.layers[-1], gv.element.Feature), f"got {type(m.layers[-1])}"
 
     def test_coastline_resolution_recorded(self, m):
@@ -131,7 +131,7 @@ class TestCoastlinesAndFeatures:
         assert plot["scale"] == "50m", f"scale not honoured: {plot.get('scale')}"
 
     def test_features_underlay_vs_overlay_order(self, m, dataset):
-        m.image(dataset).features(land=True, borders=True)
+        m.field(dataset).features(land=True, borders=True)
         assert isinstance(m.layers[0], gv.element.Feature), (
             "land must underlay the raster"
         )
@@ -174,7 +174,7 @@ class TestTogglesAndCompose:
     """``legend`` / ``colorbar`` toggles and the DI.1 acceptance overlay."""
 
     def test_colorbar_toggle_rewrites_last_layer(self, m, dataset):
-        m.image(dataset).colorbar(False)
+        m.field(dataset).colorbar(False)
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
         assert plot["colorbar"] is False
 
@@ -191,7 +191,7 @@ class TestTogglesAndCompose:
             `colorbar()` read `self.layers[-1]`, and `layers` follows band order, so the toggle reached the
             label instead and HoloViews refused it: `Unexpected option 'colorbar' for Text type` (review H5).
         """
-        m.text(4.0, 52.0, "label").image(dataset).colorbar(False)
+        m.text(4.0, 52.0, "label").field(dataset).colorbar(False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -205,10 +205,10 @@ class TestTogglesAndCompose:
             dataset: A small raster.
 
         Test scenario:
-            `coastlines().image(dem).colorbar(False)` applied the option to the coastlines and left the
+            `coastlines().field(dem).colorbar(False)` applied the option to the coastlines and left the
             raster's colorbar on — the call the caller made did nothing they could see.
         """
-        m.coastlines().image(dataset).colorbar(False)
+        m.coastlines().field(dataset).colorbar(False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -226,7 +226,7 @@ class TestTogglesAndCompose:
             toggles acted on; the web tier's `_last_layer_id` likewise counts data layers only. Tracking
             "the last layer added" without that exception would send this call to the tiles.
         """
-        m.image(dataset).tiles("CartoLight").colorbar(False)
+        m.field(dataset).tiles("CartoLight").colorbar(False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -269,7 +269,7 @@ class TestTogglesAndCompose:
 
     def test_image_tiles_coastlines_compose(self, m, dataset):
         """The DI.1 acceptance chain: raster + basemap + coastline in one ordered overlay."""
-        m.image(dataset).tiles().coastlines()
+        m.field(dataset).tiles().coastlines()
         overlay = m.render()
         assert isinstance(overlay, hv.Overlay)
         kinds = [type(layer) for layer in overlay]

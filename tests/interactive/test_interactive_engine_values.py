@@ -125,7 +125,7 @@ def _builder_calls(dataset, collection, point_fc, polygon_fc, **extra):
     """
     edges = [(0, 1), (1, 2)]
     return {
-        "image": lambda m: m.image(dataset, **extra),
+        "field": lambda m: m.field(dataset, **extra),
         "rgb": lambda m: m.rgb(dataset, bands=(1, 1, 1), **extra),
         "quadmesh": lambda m: m.quadmesh(dataset, **extra),
         "contours": lambda m: m.contours(dataset, levels=3, **extra),
@@ -134,7 +134,7 @@ def _builder_calls(dataset, collection, point_fc, polygon_fc, **extra):
         "timecube": lambda m: m.timecube(collection, **extra),
         "spaghetti": lambda m: m.spaghetti(collection, **extra),
         "points": lambda m: m.points(point_fc, **extra),
-        "path": lambda m: m.path(point_fc, **extra),
+        "lines": lambda m: m.lines(point_fc, **extra),
         "polygons": lambda m: m.polygons(polygon_fc, **extra),
         "choropleth": lambda m: m.choropleth(polygon_fc, "fid", **extra),
         "choropleth-categorical": lambda m: m.choropleth(
@@ -231,7 +231,7 @@ class TestAHeldColormapStillReachesTheEngine:
         ramp = ListedColormap(list(self.RAMP), name="homemade-ramp")
         interactive_map = new_map()
         if builder == "points":
-            interactive_map.points(point_fc, value_column="fid", cmap=ramp)
+            interactive_map.points(point_fc, column="fid", cmap=ramp)
         elif builder == "polygons":
             interactive_map.polygons(polygon_fc, column="fid", cmap=ramp)
         elif builder == "choropleth":
@@ -264,7 +264,7 @@ class TestAStyleDictDescribesItsColormapByName:
         from matplotlib import colormaps
 
         interactive_map = new_map()
-        interactive_map.points(point_fc, value_column="fid", cmap=colormaps["magma"])
+        interactive_map.points(point_fc, column="fid", cmap=colormaps["magma"])
         props = dict(
             interactive_map.figure_spec.layers.get(
                 interactive_map.layer_ids[-1]
@@ -338,7 +338,7 @@ class TestAnEngineValueIsHeldBesideTheLayer:
         """
         from matplotlib.colors import ListedColormap
 
-        interactive_map = new_map().image(
+        interactive_map = new_map().field(
             dataset, cmap=ListedColormap(["#000000", "#ffffff"])
         )
         assert _written(interactive_map), "nothing was written"
@@ -354,7 +354,7 @@ class TestAnEngineValueIsHeldBesideTheLayer:
         """
         from matplotlib import colormaps
 
-        interactive_map = new_map().image(dataset, cmap=colormaps["magma"])
+        interactive_map = new_map().field(dataset, cmap=colormaps["magma"])
         props = interactive_map.figure_spec.layers.get(
             interactive_map.layer_ids[0]
         ).symbology.props
@@ -383,7 +383,7 @@ class TestAnEngineValueIsHeldBesideTheLayer:
             new_map: The map factory.
             dataset: A small raster.
         """
-        interactive_map = new_map().image(dataset, hooks=[lambda plot, element: None])
+        interactive_map = new_map().field(dataset, hooks=[lambda plot, element: None])
         assert _written(interactive_map), "nothing was written"
 
     def test_timestamp_labels_do_not_stop_the_figure_writing(self, new_map, collection):
@@ -494,7 +494,7 @@ class TestWhatIsHeldReachesTheEngine:
             """
             fired.append(type(element).__name__)
 
-        interactive_map = new_map().image(dataset, hooks=[hook])
+        interactive_map = new_map().field(dataset, hooks=[hook])
         self._bokeh_plot(interactive_map)
         assert fired, "the hook never ran"
 
@@ -507,7 +507,7 @@ class TestWhatIsHeldReachesTheEngine:
         """
         from matplotlib.colors import ListedColormap
 
-        built = new_map().image(dataset, cmap=ListedColormap(["#000000", "#ffffff"]))
+        built = new_map().field(dataset, cmap=ListedColormap(["#000000", "#ffffff"]))
         figure = built.figure_spec
         elsewhere = new_map()
         drawn = elsewhere._renderer.draw_layer(figure, built.layer_ids[0])
@@ -520,7 +520,7 @@ class TestWhatIsHeldReachesTheEngine:
             new_map: The map factory.
             dataset: A small raster.
         """
-        interactive_map = new_map().image(dataset, hooks=[lambda plot, element: None])
+        interactive_map = new_map().field(dataset, hooks=[lambda plot, element: None])
         assert interactive_map._layer_held, "nothing was held"
         interactive_map.close()
         assert interactive_map._layer_held == {}, interactive_map._layer_held
@@ -541,7 +541,7 @@ def test_a_held_value_is_not_the_figures_business(new_map, dataset):
         recorded as `null`, because this bag is splatted into `element.opts(**opts)`, where `hooks=None`
         is a value the engine is handed rather than a keyword it was never given.
     """
-    interactive_map = new_map().image(dataset, hooks=[lambda plot, element: None])
+    interactive_map = new_map().field(dataset, hooks=[lambda plot, element: None])
     written = _written(interactive_map)
     assert "hooks" not in written, written
 
@@ -827,7 +827,7 @@ class TestATupleOrArrayKeywordIsHeldRatherThanDescribed:
         Returns:
             The map. The pattern is passed as a **copy**, so nothing here can pass by identity alone.
         """
-        return new_map().path(point_fc, line_dash=tuple(self.DASH))
+        return new_map().lines(point_fc, line_dash=tuple(self.DASH))
 
     def test_the_description_does_not_carry_it(self, new_map, point_fc):
         """A figure written out names no dash pattern at all.
@@ -899,7 +899,7 @@ class TestATupleOrArrayKeywordIsHeldRatherThanDescribed:
         """
         import numpy as np
 
-        interactive_map = new_map().path(point_fc, line_dash=np.array([4, 4]))
+        interactive_map = new_map().lines(point_fc, line_dash=np.array([4, 4]))
         written = _written(interactive_map)
         assert "line_dash" not in written, written
 
@@ -913,7 +913,7 @@ class TestATupleOrArrayKeywordIsHeldRatherThanDescribed:
         import numpy as np
 
         pattern = np.array([4, 4])
-        interactive_map = new_map().path(point_fc, line_dash=pattern)
+        interactive_map = new_map().lines(point_fc, line_dash=pattern)
         drawn = _drawn_style(interactive_map.layers[-1]).get("line_dash")
         assert drawn is pattern, (
             f"HoloViews was given {drawn!r}, not the caller's own array"
@@ -953,7 +953,7 @@ class TestAListKeywordIsDescribedAndReachesTheEngineAsAList:
         Returns:
             The map. The pattern is passed as a **copy**, so nothing here can pass by identity alone.
         """
-        return new_map().path(point_fc, line_dash=list(self.DASH))
+        return new_map().lines(point_fc, line_dash=list(self.DASH))
 
     def test_the_description_carries_it(self, new_map, point_fc):
         """A figure written out names the caller's pattern, so a reader elsewhere can draw it.

@@ -16,6 +16,7 @@ from dataclasses import replace as with_fields
 
 import numpy as np
 import pytest
+from matplotlib.text import Text
 from pyramids.feature import FeatureCollection
 
 from digitalearth.base.custom import MissingObject
@@ -44,7 +45,7 @@ def drawn_map(dataset):
         The map, whose single layer is ``raster-1``.
     """
     canvas = Map(crs=dataset.epsg)
-    canvas.imshow(dataset)
+    canvas.field(dataset)
     yield canvas
     canvas.close()
 
@@ -60,7 +61,7 @@ def layered_map(dataset):
         The map, whose layers are ``raster-1`` then ``mesh-1``.
     """
     canvas = Map(crs=dataset.epsg)
-    canvas.imshow(dataset)
+    canvas.field(dataset)
     canvas.pcolormesh(dataset)
     yield canvas
     canvas.close()
@@ -296,7 +297,7 @@ class TestTheOptionsADrawerReads:
 
         norm = Normalize(0.0, 10.0)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, norm=norm)
+        canvas.field(dataset, norm=norm)
         layer = canvas.figure_spec.layers.get("raster-1")
         held = drawing_opts(canvas, layer)["norm"]
         canvas.close()
@@ -317,7 +318,7 @@ class TestTheOptionsADrawerReads:
             dataset: The raster drawn.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, vmin=0.0)
+        canvas.field(dataset, vmin=0.0)
         layer = canvas.figure_spec.layers.get("raster-1")
         drawing_opts(canvas, layer)["vmin"] = 99.0
         again = drawing_opts(canvas, layer)["vmin"]
@@ -616,8 +617,8 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             first. A rollback that re-adds it last paints it over the image that was on top of it.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
+        canvas.field(dataset)
         figure = canvas.figure_spec
         refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):
@@ -659,7 +660,7 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         monkeypatch.setattr(raster, "draw_field", refuse)
         canvas = Map(crs=dataset.epsg)
         with pytest.raises(ValueError, match="cannot be drawn"):
-            canvas.imshow(dataset)
+            canvas.field(dataset)
         assert canvas.layer_ids == [], canvas.layer_ids
         canvas.close()
 
@@ -702,7 +703,7 @@ class TestADrawerThatFailsPartWay:
 
         monkeypatch.setattr(ArrayGlyph, "plot", draws_then_fails)
         with pytest.raises(RuntimeError, match="after drawing"):
-            drawn_map.imshow(dataset)
+            drawn_map.field(dataset)
         painted = list(drawn_map.ax.images)
         assert painted == [drawn_map._renderer.drawn["raster-1"].artist], painted
 
@@ -734,10 +735,10 @@ class TestADrawerThatFailsPartWay:
             raise RuntimeError("failed after drawing")
 
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         monkeypatch.setattr(raster, "draw_field", draws_then_fails)
         with pytest.raises(RuntimeError, match="after drawing"):
-            canvas.imshow(dataset)
+            canvas.field(dataset)
         kept = canvas._renderer.drawn["raster-1"].artist
         registered = [mappable for _, mappable in canvas.layers]
         painted = list(canvas.ax.images)
@@ -894,14 +895,15 @@ class TestAFailingGraticuleLeavesNothingBehind:
         assert kept, "the refused replacement changed what the map draws"
 
 
-class TestApplyIsRecordOnlyOnThisTier:
-    """``apply`` reconciles this renderer's record and the axes — and nothing else, in this wave.
+class TestApplyDrawsAndDoesNotDescribe:
+    """``apply`` reconciles this renderer's record and the axes; the description is ``_change``'s to install.
 
-    Nothing in ``src/`` calls it yet: the scene's own state (its layer tree, its sources, what
-    :attr:`Map.figure_spec` reports) is not routed through it, and will be in Wave 7 (order 23). Pinning
-    that here is what keeps the checks around it honest — a test that asserted the map "still reports the
-    figure it can draw" after a *refused* change passed whatever ``apply`` did, because ``apply`` cannot
-    change what the map reports either way.
+    The split is deliberate rather than a limitation. :meth:`Scene._change` calls ``apply`` and installs the
+    scene's layer tree and sources only once it has returned, which is what makes "a figure the tier refuses
+    is never one it reports" true of the six public layer-management methods. Pinning the halves separately is
+    what keeps the checks around them honest — a test that asserted the map "still reports the figure it can
+    draw" after a *refused* ``apply`` passed whatever ``apply`` did, because ``apply`` does not touch what the
+    map reports either way.
     """
 
     def test_a_successful_apply_does_not_change_what_the_map_reports(self, drawn_map):
@@ -911,8 +913,9 @@ class TestApplyIsRecordOnlyOnThisTier:
             drawn_map: A map with one drawn layer.
 
         Test scenario:
-            When Wave 7 wires a map-level change through ``apply``, this fails — which is the point: the
-            contract it pins is a limitation, and it has to be re-stated deliberately rather than drift.
+            A caller may hand ``apply`` a figure of their own — the conformance adapter did until order 23 —
+            and that must not leave the map describing something nobody asked it to draw. The description
+            moves through :meth:`Scene._change` and nowhere else.
         """
         figure = drawn_map.figure_spec
         added = with_fields(
@@ -1022,7 +1025,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
             dataset: The raster drawn and then forgotten.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         key = canvas.figure_spec.sources["raster-1"].uri.split(":", 1)[1]
         canvas.close()
         assert key not in _OBJECTS, f"{key} outlived the scene that registered it"
@@ -1034,7 +1037,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
             dataset: The raster drawn before the two closes.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.close()
         canvas.close()
         assert canvas.figure_spec.layers.ids == ("raster-1",)
@@ -1046,7 +1049,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
             dataset: The raster drawn inside the block.
         """
         with Map(crs=dataset.epsg) as canvas:
-            canvas.imshow(dataset)
+            canvas.field(dataset)
             key = canvas.figure_spec.sources["raster-1"].uri.split(":", 1)[1]
         assert key not in _OBJECTS, f"{key} outlived the with block"
 
@@ -1059,7 +1062,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
         import matplotlib.pyplot as plt
 
         with Map(crs=dataset.epsg) as canvas:
-            canvas.imshow(dataset)
+            canvas.field(dataset)
             number = canvas.fig.number
         assert plt.fignum_exists(number) is False
 
@@ -1415,12 +1418,12 @@ class TestAskingWhetherALayerIsDrawn:
         )
 
     def test_a_layer_with_no_addressable_artist_reads_back_drawn(self):
-        """A decoration that leaves nothing to switch off has nothing that could have been switched off.
+        """A decoration nobody switched off, with nothing to switch off, is still drawn.
 
         Test scenario:
             A graticule is described before the projection frame draws its lines, so between the two it
-            owns no artists at all. `all()` over nothing is `True`, which is the honest answer — a reader
-            that treated an empty record as hidden would report an unframed globe's grid as off.
+            owns no artists at all. Nothing has been asked of it, so the answer is `True` — a reader that
+            treated an absence as hidden would report an unframed globe's grid as off.
         """
         canvas = Map(crs=projections.orthographic(-9, 39), globe=True)
         canvas.graticule(lon_step=30.0, lat_step=30.0)
@@ -1431,3 +1434,75 @@ class TestAskingWhetherALayerIsDrawn:
             f"the frame has not run, so the layer owns nothing; got {owned}"
         )
         assert answer is True, "a layer with no artists must not read back hidden"
+
+    def test_a_layer_with_no_artist_reads_back_hidden_once_it_is_hidden(self):
+        """The half `all(())` got wrong: an empty aggregate answered `True` whatever was asked.
+
+        Test scenario:
+            A **flat** graticule owns no artists at all — its lines reach the axes with a globe frame, and a
+            flat map has none — so `all(())` made `set_visible(id, False)` followed by `is_visible(id)`
+            answer `True` for the layer it had just hidden. No pixel was wrong either way, and that is the
+            point: what was wrong was the renderer's *answer*, which is what `Scene.set_visible`, the
+            behavioural conformance suite and any layer switcher read. Measured at the reviewed HEAD: `True`.
+        """
+        flat = Map(crs=4326)
+        flat.graticule(lon_step=30.0, lat_step=30.0)
+        owned = flat._renderer.drawn["graticule-1"].artists
+        flat.set_visible("graticule-1", False)
+        answer = flat._renderer.is_visible("graticule-1")
+        flat.close()
+        assert owned == (), f"a flat graticule owns no artists; got {owned}"
+        assert answer is False, "a layer asked to hide must not read back drawn"
+
+    def test_a_layer_with_no_artist_comes_back_on(self):
+        """The other direction, so the check above cannot be passed by answering `False` always.
+
+        Test scenario:
+            The remembered answer is a record of the last request, not a latch.
+        """
+        flat = Map(crs=4326)
+        flat.graticule(lon_step=30.0, lat_step=30.0)
+        flat.set_visible("graticule-1", False)
+        answer = flat.set_visible("graticule-1")._renderer.is_visible("graticule-1")
+        flat.close()
+        assert answer is True, "a layer switched back on must read back drawn"
+
+    def test_a_layer_drawn_again_does_not_inherit_what_was_asked_of_the_last_one(self):
+        """An id is reserved only while the layer is on the figure, so an answer must not outlive it.
+
+        Test scenario:
+            The record of what was asked is keyed by layer id, and an id is handed back when its layer is
+            removed (`free_layer_id`). A remembered `False` left behind would answer for whatever took the
+            id next — a layer nobody hid, reported hidden.
+        """
+        flat = Map(crs=4326)
+        flat.graticule(lon_step=30.0, lat_step=30.0, name="grid")
+        flat.set_visible("grid", False)
+        flat.remove_layer("grid")
+        flat.graticule(lon_step=30.0, lat_step=30.0, name="grid")
+        answer = flat._renderer.is_visible("grid")
+        flat.close()
+        assert answer is True, "a new layer inherited the answer the old one left"
+
+    def test_hiding_a_layer_hides_every_artist_it_owns(self, drawn_map):
+        """Read the artists, not the aggregate: a half-applied hide reads clean from `is_visible`.
+
+        Args:
+            drawn_map: A map whose renderer is under test.
+
+        Test scenario:
+            A layer can own several artists — a limb-split coastline is one polyline per piece — and
+            `is_visible` is `all(...)` over them, so hiding only the first already answers `False`. A check
+            that read the aggregate would pass a hide that left half the layer on the figure, which is why
+            this reads each artist. The pair stands in for such a layer: nothing a builder here draws owns
+            two artists a test can reach as cheaply, and what is under test is the loop, not the drawer.
+        """
+        first, second = Text(0.0, 0.0, "one"), Text(1.0, 1.0, "two")
+        renderer = drawn_map._renderer
+        renderer._drawn["pair"] = DrawnLayer(
+            artist=first, glyph=None, artists=(first, second)
+        )
+        renderer.set_visible("pair", False)
+        assert [first.get_visible(), second.get_visible()] == [False, False], (
+            "every artist a layer owns is hidden with it"
+        )

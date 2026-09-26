@@ -35,7 +35,6 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.custom import custom_kind
-from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
@@ -68,6 +67,7 @@ from digitalearth.base.spec.layer import (
     layer_name,
 )
 from digitalearth.base.symbology import sample_cmap
+from digitalearth.web.capabilities import CAPABILITIES
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
 #: point, so a page, a PNG snapshot and an animation frame are titled alike.
@@ -334,6 +334,20 @@ class _Described:
             The layer's id, so a described layer is removed by the same path as a queued closure.
         """
         return self.layer_id
+
+
+@dataclass(frozen=True)
+class _DeckOverlay:
+    """A queue entry standing for the deck.gl overlay the page composes.
+
+    deck.gl owns **one** overlay per page: the widget's ``add_deck_layers`` sends ``addDeckOverlay``, and a
+    second call replaces the first rather than adding to it. So the deck layers are collected over the whole
+    queue and handed over together, and this marker is the slot the collection reads
+    :attr:`WebMapBase._deck_layers` — the layers the builders that record no description accumulate — at.
+
+    It is a queue entry rather than the closure it replaced because a closure could only call the widget,
+    and calling it once per builder is exactly what would drop every overlay but the last.
+    """
 
 
 def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
@@ -680,7 +694,7 @@ class WebMapBase:
         #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
         #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
         self._data_bounds: Optional[List[float]] = None
-        #: An explicit :meth:`fit_bounds` request, which always wins over the accumulated extent.
+        #: An explicit :meth:`set_bounds` request, which always wins over the accumulated extent.
         self._fit: Optional[dict] = None
         #: The projection MapLibre draws in, as `globe()` sets it; recorded so the view can say so.
         self._projection: str = "mercator"
@@ -968,9 +982,6 @@ class WebMapBase:
         }
         return self
 
-    #: Deprecated spelling of :meth:`set_bounds`, the contract's name for framing a figure on a region (#299).
-    fit_bounds = renamed_method(new="set_bounds", old="fit_bounds", owner="WebMap")
-
     def _switcher_request(self) -> Optional[dict]:
         """Return the layer switcher to add to the widget being built, or ``None`` for no switcher.
 
@@ -1146,7 +1157,22 @@ class WebMapBase:
 
                 ```
         """
-        tree = self._layer_tree
+        return self._figure_with(self._layer_tree)
+
+    def _figure_with(self, tree: LayerTree) -> FigureSpec:
+        """Return the figure this map would report if its layers were `tree`.
+
+        The panel is **derived** rather than maintained beside the tree: this tier draws one map, so its one
+        panel shows every layer, and a figure whose panel named a layer the tree does not hold is refused by
+        `FigureSpec` — correctly. Writing the derivation once is what lets :meth:`_change` take a tree and
+        keep the panel, the title and the furniture in step with it.
+
+        Args:
+            tree: The layers the figure describes.
+
+        Returns:
+            The figure, with the sources of exactly those layers.
+        """
         panel = PanelSpec(
             PANEL_ID,
             self.viewport,
@@ -1161,6 +1187,192 @@ class WebMapBase:
                 key: ref for key, ref in self._sources.items() if key in set(tree.ids)
             },
         )
+
+    def _change(self, figure: FigureSpec) -> None:
+        """Move the map to another figure: reconcile what is drawn, then install the description.
+
+        The one path every layer-management method goes through, and the 3-D scene's `_change` in this tier's
+        terms. The order is the point: the renderer reconciles first — its record **and** the queue the
+        widget is built from — and the description is installed only if it did. A figure that cannot be drawn
+        was installed first on the 3-D tier and left in place when `apply` raised, so `layer_ids` and
+        `figure_spec` advertised a layer that was never drawn and could not be (review H7). Nothing is rolled
+        back here because :meth:`~digitalearth.web.renderer.Renderer.apply` puts its record and the queue back
+        before it re-raises.
+
+        Args:
+            figure: The figure the map should draw. Its panel is ignored — :meth:`_figure_with` derives one
+                from the tree — so a caller may hand in a tree wrapped by either.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+            ValueError: when a layer's description does not carry what its drawer needs.
+            OffLimbError: when the map is `strict` and a layer cannot be placed.
+        """
+        candidate = self._figure_with(figure.layers)
+        self._renderer.apply(self.figure_spec, candidate)
+        self._layer_tree = candidate.layers
+        # The reference goes out of this map's figure and the object stays registered: a `figure_spec`
+        # captured before the change still names it, and `close()` is where a map lets its data go — which is
+        # what :meth:`remove_layer` already does for the same reason (review M6).
+        kept = set(candidate.layers.ids)
+        self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+
+    def _require_layer(self, layer_id: Any) -> None:
+        """Refuse an id this map does not draw, naming the ids it does.
+
+        Written once because five public methods ask the same question, and a refusal that named neither the
+        id nor the alternatives is the one a caller cannot act on. The wording is the one
+        :meth:`remove_layer`'s and :meth:`get_layer`'s doctests pin, so a caller reading for the ids that
+        *are* there reads the same sentence whichever method refused.
+
+        Args:
+            layer_id: The id the caller passed.
+
+        Raises:
+            KeyError: when no layer has that id.
+        """
+        present = self.layer_ids
+        if layer_id not in present:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; added layers are {present}"
+            )
+
+    def set_visible(self, layer_id: str, visible: bool = True) -> Self:
+        """Show or hide a layer, by id.
+
+        The layer stays on the map and in its description — which is what lets a viewer switch it back on
+        from the layer control, and what tells a saved page that the layer is there but not drawn.
+
+        Args:
+            layer_id: The layer to toggle.
+            visible: Whether it is drawn.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Note:
+            A description can draw more than one MapLibre layer — a graticule's lines and its degree labels,
+            a cluster's bubbles, counts and loose points. They are one layer to a viewer, so they are shown
+            and hidden together (review M4).
+
+        Examples:
+            - A hidden layer is still described, and comes back on:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m.set_visible("ams", False).figure_spec.layers.is_visible("ams")
+                False
+                >>> m._renderer.is_visible("ams")
+                False
+                >>> m.set_visible("ams")._renderer.is_visible("ams")
+                True
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(
+            self._figure_with(self._layer_tree.set_visible(layer_id, bool(visible)))
+        )
+        return self
+
+    def move_layer(self, layer_id: str, index: int) -> Self:
+        """Move a layer in draw order, by id.
+
+        Args:
+            layer_id: The layer to move.
+            index: Its position afterwards, counted as a list index is — `0` is the bottom, `-1` the top. A
+                layer moves within its band: reordering the data layers is what a layer switcher does, and
+                dragging the basemap over them is not.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id.
+            IndexError: if the position is outside the map, or outside the layer's band.
+
+        Note:
+            This reaches the page: the widget is built by replaying the queue in order, and the reconcile
+            re-arranges the queue (:meth:`~digitalearth.web.renderer.Renderer._arrange`) — so what MapLibre
+            adds last, and therefore draws on top, follows.
+
+        Examples:
+            - Two labels, reordered by id:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m = m.text(2.35, 48.86, "Paris", name="par")
+                >>> m.move_layer("par", 0).layer_ids
+                ['par', 'ams']
+                >>> [drawn.id for drawn in m.layers]
+                ['par', 'ams']
+
+                ```
+        """
+        self._change(self._figure_with(self._layer_tree.move(layer_id, index)))
+        return self
+
+    def replace_layer(self, layer: LayerSpec) -> Self:
+        """Swap a layer's description for another, keeping its id and its place in draw order.
+
+        This is how a layer is restyled or re-pointed after it has been drawn: MapLibre bakes the paint into
+        the layer object the page adds, so the renderer builds it again from the new description rather than
+        setting a property on what is there.
+
+        Args:
+            layer: The new description. Its id names the layer it replaces.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
+            ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
+                the drawers read the source out of the figure, and a missing one reaches the drawer as
+                `None` and fails somewhere it cannot explain.
+
+        Examples:
+            - A label re-described keeps its id and its place:
+                ```python
+                >>> from dataclasses import replace
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> _ = m.replace_layer(replace(m.get_layer("ams"), label="Capital"))
+                >>> m.get_layer("ams").label
+                'Capital'
+
+                ```
+        """
+        self._require_layer(getattr(layer, "id", None))
+        # The first production caller of `Capabilities.require` (D-10). A replacement is the one
+        # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
+        # something it does not have — and refusing here, off the declaration, refuses before a description
+        # is built or the engine is touched. Without it the refusal came from the drawer table, part-way
+        # through a reconcile, and said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="WebMap.replace_layer")
+        # Imported here, not at module scope: the renderer resolves its drawers from the builder modules, and
+        # every one of those imports this module, so a top-level import would close a cycle.
+        from digitalearth.web.renderer import DESCRIPTION_ONLY_KINDS
+
+        # `DESCRIPTION_ONLY_KINDS` is the tier's own answer to "does this kind's drawer read a figure
+        # source?", which is the question this guard means to ask; the registry answers a different one —
+        # what the kind *is* across all four tiers. This tier's terrain draws from a tile-URL template its
+        # description carries, so demanding a `source_id` for it would refuse every replacement of a layer
+        # that never had one.
+        if (
+            layer.source_id is None
+            and kind_info(layer.kind).takes != "none"
+            and layer.kind not in DESCRIPTION_ONLY_KINDS
+        ):
+            raise ValueError(
+                f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
+                f"needs a source_id; got None"
+            )
+        self._change(self._figure_with(self._layer_tree.replace(layer)))
+        return self
 
     @property
     def viewport(self) -> Viewport:
@@ -1577,11 +1789,7 @@ class WebMapBase:
 
                 ```
         """
-        present = self.layer_ids
-        if layer_id not in present:
-            raise KeyError(
-                f"no layer {layer_id!r} on this map; added layers are {present}"
-            )
+        self._require_layer(layer_id)
         return self._layer_tree.get(layer_id)
 
     def colorbar(
@@ -1711,11 +1919,7 @@ class WebMapBase:
         """
         from digitalearth.web.renderer import derived_ids
 
-        present = self.layer_ids
-        if layer_id not in present:
-            raise KeyError(
-                f"no layer {layer_id!r} on this map; added layers are {present}"
-            )
+        self._require_layer(layer_id)
         # The id is free again the moment it addresses nothing — the lifetime
         # :func:`~digitalearth.base.spec.layer.free_layer_id` states, and the one the 3-D tier already had
         # by reading its ids off the live tree. This tier reserved a removed layer's id for the life of the
@@ -2508,6 +2712,11 @@ class WebMapBase:
         Basemaps/tiles call this so they sit beneath the data layers regardless of when they are added —
         the mirror of :meth:`add_layer`, which appends on top.
 
+        Within the band it appends, like every other band: a second basemap is drawn **over** the first, as
+        `LayerTree.add` files it. It inserted at the very front instead, so two basemaps were described one
+        way round and drawn the other — invisible while a basemap recorded no description, and a plain
+        disagreement between `layer_ids` and the page once one did.
+
         Args:
             layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
                 ``maplibre`` ``Layer``/spec.
@@ -2515,7 +2724,7 @@ class WebMapBase:
         Returns:
             This map (chainable).
         """
-        self._queued.insert(0, layer)
+        self._queued.insert(self._underlay_count, layer)
         self._underlay_count += 1
         return self
 
@@ -2635,35 +2844,84 @@ class WebMapBase:
             options["center"] = self.center
         return options
 
-    def _apply_layer(self, widget: Any, layer: Any) -> None:
+    def _apply_layer(
+        self, widget: Any, layer: Any, deck: Optional[List[Any]] = None
+    ) -> None:
         """Apply one queued ``layer`` onto the MapLibre ``widget``.
 
-        Three shapes reach here, in the order the queue holds them. A described layer is looked up in the
-        renderer, and what it drew is added source-first, then the layer, then whatever extra layers the
-        same description owns (a graticule's degree labels, a cluster's counts and loose points) — a
-        description nothing was drawn for adds nothing, which is how a declined layer stays off the page. A
-        callable layer is a mixin-supplied ``apply(widget)`` that wires its own source(s) + layer(s), the
-        path the kinds outside :data:`~digitalearth.web.renderer.DRAWN_KINDS` still take. Anything else is
-        handed straight to the widget's ``add_layer``.
+        Four shapes reach here, in the order the queue holds them. A described layer is looked up in the
+        renderer, and what it drew is applied by the route its drawer built for
+        (:attr:`~digitalearth.web.renderer.DrawnLayer.route`): a style layer is added source-first, then the
+        layer, then whatever extra layers the same description owns (a graticule's degree labels, a cluster's
+        counts and loose points); terrain adds its DEM source and turns terrain on; and a deck.gl layer joins
+        the one overlay the page composes. A description nothing was drawn for adds nothing, which is how a
+        declined layer stays off the page. A :class:`_DeckOverlay` marker is where the deck layers the
+        undescribed builders accumulated join that same overlay. A callable layer is a mixin-supplied
+        ``apply(widget)`` that wires its own source(s) + layer(s), and anything else is handed straight to
+        the widget's ``add_layer``.
 
         Args:
             widget: The MapLibre ``MapWidget`` being assembled.
             layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
                 ``maplibre`` ``Layer``/spec.
+            deck: The list the page's deck.gl layers are collected into, which
+                :meth:`_build_map_widget` hands over in one call afterwards. ``None`` — a caller replaying
+                the queue one entry at a time, as the renderer contract's adapter does — applies each deck
+                layer on its own instead, which draws the same layers but would drop all but the last if a
+                page were really built that way.
         """
         if isinstance(layer, _Described):
             built = self._renderer.drawn.get(layer.layer_id)
             if built is None:
                 return
-            if built.source_id is not None:
-                widget.add_source(built.source_id, built.source_spec)
-            widget.add_layer(built.layer)
-            for extra in built.extra_layers:
-                widget.add_layer(extra)
+            self._apply_drawn(widget, built, deck)
+        elif isinstance(layer, _DeckOverlay):
+            self._collect_deck(widget, list(self._deck_layers or ()), deck)
         elif callable(layer):
             layer(widget)
         else:
             widget.add_layer(layer)
+
+    def _apply_drawn(self, widget: Any, built: Any, deck: Optional[List[Any]]) -> None:
+        """Apply what one drawer produced, by the route it built for.
+
+        Args:
+            widget: The MapLibre ``MapWidget`` being assembled.
+            built: The :class:`~digitalearth.web.renderer.DrawnLayer` the renderer holds for the layer.
+            deck: The list deck.gl layers are collected into, or ``None`` to apply each on its own.
+        """
+        from digitalearth.web.renderer import DECK_ROUTE, TERRAIN_ROUTE, shown
+
+        if built.route == DECK_ROUTE:
+            self._collect_deck(widget, [built.layer], deck)
+            return
+        if built.source_id is not None:
+            widget.add_source(built.source_id, built.source_spec)
+        if built.route == TERRAIN_ROUTE:
+            # Terrain is not a style layer: MapLibre takes the source and a `setTerrain` call. Hiding it
+            # therefore means not making that call at all, which leaves the map flat rather than half-draped.
+            if shown(built):
+                widget.set_terrain(built.layer["source"], built.layer["exaggeration"])
+            return
+        widget.add_layer(built.layer)
+        for extra in built.extra_layers:
+            widget.add_layer(extra)
+
+    @staticmethod
+    def _collect_deck(
+        widget: Any, layers: List[Any], deck: Optional[List[Any]]
+    ) -> None:
+        """Add deck.gl layers to the page's one overlay, or apply them on their own.
+
+        Args:
+            widget: The MapLibre ``MapWidget`` being assembled.
+            layers: The deck.gl JSON layers to add, in draw order.
+            deck: The list to collect them into, or ``None`` to hand them to the widget directly.
+        """
+        if deck is not None:
+            deck.extend(layers)
+        elif layers:
+            widget.add_deck_layers(layers)
 
     def _build_map_widget(self, *, with_controls: bool = True) -> Any:
         """Build the bare MapLibre ``MapWidget`` with every registered layer applied (no temporal wrap).
@@ -2687,8 +2945,14 @@ class WebMapBase:
         if self.height is not None:
             kwargs["height"] = int(self.height)
         widget = MapWidget(**kwargs)
+        # One list for the page's deck.gl layers, filled in queue order and handed over below in a single
+        # call: ``add_deck_layers`` sends ``addDeckOverlay``, which **replaces** the overlay rather than
+        # adding to it, so a call per builder would leave only the last builder's layers on the page.
+        deck: List[Any] = []
         for layer in self._queued:
-            self._apply_layer(widget, layer)
+            self._apply_layer(widget, layer, deck)
+        if deck:
+            widget.add_deck_layers(deck)
         if self._panels:
             from maplibre.controls import InfoBoxControl
 

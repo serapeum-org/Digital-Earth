@@ -231,6 +231,46 @@ class TestAutoRouting:
             assert isinstance(m.layers[0], hv.DynamicMap)
 
 
+class TestAPathIsMeasuredAsAString:
+    """#316 — the documented limit: ``rasterize="auto"`` counts whatever ``features`` is.
+
+    ``points`` and ``polygons`` take a path or URL as well as a loaded collection, and the auto-routing
+    decision is ``len(features)`` — which, for a path, is its character count. The builders say so in a
+    ``Note``, because the alternative is worse: opening the file to count it defeats naming one, and pyramids
+    has no cheap count-from-path to ask instead (serapeum-org/pyramids#1200). What is asserted here is that
+    the note stays true — a docstring nothing executes is the next thing to rot.
+    """
+
+    #: A 10-feature file whose path is 25 characters long, so the two numbers cannot be confused for each
+    #: other and the threshold below sits between them.
+    PATH = "tests/data/points.geojson"
+
+    def test_the_path_length_is_what_crosses_the_threshold(self, m):
+        """Ten rows named by a 25-character path route as if there were 25 of them.
+
+        Args:
+            m: A fresh Web-Mercator map.
+        """
+        m.points(self.PATH, big_data_threshold=10)
+        assert isinstance(m.layers[0], hv.DynamicMap), (
+            "the documented limit is that the path's length decides; a glyph layer means it was fixed — "
+            "update the Note on points()/polygons() and close #316"
+        )
+
+    def test_the_loaded_collection_is_counted_as_rows(self, m):
+        """The workaround the note names: hand it the collection and the count is the row count.
+
+        Args:
+            m: A fresh Web-Mercator map.
+        """
+        from pyramids.feature import FeatureCollection
+
+        m.points(FeatureCollection.read_file(self.PATH), big_data_threshold=10)
+        assert isinstance(m.layers[0], gv.Points), (
+            "ten rows are not above a threshold of ten, so the layer must stay raw glyphs"
+        )
+
+
 class TestTrajectory:
     """``trajectory`` — NaN-separated track datashading (DI.2b)."""
 

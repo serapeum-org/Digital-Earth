@@ -4,7 +4,7 @@
 (``figure_spec``), and the HoloViews elements those descriptions were drawn into, in draw order — the display-CRS
 reproject-through-pyramids plumbing, and the render/save/show lifecycle. Capability mixins (raster, vector,
 big-data, temporal, decoration, interaction, projection, animation, dashboard) live in sibling modules and add
-``image()`` / ``points()`` / … builder methods that call ``self.add_element(...)``; the public
+``image()`` / ``points()`` / … builder methods that call ``self.add_layer(...)``; the public
 :class:`digitalearth.interactive.map.InteractiveMap` composes the base with those mixins — exactly mirroring the
 2-D ``Map(GeoLayerBase, RasterMixin, …)`` and 3-D ``Scene3D(Scene3DBase, TerrainMixin, …)`` patterns.
 
@@ -30,7 +30,6 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.custom import MissingObject, custom_kind
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
@@ -39,6 +38,7 @@ from digitalearth.base.display import (
 from digitalearth.base.registry import (
     forget_namespace,
     forget_object,
+    kind_info,
     object_namespace,
 )
 from digitalearth.base.sources import get_source
@@ -710,7 +710,7 @@ class InteractiveMapBase:
             - A named layer keeps its name; an unnamed one is numbered after what it is:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> InteractiveMap().add_element("dem", name="elevation").add_element("obs").layer_ids
+                >>> InteractiveMap().add_layer("dem", name="elevation").add_layer("obs").layer_ids
                 ['elevation', 'holoviews-1']
 
                 ```
@@ -718,8 +718,8 @@ class InteractiveMapBase:
               because that is where it is drawn:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> m = InteractiveMap().add_element("obs", name="obs")
-                >>> m.add_element("grid", name="grid", band="reference").layer_ids
+                >>> m = InteractiveMap().add_layer("obs", name="obs")
+                >>> m.add_layer("grid", name="grid", band="reference").layer_ids
                 ['grid', 'obs']
 
                 ```
@@ -757,7 +757,7 @@ class InteractiveMapBase:
             - The panel names the layers it draws, and each layer says what it is:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> figure = InteractiveMap().add_element("dem", name="elevation").figure_spec
+                >>> figure = InteractiveMap().add_layer("dem", name="elevation").figure_spec
                 >>> figure.panels[0].id, figure.panels[0].layers
                 ('main', ('elevation',))
                 >>> figure.layers.get("elevation").kind
@@ -778,7 +778,22 @@ class InteractiveMapBase:
 
                 ```
         """
-        tree = self._layer_tree
+        return self._figure_with(self._layer_tree)
+
+    def _figure_with(self, tree: LayerTree) -> FigureSpec:
+        """Return the figure this map would report if its layers were `tree`.
+
+        The panel is **derived** rather than maintained beside the tree: this tier composes one overlay, so
+        its one panel shows every layer, and a figure whose panel named a layer the tree does not hold is
+        refused by `FigureSpec` — correctly. Writing the derivation once is what lets :meth:`_change` take a
+        tree and keep the panel in step with it.
+
+        Args:
+            tree: The layers the figure describes.
+
+        Returns:
+            The figure, with the sources of exactly those layers.
+        """
         panel = PanelSpec(
             PANEL_ID,
             self.viewport,
@@ -791,6 +806,252 @@ class InteractiveMapBase:
                 key: ref for key, ref in self._sources.items() if key in set(tree.ids)
             },
         )
+
+    def _change(self, figure: FigureSpec) -> None:
+        """Move the map to another figure: reconcile the drawing, then install the description.
+
+        The one path every layer-management method goes through, and the 3-D scene's `_change` in this tier's
+        terms. Two things happen in an order that matters.
+
+        **The renderer draws the difference first**, and the description is installed only if it did. A
+        figure that cannot be drawn — a kind this tier has no drawer for — was installed first on the 3-D
+        tier and left in place when `apply` raised, so `layer_ids` and `figure_spec` advertised a layer that
+        was never drawn and could not be (review H7). Nothing is rolled back here because
+        :meth:`~digitalearth.interactive.renderer.Renderer.apply` rolls its own record back before it
+        re-raises, and :attr:`layers` is not touched until it has returned.
+
+        **`apply` moves the overlay with it.** :attr:`layers` is what `render()` composes, and only the
+        builders used to write it — so `Renderer.apply` reached the renderer's record and nothing a viewer
+        would see (review M1). It re-arranges that list now, which is what makes a change through this path
+        a change to the picture rather than to a record beside it.
+
+        Args:
+            figure: The figure the map should draw. Its panel is ignored — :meth:`_figure_with` derives one
+                from the tree — so a caller may hand in a tree wrapped by either.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+        """
+        candidate = self._figure_with(figure.layers)
+        self._renderer.apply(self.figure_spec, candidate)
+        self._layer_tree = candidate.layers
+        # The reference goes out of this map's figure and the object stays registered: a `figure_spec`
+        # captured before the change still names it, and `close()` is where a map lets its data go — the
+        # policy the static and web tiers settled on for the same reason.
+        kept = set(candidate.layers.ids)
+        self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+
+    def get_layer(self, layer_id: str) -> LayerSpec:
+        """Return the description of one layer, by id.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            Its :class:`~digitalearth.base.spec.LayerSpec` — kind, source, symbology, band and visibility.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - What a builder recorded, read back by id:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().add_layer("mine", name="obs").get_layer("obs").kind
+                'custom:holoviews'
+
+                ```
+        """
+        self._require_layer(layer_id)
+        return self._layer_tree.get(layer_id)
+
+    def remove_layer(self, layer_id: str) -> Self:
+        """Take a layer off the map, by id.
+
+        Args:
+            layer_id: The layer to remove.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do — a silent no-op here would look
+                exactly like a layer that refused to go away.
+
+        Note:
+            The **id** goes back to the pool, so a name removed and asked for again is handed back
+            unsuffixed: an id is reserved exactly while the layer is on the map, which is the lifetime all
+            four tiers share (:func:`~digitalearth.base.spec.layer.free_layer_id`).
+
+            The in-memory **data** is not forgotten. A `figure_spec` captured before the removal still names
+            it, and drawing that figure again needs it; :meth:`close` is where this map lets its data go.
+
+        Examples:
+            - A layer added and then removed leaves nothing behind:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("mine", name="obs")
+                >>> m.remove_layer("obs").layer_ids
+                []
+                >>> m.layers
+                []
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(self._figure_with(self._layer_tree.remove(layer_id)))
+        # After the change, not before: a drawer reads the credential and the engine values out of these,
+        # so dropping them first would leave the reconcile unable to draw the layer it is taking off.
+        self._layer_keys.pop(layer_id, None)
+        self._layer_held.pop(layer_id, None)
+        self._issued_ids.discard(layer_id)
+        if self._last_layer_id == layer_id:
+            remaining = self._layer_tree.ids
+            self._last_layer_id = remaining[-1] if remaining else None
+        return self
+
+    def set_visible(self, layer_id: str, visible: bool = True) -> Self:
+        """Show or hide a layer, by id.
+
+        The layer stays on the map and in its description — which is what lets it be switched back on, and
+        what tells a saved figure that the layer is there but not drawn.
+
+        Args:
+            layer_id: The layer to toggle.
+            visible: Whether it is drawn.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Warns:
+            UserWarning: when the element has no keyword to say it with — a basemap, or a `dynamic=True`
+                layer whose `DynamicMap` has produced no frame yet. The layer stays drawn and the warning
+                says so (:func:`~digitalearth.interactive.renderer._show`).
+
+        Note:
+            A layer of a kind this tier draws is hidden **on its element**, so `render()` leaves it out. A
+            :meth:`add_layer` layer of the caller's own is described hidden and nothing more: the tier holds
+            no description to rebuild such an element from, which is why `custom:holoviews` is named in the
+            renderer contract's `UNDRAWN_KINDS`, and there is no recorded element to write the option onto.
+
+        Examples:
+            - A hidden layer is still described, and comes back on:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("mine", name="obs")
+                >>> m.set_visible("obs", False).figure_spec.layers.is_visible("obs")
+                False
+                >>> m.set_visible("obs").figure_spec.layers.is_visible("obs")
+                True
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(
+            self._figure_with(self._layer_tree.set_visible(layer_id, bool(visible)))
+        )
+        return self
+
+    def move_layer(self, layer_id: str, index: int) -> Self:
+        """Move a layer in draw order, by id.
+
+        Args:
+            layer_id: The layer to move.
+            index: Its position afterwards, counted as a list index is — `0` is the bottom, `-1` the top. A
+                layer moves within its band: reordering the data layers is what a layer switcher does, and
+                dragging the basemap over them is not.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id.
+            IndexError: if the position is outside the map, or outside the layer's band.
+
+        Note:
+            This reaches the picture: `render()` overlays :attr:`layers` bottom first, and :meth:`_change`
+            rebuilds that list in the new order.
+
+        Examples:
+            - Two layers, reordered by id:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("under", name="under")
+                >>> m = m.add_layer("over", name="over")
+                >>> m.move_layer("over", 0).layer_ids
+                ['over', 'under']
+                >>> m.layers
+                ['over', 'under']
+
+                ```
+        """
+        self._change(self._figure_with(self._layer_tree.move(layer_id, index)))
+        return self
+
+    def replace_layer(self, layer: LayerSpec) -> Self:
+        """Swap a layer's description for another, keeping its id and its place in draw order.
+
+        This is how a layer is restyled or re-pointed after it has been drawn: the drawer builds the element
+        again from the new description, since a HoloViews element carries the options it was built with.
+
+        Args:
+            layer: The new description. Its id names the layer it replaces.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
+            ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
+                the drawers read the source out of the figure, and a missing one reaches the drawer as
+                `None` and fails somewhere it cannot explain.
+
+        Examples:
+            - A layer re-described keeps its id and its place:
+                ```python
+                >>> from dataclasses import replace
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("mine", name="obs")
+                >>> _ = m.replace_layer(replace(m.get_layer("obs"), label="Observations"))
+                >>> m.get_layer("obs").label
+                'Observations'
+
+                ```
+        """
+        self._require_layer(getattr(layer, "id", None))
+        # The first production caller of `Capabilities.require` (D-10). A replacement is the one
+        # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
+        # something it does not have — and refusing here, off the declaration, refuses before a description
+        # is built or the engine is touched. Without it the refusal came from the drawer table, part-way
+        # through a reconcile, and said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="InteractiveMap.replace_layer")
+        if layer.source_id is None and kind_info(layer.kind).takes != "none":
+            raise ValueError(
+                f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
+                f"needs a source_id; got None"
+            )
+        self._change(self._figure_with(self._layer_tree.replace(layer)))
+        return self
+
+    def _require_layer(self, layer_id: Any) -> None:
+        """Refuse an id this map does not draw, naming the ids it does.
+
+        Written once because five public methods ask the same question, and a refusal that named neither the
+        id nor the alternatives is the one a caller cannot act on.
+
+        Args:
+            layer_id: The id the caller passed.
+
+        Raises:
+            KeyError: when no layer has that id.
+        """
+        if layer_id not in self._layer_tree:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; its layers are {self.layer_ids}"
+            )
 
     @property
     def viewport(self) -> Viewport:
@@ -821,7 +1082,7 @@ class InteractiveMapBase:
         """
         return Viewport(crs=self.crs)
 
-    def add_element(
+    def add_layer(
         self,
         element: Any,
         *,
@@ -873,7 +1134,7 @@ class InteractiveMapBase:
                 description says everything about it.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer
+            The same map instance, so builder calls chain: ``m.field(dem).tiles().coastlines()``. A drawer
             that declined to draw the layer leaves the map as it was — the description, the registered
             source, the held key and the id are all let go again, so nothing names a layer that was never
             drawn.
@@ -893,7 +1154,7 @@ class InteractiveMapBase:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
                 >>> m = InteractiveMap()
-                >>> m.add_element("raster-layer").add_element("vector-layer") is m
+                >>> m.add_layer("raster-layer").add_layer("vector-layer") is m
                 True
                 >>> m.layers
                 ['raster-layer', 'vector-layer']
@@ -903,8 +1164,8 @@ class InteractiveMapBase:
               registered second is drawn beneath the data layer registered first:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> m = InteractiveMap().add_element("observations")
-                >>> m = m.add_element("grid", name="grid", band="reference")
+                >>> m = InteractiveMap().add_layer("observations")
+                >>> m = m.add_layer("grid", name="grid", band="reference")
                 >>> m.layers
                 ['grid', 'observations']
                 >>> m.layer_ids
@@ -915,7 +1176,7 @@ class InteractiveMapBase:
                 ```python
                 >>> import holoviews as hv                       # doctest: +SKIP
                 >>> m = InteractiveMap()                         # doctest: +SKIP
-                >>> m.add_element(hv.Points([(0, 0)])).layers    # doctest: +SKIP
+                >>> m.add_layer(hv.Points([(0, 0)])).layers    # doctest: +SKIP
                 [:Points   [x,y]]
 
                 ```
@@ -1020,7 +1281,7 @@ class InteractiveMapBase:
     def _forget_layer(self, layer_id: str) -> None:
         """Drop a layer that was described but never drawn, and everything it registered.
 
-        What :meth:`add_element` calls for a layer its drawer declined or refused. Taking the entry out of the tree is
+        What :meth:`add_layer` calls for a layer its drawer declined or refused. Taking the entry out of the tree is
         not enough on its own: the source sits in the process-global object table, which holds a strong
         reference for the life of the process, and `figure_spec.sources` is filtered to the tree's ids, so
         nothing a caller reads would show it was still there. The id goes back to the pool too, so a caller
@@ -1145,15 +1406,10 @@ class InteractiveMapBase:
     def _resolve_big_data_threshold(
         self,
         big_data_threshold: Optional[int] = None,
-        rasterize_threshold: Optional[int] = None,
         *,
         caller: str,
     ) -> int:
         """Resolve a builder's big-data cutoff: per-call value, else the map's attribute (#250).
-
-        ``rasterize_threshold`` is the tier's **deprecated** spelling of the same number, resolved through
-        :func:`~digitalearth.base.deprecation.renamed_parameter` — the one rename rule every backend shares,
-        so this tier refuses two spellings of one cutoff exactly as static, web and 3-D do.
 
         A per-call cutoff is checked by :func:`~digitalearth.base.bigdata.validate_big_data_threshold`, the
         shared guard the web tier applies too — so a negative cutoff is refused identically on both rather
@@ -1161,34 +1417,17 @@ class InteractiveMapBase:
 
         Args:
             big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
-            rasterize_threshold: The deprecated alias of ``big_data_threshold``.
-            caller: The builder the keywords were written on, named in the warning and the error.
+            caller: The builder the keyword was written on, named in the error.
 
         Returns:
             The row/face count above which the calling builder routes through Datashader.
 
         Raises:
-            TypeError: if both spellings are passed — they name one cutoff, so two values for it cannot
-                both be honoured.
             ValueError: when the per-call cutoff is negative.
-
-        Warns:
-            DeprecationWarning: when ``rasterize_threshold`` is passed.
         """
-        threshold = renamed_parameter(
-            new="big_data_threshold",
-            value=big_data_threshold,
-            old="rasterize_threshold",
-            alias=rasterize_threshold,
-            caller=caller,
-            # renamed_parameter -> here -> the builder -> @_skips_off_limb's wrapper -> its caller.
-            # The wrapper is the frame the old inline warning stopped at, so it named this module
-            # instead of the notebook cell that wrote the deprecated keyword.
-            stacklevel=5,
-        )
-        if threshold is None:
+        if big_data_threshold is None:
             return int(self.big_data_threshold)
-        return validate_big_data_threshold(threshold, caller=caller)
+        return validate_big_data_threshold(big_data_threshold, caller=caller)
 
     def _auto_style(self, source: Source) -> Dict[str, Any]:
         """Return the :func:`~digitalearth.base.autostyle.auto_style` record for ``source``.
@@ -1406,7 +1645,7 @@ class InteractiveMapBase:
         Returns:
             dict: ``{"common": {...}, "bokeh": {...}}`` — the backend-agnostic options and the Bokeh-only
             frame. Both are empty for a layer that never went through :meth:`_styled` (a tile basemap, a
-            Natural-Earth feature, a raw element passed to :meth:`add_element`).
+            Natural-Earth feature, a raw element passed to :meth:`add_layer`).
 
         Raises:
             IndexError: when ``layer`` is an integer outside the registered layer range.
@@ -1417,7 +1656,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
                 >>> m.style_of(0)["common"]["cmap"]                             # doctest: +SKIP
                 'magma'
 
@@ -1447,7 +1686,7 @@ class InteractiveMapBase:
               path records nothing (the registry does not inspect what it is handed):
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
-                >>> m = InteractiveMap().add_element("raster-layer").add_element("vector-layer")
+                >>> m = InteractiveMap().add_layer("raster-layer").add_layer("vector-layer")
                 >>> len(m.layer_styles) == len(m.layers)
                 True
                 >>> m.layer_styles
@@ -1466,7 +1705,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
                 >>> [style["common"]["cmap"] for style in m.layer_styles]      # doctest: +SKIP
                 ['magma']
 
@@ -1536,8 +1775,8 @@ class InteractiveMapBase:
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
                 >>> m = InteractiveMap()                                     # doctest: +SKIP
-                >>> _ = m.add_element(hv.Points([(0, 0)]))                   # doctest: +SKIP
-                >>> _ = m.add_element(hv.Points([(1, 1)]))                   # doctest: +SKIP
+                >>> _ = m.add_layer(hv.Points([(0, 0)]))                   # doctest: +SKIP
+                >>> _ = m.add_layer(hv.Points([(1, 1)]))                   # doctest: +SKIP
                 >>> overlay = m.render()                                     # doctest: +SKIP
                 >>> len(overlay)                                             # doctest: +SKIP
                 2
@@ -1619,7 +1858,7 @@ class InteractiveMapBase:
                 ```python
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
-                >>> m = InteractiveMap().add_element(hv.Points([(0, 0)]))    # doctest: +SKIP
+                >>> m = InteractiveMap().add_layer(hv.Points([(0, 0)]))    # doctest: +SKIP
                 >>> m.save("map.html").name                                  # doctest: +SKIP
                 'map.html'
                 >>> m.save("map.png").suffix                                 # doctest: +SKIP

@@ -7,13 +7,24 @@ globe map, and overrides ``save``/``show`` to apply that frame before output.
 import os
 import warnings
 from dataclasses import replace as with_fields
+from math import isfinite
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    NamedTuple,
+    Optional,
+    Self,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from cleopatra.basemap.projection import apply_projection_frame
 
 from digitalearth.base.domains import DomainLike, resolve_domain
-from digitalearth.base.spec import Bounds, LayerSpec, Symbology
+from digitalearth.base.spec import Bounds, LayerSpec, Symbology, Viewport
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
 from digitalearth.static.renderer import DrawnLayer, artists_added
 from digitalearth.static.scene import LayerRecord
@@ -28,6 +39,183 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _padded(box: Bounds, fraction: float) -> Bounds:
+    """Return `box` grown by `fraction` of its own span, or `box` itself for no padding.
+
+    One line, and a named one, because every spelling of :meth:`ProjectionMixin.set_bounds` has to pad the
+    same way and a ``0.0`` must be a no-op rather than a rebuild.
+
+    Args:
+        box: The rectangle to grow.
+        fraction: How much to grow it by, as a proportion of its width and height.
+
+    Returns:
+        The padded rectangle.
+
+    Raises:
+        ValueError: from :meth:`~digitalearth.base.spec.bounds.Bounds.padded`, for a fraction below ``-0.5``.
+    """
+    return box if not fraction else box.padded(fraction)
+
+
+def _from_image(artist: Any, _axes: Any) -> Tuple[float, float, float, float]:
+    """Return an image artist's extent, as ``(xmin, ymin, xmax, ymax)``.
+
+    Args:
+        artist: An ``AxesImage`` or anything else answering ``get_extent()``.
+        _axes: Unused — an image states its extent in data coordinates already.
+
+    Returns:
+        The rectangle it covers. ``get_extent`` answers in matplotlib's ``(left, right, bottom, top)``, which
+        runs backwards for a flipped image, so the pairs are ordered here.
+    """
+    left, right, bottom, top = artist.get_extent()
+    return min(left, right), min(bottom, top), max(left, right), max(bottom, top)
+
+
+def _from_collection(artist: Any, axes: Any) -> Tuple[float, float, float, float]:
+    """Return a collection's data limits, as ``(xmin, ymin, xmax, ymax)``.
+
+    Args:
+        artist: A ``Collection`` — a scatter's paths, a mesh, a set of polygons.
+        axes: The axes whose ``transData`` the limits are wanted in.
+
+    Returns:
+        The rectangle it covers. A collection with no paths answers a null box, whose edges are infinite and
+        which :func:`_artist_extent` therefore drops.
+    """
+    xmin, ymin, xmax, ymax = artist.get_datalim(axes.transData).extents
+    return float(xmin), float(ymin), float(xmax), float(ymax)
+
+
+def _from_line(artist: Any, _axes: Any) -> Optional[Tuple[float, float, float, float]]:
+    """Return a line artist's vertex extent, as ``(xmin, ymin, xmax, ymax)``.
+
+    Args:
+        artist: A ``Line2D`` or anything else answering ``get_xydata()``.
+        _axes: Unused — the vertices are in data coordinates.
+
+    Returns:
+        The rectangle its vertices span, or ``None`` for a line with no vertices.
+    """
+    data = artist.get_xydata()
+    if data is None or len(data) == 0:
+        return None
+    xs, ys = data[:, 0], data[:, 1]
+    return float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())
+
+
+def _from_point(artist: Any, _axes: Any) -> Tuple[float, float, float, float]:
+    """Return a positioned artist's location as a zero-size rectangle.
+
+    Args:
+        artist: A ``Text`` or anything else answering ``get_position()``.
+        _axes: Unused — the position is in data coordinates.
+
+    Returns:
+        ``(x, y, x, y)``. A label covers a point rather than an area, and a union with one still moves the
+        frame to include it.
+    """
+    x, y = artist.get_position()
+    return float(x), float(y), float(x), float(y)
+
+
+#: How to read a data extent off an artist, in the order the readers are tried: the first whose method the
+#: artist answers to wins. Written as a table rather than as a chain of ``isinstance`` checks because what
+#: matters is the *question the artist answers*, not which matplotlib class it is — a third-party artist a
+#: ``custom:matplotlib`` layer holds answers the same questions without inheriting from any of them.
+_EXTENT_READERS: Tuple[Tuple[str, Any], ...] = (
+    ("get_extent", _from_image),
+    ("get_datalim", _from_collection),
+    ("get_xydata", _from_line),
+    ("get_position", _from_point),
+)
+
+
+def _artist_extent(
+    artist: Any, axes: Any
+) -> Optional[Tuple[float, float, float, float]]:
+    """Return the region one artist covers, as ``(xmin, ymin, xmax, ymax)`` in data coordinates.
+
+    Args:
+        artist: The matplotlib artist to measure.
+        axes: The axes it was drawn on, for the readers that need its ``transData``.
+
+    Returns:
+        The rectangle, or ``None`` for an artist that states no extent and for one whose extent is not finite
+        — an empty collection answers an infinite null box, and a frame cannot be set from that.
+    """
+    for name, read in _EXTENT_READERS:
+        if not callable(getattr(artist, name, None)):
+            continue
+        covered = read(artist, axes)
+        if covered is None or not all(isfinite(edge) for edge in covered):
+            return None
+        return covered
+    return None
+
+
+def _drawn_extent(
+    artists: Sequence[Any], axes: Any
+) -> Optional[Tuple[float, float, float, float]]:
+    """Return the region one layer's artists cover together.
+
+    Args:
+        artists: Every artist the layer owns.
+        axes: The axes they were drawn on.
+
+    Returns:
+        The enclosing rectangle as ``(xmin, ymin, xmax, ymax)``, or ``None`` when none of them stated one —
+        which is one layer having no extent to give rather than an error.
+    """
+    boxes = [
+        covered
+        for covered in (_artist_extent(artist, axes) for artist in artists)
+        if covered is not None
+    ]
+    if not boxes:
+        return None
+    return (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    )
+
+
+class _Frame(NamedTuple):
+    """The rectangle one :meth:`ProjectionMixin.set_bounds` call settles on, and which way its axes run.
+
+    Three spellings arrive at that method — a `Bounds` in any CRS, a matplotlib-ordered sequence, and the
+    ``None`` that fits the data — and exactly two things are done with whichever one came: the axes limits
+    are set from it, and it is recorded as the region the view reports. A rectangle alone cannot carry both,
+    because the sequence form may legitimately run backwards to invert an axis and a `Bounds` refuses corners
+    the wrong way round. So the direction travels beside the rectangle rather than inside it.
+
+    Attributes:
+        box: The region, always corners-in-order, in the display CRS.
+        flip_x: Whether the x axis runs from high to low.
+        flip_y: Whether the y axis runs from high to low.
+    """
+
+    box: Bounds
+    flip_x: bool = False
+    flip_y: bool = False
+
+    def limits(self) -> Tuple[float, float, float, float]:
+        """Return the axes limits this frame sets, in matplotlib's own order.
+
+        Returns:
+            ``(xmin, xmax, ymin, ymax)``, with either pair swapped for an inverted axis.
+        """
+        xmin, xmax, ymin, ymax = self.box.as_mpl()
+        if self.flip_x:
+            xmin, xmax = xmax, xmin
+        if self.flip_y:
+            ymin, ymax = ymax, ymin
+        return xmin, xmax, ymin, ymax
 
 
 class _GraticuleSteps(NamedTuple):
@@ -174,8 +362,52 @@ class ProjectionMixin(_MixinBase):
         digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
-    def set_extent(self, bbox: Union[Bounds, Sequence[float]]) -> None:
-        """Set the axes extent.
+    #: The region the last framing call asked for, in the display CRS, or ``None`` while nothing has framed
+    #: the axes. Declared on the class rather than set in a constructor, because this mixin is composed into
+    #: :class:`~digitalearth.static.map.Map` and owns no ``__init__`` of its own — the class attribute is the
+    #: default every instance reads until :meth:`set_bounds` writes one of its own.
+    #:
+    #: It is what :attr:`viewport` reports, and it is deliberately *not* the axes limits: those are whatever
+    #: the last autoscale left behind, which on an empty figure is matplotlib's unit square.
+    _frame_bounds: Optional[Bounds] = None
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value — including the region it has been framed on.
+
+        Returns:
+            The view :class:`~digitalearth.static.maps.base.GeoLayerBase` builds from the display CRS, the
+            declared domain and the globe flag, carrying the region the last framing call asked for when
+            there has been one. A view holds a region **or** a named domain, never both, so a map that was
+            built with a ``domain`` and then framed reports the rectangle it is actually showing — which is
+            what :meth:`~digitalearth.base.spec.viewport.Viewport.framed` does, and what keeps a stale
+            domain from sitting beside a live frame.
+
+            Before order 26 this always answered ``None`` for `bounds`: a map framed by its own data
+            described itself as unframed, which is why the basemap coverage guard had to record the axes
+            extent on its own layer instead of reading it off the panel.
+
+            A frame recorded in a CRS the map no longer draws in is **not** reported, and is not converted
+            either. A rotation swaps the display CRS between frames, and the region a previous frame was
+            globally framed on is often one the next projection cannot show at all — so the honest answer
+            there is that nothing has framed *this* view yet, rather than a rectangle reprojected across a
+            limb or a refusal raised from a property.
+        """
+        view = super().viewport
+        framed = self._frame_bounds
+        if framed is None or not same_crs(framed.crs, view.crs):
+            return view
+        # `framed()` rather than a field write: a view holds a region or a domain and never both, and that is
+        # the method that drops the one for the other. Its reprojection is a no-op, the CRSs having matched.
+        return view.framed(framed)
+
+    def set_bounds(
+        self,
+        bbox: Optional[Union[Bounds, Sequence[float]]] = None,
+        *,
+        padding: float = 0.0,
+    ) -> Self:
+        """Frame the figure on a region, or on everything it draws — the Core contract's framing method.
 
         Args:
             bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to the
@@ -184,14 +416,34 @@ class ProjectionMixin(_MixinBase):
                 form is accepted because that ordering was this method's contract; prefer `Bounds`, which
                 states both the ordering and the CRS instead of leaving them to position and assumption.
 
+                ``None`` (the default) **fits the figure to its data**: the union of what the panel's data
+                layers cover, measured from the artists they actually put on the axes. Only the ``data``
+                band counts — a basemap, a graticule and a coastline are drawn around the subject rather
+                than being it, and a global coastline would otherwise answer every such call with the world.
+                A layer built hidden does not count either.
+            padding: Breathing room around the frame, as a fraction of its own span — ``0.05`` leaves a 5%
+                margin on every side. It applies to a rectangle you name exactly as it applies to a fitted
+                one. Note the **units are this tier's**: a figure is framed in data coordinates here, so a
+                proportion of the span is the only padding that means anything, where the web tier's
+                ``padding`` is a number of screen pixels.
+
+        Returns:
+            This map, so the call chains (``Map(crs=3857).set_bounds(bbox).coastlines()``). The Core
+            declares ``returns="self"`` for this name, and every tier answers that way: the spelling
+            this tier used to carry returned ``None``, so one line worked on one tier and raised on another.
+
         Raises:
-            ValueError: if the sequence form does not hold exactly four values.
+            ValueError: if the sequence form does not hold exactly four values; if ``bbox=None`` and the
+                figure draws nothing with an extent, because silently doing nothing is indistinguishable
+                from the call being dropped; or, from `Bounds`, for a non-finite edge or a ``padding``
+                below ``-0.5``, which would turn the frame inside out.
 
         Notes:
             A **flipped** pair is honoured in the sequence form: ``[10, 0, 0, 10]`` inverts the x axis, which
-            is how matplotlib expresses ``invert_xaxis`` through the limits. A `Bounds` cannot express that —
-            it refuses corners the wrong way round, because for a rectangle handed to pyramids or cleopatra
-            that is a defect rather than an intent — so invert the axis directly if you need both.
+            is how matplotlib expresses ``invert_xaxis`` through the limits, and ``padding`` grows such an
+            axis outwards rather than inwards. :attr:`viewport` reports the *region* either way round: a
+            `Bounds` refuses corners the wrong way round, and the direction an axis runs in is a property of
+            the axes rather than of the region shown.
 
         Examples:
             - A rectangle in another CRS is converted, so the frame lands where the data is:
@@ -201,37 +453,134 @@ class ProjectionMixin(_MixinBase):
                 >>> from digitalearth import Map
                 >>> from digitalearth.base.spec import Bounds
                 >>> m = Map(crs=3857)
-                >>> m.set_extent(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+                >>> _ = m.set_bounds(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
                 >>> round(m.ax.get_xlim()[1])
                 111319
 
                 ```
-            - The bare sequence is matplotlib's own ordering, in the display CRS:
+            - The bare sequence is matplotlib's own ordering, in the display CRS, and the view reports it:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=3857)
-                >>> m.set_extent([0.0, 100.0, 0.0, 50.0])
+                >>> _ = m.set_bounds([0.0, 100.0, 0.0, 50.0])
                 >>> [float(v) for v in m.ax.get_xlim()], [float(v) for v in m.ax.get_ylim()]
                 ([0.0, 100.0], [0.0, 50.0])
+                >>> m.viewport.bounds.as_bbox()
+                [0.0, 0.0, 100.0, 50.0]
+
+                ```
+            - ``padding`` grows the frame by a fraction of its span:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=3857)
+                >>> _ = m.set_bounds([0.0, 10.0, 0.0, 10.0], padding=0.1)
+                >>> [float(v) for v in m.ax.get_xlim()]
+                [-1.0, 11.0]
 
                 ```
         """
+        frame = self._frame_asked(bbox, padding)
+        xmin, xmax, ymin, ymax = frame.limits()
+        self.ax.set_xlim(xmin, xmax)
+        self.ax.set_ylim(ymin, ymax)
+        self._frame_bounds = frame.box
+        return self
+
+    def _frame_asked(
+        self,
+        bbox: Optional[Union[Bounds, Sequence[float]]],
+        padding: float,
+    ) -> "_Frame":
+        """Resolve what a caller asked for into one rectangle in the display CRS, padded.
+
+        Split from :meth:`set_bounds` because the two halves answer different questions: this one is *which
+        rectangle*, its caller is *what to do with it* — set the limits, and record the region the view
+        reports. Each of the three spellings pads exactly once, inside its own branch, so no route can pad
+        twice and none can skip it.
+
+        Args:
+            bbox: What the caller passed — a `Bounds`, a matplotlib-ordered sequence, or ``None`` to fit the
+                data.
+            padding: The fraction to grow the rectangle by.
+
+        Returns:
+            The frame, carrying the rectangle and which way each axis runs.
+
+        Raises:
+            ValueError: for a sequence that is not four values, for ``None`` with nothing to frame on, or
+                from `Bounds` for a non-finite edge or a padding that would invert the rectangle.
+        """
+        if bbox is None:
+            return _Frame(self._fitted_box(padding))
         if isinstance(bbox, Bounds):
             # to_crs is a no-op when the CRSs already match. Without it a rectangle that carries its CRS
             # would be trusted to be in the display one, which is exactly the mistake Bounds exists to stop.
-            xmin, xmax, ymin, ymax = bbox.to_crs(self.crs).as_mpl()
-        else:
-            # Not routed through Bounds: axes limits may legitimately run backwards, and Bounds refuses that.
-            values = [float(value) for value in bbox]
-            if len(values) != 4:
-                raise ValueError(
-                    f"set_extent needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
-                )
-            xmin, xmax, ymin, ymax = values
-        self.ax.set_xlim(xmin, xmax)
-        self.ax.set_ylim(ymin, ymax)
+            return _Frame(_padded(bbox.to_crs(self.crs), padding))
+        values = [float(value) for value in bbox]
+        if len(values) != 4:
+            raise ValueError(
+                f"set_bounds needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
+            )
+        xmin, xmax, ymin, ymax = values
+        # Normalised into a Bounds so the padding and the recorded region are the same arithmetic every
+        # other spelling gets; which way each axis runs travels beside it, because a Bounds cannot hold it.
+        box = Bounds(
+            min(xmin, xmax), min(ymin, ymax), max(xmin, xmax), max(ymin, ymax), self.crs
+        )
+        return _Frame(_padded(box, padding), xmax < xmin, ymax < ymin)
+
+    def _fitted_box(self, padding: float) -> Bounds:
+        """Return the region the panel's own data layers cover, padded.
+
+        Args:
+            padding: The fraction to grow the union by.
+
+        Returns:
+            The union, in the display CRS. The panel does the merging
+            (:meth:`~digitalearth.base.spec.figure.PanelSpec.bounds_of`): which layers count is its layer
+            list and which CRS they meet in is its view, and neither is this tier's to decide.
+
+        Raises:
+            ValueError: when no data layer had an extent to give. Framing on nothing and doing nothing look
+                identical from the outside, so the refusal says what to pass instead.
+        """
+        panel = self.figure_spec.panels[0]
+        box = panel.bounds_of(self._data_extents(), padding=padding)
+        if box is None:
+            raise ValueError(
+                "set_bounds() has nothing to frame on: this figure draws no data layer with an extent — "
+                "a basemap, graticule or coastline is drawn around the subject rather than being it, and a "
+                "hidden layer is not drawn at all. Add the data first, or pass a rectangle."
+            )
+        return box
+
+    def _data_extents(self) -> dict:
+        """Return what each of the panel's data layers covers, by layer id, in the display CRS.
+
+        Read from the **artists**, not from the sources: a layer is drawn where the reprojection and the
+        cell-edge maths left it, and that is the region the frame has to hold. A layer with nothing on the
+        axes — a graticule before the frame goes on, a layer whose data fell off the limb — simply has no
+        entry, which :meth:`~digitalearth.base.spec.figure.PanelSpec.bounds_of` reads as "no extent to
+        give" rather than as an error.
+
+        Returns:
+            ``{layer_id: Bounds}`` for the visible layers of the ``data`` band.
+        """
+        measured = {}
+        for layer in self._layer_tree.layers:
+            if self._renderer.band_for(layer) != "data":
+                continue
+            if not self._layer_tree.is_visible(layer.id):
+                continue
+            drawn = self._renderer.drawn.get(layer.id)
+            covered = None if drawn is None else _drawn_extent(drawn.artists, self.ax)
+            if covered is not None:
+                measured[layer.id] = Bounds(*covered, self.crs)
+        return measured
 
     def set_domain(self, domain: Optional[DomainLike] = None) -> None:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
@@ -275,7 +624,7 @@ class ProjectionMixin(_MixinBase):
                 "(west, south, east, north) in EPSG:4326, and cannot express a region crossing the "
                 f"antimeridian — split it into two, or set the extent directly ({error})"
             ) from error
-        self.set_extent(box.to_crs(self.crs))
+        self.set_bounds(box.to_crs(self.crs))
 
     # ------------------------------------------------------------------ globe / projection frame
 
@@ -426,7 +775,7 @@ class ProjectionMixin(_MixinBase):
     def set_global(self) -> None:
         """Set the axes extent to the full projection domain (the whole globe/world)."""
         _, xlim, ylim = self._frame()
-        self.set_extent([xlim[0], xlim[1], ylim[0], ylim[1]])
+        self.set_bounds([xlim[0], xlim[1], ylim[0], ylim[1]])
 
     def _apply_frame(self) -> Any:
         """Draw the projection boundary + graticule and clip the layers to it (once, at render time).
@@ -461,7 +810,7 @@ class ProjectionMixin(_MixinBase):
         return patch
 
     def _own_the_graticule(self, artists: Tuple[Any, ...]) -> None:
-        """Give the described graticule layer the artists the projection frame drew for it.
+        """Give the described graticule layer the artists the projection frame drew for it, and its flag.
 
         Args:
             artists: The line artists the frame added, in the order it added them.
@@ -470,6 +819,14 @@ class ProjectionMixin(_MixinBase):
             This writes into the renderer's record of what it drew, which no public method reaches — every
             other layer's artists are known to its drawer, and a graticule's are not. A
             ``Renderer.attach_artists`` would be the tidier home for it.
+
+            **The flag is applied here because this is the only place it can be.** ``Renderer.draw_layer``
+            applies a layer's ``visible`` the moment its drawer returns, which for every other layer is the
+            moment its artists exist. A graticule's do not: they are drawn by ``apply_projection_frame``,
+            after the funnel has run and found nothing on the axes to toggle — so a grid built
+            ``visible=False`` was described hidden and drawn visible (#333). Adopting the artists and
+            applying the flag are one step for that reason, and the flag is read from the tree, exactly as
+            the funnel reads it, so the two cannot answer differently.
         """
         layer_id = self._graticule_id
         if layer_id is None or not artists:
@@ -478,6 +835,13 @@ class ProjectionMixin(_MixinBase):
         if drawn is None:
             return
         self._renderer._drawn[layer_id] = with_fields(drawn, artists=artists)
+        # Guarded on membership rather than caught: `_reset_layers` clears the tree between animation frames
+        # while `_graticule_id` survives it, so the remembered id can outlive its layer — and `is_visible`
+        # answers a missing id with a `KeyError`, which is not a question about visibility.
+        if layer_id in self._layer_tree.ids and not self._layer_tree.is_visible(
+            layer_id
+        ):
+            self._renderer.set_visible(layer_id, False)
 
     def render(self) -> None:
         """Apply the projection frame if this is a globe map (idempotent). Call before showing/saving."""

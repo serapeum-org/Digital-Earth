@@ -152,14 +152,14 @@ nav:
       - 'GIS data — combined raster + vector scene': examples/pyvista/10_gis_scene_3d.ipynb
     - Plot gallery:
       - Fields:
-        - imshow: examples/plots/01_imshow.ipynb
-        - contourf: examples/plots/02_contourf.ipynb
-        - contour: examples/plots/03_contour.ipynb
+        - field: examples/plots/01_imshow.ipynb
+        - contours (filled): examples/plots/02_contourf.ipynb
+        - contours: examples/plots/03_contour.ipynb
         - pcolormesh: examples/plots/04_pcolormesh.ipynb
         - block: examples/plots/05_block.ipynb
       - Points & cells:
         - grid_points: examples/plots/06_grid_points.ipynb
-        - scatter: examples/plots/07_scatter.ipynb
+        - points: examples/plots/07_scatter.ipynb
         - grid_cells: examples/plots/08_grid_cells.ipynb
       - Vector fields:
         - quiver: examples/plots/09_quiver.ipynb
@@ -174,7 +174,7 @@ nav:
         - hsv_composite: examples/plots/16_hsv_composite.ipynb
       - Polygons:
         - choropleth: examples/plots/17_choropleth.ipynb
-        - shapes: examples/plots/18_shapes.ipynb
+        - polygons: examples/plots/18_shapes.ipynb
       - Ensemble & series:
         - spaghetti: examples/plots/19_spaghetti.ipynb
         - envelope: examples/plots/20_envelope.ipynb
@@ -187,13 +187,11 @@ nav:
         - climatology: examples/plots/26_climatology.ipynb
   - Reference:
     - Figure vocabulary: reference/vocabulary.md
-    - Renamed keywords: reference/renamed-keywords.md
     - Web maps: reference/web_map.md
     - Keyed basemaps: reference/basemaps.md
     - TexturedGlobe (3-D globe): reference/textured_globe.md
     - Saving animations: reference/animation.md
     - Composite stretch: reference/stretch.md
-    - StaticGlyph: reference/static.md
   - About:
     - Change-log: change-log.md
     - Code of Conduct: CODE_OF_CONDUCT.md

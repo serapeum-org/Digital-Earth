@@ -24,7 +24,7 @@ class TestImage:
     """``image`` — the I1 recipe (Dataset → display-CRS ``hv.Image``)."""
 
     def test_registers_hv_image_and_chains(self, m, dataset):
-        out = m.image(dataset)
+        out = m.field(dataset)
         assert out is m, "image() must return the map for chaining"
         assert len(m.layers) == 1
         assert isinstance(m.layers[0], hv.Image), (
@@ -68,14 +68,14 @@ class TestImage:
         """Option A: pre-reprojected coordinates must NOT carry a GeoViews CRS (no re-projection)."""
         import geoviews as gv
 
-        m.image(dataset)
+        m.field(dataset)
         assert not isinstance(m.layers[0], gv.element.geo._Element), (
             "raster elements must be plain hv.Image — a gv element would re-project 3857 coords"
         )
 
     def test_coordinates_are_display_crs(self, m, dataset):
         """The element's x samples must be the reprojected (Web-Mercator) cell centres."""
-        m.image(dataset)
+        m.field(dataset)
         x_samples = m.layers[0].dimension_values("x", expanded=False)
         src = m._to_display_source(dataset)
         assert np.allclose(np.sort(x_samples), np.sort(src.x.values)), (
@@ -83,7 +83,7 @@ class TestImage:
         )
 
     def test_clim_and_cmap_are_recorded(self, m, dataset):
-        m.image(dataset, cmap="magma", clim=(0.0, 50.0), alpha=0.5)
+        m.field(dataset, cmap="magma", clim=(0.0, 50.0), alpha=0.5)
         opts = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert opts["cmap"] == "magma", f"cmap not honoured: {opts.get('cmap')}"
         assert opts["alpha"] == 0.5, f"alpha not honoured: {opts.get('alpha')}"
@@ -91,7 +91,7 @@ class TestImage:
         assert plot["clim"] == (0.0, 50.0), f"clim not honoured: {plot.get('clim')}"
 
     def test_bokeh_frame_and_hover_are_bokeh_only(self, m, dataset):
-        m.image(dataset)
+        m.field(dataset)
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
         assert plot["width"] == m.width
         assert plot["height"] == m.height
@@ -99,7 +99,7 @@ class TestImage:
 
     def test_nodata_renders_as_nan(self, m, dataset):
         """Masked (NoData) cells must become NaN so Bokeh draws them transparent."""
-        m.image(dataset)
+        m.field(dataset)
         values = m.layers[0].dimension_values(2, flat=False)
         assert np.isnan(values).any(), (
             "fixture nodata cells should surface as NaN in the element"
@@ -107,7 +107,7 @@ class TestImage:
 
     def test_mpl_backend_render_smoke(self, m, dataset, tmp_path):
         out = tmp_path / "image.png"
-        m.image(dataset).save(str(out))
+        m.field(dataset).save(str(out))
         assert out.exists() and out.stat().st_size > 0
 
 

@@ -12,7 +12,7 @@ vector data, built on top of [cleopatra](https://github.com/serapeum-org/cleopat
 
 ## Main Features
 
-- Static raster/array plotting via `StaticGlyph`, with rich, customizable
+- Static raster plotting via `quickmap` / `Map`, with rich, customizable
   styling (color scales, color bars, cell-value annotations).
 - Overlay vector points on raster maps with configurable size, color, and labels.
 
@@ -42,13 +42,14 @@ See [Installation](installation.md) for the full guide.
 
 ```python
 from pyramids.dataset import Dataset
-from digitalearth.static import StaticGlyph
+from digitalearth import quickmap
 
 dataset = Dataset.read_file("examples/data/acc4000.tif")
-fig, ax = StaticGlyph.plot(dataset, title="Flow Accumulation")
+m = quickmap(dataset, crs=dataset.epsg)
+m.set_title("Flow Accumulation")
 ```
 
 ## Next steps
 
 - Read the [Plot raster/array](plotarray.md) guide for the full plotting API.
-- Browse the [API Reference](reference/static.md).
+- Work through the [Maps & raster fields](examples/02_maps_and_fields.ipynb) example.

@@ -29,8 +29,8 @@ def test_quickmap_saves_png(dataset, tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
-def test_quickmap_scatter_features():
-    """A FeatureCollection of points is drawn as a scatter map."""
+def test_quickmap_point_features():
+    """A FeatureCollection of points is drawn as a marker map."""
     from pyramids.feature import FeatureCollection
 
     fc = FeatureCollection.read_file("tests/data/points.geojson")
@@ -112,9 +112,9 @@ def test_quickmap_rejects_empty_features():
         qp.quickmap(empty, crs=4326)
 
 
-def test_module_function_contourf(dataset):
-    """The module-level contourf builds a finished Map via the contourf kind."""
-    m = qp.contourf(dataset, crs=dataset.epsg)
+def test_module_function_filled_contours(dataset):
+    """The module-level contours builds a finished Map via the contourf kind."""
+    m = qp.contours(dataset, crs=dataset.epsg, filled=True)
     assert m.layers
 
 
@@ -152,7 +152,7 @@ def test_interactive_basemap_branches_reach_the_tier(
     """
     interactive = pytest.importorskip("digitalearth.interactive")
     tiles = mocker.patch.object(interactive.InteractiveMap, "tiles")
-    mocker.patch.object(interactive.InteractiveMap, "image")
+    mocker.patch.object(interactive.InteractiveMap, "field")
     qp.quickmap(dataset, backend="interactive", basemap=basemap)
     assert tiles.call_args.args == expected_args, (
         f"basemap={basemap!r} must call tiles{expected_args}, got {tiles.call_args!r}"
@@ -193,13 +193,13 @@ def test_quickmap_decorations_best_effort(dataset):
     assert m.layers  # the raster layer is drawn regardless of decoration availability
 
 
-def test_quickmap_shapes_without_column_skips_colorbar():
+def test_quickmap_polygons_without_column_skips_colorbar():
     """A polygon FeatureCollection with no column draws outlines and skips the colorbar gracefully."""
     from pyramids.feature import FeatureCollection
 
     fc = FeatureCollection.read_file("tests/data/points.geojson")
     fc["geometry"] = fc.geometry.buffer(500.0)
-    m = qp.quickmap(fc, crs=fc.epsg)  # no column -> shapes (outline only)
+    m = qp.quickmap(fc, crs=fc.epsg)  # no column -> polygons (outline only)
     assert m.ax.collections
 
 
@@ -218,7 +218,7 @@ def test_an_empty_map_has_no_key_to_draw(dataset):
 
     with Map() as canvas:
         assert _has_a_key_to_draw(canvas) is False, "an empty map has nothing to key"
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         assert _has_a_key_to_draw(canvas) is True, "a drawn field has a key"
 
 
@@ -232,12 +232,12 @@ def test_module_choropleth(dataset):
     assert m.ax.collections
 
 
-def test_module_scatter():
-    """The module-level scatter draws a point FeatureCollection."""
+def test_module_points():
+    """The module-level points draws a point FeatureCollection."""
     from pyramids.feature import FeatureCollection
 
     fc = FeatureCollection.read_file("tests/data/points.geojson")
-    m = qp.scatter(fc, crs=fc.epsg)
+    m = qp.points(fc, crs=fc.epsg)
     assert m.ax.collections
 
 
@@ -598,7 +598,7 @@ class TestTheRefusalNamesWhatTheCallerWrote:
     def test_a_module_wrapper_names_itself_not_the_kind_it_injected(
         self, dataset, backend
     ):
-        """``imshow(ds, backend="web")`` must not tell the caller to drop a keyword they never wrote.
+        """``field(ds, backend="web")`` must not tell the caller to drop a keyword they never wrote.
 
         Args:
             dataset: The raster to draw.
@@ -609,9 +609,9 @@ class TestTheRefusalNamesWhatTheCallerWrote:
             said "drop the argument", naming a parameter that does not appear in the caller's source (L5).
         """
         with pytest.raises(ValueError) as excinfo:
-            qp.imshow(dataset, backend=backend)
+            qp.field(dataset, backend=backend)
         message = str(excinfo.value)
-        assert message.startswith("imshow()"), message
+        assert message.startswith("field()"), message
         assert f"backend={backend!r}" in message, message
         assert "kind=" not in message, (
             f"the message must not name the injected keyword: {message}"
@@ -622,8 +622,8 @@ class TestTheRefusalNamesWhatTheCallerWrote:
 
         Test scenario:
             The polygon branch pops ``column`` and draws a choropleth; the point branch forwarded it into
-            ``Map.scatter``'s ``**opts``, where cleopatra answered with its own accepted-keyword list and
-            never mentioned ``column`` (M19). ``Map.scatter`` has no fill column — it sizes markers by
+            ``Map.points``'s ``**opts``, where cleopatra answered with its own accepted-keyword list and
+            never mentioned ``column`` (M19). ``Map.points`` has no fill column — it sizes markers by
             ``size_column`` — so the honest answer is a refusal that says so.
         """
         from pyramids.feature import FeatureCollection

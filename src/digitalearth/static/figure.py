@@ -62,8 +62,8 @@ def grid(
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326)
-            >>> maps[0].set_title("left")
-            >>> maps[1].set_title("right")
+            >>> _ = maps[0].set_title("left")
+            >>> _ = maps[1].set_title("right")
             >>> [m.ax.get_title() for m in maps]
             ['left', 'right']
 
@@ -87,7 +87,7 @@ def shared_colorbar(
 
     Args:
         fig: The figure created by :func:`grid`.
-        mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel's ``imshow``)
+        mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel's ``field``)
             whose colour scale the bar represents. ``None`` is accepted and adds no bar, since a layer
             whose data lies outside the display CRS draws nothing and so has no scale to represent.
         maps: Panels the colorbar should steal space from; ``None`` spans all of the figure's axes.

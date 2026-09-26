@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import numpy as np
 
+from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
@@ -41,8 +42,11 @@ from digitalearth.base.spec import (
     Selection,
     Symbology,
 )
+from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+from digitalearth.three_d.capabilities import CAPABILITIES
 from digitalearth.three_d.layer import next_layer_id, stored_props
 from digitalearth.three_d.renderer import Renderer3D
+from digitalearth.three_d.views import named_view
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
@@ -552,6 +556,11 @@ class Scene3DBase:
         self.strict: bool = strict
         #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
         self.display_crs: Any = crs
+        #: Cells above which a layer takes this tier's big-data route (#207, contract C8). The scene-wide reach
+        #: of the cutoff: every builder that can reduce reads it, and each takes its own
+        #: `big_data_threshold=` for one call without changing this. **Cells, not rows** — see
+        #: :data:`~digitalearth.three_d.bigdata.DEFAULT_CELL_BUDGET`.
+        self.big_data_threshold: int = DEFAULT_CELL_BUDGET
 
     @property
     def plotter(self) -> "pv.Plotter":
@@ -807,7 +816,10 @@ class Scene3DBase:
                 volume=volume,
                 **kwargs,
             )
-        except Exception:
+        except BaseException:
+            # `BaseException`, the class the three renderers already catch: what the restore has to survive is
+            # the draw stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
+            # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._custom.pop(layer_id, None)
             raise
         if (
@@ -991,10 +1003,8 @@ class Scene3DBase:
         Note:
             This is a **compatibility view** of what the renderer holds, not the scene's state: the scene is
             described by :attr:`figure_spec`, and layers are addressed by id through :attr:`layer_ids`,
-            :meth:`mesh_of`, :meth:`actor_of`, :meth:`remove_layer` and :meth:`set_visible`. It is kept —
-            without a deprecation warning — because it is what `animate`'s callback and a good deal of user
-            code reach for; the rename that retires it belongs with the tier method names (#299), so callers
-            get one migration rather than two.
+            :meth:`mesh_of`, :meth:`actor_of`, :meth:`remove_layer` and :meth:`set_visible`. It is kept
+            because it is what `record`'s callback and a good deal of user code reach for.
         """
         drawn = self._renderer.drawn
         return [
@@ -1135,8 +1145,9 @@ class Scene3DBase:
             This scene (chainable).
 
         Raises:
-            KeyError: if no layer has that id, or if the replacement names a kind nobody registered — a
-                plugin's kind on a machine without the plugin reads as the second.
+            CapabilityError: if the replacement names a kind this tier does not declare — a plugin's kind on
+                a machine without the plugin reads as that.
+            KeyError: if no layer has that id.
             ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
                 the drawers read the source from the figure, and a missing one reached `get_source(None)`
                 and answered with a `TypeError` nothing documents.
@@ -1163,6 +1174,12 @@ class Scene3DBase:
             raise KeyError(
                 f"no layer {layer.id!r} in this scene; its layers are {self.layer_ids}"
             )
+        # The fourth production caller of `Capabilities.require` (D-10), joining the other three tiers. A
+        # replacement is the one layer-management call that can name a **new kind**, so it is the one that can
+        # ask this tier for something it does not have — and refusing here, off the declaration, refuses
+        # before a description is built or the plotter is touched. Without it the refusal came from the drawer
+        # table part-way through a reconcile, as a `KeyError` that said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="Scene3D.replace_layer")
         if layer.source_id is None and kind_info(layer.kind).takes != "none":
             # The drawers hand `_source_object`'s `None` straight to `get_source`, which answers with a
             # `TypeError` nothing documents — and, going through `_change`, used to leave the scene holding
@@ -1432,13 +1449,47 @@ class Scene3DBase:
         candidate = _with_panel_layers(figure)
         try:
             self._renderer.apply(before, candidate)
-        except Exception:
+        except BaseException:
+            # `BaseException` for the same reason the three renderers' `apply` catches it (review N2): the
+            # scene must not keep a figure the plotter never reached, and a `KeyboardInterrupt` mid-reconcile
+            # leaves exactly that. The inner `suppress` stays at `Exception` deliberately — a Ctrl-C *during*
+            # the rollback is the caller asking to stop, so it propagates instead of being swallowed.
             # Best effort, and second: the caller's failure is the one worth raising. A rollback that fails
             # leaves the scene as the original exception found it, which is what it would have been anyway.
             with suppress(Exception):
                 self._renderer.apply(candidate, before)
             raise
         self._figure = candidate
+
+    def _resolve_big_data_threshold(
+        self, big_data_threshold: Optional[int] = None, *, caller: str
+    ) -> int:
+        """Resolve a builder's cell budget: the per-call value, else the scene's attribute (#207, C8).
+
+        The tier's half of the one cutoff every backend spells `big_data_threshold` — an attribute on the scene
+        and an override on the builder. The per-call value goes through
+        :func:`~digitalearth.base.bigdata.validate_big_data_threshold`, the guard the interactive and web tiers
+        apply, so a negative or fractional cutoff is refused the same way on all three rather than raising on
+        two and reducing everything on this one.
+
+        There is **no second spelling** here, unlike the interactive tier's former `rasterize_threshold`:
+        nothing on this tier ever spelled the cutoff another way, and shipping one in order to retire it would
+        something nobody has written. The web tier has no alias either, for the same reason.
+
+        Args:
+            big_data_threshold: The per-call override, or `None` to use the scene's attribute.
+            caller: The builder the keyword was written on, named in the error so the message points at the
+                call rather than at this helper.
+
+        Returns:
+            The cell count above which the calling builder takes its reduction route.
+
+        Raises:
+            ValueError: when the per-call cutoff is negative, or is not a whole number of cells.
+        """
+        if big_data_threshold is None:
+            return int(self.big_data_threshold)
+        return validate_big_data_threshold(big_data_threshold, caller=caller)
 
     def _add_described_layer(
         self,
@@ -1536,18 +1587,7 @@ class Scene3DBase:
                 vertical_exaggeration=self.vertical_exaggeration,
                 crs=self.display_crs,
             )
-        live = self._plotter.camera
-        parallel = bool(live.parallel_projection)
-        return Camera(
-            position=_vector3(live.position),
-            focal_point=_vector3(live.focal_point),
-            view_up=_vector3(live.up),
-            view_angle=float(live.view_angle),
-            parallel=parallel,
-            parallel_scale=float(live.parallel_scale) if parallel else None,
-            vertical_exaggeration=self.vertical_exaggeration,
-            crs=self.display_crs,
-        )
+        return self._live_camera()
 
     @camera.setter
     def camera(self, camera: Camera) -> None:
@@ -1599,6 +1639,84 @@ class Scene3DBase:
         live.parallel_projection = bool(self._camera.parallel)
         if self._camera.parallel and self._camera.parallel_scale is not None:
             live.parallel_scale = float(self._camera.parallel_scale)
+
+    def _live_camera(self) -> Camera:
+        """Read the plotter's current viewpoint as a :class:`~digitalearth.base.spec.Camera`.
+
+        The read half of the round-trip, split out of :attr:`camera` because :meth:`view` needs it too: a named
+        view is applied by PyVista and then has to be *captured*, or :meth:`_apply_camera` would write the
+        scene's own camera back over it before the next frame.
+
+        Returns:
+            The live view, carrying the scene's vertical exaggeration and display CRS.
+        """
+        live = self.plotter.camera
+        parallel = bool(live.parallel_projection)
+        return Camera(
+            position=_vector3(live.position),
+            focal_point=_vector3(live.focal_point),
+            view_up=_vector3(live.up),
+            view_angle=float(live.view_angle),
+            parallel=parallel,
+            parallel_scale=float(live.parallel_scale) if parallel else None,
+            vertical_exaggeration=self.vertical_exaggeration,
+            crs=self.display_crs,
+        )
+
+    def view(self, name: str) -> Self:
+        """Look at the scene from a named view — ``"top"``, ``"front"``, ``"isometric"``, ….
+
+        The one-word half of the camera API. :attr:`camera` says exactly where to stand; this says it the way a
+        figure caption does, over PyVista's own ``view_*`` methods, which frame the scene's current bounds from
+        a direction. The names are a table a caller can add to
+        (:func:`~digitalearth.three_d.views.register_view`), not a fixed list of methods.
+
+        The view is **captured**, not only applied: PyVista aims its camera, the scene reads the result back as
+        a `Camera` and stores it. That is what makes the viewpoint survive the next render — which writes the
+        stored camera onto the plotter — and what puts it on the figure's panel, in `to_dict()`, and anywhere
+        else the view is read.
+
+        Args:
+            name: The view's name, as :func:`~digitalearth.three_d.views.view_names` lists it.
+
+        Returns:
+            The scene, so a view chains with the builders.
+
+        Raises:
+            KeyError: for a name nothing registered; the message lists the names that do exist.
+
+        Examples:
+            - Look at a DEM from straight above, and read the viewpoint back:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(dem))
+                >>> camera = scene.view("top").camera
+                >>> camera.position[2] > camera.focal_point[2]
+                True
+                >>> scene.close()
+
+                ```
+            - The presets are absolute viewpoints, not turns, so the last one wins:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> position = scene.view("top").view("front").camera.position
+                >>> position[1] < 0.0, round(position[2], 6)
+                (True, 0.0)
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            digitalearth.three_d.views: the table, and how to put a view of your own in it.
+        """
+        named_view(name).apply(self.plotter)
+        self.camera = self._live_camera()
+        return self
 
     def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).

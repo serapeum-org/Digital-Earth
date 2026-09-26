@@ -58,9 +58,14 @@ class TestTheTwoPathsAreDisjoint:
         assert unresolved == [], f"{unresolved} are declared drawable with no drawer"
 
     def test_a_kind_from_another_tier_is_refused_by_name(self):
-        """A figure written for another backend should say so, not fail obscurely."""
-        with pytest.raises(KeyError, match="does not draw 'terrain'"):
-            drawer_for("terrain")
+        """A figure written for another backend should say so, not fail obscurely.
+
+        Test scenario:
+            It asked about `terrain` until this tier started drawing terrain from a description. `volume` is
+            a registered kind only the 3-D tier renders, so it is what a figure written there would carry.
+        """
+        with pytest.raises(KeyError, match="does not draw 'volume'"):
+            drawer_for("volume")
 
     def test_no_builder_both_describes_and_queues_a_layer(self, points_gdf):
         """Drawing a layer twice is what a half-open seam looks like.
@@ -126,41 +131,45 @@ class TestTheTwoPathsAreDisjoint:
                 """
                 added.append(getattr(layer, "id", layer))
 
-        for entry in m.layers:
+        # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+        # and `layers` reports each described entry already resolved to the object it drew.
+        for entry in m._queued:
             m._apply_layer(Recorder(), entry)
         assert len(added) == len(set(added)), f"a layer was added twice: {added}"
         for layer_id in m.layer_ids:
             assert layer_id in added, f"{layer_id} is described but never drawn"
 
-    def test_a_kind_the_seam_has_not_reached_is_described_but_left_to_the_queue(self):
-        """The seam opens one kind at a time, so a kind it has not reached must not be drawn from its record.
+    def test_a_kind_with_no_drawer_is_described_and_not_drawn(self):
+        """Recording a layer is not the same as drawing one, and `DRAWN_KINDS` is what decides.
 
         Test scenario:
-            `DRAWN_KINDS` is a growing subset: a kind joins it in the same step its builder stops queuing
-            a closure. Drawing every described layer regardless of that list would hand an unconverted
-            kind to `drawer_for`, which refuses it by name — so a builder that has not been converted yet
-            would stop working the moment it recorded a description. Its layer is still registered; it is
-            simply drawn by its own queued closure rather than from the tree.
+            The seam opened one kind at a time, and this asked about the kind it had not reached yet —
+            `terrain`, until terrain started being drawn from its description. Every kind the tier declares
+            is drawn from one now, so what is left to ask about is a kind the tier does **not** declare:
+            drawing every described layer regardless of `DRAWN_KINDS` would hand it to `drawer_for`, which
+            refuses it by name, and turn a recorded layer into a `KeyError` from a builder that never asked
+            for one. `volume` is such a kind — registered, so `_index_layer` accepts it, and drawn by the
+            3-D tier alone.
         """
         from digitalearth.web import WebMap
 
-        unconverted = "terrain"
-        assert unconverted in CAPABILITIES.kinds, (
-            f"{unconverted} must be a kind the tier declares, or this asks nothing"
+        undrawn = "volume"
+        assert undrawn not in CAPABILITIES.kinds, (
+            f"{undrawn} must be a kind the tier does not declare, or this asks nothing"
         )
-        assert unconverted not in DRAWN_KINDS, (
-            f"{unconverted} is drawn from its description now; ask about a kind that is not"
+        assert undrawn not in DRAWN_KINDS, (
+            f"{undrawn} is drawn from its description now; ask about a kind that is not"
         )
 
         m = WebMap()
-        registered = m._index_layer("dem", "dem", kind=unconverted)
-        assert registered is True, "an unconverted kind is still a registered layer"
-        assert m.layer_ids == ["dem"], m.layer_ids
+        registered = m._index_layer("cube", "cube", kind=undrawn)
+        assert registered is True, "a kind with no drawer is still a registered layer"
+        assert m.layer_ids == ["cube"], m.layer_ids
         assert m._renderer.drawn == {}, (
-            f"an unconverted kind was drawn from its description: {m._renderer.drawn}"
+            f"a kind with no drawer was drawn from its description: {m._renderer.drawn}"
         )
         assert m._queued == [], (
-            f"an unconverted kind was queued as a description: {m._queued}"
+            f"a kind with no drawer was queued as a description: {m._queued}"
         )
 
     def test_a_custom_layer_hands_the_widget_no_source_of_its_own(self):
@@ -289,6 +298,50 @@ class TestAFigureSurvivesBeingWrittenDown:
         assert drawn is not None, "a reloaded description must be drawable"
         assert drawn.layer.id == "grid", drawn.layer.id
 
+    @pytest.mark.parametrize(
+        "build, layer_id",
+        [
+            (
+                lambda m: m.tiles(
+                    "https://tiles.example/{z}/{x}/{y}.png", name="ground"
+                ),
+                "ground",
+            ),
+            (lambda m: m.terrain_tiles(name="relief"), "relief"),
+            (
+                lambda m: m.gltf(
+                    "https://example.invalid/model.glb", 4.9, 52.4, name="statue"
+                ),
+                "statue",
+            ),
+        ],
+        ids=["basemap", "terrain", "model"],
+    )
+    def test_a_converted_source_less_kind_reloads_and_draws(self, build, layer_id):
+        """The three converted kinds that draw from a URL survive `to_dict` and draw again from it.
+
+        Args:
+            build: The builder call under test.
+            layer_id: The name it was given.
+
+        Test scenario:
+            A basemap, terrain and a glTF model each drew from a closure and recorded nothing, so a saved
+            figure did not know they were there. Each is described by values now — a MapLibre raster source,
+            a tile-URL template, a model URL and a position — and none of them names a figure source, so all
+            three are figures that leave the process. The fourth converted kind, `point_cloud`, draws from
+            data: given a frame in memory it records an `object:` reference and `to_dict` refuses it, exactly
+            as it does for `points(gdf)`.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.web import WebMap
+
+        built = WebMap()
+        build(built)
+        reloaded = FigureSpec.from_dict(built.figure_spec.to_dict())
+        drawn = WebMap()._renderer.draw_layer(reloaded, layer_id)
+        assert drawn is not None, "a reloaded description must be drawable"
+        assert reloaded.layers.get(layer_id).kind == built.get_layer(layer_id).kind
+
     def test_the_drawing_uses_the_recorded_values_rather_than_its_own_defaults(self):
         """A description that survives but is not *read* is a description in name only.
 
@@ -345,6 +398,12 @@ PATH_BACKED_BUILDERS = {
     "rgb_composite": (
         RASTER_PATH,
         lambda m, path: m.rgb_composite(path, bands=(1, 1, 1)),
+    ),
+    # Added with #266: a composite takes a path exactly as its sibling does, and a web figure that cannot be
+    # written down from one is a figure that cannot leave the process that made it.
+    "hsv_composite": (
+        RASTER_PATH,
+        lambda m, path: m.hsv_composite(path, bands=(1, 1, 1)),
     ),
     "points": (VECTOR_PATH, lambda m, path: m.points(path)),
     "lines": (VECTOR_PATH, lambda m, path: m.lines(path)),
@@ -612,6 +671,14 @@ _RASTER_BUILDERS = [
     pytest.param(
         lambda m, ds: m.rgb_composite(ds, bands=(1, 1, 1), name="dem"),
         id="rgb_composite",
+    ),
+    # `hsv_composite` landed with #266 and draws through the same recipe as `rgb_composite`, so every
+    # promise below — a declined layer letting its data go, a refused one giving back its name — is one it
+    # makes too. It was missing here while its own module covered the equivalent properties; both composites
+    # are in the list now, so the two cannot diverge on what a dropped layer leaves behind.
+    pytest.param(
+        lambda m, ds: m.hsv_composite(ds, bands=(1, 1, 1), name="dem"),
+        id="hsv_composite",
     ),
 ]
 
@@ -1210,20 +1277,20 @@ class TestTheAdaptersQueueReplayIsExercised:
 class WebContract(RendererContract):
     """The web tier's adapter for the shared renderer contract (#305).
 
-    **`apply` does not reach this tier's engine, nor the figure it reports.** The widget is built from the
-    map's queue, `_queued`, which only the builders and `remove_layer` write. `Renderer.apply` reconciles the
-    renderer's own record and stops there: a layer it adds is never queued, so the widget never adds it, and
-    a layer it removes stays queued (review M1). That is the decision for this wave — the renderer's module
-    docstring says so — and wiring `apply` through the map's own state is later work. So
-    `apply_reaches_engine` is `False` and the engine checks skip here rather than pass whatever `apply` did;
-    `apply_reaches_description` is `False` because `apply_figure` calls the renderer, which never touches
-    `figure_spec`. The rollback and the redraw guard are held to the renderer's record instead, which is the
-    one thing `apply` changes here.
+    **`apply` reaches this tier's engine, since order 23.** The widget is built from the map's queue,
+    `_queued`, and only the builders and `remove_layer` used to write it: `Renderer.apply` reconciled the
+    renderer's own record and stopped there, so a layer it added was never queued and the widget never added
+    it, and a layer it removed stayed queued (review M1). `Renderer._arrange` brings the queue to the new
+    figure's layers in its draw order, and rolls it back — with the band counts — when a change is refused,
+    so the engine checks run here rather than skipping.
+
+    `apply_figure` goes through `WebMapBase._change`, the path every public layer-management call takes, which
+    installs the description once the queue has moved. So both halves are checked.
     """
 
     backend = "web"
-    apply_reaches_engine = False
-    apply_reaches_description = False
+    apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an empty map.
@@ -1277,13 +1344,13 @@ class WebContract(RendererContract):
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:
-        """Move the map to `figure` through the renderer.
+        """Move the map to `figure` through the path every change goes through.
 
         Args:
             tier: The map.
             figure: The figure.
         """
-        tier._renderer.apply(tier.figure_spec, figure)
+        tier._change(figure)
 
     def engine_holds(self, tier):
         """Return what the widget is built from: the queue, replayed the way the widget build replays it.
@@ -1291,10 +1358,9 @@ class WebContract(RendererContract):
         `_build_map_widget` hands every queue entry to `_apply_layer`, so that is what this does, into a
         widget that records each call. A described layer resolves through the renderer's record only because
         its marker is in the queue — a layer the record holds and the queue does not is never added, which is
-        exactly what reading the record directly could not see. **No shared contract check reads this
-        while `apply_reaches_engine` is `False`**; it is what they will read once `apply` reaches the
-        queue. So that it cannot rot in the meantime, `TestTheAdaptersQueueReplayIsExercised` above
-        reads it here, read-only (review L4).
+        exactly what reading the record directly could not see, and what the engine checks read now that
+        `apply` reaches the queue. `TestTheAdaptersQueueReplayIsExercised` above also reads it here,
+        read-only, which is what kept it from rotting while nothing else did (review L4).
 
         Args:
             tier: The map.

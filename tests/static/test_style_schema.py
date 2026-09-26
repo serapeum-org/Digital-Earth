@@ -182,7 +182,7 @@ class TestTheMarkerSizeChannel:
             own.
         """
         opts = {"size": 12, "cmap": "viridis"}
-        plot_style = relocate_flat_style(opts, marker_size_for="Map.scatter()")
+        plot_style = relocate_flat_style(opts, folds_marker_size=True)
         assert opts == {"cmap": "viridis", "point_size": 12}, (
             "the size channel must reach the constructor as point_size"
         )
@@ -190,31 +190,8 @@ class TestTheMarkerSizeChannel:
             "and must not also travel to plot(), where it would style a point overlay"
         )
 
-    def test_the_older_spelling_still_works_and_warns(self):
-        """`point_size=` keeps working for one release.
-
-        Test scenario:
-            The rename promise the package keeps everywhere: the old spelling works, warns, and names the
-            method the user actually called.
-        """
-        opts = {"point_size": 9}
-        with pytest.warns(DeprecationWarning, match="Map.scatter"):
-            relocate_flat_style(opts, marker_size_for="Map.scatter()")
-        assert opts == {"point_size": 9}, "the old spelling must still reach the glyph"
-
-    def test_both_spellings_at_once_is_refused(self):
-        """A contradictory call is an error rather than a coin flip.
-
-        Test scenario:
-            Picking one silently would draw markers at a size the caller did not ask for, with no signal.
-        """
-        with pytest.raises(TypeError):
-            relocate_flat_style(
-                {"size": 12, "point_size": 9}, marker_size_for="Map.scatter()"
-            )
-
     def test_a_glyph_that_is_not_a_point_glyph_keeps_the_old_behaviour(self):
-        """Without `marker_size_for`, `point_size` stays on its way to the point overlay.
+        """Without `folds_marker_size`, `point_size` stays on its way to the point overlay.
 
         Test scenario:
             A raster field's `point_size` styles the markers overlaid on it, not the field — so relocating it

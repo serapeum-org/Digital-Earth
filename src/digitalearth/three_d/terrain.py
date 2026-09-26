@@ -21,6 +21,7 @@ import numpy as np
 from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
 from digitalearth.base.spec import LayerSpec, Selection
+from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET, reduce_surface
 from digitalearth.three_d.layer import drawing_props
 
 #: Attribute name the elevation scalar is stored under on the generated mesh.
@@ -122,6 +123,7 @@ class TerrainMixin(_MixinBase):
         z_exaggeration: float | None = None,
         cmap: str | None = None,
         scalars: str | None = ELEVATION,
+        big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
         """Render a raster/DEM as a 3-D relief surface and register it as a layer.
@@ -159,6 +161,12 @@ class TerrainMixin(_MixinBase):
                 the static, interactive and web tiers use, so a DEM/field is drawn in the same colours on all
                 four — falling back to ``"terrain"`` only when the lookup yields nothing.
             scalars: Scalar array to colour by (default the elevation); ``None`` for a flat colour.
+            big_data_threshold: Cells above which the surface is simplified with ``decimate_pro`` before it is
+                drawn (#207). ``None`` (the default) uses the scene's
+                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a DEM at or under the budget
+                is drawn exactly as it was built. Measured: a 708x708 DEM is drawn whole, a 709x709 one is
+                reduced, and a 1000x1000 one goes from a 39.0 MB ``export_html`` page to a 12.3 MB one — see
+                :mod:`digitalearth.three_d.bigdata` for the table the budget comes from.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh` (``opacity``, ``show_edges``, ``pbr`` …).
 
         Returns:
@@ -171,7 +179,7 @@ class TerrainMixin(_MixinBase):
                 entirely nodata; by default that layer is skipped with a warning instead, so one blank tile
                 does not cost a composed scene its other layers.
             ValueError: if `data` is a `Source` in a CRS other than the scene's — extracted coordinates cannot be
-                reprojected.
+                reprojected; or if ``big_data_threshold`` is negative or not a whole number of cells.
 
         Examples:
             - A ramped DEM renders as a non-flat, correctly-oriented surface, and the exaggeration asked for is
@@ -222,6 +230,9 @@ class TerrainMixin(_MixinBase):
             selection=Selection(band=(band,)),
             cmap=cmap,
             scalars=scalars,
+            big_data_threshold=self._resolve_big_data_threshold(
+                big_data_threshold, caller="Scene3D.terrain()"
+            ),
             **kwargs,
         )
 
@@ -246,6 +257,7 @@ def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """
     props = drawing_props(layer.symbology.props)
     cmap = props.pop("cmap", None)
+    budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
     band = layer.selection.band[0] if layer.selection.band else 1
     placed = scene._place(data, layer="terrain")
     src = placed if isinstance(placed, Source) else get_source(placed, band=band)
@@ -260,8 +272,12 @@ def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
     # conversion the scene's CRS dictates — the horizontal units every layer is drawn in — and the
     # layer's own only when the scene has none; exaggeration is the view scale, kept on the camera.
     units_crs = src.crs if scene.display_crs is None else scene.display_crs
-    mesh = _terrain_mesh(
-        src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
+    mesh = reduce_surface(
+        _terrain_mesh(
+            src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
+        ),
+        budget,
+        kind="terrain",
     )
     return mesh, scene.plotter.add_mesh(
         mesh, cmap=scene._auto_cmap(src, cmap, fallback="terrain"), **props

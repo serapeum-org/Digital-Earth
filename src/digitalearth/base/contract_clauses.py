@@ -128,7 +128,7 @@ def _clauses() -> tuple[Clause, ...]:
             title="the frame rate is fps",
             rule=(
                 "The frame rate is `fps: float` on every animation entry point, over one shared default of "
-                "3.0; the spellings it replaced survive as deprecated aliases."
+                "3.0, and is the only spelling of it: the ones it replaced are gone."
             ),
             issues=(256,),
         ),
@@ -136,9 +136,9 @@ def _clauses() -> tuple[Clause, ...]:
             number=3,
             title="size is a marker's size",
             rule=(
-                "`size` is the visual size of a marker and nothing else: text size is `text_size`, the "
-                "column that varies a marker is `column`, and the spellings they replaced survive as "
-                "deprecated aliases."
+                "`size` is the visual size of a marker and nothing else: text size is `text_size` and the "
+                "column that varies a marker is `column`. The spellings they replaced are gone rather than "
+                "kept as second names."
             ),
             issues=(251,),
         ),
@@ -186,7 +186,9 @@ def _clauses() -> tuple[Clause, ...]:
             title="one big_data_threshold, two reaches",
             rule=(
                 "One `big_data_threshold` over one shared default: an attribute on the map and a per-call "
-                "override on the builder, with one deprecated alias."
+                "override of the same name on the builder, with `None` the sentinel that defers to the map. "
+                "It is the **only** spelling of that cutoff on any tier — where a tier spelled it another "
+                "way, that spelling was deleted rather than kept working beside this one."
             ),
             issues=(250,),
         ),

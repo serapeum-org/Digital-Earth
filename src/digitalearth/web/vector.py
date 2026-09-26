@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 from loguru import logger
 
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, LegendSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
@@ -79,6 +78,44 @@ class ContourInterval:
             raise ValueError(
                 f"contour spacing must be finite and greater than zero; got {self.spacing!r}"
             )
+
+
+#: How many levels `contours` traces when the caller names none and the band's variable carries none. Ten,
+#: which is what the interactive tier has always fallen back to and what matplotlib's own `levels=10` means,
+#: so the same call describes the same number of levels on either tier (#262).
+DEFAULT_CONTOUR_LEVELS = 10
+
+
+def _even_levels(source: Any, count: int) -> list:
+    """Return ``count`` levels evenly spaced strictly inside a band's finite range.
+
+    **Strictly inside** on purpose: a level sitting exactly on the minimum or the maximum traces the frame's
+    edge or nothing at all, so `count` levels between the two extremes is `count` contours a reader can see.
+    That is also what matplotlib's own `levels=<int>` produces in effect, and what the interactive tier's
+    fallback hands HoloViews.
+
+    Args:
+        source: The display-CRS :class:`~digitalearth.base.sources.source.Source` for the band being traced.
+        count: How many levels to cut the range into.
+
+    Returns:
+        The levels, as plain floats so a figure can be written down with them.
+
+    Raises:
+        ValueError: when the band has no finite values, or they are all the same — there is genuinely
+            nothing to contour, and guessing a level would draw a line the data does not support.
+    """
+    import numpy as np
+
+    values = np.asarray(source.z.values, dtype="float64")
+    finite = values[np.isfinite(values)]
+    if finite.size == 0 or float(finite.min()) == float(finite.max()):
+        raise ValueError(
+            "contours() has no range to cut into levels: the band is empty or constant. Pass interval= or "
+            "levels= if the values are meaningful, or contour a band that varies."
+        )
+    edges = np.linspace(float(finite.min()), float(finite.max()), count + 2)
+    return [float(level) for level in edges[1:-1]]
 
 
 def _as_interval(
@@ -419,7 +456,7 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        text_size: Optional[float] = None,
+        text_size: float = 12.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
@@ -427,7 +464,6 @@ class VectorMixin(_MixinBase):
         allow_overlap: bool = False,
         name: Optional[str] = None,
         visible: bool = True,
-        size: Optional[float] = None,
     ) -> Self:
         """Label features with the text in ``column`` (recipe W2).
 
@@ -443,9 +479,8 @@ class VectorMixin(_MixinBase):
                 (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what the
                 figure records.
             column: The property to read the text from.
-            text_size: Text size in pixels (``12.0`` when omitted — the signature's ``None`` is the
-                "not passed" sentinel the deprecated spelling is resolved against). Named for the text
-                rather than ``size``, which means the visual size of a marker everywhere else.
+            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
+                visual size of a marker everywhere else.
             color: Text colour.
             halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
                 over imagery.
@@ -455,15 +490,12 @@ class VectorMixin(_MixinBase):
                 that collide, which is what keeps a dense layer readable.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
-            size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``size=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when ``features`` is not a vector layer, or when both ``text_size`` and the
-                deprecated ``size`` are passed — they name one parameter.
+            TypeError: when ``features`` is not a vector layer.
             KeyError: when ``column`` is not one of its properties — a MapLibre expression reading a
                 missing property renders nothing at all, with no error to explain the empty map — or when
                 ``features`` is a URL with no resolver registered for its scheme.
@@ -485,14 +517,6 @@ class VectorMixin(_MixinBase):
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.labels()"
         _, layer_types = _require_layer_api()
-        text_size = renamed_parameter(
-            new="text_size",
-            value=text_size,
-            old="size",
-            alias=size,
-            caller=call,
-            default=12.0,
-        )
         text_size = as_finite(text_size, "text_size", call)
         halo_width = as_finite(halo_width, "halo_width", call)
         gdf = self._display_gdf(features, method="labels")
@@ -551,10 +575,11 @@ class VectorMixin(_MixinBase):
             return None
         resolved = self._auto_levels(source, levels)
         if resolved is None:
-            raise ValueError(
-                "contours() needs interval= or levels=: neither was given, and the band's variable "
-                f"({source.metadata('variable')!r}) is not one auto_style carries levels for."
-            )
+            # The tier used to refuse here, while the interactive tier fell back to ten from the same call —
+            # one call, two answers, from tiers a caller is told are interchangeable (#262). Ten evenly
+            # spaced levels is what that tier has always done and what matplotlib's own `levels=10` means,
+            # so falling back is the tiers agreeing rather than a third behaviour.
+            resolved = _even_levels(source, DEFAULT_CONTOUR_LEVELS)
         return resolved
 
     def _draw_contour_features(
@@ -692,7 +717,7 @@ class VectorMixin(_MixinBase):
                 variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels
                 that field is conventionally drawn with.
             band: 1-based band to contour, matching
-                :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and
+                :meth:`~digitalearth.web.raster.RasterMixin.field` — pyramids counts bands from 0, and
                 this converts, so the same number means the same band everywhere in this tier.
             filled: Draw filled bands between successive levels instead of lines.
             cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the
@@ -895,14 +920,13 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        size: Optional[float] = None,
+        size: float = 5.0,
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
         big_data_threshold: Optional[int] = None,
         name: Optional[str] = None,
         visible: bool = True,
-        radius: Optional[float] = None,
     ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
@@ -919,9 +943,7 @@ class VectorMixin(_MixinBase):
                 ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
-            size: Circle radius in pixels (``5.0`` when omitted — the signature's ``None`` is the
-                "not passed" sentinel the deprecated spelling is resolved against). The same ``size``
-                that means marker size on every tier.
+            size: Circle radius in pixels. The same ``size`` that means marker size on every tier.
             color: Fixed circle colour used when ``column`` is ``None``.
             opacity: Circle fill opacity in ``[0, 1]``.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
@@ -931,15 +953,12 @@ class VectorMixin(_MixinBase):
                 way to change it for every layer at once.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
-            radius: **Deprecated** spelling of ``size``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``radius=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when ``features`` is a raster rather than a vector layer, or when both ``size``
-                and the deprecated ``radius`` are passed — they name one parameter.
+            TypeError: when ``features`` is a raster rather than a vector layer.
             KeyError: when ``column`` names no feature attribute — a MapLibre expression
                 reading a property that is not there colours nothing, with no error to explain
                 the blank layer — or when ``features`` is a URL with no resolver registered for
@@ -998,14 +1017,6 @@ class VectorMixin(_MixinBase):
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.points()"
         _, layer_types = _require_layer_api()
-        size = renamed_parameter(
-            new="size",
-            value=size,
-            old="radius",
-            alias=radius,
-            caller=call,
-            default=5.0,
-        )
         size = as_finite(size, "size", call)
         opacity = as_finite(opacity, "opacity", call)
         gdf = self._display_gdf(features, method="points")

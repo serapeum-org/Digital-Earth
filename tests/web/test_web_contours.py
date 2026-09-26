@@ -11,6 +11,34 @@ import pytest
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.web import ContourInterval, WebMap
+from digitalearth.web.vector import _even_levels
+
+
+class _Band:
+    """The one thing :func:`_even_levels` reads off a `Source`: the band's values.
+
+    A stub rather than a real `Source`, because the helper is pure arithmetic over an array and building a
+    display-CRS source would make the range being cut a property of the warp rather than of the test.
+    """
+
+    class _Z:
+        """The `z` dimension a `Source` exposes."""
+
+        def __init__(self, values):
+            """Hold the values.
+
+            Args:
+                values: The band's values.
+            """
+            self.values = values
+
+    def __init__(self, values):
+        """Hold the values under the accessor the helper uses.
+
+        Args:
+            values: The band's values, as a flat sequence.
+        """
+        self.z = self._Z(values)
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +73,8 @@ class TestTracingIsPyramids:
         m = WebMap().basemap().contours(dataset, interval=10)
         payload = _payload(m.to_html())
         assert '"line"' in payload
-        assert len(m.layer_ids) == 1
+        # The basemap is a described layer too, so it is in the ids beside the contour.
+        assert m.layer_ids == ["tiles-1", "line-1"], m.layer_ids
 
     def test_filled_contours_are_polygons(self, dataset):
         """Bands between levels are areas, not lines.
@@ -61,7 +90,7 @@ class TestTracingIsPyramids:
         """pyramids counts bands from 0 and this tier from 1; a silent off-by-one would draw the wrong band.
 
         Test scenario:
-            ``band=1`` must reach pyramids as band 0 — the same band ``add_raster(band=1)`` draws.
+            ``band=1`` must reach pyramids as band 0 — the same band ``field(band=1)`` draws.
         """
         seen = {}
         original = type(dataset).contour
@@ -85,7 +114,8 @@ class TestTracingIsPyramids:
             dataset: The shared pyramids raster fixture.
         """
         m = WebMap().basemap().contours(dataset, interval=10, labels=True)
-        assert len(m.layer_ids) == 2, m.layer_ids
+        # Three ids: the basemap beneath, the traced lines, and the labels over them.
+        assert len(m.layer_ids) == 3, m.layer_ids
         assert any("label" in layer_id for layer_id in m.layer_ids)
 
     def test_a_single_colour_skips_the_classification(self, dataset):
@@ -297,19 +327,68 @@ class TestWhatItRefuses:
         with pytest.raises(ValueError, match="at most one"):
             web_map.contours(dataset, interval=10, levels=[1.0])
 
-    def test_neither_and_no_autostyle_levels_names_both_arguments(self, dataset):
-        """With neither given, `auto_style` is consulted — and an unknown variable has no levels (C6).
+    def test_neither_and_no_autostyle_levels_falls_back_to_ten(self, dataset):
+        """With neither given and no canonical levels, the band is cut into ten (#262, order 27a).
 
         Args:
             dataset: The shared pyramids raster fixture.
 
         Test scenario:
-            The fixture's variable is not one the style library knows, so nothing can be resolved and the
-            caller is asked for `interval=`/`levels=` rather than handed a guessed set.
+            The defect #262 is titled for: `contours(dataset)` **rendered** on the interactive tier, which
+            falls back to ten levels, and **raised** on this one — one call, two answers, from tiers a
+            caller is told are interchangeable. The fixture's variable is not one the style library knows,
+            so this is exactly the path that refused. Ten evenly spaced levels strictly inside the band's
+            range is what the interactive tier has always done and what matplotlib's own `levels=10` means,
+            so the fallback is the tiers agreeing rather than a third behaviour.
         """
-        web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match=r"needs interval= or levels="):
-            web_map.contours(dataset)
+        drawn = WebMap().basemap().contours(dataset)
+        assert drawn.layer_ids, "the fallback drew no layer"
+
+    def test_the_fallback_cuts_a_band_into_ten_levels_inside_its_range(self):
+        """Ten levels, evenly spaced, and every one strictly inside the data.
+
+        Test scenario:
+            The count is the promise; "it drew something" would pass for one level or for a hundred. Asked
+            of `_even_levels`, which is the helper the builder falls back to, because what the *map* then
+            publishes as `last_breaks` is the classification of the traced features (five quantile classes
+            by default) rather than the level count — a different number, and not the one being promised.
+            Strictly inside matters: a level sitting on the minimum or the maximum traces the frame's edge
+            or nothing at all.
+        """
+        levels = _even_levels(_Band([0.0, 5.0, 10.0]), 10)
+        assert len(levels) == 10, levels
+        assert min(levels) > 0.0, levels
+        assert max(levels) < 10.0, levels
+
+    def test_the_fallback_spaces_them_evenly(self):
+        """Evenly, so the ten describe the range rather than clustering in it.
+
+        Test scenario:
+            The gap between successive levels has to be one number. Measured on a 0-10 band cut into ten:
+            eleven equal steps of 10/12 between the two extremes.
+        """
+        levels = _even_levels(_Band([0.0, 10.0]), 10)
+        gaps = {round(b - a, 9) for a, b in zip(levels, levels[1:])}
+        assert len(gaps) == 1, sorted(gaps)
+
+    def test_a_constant_band_is_refused_rather_than_guessed(self):
+        """There is genuinely nothing to contour, and a guessed level would draw an unsupported line.
+
+        Test scenario:
+            The complement of the fallback. Falling back on a band with no range would hand pyramids ten
+            identical levels, and the "no level lies within the data" skip would report the wrong cause.
+        """
+        flat = _Band([3.0, 3.0, 3.0])
+        with pytest.raises(ValueError) as refused:
+            _even_levels(flat, 10)
+        assert "no range to cut into levels" in str(refused.value), refused.value
+
+    def test_a_band_with_no_finite_values_is_refused_too(self):
+        """The other empty case: every value masked out."""
+        masked = _Band([float("nan"), float("nan")])
+        with pytest.raises(ValueError) as refused:
+            _even_levels(masked, 10)
+        assert "no range to cut into levels" in str(refused.value), refused.value
 
     def test_an_interval_coarser_than_the_data_skips_and_warns(
         self, dataset, warning_log

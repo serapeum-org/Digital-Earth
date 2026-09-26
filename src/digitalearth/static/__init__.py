@@ -16,12 +16,9 @@ series (:mod:`~digitalearth.static.series`), time-series products (:mod:`~digita
 animation (:mod:`~digitalearth.static.animation`) — the matplotlib-rendering counterparts of what the other
 backends provide for themselves.
 
-``StaticGlyph`` (:mod:`digitalearth.static.glyph`) is the package's original entry point and is
-**deprecated** — prefer ``Map``/``quickmap``. It stays importable as ``from digitalearth.static import
-StaticGlyph``, but is resolved **lazily** through a PEP 562 module ``__getattr__``: the package facade
-imports :mod:`digitalearth.static`, so an eager re-export would load the deprecated module on every
-``import digitalearth``. Importing it emits no warning; every one of its entry points does. Removing it
-later is then a one-line deletion here.
+Everything this backend exports is eager: the names below are the whole surface, and each is also a
+package-root export (``from digitalearth import Map``). There is no lazily-resolved name left, so the module
+has no PEP 562 ``__getattr__`` — an unknown attribute fails with Python's own message.
 """
 
 from digitalearth.static.figure import grid, shared_colorbar
@@ -29,30 +26,10 @@ from digitalearth.static.map import Map
 
 # Importable as ``from digitalearth.static import OffLimbError`` so a caller can catch it, but kept
 # out of ``__all__``: it is a signal the layer methods already answer, not part of the backend's
-# advertised surface, and the guard on that list expects its non-deprecated names to be package-root
-# exports too (StaticGlyph is the deprecated exception).
+# advertised surface, and the guard on that list expects every name it carries to be a package-root
+# export too.
 from digitalearth.static.maps.base import OffLimbError  # noqa: F401
 from digitalearth.static.scene import Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 
-__all__ = ["Scene", "Map", "TexturedGlobe", "StaticGlyph", "grid", "shared_colorbar"]
-
-
-def __getattr__(name: str):
-    """Resolve ``StaticGlyph`` lazily so ``import digitalearth`` does not load the deprecated module.
-
-    Args:
-        name: The attribute being looked up on the ``digitalearth.static`` package.
-
-    Returns:
-        The :class:`~digitalearth.static.glyph.StaticGlyph` class.
-
-    Raises:
-        AttributeError: for any other name.
-    """
-    if name == "StaticGlyph":
-        from digitalearth.static.glyph import StaticGlyph
-
-        globals()[name] = StaticGlyph
-        return StaticGlyph
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__all__ = ["Scene", "Map", "TexturedGlobe", "grid", "shared_colorbar"]

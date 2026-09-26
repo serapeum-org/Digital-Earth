@@ -244,16 +244,16 @@ class TestTheDispatcherRefusesFromTheDeclarations:
 
     @pytest.mark.parametrize("backend", ["3d", "web"])
     def test_a_renderer_wrapper_refusal_is_the_declared_error(self, dataset, backend):
-        """The four `imshow`/`contourf`/`contour`/`pcolormesh` wrappers refuse the same way.
+        """The `field`/`contours`/`pcolormesh` wrappers refuse the same way.
 
         Args:
             dataset: The raster to draw.
             backend: A tier with no renderer selector.
         """
-        from digitalearth.api import imshow
+        from digitalearth.api import field
 
         with pytest.raises(CapabilityError):
-            imshow(dataset, backend=backend)
+            field(dataset, backend=backend)
 
     @pytest.mark.parametrize(
         ("backend", "phrase"),
@@ -277,7 +277,7 @@ class TestTheDispatcherRefusesFromTheDeclarations:
             the caller only that the renderer was missing. The declared reason is what turns that into an
             answer: a 3-D raster is a surface or a volume, chosen by calling a different builder.
         """
-        from digitalearth.api import imshow
+        from digitalearth.api import field
 
         with pytest.raises(CapabilityError, match=phrase):
-            imshow(dataset, backend=backend)
+            field(dataset, backend=backend)

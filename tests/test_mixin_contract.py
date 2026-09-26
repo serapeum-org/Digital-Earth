@@ -447,7 +447,7 @@ class TestSelfReturningBuilders:
             index: Position of the builder in the source scan.
 
         Test scenario:
-            `-> Self` is the promise that makes `m.add_raster(dem).basemap()` type-check against the composed
+            `-> Self` is the promise that makes `m.field(dem).basemap()` type-check against the composed
             map rather than the mixin. mypy cannot police it across these modules — `no-any-return` is
             baselined off in `web.vector`, `web.threed`, `web.base`, `interactive.vector` and others, so a
             builder that returned an untyped engine object would type-check clean and break chaining at run
@@ -517,9 +517,9 @@ class TestBuilderChaining:
         [
             ("digitalearth.web.map", "WebMap", "add_layer"),
             ("digitalearth.web.map", "WebMap", "add_underlay"),
-            ("digitalearth.interactive.map", "InteractiveMap", "add_element"),
+            ("digitalearth.interactive.map", "InteractiveMap", "add_layer"),
         ],
-        ids=["web-add_layer", "web-add_underlay", "interactive-add_element"],
+        ids=["web-add_layer", "web-add_underlay", "interactive-add_layer"],
     )
     def test_registration_returns_the_composed_map(self, module, name, builder):
         """The low-level registration builders return the composed map itself, so calls chain.
@@ -531,7 +531,7 @@ class TestBuilderChaining:
 
         Test scenario:
             These three are the terminus every other `-> Self` builder delegates to, and the only ones that
-            run without an optional engine — the existing `test_add_layer_chains` / `test_add_element_chains`
+            run without an optional engine — the existing `test_add_layer_chains` / `test_add_layer_chains_twice`
             sit behind `importorskip("maplibre")` / `importorskip("geoviews")`, so neither runs in the `dev`
             environment CI gates on, and `add_underlay` has no chaining test at all. Assert both identity and
             exact type: `Self` promises the *composed* class, not the mixin that defines the method.

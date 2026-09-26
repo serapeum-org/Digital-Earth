@@ -120,7 +120,7 @@ class TestWhoDecidesTheView:
         m = WebMap(**kwargs).basemap().choropleth(boxes, column="pop")
         assert m._map_view() is None, m._map_view()
 
-    def test_an_explicit_fit_bounds_wins_over_everything(self, boxes):
+    def test_an_explicit_set_bounds_wins_over_everything(self, boxes):
         """A direct request is the strongest signal there is."""
         from digitalearth.web import WebMap
 
@@ -128,23 +128,23 @@ class TestWhoDecidesTheView:
             WebMap(zoom=7)
             .basemap()
             .choropleth(boxes, column="pop")
-            .fit_bounds((0.0, 0.0, 1.0, 1.0))
+            .set_bounds((0.0, 0.0, 1.0, 1.0))
         )
         assert m._map_view()["bounds"] == [0.0, 0.0, 1.0, 1.0]
 
-    def test_fit_bounds_with_no_data_says_so(self):
+    def test_set_bounds_with_no_data_says_so(self):
         """Doing nothing quietly would look exactly like the call being ignored."""
         from digitalearth.web import WebMap
 
         web_map = WebMap().basemap()
         with pytest.raises(ValueError, match="nothing to frame on"):
-            web_map.fit_bounds()
+            web_map.set_bounds()
 
-    def test_fit_bounds_with_no_argument_uses_the_data(self, boxes):
+    def test_set_bounds_with_no_argument_uses_the_data(self, boxes):
         """The no-argument form is the one a caller reaches for after adding their data."""
         from digitalearth.web import WebMap
 
-        m = WebMap(zoom=7).basemap().choropleth(boxes, column="pop").fit_bounds()
+        m = WebMap(zoom=7).basemap().choropleth(boxes, column="pop").set_bounds()
         assert m._map_view()["bounds"] == [4.0, 51.0, 7.0, 53.0]
 
     def test_padding_and_animate_reach_the_view(self, boxes):
@@ -154,7 +154,7 @@ class TestWhoDecidesTheView:
         m = (
             WebMap()
             .basemap()
-            .fit_bounds((0.0, 0.0, 1.0, 1.0), padding=64, animate=True)
+            .set_bounds((0.0, 0.0, 1.0, 1.0), padding=64, animate=True)
         )
         assert (m._map_view()["padding"], m._map_view()["animate"]) == (64, True)
 
@@ -253,7 +253,7 @@ class TestAnAnnotationDoesNotDecideTheView:
         assert WebMap().basemap().text(4.9, 52.4, "Amsterdam")._map_view() is None
 
     def test_an_annotation_does_not_drag_the_extent(self, boxes):
-        """One caption far away used to shrink the data to a speck — the bug fit_bounds cured.
+        """One caption far away used to shrink the data to a speck — the bug set_bounds cured.
 
         Args:
             boxes: The fixture frame, spanning (4, 51, 7, 53).
@@ -293,7 +293,7 @@ class TestRasterPlacementAndFramingAgree:
         m.crs = (
             crs  # assigned, not constructed: C13 fixes the public display CRS at 4326
         )
-        payload = _payload(m.add_raster(dataset).to_html())
+        payload = _payload(m.field(dataset).to_html())
         corners = re.search(r'"coordinates": \[\[([-\d.]+), ([-\d.]+)\]', payload)
         view = re.search(r'"fitBounds", \[\[([-\d.]+), ([-\d.]+)', payload)
         assert corners is not None, f"the image source has no corners: {payload[-400:]}"
@@ -324,7 +324,7 @@ class TestTheViewChoiceIsRemembered:
 
         web_map = WebMap().basemap()
         with pytest.raises(ValueError, match="west, south, east, north"):
-            web_map.fit_bounds((1.0, 2.0, 3.0))
+            web_map.set_bounds((1.0, 2.0, 3.0))
 
 
 class TestFramingGivesUpRatherThanGuessing:

@@ -46,7 +46,7 @@ def _classifiable(features: Any) -> Any:
     Every builder on this tier takes a path as well as an opened object, and a path is the only input a
     figure can be *written* with: `DataRef.of` records a path as a path and anything else as an `object:`
     reference, which `FigureSpec.to_dict` refuses. The unclassified branches never had to read the data
-    themselves — they hand the caller's argument to `add_element` and the renderer opens it at draw time —
+    themselves — they hand the caller's argument to `add_layer` and the renderer opens it at draw time —
     but classifying is different: the class edges or the distinct values have to be known before the layer
     is described, because they are part of the description. Indexing the argument itself answered
     `TypeError: string indices must be integers` for the one input that yields a storable figure
@@ -87,6 +87,28 @@ def _as_labels(gdf: Any, column: str, missing: str) -> Any:
     absent = gdf[column].isna()
     gdf[column] = gdf[column].astype(str).mask(absent, missing)
     return gdf
+
+
+#: How a point layer names itself in a refusal. The big-data threshold's resolution and the refusal of an
+#: unclassifiable `scheme=` speak for the same public call, so they share the one spelling — as
+#: `Map.points()` does on the static tier.
+_POINTS_CALLER = "InteractiveMap.points()"
+
+
+def apply_opacity(opacity: Optional[float], opts: dict) -> None:
+    """Write the Core ``opacity`` into ``opts`` under the spelling the engine reads.
+
+    ``opacity`` is what :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract call it, and
+    what the web and 3-D tiers take; HoloViews reads ``alpha`` (#332). One place decides that mapping, so no
+    builder holds it.
+
+    Args:
+        opacity: What the caller passed; ``None`` means "not passed", which is **not** the same as ``1.0``:
+            it leaves the engine's own default in force, and leaves a colormap's alpha channel alone.
+        opts: The caller's remaining engine keywords, mutated in place.
+    """
+    if opacity is not None:
+        opts["alpha"] = opacity
 
 
 def _vector_symbology(
@@ -505,14 +527,14 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        value_column: Optional[str] = None,
+        column: Optional[str] = None,
         scheme: Optional[Any] = None,
         k: int = 5,
         size: float = 6.0,
         cmap: str = "viridis",
+        opacity: Optional[float] = None,
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
-        rasterize_threshold: Optional[int] = None,
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
@@ -523,27 +545,32 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
                 display CRS through pyramids when needed. A path or URL naming one is taken too, and is
                 the only input a figure carrying this layer can be written down with.
-            value_column: Optional numeric column colouring the points (also shown on hover).
-            scheme: Optional classification scheme for ``value_column`` — ``None`` (the default) is a
+            column: The column colouring the points (also shown on hover). The Core spelling, and the one
+                ``polygons`` and ``choropleth`` on this tier already used; ``value_column`` was a second
+                name for one concept (#332) and is gone.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
+                ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
+                colormap's own alpha channel in force.
+            scheme: Optional classification scheme for ``column`` — ``None`` (the default) is a
                 continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts it into ``k``
                 classes, and ``"categorical"`` gives every distinct value its own colour (the same
                 unordered-attribute colouring :meth:`choropleth` does, so a point layer and a polygon
                 layer key one column the same way). Spelled and computed the same way on every tier that
-                classifies. It styles ``value_column``, so naming a scheme without one is refused rather
+                classifies. It styles ``column``, so naming a scheme without one is refused rather
                 than ignored.
             k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
                 ``"categorical"``.
             size: Marker size in screen pixels — the one thing ``size`` ever means on any tier (#251).
-            cmap: Colormap used when ``value_column`` is given.
+            cmap: Colormap used when ``column`` is given.
             rasterize: ``"auto"`` (default) routes through Datashader above
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
-                (default) uses the map's ``big_data_threshold`` attribute (#250).
-            rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
-                number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
-                for one release; passing it together with ``big_data_threshold`` is a
-                ``TypeError``, since they name one cutoff (#250).
+                (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
+                as given, so a path is measured as a string rather than as rows — see the note below.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -555,13 +582,24 @@ class VectorMixin(_MixinBase):
                 ``colorbar=False`` drops the colorbar on a classified point layer just as it does on a
                 classified polygon one.
 
+        Note:
+            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
+            for a path that is the length of the string — so a layer named by the 25-character path
+            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
+            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
+            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
+            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
+            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
+            it yourself. The routing log line always names the number the decision used, so a wrong one is
+            visible rather than silent.
+
         Examples:
             - Colour gauging stations by an attribute column:
                 ```python
                 >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
-                >>> m = InteractiveMap().points(fc, value_column="fid")         # doctest: +SKIP
+                >>> m = InteractiveMap().points(fc, column="fid")         # doctest: +SKIP
                 >>> [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP
                 ['fid']
 
@@ -571,57 +609,56 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
-                are passed — two values for one cutoff, so neither can be silently preferred.
-            ValueError: if ``scheme`` is given without a ``value_column`` to classify, or when the
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the
                 column cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit
                 colour list shorter than the class count).
-
-        Warns:
-            DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
-                ``big_data_threshold=``.
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
-        if scheme is not None and not value_column:
+        apply_opacity(opacity, opts)
+        if scheme is not None and not column:
             # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
             # styling request, which is exactly what this tier stopped doing elsewhere (review M2).
             raise ValueError(
-                "InteractiveMap.points(): scheme= classifies value_column=, which was not given; "
+                f"{_POINTS_CALLER}: scheme= classifies column=, which was not given; "
                 "name the column to classify, or drop scheme="
             )
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold, caller="InteractiveMap.points()"
+            big_data_threshold, caller=_POINTS_CALLER
         )
         # Nothing here is reprojected: the drawer warps what it draws, and what the description needs — the
         # row count and a column's values — is the same before a warp as after it. Warping here as well did
         # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
         # still refused, by the drawer, and `_skips_off_limb` answers it as before.
+        # The count is `len(features)`, and `features` may be a path: a path's length is its character
+        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
+        # than worked around here — pyramids has no cheap count-from-path to ask
+        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
         if rasterize is True or (
             rasterize == "auto"
             and _route_through_rasterize("points", len(features), threshold)
         ):
-            aggregator = "mean" if value_column else "count"
+            aggregator = "mean" if column else "count"
             return self.rasterize(
-                features, aggregator=aggregator, column=value_column, cmap=cmap, **opts
+                features, aggregator=aggregator, column=column, cmap=cmap, **opts
             )
         styling: dict = {}
         labels: Optional[dict] = None
-        if value_column and isinstance(scheme, str) and scheme.lower() == "categorical":
+        if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
             # a point layer and a polygon layer key an unordered column identically (review M3).
             styling, categories, labels = self._categorical_style(
-                features, value_column, cmap=cmap
+                features, column, cmap=cmap
             )
             self.last_breaks = categories
-        elif value_column and scheme is not None:
+        elif column and scheme is not None:
             styling = self._graduated_style(
-                features, value_column, scheme=scheme, k=k, cmap=cmap
+                features, column, scheme=scheme, k=k, cmap=cmap
             )
             self.last_breaks = list(styling["color_levels"])
-        elif value_column:
-            styling = {"color": value_column, "cmap": cmap, "colorbar": True}
+        elif column:
+            styling = {"color": column, "cmap": cmap, "colorbar": True}
         # The caller's `**opts` are split per value: `describe_opts` writes the JSON-safe half into the
         # description and puts the rest in `held` (review M3). Either way the drawer merges them over
         # this, which keeps the precedence: an explicit style the caller wrote outranks the one
@@ -629,7 +666,7 @@ class VectorMixin(_MixinBase):
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         common: dict = {"size": size, **styling}
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -638,7 +675,7 @@ class VectorMixin(_MixinBase):
             held=held,
             symbology=_vector_symbology(
                 "Points",
-                [value_column] if value_column else None,
+                [column] if column else None,
                 describe_style(held, common),
                 labels,
                 described_opts,
@@ -646,7 +683,7 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
-    def path(
+    def lines(
         self,
         features: Any,
         *,
@@ -673,7 +710,7 @@ class VectorMixin(_MixinBase):
                 >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> reaches = FeatureCollection.read_file("reaches.geojson")    # doctest: +SKIP
-                >>> InteractiveMap().path(reaches).save("reaches.html").name    # doctest: +SKIP
+                >>> InteractiveMap().lines(reaches).save("reaches.html").name    # doctest: +SKIP
                 'reaches.html'
 
                 ```
@@ -683,7 +720,7 @@ class VectorMixin(_MixinBase):
         """
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -700,9 +737,9 @@ class VectorMixin(_MixinBase):
         *,
         column: Optional[str] = None,
         cmap: str = "viridis",
+        opacity: Optional[float] = None,
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
-        rasterize_threshold: Optional[int] = None,
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
@@ -713,6 +750,12 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
                 pyramids when needed. A path or URL naming one is taken too, and is the only input a
                 figure carrying this layer can be written down with.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
+                ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
+                colormap's own alpha channel in force.
             column: Optional numeric column filling the polygons (also shown on hover); ``None``
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
@@ -720,11 +763,8 @@ class VectorMixin(_MixinBase):
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
                 Polygon datashading needs the optional ``spatialpandas`` package.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
-                (default) uses the map's ``big_data_threshold`` attribute (#250).
-            rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
-                number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
-                for one release; passing it together with ``big_data_threshold`` is a
-                ``TypeError``, since they name one cutoff (#250).
+                (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
+                as given, so a path is measured as a string rather than as rows — see the note below.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -732,6 +772,17 @@ class VectorMixin(_MixinBase):
                 hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
                 element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element.
+
+        Note:
+            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
+            for a path that is the length of the string — so a layer named by the 25-character path
+            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
+            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
+            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
+            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
+            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
+            it yourself. The routing log line always names the number the decision used, so a wrong one is
+            visible rather than silent.
 
         Examples:
             - Outline catchment polygons over a basemap:
@@ -753,15 +804,10 @@ class VectorMixin(_MixinBase):
                 datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
                 which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
                 rather than failing deeper inside datashader.
-            TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
-                are passed — two values for one cutoff, so neither can be silently preferred.
-
-        Warns:
-            DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
-                ``big_data_threshold=``.
         """
+        apply_opacity(opacity, opts)
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold, caller="InteractiveMap.polygons()"
+            big_data_threshold, caller="InteractiveMap.polygons()"
         )
         return self._polygon_layer(
             features,
@@ -794,8 +840,7 @@ class VectorMixin(_MixinBase):
         because the two draw the same element yet are different layers to a reader of the figure: the
         continuous ramp used to reach here through `polygons()` and so was described as `polygons`, while
         the categorical and graduated schemes said `choropleth` (review L6). The big-data cutoff arrives
-        resolved, since the deprecation warning for its old spelling has to be raised by the public builder
-        the caller wrote, a fixed number of frames above them.
+        resolved, because the public builders take it and this body does not.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries.
@@ -822,6 +867,10 @@ class VectorMixin(_MixinBase):
 
         # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
         # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
+        # The count is `len(features)`, and `features` may be a path: a path's length is its character
+        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
+        # than worked around here — pyramids has no cheap count-from-path to ask
+        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
         if rasterize is True or (
             rasterize == "auto"
             and _route_through_rasterize(kind, len(features), threshold)
@@ -864,7 +913,7 @@ class VectorMixin(_MixinBase):
             )
         elif "fill_alpha" not in opts:
             common["fill_alpha"] = 0.0
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -923,7 +972,7 @@ class VectorMixin(_MixinBase):
         self.last_breaks = categories
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1100,7 +1149,7 @@ class VectorMixin(_MixinBase):
         self.last_breaks = list(classified["color_levels"])
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1125,6 +1174,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[str] = None,
         k: int = 5,
         cmap: str = "viridis",
+        opacity: Optional[float] = None,
         clim: Optional[Tuple[float, float]] = None,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1156,6 +1206,12 @@ class VectorMixin(_MixinBase):
                 ``5`` is the shared cross-tier default (#246).
             cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
                 left at the default); sampled once per class for a graduated scheme.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
+                ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
+                colormap's own alpha channel in force.
             clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
@@ -1189,6 +1245,7 @@ class VectorMixin(_MixinBase):
             raise KeyError(
                 f"choropleth column {column!r} not found in the feature attributes"
             )
+        apply_opacity(opacity, opts)
         if isinstance(scheme, str) and scheme.lower() == "categorical":
             return self._categorical_polygons(
                 features, column, cmap=cmap, name=name, visible=visible, **opts
@@ -1210,12 +1267,10 @@ class VectorMixin(_MixinBase):
         self.last_breaks = None
         if clim is not None:
             opts = {"clim": clim, **opts}
-        # Resolved here rather than by `polygons()`: this is the frame the deprecation warning for the old
-        # spelling is counted from, so a `rasterize_threshold=` written on `choropleth()` is attributed to the
-        # caller's line.
+        # Resolved here rather than by `polygons()`, which never sees the keyword: `choropleth` takes it
+        # through `**opts`.
         threshold = self._resolve_big_data_threshold(
             opts.pop("big_data_threshold", None),
-            opts.pop("rasterize_threshold", None),
             caller="InteractiveMap.choropleth()",
         )
         return self._polygon_layer(
@@ -1297,7 +1352,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1364,7 +1419,7 @@ class VectorMixin(_MixinBase):
         )
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1433,7 +1488,7 @@ class VectorMixin(_MixinBase):
         )
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1458,7 +1513,6 @@ class VectorMixin(_MixinBase):
         value_column: Optional[str] = None,
         rasterize: Any = "auto",
         big_data_threshold: Optional[int] = None,
-        rasterize_threshold: Optional[int] = None,
         cmap: str = "viridis",
         name: Optional[str] = None,
         visible: bool = True,
@@ -1482,10 +1536,6 @@ class VectorMixin(_MixinBase):
             rasterize: ``"auto"`` (default) rasterizes above the threshold; ``True``/``False`` force it.
             big_data_threshold: Face count above which ``"auto"`` rasterizes; ``None`` (default) uses
                 the map's ``big_data_threshold`` attribute (#250).
-            rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
-                number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
-                for one release; passing it together with ``big_data_threshold`` is a
-                ``TypeError``, since they name one cutoff (#250).
             cmap: Colormap name.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
@@ -1499,12 +1549,6 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
-                are passed — two values for one cutoff, so neither can be silently preferred.
-
-        Warns:
-            DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
-                ``big_data_threshold=``.
 
         Examples:
             - Delaunay-triangulate scattered points; the nodes carry the value column:
@@ -1554,7 +1598,7 @@ class VectorMixin(_MixinBase):
         """
         gv, _ = _require_holoviz()
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold, caller="InteractiveMap.trimesh()"
+            big_data_threshold, caller="InteractiveMap.trimesh()"
         )
         # The mesh is built here because the routing decision below is made on the face count, which only the
         # built connectivity knows. The drawer would build the same one again from the same data, so the one
@@ -1578,7 +1622,7 @@ class VectorMixin(_MixinBase):
         try:
             held: Dict[str, Any] = {}
             described_opts = describe_opts(held, opts)
-            return self.add_element(
+            return self.add_layer(
                 None,
                 name=name,
                 visible=visible,
@@ -1677,7 +1721,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1727,7 +1771,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1785,7 +1829,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,

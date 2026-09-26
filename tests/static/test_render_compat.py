@@ -157,8 +157,8 @@ def test_flat_style_keys_covers_group_members_and_params():
         assert key in FLAT_STYLE_KEYS
 
 
-def test_scatter_alpha_applies_to_the_rendered_artist():
-    """Map().scatter(fc, alpha=) reaches the artist (regression: it used to raise TypeError on vector glyphs)."""
+def test_points_alpha_applies_to_the_rendered_artist():
+    """Map().points(fc, alpha=) reaches the artist (regression: it used to raise TypeError on vector glyphs)."""
     import geopandas as gpd
     from pyramids.feature import FeatureCollection
     from shapely.geometry import Point
@@ -172,7 +172,7 @@ def test_scatter_alpha_applies_to_the_rendered_artist():
             crs="EPSG:4326",
         )
     )
-    artist = Map(crs=4326).scatter(fc, alpha=0.5)
+    artist = Map(crs=4326).points(fc, alpha=0.5)
     assert artist.get_alpha() == 0.5
 
 

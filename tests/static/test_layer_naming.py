@@ -140,26 +140,26 @@ class TestTheNameACallerGives:
     """`name=` reaches the layer id, across the builder families this tier has."""
 
     def test_a_vector_builder_files_the_layer_under_the_name(self, drawn):
-        """`scatter(name=)` is the id `layer_ids` reports.
+        """`points(name=)` is the id `layer_ids` reports.
 
         Args:
             drawn: The map under test.
         """
-        drawn.scatter(_points(), name=ASKED)
+        drawn.points(_points(), name=ASKED)
         assert drawn.layer_ids == [ASKED], drawn.layer_ids
 
     def test_a_raster_builder_does_too(self, dataset):
-        """`imshow(name=)` reaches the same funnel through `_field`.
+        """`field(name=)` reaches the same funnel through `_field`.
 
         Args:
             dataset: The committed raster fixture.
 
         Test scenario:
-            `imshow` forwards its keywords to `_field`, so the keyword has to be declared in both places to
-            be discoverable in either. A caller reading `help(Map.imshow)` should find it there.
+            `field` forwards its keywords to `_field`, so the keyword has to be declared in both places to
+            be discoverable in either. A caller reading `help(Map.field)` should find it there.
         """
         with Map(crs=dataset.epsg) as built:
-            built.imshow(dataset, name=ASKED)
+            built.field(dataset, name=ASKED)
             assert built.layer_ids == [ASKED], built.layer_ids
 
     def test_a_decoration_builder_does_too(self, drawn):
@@ -186,7 +186,7 @@ class TestTheNameACallerGives:
         Args:
             drawn: The map under test.
         """
-        drawn.scatter(_points())
+        drawn.points(_points())
         assert drawn.layer_ids == ["points-1"], drawn.layer_ids
 
 
@@ -199,8 +199,8 @@ class TestANameUsedTwice:
         Args:
             drawn: The map under test.
         """
-        drawn.scatter(_points(), name=ASKED)
-        drawn.scatter(_points(), name=ASKED)
+        drawn.points(_points(), name=ASKED)
+        drawn.points(_points(), name=ASKED)
         assert drawn.layer_ids == [ASKED, SUFFIXED], drawn.layer_ids
 
     def test_the_suffix_counts_the_name_and_not_the_figure(self, drawn):
@@ -215,11 +215,11 @@ class TestANameUsedTwice:
             script. Three unnamed layers are drawn here for exactly that reason; the old rule cannot
             produce the expected id.
         """
-        drawn.scatter(_points())
-        drawn.scatter(_points())
-        drawn.scatter(_points())
-        drawn.scatter(_points(), name=ASKED)
-        drawn.scatter(_points(), name=ASKED)
+        drawn.points(_points())
+        drawn.points(_points())
+        drawn.points(_points())
+        drawn.points(_points(), name=ASKED)
+        drawn.points(_points(), name=ASKED)
         assert drawn.layer_ids[-2:] == [ASKED, SUFFIXED], drawn.layer_ids
 
     def test_a_third_layer_keeps_counting(self, drawn):
@@ -229,7 +229,7 @@ class TestANameUsedTwice:
             drawn: The map under test.
         """
         for _ in range(3):
-            drawn.scatter(_points(), name=ASKED)
+            drawn.points(_points(), name=ASKED)
         assert drawn.layer_ids == [ASKED, SUFFIXED, "wells-3"], drawn.layer_ids
 
 
@@ -237,8 +237,8 @@ class TestANameThatIsWhatTheGeneratorWouldMint:
     """The other collision: the caller's name lands *on* the generated sequence rather than beside it.
 
     `TestANameUsedTwice` covers two callers asking for one name. This is the case the suffix rule cannot
-    answer, because the caller asks first: `scatter(name="points-1")` takes the very id the next unnamed
-    `scatter` would generate. The counter is per-scene and the issued set is per-id, so the generator has
+    answer, because the caller asks first: `points(name="points-1")` takes the very id the next unnamed
+    `points` call would generate. The counter is per-scene and the issued set is per-id, so the generator has
     to step over what is already out — and the cost of it not doing so is not a cosmetic id clash. The
     renderer keys everything it drew by layer id, so a second layer minting an id already in use makes the
     first one unaddressable: `set_visible`, `is_visible` and `remove_layer` would all reach the wrong
@@ -252,12 +252,12 @@ class TestANameThatIsWhatTheGeneratorWouldMint:
             drawn: The map under test.
 
         Test scenario:
-            The kind a `scatter` counts under is `points`, so the first generated id is `points-1` — which
+            The kind a `points` call counts under is `points`, so the first generated id is `points-1` — which
             this caller asks for by name before any unnamed layer exists. Without the skip the second call
             re-mints it and the scene describes two layers under one id.
         """
-        drawn.scatter(_points(), name="points-1")
-        drawn.scatter(_points())
+        drawn.points(_points(), name="points-1")
+        drawn.points(_points())
         assert drawn.layer_ids == ["points-1", "points-2"], drawn.layer_ids
 
     def test_each_layer_is_still_the_only_artist_its_id_toggles(self, drawn):
@@ -272,8 +272,8 @@ class TestANameThatIsWhatTheGeneratorWouldMint:
             the axes with nothing able to reach them. Hiding the caller's own layer and reading the other
             one back is what tells the two apart, because it asks the renderer rather than the description.
         """
-        drawn.scatter(_points(), name="points-1")
-        drawn.scatter(_points())
+        drawn.points(_points(), name="points-1")
+        drawn.points(_points())
         drawn._renderer.set_visible("points-1", False)
         assert drawn._renderer.is_visible("points-2") is True, drawn.layer_ids
 
@@ -287,7 +287,7 @@ class TestALayerBuiltHidden:
         Args:
             drawn: The map under test.
         """
-        drawn.scatter(_points(), name=ASKED, visible=False)
+        drawn.points(_points(), name=ASKED, visible=False)
         assert drawn.figure_spec.layers.get(ASKED).visible is False
 
     def test_the_artist_is_hidden_too(self, drawn):
@@ -301,7 +301,7 @@ class TestALayerBuiltHidden:
             disagreement the interactive tier had in the opposite direction (#327), so both halves are
             asserted rather than one.
         """
-        drawn.scatter(_points(), name=ASKED, visible=False)
+        drawn.points(_points(), name=ASKED, visible=False)
         assert drawn._renderer.is_visible(ASKED) is False
 
     def test_a_layer_nobody_hid_stays_visible(self, drawn):
@@ -310,7 +310,7 @@ class TestALayerBuiltHidden:
         Args:
             drawn: The map under test.
         """
-        drawn.scatter(_points(), name=ASKED)
+        drawn.points(_points(), name=ASKED)
         assert drawn._renderer.is_visible(ASKED) is True
 
     def test_a_choropleth_built_hidden_is_hidden(self, drawn):

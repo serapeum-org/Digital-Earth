@@ -19,7 +19,7 @@ def test_render_without_auto_cmap(dataset, mocker):
     """When auto_style supplies no cmap, _render leaves cmap unset (no opts['cmap']) and still draws."""
     mocker.patch("digitalearth.static.maps.raster.auto_style", return_value={})
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
+    m.field(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
     assert len(m.layers) == 1
     assert len(m.ax.images) == 1
 
@@ -46,10 +46,10 @@ def test_reproject_skips_a_string_spelling_of_the_dataset_crs(dataset, mocker):
     assert placed is dataset, "the dataset should come back unchanged"
 
 
-def test_imshow_renders_in_display_crs(dataset):
-    """imshow draws the reprojected raster on the shared axes with an extent in the display CRS."""
+def test_field_renders_in_display_crs(dataset):
+    """field draws the reprojected raster on the shared axes with an extent in the display CRS."""
     m = Map(crs=3857)
-    m.imshow(dataset)
+    m.field(dataset)
     assert len(m.layers) == 1
     assert len(m.ax.images) == 1
     # EPSG:3857 eastings for this UTM-18N scene are large negative metres (~ -8.3e6)
@@ -57,16 +57,16 @@ def test_imshow_renders_in_display_crs(dataset):
     assert xmin < xmax
 
 
-def test_set_extent(dataset):
-    """set_extent applies the given bbox to the axes limits."""
+def test_set_bounds(dataset):
+    """set_bounds applies the given bbox to the axes limits."""
     m = Map(crs=3857)
-    m.imshow(dataset)
-    m.set_extent([0.0, 100.0, 0.0, 50.0])
+    m.field(dataset)
+    m.set_bounds([0.0, 100.0, 0.0, 50.0])
     assert m.ax.get_xlim() == (0.0, 100.0)
     assert m.ax.get_ylim() == (0.0, 50.0)
 
 
-def test_set_extent_reprojects_a_foreign_crs_bounds():
+def test_set_bounds_reprojects_a_foreign_crs_bounds():
     """A Bounds in another CRS is converted to the display CRS rather than trusted.
 
     Test scenario:
@@ -74,7 +74,7 @@ def test_set_extent_reprojects_a_foreign_crs_bounds():
         used verbatim would silently frame one square *metre* — a 111,000x error that draws without complaint.
     """
     m = Map(crs=3857)
-    m.set_extent(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+    m.set_bounds(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
     xmin, xmax = m.ax.get_xlim()
     assert round(xmax) == 111319, (
         f"one degree of longitude must reproject to ~111,319 m, got {xmax}"
@@ -82,7 +82,7 @@ def test_set_extent_reprojects_a_foreign_crs_bounds():
     assert round(xmin) == 0, f"the western edge must stay at the origin, got {xmin}"
 
 
-def test_set_extent_leaves_a_matching_crs_bounds_alone():
+def test_set_bounds_leaves_a_matching_crs_bounds_alone():
     """A Bounds already in the display CRS passes through untouched.
 
     Test scenario:
@@ -90,12 +90,12 @@ def test_set_extent_leaves_a_matching_crs_bounds_alone():
         round trip through pyramids and risk drift from it.
     """
     m = Map(crs=3857)
-    m.set_extent(Bounds(0.0, 0.0, 100.0, 50.0, crs=3857))
+    m.set_bounds(Bounds(0.0, 0.0, 100.0, 50.0, crs=3857))
     assert m.ax.get_xlim() == (0.0, 100.0), "a same-CRS rectangle must be used as given"
     assert m.ax.get_ylim() == (0.0, 50.0)
 
 
-def test_set_extent_still_accepts_a_flipped_axis():
+def test_set_bounds_still_accepts_a_flipped_axis():
     """A backwards pair inverts the axis, as it did before Bounds was introduced.
 
     Test scenario:
@@ -105,11 +105,11 @@ def test_set_extent_still_accepts_a_flipped_axis():
         ValueError on a public method.
     """
     m = Map(crs=3857)
-    m.set_extent([10.0, 0.0, 0.0, 10.0])
+    m.set_bounds([10.0, 0.0, 0.0, 10.0])
     assert m.ax.get_xlim() == (10.0, 0.0), "a flipped pair must invert the axis"
 
 
-def test_set_extent_rejects_a_sequence_that_is_not_four_values():
+def test_set_bounds_rejects_a_sequence_that_is_not_four_values():
     """A wrong-length extent is refused rather than silently truncated.
 
     Test scenario:
@@ -118,7 +118,7 @@ def test_set_extent_rejects_a_sequence_that_is_not_four_values():
     """
     map = Map(crs=3857)
     with pytest.raises(ValueError, match="exactly 4 values"):
-        map.set_extent([0.0, 1.0, 0.0, 1.0, 2.0])
+        map.set_bounds([0.0, 1.0, 0.0, 1.0, 2.0])
 
 
 def test_no_cartopy_import():
@@ -143,7 +143,7 @@ def test_no_cartopy_import():
 def test_natural_earth_overlays(dataset, layer):
     """Coastlines/borders overlay the real 110m Natural-Earth lines (seeded cache, offline)."""
     m = Map(crs=3857)
-    m.imshow(dataset)
+    m.field(dataset)
     getattr(m, layer)()
     # the vector layer added at least one artist (collection/line) to the axes
     assert m.ax.collections or m.ax.lines
@@ -176,7 +176,7 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
     )
 
     m = Map(crs=3857)
-    m.imshow(dataset)
+    m.field(dataset)
     xlim_before, ylim_before = m.ax.get_xlim(), m.ax.get_ylim()
     m.coastlines()
     # the global layer was drawn, but the view stayed on the data
@@ -245,7 +245,7 @@ def test_to_feature_style_routes_color_and_drops_line_fill():
 def test_natural_earth_fills(dataset, layer):
     """Land/ocean polygon fills overlay the real 110m Natural-Earth data (seeded cache, offline)."""
     m = Map(crs=3857)
-    m.imshow(dataset)
+    m.field(dataset)
     getattr(m, layer)()
     assert m.ax.collections
 
@@ -268,7 +268,7 @@ def test_basemap_tiles(dataset, mocker):
     )
 
     m = Map(crs=3857)
-    m.imshow(dataset)
+    m.field(dataset)
     before = len(m.ax.images)
     m.basemap()
     spy.assert_called_once()
@@ -278,7 +278,7 @@ def test_basemap_tiles(dataset, mocker):
 def test_text_at_lonlat(dataset):
     """text() places a Text at the reprojected lon/lat on a flat map."""
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset)
+    m.field(dataset)
     txt = m.text(
         float(dataset.x.mean()) if hasattr(dataset, "x") else 0.0,
         0.0,
@@ -304,7 +304,7 @@ def test_annotate_with_arrow(dataset):
     from matplotlib.text import Annotation
 
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset)
+    m.field(dataset)
     ann = m.annotate(
         0.0,
         0.0,
@@ -329,7 +329,7 @@ def test_annotate_far_side_globe_skipped():
 def test_stock_img_dataset_backdrop(dataset):
     """stock_img(dataset) draws a backdrop AxesImage below data and keeps the data extent."""
     m = Map(crs=dataset.epsg)
-    data_im = m.imshow(dataset)
+    data_im = m.field(dataset)
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
     back = m.stock_img(dataset)
     assert back is not None

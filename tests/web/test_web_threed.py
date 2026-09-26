@@ -74,30 +74,41 @@ class TestThreeDNeedEngine:
         m = WebMap().extrusion(polygons_gdf, height=100.0)
         assert len(m.layers) == 1
 
-    def test_terrain_and_globe_chain_and_render(self, polygons_gdf):
+    def test_terrain_tiles_and_projection_chain_and_render(self, polygons_gdf):
         from maplibre.ipywidget import MapWidget
 
         m = (
             WebMap()
             .extrusion(polygons_gdf, height="pop")
-            .terrain(exaggeration=1.5)
-            .globe(True)
+            .terrain_tiles(exaggeration=1.5)
+            .projection("globe")
         )
         assert len(m.layers) == 3
         assert isinstance(m.render(), MapWidget)
 
-    def test_point_cloud_accumulates_deck(self, points_gdf):
+    def test_point_cloud_is_a_described_deck_layer(self, points_gdf):
+        """The cloud is recorded as a layer and its deck.gl spec is built from that description.
+
+        Args:
+            points_gdf: The fixture points.
+        """
         m = WebMap().point_cloud(points_gdf, z_column="elev")
-        assert m._deck_layers is not None
-        assert m._deck_layers[0]["@@type"] == "PointCloudLayer"
+        (layer_id,) = m.layer_ids
+        drawn = m._renderer.drawn[layer_id]
+        assert drawn.layer["@@type"] == "PointCloudLayer", drawn.layer
+        assert m._deck_layers is None, (
+            "a described deck layer joins the overlay from the queue, not the accumulator"
+        )
 
     def test_tiles_3d_layer(self):
         m = WebMap().tiles_3d("https://example.com/tileset.json")
         assert m._deck_layers[0]["@@type"] == "Tile3DLayer"
 
     def test_gltf_layer(self):
+        """A model is recorded as a layer, and its deck.gl spec is built from that description."""
         m = WebMap().gltf("https://example.com/model.glb", 8.0, 47.0)
-        layer = m._deck_layers[0]
+        (layer_id,) = m.layer_ids
+        layer = m._renderer.drawn[layer_id].layer
         assert layer["@@type"] == "ScenegraphLayer"
         assert layer["data"][0]["position"] == [8.0, 47.0]
 
