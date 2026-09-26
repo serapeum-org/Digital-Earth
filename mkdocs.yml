@@ -187,7 +187,6 @@ nav:
         - climatology: examples/plots/26_climatology.ipynb
   - Reference:
     - Figure vocabulary: reference/vocabulary.md
-    - Renamed names: reference/renamed-names.md
     - Web maps: reference/web_map.md
     - Keyed basemaps: reference/basemaps.md
     - TexturedGlobe (3-D globe): reference/textured_globe.md

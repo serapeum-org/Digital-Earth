@@ -83,8 +83,7 @@ The web tier's marker size is `size=` (was `radius=` on `points`/`deck_scatter`,
 `fps=` (was `duration=`, which held a frame for that many *seconds* — the reciprocal). Every old
 spelling still works for one release and warns at your call. The methods were renamed too — `field` for
 `add_raster`, `set_bounds` for `fit_bounds`, `set_title` for `title`, `save_animation` for `animate`,
-`terrain_tiles` for `terrain` and `projection` for `globe`. See
-[Renamed names](renamed-names.md) for the tables across all four backends.
+`terrain_tiles` for `terrain` and `projection` for `globe`.
 
 ::: digitalearth.web.map.WebMap
     options:
