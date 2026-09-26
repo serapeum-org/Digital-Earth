@@ -820,3 +820,24 @@ class TestARefusedRemovalGivesNoIdBack:
             draped.remove_layer(BOTTOM)
         draped.text(0.0, 0.0, "again", name=BOTTOM)
         assert draped.layer_ids == [BOTTOM, TOP, f"{BOTTOM}-2"], draped.layer_ids
+
+
+class TestTheLayerManagementRefusalsShareOneVocabulary:
+    """Five public methods ask the same question of an id, and `move_layer` asked the tree instead.
+
+    `_require_layer` exists so that a caller who names a layer that is not there reads one sentence whichever
+    method refused. `move_layer` was the one that did not call it, so it answered in the tree's words — about a
+    tree the caller never handled (review R2-N6).
+    """
+
+    def test_a_reorder_and_a_removal_refuse_an_unknown_id_alike(self):
+        """The two refusals are read against each other, not against a literal one of them agrees with."""
+        m = WebMap().text(4.9, 52.4, "Amsterdam", name="ams")
+        with pytest.raises(KeyError, match="no layer 'nope' on this map") as moved:
+            m.move_layer("nope", 0)
+        with pytest.raises(KeyError, match="no layer 'nope' on this map") as removed:
+            m.remove_layer("nope")
+        assert str(moved.value) == str(removed.value), (
+            f"{moved.value} against {removed.value}"
+        )
+        m.close()

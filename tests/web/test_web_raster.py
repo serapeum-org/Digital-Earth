@@ -443,6 +443,33 @@ class TestTheInlineCeilingIsARefusal:
         assert '"xyz"' in message, message
         assert '"cog"' in message, message
 
+    def test_the_ceiling_refusal_names_the_call_as_the_rest_of_field_does(
+        self, dataset, monkeypatch
+    ):
+        """One spelling for the builder, or two refusals of one call read as two different calls.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher, used to lower the ceiling.
+
+        Test scenario:
+            The ceiling refusal opened with the bare word ``field`` while every other refusal `field` can give
+            opens with ``WebMap.field()`` — the constant that exists to name this caller once (review R2-N6).
+            Measured against a sibling refusal of the same call rather than against a literal alone, so the
+            two are held to each other.
+        """
+        from digitalearth.web import raster as raster_module
+
+        monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        m = WebMap()
+        with pytest.raises(ValueError) as ceiling:
+            m.field(dataset)
+        other = WebMap()
+        with pytest.raises(ValueError) as sibling:
+            other.field(dataset, opacity=float("nan"))
+        assert str(ceiling.value).startswith("WebMap.field()"), str(ceiling.value)
+        assert str(sibling.value).startswith("WebMap.field()"), str(sibling.value)
+
     def test_a_band_under_the_ceiling_still_inlines(self, dataset):
         """Every map built so far embeds its pixels, and none of them may move.
 

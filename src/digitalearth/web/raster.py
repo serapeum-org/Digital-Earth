@@ -1390,7 +1390,11 @@ class RasterMixin(_MixinBase):
             return self
         # Before the colour map and the units, so a refused call leaves nothing of itself behind: those two
         # write `last_units`, which a later `colorbar()` would then label with a layer that was never built.
-        _refuse_if_large("field", "band", int(getattr(source.z.values, "size", 0)))
+        # Named by the constant every other refusal this builder gives is named by, so the ceiling does not
+        # open with `field:` where its siblings open with `WebMap.field()` (review R2-N6).
+        _refuse_if_large(
+            _FIELD_CALLER, "band", int(getattr(source.z.values, "size", 0))
+        )
         cmap_name = self._auto_cmap(source, cmap)
         # Carried for a key built from this band's values (see `_auto_units`); `None` when unknown.
         self.last_units = self._auto_units(source, units)

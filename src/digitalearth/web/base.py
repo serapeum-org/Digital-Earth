@@ -1333,7 +1333,8 @@ class WebMapBase:
             This map (chainable).
 
         Raises:
-            KeyError: if no layer has that id.
+            KeyError: if no layer has that id, naming the ids that do — the same sentence its four sibling
+                calls answer with, since a caller who named a layer that is not there made one mistake.
             IndexError: if the position is outside the map, or outside the layer's band.
 
         Note:
@@ -1369,6 +1370,10 @@ class WebMapBase:
 
                 ```
         """
+        # The same question its four siblings ask, in the same words: without it this one method answered out
+        # of `LayerTree.move` — "no layer 'nope' in this tree; layers are [...]" — about a tree the caller
+        # never handled, and named neither the map nor the ids that are on it (review R2-N6).
+        self._require_layer(layer_id)
         self._change(self._figure_with(self._layer_tree.move(layer_id, index)))
         return self
 
