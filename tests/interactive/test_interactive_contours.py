@@ -189,6 +189,46 @@ class TestAnIntervalIsSpacing:
             drawn.contours(constant, interval=100.0)
         assert drawn.layer_ids == []
 
+    def test_the_tiers_own_filled_spelling_takes_a_spacing_too(self, drawn):
+        """``filled_contours`` is documented as this tier's spelling of ``contours(filled=True)``.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            A spelling of a call takes the call's keywords, or it is a different call wearing the name. This
+            one took ``levels=`` alone, so a spacing fell through ``**opts`` and HoloViews refused it as a
+            style option — the same trap the one ``contours`` closed, still open on the other name.
+        """
+        drawn.filled_contours(_raster(), interval=100.0)
+        assert type(drawn.layers[0]).__name__ == "Polygons", drawn.layers
+
+    def test_the_spacing_reaches_the_engine_from_that_spelling(self, drawn):
+        """So the check above is not passing on bands laid out at a spacing nobody asked for.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.filled_contours(_raster(), interval=100.0)
+        values = _traced(drawn.layers[0])
+        gaps = {round(later - earlier, 9) for earlier, later in zip(values, values[1:])}
+        assert gaps == {100.0}, values
+
+    def test_that_spelling_refuses_a_spacing_and_levels_together_under_its_own_name(
+        self, drawn
+    ):
+        """Two ways of asking for one thing is refused on both names, each naming the one written.
+
+        Args:
+            drawn: The map under test.
+        """
+        raster = _raster()
+        with pytest.raises(ValueError) as refused:
+            drawn.filled_contours(raster, levels=LEVELS, interval=100.0)
+        assert "filled_contours() takes at most one of" in str(refused.value), (
+            refused.value
+        )
+
 
 class TestTheApiWrapperReachesThisTier:
     """``api.contours`` picks the render with ``filled=``, and has to mean that here too (review H3).
