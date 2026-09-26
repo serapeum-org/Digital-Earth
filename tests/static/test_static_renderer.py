@@ -45,7 +45,7 @@ def drawn_map(dataset):
         The map, whose single layer is ``raster-1``.
     """
     canvas = Map(crs=dataset.epsg)
-    canvas.imshow(dataset)
+    canvas.field(dataset)
     yield canvas
     canvas.close()
 
@@ -61,7 +61,7 @@ def layered_map(dataset):
         The map, whose layers are ``raster-1`` then ``mesh-1``.
     """
     canvas = Map(crs=dataset.epsg)
-    canvas.imshow(dataset)
+    canvas.field(dataset)
     canvas.pcolormesh(dataset)
     yield canvas
     canvas.close()
@@ -297,7 +297,7 @@ class TestTheOptionsADrawerReads:
 
         norm = Normalize(0.0, 10.0)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, norm=norm)
+        canvas.field(dataset, norm=norm)
         layer = canvas.figure_spec.layers.get("raster-1")
         held = drawing_opts(canvas, layer)["norm"]
         canvas.close()
@@ -318,7 +318,7 @@ class TestTheOptionsADrawerReads:
             dataset: The raster drawn.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, vmin=0.0)
+        canvas.field(dataset, vmin=0.0)
         layer = canvas.figure_spec.layers.get("raster-1")
         drawing_opts(canvas, layer)["vmin"] = 99.0
         again = drawing_opts(canvas, layer)["vmin"]
@@ -617,8 +617,8 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             first. A rollback that re-adds it last paints it over the image that was on top of it.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
+        canvas.field(dataset)
         figure = canvas.figure_spec
         refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):
@@ -660,7 +660,7 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
         monkeypatch.setattr(raster, "draw_field", refuse)
         canvas = Map(crs=dataset.epsg)
         with pytest.raises(ValueError, match="cannot be drawn"):
-            canvas.imshow(dataset)
+            canvas.field(dataset)
         assert canvas.layer_ids == [], canvas.layer_ids
         canvas.close()
 
@@ -703,7 +703,7 @@ class TestADrawerThatFailsPartWay:
 
         monkeypatch.setattr(ArrayGlyph, "plot", draws_then_fails)
         with pytest.raises(RuntimeError, match="after drawing"):
-            drawn_map.imshow(dataset)
+            drawn_map.field(dataset)
         painted = list(drawn_map.ax.images)
         assert painted == [drawn_map._renderer.drawn["raster-1"].artist], painted
 
@@ -735,10 +735,10 @@ class TestADrawerThatFailsPartWay:
             raise RuntimeError("failed after drawing")
 
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         monkeypatch.setattr(raster, "draw_field", draws_then_fails)
         with pytest.raises(RuntimeError, match="after drawing"):
-            canvas.imshow(dataset)
+            canvas.field(dataset)
         kept = canvas._renderer.drawn["raster-1"].artist
         registered = [mappable for _, mappable in canvas.layers]
         painted = list(canvas.ax.images)
@@ -1025,7 +1025,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
             dataset: The raster drawn and then forgotten.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         key = canvas.figure_spec.sources["raster-1"].uri.split(":", 1)[1]
         canvas.close()
         assert key not in _OBJECTS, f"{key} outlived the scene that registered it"
@@ -1037,7 +1037,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
             dataset: The raster drawn before the two closes.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.close()
         canvas.close()
         assert canvas.figure_spec.layers.ids == ("raster-1",)
@@ -1049,7 +1049,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
             dataset: The raster drawn inside the block.
         """
         with Map(crs=dataset.epsg) as canvas:
-            canvas.imshow(dataset)
+            canvas.field(dataset)
             key = canvas.figure_spec.sources["raster-1"].uri.split(":", 1)[1]
         assert key not in _OBJECTS, f"{key} outlived the with block"
 
@@ -1062,7 +1062,7 @@ class TestTheSceneLetsGoOfWhatItRegistered:
         import matplotlib.pyplot as plt
 
         with Map(crs=dataset.epsg) as canvas:
-            canvas.imshow(dataset)
+            canvas.field(dataset)
             number = canvas.fig.number
         assert plt.fignum_exists(number) is False
 

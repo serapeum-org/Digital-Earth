@@ -30,7 +30,7 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.custom import MissingObject, custom_kind
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
@@ -1225,13 +1225,6 @@ class InteractiveMapBase:
         self.layers.insert(self._layer_tree.ids.index(layer_id), element)
         self._note_last_layer(layer_id)
         return self
-
-    #: The tier's own spelling of :meth:`add_layer`, kept working for one release. The Core name is what
-    #: every other tier calls it; the kind an unnamed custom layer is filed under (``custom:holoviews``) is
-    #: unchanged, so a figure written before the rename reads back the same way.
-    add_element = renamed_method(
-        new="add_layer", old="add_element", owner="InteractiveMap"
-    )
 
     def _note_last_layer(self, layer_id: str) -> None:
         """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.

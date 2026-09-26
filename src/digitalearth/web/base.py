@@ -35,7 +35,6 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.custom import custom_kind
-from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
@@ -695,7 +694,7 @@ class WebMapBase:
         #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
         #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
         self._data_bounds: Optional[List[float]] = None
-        #: An explicit :meth:`fit_bounds` request, which always wins over the accumulated extent.
+        #: An explicit :meth:`set_bounds` request, which always wins over the accumulated extent.
         self._fit: Optional[dict] = None
         #: The projection MapLibre draws in, as `globe()` sets it; recorded so the view can say so.
         self._projection: str = "mercator"
@@ -982,9 +981,6 @@ class WebMapBase:
             "animate": bool(animate),
         }
         return self
-
-    #: Deprecated spelling of :meth:`set_bounds`, the contract's name for framing a figure on a region (#299).
-    fit_bounds = renamed_method(new="set_bounds", old="fit_bounds", owner="WebMap")
 
     def _switcher_request(self) -> Optional[dict]:
         """Return the layer switcher to add to the widget being built, or ``None`` for no switcher.

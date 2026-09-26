@@ -1,7 +1,7 @@
-"""DW.1 — web-tier raster builder (``add_raster``) + basemap/tiles encoding helpers.
+"""DW.1 — web-tier raster builder (``field``) + basemap/tiles encoding helpers.
 
 The PNG/coordinate encoding lives in pure helpers (``_rgba_png_datauri`` / ``_image_coordinates``) tested
-without the engine (numpy/matplotlib are core deps via cleopatra). ``add_raster`` itself ``importorskip``s
+without the engine (numpy/matplotlib are core deps via cleopatra). ``field`` itself ``importorskip``s
 maplibre and exercises the reproject → image-source → render → save path on the shared ``dataset`` fixture.
 """
 
@@ -138,28 +138,28 @@ class TestImageCoordinates:
 
 
 class TestAddRasterNeedsEngine:
-    """``add_raster`` reprojects through pyramids and builds an image source (engine required)."""
+    """``field`` reprojects through pyramids and builds an image source (engine required)."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
         pytest.importorskip("maplibre")
 
-    def test_add_raster_registers_layer_and_renders(self, dataset):
+    def test_field_registers_layer_and_renders(self, dataset):
         from maplibre.ipywidget import MapWidget
 
-        m = WebMap().add_raster(dataset)
-        assert len(m.layers) == 1, "add_raster should register one layer"
+        m = WebMap().field(dataset)
+        assert len(m.layers) == 1, "field should register one layer"
         assert m._last_layer_id is not None
         assert isinstance(m.render(), MapWidget)
 
-    def test_add_raster_then_basemap_saves(self, tmp_path, dataset):
+    def test_field_then_basemap_saves(self, tmp_path, dataset):
         out = tmp_path / "raster.html"
-        WebMap().add_raster(dataset, opacity=0.7).basemap("CartoLight").save(str(out))
+        WebMap().field(dataset, opacity=0.7).basemap("CartoLight").save(str(out))
         assert out.stat().st_size > 1_000
 
 
 def _source_with(y_values, values):
-    """Build a stand-in display source exposing the coordinate and value arrays `add_raster` reads.
+    """Build a stand-in display source exposing the coordinate and value arrays `field` reads.
 
     Args:
         y_values: The y coordinates, ascending or descending.
@@ -191,7 +191,7 @@ def _source_with(y_values, values):
 class TestAddRasterDrawsNorthFirst:
     """PNG row 0 is the northern edge, so a source whose rows run south-first has to be flipped.
 
-    `rgb_composite` has this test; `add_raster` — the older and far more used builder — did not, and an
+    `rgb_composite` has this test; `field` — the older and far more used builder — did not, and an
     upside-down overlay is silently plausible: it still lines up with its bounding box.
     """
 
@@ -233,7 +233,7 @@ class TestAddRasterDrawsNorthFirst:
             return encoder(values, cmap_name, vmin=vmin, vmax=vmax)
 
         monkeypatch.setattr(WebMap, "_rgba_png_datauri", staticmethod(spy))
-        WebMap().basemap().add_raster(dataset, cmap="viridis")
+        WebMap().basemap().field(dataset, cmap="viridis")
 
         expected = band[::-1] if flipped else band
         assert np.allclose(captured["values"], expected), (
@@ -262,11 +262,11 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
             Whatever the builder returns (the map itself, since both are fluent).
         """
         return {
-            "add_raster": lambda: m.add_raster(dataset),
+            "field": lambda: m.field(dataset),
             "rgb_composite": lambda: m.rgb_composite(dataset, bands=(1, 1, 1)),
         }[builder]()
 
-    @pytest.mark.parametrize("builder", ["add_raster", "rgb_composite"])
+    @pytest.mark.parametrize("builder", ["field", "rgb_composite"])
     def test_unplaceable_corners_skip_the_layer_and_warn(
         self, dataset, monkeypatch, builder, warning_log
     ):
@@ -292,7 +292,7 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
             f"the skip has to name why the layer is missing; got {warning_log!r}"
         )
 
-    @pytest.mark.parametrize("builder", ["add_raster", "rgb_composite"])
+    @pytest.mark.parametrize("builder", ["field", "rgb_composite"])
     def test_strict_raises_instead_of_skipping(self, dataset, monkeypatch, builder):
         """`strict=True` is for a pipeline that must not publish a map with a layer quietly missing.
 

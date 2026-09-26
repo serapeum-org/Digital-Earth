@@ -10,7 +10,7 @@ The clauses themselves are stated once, in :data:`digitalearth.base.contract_cla
 one is an edit in ``base/`` rather than one per tier (#326). This tier is held to C1 through C10 and C13;
 each class below names its clause, and what is peculiar to drawing into a MapLibre style is:
 
-* **C2** ``to_gif`` and ``duration=`` are the spellings this tier kept, with ``duration`` converted to a rate;
+* **C2** ``save_animation`` and ``duration=`` are the spellings this tier kept, with ``duration`` converted to a rate;
 * **C3** ``radius`` and ``point_size`` are the aliases this tier kept;
 * **C7** the clause's other half — a kind this tier does not draw at all, ``mesh`` or ``vectors`` — is pinned
   by ``test_web_capabilities.py`` rather than here (#320);
@@ -263,7 +263,7 @@ class TestC2FrameRateIsFps:
         monkeypatch.setattr(
             WebMap, "_frame_png", lambda self, path, visible, title: path
         )
-        WebMap().animate(str(tmp_path / "series.gif"))
+        WebMap().save_animation(str(tmp_path / "series.gif"))
         assert recorded["duration"] == pytest.approx(1.0 / DEFAULT_FPS), (
             "omitting fps must animate at the shared default rate"
         )
@@ -283,7 +283,7 @@ class TestC2FrameRateIsFps:
         scene = WebMap()
         target = str(tmp_path / "series.gif")
         with pytest.raises(TypeError) as excinfo:
-            scene.animate(target, fps=4.0, duration=0.5)
+            scene.save_animation(target, fps=4.0, duration=0.5)
         message = str(excinfo.value)
         assert "both fps= and the deprecated duration=" in message, message
         assert "pass only fps=" in message, message
@@ -313,7 +313,7 @@ class TestC2FrameRateIsFps:
         target = str(tmp_path / "series.gif")
         scene = WebMap()
         with pytest.warns(DeprecationWarning, match="duration= is deprecated"):
-            scene.animate(target, duration=0.5)
+            scene.save_animation(target, duration=0.5)
         assert recorded["duration"] == pytest.approx(0.5), (
             "duration=0.5 must mean fps=2, i.e. the same half-second hold it always did"
         )
@@ -340,31 +340,8 @@ class TestC2FrameRateIsFps:
             WebMap, "_frame_png", lambda self, path, visible, title: path
         )
 
-        WebMap().animate(str(tmp_path / "series.gif"), fps=4.0)
+        WebMap().save_animation(str(tmp_path / "series.gif"), fps=4.0)
         assert recorded["duration"] == pytest.approx(0.25)
-
-    def test_to_gif_still_works_and_warns(self, monkeypatch, tmp_path):
-        """The old name keeps working for one release, and says what replaces it.
-
-        Args:
-            monkeypatch: pytest's patcher.
-            tmp_path: pytest's per-test directory.
-        """
-        seen = {}
-
-        def fake_animate(self, path, **kwargs):
-            """Stand in for the real animation, recording that it was reached."""
-            seen["path"] = path
-            return pathlib.Path(path)
-
-        monkeypatch.setattr(WebMap, "save_animation", fake_animate)
-        out = tmp_path / "series.gif"
-        target = str(out)
-        scene = WebMap()
-        with pytest.warns(DeprecationWarning, match="use WebMap.save_animation"):
-            written = scene.to_gif(target)
-        assert written == out
-        assert seen["path"] == target
 
     @pytest.mark.parametrize("kwargs", [{"fps": 0}, {"duration": 0}])
     def test_a_non_positive_rate_is_refused(self, kwargs, tmp_path):
@@ -379,7 +356,7 @@ class TestC2FrameRateIsFps:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             with pytest.raises(ValueError, match="must be positive"):
-                scene.animate(target, **kwargs)
+                scene.save_animation(target, **kwargs)
 
 
 class TestC3SizeIsMarkerSizeAndTextSizeIsText:
@@ -644,8 +621,8 @@ class TestC6LevelsAndUnitsAreConsumed:
             f"{builder}(units=) must be keyword-only like the rest of the styling arguments"
         )
 
-    def test_add_raster_records_the_caller_supplied_unit(self, dataset):
-        """``add_raster(units=)`` reaches ``last_units``, so a key built from the band can name it.
+    def test_field_records_the_caller_supplied_unit(self, dataset):
+        """``field(units=)`` reaches ``last_units``, so a key built from the band can name it.
 
         Args:
             dataset: The shared pyramids raster fixture.
@@ -655,7 +632,7 @@ class TestC6LevelsAndUnitsAreConsumed:
             to say so. Nothing consumed the caller's unit before this, because nothing could pass one.
         """
         pytest.importorskip("maplibre")
-        assert WebMap().add_raster(dataset, units="Pa").last_units == "Pa"
+        assert WebMap().field(dataset, units="Pa").last_units == "Pa"
 
     def test_a_caller_supplied_unit_replaces_the_library_one_in_the_key(
         self, monkeypatch
@@ -901,7 +878,7 @@ class TestC7OffLimbSkipsAndWarns:
         scene = WebMap(strict=True)
         payload = object()
         with pytest.raises(OffLimbError):
-            scene.add_raster(payload)
+            scene.field(payload)
 
     @staticmethod
     def _off_limb_features():

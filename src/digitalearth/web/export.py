@@ -9,7 +9,7 @@ The headline of the tier: turn any ``WebMap`` into a shareable artifact.
   gated** dependency (not in the ``[web]`` extra): ``save(*.png)`` raises an actionable ``ImportError`` when
   neither Playwright nor Selenium is installed, rather than failing obscurely.
 * ``animate`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate every
-  tier's animation entry point takes). ``animate`` and ``to_gif`` are its deprecated names, and
+  tier's animation entry point takes). ``animate`` and ``to_gif`` were its older names, and
   ``duration=`` its deprecated
   seconds-per-frame spelling, converted to ``fps`` rather than reinterpreted.
 
@@ -25,7 +25,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Optional
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import DEFAULT_TITLE
 
 # `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
@@ -303,13 +303,12 @@ class ExportMixin(_MixinBase):
                 >>> from digitalearth.web import WebMap                           # doctest: +SKIP
                 >>> from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP
                 >>> stack = DatasetCollection.from_files(["jan.tif", "feb.tif"])  # doctest: +SKIP
-                >>> WebMap().basemap().timeslider(stack).animate("out.gif")       # doctest: +SKIP
+                >>> WebMap().basemap().timeslider(stack).save_animation("out.gif")       # doctest: +SKIP
 
                 ```
 
         See Also:
             digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
-            digitalearth.web.export.ExportMixin.to_gif: the deprecated name of this method.
         """
         fps = renamed_parameter(
             new="fps",
@@ -332,14 +331,6 @@ class ExportMixin(_MixinBase):
             ]
             _write_gif(images, path, duration=1.0 / float(fps), loop=loop)
         return pathlib.Path(path)
-
-    #: Deprecated spellings of :meth:`save_animation`, the contract's name for writing a sequence of frames
-    #: to a file (#299). `animate` means a matplotlib `FuncAnimation` on static and a callback loop in 3-D, so
-    #: the file-writing meaning takes the name it already had on those tiers; `to_gif` was this tier's own
-    #: older name. Both forward and warn.
-    save_gif = renamed_method(new="save_animation", old="save_gif", owner="WebMap")
-    animate = renamed_method(new="save_animation", old="animate", owner="WebMap")
-    to_gif = renamed_method(new="save_animation", old="to_gif", owner="WebMap")
 
     def _temporal_frames(self) -> list:
         """Return the visible-layer set for each time step, oldest first.

@@ -42,7 +42,7 @@ def _data_the_display_crs_cannot_place() -> None:
     """
     from digitalearth.static import Map
 
-    Map(crs=3857, strict=True)._skipped_off_limb("imshow")
+    Map(crs=3857, strict=True)._skipped_off_limb("field")
 
 
 def _a_url_with_no_resolver() -> None:

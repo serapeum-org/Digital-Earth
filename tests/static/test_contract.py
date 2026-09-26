@@ -137,7 +137,7 @@ class TestSaveReturnsPath:
             The ProjectionMixin override must forward the base class's return value, not swallow it.
         """
         m = Map(crs=dataset.epsg)
-        m.imshow(dataset)
+        m.field(dataset)
         written = m.save(tmp_path / "map.png")
         assert written == tmp_path / "map.png", (
             "the projection override dropped the return value"
@@ -202,10 +202,10 @@ class TestFrameRateDefault:
 
 
 class TestMarkerSizeAndColumn:
-    """C3 on the static tier — the scatter builders, and the rename each of them carried."""
+    """C3 on the static tier — the point builders, and the rename each of them carried."""
 
     def test_size_column_scales_the_markers(self, points_fc):
-        """scatter(size_column=...) maps the column's values across ``size_limits``.
+        """points(size_column=...) maps the column's values across ``size_limits``.
 
         Args:
             points_fc: The committed point fixture.
@@ -213,7 +213,7 @@ class TestMarkerSizeAndColumn:
         Test scenario:
             The parameter renamed from ``scale`` still drives per-point marker area.
         """
-        pc = Map(crs=points_fc.epsg).scatter(
+        pc = Map(crs=points_fc.epsg).points(
             points_fc, size_column="fid", size_limits=(20, 200)
         )
         sizes = np.asarray(pc.get_sizes())
@@ -225,7 +225,7 @@ class TestMarkerSizeAndColumn:
         )
 
     def test_size_sets_a_uniform_marker_size(self, points_fc):
-        """scatter(size=...) sets one marker size for every point.
+        """points(size=...) sets one marker size for every point.
 
         Args:
             points_fc: The committed point fixture.
@@ -234,7 +234,7 @@ class TestMarkerSizeAndColumn:
             ``size`` is what the other backends call a marker's visual size, so the static tier takes it
             too and folds it onto cleopatra's ``point_size``.
         """
-        pc = Map(crs=points_fc.epsg).scatter(points_fc, size=64)
+        pc = Map(crs=points_fc.epsg).points(points_fc, size=64)
         assert set(np.asarray(pc.get_sizes()).tolist()) == {64.0}, (
             "size= did not reach the markers"
         )
@@ -252,10 +252,10 @@ class TestMarkerSizeAndColumn:
         with pytest.warns(
             DeprecationWarning, match=r"scale= is deprecated.*use size_column="
         ):
-            deprecated = deprecated_map.scatter(
+            deprecated = deprecated_map.points(
                 points_fc, scale="fid", size_limits=(20, 200)
             )
-        renamed = Map(crs=points_fc.epsg).scatter(
+        renamed = Map(crs=points_fc.epsg).points(
             points_fc, size_column="fid", size_limits=(20, 200)
         )
         assert np.allclose(deprecated.get_sizes(), renamed.get_sizes()), (
@@ -275,7 +275,7 @@ class TestMarkerSizeAndColumn:
         with pytest.warns(
             DeprecationWarning, match=r"point_size= is deprecated.*use size="
         ):
-            pc = m.scatter(points_fc, point_size=77)
+            pc = m.points(points_fc, point_size=77)
         assert set(np.asarray(pc.get_sizes()).tolist()) == {77.0}, (
             "point_size= no longer sets the size"
         )
@@ -306,7 +306,7 @@ class TestMarkerSizeAndColumn:
         """
         m = Map(crs=points_fc.epsg)
         with pytest.raises(TypeError) as excinfo:
-            m.scatter(points_fc, **kwargs)
+            m.points(points_fc, **kwargs)
         message = str(excinfo.value)
         assert f"{new_name}=" in message, (
             f"the error must name the spelling to keep ({new_name}=), got {message!r}"
@@ -318,7 +318,7 @@ class TestMarkerSizeAndColumn:
 
 
 #: Every static builder that resolves a deprecated spelling, called the way a user writes it. The list is the
-#: whole class, not a sample: `scatter` is wrapped by `_skips_off_limb`, `grid_points` is not, and
+#: whole class, not a sample: `points` is wrapped by `_skips_off_limb`, `grid_points` is not, and
 #: `point_cloud` delegates to `grid_points`, so each sits a different number of frames from the caller.
 DEPRECATED_SPELLINGS = {
     # Called under the Core spelling `points`, not the deprecated `scatter`: this table is about a
@@ -363,48 +363,6 @@ class TestADeprecationWarningPointsAtTheCaller:
         assert len(deprecations) == 1, [str(w.message) for w in deprecations]
         warned = deprecations[0]
         assert warned.filename == __file__, f"{warned.filename}:{warned.lineno}"
-
-
-class TestADeprecatedParameterOnADeprecatedMethod:
-    """Both warnings have to land on the caller's line, and one of them is counted through the other.
-
-    A caller with an old script writes `Map.scatter(fc, point_size=5)`, and order 27a made *both* halves of
-    that deprecated: the method is an alias for `points` now, and `point_size=` was already an alias for
-    `size=`. The alias forwards, which puts a frame between the caller and the builder that resolves the
-    parameter — so a `stacklevel` counted for a direct call would blame `base/deprecation.py` instead of the
-    user. `_ALIAS_DEPTH` is what closes that, and until this rename no static builder exercised it.
-    """
-
-    def test_both_warnings_name_the_callers_file(self, points_fc):
-        """Two deprecations, one call, and both must point at the line that made it.
-
-        Args:
-            points_fc: The committed point fixture.
-        """
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            Map(crs=points_fc.epsg).scatter(points_fc, point_size=5)
-        blamed = sorted(
-            {w.filename for w in caught if issubclass(w.category, DeprecationWarning)}
-        )
-        assert blamed == [__file__], blamed
-
-    def test_the_two_warnings_name_the_two_spellings_to_change(self, points_fc):
-        """And a reader has to be told about both, not just the outer one.
-
-        Args:
-            points_fc: The committed point fixture.
-        """
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            Map(crs=points_fc.epsg).scatter(points_fc, point_size=5)
-        said = sorted(
-            str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
-        )
-        assert [text.split(" is deprecated")[0] for text in said] == [
-            "Map.points(): point_size=",
-            "Map.scatter()",
-        ], said
 
 
 class TestClassification:
@@ -482,9 +440,7 @@ class TestClassification:
 class TestColormapResolution:
     """C5 on the static tier — every raster builder, with the tier's own literal behind the lookup."""
 
-    @pytest.mark.parametrize(
-        "method", ["imshow", "contourf", "contour", "pcolormesh", "block"]
-    )
+    @pytest.mark.parametrize("method", ["field", "contours", "pcolormesh", "block"])
     def test_no_raster_builder_defaults_to_a_literal(self, method):
         """No raster builder names a colormap in its signature.
 
@@ -510,7 +466,7 @@ class TestColormapResolution:
             The lookup's answer reaches the glyph rather than matplotlib's default.
         """
         _styled(monkeypatch, cmap="magma")
-        im = Map(crs=dataset.epsg).imshow(dataset)
+        im = Map(crs=dataset.epsg).field(dataset)
         assert im.get_cmap().name == "magma", (
             "the resolved colormap did not reach the render"
         )
@@ -526,7 +482,7 @@ class TestColormapResolution:
             The lookup offers ``magma``; the caller asked for ``plasma`` and gets it.
         """
         _styled(monkeypatch, cmap="magma")
-        im = Map(crs=dataset.epsg).imshow(dataset, cmap="plasma")
+        im = Map(crs=dataset.epsg).field(dataset, cmap="plasma")
         assert im.get_cmap().name == "plasma", "the lookup overrode an explicit cmap"
 
     def test_literal_sits_behind_the_lookup(self, dataset, monkeypatch):
@@ -540,7 +496,7 @@ class TestColormapResolution:
             The default is still deterministic — it just lives behind the lookup instead of in a signature.
         """
         _styled(monkeypatch)
-        im = Map(crs=dataset.epsg).imshow(dataset)
+        im = Map(crs=dataset.epsg).field(dataset)
         assert im.get_cmap().name == DEFAULT_FIELD_CMAP, (
             "the fallback colormap was not applied"
         )
@@ -583,7 +539,7 @@ class TestAutoStyleLevelsAndUnits:
             The resolved edges are the ones the contour set is built on.
         """
         _styled(monkeypatch, cmap="viridis", levels=[0.0, 5.0, 10.0, 20.0])
-        cs = Map(crs=dataset.epsg).contourf(dataset)
+        cs = Map(crs=dataset.epsg).contours(dataset, filled=True)
         assert np.allclose(cs.levels, [0.0, 5.0, 10.0, 20.0]), (
             f"the resolved levels were ignored: {cs.levels}"
         )
@@ -599,13 +555,15 @@ class TestAutoStyleLevelsAndUnits:
             The caller asks for four even bands over a range the lookup does not describe.
         """
         _styled(monkeypatch, cmap="viridis", levels=[0.0, 5.0, 10.0, 20.0])
-        cs = Map(crs=dataset.epsg).contourf(dataset, levels=[0.0, 1.0, 2.0])
+        cs = Map(crs=dataset.epsg).contours(
+            dataset, levels=[0.0, 1.0, 2.0], filled=True
+        )
         assert np.allclose(cs.levels, [0.0, 1.0, 2.0]), (
             "the lookup overrode explicit levels"
         )
 
     def test_levels_do_not_band_a_continuous_render(self, dataset, monkeypatch):
-        """An ``imshow`` stays continuous even when the variable has canonical contour levels.
+        """A ``field`` stays continuous even when the variable has canonical contour levels.
 
         Args:
             dataset: The committed ``acc4000`` raster.
@@ -616,9 +574,9 @@ class TestAutoStyleLevelsAndUnits:
             caller asked to see.
         """
         _styled(monkeypatch, cmap="viridis", levels=[0.0, 5.0, 10.0, 20.0])
-        im = Map(crs=dataset.epsg).imshow(dataset)
+        im = Map(crs=dataset.epsg).field(dataset)
         assert not isinstance(im.norm, BoundaryNorm), (
-            "imshow was banded by the resolved levels"
+            "field was banded by the resolved levels"
         )
 
     def test_units_label_the_colorbar(self, dataset, monkeypatch):
@@ -633,7 +591,7 @@ class TestAutoStyleLevelsAndUnits:
         """
         _styled(monkeypatch, cmap="viridis", units="m3/s")
         m = Map(crs=dataset.epsg)
-        m.imshow(dataset)
+        m.field(dataset)
         assert m.colorbar().ax.get_ylabel() == "m3/s", (
             "the resolved units did not label the bar"
         )
@@ -650,7 +608,7 @@ class TestAutoStyleLevelsAndUnits:
         """
         _styled(monkeypatch, cmap="viridis", units="m3/s")
         m = Map(crs=dataset.epsg)
-        m.imshow(dataset)
+        m.field(dataset)
         assert m.colorbar(label="discharge").ax.get_ylabel() == "discharge", (
             "the units overrode an explicit label"
         )
@@ -667,7 +625,7 @@ class TestAutoStyleLevelsAndUnits:
         """
         _styled(monkeypatch, cmap="viridis")
         m = Map(crs=dataset.epsg)
-        m.imshow(dataset)
+        m.field(dataset)
         assert m.colorbar().ax.get_ylabel() == "", "an unlabelled bar was given a label"
 
     def test_animation_colorbar_follows_the_same_style(self, global_field, monkeypatch):
@@ -724,8 +682,8 @@ class TestStrictOffLimb:
         """
         m = Map(crs=projections.orthographic(lon=-175, lat=15))
         with caplog.at_level(logging.WARNING):
-            assert m.imshow(regional) is None, "an off-limb layer must draw nothing"
-        assert "imshow" in caplog.text, f"the skip was not reported: {caplog.text!r}"
+            assert m.field(regional) is None, "an off-limb layer must draw nothing"
+        assert "field" in caplog.text, f"the skip was not reported: {caplog.text!r}"
 
     def test_strict_raises_naming_the_layer(self, regional):
         """With ``strict=True`` the same layer raises instead of being skipped.
@@ -738,8 +696,8 @@ class TestStrictOffLimb:
             is rather than at the empty figure.
         """
         m = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True, strict=True)
-        with pytest.raises(OffLimbError, match="imshow"):
-            m.imshow(regional)
+        with pytest.raises(OffLimbError, match="field"):
+            m.field(regional)
 
     def test_strict_reaches_vector_layers_too(self, regional):
         """The strict flag is honoured by every layer, not just the raster fields.
@@ -832,13 +790,11 @@ def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
 #: takes a `DatasetCollection`, which is a set of rasters rather than one file, and refuses a path.
 #:
 #: The three Core spellings adopted at order 27a are listed under those names — `field`, `points`,
-#: `polygons` — because that is where the documentation lives. Their deprecated aliases (`imshow`,
-#: `scatter`, `shapes`) carry the one-line docstring `renamed_method` generates, whose whole job is to name
-#: the replacement; documenting the data argument twice is what the rename exists to stop.
+#: `polygons`. The spellings they replaced are gone rather than aliased, so each argument is documented in
+#: exactly one place.
 PATH_TAKING_BUILDERS = {
     "field": "dataset",
-    # `contours`, not `contour`/`contourf`: those two are translating aliases now (#262) and carry the
-    # one-line docstring that names the `filled=` to write instead, which is the whole of their job.
+    # One `contours`, told apart by `filled=` (#262), rather than the two names this tier used to carry.
     "contours": "dataset",
     "pcolormesh": "dataset",
     "block": "dataset",

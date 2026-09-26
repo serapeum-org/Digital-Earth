@@ -41,7 +41,7 @@ class TestGrid:
         """Each panel renders its own data on its own axes."""
         fig, maps = grid(1, 2, crs=dataset.epsg)
         for m in maps:
-            m.imshow(dataset)
+            m.field(dataset)
         assert all(len(m.ax.images) == 1 for m in maps), (
             "each panel should hold its own image"
         )
@@ -53,7 +53,7 @@ class TestSharedColorbar:
     def test_spans_given_panels(self, dataset):
         """shared_colorbar adds one colorbar axes for the supplied panels."""
         fig, maps = grid(1, 2, crs=dataset.epsg)
-        im = maps[0].imshow(dataset)
+        im = maps[0].field(dataset)
         n_axes_before = len(fig.axes)
         cbar = shared_colorbar(fig, im, maps, label="value")
         assert cbar.ax in fig.axes, "a colorbar axes should be added to the figure"
@@ -63,7 +63,7 @@ class TestSharedColorbar:
     def test_spans_all_axes_when_maps_none(self, dataset):
         """With maps=None the colorbar steals space from every axes in the figure."""
         fig, maps = grid(1, 2, crs=dataset.epsg)
-        im = maps[0].imshow(dataset)
+        im = maps[0].field(dataset)
         cbar = shared_colorbar(fig, im)
         assert cbar.ax in fig.axes
 

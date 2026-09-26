@@ -87,7 +87,7 @@ def shared_colorbar(
 
     Args:
         fig: The figure created by :func:`grid`.
-        mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel's ``imshow``)
+        mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel's ``field``)
             whose colour scale the bar represents. ``None`` is accepted and adds no bar, since a layer
             whose data lies outside the display CRS draws nothing and so has no scale to represent.
         maps: Panels the colorbar should steal space from; ``None`` spans all of the figure's axes.

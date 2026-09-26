@@ -5,8 +5,8 @@ matplotlib axes in that projected space, and decorates it with an XYZ-tile basem
 Natural-Earth vector features (``cleopatra.basemap.reference``). There is deliberately **no Cartopy**: the
 projection is applied to the *data* upstream, not to the axes (see plan §2.4).
 
-The field methods here (``imshow`` and the private ``_field`` recipe) are the foundation T1.1 extends with
-``contourf``/``contour``/``pcolormesh``/``block``.
+The field methods here (``field`` and the private ``_field`` recipe) are the foundation T1.1 extends with
+``contours``/``pcolormesh``/``block``.
 """
 
 from digitalearth.static.maps.animation import AnimationMixin

@@ -1,7 +1,7 @@
 """The colour group, built by cleopatra's own builder rather than by a copy of it (DE-43, #302).
 
 `render_compat` mapped six flat keys onto `ColorScaling` fields by hand, and the copy had drifted: the
-`equalize` scale's `samples` had no flat key, so `Map.imshow(ds, color_scale="equalize", samples=64)` raised
+`equalize` scale's `samples` had no flat key, so `Map.field(ds, color_scale="equalize", samples=64)` raised
 cleopatra's *"the 'samples' option moved onto a grouped parameter object"* — advice with no way to follow it
 from here. `ColorScaling.from_options` is the builder that does not drift.
 
@@ -171,7 +171,7 @@ class TestWhatIsDrawn:
         from digitalearth.static import Map
 
         with Map() as canvas:
-            canvas.imshow(raster, color_scale="equalize", samples=64)
+            canvas.field(raster, color_scale="equalize", samples=64)
             glyph = canvas.layers[-1][0]
         assert glyph.default_options["samples"] == 64, glyph.default_options["samples"]
 
@@ -184,6 +184,6 @@ class TestWhatIsDrawn:
         from digitalearth.static import Map
 
         with Map() as canvas:
-            canvas.imshow(raster, norm=matplotlib.colors.LogNorm())
+            canvas.field(raster, norm=matplotlib.colors.LogNorm())
             drawn = canvas.layers[-1][1].norm
         assert isinstance(drawn, matplotlib.colors.LogNorm), type(drawn).__name__

@@ -118,7 +118,7 @@ class TestTheCallersOwnKeywordsAreThawedAtTheReadBoundary:
             dataset: The raster drawn.
         """
         built = Map(crs=dataset.epsg)
-        built.imshow(dataset, alpha_range=list(ALPHA_RANGE))
+        built.field(dataset, alpha_range=list(ALPHA_RANGE))
         layer = built.figure_spec.layers.get(built.layer_ids[-1])
         built.close()
         with Scene() as elsewhere:
@@ -141,7 +141,7 @@ class TestTheCallersOwnKeywordsAreThawedAtTheReadBoundary:
         """
         given = tuple(ALPHA_RANGE)
         built = Map(crs=dataset.epsg)
-        built.imshow(dataset, alpha_range=given)
+        built.field(dataset, alpha_range=given)
         layer = built.figure_spec.layers.get(built.layer_ids[-1])
         described = dict(layer.symbology.props.get("opts") or {})
         style = drawing_style(built, layer)
@@ -174,7 +174,7 @@ class TestABuildersOwnRecordedListIsThawedToo:
             render_calls: The recorder of what each drawer handed the glyph.
         """
         built = Map(crs=dataset.epsg)
-        built.contour(dataset, levels=list(LEVELS))
+        built.contours(dataset, levels=list(LEVELS))
         recorded = dict(
             built.figure_spec.layers.get(built.layer_ids[-1]).symbology.props
         )
@@ -195,7 +195,7 @@ class TestABuildersOwnRecordedListIsThawedToo:
             render_calls: The recorder of what each drawer handed the glyph.
         """
         built = Map(crs=dataset.epsg)
-        built.contour(dataset, levels=list(LEVELS))
+        built.contours(dataset, levels=list(LEVELS))
         layer = built.figure_spec.layers.get(built.layer_ids[-1])
         built.close()
         render_calls.clear()

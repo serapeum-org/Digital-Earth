@@ -2,8 +2,8 @@
 
 ``quickmap`` (and its alias ``quickplot``) dispatch on the input type, auto-style the data, draw it on a
 ``Map``, optionally decorate (basemap/coastlines/domain), and add a colorbar — returning the finished
-``Map`` so callers can further tweak or ``save`` it. Module-level functions (``contourf``, ``imshow``,
-``scatter``, ``choropleth``, …) mirror the ``Map`` methods for a terse functional API.
+``Map`` so callers can further tweak or ``save`` it. Module-level functions (``field``, ``contours``,
+``points``, ``choropleth``, …) mirror the ``Map`` methods for a terse functional API.
 
 **Decoration is best-effort, not error-proof.** A basemap or coastline overlay needs assets this process may
 not be able to reach, so those steps tolerate *unavailability* — ``OSError`` and its network subclasses
@@ -22,14 +22,14 @@ the domain had been ignored. Now each such parameter is checked against
 support is forwarded to it.
 
 **The refusal is the declared one.** Both gates — :func:`_reject_unsupported` and the renderer wrappers
-:func:`imshow`/:func:`contourf`/:func:`contour`/:func:`pcolormesh` — decide from the tier's own
+:func:`field`/:func:`contours`/:func:`pcolormesh` — decide from the tier's own
 :class:`~digitalearth.base.capabilities.Capabilities`, carry the reason that declaration gave, and raise its
 :class:`~digitalearth.base.capabilities.CapabilityError`. It subclasses ``ValueError``, so a caller catching
 ``ValueError`` around ``quickmap`` keeps catching it, and one that wants only this refusal can now name it.
 """
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -300,11 +300,10 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
 __all__ = [
     "quickmap",
     "quickplot",
-    "imshow",
-    "contourf",
-    "contour",
+    "field",
+    "contours",
     "pcolormesh",
-    "scatter",
+    "points",
     "grid_cells",
     "choropleth",
     "voronoi",
@@ -361,10 +360,10 @@ def _add_colorbar(scene: Map) -> Any:
 #: The static tier's renderer for each raster ``kind`` whose method is spelled differently, as
 #: ``{kind: (method, keywords)}``.
 #:
-#: The companion of :data:`_INTERACTIVE_RASTER_KINDS`, and here for the same reason: a ``kind`` is the
-#: renderer a caller names, and the static tier's Core renames (order 27a) moved the methods it dispatches
-#: to. Dispatching on the kind alone would reach a deprecated alias and warn a caller about a spelling they
-#: never wrote.
+#: The companion of :data:`_INTERACTIVE_RASTER_KINDS`, and here for the same reason: a ``kind`` is a
+#: **renderer** a caller names — matplotlib's own vocabulary, which is also what cleopatra's ``ArrayGlyph``
+#: takes — and it is not the method's name. The static tier's Core renames (order 27a) moved those methods,
+#: so dispatching on the kind alone would now reach nothing at all.
 #:
 #: The keywords are why this is a pair rather than a name. ``contour`` and ``contourf`` are one method now,
 #: told apart by ``filled=`` (#262), so the kind carries the argument that picks the render. A kind not
@@ -404,20 +403,20 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
     """Draw ``data`` on ``scene`` using the renderer implied by its type and ``kind``.
 
     Dispatch is by input type: a ``FeatureCollection`` of polygons becomes a ``choropleth`` (when a
-    ``column`` kwarg is given) or outline ``shapes``; any other geometry becomes a ``scatter``; a
-    ``Dataset`` is rendered with the ``kind`` method (``imshow`` for ``"auto"``). An empty
+    ``column`` kwarg is given) or outline ``polygons``; any other geometry becomes ``points``; a
+    ``Dataset`` is rendered with the method the ``kind`` names (``field`` for ``"auto"``). An empty
     ``FeatureCollection`` is rejected up front — without the guard its all-``True`` empty ``geom_type``
     check would misclassify it as polygons and silently draw nothing.
 
     Args:
         scene: The :class:`Map` to draw on.
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
-        kind: Raster renderer name (``"auto"`` → ``imshow``); ignored for vector input.
+        kind: Raster renderer name (``"auto"`` → ``field``); ignored for vector input.
         **kwargs: Forwarded to the chosen ``Map`` draw method (e.g. ``column``, ``cmap``, ``levels``).
 
     Raises:
         ValueError: if ``data`` is an empty ``FeatureCollection`` (nothing to draw), or if ``column`` was
-            given for point input — it names a polygon fill and ``Map.scatter`` has no such parameter, so
+            given for point input — it names a polygon fill and ``Map.points`` has no such parameter, so
             forwarding it produced an opaque cleopatra error instead of naming the keyword (review M19).
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
@@ -430,7 +429,7 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
                 scene.polygons(data, **kwargs)
             return
         if "column" in kwargs:
-            # `Map.scatter` has no fill column: it sizes markers by `size_column` and colours them from
+            # `Map.points` has no fill column: it sizes markers by `size_column` and colours them from
             # the collection's own value column. Forwarding `column` reached cleopatra, which answered
             # with its own keyword list and never named the caller's parameter (review M19).
             raise ValueError(
@@ -465,7 +464,8 @@ def quickmap(
         crs: Display CRS for the map (`backend="matplotlib"`/`"interactive"`, where it defaults to `3857`, and
             `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
             scene takes the data's own CRS.
-        kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
+        kind: Renderer for raster input (``"auto"`` → ``imshow``, which the ``field`` method draws; or
+            ``contourf``/``contour``/``pcolormesh``).
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
             nothing) is accepted anywhere.
@@ -499,7 +499,7 @@ def quickmap(
             recorded in :attr:`~digitalearth.web.base.WebMapBase.last_legend` — so an unclassified layer gets
             nothing. The split is not raster-vs-vector: the same unclassified polygon layer gets a colorbar
             on ``matplotlib`` and no key on ``web``, and every raster falls on the empty side there because
-            ``add_raster`` records no classification. Giving the web tier a continuous ramp key for a raster
+            ``field`` records no classification. Giving the web tier a continuous ramp key for a raster
             is tier work, not part of this argument's contract. Neither active tier logs when it skips: the
             ``matplotlib`` path warns only if its builder refuses, and the ``web`` path lets a refusal
             surface, since past the guard only a malformed classification can raise.
@@ -515,7 +515,7 @@ def quickmap(
             honours is :data:`BACKEND_CAPABILITIES`; anything else you pass it is refused, not dropped.
         **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
             ``z_exaggeration``/``height``/``size`` for ``backend="3d"``). ``column`` names a **polygon**
-            fill on ``backend="matplotlib"``: point input there is a ``Map.scatter``, which sizes markers
+            fill on ``backend="matplotlib"``: point input there is a ``Map.points``, which sizes markers
             by ``size_column`` instead, so ``column`` on points is refused by name rather than forwarded.
 
     Returns:
@@ -641,7 +641,7 @@ def _quickmap_matplotlib(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
         crs: Display CRS for the map.
-        kind: Raster renderer (``"auto"`` → ``imshow``).
+        kind: Raster renderer (``"auto"`` → ``imshow``, drawn by ``Map.field``).
         domain: A named region / bbox to frame on, or `None` to leave the extent to the data.
         basemap: ``True`` for the backend's default tile source, or the source itself.
         coastlines: When True, overlay coastlines.
@@ -805,13 +805,14 @@ def _quickmap_interactive(
 
     Dispatches by input type exactly like :func:`_draw`: a polygon ``FeatureCollection`` with a
     ``column`` becomes a ``choropleth`` (else ``polygons``); other vectors become ``points``; a raster
-    is drawn with the ``kind`` method (``"auto"`` → ``image``). The ``InteractiveMap`` import is lazy so
+    is drawn with the ``kind`` method (``"auto"`` → ``field``). The ``InteractiveMap`` import is lazy so
     the core ``api`` works without the ``interactive`` extra.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
         crs: Display CRS for the interactive map.
-        kind: Raster renderer (``"auto"`` → ``image``; or ``contourf``/``contour``/``pcolormesh``).
+        kind: Raster renderer (``"auto"`` → ``imshow``, drawn by ``InteractiveMap.field``; or
+            ``contourf``/``contour``/``pcolormesh``).
         basemap: ``True`` for the backend's default tile source, or the source itself (provider name or
             keyed preset), forwarded to ``InteractiveMap.tiles``.
         coastlines: When True, overlay a coastline.
@@ -911,7 +912,7 @@ def _quickmap_web(
 
     Dispatches by input type, mirroring :func:`_draw`: a polygon ``FeatureCollection`` with a ``column``
     becomes a ``choropleth`` (else outline ``polygons``); other vectors become ``points``; a raster
-    ``Dataset`` becomes ``add_raster``. The ``WebMap`` import is lazy so the core ``api`` works without the
+    ``Dataset`` becomes ``field``. The ``WebMap`` import is lazy so the core ``api`` works without the
     ``web`` extra. The web tier normalises data to lon/lat itself, so the matplotlib-oriented ``kind`` /
     ``domain`` / ``coastlines`` kwargs have no counterpart here and :func:`_reject_unsupported` refuses them
     upstream. ``crs`` **is** forwarded: ``WebMap`` carries one and validates it, so a CRS it cannot place
@@ -1067,10 +1068,10 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
     return scene
 
 
-def _method(name: str):
+def _method(name: str, kind: Optional[str] = None):
     """Build a module-level function that quick-draws via the ``Map`` method ``name``.
 
-    The wrapper *is* the ``kind``: it injects ``kind=name`` on the caller's behalf. So when the chosen
+    The wrapper *is* the ``kind``: it injects one on the caller's behalf. So when the chosen
     backend has no renderer selector, :func:`_reject_unsupported`'s "drop the argument" message named a
     keyword the caller never typed (review L5). The wrapper answers for its own injection instead, naming
     itself and the call that does work.
@@ -1081,11 +1082,16 @@ def _method(name: str):
     they were told a renderer is missing and never what the tier does instead.
 
     Args:
-        name: The ``Map`` renderer the wrapper draws with, also the wrapper's own name.
+        name: The ``Map`` method the wrapper draws with, and the wrapper's own name.
+        kind: The ``quickmap`` renderer it injects, where that is spelled differently from the
+            method — ``field`` draws matplotlib's ``imshow`` kind, and ``contours`` draws
+            ``contour`` or ``contourf`` depending on ``filled=``. ``None`` (default) means the
+            two agree, which is the case for ``pcolormesh``.
 
     Returns:
         The module-level quick-draw function.
     """
+    renderer = name if kind is None else kind
 
     def _fn(data: PlottableData, **kwargs) -> Map:
         backend = kwargs.get("backend", "matplotlib")
@@ -1098,17 +1104,17 @@ def _method(name: str):
             )
             reason = _refusal_reason(backend, "kind")
             raise CapabilityError(
-                f"{name}() draws with the {name!r} renderer, which backend={backend!r} does not have; "
+                f"{name}() draws with the {renderer!r} renderer, which backend={backend!r} does not have; "
                 + (f"{reason}. " if reason else "")
                 + f"It is honoured by {honoured} — call quickmap(data, backend={backend!r}) instead"
             )
-        return quickmap(data, kind=name, **kwargs)
+        return quickmap(data, kind=renderer, **kwargs)
 
     _fn.__name__ = name
     _fn.__doc__ = f"""Quick-draw ``data`` with :meth:`Map.{name}` and return the finished Map.
 
-    The wrapper *is* the renderer choice: it calls :func:`quickmap` with ``kind={name!r}`` on the caller's
-    behalf, so everything else :func:`quickmap` accepts is written here unchanged.
+    The wrapper *is* the renderer choice: it calls :func:`quickmap` with ``kind={renderer!r}`` on the
+    caller's behalf, so everything else :func:`quickmap` accepts is written here unchanged.
 
     Args:
         data: A pyramids ``Dataset`` or ``FeatureCollection`` to draw.
@@ -1121,7 +1127,7 @@ def _method(name: str):
 
     Raises:
         CapabilityError: when ``backend=`` names a backend that has no renderer selector, since the
-            {name!r} renderer is this wrapper's own injection rather than something the caller
+            {renderer!r} renderer is this wrapper's own injection rather than something the caller
             asked for. A ``ValueError``, so catching that still works. The message carries the
             tier's own reason for having no renderer selector, names the backends that do honour
             one, and points at :func:`quickmap` for the chosen one.
@@ -1129,23 +1135,51 @@ def _method(name: str):
     return _fn
 
 
-imshow = _method("imshow")
-contourf = _method("contourf")
-contour = _method("contour")
+field = _method("field", kind="imshow")
 pcolormesh = _method("pcolormesh")
 
+#: The two renderers :func:`contours` picks between, built once rather than per call so each keeps the
+#: capability refusal every other wrapper has. The *kinds* are matplotlib's own two function names;
+#: the method they reach is one ``contours`` on every tier that has both.
+_UNFILLED_CONTOURS = _method("contours", kind="contour")
+_FILLED_CONTOURS = _method("contours", kind="contourf")
 
-def scatter(data: PlottableData, **kwargs) -> Map:
-    """Quick-draw a FeatureCollection of points as a scatter map; returns the finished Map.
 
-    Point input is what makes it a scatter: this adds no ``kind``, so :func:`quickmap`'s own input-type
-    dispatch chooses the builder. Sizing by an attribute is ``size_column``, not ``column`` — the latter
-    names a polygon fill and is refused on points by name.
+def contours(data: PlottableData, *, filled: bool = False, **kwargs) -> Map:
+    """Quick-draw a raster as iso-value lines, or as filled bands between them.
+
+    One function for both renders, which is what the tiers offer: ``filled=`` picks the render rather
+    than the function's name doing it.
+
+    Args:
+        data: A pyramids ``Dataset`` to trace.
+        filled: ``False`` (default) traces the levels as lines; ``True`` fills between them.
+        **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
+            ``colorbar``, ``backend``, plus styling kwargs such as ``levels``). ``kind`` is not among
+            them — this function supplies it.
+
+    Returns:
+        The finished map :func:`quickmap` built.
+
+    Raises:
+        CapabilityError: when ``backend=`` names a backend with no renderer selector, as every other
+            renderer wrapper raises it.
+    """
+    wrapper = _FILLED_CONTOURS if filled else _UNFILLED_CONTOURS
+    return wrapper(data, **kwargs)
+
+
+def points(data: PlottableData, **kwargs) -> Map:
+    """Quick-draw a FeatureCollection of points as a marker map; returns the finished Map.
+
+    Point input is what makes it a marker map: this adds no ``kind``, so :func:`quickmap`'s own
+    input-type dispatch chooses the builder. Sizing by an attribute is ``size_column``, not
+    ``column`` — the latter names a polygon fill and is refused on points by name.
 
     Args:
         data: A pyramids ``FeatureCollection`` of point geometries.
         **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
-            ``colorbar``, ``backend``, plus the styling kwargs ``Map.scatter`` takes).
+            ``colorbar``, ``backend``, plus the styling kwargs ``Map.points`` takes).
 
     Returns:
         The finished :class:`Map` — or the other tier's map when ``backend=`` names one.
@@ -1161,7 +1195,7 @@ def scatter(data: PlottableData, **kwargs) -> Map:
 def grid_cells(data: PlottableData, **kwargs) -> Map:
     """Quick-draw raster cells as coloured polygons; returns the finished Map.
 
-    Unlike :func:`scatter` and :func:`choropleth`, this does not go through :func:`quickmap`: it builds a
+    Unlike :func:`points` and :func:`choropleth`, this does not go through :func:`quickmap`: it builds a
     :class:`Map` and calls :meth:`Map.grid_cells` on it, so it is **matplotlib only**. There is no
     ``backend=`` to choose, and passing one reaches the cleopatra glyph as an unknown styling keyword and
     is refused there.

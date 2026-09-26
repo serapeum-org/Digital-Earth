@@ -172,7 +172,7 @@ THREE_D_UNDRAWN_KINDS: dict[str, str] = {}
 WEB_UNDRAWN_KINDS: dict[str, str] = {}
 INTERACTIVE_UNDRAWN_KINDS: dict[str, str] = {
     "custom:holoviews": (
-        "a caller's own element, drawn by being kept: `add_element` holds no description to rebuild it from"
+        "a caller's own element, drawn by being kept: `add_layer` holds no description to rebuild it from"
     ),
 }
 STATIC_UNDRAWN_KINDS: dict[str, str] = {}
@@ -1211,7 +1211,7 @@ class StaticContract(RendererContract):
                 geo=(400000.0, 30000.0, 0.0, 5020000.0, 0.0, -20000.0), epsg=3857
             ),
         )
-        tier.imshow(dataset)
+        tier.field(dataset)
         return tier.layer_ids[-1]
 
     def refused_figure(self, tier):

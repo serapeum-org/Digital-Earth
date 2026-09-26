@@ -47,19 +47,19 @@ class TestAutostyleDefaults:
 
         src = _source("t2m")
         expected = auto_style(src)["cmap"]
-        m.image(src)
+        m.field(src)
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["cmap"] == expected, (
             f"autostyle cmap not applied: {style.get('cmap')} != {expected}"
         )
 
     def test_unknown_variable_falls_back_to_viridis(self, m):
-        m.image(_source("totally-unknown-field"))
+        m.field(_source("totally-unknown-field"))
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["cmap"] == "viridis", f"fallback cmap wrong: {style.get('cmap')}"
 
     def test_explicit_cmap_overrides_autostyle(self, m):
-        m.image(_source("t2m"), cmap="bone")
+        m.field(_source("t2m"), cmap="bone")
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["cmap"] == "bone", "explicit cmap must win over autostyle"
 
@@ -69,7 +69,7 @@ class TestSourceIngestion:
 
     def test_image_accepts_bare_source(self, m):
         src = _source("rain")
-        m.image(src)
+        m.field(src)
         assert isinstance(m.layers[0], hv.Image)
         x_samples = m.layers[0].dimension_values("x", expanded=False)
         assert np.allclose(np.sort(x_samples), src.x.values), (
@@ -81,8 +81,8 @@ class TestSourceIngestion:
         from digitalearth.base.sources import get_source
 
         src = get_source(dataset.to_crs(3857))
-        InteractiveMap(crs=3857).image(src)
-        m.image(dataset)
+        InteractiveMap(crs=3857).field(src)
+        m.field(dataset)
         assert isinstance(m.layers[0], hv.Image)
 
 

@@ -1,4 +1,4 @@
-"""RasterMixin — raster field rendering: imshow/contourf/contour/pcolormesh/block, composites, spaghetti.
+"""RasterMixin — raster field rendering: field/contours/pcolormesh/block, composites, spaghetti.
 
 Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into cleopatra ``ArrayGlyph`` field
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
@@ -13,7 +13,6 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
-import warnings
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
@@ -22,7 +21,6 @@ from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 from matplotlib import colormaps
 
 from digitalearth.base.autostyle import auto_style
-from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import Source, get_stack
@@ -69,6 +67,16 @@ FIELD_KINDS = {
 #: belong to a contour render — applying them to ``imshow``/``pcolormesh`` would quietly band a continuous
 #: field the caller asked to see continuously.
 _CONTOUR_KINDS = frozenset({"contour", "contourf"})
+
+#: The public method each render kind is reached through, for a message that has to name something a caller
+#: can call. The kinds are matplotlib's own spellings and two of them share one method, so a skip reported
+#: under its kind would name ``imshow`` at a tier whose method is ``field``.
+_FIELD_METHODS = {
+    "imshow": "field",
+    "pcolormesh": "pcolormesh",
+    "contour": "contours",
+    "contourf": "contours",
+}
 
 #: How much larger than the canvas a band must be before a field render decimates it instead of decoding it
 #: whole — measured on a side, so this squared is the ratio in cells. Below it the decimated read and the full
@@ -676,7 +684,7 @@ class RasterMixin(_MixinBase):
         try:
             return self._draw(record)
         except OffLimbError:
-            self._skipped_off_limb(kind)
+            self._skipped_off_limb(_FIELD_METHODS[kind])
             return None
 
     def field(
@@ -712,11 +720,6 @@ class RasterMixin(_MixinBase):
         """
         return self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
 
-    #: The tier's own spelling of :meth:`field`, kept working for one release. The Core name is what every
-    #: other tier calls it, and the recipe key underneath (``via="imshow"``) is unchanged — a figure written
-    #: before the rename reads back into the same drawer.
-    imshow = renamed_method(new="field", old="imshow", owner="Map")
-
     def contours(
         self,
         dataset: Any,
@@ -732,8 +735,8 @@ class RasterMixin(_MixinBase):
 
         One method for both renders, which is what the Tier-2 contract declares and what the web and
         interactive tiers offer. This tier had two — ``contour`` and ``contourf`` — so ``filled=`` meant
-        nothing here and a script moving between tiers had to know which of the two to write. Both old
-        spellings keep working for one release and warn, naming the ``filled=`` to pass instead.
+        nothing here and a script moving between tiers had to know which of the two to write. Neither
+        spelling survives: ``filled=`` is the argument that picks the render.
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
@@ -779,75 +782,6 @@ class RasterMixin(_MixinBase):
             name=name,
             visible=visible,
             **kwargs,
-        )
-
-    def contourf(
-        self,
-        dataset: Any,
-        *,
-        name: Optional[str] = None,
-        visible: bool = True,
-        **kwargs,
-    ) -> Any:
-        """Deprecated spelling of :meth:`contours` with ``filled=True``; it forwards there and warns.
-
-        Written out rather than built by
-        :func:`~digitalearth.base.deprecation.renamed_method` because this is a **translating** alias, not a
-        plain rename: the old name carries the ``filled=True`` the new one takes as an argument, and that
-        helper forwards arguments unchanged. ``WebMap.globe`` is the same shape for the same reason.
-
-        Args:
-            dataset: As :meth:`contours` takes it.
-            name: As :meth:`contours` takes it.
-            visible: As :meth:`contours` takes it.
-            **kwargs: Passed straight through.
-
-        Returns:
-            Whatever :meth:`contours` returns.
-
-        Warns:
-            DeprecationWarning: naming ``contours(filled=True)`` as its replacement, on the caller's line.
-        """
-        warnings.warn(
-            "Map.contourf() is deprecated and will be removed in a future release; "
-            "use Map.contours(filled=True) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.contours(dataset, filled=True, name=name, visible=visible, **kwargs)
-
-    def contour(
-        self,
-        dataset: Any,
-        *,
-        name: Optional[str] = None,
-        visible: bool = True,
-        **kwargs,
-    ) -> Any:
-        """Deprecated spelling of :meth:`contours` with ``filled=False``; it forwards there and warns.
-
-        Translating, and hand-written, for the reason :meth:`contourf` records.
-
-        Args:
-            dataset: As :meth:`contours` takes it.
-            name: As :meth:`contours` takes it.
-            visible: As :meth:`contours` takes it.
-            **kwargs: Passed straight through.
-
-        Returns:
-            Whatever :meth:`contours` returns.
-
-        Warns:
-            DeprecationWarning: naming ``contours(filled=False)`` as its replacement, on the caller's line.
-        """
-        warnings.warn(
-            "Map.contour() is deprecated and will be removed in a future release; "
-            "use Map.contours(filled=False) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.contours(
-            dataset, filled=False, name=name, visible=visible, **kwargs
         )
 
     def pcolormesh(

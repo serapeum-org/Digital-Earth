@@ -10,7 +10,7 @@ from digitalearth.static import Map, projections
 def test_globe_frame_applied_on_render(dataset):
     """A globe Map draws a boundary patch and equal aspect after render()."""
     m = Map(crs=projections.orthographic(lon=-9, lat=39), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     assert not m.ax.patches  # frame not applied until render
     m.render()
     assert m.ax.patches  # boundary patch added
@@ -21,7 +21,7 @@ def test_globe_frame_applied_on_render(dataset):
 def test_globe_frame_idempotent(dataset):
     """render() applies the frame once (no duplicate boundary patches)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     m.render()
     n = len(m.ax.patches)
     m.render()
@@ -31,7 +31,7 @@ def test_globe_frame_idempotent(dataset):
 def test_non_globe_map_unframed(dataset):
     """A plain (globe=False) Map adds no boundary patch."""
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset)
+    m.field(dataset)
     m.render()
     assert not m.ax.patches
 
@@ -39,7 +39,7 @@ def test_non_globe_map_unframed(dataset):
 def test_graticule_drawn_in_frame(dataset):
     """graticule() lines are drawn when the globe frame is applied."""
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     m.graticule(lon_step=30, lat_step=30)
     before = len(m.ax.lines)
     m.render()
@@ -58,7 +58,7 @@ def test_set_global_sets_full_domain():
 def test_polar_stereographic_reprojects(dataset):
     """An EPSG-coded projection (polar south, 3031) reprojects and frames without proj4."""
     m = Map(crs=projections.polar_south(), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     m.render()
     assert len(m.layers) == 1
     assert m.ax.patches
@@ -67,7 +67,7 @@ def test_polar_stereographic_reprojects(dataset):
 def test_globe_coastlines(dataset):
     """Globe coastlines project per-line and split at the limb (real 110m data, seeded cache)."""
     m = Map(crs=projections.orthographic(10, 25), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     segs = m.coastlines(resolution="110m")
     assert segs
     assert m.ax.lines
@@ -148,7 +148,7 @@ def test_globe_tricontourf_finite(global_field):
 def test_globe_save(dataset, tmp_path):
     """A globe map saves a non-empty PNG (frame applied on save)."""
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     m.coastlines() if False else None  # coastlines need network; covered elsewhere
     m.graticule()
     out = tmp_path / "globe.png"
@@ -159,7 +159,7 @@ def test_globe_save(dataset, tmp_path):
 def test_globe_show_applies_frame(dataset):
     """show() applies the projection frame for a globe map (Agg backend -> no window)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    m.imshow(dataset)
+    m.field(dataset)
     assert not m.ax.patches
     m.show()  # MPLBACKEND=Agg makes this a no-op draw, but the frame must still be applied
     assert m.ax.patches
@@ -228,7 +228,7 @@ def test_natural_earth_flat_without_data_autoscales_to_layer(mocker):
         "digitalearth.static.maps.decoration.add_features",
         side_effect=_add_features_drawing([(-50, -20), (50, 20)]),
     )
-    m = Map(crs=4326)  # flat, no imshow -> had_data is False
+    m = Map(crs=4326)  # flat, no field -> had_data is False
     m.coastlines()
     assert m.ax.collections  # the layer drew something
     assert (
@@ -306,7 +306,7 @@ def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(-75, 42), globe=True)
-    img = m.imshow(dataset)
+    img = m.field(dataset)
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
     pc = m.land()
     assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, (
@@ -408,7 +408,7 @@ def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     )
     m = Map(crs=projections.orthographic(-30, 20), globe=True)
     m.ocean()
-    m.imshow(dataset)
+    m.field(dataset)
     m.land()
     out = tmp_path / "globe_fills.png"
     m.save(str(out))
@@ -435,7 +435,7 @@ class TestOffLimbDraw:
         )
 
     def test_a_static_off_limb_field_draws_nothing(self, regional):
-        """imshow on a hiding projection returns None rather than raising — no animation involved.
+        """field on a hiding projection returns None rather than raising — no animation involved.
 
         Test scenario:
             The reprojection to the display CRS raises out of GDAL when every sample point falls behind
@@ -445,7 +445,7 @@ class TestOffLimbDraw:
         m = Map(
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
         )
-        assert m.imshow(regional) is None, (
+        assert m.field(regional) is None, (
             "an off-limb field should draw nothing, not raise"
         )
         assert not m.ax.images, "no raster should have been drawn"
@@ -453,7 +453,7 @@ class TestOffLimbDraw:
     def test_an_on_limb_field_still_draws(self, regional):
         """The guard must not swallow a view that can see the data."""
         m = Map(crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4))
-        assert m.imshow(regional) is not None, "a visible field must still render"
+        assert m.field(regional) is not None, "a visible field must still render"
         assert m.ax.images, "the raster should have been drawn"
 
     def test_rotate_spins_a_regional_aoi(self, regional, tmp_path):
@@ -493,7 +493,7 @@ class TestOffLimbDraw:
         m = Map(
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
         )
-        assert m.imshow(regional) is None, (
+        assert m.field(regional) is None, (
             "a partial count must be treated as off-limb too"
         )
 
@@ -516,7 +516,7 @@ class TestOffLimbDraw:
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
         )
         with pytest.raises(RuntimeError) as caught:
-            m.imshow(regional)
+            m.field(regional)
         assert not isinstance(caught.value, OffLimbError), (
             "an unrelated failure must stay a plain RuntimeError, not become OffLimbError"
         )
@@ -579,7 +579,7 @@ class TestOffLimbEveryLayerKind:
         )
 
     @pytest.mark.parametrize(
-        "method", ["imshow", "contourf", "pcolormesh", "grid_points", "grid_cells"]
+        "method", ["field", "contours", "pcolormesh", "grid_points", "grid_cells"]
     )
     def test_single_raster_layers_draw_nothing(self, hidden, regional, method):
         """Every layer taking one raster returns None rather than raising."""
@@ -609,10 +609,10 @@ class TestOffLimbEveryLayerKind:
         )
 
     def test_stock_img_handles_an_off_limb_backdrop(self, hidden, regional):
-        """stock_img consumes imshow's return, so it had to learn about the None too.
+        """stock_img consumes field's return, so it had to learn about the None too.
 
         Test scenario:
-            It set a z-order on whatever imshow handed back. Once a hidden layer returns None that became
+            It set a z-order on whatever field handed back. Once a hidden layer returns None that became
             "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard turning one crash
             into another, in the one place inside src/ that consumes these returns.
         """
@@ -680,16 +680,16 @@ class TestOffLimbEveryLayerKind:
         import logging
 
         with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
-            hidden.imshow(regional)
+            hidden.field(regional)
         assert any("nothing drawn" in record.message for record in caplog.records), (
             f"the skip should be logged, got {[r.message for r in caplog.records]}"
         )
-        assert any("imshow" in record.getMessage() for record in caplog.records), (
+        assert any("field" in record.getMessage() for record in caplog.records), (
             "the log line should name the public method, not the private helper behind it"
         )
 
     @pytest.mark.parametrize(
-        "method", ["imshow", "contourf", "pcolormesh", "grid_points", "grid_cells"]
+        "method", ["field", "contours", "pcolormesh", "grid_points", "grid_cells"]
     )
     def test_the_same_layers_still_draw_when_visible(self, regional, method):
         """The positive control: every layer asserted to return None above must draw when it can see.
@@ -724,7 +724,7 @@ class TestOffLimbEveryLayerKind:
             no_data_value=-9999.0,
         )
         with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
-            assert Map(crs=3857, figsize=(4, 4)).imshow(mislabelled) is None
+            assert Map(crs=3857, figsize=(4, 4)).field(mislabelled) is None
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, (
             f"an unclipped projection that places no data should warn, got {caplog.records}"
@@ -738,7 +738,7 @@ class TestOffLimbEveryLayerKind:
         import logging
 
         with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
-            hidden.imshow(regional)
+            hidden.field(regional)
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING], (
             "a hidden hemisphere is expected on a globe and must not warn"
         )
@@ -814,7 +814,7 @@ class TestOffLimbEveryLayerKind:
 
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
-        assert hidden.imshow(regional) is None
+        assert hidden.field(regional) is None
         assert not hidden.ax.images, "nothing should have been drawn"
         assert hidden.layers == [], "no layer should have been registered"
 
@@ -858,9 +858,8 @@ def _draw(m: Map, method: str, points, polygons, lines):
 
 #: Every validating vector builder — the eight that share the ``_vector_input`` preamble.
 VECTOR_BUILDERS = [
-    # The Core spellings adopted at order 27a. `points` and `polygons`, not `scatter` and `shapes`: the
-    # off-limb signal names the *builder* that drew nothing, so the name a caller is shown is the name of
-    # the method they called, and the aliases forward here.
+    # The Core spellings adopted at order 27a: the off-limb signal names the *builder* that drew nothing,
+    # so the name a caller is shown is the name of the method they called.
     "points",
     "choropleth",
     "polygons",
@@ -879,7 +878,7 @@ class TestOffLimbVectorLayers:
     of it was written into :func:`~digitalearth.base.crs.reproject`. This tier never reached it: the shared
     preamble called ``features.to_crs`` directly, so a globe that hides the data gave a raw
     ``ValueError: zero-size array to reduction operation fmin`` from ``choropleth`` and an all-masked layer
-    from ``scatter`` — which ``strict=True`` did not even notice. These tests drive the real orthographic
+    from ``points`` — which ``strict=True`` did not even notice. These tests drive the real orthographic
     warp rather than monkeypatching the reprojection, because the bypass was the bug.
     """
 

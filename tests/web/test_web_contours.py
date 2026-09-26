@@ -90,7 +90,7 @@ class TestTracingIsPyramids:
         """pyramids counts bands from 0 and this tier from 1; a silent off-by-one would draw the wrong band.
 
         Test scenario:
-            ``band=1`` must reach pyramids as band 0 — the same band ``add_raster(band=1)`` draws.
+            ``band=1`` must reach pyramids as band 0 — the same band ``field(band=1)`` draws.
         """
         seen = {}
         original = type(dataset).contour

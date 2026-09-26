@@ -19,10 +19,9 @@ embedding a DEM the way :mod:`digitalearth.web.raster` can embed a band. The til
 goes and the promise that the page decodes with the scheme it was written with.
 """
 
-import warnings
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
@@ -434,12 +433,6 @@ class ThreeDMixin(_MixinBase):
         )
         return f"{destination.name}/{{z}}/{{x}}/{{y}}.png"
 
-    #: Deprecated spelling of :meth:`terrain_tiles` (#299). Both tiers' terrain now takes a pyramids DEM, so
-    #: the names no longer disagree about the *input* — they still disagree about the output, and that is what
-    #: this one says: the 3-D tier renders a surface from the heights in memory, while this one writes (or
-    #: reads) a served tile pyramid, because MapLibre takes its terrain from tiles and nothing else.
-    terrain = renamed_method(new="terrain_tiles", old="terrain", owner="WebMap")
-
     def projection(self, name: str = "globe") -> Self:
         """Draw the map in another projection, by name.
 
@@ -467,24 +460,6 @@ class ThreeDMixin(_MixinBase):
                 ```
         """
         return self._set_projection(str(name))
-
-    def globe(self, enabled: bool = True) -> Self:
-        """Switch the map to the spherical globe projection (or back to Web Mercator).
-
-        Args:
-            enabled: ``True`` for the globe projection; ``False`` restores Web Mercator.
-
-        Returns:
-            This map (chainable).
-        """
-        _require_layer_api()
-        warnings.warn(
-            "WebMap.globe() is deprecated and will be removed in a future release; use "
-            f"WebMap.projection({'globe' if enabled else 'mercator'!r}) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._set_projection("globe" if enabled else "mercator")
 
     def _set_projection(self, projection: str) -> Self:
         """Switch the map's projection and record it on the view.

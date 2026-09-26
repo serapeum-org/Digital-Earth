@@ -193,18 +193,6 @@ class TestTheRenamesNobodyHasAdopted:
     and a guard deleted for being vacuous is a guard the next row ships without.
     """
 
-    #: The six adopted at order 27a, as `{backend: {old: new}}`. Written out rather than read from `ALIASES`,
-    #: which carries older aliases too: this is the claim that *these* moved, so reading the table it moved
-    #: into would assert nothing.
-    ADOPTED = {
-        "matplotlib": {"imshow": "field", "scatter": "points", "shapes": "polygons"},
-        "interactive": {
-            "image": "field",
-            "path": "lines",
-            "add_element": "add_layer",
-        },
-    }
-
     def test_nothing_is_still_waiting_to_be_renamed(self):
         """The emptiness itself, stated where a reader of this class will look for it.
 
@@ -215,30 +203,6 @@ class TestTheRenamesNobodyHasAdopted:
         """
         assert dict(PLANNED_RENAMES) == {}, (
             f"PLANNED_RENAMES holds {dict(PLANNED_RENAMES)}; this class's docstring says it is empty"
-        )
-
-    @pytest.mark.parametrize("backend", sorted(ADOPTED))
-    def test_every_adopted_rename_is_a_live_alias_instead(self, backend):
-        """Where the six went, and the reason the emptiness above is a result and not an omission.
-
-        Args:
-            backend: The tier under test.
-
-        Test scenario:
-            A row leaving `PLANNED_RENAMES` has exactly one legitimate destination: `ALIASES`, where the old
-            spelling is promised to work, to warn, and to name its replacement. A row that simply vanished
-            would empty the table just as well and would drop the promise to the caller who already wrote the
-            old name, and no check compares the two tables across time — so this is what compares them.
-        """
-        adopted = self.ADOPTED[backend]
-        misfiled = {
-            old: alias_table(backend).get(old)
-            for old, new in adopted.items()
-            if alias_table(backend).get(old) != new
-        }
-        assert misfiled == {}, (
-            f"{backend} adopted {sorted(adopted)} and ALIASES records {misfiled} for them; an adopted "
-            "rename belongs in ALIASES pointing at its Core name"
         )
 
     def test_a_tier_with_none_answers_empty(self):

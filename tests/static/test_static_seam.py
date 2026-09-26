@@ -89,11 +89,11 @@ def bands(dataset):
 #: mesh under two entry points, and ``voronoi``/``cartogram`` are a choropleth or a plain polygon layer
 #: depending only on whether a column was named.
 DATA_BUILDERS = {
-    "imshow": ("raster", lambda canvas, given: canvas.imshow(given["raster"])),
-    "contour": ("contours", lambda canvas, given: canvas.contour(given["raster"])),
-    "contourf": (
+    "field": ("raster", lambda canvas, given: canvas.field(given["raster"])),
+    "contours": ("contours", lambda canvas, given: canvas.contours(given["raster"])),
+    "filled-contours": (
         "filled_contours",
-        lambda canvas, given: canvas.contourf(given["raster"]),
+        lambda canvas, given: canvas.contours(given["raster"], filled=True),
     ),
     "pcolormesh": ("mesh", lambda canvas, given: canvas.pcolormesh(given["raster"])),
     "block": ("mesh", lambda canvas, given: canvas.block(given["raster"])),
@@ -105,7 +105,7 @@ DATA_BUILDERS = {
         "rgb",
         lambda canvas, given: canvas.hsv_composite(given["bands"]),
     ),
-    "scatter": ("points", lambda canvas, given: canvas.scatter(given["points"])),
+    "points": ("points", lambda canvas, given: canvas.points(given["points"])),
     "grid_points": (
         "points",
         lambda canvas, given: canvas.grid_points(given["raster"]),
@@ -146,7 +146,7 @@ DATA_BUILDERS = {
         "choropleth",
         lambda canvas, given: canvas.choropleth(given["polygons"], column="fid"),
     ),
-    "shapes": ("polygons", lambda canvas, given: canvas.shapes(given["polygons"])),
+    "polygons": ("polygons", lambda canvas, given: canvas.polygons(given["polygons"])),
     "voronoi": (
         "choropleth",
         lambda canvas, given: canvas.voronoi(given["points"], column="fid"),
@@ -349,8 +349,8 @@ class TestEveryBuilderDescribesWhatItDrew:
             describing fewer layers than it drew, which is the drift this seam exists to remove.
         """
         canvas = Map(crs=given["raster"].epsg)
-        canvas.imshow(given["raster"])
-        canvas.scatter(given["points"])
+        canvas.field(given["raster"])
+        canvas.points(given["points"])
         canvas.choropleth(given["polygons"], column="fid")
         assert len(canvas.layer_ids) == len(canvas.layers), (
             f"{len(canvas.layers)} artists registered, {len(canvas.layer_ids)} described"
@@ -379,7 +379,7 @@ class TestEveryBuilderDescribesWhatItDrew:
 
         monkeypatch.setattr(Map, "_reproject", off_limb)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         assert canvas.layer_ids == [], canvas.layer_ids
 
 
@@ -393,8 +393,8 @@ class TestAnIdFollowsTheLayer:
             dataset: A raster drawn twice.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
+        canvas.field(dataset)
         assert canvas.layer_ids == ["raster-1", "raster-2"], canvas.layer_ids
 
     def test_an_id_reaches_the_layer_it_was_issued_for(self, dataset, features):
@@ -405,8 +405,8 @@ class TestAnIdFollowsTheLayer:
             features: Points drawn over it.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
-        canvas.scatter(features)
+        canvas.field(dataset)
+        canvas.points(features)
         found = {i: canvas.figure_spec.layers.get(i).kind for i in canvas.layer_ids}
         assert found == {"raster-1": "raster", "points-1": "points"}, found
 
@@ -432,8 +432,8 @@ class TestAnIdFollowsTheLayer:
             never said when a layer was added.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.scatter(features)
-        canvas.imshow(dataset)
+        canvas.points(features)
+        canvas.field(dataset)
         assert canvas.layer_ids == ["points-1", "raster-1"], canvas.layer_ids
 
     def test_a_redrawn_frame_mints_the_same_ids_again(self, dataset):
@@ -447,9 +447,9 @@ class TestAnIdFollowsTheLayer:
             copies of one raster, each under a fresh id, and the figure would grow with the animation.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas._reset_layers()
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         assert canvas.layer_ids == ["raster-1"], canvas.layer_ids
 
     def test_a_second_graticule_replaces_the_first(self):
@@ -477,7 +477,7 @@ class TestTheSourcesAreWhatTheBuildersWereGiven:
             dataset: The raster the builder is given.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         reference = canvas.figure_spec.sources["raster-1"]
         assert reference.open() is dataset, reference.uri
 
@@ -489,8 +489,8 @@ class TestTheSourcesAreWhatTheBuildersWereGiven:
             features: The points.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
-        canvas.scatter(features)
+        canvas.field(dataset)
+        canvas.points(features)
         sources = canvas.figure_spec.sources
         assert sources["raster-1"].open() is dataset, sources["raster-1"].uri
         assert sources["points-1"].open() is features, sources["points-1"].uri
@@ -524,9 +524,9 @@ class TestTheSourcesAreWhatTheBuildersWereGiven:
             the first map's already-captured source at its own data.
         """
         first = Map(crs=dataset.epsg)
-        first.imshow(dataset)
+        first.field(dataset)
         second = Map(crs=dataset.epsg)
-        second.imshow(dataset)
+        second.field(dataset)
         held = first.figure_spec.sources["raster-1"].uri
         assert held != second.figure_spec.sources["raster-1"].uri, held
 
@@ -539,7 +539,7 @@ class TestTheSourcesAreWhatTheBuildersWereGiven:
             dataset: A raster held in memory rather than referenced by path.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         figure = canvas.figure_spec
         with pytest.raises(ValueError, match="only resolves in the process"):
             figure.to_dict()
@@ -557,7 +557,7 @@ class TestTheBandOfALayerIsItsKinds:
         """
         canvas = Map(crs=dataset.epsg)
         canvas.coastlines()
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.graticule()
         canvas.basemap()
         assert canvas.layer_ids == [
@@ -578,7 +578,7 @@ class TestTheBandOfALayerIsItsKinds:
         """
         canvas = Map(crs=dataset.epsg)
         canvas.coastlines()
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.graticule()
         canvas.basemap()
         drawn = [
@@ -593,7 +593,7 @@ class TestTheBandOfALayerIsItsKinds:
             dataset: The raster used as the backdrop.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.stock_img(dataset)
         assert canvas.layer_ids == ["raster-2", "raster-1"], canvas.layer_ids
         assert canvas.figure_spec.layers.get("raster-2").band == "underlay"
@@ -651,8 +651,8 @@ class TestTheFigureIsOneWholeThing:
             agree — and nothing about *which* order that is. The test below is the one that says that.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
-        canvas.scatter(features)
+        canvas.field(dataset)
+        canvas.points(features)
         panel = canvas.figure_spec.panels[0]
         assert list(panel.layers) == canvas.layer_ids, panel.layers
 
@@ -669,7 +669,7 @@ class TestTheFigureIsOneWholeThing:
             picture. The assertion is on what matplotlib paints, in the order it paints it.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.stock_img(dataset)
         owner = {
             id(artist): layer_id
@@ -692,7 +692,7 @@ class TestTheFigureIsOneWholeThing:
             dataset: A raster, so the figure is not empty.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         assert canvas.figure_spec.panels[0].id == PANEL_ID, PANEL_ID
 
     def test_the_view_is_the_display_crs_rather_than_the_axes_limits(self, dataset):
@@ -702,7 +702,7 @@ class TestTheFigureIsOneWholeThing:
             dataset: A raster in a projected CRS.
         """
         canvas = Map(crs=dataset.epsg, domain="europe")
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         view = canvas.viewport
         assert view.crs == dataset.epsg, view.crs
         assert view.domain == "europe", view.domain
@@ -718,7 +718,7 @@ class TestTheFigureIsOneWholeThing:
             dataset: The raster drawn with an explicit colormap.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, cmap="terrain")
+        canvas.field(dataset, cmap="terrain")
         props = canvas.figure_spec.layers.get("raster-1").symbology.props
         assert props["cmap"] == "terrain", dict(props)
 
@@ -729,7 +729,7 @@ class TestTheFigureIsOneWholeThing:
             dataset: The raster drawn as filled contours.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.contourf(dataset)
+        canvas.contours(dataset, filled=True)
         props = canvas.figure_spec.layers.get("filled_contours-1").symbology.props
         assert props["via"] == "contourf", dict(props)
 
@@ -836,7 +836,7 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         """
         alpha = np.full(dataset.shape[-2:], 0.5)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, alpha=alpha)
+        canvas.field(dataset, alpha=alpha)
         assert canvas._layer_opts["raster-1"]["alpha"] is alpha
 
     def test_a_keyword_whose_type_matters_is_not_written_into_the_description(self):
@@ -865,7 +865,7 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         """
         alpha = np.full(dataset.shape[-2:], 0.5)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, alpha=alpha)
+        canvas.field(dataset, alpha=alpha)
         props = canvas.figure_spec.layers.get("raster-1").symbology.props
         canvas.close()
         assert "alpha" not in dict(props.get("opts") or {}), dict(props)
@@ -887,7 +887,7 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
             the whole figure, for a keyword the caller passed to one layer.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow("examples/data/acc4000.tif", alpha=unwritable, vmin=1.0)
+        canvas.field("examples/data/acc4000.tif", alpha=unwritable, vmin=1.0)
         props = canvas.figure_spec.layers.get("raster-1").symbology.props
         recorded = dict(props.get("opts") or {})
         held = canvas._layer_opts["raster-1"]["alpha"]
@@ -909,7 +909,7 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         from matplotlib.font_manager import FontProperties
 
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, norm=Normalize(0.0, 10.0))
+        canvas.field(dataset, norm=Normalize(0.0, 10.0))
         canvas.text(
             4.9, 52.4, "Amsterdam", crs=dataset.epsg, fontproperties=FontProperties()
         )
@@ -930,7 +930,7 @@ class TestEngineKeywordsAreHeldBesideTheLayer:
         from matplotlib.colors import Normalize
 
         drawn_from = Map(crs=dataset.epsg)
-        drawn_from.imshow(dataset, norm=Normalize(0.0, 10.0))
+        drawn_from.field(dataset, norm=Normalize(0.0, 10.0))
         drawn_from.coastlines(linestyle=DASHED)
         figure = _written_and_read_back(_saved(drawn_from.figure_spec))
         target = Map(crs=dataset.epsg)
@@ -955,7 +955,7 @@ class TestAPlainKeywordTravelsInTheFigure:
             dataset: The raster drawn.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, vmin=1.0, vmax=9.0, alpha=0.5)
+        canvas.field(dataset, vmin=1.0, vmax=9.0, alpha=0.5)
         recorded = dict(
             canvas.figure_spec.layers.get("raster-1").symbology.props["opts"]
         )
@@ -1016,7 +1016,7 @@ class TestAPlainKeywordTravelsInTheFigure:
 
         norm = Normalize(0.0, 10.0)
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, alpha=0.5, norm=norm)
+        canvas.field(dataset, alpha=0.5, norm=norm)
         style = drawing_style(canvas, canvas.figure_spec.layers.get("raster-1"))
         canvas.close()
         assert style["norm"] is norm, style
@@ -1029,7 +1029,7 @@ class TestAPlainKeywordTravelsInTheFigure:
             dataset: The raster drawn.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, vmin=1.0, title="Accumulation")
+        canvas.field(dataset, vmin=1.0, title="Accumulation")
         figure = _written_and_read_back(_saved(canvas.figure_spec))
         canvas.close()
         recorded = dict(figure.layers.get("raster-1").symbology.props["opts"])
@@ -1113,7 +1113,7 @@ class TestANamedArgumentIsNormalisedForTheDescription:
         from matplotlib import colormaps
 
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, cmap=colormaps["viridis"])
+        canvas.field(dataset, cmap=colormaps["viridis"])
         recorded = canvas.figure_spec.layers.get("raster-1").symbology.props["cmap"]
         drawn = canvas.ax.images[-1].get_cmap().name
         canvas.close()
@@ -1132,7 +1132,7 @@ class TestANamedArgumentIsNormalisedForTheDescription:
 
         theirs = ListedColormap(["red", "blue"], name="two-tone")
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset, cmap=theirs)
+        canvas.field(dataset, cmap=theirs)
         written = json.dumps(
             canvas.figure_spec.layers.to_dict(), allow_nan=False
         )  # the figure is storable
@@ -1472,7 +1472,7 @@ class TestABasemapFigureDrawsBackFromItsOwnDescription:
             ``ValueError: Axes have no data extent`` with the suite green.
         """
         drawn_from = Map(crs=dataset.epsg)
-        drawn_from.imshow(dataset)
+        drawn_from.field(dataset)
         drawn_from.basemap()
         figure = _written_and_read_back(_saved(drawn_from.figure_spec))
         target = Map(crs=dataset.epsg)
@@ -1498,7 +1498,7 @@ class TestABasemapFigureDrawsBackFromItsOwnDescription:
             different mosaic at a different zoom.
         """
         drawn_from = Map(crs=dataset.epsg)
-        drawn_from.imshow(dataset)
+        drawn_from.field(dataset)
         drawn_from.basemap()
         # Sorted, not as served: the tiles are fetched in parallel, so their arrival order is the pool's.
         built = sorted(served_tiles)
@@ -1522,7 +1522,7 @@ class TestABasemapFigureDrawsBackFromItsOwnDescription:
             served_tiles: The in-memory tile service.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.basemap()
         recorded = canvas.figure_spec.layers.get("basemap-1").symbology.props["extent"]
         framed = (*canvas.ax.get_xlim(), *canvas.ax.get_ylim())
@@ -1544,12 +1544,12 @@ class TestABasemapFigureDrawsBackFromItsOwnDescription:
             the axes limits exactly as that data set them.
         """
         drawn_from = Map(crs=dataset.epsg)
-        drawn_from.imshow(dataset)
+        drawn_from.field(dataset)
         drawn_from.basemap()
         figure = _written_and_read_back(_saved(drawn_from.figure_spec))
         drawn_from.close()
         target = Map(crs=dataset.epsg)
-        target.imshow(dataset)
+        target.field(dataset)
         expected = (*target.ax.get_xlim(), *target.ax.get_ylim())
         target._renderer.draw_layer(figure, "basemap-1")
         after = (*target.ax.get_xlim(), *target.ax.get_ylim())
@@ -1604,7 +1604,7 @@ class TestADecorationLayerOwnsTheArtistsItAdded:
             dataset: The raster the map is framed on, so the reference layer has a view to draw in.
         """
         canvas = Map(crs=dataset.epsg)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         canvas.coastlines()
         drawn_features = len(canvas.ax.collections)
         canvas._renderer.remove("coastlines-1")
@@ -1724,10 +1724,10 @@ class TestTwoScenesOnOneAxesIsUnsupported:
             dataset: The raster both maps draw.
         """
         first = Map(crs=dataset.epsg)
-        first.imshow(dataset)
+        first.field(dataset)
         held = first._renderer.drawn["raster-1"].artist
         second = Map(ax=first.ax, fig=first.fig, crs=dataset.epsg)
-        second.imshow(dataset)
+        second.field(dataset)
         assert held not in list(first.ax.images), "the first map's image survived"
 
     def test_the_first_scene_goes_on_describing_what_it_lost(self, dataset):
@@ -1737,9 +1737,9 @@ class TestTwoScenesOnOneAxesIsUnsupported:
             dataset: The raster both maps draw.
         """
         first = Map(crs=dataset.epsg)
-        first.imshow(dataset)
+        first.field(dataset)
         second = Map(ax=first.ax, fig=first.fig, crs=dataset.epsg)
-        second.imshow(dataset)
+        second.field(dataset)
         assert first.layer_ids == ["raster-1"], first.layer_ids
         assert second.layer_ids == ["raster-1"], second.layer_ids
 

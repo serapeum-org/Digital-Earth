@@ -39,7 +39,7 @@ def _points(corners):
     """Return a two-point feature collection at `corners`.
 
     Args:
-        corners: Two ``(lon, lat)`` pairs, which become the layer's extent exactly — a scatter's data limits
+        corners: Two ``(lon, lat)`` pairs, which become the layer's extent exactly — a point layer's limits
             are its points, with no marker padding (measured).
 
     Returns:
@@ -159,7 +159,7 @@ class TestNoneFitsTheData:
             flat.set_bounds(None)
 
     def test_a_raster_layer_is_framed_on_the_image_it_drew(self, flat):
-        """A raster states the region it covers, where a scatter only has the points it drew.
+        """A raster states the region it covers, where a point layer only has the points it drew.
 
         Args:
             flat: A map in degrees.
@@ -430,18 +430,3 @@ class TestAFlippedAxisSurvives:
         """
         with pytest.raises(ValueError, match="exactly 4 values"):
             flat.set_bounds([0.0, 1.0, 0.0, 1.0, 2.0])
-
-
-class TestTheOldSpellingReachesAllOfIt:
-    """``set_extent`` is a live alias, so it forwards the new keyword as well as the old rectangle."""
-
-    def test_the_alias_fits_the_data_too(self, flat):
-        """A caller who has not renamed their calls still gets the capability.
-
-        Args:
-            flat: A map in degrees.
-        """
-        flat.points(_points(NORTH_WEST))
-        with pytest.warns(DeprecationWarning):
-            flat.set_extent(None, padding=0.1)
-        assert _limits(flat) == ((-1.0, 11.0), (-1.0, 11.0)), _limits(flat)

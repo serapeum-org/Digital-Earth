@@ -185,12 +185,12 @@ EXPECTED_SEED = (
 #: **The interactive tier came off it, and the 3-D tier went on.** The interactive tier was listed here:
 #: `points(visible=False)` fell through the builder's `**opts` to HoloViews as a style option, so the element
 #: was hidden while the figure went on describing the layer visible (#327). The flag is a declared parameter
-#: of every builder on that tier now, so it reaches `add_element(visible=)` and the description and the
+#: of every builder on that tier now, so it reaches `add_layer(visible=)` and the description and the
 #: drawing say the same thing. The 3-D tier never gained it: measured,
 #: `Scene3D().point_cloud(cloud, visible=False)` raises `TypeError: "visible" is an invalid keyword argument
 #: for _common_arg_parser` — the flag falls through `**kwargs` to PyVista, which refuses it, and
 #: `set_visible()` after the build is the only way to hide a 3-D layer. The static tier is **not** listed:
-#: measured, `Map(crs=4326).scatter(features, visible=False)` describes the layer `visible=False` (R-M4).
+#: measured, `Map(crs=4326).points(features, visible=False)` describes the layer `visible=False` (R-M4).
 #:
 #: **Where the reverse branch actually runs, and where it does not.** The base class used to carry a reverse
 #: probe of its own, and it could never execute: it skips unless the tier is on this table, the only tier on
@@ -222,7 +222,7 @@ CANNOT_HIDE_AT_BUILD: dict[str, str] = {
 #: fails just as a broken tier taken off it would.
 #:
 #: The static and 3-D tiers were never fixed, and the empty table said otherwise (review R-M4). Measured:
-#: `Map(crs=4326).scatter(features, size=7.0)` records `props == ['opts', 'size_column', 'via']` and
+#: `Map(crs=4326).points(features, size=7.0)` records `props == ['opts', 'size_column', 'via']` and
 #: `encodings == {}`; `Scene3D().point_cloud(cloud, size=7.0)` records `size` flat in `props` and
 #: `encodings == {}`. Neither is a 2-D map, and neither has a fold that turns its own spelling into declared
 #: channels, so both are named here with what they record instead — and both are held to it, in both

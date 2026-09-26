@@ -301,7 +301,7 @@ class TestTheRegistryIsAddressable:
         m = (
             WebMap()
             .basemap()
-            .add_raster(raster)
+            .field(raster)
             .contours(raster, levels=[0.3], labels=True)
             .choropleth(polygons, column="pop")
             .points(points)
@@ -317,7 +317,7 @@ class TestTheRegistryIsAddressable:
     @pytest.mark.parametrize(
         "method, fixture, args, kwargs, kind",
         [
-            ("add_raster", "raster", (), {}, "raster"),
+            ("field", "raster", (), {}, "raster"),
             ("rgb_composite", "raster", (), {"bands": (1, 1, 1)}, "rgb"),
             ("heatmap", "points", (), {}, "heatmap"),
             ("cluster", "points", (), {}, "clusters"),
@@ -327,7 +327,7 @@ class TestTheRegistryIsAddressable:
             ("labels", "points", ("v",), {}, "labels"),
         ],
         ids=[
-            "add_raster",
+            "field",
             "rgb_composite",
             "heatmap",
             "cluster",
@@ -369,7 +369,7 @@ class TestTheRegistryIsAddressable:
     @pytest.mark.parametrize(
         "method, fixture, kwargs",
         [
-            ("add_raster", "raster", {}),
+            ("field", "raster", {}),
             ("rgb_composite", "raster", {"bands": (1, 1, 1)}),
             ("points", "points", {}),
             ("lines", "lines", {}),
@@ -380,7 +380,7 @@ class TestTheRegistryIsAddressable:
             ("graticule", None, {}),
         ],
         ids=[
-            "add_raster",
+            "field",
             "rgb_composite",
             "points",
             "lines",
@@ -432,7 +432,7 @@ class TestTheRegistryIsAddressable:
         [
             ("points", "points", 0, False),
             ("points", "points", 1, True),
-            ("add_raster", "raster", None, False),
+            ("field", "raster", None, False),
             ("graticule", None, 0, False),
         ],
         ids=["points-0", "points-1", "raster-none", "graticule-0"],

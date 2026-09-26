@@ -48,7 +48,6 @@ from typing import (
     Tuple,
 )
 
-from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.spec import DEFAULT_BAND, Bounds, LayerSpec, Scale, Symbology
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
 from digitalearth.web.base import _require_layer_api, as_finite
@@ -1379,10 +1378,6 @@ class RasterMixin(_MixinBase):
             self._last_layer_id = layer_id
         return self
 
-    #: Deprecated spelling of :meth:`field`, the contract's name for a raster band drawn as a coloured field
-    #: (#299). It forwards and warns.
-    add_raster = renamed_method(new="field", old="add_raster", owner="WebMap")
-
     def _tiled_field(
         self,
         route: str,
@@ -1556,7 +1551,7 @@ class RasterMixin(_MixinBase):
         See Also:
             digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.
             digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
-            digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.
+            digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.
         """
         return self._composite(
             _RGB_RECIPE,

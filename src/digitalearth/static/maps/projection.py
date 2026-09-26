@@ -22,7 +22,6 @@ from typing import (
 
 from cleopatra.basemap.projection import apply_projection_frame
 
-from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.domains import DomainLike, resolve_domain
 from digitalearth.base.spec import Bounds, LayerSpec, Symbology, Viewport
 from digitalearth.base.spec.bounds import same_crs
@@ -430,8 +429,8 @@ class ProjectionMixin(_MixinBase):
 
         Returns:
             This map, so the call chains (``Map(crs=3857).set_bounds(bbox).coastlines()``). The Core
-            declares ``returns="self"`` for this name and the web and 3-D tiers already answer that way;
-            ``set_extent`` returned ``None``, so the same line worked on one tier and raised on another.
+            declares ``returns="self"`` for this name, and every tier answers that way: the spelling
+            this tier used to carry returned ``None``, so one line worked on one tier and raised on another.
 
         Raises:
             ValueError: if the sequence form does not hold exactly four values; if ``bbox=None`` and the
@@ -582,11 +581,6 @@ class ProjectionMixin(_MixinBase):
             if covered is not None:
                 measured[layer.id] = Bounds(*covered, self.crs)
         return measured
-
-    #: The tier's own spelling of :meth:`set_bounds`, kept working for one release. It returns what
-    #: `set_bounds` returns, so a caller who ignored the old ``None`` is unaffected and one who chains gets
-    #: the map.
-    set_extent = renamed_method(new="set_bounds", old="set_extent", owner="Map")
 
     def set_domain(self, domain: Optional[DomainLike] = None) -> None:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.

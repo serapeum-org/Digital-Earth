@@ -154,7 +154,7 @@ def renamed_parameter(
         value: What the caller passed under ``new``; ``None`` means "not passed".
         old: The deprecated spelling, named in both the warning and the error.
         alias: What the caller passed under ``old``; ``None`` means "not passed".
-        caller: The public method the keywords were written on (e.g. ``"Map.scatter()"``), so both messages
+        caller: The public method the keywords were written on (e.g. ``"Map.points()"``), so both messages
             say *where* the offending call is even when the stack does not survive a wrapper.
         default: The new parameter's real default — returned when neither spelling was given. Keep the
             signature's default at ``None`` and put the effective one here; see the module docstring.

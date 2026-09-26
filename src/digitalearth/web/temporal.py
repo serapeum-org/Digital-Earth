@@ -32,7 +32,7 @@ from digitalearth.web.base import _require_layer_api
 #: anything. Pass an explicit `clim` to skip the scan entirely.
 _CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
-#: Total pixels above which an inlined stack is warned against. `add_raster` warns per member, which never
+#: Total pixels above which an inlined stack is warned against. `field` warns per member, which never
 #: fires for a stack of individually-modest members that is collectively enormous.
 _LARGE_STACK_PIXELS = 8_000_000
 
@@ -178,7 +178,7 @@ class TemporalMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.raster.RasterMixin.add_raster: draw a single raster with no time dimension.
+            digitalearth.web.raster.RasterMixin.field: draw a single raster with no time dimension.
             digitalearth.static.maps.animation.AnimationMixin.animate: the matplotlib tier's raster
                 time-stack animation.
             digitalearth.interactive.temporal.TemporalMixin.timecube: the interactive tier's raster
@@ -305,7 +305,7 @@ class TemporalMixin(_MixinBase):
         # the discarded frames moved. `remove_layer` takes the layers off the map but leaves the running
         # extent widened — it only clears it when the *last* layer goes, so a stack added on top of an
         # existing layer kept the abandoned frames' corners — and leaves `last_units` describing a frame
-        # that is no longer drawn. A later `fit_bounds()` then framed on data the map does not show (L12).
+        # that is no longer drawn. A later `set_bounds()` then framed on data the map does not show (L12).
         bounds_before = (
             list(self._data_bounds) if self._data_bounds is not None else None
         )
@@ -315,9 +315,6 @@ class TemporalMixin(_MixinBase):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
             # without a slider then shows one frame rather than the whole stack piled up.
             previous = self._last_layer_id
-            # The contract's name, not the alias: `renamed_method` warns at `stacklevel=2`, so calling the
-            # old spelling here made ordinary use of `timeslider` emit three DeprecationWarnings pointing at
-            # *this* line, which no caller can act on (review M14).
             self.field(
                 member,
                 band=band,
@@ -330,7 +327,7 @@ class TemporalMixin(_MixinBase):
                 name=step_names[index],
             )
             if self._last_layer_id == previous:
-                # `add_raster` skipped this member (it could not be placed). Keeping the frames either
+                # `field` skipped this member (it could not be placed). Keeping the frames either
                 # side would leave a slider with a hole in it, so the steps already built are unwound.
                 for built in layer_ids:
                     self.remove_layer(built)
@@ -362,12 +359,12 @@ class TemporalMixin(_MixinBase):
     def _check_stack_is_drawable(self, members: Sequence, band: int) -> None:
         """Fail before any layer is registered if a member cannot be drawn, and warn on a huge page.
 
-        ``add_raster`` raises for a band with no finite values — routine in EO, where a whole time step can
+        ``field`` raises for a band with no finite values — routine in EO, where a whole time step can
         be cloud-masked away. Discovering that midway through the loop left the map holding layers for the
         members already added, so a caught error left a half-built stack behind. Checking up front keeps
         ``timeslider`` all-or-nothing.
 
-        The size warning is the stack-level counterpart of ``add_raster``'s per-member one: every member is
+        The size warning is the stack-level counterpart of ``field``'s per-member one: every member is
         inlined as a base64 PNG, so a stack of individually-modest members can still produce an enormous
         page without any single member tripping the per-member threshold.
 

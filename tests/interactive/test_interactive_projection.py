@@ -42,19 +42,19 @@ class TestProjection:
     def test_projection_makes_rasters_gv_with_crs(self, m, dataset):
         """Under a projection, image() emits a gv.Image (crs-aware) so GeoViews can reproject it."""
         m.projection("Robinson")
-        m.image(dataset)
+        m.field(dataset)
         assert isinstance(m.layers[0], gv.Image), (
             f"expected gv.Image under a projection, got {type(m.layers[0])}"
         )
 
     def test_no_projection_keeps_plain_hv_image(self, m, dataset):
-        m.image(dataset)
+        m.field(dataset)
         assert isinstance(m.layers[0], hv.Image) and not isinstance(
             m.layers[0], gv.Image
         )
 
     def test_render_sets_projection_on_the_object(self, m, dataset):
-        m.projection("Orthographic").image(dataset)
+        m.projection("Orthographic").field(dataset)
         obj = m.render()
         proj = hv.Store.lookup_options("matplotlib", obj, "plot").kwargs.get(
             "projection"
@@ -66,13 +66,13 @@ class TestProjection:
 
     def test_orthographic_png_export(self, m, dataset, tmp_path):
         out = tmp_path / "globe.png"
-        m.projection("Orthographic").image(dataset).save(str(out))
+        m.projection("Orthographic").field(dataset).save(str(out))
         assert out.exists() and out.stat().st_size > 0
 
     def test_projection_none_returns_to_bokeh_path(self, m, dataset):
         m.projection("Robinson")
         m.projection(None)
-        m.image(dataset)
+        m.field(dataset)
         assert isinstance(m.layers[0], hv.Image) and not isinstance(
             m.layers[0], gv.Image
         )
@@ -82,7 +82,7 @@ class TestProjection:
 
     def test_epsg_int_projection(self, m, dataset):
         """An EPSG int projection resolves via process_crs and renders through the mpl backend."""
-        m.projection(3857).image(dataset)
+        m.projection(3857).field(dataset)
         obj = m.render()
         proj = hv.Store.lookup_options("matplotlib", obj, "plot").kwargs.get(
             "projection"
@@ -94,7 +94,7 @@ class TestProjection:
         import cartopy.crs as ccrs
 
         proj = ccrs.Mollweide()
-        m.projection(proj).image(dataset)
+        m.projection(proj).field(dataset)
         assert m._projection is proj, "a cartopy object must pass straight through"
 
     def test_unknown_projection_name_raises(self, m):
@@ -110,12 +110,12 @@ class TestProjectionTileGuards:
     """tiles and a non-Mercator projection are mutually exclusive (both directions)."""
 
     def test_projection_after_tiles_raises(self, m, dataset):
-        m.image(dataset).tiles("CartoLight")
+        m.field(dataset).tiles("CartoLight")
         with pytest.raises(ValueError, match="Web-Mercator only"):
             m.projection("Robinson")
 
     def test_tiles_after_projection_raises(self, m, dataset):
-        m.projection("Robinson").image(dataset)
+        m.projection("Robinson").field(dataset)
         with pytest.raises(ValueError, match="Web-Mercator only"):
             m.tiles("CartoLight")
 

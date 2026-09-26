@@ -11,10 +11,9 @@ appear, :data:`ALIASES` what each tier used to call them, and :data:`PENDING` wh
 which roadmap order builds it. A contract test per tier reads this and compares; nothing here imports a
 renderer, so the comparison costs no engine.
 
-**A spelling never changes meaning in the release that deprecates it.** An old name keeps working, warns once
-through :func:`~digitalearth.base.deprecation.renamed_method`, and names its replacement — and where the two
-would mean different things (`globe(True)` against `projection("globe")`), the tier translates rather than
-forwarding blindly.
+**A spelling never means two things.** Where a tier called a contract method something else, that spelling
+was deleted rather than kept working: nothing here is released, so there is no caller to keep a promise to.
+:data:`ALIASES` records that the table is empty and which rows it held.
 """
 
 import re
@@ -290,58 +289,16 @@ TIER2: Tuple[Method, ...] = (
     Method("projection", "Draw in another projection, by name.", frozenset()),
 )
 
-#: What each tier used to call a contract name, as `{backend: {old: new}}`. **Every entry here is live**: the
-#: old spelling works, warns once and names its replacement, and a contract test holds each tier to that.
+#: What each tier used to call a contract name, as `{backend: {old: new}}`.
 #:
-#: A rename that has been agreed but not adopted lives in :data:`PLANNED_RENAMES` instead. Both were in this
-#: table once, with a docstring that claimed liveness in one sentence and disclaimed it in the next — so
-#: `alias_table("matplotlib")` told a caller that `imshow` was deprecated in favour of a `field` that does not
-#: exist, and `imshow` itself warned nobody (review M5). Two claims, two tables.
-ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
-    {
-        "web": MappingProxyType(
-            {
-                "add_raster": "field",
-                "fit_bounds": "set_bounds",
-                "title": "set_title",
-                "animate": "save_animation",
-                "to_gif": "save_animation",
-                "save_gif": "save_animation",
-                "terrain": "terrain_tiles",
-                "globe": "projection",
-            }
-        ),
-        "3d": MappingProxyType({"animate": "record"}),
-        # The six adopted at order 27a. Each was in `PLANNED_RENAMES` — agreed and not adopted — and moving
-        # it here is what turns the liveness checks on: the old spelling has to exist, warn, and name its
-        # replacement. Every recipe key underneath is unchanged (`via="imshow"`, `"scatter"`, `"shapes"`,
-        # `"image"`; the interactive line layer's kind was already the neutral `"lines"`), so a figure
-        # written before the rename still reads back into the drawer that made it.
-        "matplotlib": MappingProxyType(
-            {
-                "imshow": "field",
-                "scatter": "points",
-                "shapes": "polygons",
-                # Not one of the six: `set_extent` was never a `PLANNED_RENAMES` row, because it was not the
-                # Core method under an older name (see that table). Order 27a adopted the *name* anyway, so
-                # the old spelling is live here and the capability gap is a keyword shortfall.
-                "set_extent": "set_bounds",
-                # Translating aliases, not plain renames: the old names carry the `filled=` the Core name
-                # takes as an argument (#262), which is why they are hand-written rather than built by
-                # `renamed_method` — the same shape `web`'s `globe` has, for the same reason.
-                "contour": "contours",
-                "contourf": "contours",
-            }
-        ),
-        "interactive": MappingProxyType(
-            {
-                "image": "field",
-                "path": "lines",
-                "add_element": "add_layer",
-            }
-        ),
-    }
-)
+#: **It is empty, and that is the arrangement rather than an omission.** Nothing in this package is released,
+#: so a tier that renamed a method renamed it outright: the eighteen rows this table held — `add_raster`,
+#: `fit_bounds`, `title`, `animate`, `to_gif`, `save_gif`, `terrain` and `globe` on web, `animate` on 3-D,
+#: `imshow`, `scatter`, `shapes`, `set_extent`, `contour` and `contourf` on static, and `image`, `path` and
+#: `add_element` on interactive — were deleted along with the methods they named, not deprecated. Every recipe
+#: key underneath is unchanged (`via="imshow"`, `"scatter"`, `"shapes"`, `"image"`), so a figure written
+#: before the renames still reads back into the drawer that made it.
+ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
 #: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
 #: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
@@ -487,23 +444,16 @@ def alias_table(backend: str) -> Mapping[str, str]:
         backend: The tier, as `quickmap(backend=...)` spells it.
 
     Returns:
-        `{old: new}` for the aliases that are **live** — every one of them forwards and warns. A tier whose
-        renames are agreed but unadopted answers `{}` here and names them through
-        :func:`planned_renames`, because a caller reads this table to know what still works.
+        `{old: new}` for the aliases that are **live** — every one of them forwards and warns. Empty for
+        every tier today, because this package deletes an old spelling rather than deprecating it; a tier
+        whose renames are agreed but unadopted names them through :func:`planned_renames` instead.
 
     Examples:
-        - The web tier's raster builder was `add_raster`:
+        - Every tier answers empty, because every old spelling was deleted rather than aliased:
             ```python
             >>> from digitalearth.base.contract import alias_table
-            >>> alias_table("web")["add_raster"]
-            'field'
-
-            ```
-        - The static tier's was `imshow`, since order 27a adopted the Core spelling there:
-            ```python
-            >>> from digitalearth.base.contract import alias_table
-            >>> alias_table("matplotlib")["imshow"]
-            'field'
+            >>> dict(alias_table("web"))
+            {}
 
             ```
         - A tier that has renamed nothing answers empty, rather than raising:

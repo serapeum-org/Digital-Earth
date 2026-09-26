@@ -587,17 +587,17 @@ class TestAPlannedRenameIsNotAnAlias:
     rather than a convenience, because the day a seventh rename is agreed it ships under a guard nobody has
     seen work. So each is paired with the same predicate applied to a **synthetic** one-row table, which is
     what keeps the rule itself exercised while the real table is empty. The synthetic rows are deliberately
-    built from a live alias (`Map.imshow -> field`), so they describe a shape the package really has: a
-    method present under its old name, and one present under both.
+    built from methods the tier really has, so they describe a shape the package really holds: a method
+    present under the name a row calls old, and one present under both names.
     """
 
-    #: A planned rename that does describe the tier, for the predicate checks: `Map` has `imshow`, so a row
-    #: naming it as the *old* spelling of something the tier does **not** have is well-formed.
-    UNADOPTED = {"imshow": "a_name_no_tier_has"}
+    #: A planned rename that does describe the tier, for the predicate checks: `Map` has `pcolormesh`, so a
+    #: row naming it as the *old* spelling of something the tier does **not** have is well-formed.
+    UNADOPTED = {"pcolormesh": "a_name_no_tier_has"}
 
-    #: A planned rename that no longer describes the tier: `Map` has both `imshow` and `field`, so the row
-    #: has been adopted and belongs in `ALIASES`.
-    ADOPTED = {"imshow": "field"}
+    #: A planned rename that no longer describes the tier: `Map` has both `pcolormesh` and `field`, so the
+    #: row has been adopted and belongs in `ALIASES`.
+    ADOPTED = {"pcolormesh": "field"}
 
     @staticmethod
     def _missing(facade, table) -> list:
@@ -682,12 +682,12 @@ class TestAPlannedRenameIsNotAnAlias:
         """And the same for the overlap rule, against a table that really breaks it.
 
         Test scenario:
-            `Map` answers to both `imshow` and `field` — the first as a live alias for the second — so a
-            `PLANNED_RENAMES` row saying `imshow` is *to become* `field` would be claiming the rename has
-            not happened. That is what the predicate has to report.
+            `Map` answers to both `pcolormesh` and `field`, so a `PLANNED_RENAMES` row saying
+            `pcolormesh` is *to become* `field` would be claiming a rename that has already happened. That
+            is what the predicate has to report.
         """
         facade = _facade("matplotlib")
-        assert self._adopted(facade, self.ADOPTED) == ["imshow"]
+        assert self._adopted(facade, self.ADOPTED) == ["pcolormesh"]
 
     def test_the_unadopted_shape_is_reported_as_neither(self):
         """The negative control: a well-formed unadopted row must trip neither predicate.
@@ -760,19 +760,20 @@ class TestOneNamePerMeaning:
     """The collisions the contract settles, checked where they were live."""
 
     def test_the_web_tier_draws_a_field_under_that_name(self):
-        """`add_raster` is the alias now; `field` is the name every tier answers to."""
+        """`field` is the name every tier answers to, and the tier's own spelling is gone."""
         web = _facade("web")
         assert callable(web.field), "web must draw a field"
-        assert inspect.getattr_static(web, "add_raster") is not inspect.getattr_static(
-            web, "field"
-        ), "the alias must be a shim, not the same function under two names"
+        assert not hasattr(web, "add_raster"), (
+            "the spelling field replaced must be gone, not kept as a second name"
+        )
 
     def test_the_web_tier_switches_projection_by_name(self):
-        """`globe(True)` was a projection switch spelled as a layer builder."""
+        """The globe is a projection here, not a layer builder called `globe`."""
         web = _facade("web")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            assert web().projection("globe").viewport.globe is True, "globe by name"
+        assert web().projection("globe").viewport.globe is True, "globe by name"
+        assert not hasattr(web, "globe"), (
+            "the builder-shaped spelling must be gone from the web tier"
+        )
 
     def test_the_web_tier_writes_an_animation_under_the_shared_name(self):
         """`save_animation` is what static and interactive already called it."""

@@ -19,7 +19,7 @@ import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
 from digitalearth.base.symbology import sample_cmap
@@ -786,10 +786,6 @@ class VectorMixin(_MixinBase):
             held=held,
             symbology=_vector_symbology("Path", None, {}, None, described_opts),
         )
-
-    #: The tier's own spelling of :meth:`lines`, kept working for one release. The layer's kind is already
-    #: the engine-neutral ``"lines"``, so nothing a figure records changes with the method's name.
-    path = renamed_method(new="lines", old="path", owner="InteractiveMap")
 
     @_skips_off_limb
     def polygons(

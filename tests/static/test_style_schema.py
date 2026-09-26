@@ -182,7 +182,7 @@ class TestTheMarkerSizeChannel:
             own.
         """
         opts = {"size": 12, "cmap": "viridis"}
-        plot_style = relocate_flat_style(opts, marker_size_for="Map.scatter()")
+        plot_style = relocate_flat_style(opts, marker_size_for="Map.points()")
         assert opts == {"cmap": "viridis", "point_size": 12}, (
             "the size channel must reach the constructor as point_size"
         )
@@ -198,8 +198,8 @@ class TestTheMarkerSizeChannel:
             method the user actually called.
         """
         opts = {"point_size": 9}
-        with pytest.warns(DeprecationWarning, match="Map.scatter"):
-            relocate_flat_style(opts, marker_size_for="Map.scatter()")
+        with pytest.warns(DeprecationWarning, match="Map.points"):
+            relocate_flat_style(opts, marker_size_for="Map.points()")
         assert opts == {"point_size": 9}, "the old spelling must still reach the glyph"
 
     def test_both_spellings_at_once_is_refused(self):
@@ -210,7 +210,7 @@ class TestTheMarkerSizeChannel:
         """
         with pytest.raises(TypeError):
             relocate_flat_style(
-                {"size": 12, "point_size": 9}, marker_size_for="Map.scatter()"
+                {"size": 12, "point_size": 9}, marker_size_for="Map.points()"
             )
 
     def test_a_glyph_that_is_not_a_point_glyph_keeps_the_old_behaviour(self):

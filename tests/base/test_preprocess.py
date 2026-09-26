@@ -41,12 +41,12 @@ class TestWrapLongitude:
 
 
 def test_field_cyclic_option_widens_extent():
-    """contourf(cyclic=True) closes the seam, widening the x-extent by one grid step."""
+    """contours(cyclic=True, filled=True) closes the seam, widening the x-extent by one grid step."""
     arr = np.arange(8 * 4, dtype="float32").reshape(4, 8)
     geo = (-180.0, 45.0, 0.0, 90.0, 0.0, -45.0)
     ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=geo, epsg=4326))
     plain = Map(crs=4326)
-    plain.contourf(ds)
+    plain.contours(ds, filled=True)
     wide = Map(crs=4326)
-    wide.contourf(ds, cyclic=True)
+    wide.contours(ds, cyclic=True, filled=True)
     assert wide.ax.get_xlim()[1] > plain.ax.get_xlim()[1]

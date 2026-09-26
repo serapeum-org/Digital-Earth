@@ -74,14 +74,14 @@ class TestThreeDNeedEngine:
         m = WebMap().extrusion(polygons_gdf, height=100.0)
         assert len(m.layers) == 1
 
-    def test_terrain_and_globe_chain_and_render(self, polygons_gdf):
+    def test_terrain_tiles_and_projection_chain_and_render(self, polygons_gdf):
         from maplibre.ipywidget import MapWidget
 
         m = (
             WebMap()
             .extrusion(polygons_gdf, height="pop")
-            .terrain(exaggeration=1.5)
-            .globe(True)
+            .terrain_tiles(exaggeration=1.5)
+            .projection("globe")
         )
         assert len(m.layers) == 3
         assert isinstance(m.render(), MapWidget)

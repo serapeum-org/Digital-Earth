@@ -77,12 +77,12 @@ class TestANamePaddedWithWhitespace:
             padded: The name as the caller mistyped it.
 
         Test scenario:
-            Measured at the reviewed HEAD, `scatter(name="wells ")` raised
+            Measured at the reviewed HEAD, `points(name="wells ")` raised
             `KeyError: "no object is registered as '<ns>:wells'..."` — the *stripped* key, against the
             padded one the registry held — while `name=" wells"` worked, because leading padding survives a
             `str.strip()` comparison on the way in. Both spellings are probed here for that reason.
         """
-        drawn.scatter(_points(), name=padded)
+        drawn.points(_points(), name=padded)
         assert drawn.layer_ids == [ASKED], (padded, drawn.layer_ids)
 
     def test_the_source_the_layer_registered_still_resolves(self, drawn):
@@ -96,7 +96,7 @@ class TestANamePaddedWithWhitespace:
             id is minted before anything is registered. Opening the reference is what asks the registry,
             which is where the `KeyError` came from.
         """
-        drawn.scatter(_points(), name="wells ")
+        drawn.points(_points(), name="wells ")
         reopened = drawn.figure_spec.sources[ASKED].open()
         assert isinstance(reopened, FeatureCollection), type(reopened).__name__
 
@@ -110,8 +110,8 @@ class TestANamePaddedWithWhitespace:
             Two ids that differ only by padding are two layers nobody can tell apart in `layer_ids`, in a
             traceback or in a layer switcher. Colliding them is what makes the suffix rule reach the case.
         """
-        drawn.scatter(_points(), name="wells ")
-        drawn.scatter(_points(), name=ASKED)
+        drawn.points(_points(), name="wells ")
+        drawn.points(_points(), name=ASKED)
         assert drawn.layer_ids == [ASKED, "wells-2"], drawn.layer_ids
 
     @pytest.mark.parametrize("blank", ["   ", "\t", ""])
@@ -126,7 +126,7 @@ class TestANamePaddedWithWhitespace:
             `name="  "` raised `KeyError: "no object is registered as '<ns>:'"` — the id had been stripped
             to nothing — while `name=""` generated an id. Two spellings of "no name", two outcomes.
         """
-        drawn.scatter(_points(), name=blank)
+        drawn.points(_points(), name=blank)
         assert drawn.layer_ids == ["points-1"], (blank, drawn.layer_ids)
 
     @pytest.mark.parametrize("wrong", [123, 0, True, 2.5])
@@ -144,7 +144,7 @@ class TestANamePaddedWithWhitespace:
         """
         features = _points()
         with pytest.raises(TypeError, match=r"a layer name must be a string"):
-            drawn.scatter(features, name=wrong)
+            drawn.points(features, name=wrong)
 
     def test_a_long_name_survives_whole(self, drawn):
         """No length cap: truncating an id silently would make two named layers one.
@@ -153,7 +153,7 @@ class TestANamePaddedWithWhitespace:
             drawn: The map under test.
         """
         long_name = "w" * 300
-        drawn.scatter(_points(), name=long_name)
+        drawn.points(_points(), name=long_name)
         assert drawn.layer_ids == [long_name], len(drawn.layer_ids[0])
 
 
@@ -172,9 +172,9 @@ class TestAnUnnamedLayerCountsItsOwnKind:
             'text-4']`, which reads as if two layers had gone missing, and disagreed with the 3-D tier and
             with `layer_ids`' own docstring. The ids are listed in draw order, so the text layers follow.
         """
-        drawn.scatter(_points())
+        drawn.points(_points())
         drawn.text(0.5, 0.5, "a")
-        drawn.scatter(_points())
+        drawn.points(_points())
         drawn.text(0.6, 0.6, "b")
         assert drawn.layer_ids == ["points-1", "points-2", "text-1", "text-2"], (
             drawn.layer_ids
@@ -191,7 +191,7 @@ class TestAnUnnamedLayerCountsItsOwnKind:
             now, so the check that it still consults the issued set rather than trusting its own count has
             to be made again.
         """
-        drawn.scatter(_points())
+        drawn.points(_points())
         drawn.text(0.5, 0.5, "a", name="text-1")
         drawn.text(0.6, 0.6, "b")
         assert drawn.layer_ids == ["points-1", "text-1", "text-2"], drawn.layer_ids
@@ -231,7 +231,7 @@ class TestADescriptionThatRefuses:
         features = _points()
         monkeypatch.setattr(Map, "_index_layer", refuse)
         with pytest.raises(ValueError, match="refused"):
-            drawn.scatter(features, name=ASKED)
+            drawn.points(features, name=ASKED)
         assert drawn._issued_ids == set(), drawn._issued_ids
 
     def test_the_next_layer_gets_the_name_unsuffixed(self, drawn, monkeypatch):
@@ -267,8 +267,8 @@ class TestADescriptionThatRefuses:
         refused = _points()
         monkeypatch.setattr(Map, "_index_layer", refuse_once)
         with pytest.raises(ValueError, match="refused"):
-            drawn.scatter(refused, name=ASKED)
-        drawn.scatter(_points(), name=ASKED)
+            drawn.points(refused, name=ASKED)
+        drawn.points(_points(), name=ASKED)
         assert drawn.layer_ids == [ASKED], drawn.layer_ids
 
     def test_forgetting_a_layer_that_was_never_added_is_ignored(self, drawn):

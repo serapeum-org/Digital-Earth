@@ -26,7 +26,7 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.controls import check_control_position, resolved_controls
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
@@ -1053,7 +1053,7 @@ class DecorationMixin(_MixinBase):
             - Title a saved map:
                 ```python
                 >>> from digitalearth.web import WebMap                            # doctest: +SKIP
-                >>> WebMap().basemap().title("Population, 2024")                   # doctest: +SKIP
+                >>> WebMap().basemap().set_title("Population, 2024")                   # doctest: +SKIP
 
                 ```
         """
@@ -1174,10 +1174,6 @@ class DecorationMixin(_MixinBase):
         # Reference geography says nothing about where to look, so it does not frame the map. Its band —
         # over the basemap, under the data — comes from the kind's registration, not from here.
         return self
-
-    #: Deprecated spelling of :meth:`set_title`, the contract's name for a figure's heading (#299). The
-    #: web tier's other `title=` -- the HTML document's -- is untouched: it names a different thing.
-    title = renamed_method(new="set_title", old="title", owner="WebMap")
 
     def navigation(
         self,

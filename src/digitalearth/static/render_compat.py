@@ -353,7 +353,7 @@ def resolve_marker_size(opts: Dict[str, Any], *, caller: str, depth: int = 4) ->
             ```python
             >>> from digitalearth.static.render_compat import resolve_marker_size
             >>> opts = {"size": 12, "cmap": "viridis"}
-            >>> resolve_marker_size(opts, caller="Map.scatter()")
+            >>> resolve_marker_size(opts, caller="Map.points()")
             >>> sorted(opts.items())
             [('cmap', 'viridis'), ('size', 12)]
 
@@ -423,7 +423,7 @@ def relocate_flat_style(
 
     Args:
         opts: The constructor keyword dict; mutated in place (matched keys are removed).
-        marker_size_for: Name the layer method — ``"Map.scatter()"`` — when the glyph being built is a point
+        marker_size_for: Name the layer method — ``"Map.points()"`` — when the glyph being built is a point
             glyph, which takes its marker size on the constructor. The ``size`` channel is then folded onto
             the ``point_size`` it wants, and the deprecated spelling is warned about on the caller's line.
             Leave unset for every other glyph.
@@ -452,7 +452,7 @@ def relocate_flat_style(
             ```python
             >>> from digitalearth.static.render_compat import relocate_flat_style
             >>> opts = {"size": 12, "cmap": "viridis"}
-            >>> relocate_flat_style(opts, marker_size_for="Map.scatter()")
+            >>> relocate_flat_style(opts, marker_size_for="Map.points()")
             {}
             >>> opts["point_size"]
             12

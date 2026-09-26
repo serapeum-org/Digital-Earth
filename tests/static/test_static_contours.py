@@ -1,21 +1,15 @@
-"""One ``contours(filled=)`` on the static tier, and the two spellings it was adopted from (#262).
+"""One ``contours(filled=)`` on the static tier, and the two spellings it replaced (#262).
 
 The Tier-2 contract declares ``contours`` with ``{levels, interval, filled}`` and says a name that appears on
 more than one tier must mean one thing wherever it appears. This tier had **two** methods instead —
 ``contour`` for lines and ``contourf`` for filled bands — so a caller moving a script from the web or
-interactive tier had to know which of the two to write, and ``filled=`` meant nothing here.
-
-``contour`` and ``contourf`` keep working for one release. They are *translating* aliases rather than plain
-renames — ``contourf`` means ``contours(filled=True)`` — which is the shape `WebMap.globe` already has, and
-the reason they are written out rather than built by `renamed_method`: that helper forwards arguments
-unchanged, and forwarding unchanged is exactly what these two must not do.
+interactive tier had to know which of the two to write, and ``filled=`` meant nothing here. Both are deleted:
+``filled=`` is the argument that picks the render.
 
 Every check reads what landed on the axes, because the two renders differ in the artist they produce: lines
 are a ``QuadContourSet`` of paths, filled bands one of polygons. A ``filled=`` recorded and not acted on
 would leave the wrong one there.
 """
-
-import warnings
 
 import numpy as np
 import pytest
@@ -123,75 +117,4 @@ class TestAnIntervalIsSpacing:
             drawn.contours(raster, levels=LEVELS, interval=100.0)
         assert "at most one of interval= or levels=" in str(refused.value), (
             refused.value
-        )
-
-
-class TestTheOldSpellingsStillDraw:
-    """``contour`` and ``contourf`` are a promise to every script already written against this tier."""
-
-    @pytest.mark.parametrize(
-        ("old", "expected"), [("contour", False), ("contourf", True)]
-    )
-    def test_each_alias_draws_the_render_it_named(self, drawn, old, expected):
-        """``contourf`` must still fill and ``contour`` must still not.
-
-        Args:
-            drawn: The map under test.
-            old: The deprecated spelling.
-            expected: Whether it draws filled bands.
-
-        Test scenario:
-            The half a rename risks most here: these two are *translating* aliases, so one forwarding
-            without its `filled=` would silently swap the render. Read off matplotlib's own `filled` flag.
-        """
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            artist = getattr(drawn, old)(_raster(), levels=LEVELS)
-        assert _filled(artist) is expected
-
-    @pytest.mark.parametrize("old", ["contour", "contourf"])
-    def test_each_alias_warns_and_names_contours(self, drawn, old):
-        """The warning has to tell the caller what to write instead.
-
-        Args:
-            drawn: The map under test.
-            old: The deprecated spelling.
-        """
-        alias, raster = getattr(drawn, old), _raster()
-        with pytest.warns(DeprecationWarning) as caught:
-            alias(raster, levels=LEVELS)
-        assert "use Map.contours(" in str(caught[0].message), caught[0].message
-
-    @pytest.mark.parametrize("old", ["contour", "contourf"])
-    def test_the_warning_names_the_filled_argument_to_write(self, drawn, old):
-        """Naming `contours()` is not enough when the two differ by an argument.
-
-        Args:
-            drawn: The map under test.
-            old: The deprecated spelling.
-
-        Test scenario:
-            A caller told to "use contours() instead" of `contourf` and writing `contours(dataset)` would
-            get lines where they had bands. The message says which `filled=` to pass, because that is the
-            edit they have to make.
-        """
-        alias, raster = getattr(drawn, old), _raster()
-        with pytest.warns(DeprecationWarning) as caught:
-            alias(raster, levels=LEVELS)
-        wanted = "filled=True" if old == "contourf" else "filled=False"
-        assert wanted in str(caught[0].message), caught[0].message
-
-    @pytest.mark.parametrize("old", ["contour", "contourf"])
-    def test_the_warning_points_at_the_callers_own_line(self, drawn, old):
-        """A warning blaming a line inside the package is one nobody can act on.
-
-        Args:
-            drawn: The map under test.
-            old: The deprecated spelling.
-        """
-        alias, raster = getattr(drawn, old), _raster()
-        with pytest.warns(DeprecationWarning) as caught:
-            alias(raster, levels=LEVELS)
-        assert caught[0].filename == __file__, (
-            f"{caught[0].filename}:{caught[0].lineno}"
         )

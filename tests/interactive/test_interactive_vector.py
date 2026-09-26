@@ -104,7 +104,7 @@ class TestPath:
         lines["geometry"] = point_fc.geometry.shortest_line(
             point_fc.geometry.shift(1).fillna(point_fc.geometry.iloc[0])
         )
-        m.path(lines)
+        m.lines(lines)
         assert isinstance(m.layers[0], gv.Path), (
             f"expected gv.Path, got {type(m.layers[0])}"
         )
@@ -327,7 +327,7 @@ class TestRasterVectorCompose:
     """Raster + vector layers compose into one overlay (the DI.1 headline)."""
 
     def test_image_plus_choropleth_overlay(self, m, dataset, polygon_fc):
-        m.image(dataset).choropleth(polygon_fc, "fid")
+        m.field(dataset).choropleth(polygon_fc, "fid")
         overlay = m.render()
         assert isinstance(overlay, hv.Overlay)
         assert len(overlay) == 2, (

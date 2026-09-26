@@ -158,7 +158,7 @@ class TestTimeSliderRejectsUnsupportedInput:
     attribute-membership test raised ``TypeError: argument of type 'int' is not iterable`` — a message with
     no hint of what ``timeslider`` accepts. A ``DatasetCollection`` is *not* covered here: it is a supported
     input (see ``TestTimeSliderRasterStack``). A single ``Dataset`` has no time dimension, so it stays a
-    rejection, and the message routes it to ``add_raster``.
+    rejection, and the message routes it to ``field``.
     """
 
     @pytest.fixture(autouse=True)
@@ -366,11 +366,9 @@ class TestTimeSliderRasterStack:
             Member ``k`` spans ``[10k, 10k+2.4]``, so a per-member range would differ on every frame; the
             acceptance criterion is that it does not.
         """
-        add_raster = mocker.spy(WebMap, "field")
+        field = mocker.spy(WebMap, "field")
         WebMap().timeslider(raster_stack)
-        limits = {
-            (c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list
-        }
+        limits = {(c.kwargs["vmin"], c.kwargs["vmax"]) for c in field.call_args_list}
         assert len(limits) == 1, (
             f"every frame must share one colour range, got {limits}"
         )
@@ -387,12 +385,12 @@ class TestTimeSliderRasterStack:
             The scan reads every member, so a caller with a large stack must be able to bypass it.
         """
         scan = mocker.spy(WebMap, "_global_clim")
-        add_raster = mocker.spy(WebMap, "field")
+        field = mocker.spy(WebMap, "field")
         WebMap().timeslider(raster_stack, clim=(-5.0, 5.0))
         assert scan.call_count == 0, "an explicit clim must skip the global scan"
-        assert {
-            (c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list
-        } == {(-5.0, 5.0)}
+        assert {(c.kwargs["vmin"], c.kwargs["vmax"]) for c in field.call_args_list} == {
+            (-5.0, 5.0)
+        }
 
     def test_band_and_cmap_reach_every_member(self, raster_stack, mocker):
         """The styling arguments are forwarded to each member's image layer.
@@ -400,15 +398,15 @@ class TestTimeSliderRasterStack:
         Test scenario:
             A stack must not silently colour frames differently from what the caller asked for.
         """
-        add_raster = mocker.spy(WebMap, "field")
+        field = mocker.spy(WebMap, "field")
         WebMap().timeslider(raster_stack, band=1, cmap="magma", opacity=0.5)
-        assert all(c.kwargs["cmap"] == "magma" for c in add_raster.call_args_list), (
+        assert all(c.kwargs["cmap"] == "magma" for c in field.call_args_list), (
             "cmap not forwarded"
         )
-        assert all(c.kwargs["band"] == 1 for c in add_raster.call_args_list), (
+        assert all(c.kwargs["band"] == 1 for c in field.call_args_list), (
             "band not forwarded"
         )
-        assert all(c.kwargs["opacity"] == 0.5 for c in add_raster.call_args_list), (
+        assert all(c.kwargs["opacity"] == 0.5 for c in field.call_args_list), (
             "opacity not forwarded"
         )
 
@@ -476,7 +474,7 @@ class TestTimeSliderRasterStack:
             tmp_path: pytest's per-test directory, holding the two written rasters.
 
         Test scenario:
-            ``add_raster`` raises for an all-nodata band — routine in EO, where a step can be entirely
+            ``field`` raises for an all-nodata band — routine in EO, where a step can be entirely
             cloud-masked. Discovering it midway used to leave the already-added members registered.
         """
         import numpy as np
@@ -538,7 +536,7 @@ class TestTimeSliderRasterStack:
     def test_a_member_that_cannot_be_placed_unwinds_the_steps_already_built(
         self, raster_stack, monkeypatch, warning_log
     ):
-        """A step ``add_raster`` cannot place takes the steps already built down with it.
+        """A step ``field`` cannot place takes the steps already built down with it.
 
         Args:
             raster_stack: The 3-member collection the slider is built from.
@@ -546,7 +544,7 @@ class TestTimeSliderRasterStack:
             warning_log: The tier's loguru warnings.
 
         Test scenario:
-            ``add_raster`` skips a member whose corners will not express as the lon/lat a MapLibre image
+            ``field`` skips a member whose corners will not express as the lon/lat a MapLibre image
             source is placed by. Keeping the frames either side would leave a slider with a hole in it,
             so the series is abandoned and the layers already registered are removed again.
         """
@@ -584,9 +582,9 @@ class TestTimeSliderRasterStack:
             ``remove_layer`` takes the abandoned frames off the map but only clears the running extent when
             the *last* layer goes, so a stack added on top of an existing layer kept the discarded frames'
             corners in it — and ``last_units`` went on describing a frame that is no longer drawn. A later
-            ``fit_bounds()`` then framed on data the map does not show, halfway to nothing between the two.
+            ``set_bounds()`` then framed on data the map does not show, halfway to nothing between the two.
         """
-        m = WebMap().add_raster(dataset, units="mm")
+        m = WebMap().field(dataset, units="mm")
         bounds_before = list(m._data_bounds)
         assert m.last_units == "mm", (
             "the surviving layer's units set the state to restore"
@@ -612,8 +610,8 @@ class TestTimeSliderRasterStack:
         assert m.last_units == "mm", (
             "last_units must describe a layer that is still drawn, not a discarded frame"
         )
-        assert m.fit_bounds()._fit["bounds"] == bounds_before, (
-            "fit_bounds() must frame the surviving layer, not data that was rolled back"
+        assert m.set_bounds()._fit["bounds"] == bounds_before, (
+            "set_bounds() must frame the surviving layer, not data that was rolled back"
         )
         assert any("could not be placed" in line for line in warning_log), warning_log
 
@@ -1080,7 +1078,7 @@ class TestASavedTemporalMapIsSteppable:
         """
         from digitalearth.web import WebMap
 
-        payload = self._payload(WebMap().basemap().add_raster(dataset).to_html())
+        payload = self._payload(WebMap().basemap().field(dataset).to_html())
         assert "LayerSwitcherControl" not in payload
 
 

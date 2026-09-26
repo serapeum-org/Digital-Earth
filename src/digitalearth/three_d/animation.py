@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Union
 import numpy as np
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 
 # `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
 # defaults to lives in `digitalearth.base.animation`, so one `fps` means one speed whichever backend rendered
@@ -192,11 +192,6 @@ class AnimationMixin(_MixinBase):
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
         digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
     """
-
-    #: Deprecated spelling of :meth:`record`. `animate` means three different things across the tiers — a
-    #: matplotlib `FuncAnimation` on static, a written GIF on web, and this callback loop — so the loop takes
-    #: its own name and the old one forwards (#299).
-    animate = renamed_method(new="record", old="animate", owner="Scene3D")
 
     def orbit(
         self,

@@ -23,7 +23,7 @@ from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DataRef, LayerSpec, Symbology
@@ -171,7 +171,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """
     opts = drawing_style(scene, layer)
     # empty-guard; any geometry (centroid fallback) OK
-    fc = scene._vector_input(data, name="scatter")
+    fc = scene._vector_input(data, name="points")
     src = get_source(fc)
     size_column = layer.symbology.props.get("size_column")
     sizes = (
@@ -400,7 +400,7 @@ def draw_shapes(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     gdf = scene._vector_input(
         data,
         geom_types=("Polygon", "MultiPolygon"),
-        name="shapes",
+        name="polygons",
         geom_label="polygon",
     )
     polygons, _ = scene._polygon_vertices(gdf.geometry)
@@ -1046,10 +1046,6 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
-
-    #: The tier's own spelling of :meth:`points`, kept working for one release. The recipe key underneath
-    #: (``via="scatter"``) is unchanged, so a figure written before the rename reads back into the same drawer.
-    scatter = renamed_method(new="points", old="scatter", owner="Map")
 
     def grid_points(
         self,
@@ -1849,10 +1845,6 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
-
-    #: The tier's own spelling of :meth:`polygons`, kept working for one release. The recipe key underneath
-    #: (``via="shapes"``) is unchanged, so a figure written before the rename reads back into the same drawer.
-    shapes = renamed_method(new="polygons", old="shapes", owner="Map")
 
     def _clip_geometry(self, clip: Any) -> Any:
         """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.

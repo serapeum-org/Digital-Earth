@@ -126,7 +126,7 @@ class TestSaveReturnsPath:
             with a string, which is why the return type is part of the contract rather than a detail.
         """
         out = tmp_path / "m.html"
-        written = m.add_element(hv.Points([(0.0, 0.0)])).save(str(out))
+        written = m.add_layer(hv.Points([(0.0, 0.0)])).save(str(out))
         assert isinstance(written, pathlib.Path), (
             f"expected a Path, got {type(written)}"
         )
@@ -155,7 +155,7 @@ class TestSaveReturnsPath:
             tmp_path / "anim.html": InteractiveMap()
             .timecube(cube)
             .save_animation(str(tmp_path / "anim.html")),
-            tmp_path / "app.html": m.image(dataset).save_app(
+            tmp_path / "app.html": m.field(dataset).save_app(
                 str(tmp_path / "app.html"), widgets=("cmap",)
             ),
         }
@@ -285,12 +285,12 @@ class TestAutoCmap:
         from digitalearth.base.autostyle import auto_style
 
         src = _source("t2m")
-        m.image(src)
+        m.field(src)
         assert m.style_of(0)["common"]["cmap"] == auto_style(src)["cmap"]
 
     def test_the_callers_colormap_always_wins(self, m):
         """An explicit ``cmap`` is never overridden by the lookup."""
-        m.image(_source("t2m"), cmap="magma")
+        m.field(_source("t2m"), cmap="magma")
         assert m.style_of(0)["common"]["cmap"] == "magma"
 
     def test_large_image_resolves_from_the_band_name(self, m):
@@ -330,17 +330,17 @@ class TestAutoLevelsAndUnits:
 
     def test_units_label_the_colorbar(self, m):
         """A recognised variable's ``units`` become the colorbar label when the caller gave none."""
-        m.image(_source("msl"))
+        m.field(_source("msl"))
         assert m.style_of(0)["common"]["clabel"] == "hPa", m.style_of(0)
 
     def test_a_caller_supplied_label_wins(self, m):
         """``clabel=`` is never overridden by the style library."""
-        m.image(_source("msl"), clabel="millibar")
+        m.field(_source("msl"), clabel="millibar")
         assert m.style_of(0)["common"]["clabel"] == "millibar"
 
     def test_an_unknown_variable_is_left_unlabelled(self, m):
         """Units are never guessed: an unrecognised field labels exactly as before (not at all)."""
-        m.image(_source("totally-unknown-field"))
+        m.field(_source("totally-unknown-field"))
         assert "clabel" not in m.style_of(0)["common"], m.style_of(0)
 
     def test_levels_come_from_the_style_library(self, m):
@@ -395,7 +395,7 @@ class TestOffLimbIsSkipped:
             off_limb: Makes the reprojection report the data as off-limb.
         """
         m = InteractiveMap()
-        assert m.image(dataset) is m, "a skipped builder must still chain"
+        assert m.field(dataset) is m, "a skipped builder must still chain"
         assert m.layers == [], f"nothing may be registered: {m.layers}"
 
     def test_the_skip_is_warned_about_and_names_the_layer(self, dataset, off_limb):
@@ -423,7 +423,7 @@ class TestOffLimbIsSkipped:
         """
         strict_map = InteractiveMap(strict=True)
         with pytest.raises(OffLimbError):
-            strict_map.image(dataset)
+            strict_map.field(dataset)
 
     def test_a_vector_builder_is_guarded_too(self, point_fc, off_limb):
         """The policy is the tier's, not one builder's — a vector layer skips the same way.
@@ -700,7 +700,7 @@ class TestKeyedBasemapCoverage:
             m: The map under test.
             dataset: A raster fixture well outside the tropics band.
         """
-        m.image(dataset).tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m.field(dataset).tiles("Planet.NICFI", preset={"date": "2024-01"})
         assert len(m.layers) == 2, m.layers
 
 

@@ -155,7 +155,7 @@ class TestTheMapCarriesItsTitle:
         """Otherwise the title lives only in the surrounding notebook."""
         from digitalearth.web import WebMap
 
-        payload = _payload(WebMap().basemap().title("Population, 2024").to_html())
+        payload = _payload(WebMap().basemap().set_title("Population, 2024").to_html())
         assert "InfoBoxControl" in payload
         assert "Population, 2024" in payload
 
@@ -164,7 +164,7 @@ class TestTheMapCarriesItsTitle:
         from digitalearth.web import WebMap
 
         payload = _payload(
-            WebMap().basemap().title("Population", subtitle="Source: CBS").to_html()
+            WebMap().basemap().set_title("Population", subtitle="Source: CBS").to_html()
         )
         assert "Source: CBS" in payload
 
@@ -174,4 +174,4 @@ class TestTheMapCarriesItsTitle:
 
         web_map = WebMap().basemap()
         with pytest.raises(ValueError):
-            web_map.title("x", position="middle")
+            web_map.set_title("x", position="middle")

@@ -139,13 +139,13 @@ class TestAGraduatedLayerRecordsTheEdgesItWasDrawnWith:
             drawn: The map under test.
 
         Test scenario:
-            `choropleth` declares `scheme=`; `scatter` takes it through `**opts`. A record written into one
+            `choropleth` declares `scheme=`; `points` takes it through `**opts`. A record written into one
             builder would have left the other silent, which is the "fixed the instance, described the class
             as fixed" shape. Two points valued 1 and 9, cut the same way, give the same three edges.
         """
-        drawn.scatter(_points(VALUES), scheme=SCHEME, k=CLASSES)
+        drawn.points(_points(VALUES), scheme=SCHEME, k=CLASSES)
         assert tuple(drawn.last_breaks) == EXPECTED_EDGES, (
-            f"a graduated scatter recorded {drawn.last_breaks!r}"
+            f"a graduated point layer recorded {drawn.last_breaks!r}"
         )
 
 

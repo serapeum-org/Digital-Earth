@@ -10,8 +10,8 @@ PlateCarree ``crs`` would re-project already-projected coordinates at render tim
 masked array from pyramids and renders transparent (``NaN``).
 
 **Naming note** — the interactive builders use HoloViews-idiomatic names that differ from the static
-``Map``: ``image`` (static ``imshow``), ``rgb`` (static ``rgb_composite``), ``contours``/
-``filled_contours`` (static ``contour``/``contourf``). ``spaghetti``/``quadmesh`` match. The divergence
+``Map``: ``rgb`` (static ``rgb_composite``), ``contours``/``filled_contours`` (one
+``contours(filled=)`` there). ``field``/``spaghetti``/``quadmesh`` match. The divergence
 is intentional (this tier reads as HoloViews to its users); the static↔interactive mapping is documented
 in the tier plan's feature-parity matrix.
 """
@@ -19,7 +19,6 @@ in the tier plan's feature-parity matrix.
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.crs import reproject
-from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.levels import levels_every
 from digitalearth.base.sources.view import SourceView
 from digitalearth.base.spec import (
@@ -318,7 +317,7 @@ class RasterMixin(_MixinBase):
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Add a colour-mapped raster layer with hover readout (interactive ``imshow``).
+        """Add a colour-mapped raster layer with hover readout.
 
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected to the display CRS
@@ -382,10 +381,6 @@ class RasterMixin(_MixinBase):
                 }
             ),
         )
-
-    #: The tier's own spelling of :meth:`field`, kept working for one release. The recipe key underneath
-    #: (``via="image"``) is unchanged, so a figure written before the rename reads back into the same drawer.
-    image = renamed_method(new="field", old="image", owner="InteractiveMap")
 
     @_skips_off_limb
     def rgb(

@@ -731,7 +731,7 @@ class VectorMixin(_MixinBase):
                 variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels
                 that field is conventionally drawn with.
             band: 1-based band to contour, matching
-                :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and
+                :meth:`~digitalearth.web.raster.RasterMixin.field` — pyramids counts bands from 0, and
                 this converts, so the same number means the same band everywhere in this tier.
             filled: Draw filled bands between successive levels instead of lines.
             cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the

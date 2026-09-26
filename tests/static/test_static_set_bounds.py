@@ -1,19 +1,14 @@
 """The static tier's framing method, under the Core name (order 27a, #265).
 
-The Core contract calls it ``set_bounds``; the web and 3-D tiers already do, web's own ``fit_bounds`` having
-become a deprecated alias when its seam landed. The static tier called it ``set_extent`` and returned
-``None``, so a caller writing one script against two tiers had to spell the same intent two ways and could
-not chain it on one of them.
+The Core contract calls it ``set_bounds``, and every tier answers to it. The static tier used to spell the
+same intent differently and returned ``None``, so a caller writing one script against two tiers had to write
+the same intent two ways and could not chain it on one of them. That spelling is gone rather than deprecated —
+nothing here is released — so what is left to hold is the method itself.
 
-``set_extent`` is a live alias now, and it was deliberately **not** in ``PLANNED_RENAMES``: the two are not
-the same method under two names, because the Core declares ``set_bounds(padding=)`` and a ``None`` that fits
-the data, and when 27a landed this tier had neither. Order 27a takes the *name*; the auto-framing behind it
-is the framing order, which has since built both — see ``tests/static/test_static_auto_framing.py``. What
-this module holds is the part 27a is responsible for: that the Core name frames the axes, that it chains,
-and that the old spelling still frames them identically.
+Taking the *name* was order 27a's half; the auto-framing behind it — ``padding=`` and the ``None`` that fits
+the data — is the framing order, which has since built both (see ``tests/static/test_static_auto_framing.py``).
+What this module holds is that the Core name frames the axes, in either accepted form, and that it chains.
 """
-
-import warnings
 
 import pytest
 
@@ -85,10 +80,10 @@ class TestTheCoreNameFramesTheAxes:
             drawn: The map under test.
 
         Test scenario:
-            ``set_extent`` returned ``None``, so `Map(...).set_extent(bbox).coastlines()` raised
-            ``AttributeError`` on the tier that draws most of the package's figures while the same line
-            worked on web. Asserted as identity rather than truthiness: a method returning any object would
-            satisfy "not None" and still break a chain.
+            The spelling this tier used to carry returned ``None``, so
+            ``Map(...).set_bounds(bbox).coastlines()`` raised ``AttributeError`` on the tier that draws most
+            of the package's figures while the same line worked on web. Asserted as identity rather than
+            truthiness: a method returning any object would satisfy "not None" and still break a chain.
         """
         assert drawn.set_bounds(HERE) is drawn
 
@@ -102,97 +97,25 @@ class TestTheCoreNameFramesTheAxes:
             drawn.set_bounds([0.0, 1.0, 2.0])
         assert "set_bounds needs exactly 4 values" in str(refused.value), refused.value
 
-
-class TestTheOldSpellingStillFramesTheSameWay:
-    """``set_extent`` is a promise to every script already written against this tier."""
-
-    @pytest.mark.parametrize("frame", (ELSEWHERE, HERE), ids=("bounds", "sequence"))
-    def test_the_alias_frames_the_axes_identically(self, frame):
-        """Both spellings must leave matplotlib holding the same limits.
-
-        Args:
-            frame: The rectangle to frame on, in each accepted form.
+    def test_the_two_accepted_forms_frame_the_axes_the_same_way(self):
+        """A ``Bounds`` in the display CRS and the bare sequence of its own numbers must agree.
 
         Test scenario:
-            Compared on what the axes were left with rather than on the return value: an alias forwarding to
-            the wrong method would still hand back a ``Map``.
+            The reprojecting branch and the literal one are different code paths to one frame. Given a
+            ``Bounds`` already in the display CRS, reprojection is the identity, so the two must leave
+            matplotlib holding the same limits — measured on the axes rather than on the return value,
+            since a method forwarding to the wrong place would still hand back a ``Map``.
         """
-        under_core = Map(crs=3857)
-        under_old = Map(crs=3857)
+        west, east, south, north = HERE
+        from_bounds = Map(crs=3857)
+        from_sequence = Map(crs=3857)
         try:
-            under_core.set_bounds(frame)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                under_old.set_extent(frame)
-            assert _limits(under_old) == _limits(under_core), (
-                f"set_extent framed {_limits(under_old)} and set_bounds framed {_limits(under_core)}"
+            from_bounds.set_bounds(Bounds(west, south, east, north, crs=3857))
+            from_sequence.set_bounds(HERE)
+            assert _limits(from_bounds) == _limits(from_sequence), (
+                f"a Bounds framed {_limits(from_bounds)} and a sequence framed "
+                f"{_limits(from_sequence)}"
             )
         finally:
-            under_core.close()
-            under_old.close()
-
-    def test_the_alias_warns_and_names_the_core_spelling(self, drawn):
-        """The warning has to tell the caller what to write instead.
-
-        Args:
-            drawn: The map under test.
-        """
-        with pytest.warns(DeprecationWarning) as caught:
-            drawn.set_extent(HERE)
-        assert "Map.set_bounds()" in str(caught[0].message), caught[0].message
-
-    def test_the_warning_points_at_the_callers_own_line(self, drawn):
-        """A warning blaming a line inside the package is one nobody can act on.
-
-        Args:
-            drawn: The map under test.
-        """
-        with pytest.warns(DeprecationWarning) as caught:
-            drawn.set_extent(HERE)
-        assert caught[0].filename == __file__, caught[0].filename
-
-
-class TestNoInternalCallerGoesThroughTheAlias:
-    """Two methods on this tier frame the axes by calling the framing method, and both had to move.
-
-    ``set_domain`` resolves a named region and frames on it; the globe frame re-applies the limits it
-    computed. Either left on ``set_extent`` would warn a caller who wrote neither.
-    """
-
-    def test_set_domain_does_not_warn(self, drawn):
-        """A named region frames the axes without deprecating anything.
-
-        Args:
-            drawn: The map under test.
-        """
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always", DeprecationWarning)
-            drawn.set_domain("europe")
-        blamed = [
-            str(record.message)
-            for record in caught
-            if issubclass(record.category, DeprecationWarning)
-            and "set_extent" in str(record.message)
-        ]
-        assert blamed == [], f"set_domain reaches the deprecated spelling: {blamed}"
-
-    def test_a_globe_frame_does_not_warn(self):
-        """The globe frame re-applies its own limits, and must do it under the Core name."""
-        from digitalearth.static import projections
-
-        scene = Map(crs=projections.orthographic(lon=4.5, lat=53.3), globe=True)
-        try:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always", DeprecationWarning)
-                scene.set_global()
-            blamed = [
-                str(record.message)
-                for record in caught
-                if issubclass(record.category, DeprecationWarning)
-                and "set_extent" in str(record.message)
-            ]
-        finally:
-            scene.close()
-        assert blamed == [], (
-            f"the globe frame reaches the deprecated spelling: {blamed}"
-        )
+            from_bounds.close()
+            from_sequence.close()

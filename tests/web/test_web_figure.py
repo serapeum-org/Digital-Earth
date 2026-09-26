@@ -155,9 +155,9 @@ class TestTheFurniture:
 
     def test_a_title_is_the_panel_s(self):
         """A heading belongs to the panel, not to a floating HTML box beside it."""
-        assert WebMap().title("Rainfall").figure_spec.panels[0].title == "Rainfall", (
-            "the panel must carry the title"
-        )
+        assert (
+            WebMap().set_title("Rainfall").figure_spec.panels[0].title == "Rainfall"
+        ), "the panel must carry the title"
 
 
 class TestPerLayerInteraction:

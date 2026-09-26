@@ -139,7 +139,7 @@ def _collection(members: int = 3):
 #: `grep -rn UNASKED tests/` returned nothing before this (review R2-M5).
 UNSTYLED: Dict[str, Callable[[Any], Any]] = {
     "points": lambda m: m.points(_points()),
-    "path": lambda m: m.path(_lines()),
+    "lines": lambda m: m.lines(_lines()),
     "polygons": lambda m: m.polygons(_polygons()),
     "choropleth": lambda m: m.choropleth(_polygons(), "pop"),
     "labels": lambda m: m.labels(_points(), "pop"),
@@ -151,7 +151,7 @@ UNSTYLED: Dict[str, Callable[[Any], Any]] = {
     "vectorfield": lambda m: m.vectorfield(_dem(), _dem()),
     "streamlines": lambda m: m.streamlines(_dem(), _dem()),
     "barbs": lambda m: m.barbs(_dem(), _dem()),
-    "image": lambda m: m.image(_dem()),
+    "field": lambda m: m.field(_dem()),
     "rgb": lambda m: m.rgb(_dem(), bands=(1, 1, 1)),
     "quadmesh": lambda m: m.quadmesh(_dem()),
     "contours": lambda m: m.contours(_dem(), levels=LEVELS),
@@ -173,7 +173,7 @@ UNSTYLED: Dict[str, Callable[[Any], Any]] = {
 #: and look its key up here, so a row added without a probe fails rather than going unmeasured.
 ROW_PROBES: Dict[Tuple[str, str], str] = {
     ("geometry", "Points"): "points",
-    ("image", ""): "image",
+    ("image", ""): "field",
 }
 
 
@@ -207,7 +207,7 @@ BORROWED: Dict[str, Borrowed] = {
         lambda m: m.points(_points(), size=5.0), "size", 5.0, "the web tier's size"
     ),
     "alpha-is-the-web-tiers-opacity": Borrowed(
-        lambda m: m.image(_dem(), alpha=0.9),
+        lambda m: m.field(_dem(), alpha=0.9),
         "opacity",
         0.9,
         "the web tier's circle opacity",
