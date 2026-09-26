@@ -12,11 +12,12 @@ is the point of the function living in ``base/`` at all.
 """
 
 import math
+import time
 
 import numpy as np
 import pytest
 
-from digitalearth.base.levels import levels_every
+from digitalearth.base.levels import MAX_LEVELS, levels_every
 
 #: A band running 0-399, the same range the static tier's contour checks use, so the two agree on the
 #: measured answer for one interval rather than on two independently chosen fixtures.
@@ -99,3 +100,80 @@ class TestWhatHasNoLevelsToGive:
         with pytest.raises(ValueError) as refused:
             levels_every(BAND, 10_000.0)
         assert "0.0 to 399.0" in str(refused.value), refused.value
+
+
+class TestAnIntervalTooFineToDrawIsRefused:
+    """L6 — the walk is bounded, so a mistyped unit cannot allocate until the process dies.
+
+    ``interval`` was validated as positive and finite but never against the band's range, so the intermediate
+    ``arange`` was as long as the caller's typo made it: ``levels_every(dem, 1e-3)`` on a 0-8848 m DEM builds
+    ~8.8 M float64s and then walks them in a Python comprehension. A metres-versus-kilometres slip therefore
+    turned a contour call into a multi-second stall, or a ``MemoryError`` raised from inside ``base/`` with
+    nothing naming the argument that caused it.
+    """
+
+    #: A band spanning the height of Everest, which is where the metres/kilometres slip actually happens.
+    DEM = np.linspace(0.0, 8848.0, 256)
+
+    def test_a_count_above_the_ceiling_is_refused(self):
+        """An interval that would cut more than :data:`MAX_LEVELS` levels raises instead of allocating.
+
+        Test scenario:
+            The refusal has to come before the array, or the guard is a report on a cost already paid.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            levels_every(self.DEM, 1e-3)
+        message = str(excinfo.value)
+        assert "0.001" in message, (
+            f"the refusal must name the interval that caused it, got: {message}"
+        )
+        assert str(MAX_LEVELS) in message, (
+            f"the refusal must name the ceiling it exceeded, got: {message}"
+        )
+
+    def test_the_refusal_names_how_many_levels_were_asked_for(self):
+        """The count is the number that tells a caller they meant kilometres, so it has to be in the message."""
+        with pytest.raises(ValueError) as excinfo:
+            levels_every(self.DEM, 1e-3)
+        asked = len(str(8_847_999))
+        assert any(len(token) >= asked for token in str(excinfo.value).split()), (
+            f"no token in the refusal is as long as the level count it should name: {excinfo.value}"
+        )
+
+    def test_it_is_refused_before_the_array_is_built(self):
+        """The guard reads two floats, so the interval that would exhaust memory costs nothing to refuse.
+
+        Test scenario:
+            A ceiling checked after `np.arange` would still allocate what it then complains about. Timing is
+            the only way to tell the two apart, and the margin is enormous: the unguarded walk over this band
+            at this interval took ~2 s, against a refusal that reads `low`, `high` and divides.
+        """
+        started = time.perf_counter()
+        with pytest.raises(ValueError):
+            levels_every(self.DEM, 1e-6)
+        spent = time.perf_counter() - started
+        assert spent < 0.5, (
+            f"refusing an interval of 1e-06 took {spent:.3f}s, so the array was built first"
+        )
+
+    def test_a_count_at_the_ceiling_still_draws(self):
+        """The ceiling is inclusive: the largest legal walk is not refused with the illegal ones.
+
+        Test scenario:
+            An off-by-one here is a silent loss of a legitimate figure, which is worse than the stall the
+            guard exists to prevent.
+        """
+        band = np.array([0.0, float(MAX_LEVELS + 1)])
+        cut = levels_every(band, 1.0)
+        assert len(cut) == MAX_LEVELS, (
+            f"a band asking for exactly {MAX_LEVELS} levels cut {len(cut)}"
+        )
+
+    def test_one_more_than_the_ceiling_is_refused(self):
+        """And the first illegal walk is the one past it, built the other way round from the test above."""
+        band = np.array([0.0, MAX_LEVELS + 2.0])
+        with pytest.raises(ValueError) as excinfo:
+            levels_every(band, 1.0)
+        assert "interval=1.0" in str(excinfo.value), (
+            f"the refusal must name the interval, got: {excinfo.value}"
+        )

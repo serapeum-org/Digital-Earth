@@ -22,7 +22,18 @@ from typing import Any, List
 
 import numpy as np
 
-__all__ = ["levels_every"]
+__all__ = ["MAX_LEVELS", "levels_every"]
+
+#: The most levels one ``interval=`` may cut. It is not a rendering limit — it is the point past which the
+#: call can only be a mistake, and the cost of finding out is the problem: ``interval`` was checked for being
+#: positive and finite but never against the band's range, so the intermediate array was as long as a typo
+#: made it. Measured on a 0-8848 m band: ``interval=1e-3`` walks 8 847 999 levels in 2.0 s, and ``1e-6`` asks
+#: numpy for 65.9 GiB and raises ``MemoryError`` from inside ``base/`` — neither naming the argument that did
+#: it. A metres-for-kilometres slip is exactly how a caller gets there.
+#:
+#: 10 000 is far above any figure a reader can use (a 400-unit band at ``interval=0.05``) and far below the
+#: counts that cost anything: the walk at the ceiling takes under a millisecond.
+MAX_LEVELS: int = 10_000
 
 
 def levels_every(values: Any, interval: float) -> List[float]:
@@ -85,6 +96,16 @@ def levels_every(values: Any, interval: float) -> List[float]:
     low, high = float(finite.min()), float(finite.max())
     first = np.floor(low / interval) + 1.0
     last = np.ceil(high / interval) - 1.0
+    # Counted before the array exists, not measured after: the walk is as long as `interval` makes it, and a
+    # guard behind `np.arange` would report a cost already paid — 65.9 GiB for a 0-8848 band at 1e-6
+    # (review L6). Two floats and a subtraction is the whole check.
+    asked = int(max(last - first + 1.0, 0.0))
+    if asked > MAX_LEVELS:
+        raise ValueError(
+            f"contours(interval={interval!r}) would cut {asked} levels across the band's range "
+            f"({low!r} to {high!r}), above the {MAX_LEVELS} this draws at most; pass a larger interval — "
+            "the units are the band's own — or levels= for the ones you want"
+        )
     steps = np.arange(first, last + 1.0) * interval
     inside = [float(level) for level in steps if low < level < high]
     if not inside:
