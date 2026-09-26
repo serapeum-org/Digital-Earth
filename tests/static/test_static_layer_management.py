@@ -243,37 +243,121 @@ class TestAMoveAcrossTwoZOrders:
             f"painted {paint_order(mixed)}, described {mixed.layer_ids}"
         )
 
-    def test_the_layers_keep_the_z_orders_they_held_between_them(self, mixed):
-        """A move deals the layers' own z-orders back out; it does not invent a new scale.
+    def test_a_band_the_move_did_not_reach_keeps_its_z_orders(self, dataset):
+        """The property review H1 broke: a move inside one band may not renumber another band.
+
+        Args:
+            dataset: The session's pyramids raster.
+
+        Test scenario:
+            Two rasters sharing matplotlib's `0` in the `data` band, and two labels in the `overlay` band
+            given `zorder=3` and `zorder=2` — described in the opposite order to their values, which is the
+            arrangement that makes this measurable. `LayerTree.move` confines a move to one band, so moving
+            one raster past the other is a `data`-band move and the `overlay` band must come out untouched.
+
+            The first attempt at this ranked **every** layer on every repaint, so a data-band move re-dealt
+            the labels too and the pair swapped — a text label handed its `3` to the layer beneath it and
+            painted under what it had been written over. Asserted per-layer: the multiset is preserved by
+            construction either way, which is why the probe this replaces could not fail.
+        """
+        built = Map(crs=dataset.epsg)
+        try:
+            built.field(dataset, name="lower")
+            built.field(dataset, name="upper")
+            built.text(4.2, 52.8, "over", name="high", zorder=3)
+            built.text(4.4, 52.6, "under", name="mid", zorder=2)
+            owner = _owners(built)
+
+            def per_layer():
+                held = {}
+                for artist in layer_artists(built):
+                    held.setdefault(owner[id(artist)], []).append(artist.get_zorder())
+                return held
+
+            before = per_layer()
+            assert built.layer_ids.index("high") < built.layer_ids.index("mid"), (
+                f"the premise needs 'high' described before 'mid'; got {built.layer_ids}"
+            )
+            assert before["high"] > before["mid"], (
+                f"the premise needs 'high' to carry the larger z-order; got {before}"
+            )
+            built.move_layer("lower", 1)
+            after = per_layer()
+            assert after["high"] == before["high"], (
+                f"a data-band move renumbered the overlay band: 'high' went from {before['high']} "
+                f"to {after['high']}"
+            )
+            assert after["mid"] == before["mid"], (
+                f"a data-band move renumbered the overlay band: 'mid' went from {before['mid']} "
+                f"to {after['mid']}"
+            )
+        finally:
+            built.close()
+
+    def test_a_move_and_its_inverse_paint_the_original_picture(self, dataset):
+        """Review H2, run where the description and the z-order ranking disagree to begin with.
+
+        Args:
+            dataset: The session's pyramids raster.
+
+        Test scenario:
+            The `mixed` fixture adds a raster (z 0) before points (z 1), the one arrangement where the
+            description and the ranking already agree — so a round trip there works whatever the
+            implementation does, which is why the probe this replaces could not fail. This builds the
+            disagreeing case, with an explicit `zorder=5` on the raster added first: described
+            `['grid', 'obs']`, painted `('obs', 'grid')`.
+
+            The **first** move is what brings the two into agreement, and it is not undoable — a figure that
+            described one order and painted another cannot be returned to a state it was never consistent in.
+            From there every move is exactly undoable, which is what this asserts: snap first, then move and
+            invert, and the picture comes back.
+        """
+        built = Map(crs=dataset.epsg)
+        try:
+            built.field(dataset, name="grid", zorder=5)
+            built.points(
+                FeatureCollection.read_file("tests/data/points.geojson"), name="obs"
+            )
+            assert paint_order(built) != tuple(built.layer_ids), (
+                f"the premise needs a figure that paints {paint_order(built)} while describing "
+                f"{built.layer_ids}"
+            )
+            built.move_layer("grid", -1)
+            settled = paint_order(built)
+            assert list(settled) == built.layer_ids, (
+                f"the move left {settled} describing {built.layer_ids}"
+            )
+            built.move_layer("grid", 0)
+            moved = paint_order(built)
+            assert moved != settled, (
+                f"the move did not reach the picture: still {moved}"
+            )
+            built.move_layer("grid", -1)
+            assert paint_order(built) == settled, (
+                f"the round trip painted {paint_order(built)}, not {settled}"
+            )
+        finally:
+            built.close()
+
+    def test_the_layers_stay_inside_the_span_they_already_occupied(self, mixed):
+        """A reorder may not push a layer past an artist that is not one.
 
         Args:
             mixed: A raster field under a point layer.
 
         Test scenario:
-            The multiset is what places the layers against everything the reorder must not touch — a
-            basemap far below, a coastline far above, a colorbar's axes. Preserving it is what keeps a move
-            inside the band's own slice of the z stack.
+            A colorbar's axes, the axes' patch and anything a caller drew straight onto `Scene.ax` are not
+            layers, and a move is not licence to move them. The guarantee is that the layers' own values stay
+            within the `min`-to-`max` they already spanned, so nothing outside that range changes sides.
         """
-        before = sorted(artist.get_zorder() for artist in layer_artists(mixed))
+        held = [artist.get_zorder() for artist in layer_artists(mixed)]
+        low, high = min(held), max(held)
         mixed.move_layer("obs", 0)
-        assert (
-            sorted(artist.get_zorder() for artist in layer_artists(mixed)) == before
-        ), (
-            f"the z-orders went from {before} to "
-            f"{sorted(artist.get_zorder() for artist in layer_artists(mixed))}"
+        after = [artist.get_zorder() for artist in layer_artists(mixed)]
+        assert min(after) >= low, (
+            f"a layer dropped below the span: {min(after)} < {low}"
         )
-
-    def test_moving_the_layer_back_paints_the_original_order_again(self, mixed):
-        """A move is undoable, which a rewritten z-order scale would not be.
-
-        Args:
-            mixed: A raster field under a point layer.
-        """
-        mixed.move_layer("obs", 0)
-        mixed.move_layer("obs", -1)
-        assert paint_order(mixed) == ("grid", "obs"), (
-            f"the round trip left the axes painting {paint_order(mixed)}"
-        )
+        assert max(after) <= high, f"a layer rose above the span: {max(after)} > {high}"
 
     def test_the_engine_reading_is_the_painted_order_not_the_addition_order(
         self, dataset

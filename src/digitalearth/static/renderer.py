@@ -518,7 +518,7 @@ def _painted(axes: Any) -> Optional[List[Any]]:
     matplotlib draws artists sorted by z-order, and artists of one z-order in the order they were added —
     so that order is part of what the axes shows, and a layer put back last is painted over layers it was
     under. The list is the one matplotlib draws from, so reordering it reorders the painting **within one
-    z-order**; reaching across two takes :func:`_deal_zorders` as well.
+    z-order**; reaching across two takes :func:`_rank_zorders` as well.
 
     Args:
         axes: The axes being drawn on.
@@ -555,40 +555,82 @@ def _zorder_of(artist: Any) -> float:
         return 0.0
 
 
-def _deal_zorders(arranged: List[Any]) -> None:
-    """Deal the artists' own z-orders back out along `arranged`, so the list order is the painted order.
-
-    matplotlib draws an axes' artists ``sorted(children, key=attrgetter("zorder"))`` — a **stable** sort, so
-    the list order decides only between artists that already share a z-order. Rearranging the list therefore
-    reaches the picture within one z-order and nowhere else, which was the whole of review H5: a raster
-    (``AxesImage``, z-order 0) under a point layer (``PathCollection``, z-order 1) is the ordinary
-    composition of a map, and a move between the two left the figure exactly as it had been while
-    ``layer_ids`` reported the new order.
-
-    Reaching across the z-orders means writing them, and what is written is the **same multiset** back in the
-    new positions — not a fresh scale counted off the tree. That is what keeps a move inside the layers' own
-    slice of the z stack: every value the layers held is still held, so a basemap at ``-3``, a coastline at
-    ``2.5``, a colorbar's axes and anything a caller drew straight onto :attr:`Scene.ax` keep their place
-    against the block, and only *which* layer sits at which of those values changes. It also makes a move
-    undoable, since moving the layer back deals the same values back the way they were.
-
-    Where the description and the z-orders already agree — every layer on one z-order, which is every figure
-    two layers of one kind can build — each artist is written the value it already carried and nothing moves.
-    Where they disagree, a ``zorder=`` the caller gave a layer is superseded: both it and the move say where
-    the layer is painted, and the move is the later word.
+def _band_of_layer(layers: Any, layer_id: str) -> str:
+    """Return the band a layer is drawn in, as the key the z-order ranking groups by.
 
     Args:
-        arranged: The layers' artists in the order the figure now describes, bottom first, each layer's own
-            artists already in the order matplotlib paints them.
+        layers: The figure's `LayerTree`, or `None` when the caller has none to offer.
+        layer_id: The layer to place.
+
+    Returns:
+        The layer's own `band` when it declares one, else the band its kind declares. `""` when there is no
+        tree to ask, which puts every layer in one band — the answer that changes nothing, for the rollback
+        path that is restoring an arrangement rather than making a move.
     """
-    for artist, zorder in zip(arranged, sorted(_zorder_of(held) for held in arranged)):
-        try:
-            artist.set_zorder(zorder)
-        except AttributeError:  # pragma: no cover - every matplotlib artist has one
-            logger.debug(
-                "%r cannot carry a z-order; leaving it where matplotlib paints it",
-                artist,
-            )
+    if layers is None:
+        return ""
+    layer = layers.get(layer_id)
+    if layer is None:
+        return ""
+    return layer.band or band_of(layer.kind)
+
+
+def _rank_zorders(bands: List[List[List[Any]]]) -> None:
+    """Give each layer the z-order its place in its **own band** earns, within that band's own span.
+
+    matplotlib draws an axes' artists ``sorted(children, key=attrgetter("zorder"))`` — a **stable** sort, so
+    rearranging the list reaches the picture only between artists that already share a z-order. Carrying a move
+    across two of them means writing the z-orders, and the question review H1 answered the hard way is *whose*.
+
+    **Per band, never across them.** `LayerTree.move` already confines a move to one band — the docstring on
+    :meth:`~digitalearth.static.Scene.move_layer` says so, and an index outside the band is an `IndexError` —
+    so a move cannot change any other band's order and must not change any other band's values. The first
+    attempt at this dealt the layers' values back out across *every* layer at once, which is precisely how a
+    move between two data rasters handed a text label's ``3`` to a coastline at ``2.5`` and painted one over
+    the other: two layers in bands the caller never touched, swapped.
+
+    Within one band each layer's value comes from its own index there, spread across the span that band's
+    layers already occupied. Two properties follow:
+
+    - **A band the move did not reach is not written at all**, so the package's own stacking survives — a
+      basemap underlay at ``-3``, coastlines and borders at ``2.5``, rivers at ``2.4``.
+    - **The picture follows the description inside the band**, which is what a layer switcher is for: a point
+      layer at matplotlib's ``1`` really does go under a raster at its ``0``.
+
+    Where a band's layers all sit on one z-order — two rasters, two point layers — nothing is written: the
+    list order already decides. A layer whose own artists carried different z-orders keeps its internal
+    stacking through the list, which is sorted by those values and which matplotlib's stable sort preserves.
+
+    Where a band's described order disagrees with its values, a ``zorder=`` a caller gave one of *that band's*
+    layers is superseded: both it and the move say where the layer paints, and the move is the later word.
+
+    Args:
+        bands: One list per band, each holding that band's layers' artists in the order the figure now
+            describes them, bottom first; each layer's own artists already in paint order.
+    """
+    for blocks in bands:
+        held = [_zorder_of(artist) for block in blocks for artist in block]
+        if not held:
+            continue
+        low, high = min(held), max(held)
+        last = len(blocks) - 1
+        if last < 1 or low == high:
+            # One layer in the band, or all of them on one z-order: the arrangement already decides, and
+            # writing a value would move this band's layers against artists that are not layers for no gain.
+            continue
+        span = high - low
+        for index, block in enumerate(blocks):
+            zorder = low + span * index / last
+            for artist in block:
+                try:
+                    artist.set_zorder(zorder)
+                except (
+                    AttributeError
+                ):  # pragma: no cover - every matplotlib artist has one
+                    logger.debug(
+                        "%r cannot carry a z-order; leaving it where matplotlib paints it",
+                        artist,
+                    )
 
 
 @contextmanager
@@ -905,25 +947,35 @@ class Renderer:
             self.set_visible(layer_id, False)
         if change.order is not None:
             # Last, so the layers a redraw or an add has just appended are in the arrangement too.
-            self._repaint(change.order)
+            self._repaint(change.order, after.layers, before.layers.ids)
 
-    def _repaint(self, order: Tuple[str, ...]) -> None:
+    def _repaint(
+        self, order: Tuple[str, ...], layers: Any = None, previous: Tuple[str, ...] = ()
+    ) -> None:
         """Paint the layers this renderer holds in `order`, leaving every other artist where it is.
 
         ``FigureDiff`` has reported ``order`` since the seam landed and no renderer acted on it, so a
         reorder reached every tier's *description* and none of their pictures. On this tier it reaches both,
         in two steps: the layers' artists are re-arranged in :func:`_painted`, which matplotlib honours
-        between artists of one z-order, and then :func:`_deal_zorders` writes the layers' own z-orders back
-        out along that arrangement, which is what carries the move across two of them. Review H5: the first
-        step alone left a raster moved above a point layer still painted underneath it.
+        between artists of one z-order, and then :func:`_rank_zorders` gives each layer the z-order its own
+        place in that arrangement earns, which is what carries the move across two of them. Review H5: the
+        first step alone left a raster moved above a point layer still painted underneath it.
 
         The layers' own slots are refilled and nothing else moves. The axes' patch, its spines, a colorbar's
         axes and anything a caller drew straight onto :attr:`Scene.ax` are not layers, and a reorder is not
-        licence to move them — nor to renumber them, which is why the z-orders are dealt out of the multiset
-        the layers already held rather than counted off `order`.
+        licence to move them, so :func:`_rank_zorders` writes only within the span the layers already
+        occupied — see there for why each layer's value comes from its own place in `order` rather than from
+        the multiset the layers held between them.
 
         Args:
             order: The layer ids in the draw order the figure now describes, bottom first.
+            layers: The figure's `LayerTree`, read only for each layer's band so the z-orders are ranked
+                within a band and never across them. When it is `None` every layer is treated as one band,
+                which is what the rollback path wants: it is restoring an arrangement, not making a move.
+            previous: The order being moved away from. A band whose own sequence is unchanged between
+                `previous` and `order` is not written at all — `LayerTree.move` confines a move to one band,
+                so every other band's values are none of a move's business. Empty means "compare against
+                nothing", which ranks every band; that is the rollback path, restoring an arrangement.
         """
         painted = _painted(self._scene.ax)
         if painted is None:
@@ -940,9 +992,25 @@ class Renderer:
         for artists in blocks.values():
             # One layer's artists in the order matplotlib paints them, so a layer whose pieces carry
             # different z-orders — a limb-split coastline is one, a glyph that drew its own overlay another —
-            # keeps its own stacking when `_deal_zorders` writes the block's values back out.
+            # keeps its own stacking through the list, which `_rank_zorders` leaves ordered.
             artists.sort(key=_zorder_of)
-        arranged = [artist for layer_id in order for artist in blocks.get(layer_id, ())]
+        ordered = [list(blocks.get(layer_id, ())) for layer_id in order]
+        arranged = [artist for block in ordered for artist in block]
+        bands: Dict[str, List[List[Any]]] = {}
+        for layer_id, block in zip(order, ordered):
+            bands.setdefault(_band_of_layer(layers, layer_id), []).append(block)
+        if previous:
+            was: Dict[str, List[str]] = {}
+            for layer_id in previous:
+                was.setdefault(_band_of_layer(layers, layer_id), []).append(layer_id)
+            now: Dict[str, List[str]] = {}
+            for layer_id in order:
+                now.setdefault(_band_of_layer(layers, layer_id), []).append(layer_id)
+            bands = {
+                band: blocks
+                for band, blocks in bands.items()
+                if now.get(band) != was.get(band)
+            }
         if len(arranged) != len(slots):
             # An artist owned by a layer the new order does not name would be dropped from the axes by the
             # assignment below, and one named twice would be painted twice. Neither is reachable from
@@ -956,7 +1024,7 @@ class Renderer:
             return
         for slot, artist in zip(slots, arranged):
             painted[slot] = artist
-        _deal_zorders(arranged)
+        _rank_zorders(list(bands.values()))
 
     def _rollback(self, held: _Held, before: FigureSpec) -> None:
         """Put the axes and this record back the way a refused :meth:`apply` found them.

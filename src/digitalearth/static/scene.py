@@ -932,7 +932,7 @@ class Scene(WatermarkMixin):
             z-order in the order they were added, so the renderer re-arranges the layers it holds
             (:meth:`~digitalearth.static.renderer.Renderer._repaint`) — and because that stops at a z-order
             boundary, it also deals the layers' own z-orders back out along the new order
-            (:func:`~digitalearth.static.renderer._deal_zorders`), which is what moves a point layer under a
+            (:func:`~digitalearth.static.renderer._rank_zorders`), which is what moves a point layer under a
             raster rather than only saying so. The layers keep the z-orders they held between them, so the
             move stays inside their slice of the stack and nothing outside it shifts; a ``zorder=`` a caller
             gave one of the moved layers is superseded, the move being the later word on where it is painted.
