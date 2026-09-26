@@ -929,24 +929,33 @@ class InteractiveMapBase:
             KeyError: if no layer has that id, naming the ids that do.
 
         Warns:
-            UserWarning: when the element has no keyword to say it with — a basemap, or a `dynamic=True`
-                layer whose `DynamicMap` has produced no frame yet. The layer stays drawn and the warning
-                says so (:func:`~digitalearth.interactive.renderer._show`).
+            UserWarning: when the element has no keyword to say it with — a basemap, a `dynamic=True` layer
+                whose `DynamicMap` has produced no frame yet, or an object handed to :meth:`add_layer` that
+                HoloViews has no option tree for at all. The layer stays drawn and the warning says so
+                (:func:`~digitalearth.interactive.renderer._show`).
 
         Note:
-            A layer of a kind this tier draws is hidden **on its element**, so `render()` leaves it out. A
-            :meth:`add_layer` layer of the caller's own is described hidden and nothing more: the tier holds
-            no description to rebuild such an element from, which is why `custom:holoviews` is named in the
-            renderer contract's `UNDRAWN_KINDS`, and there is no recorded element to write the option onto.
+            Every layer is hidden **on its element**: Bokeh takes `visible=False` and draws nothing for it,
+            while the overlay `render()` composes is unchanged. That includes a layer of the caller's own.
+            The tier holds no *description* to rebuild such an element from — which is why
+            `custom:holoviews` is named in the renderer contract's `UNDRAWN_KINDS` — but it does hold the
+            object, and hiding it is the same `.opts()` call. It used to be described hidden and nothing
+            more, so a caller was told the layer was hidden while `render()` went on drawing it, without
+            even the warning above (review H8).
 
         Examples:
             - A hidden layer is still described, and comes back on:
                 ```python
+                >>> import warnings
                 >>> from digitalearth.interactive import InteractiveMap
                 >>> m = InteractiveMap().add_layer("mine", name="obs")
-                >>> m.set_visible("obs", False).figure_spec.layers.is_visible("obs")
+                >>> with warnings.catch_warnings():  # a str has no `visible` option, so this warns
+                ...     warnings.simplefilter("ignore", UserWarning)
+                ...     m.set_visible("obs", False).figure_spec.layers.is_visible("obs")
                 False
-                >>> m.set_visible("obs").figure_spec.layers.is_visible("obs")
+                >>> with warnings.catch_warnings():
+                ...     warnings.simplefilter("ignore", UserWarning)
+                ...     m.set_visible("obs").figure_spec.layers.is_visible("obs")
                 True
 
                 ```
@@ -1298,6 +1307,28 @@ class InteractiveMapBase:
                 f"{method}() needs at least one layer — add a builder call first"
             )
         return self._layer_tree.ids.index(self._last_layer_id)
+
+    def _kept_element(self, layer_id: str) -> Any:
+        """Return the object this map overlays for one layer, for a layer no drawer produced.
+
+        The renderer's record holds what its drawers built; a caller's own element is not in it, so this is
+        the only place such an object can be found. Looked up the way :meth:`_last_layer_index` looks its
+        own up — :attr:`layers` is kept in the tree's order, each element inserted at its layer's tree
+        index, so the tree index is the element's index.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            The element, or `None` for a layer this map overlays nothing for. The length check is what makes
+            the index honest: writing an option onto the wrong layer's element would be worse than the
+            no-op this tier did before (review H8), and the two lists agreeing is the invariant rather than
+            something callers may rely on here.
+        """
+        ids = self._layer_tree.ids
+        if layer_id not in ids or len(self.layers) != len(ids):
+            return None
+        return self.layers[ids.index(layer_id)]
 
     def _forget_layer(self, layer_id: str) -> None:
         """Drop a layer that was described but never drawn, and everything it registered.

@@ -18,6 +18,9 @@ from digitalearth.base.capabilities import CapabilityError
 from digitalearth.base.spec import Symbology
 from digitalearth.interactive import InteractiveMap
 
+hv = pytest.importorskip(
+    "holoviews", reason="the interactive tier needs the interactive environment"
+)
 pytest.importorskip(
     "geoviews", reason="the interactive tier needs the interactive environment"
 )
@@ -120,7 +123,8 @@ def held():
 
     A string stands in for a HoloViews element: the registry does not inspect what it is handed, which is
     what lets these checks run without the `interactive` extra — and a custom layer is exactly the case the
-    renderer has no drawer for, so no engine would be reached even with one installed.
+    renderer has no drawer for, so nothing here builds an element. A string also has no visibility option
+    to write, which is the other half of what :class:`TestHidingACallersOwnElement` measures.
 
     Yields:
         The map, with `lower` and `upper` registered.
@@ -130,6 +134,38 @@ def held():
     built.add_layer("upper-element", name=TOP)
     yield built
     built.close()
+
+
+@pytest.fixture
+def kept():
+    """Yield a map holding one real HoloViews element of the caller's own.
+
+    The `held` fixture's strings cannot be hidden, so they can only show the warning. This one is a
+    `Points`, which Bokeh *does* take `visible` for — the case where "hidden" has to reach the engine.
+
+    Yields:
+        The map, with `lower` registered.
+    """
+    built = InteractiveMap()
+    built.add_layer(hv.Points([(0.0, 0.0)]), name=BOTTOM)
+    yield built
+    built.close()
+
+
+def _bokeh_visible(element):
+    """Return what HoloViews' own Bokeh option store holds for one element's `visible`.
+
+    Args:
+        element: The element to ask.
+
+    Returns:
+        The applied option, or `None` when none was applied. Read out of the engine's store — the same
+        place a Bokeh render reads it — rather than out of this package's record, which is the whole
+        question review H8 asks. `hv.renderer` registers the store without making Bokeh current, the
+        idiom :func:`~digitalearth.interactive.style_fold.allowed_options` uses for the same read.
+    """
+    hv.renderer("bokeh")
+    return hv.Store.lookup_options("bokeh", element, "style").kwargs.get("visible")
 
 
 class TestACallersOwnElement:
@@ -221,23 +257,6 @@ class TestACallersOwnElement:
             ["lower-element", "upper-element"],
         ), (held.layer_ids, held.layers)
 
-    def test_hiding_it_is_described_although_no_element_can_say_so(self, held):
-        """Honest half-measure: the description records it, and the overlay cannot express it.
-
-        Args:
-            held: The map under test.
-
-        Test scenario:
-            `set_visible` writes a HoloViews option onto the element the renderer recorded, and a custom
-            layer has no record — so the figure says hidden and `render()` still overlays it. Pinned rather
-            than left implied, because the alternative reading is that the tier drops the layer.
-        """
-        held.set_visible(BOTTOM, False)
-        assert (held.figure_spec.layers.is_visible(BOTTOM), held.layers) == (
-            False,
-            ["lower-element", "upper-element"],
-        ), held.layers
-
     def test_the_removed_layer_stops_being_the_one_the_toggles_act_on(self, held):
         """`colorbar()` and `legend()` act on the layer added last; a removed one is not it.
 
@@ -305,3 +324,74 @@ class TestWhatReplaceLayerRefusesAndSaysItRefuses:
         assert "no layer" not in str(refusal.value), (
             f"the refusal blamed a missing layer: {refusal.value}"
         )
+
+
+class TestHidingACallersOwnElement:
+    """Review H8: `set_visible` reported success on a custom layer, reached no engine, and stayed silent.
+
+    The method promises one of two things and did neither. Its `Warns:` clause says a `UserWarning` is
+    emitted "when the element has no keyword to say it with … The layer stays drawn and the warning says
+    so" — and this was the one path that took neither branch: the element was never asked, so a caller was
+    told the layer was hidden while `render()` went on composing it. It is the "reports success while the
+    engine was not reached" mode, and it was the only tier with it (static, web and 3-D all hide theirs).
+    """
+
+    def test_hiding_it_writes_the_option_onto_the_element(self, kept):
+        """A HoloViews element of the caller's own *can* be hidden, so hiding it must reach it.
+
+        Args:
+            kept: A map holding one real `Points` element.
+
+        Test scenario:
+            `.opts()` writes into HoloViews' global option `Store` against the object it is called on, and
+            the map holds that object — so there is nothing standing between `set_visible` and the engine
+            except the renderer's record, which never held a custom layer. Read back out of the store, off
+            `layers[0]`, which is the element `render()` composes: a fix that dropped the layer instead of
+            hiding it would not get as far as the assertion.
+        """
+        kept.set_visible(BOTTOM, False)
+        applied = _bokeh_visible(kept.layers[0])
+        assert applied is False, f"the engine's store holds visible={applied!r}"
+
+    def test_showing_it_again_turns_it_back_on(self, kept):
+        """The switch has to work in both directions, or a hidden layer can never come back.
+
+        Args:
+            kept: A map holding one real `Points` element.
+        """
+        kept.set_visible(BOTTOM, False)
+        kept.set_visible(BOTTOM, True)
+        applied = _bokeh_visible(kept.layers[0])
+        assert applied is True, f"the engine's store holds visible={applied!r}"
+
+    def test_an_object_with_no_visibility_keyword_warns_instead(self, held):
+        """The promise the `Warns:` clause makes, on the path that could not keep the other one.
+
+        Args:
+            held: The map under test, holding strings.
+
+        Test scenario:
+            A string has no Bokeh option tree, exactly as a `Tiles` basemap and a frameless `DynamicMap`
+            have none, so there is no keyword to write. Saying nothing is what left a caller believing a
+            layer was hidden.
+        """
+        with pytest.warns(UserWarning, match="no way to hide"):
+            held.set_visible(BOTTOM, False)
+
+    def test_such_an_object_stays_described_hidden_and_drawn(self, held):
+        """The warning's own wording — "it stays drawn" — held against the map.
+
+        Args:
+            held: The map under test, holding strings.
+
+        Test scenario:
+            The description records the request, so a switcher reading the figure still shows the layer
+            off; the overlay keeps the object, because nothing can express the request on it. Pinned rather
+            than left implied, because the alternative reading is that the tier drops the layer.
+        """
+        with pytest.warns(UserWarning):
+            held.set_visible(BOTTOM, False)
+        assert (held.figure_spec.layers.is_visible(BOTTOM), held.layers) == (
+            False,
+            ["lower-element", "upper-element"],
+        ), held.layers

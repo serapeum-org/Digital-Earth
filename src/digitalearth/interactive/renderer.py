@@ -188,17 +188,21 @@ def _show(element: Any, layer_id: str, visible: bool) -> None:
         visible: Whether it is drawn.
 
     Warns:
-        UserWarning: when the element has no keyword to say it with — a `Tiles`/`WMTS` basemap, or a
+        UserWarning: when the element has no keyword to say it with — a `Tiles`/`WMTS` basemap, a
             `DynamicMap` that has not produced a frame, which is what every `dynamic=True` layer is at
-            build time (see :func:`_visibility_keywords`). Saying nothing would leave a figure that
-            describes a hidden layer drawing it — the silence review M4 reports on this tier. The warning
-            is worded for the hide direction because that is the case it costs something; it is emitted
-            before `visible` is read, so `set_visible(id, True)` on such an element warns too.
+            build time (see :func:`_visibility_keywords`), or an object a caller handed `add_layer` that
+            HoloViews has no option tree for at all. Saying nothing would leave a figure that describes a
+            hidden layer drawing it — the silence review M4 reports on this tier, and review H8 on the
+            custom-layer half of it. The warning is worded for the hide direction because that is the case
+            it costs something; it is emitted before `visible` is read, so `set_visible(id, True)` on such
+            an element warns too.
     """
     keywords = _visibility_keywords(element)
     if not keywords:
+        # "its element is a …" rather than "the tier draws it as a …": this path is reached for a caller's
+        # own object too, which the tier keeps rather than draws (review H8).
         warnings.warn(
-            f"layer {layer_id!r} is described hidden, but the interactive tier draws it as a "
+            f"layer {layer_id!r} is described hidden, but its element is a "
             f"{type(element).__name__}, which Bokeh gives no way to hide; it stays drawn",
             UserWarning,
             stacklevel=3,
@@ -732,20 +736,28 @@ class Renderer:
         self._drawn.pop(layer_id, None)
 
     def set_visible(self, layer_id: str, visible: bool) -> None:
-        """Draw or stop drawing the element recorded for a layer.
+        """Draw or stop drawing the element a layer contributes to the overlay.
 
         The element is changed in place — ``.opts()`` writes into HoloViews' option `Store` against the
         object it is called on and hands that same object back — so what `InteractiveMap.layers` holds, and
         the style filed against it, are the ones this changes.
 
+        **A layer of the caller's own is reached through the map**, because this record never holds one: the
+        object is in :attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` and nowhere else, and
+        it is the same `.opts()` call that hides it. Before, an id with nothing recorded was ignored, so
+        `set_visible` on a custom layer changed the description, reached no engine, and did not emit the
+        warning its own contract promises for a layer it leaves drawn — review H8. `is_visible` still
+        refuses such an id: it reports on what a *drawer* produced, and no drawer produced this.
+
         Args:
-            layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
-                three tiers answer one too.
+            layer_id: The layer to toggle. An id this map has no element for at all is ignored, which is how
+                the other three tiers answer one too.
             visible: Whether it is drawn.
 
         Warns:
             UserWarning: when the element has no keyword to say it with, in either direction — see
-                :func:`_show`, which this delegates to.
+                :func:`_show`, which this delegates to. A caller's own object reaches it whenever HoloViews
+                has no option tree for what was handed in.
 
         Examples:
             - Hiding a layer and reading it back, off the element rather than off the description:
@@ -764,8 +776,11 @@ class Renderer:
                 ```
         """
         drawn = self._drawn.get(layer_id)
-        if drawn is not None:
-            _show(drawn.element, layer_id, visible)
+        element = (
+            drawn.element if drawn is not None else self._map._kept_element(layer_id)
+        )
+        if element is not None:
+            _show(element, layer_id, visible)
 
     def is_visible(self, layer_id: str) -> bool:
         """Whether HoloViews would currently draw the element recorded for a layer.
