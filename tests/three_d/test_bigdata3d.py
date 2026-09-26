@@ -609,3 +609,109 @@ class TestAReductionNeverClaimsAnOvershootAsASuccess:
         assert "could not reach" in caplog.text, (
             f"a reduction that stayed over the budget ({reduced.n_cells} cells) reported: {caplog.text}"
         )
+
+
+def _triangles_drawn(mesh) -> int:
+    """Return how many triangles `mesh` renders as, measured rather than derived from the module.
+
+    The budget is set from a page-size table in triangles, so this is the quantity every check below reads.
+    It is measured by triangulating a copy: a structured grid has its surface extracted first, since
+    ``triangulate()`` on one yields an `UnstructuredGrid` with no cells to count.
+
+    Args:
+        mesh: The PyVista object the plotter was handed.
+
+    Returns:
+        The triangle count VTK draws it as.
+    """
+    surface = mesh if isinstance(mesh, pv.PolyData) else mesh.extract_surface()
+    return int(
+        surface.n_cells if surface.is_all_triangles else surface.triangulate().n_cells
+    )
+
+
+class TestTheSurfaceBudgetCountsTrianglesOnBothSides:
+    """R2-M11 — one quantity on both sides of the comparison, so the budget means one thing.
+
+    `DEFAULT_CELL_BUDGET` is set from a table of exported page sizes measured in **triangles**, and the
+    reduced path targets triangles: `decimate_pro` is given `1 - budget / triangles.n_cells`. The gate,
+    though, compared `mesh.n_cells` — and a terrain under the budget is a `StructuredGrid` whose cells are
+    **quads**, each drawn as two triangles. So a terrain was admitted at up to twice the geometry the budget
+    was chosen for, and one input cell more than the gate allowed halved the page that reached
+    `export_html`: 708x708 went whole at 999 698 triangles (the table's 24.0 MB row) while 709x709 was
+    reduced to 500 000 (12.6 MB), with the docstring presenting the two as comparable.
+    """
+
+    @staticmethod
+    def _quads(n: int):
+        """Return an ``n x n``-point structured sheet — ``(n - 1) ** 2`` quad cells.
+
+        Args:
+            n: Points per side.
+
+        Returns:
+            The `StructuredGrid` a terrain is built as.
+        """
+        axis = np.arange(float(n))
+        xx, yy = np.meshgrid(axis, axis)
+        return pv.StructuredGrid(xx, yy, np.zeros((n, n)))
+
+    def test_a_structured_quad_is_drawn_as_two_triangles(self):
+        """The premise the budget rests on, measured on the engine rather than assumed."""
+        sheet = self._quads(41)
+        assert _triangles_drawn(sheet) == 2 * sheet.n_cells, (
+            f"{sheet.n_cells} quads rendered as {_triangles_drawn(sheet)} triangles"
+        )
+
+    def test_a_sheet_whose_quads_fit_but_whose_triangles_do_not_is_reduced(self):
+        """The gap the two units left: 1 600 quads passed a 2 000 budget and drew 3 200 triangles."""
+        sheet = self._quads(41)
+        budget = sheet.n_cells + 400
+        drawn = reduce_surface(sheet, budget, kind="terrain")
+        assert _triangles_drawn(drawn) <= budget, (
+            f"a sheet of {sheet.n_cells} quads drew {_triangles_drawn(drawn)} triangles against a "
+            f"{budget} budget"
+        )
+
+    def test_a_sheet_whose_triangles_fit_is_still_handed_over_untouched(self):
+        """The other half: inside the budget nothing is triangulated, copied or simplified."""
+        sheet = self._quads(41)
+        assert reduce_surface(sheet, 2 * sheet.n_cells, kind="terrain") is sheet, (
+            "a sheet at exactly the triangle budget was not handed back as it is"
+        )
+
+    def test_a_terrain_drawn_through_the_builder_honours_the_triangle_budget(self):
+        """Read off the object the plotter was handed, which is what exports to the page."""
+        source = _dem(41)
+        budget = (len(source.x.values) - 1) * (len(source.y.values) - 1) + 400
+        scene = Scene3D(off_screen=True)
+        scene.terrain(source, big_data_threshold=budget)
+        rendered = _triangles_drawn(scene.mesh_of("terrain-1"))
+        scene.close()
+        assert rendered <= budget, (
+            f"the plotter was handed {rendered} triangles against a {budget} budget"
+        )
+
+    def test_an_all_triangle_mesh_at_its_own_count_is_handed_back_as_it_is(self):
+        """The other kind sharing this route must not inherit the quad's factor of two.
+
+        Test scenario:
+            Identity, not a cell count: a doubled count crosses the budget, and a crossed budget triangulates
+            and decimates — to the right number, because the decimation target reads the real triangle count,
+            so only the *copy* tells the two readings apart.
+        """
+        shell = pv.Sphere(theta_resolution=30, phi_resolution=30)
+        assert shell.is_all_triangles, (
+            "the premise: pyvista.Sphere is the all-triangle shape this route's other kind produces"
+        )
+        assert reduce_surface(shell, shell.n_cells, kind="isosurface") is shell, (
+            f"a {shell.n_cells}-triangle mesh at a budget of exactly {shell.n_cells} was copied"
+        )
+
+    def test_an_all_triangle_mesh_one_triangle_over_is_reduced(self):
+        """Built the other way round from the test above, so neither is vacuous."""
+        shell = pv.Sphere(theta_resolution=30, phi_resolution=30)
+        drawn = reduce_surface(shell, shell.n_cells - 1, kind="isosurface")
+        assert drawn.n_cells < shell.n_cells, (
+            f"a {shell.n_cells}-triangle mesh drew {drawn.n_cells} at a budget of {shell.n_cells - 1}"
+        )

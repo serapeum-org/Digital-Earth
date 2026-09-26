@@ -29,8 +29,17 @@ neither or in both. Type-sniffing is what that avoids — measured on PyVista 0.
 vertex-only point cloud returns a mesh of **zero cells**, so a generic "triangulate, then decimate" path would
 have deleted every point cloud it was asked to thin.
 
-**The budget counts the cells of the object the plotter is handed**, and an object at or under it is passed
-through untouched — not triangulated, not copied — so nothing that renders today renders differently.
+**The budget counts what is drawn, in the unit the route reduces in**: triangles for the surface route, where
+a structured quad counts as the two triangles VTK draws it as, and voxels for the volume route. Both sides of
+each comparison are therefore the same quantity as the table above — the gate used to read a terrain's quad
+count against a triangle budget, which admitted twice the geometry the number was chosen for (review R2-M11).
+:func:`report_unreduced` is the exception, and deliberately so: it compares the object's own cells, because a
+kind with no route has no triangle count the budget could be about — a point cloud draws none, and a block of
+arrows is one small solid per sample.
+
+An object at or under the budget is passed through untouched — not triangulated, not copied — so nothing that
+renders today renders differently: the two shapes this tier builds, an all-triangle `PolyData` and a
+structured sheet, are both counted arithmetically rather than by triangulating to find out.
 """
 
 import logging
@@ -60,9 +69,12 @@ logger = logging.getLogger(__name__)
 #: megabytes (12.6 MB) and whose host copy stays under 25 MB; the next step up doubles the page to 24 MB. At the
 #: margin the reduction costs ~3 s of ``decimate_pro``, against ~6 s at a 1 M budget.
 #:
-#: What that means for a DEM, measured: a 708x708 one (499 849 structured cells) is drawn exactly as it is, and a
-#: 709x709 one (501 264) is reduced to 500 000 triangles. A 1000x1000 DEM goes from a 39.0 MB exported page to a
-#: 12.3 MB one.
+#: What that means for a DEM, measured through :func:`reduce_surface` — and in triangles, since a structured
+#: quad is drawn as two of them: a 501x501 one (250 000 quads, exactly 500 000 triangles) is drawn as it is, and
+#: a 502x502 one (251 001 quads, 502 002 triangles) is reduced to 499 999. A 708x708 DEM, which the quad-counting
+#: gate let through whole at 999 698 triangles, is now reduced like its 709x709 neighbour — the two come out at
+#: 499 999 and 500 000, which is what the budget was chosen to mean. A 1000x1000 DEM goes from a 39.0 MB
+#: exported page to a 12.3 MB one, as it did before: at 1 996 002 triangles it was already over either gate.
 DEFAULT_CELL_BUDGET: int = 500_000
 
 #: The PyVista filter that reduces a surface mesh: boundary-preserving, which is what terrain edges and
@@ -119,11 +131,19 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
 
 
 def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
-    """Return `mesh` with at most `budget` cells, simplified with ``decimate_pro`` if it has more.
+    """Return `mesh` drawing at most `budget` triangles, simplified with ``decimate_pro`` if it draws more.
 
     The route for a **sampled surface** — a terrain built from a DEM, a shell extracted from a cube.
     ``decimate_pro`` rather than ``decimate`` because it preserves boundaries, which is what keeps a terrain's
     edge and a coastline where they were.
+
+    **The budget is counted in the triangles VTK draws, on both sides of the comparison.** The module
+    docstring's page-size table is in triangles and ``decimate_pro`` is given a triangle target, but the gate
+    read ``mesh.n_cells`` — and a terrain under the budget is a `StructuredGrid` of **quads**, each drawn as
+    two triangles (measured: 499 849 quads render as 999 698 triangles). So a terrain was admitted at up to
+    twice the geometry the budget was chosen for, and one input cell past the gate halved the exported page
+    (review R2-M11). An all-triangle `PolyData` — what ``contour`` hands the isosurface route — counts as it
+    is, so the two kinds sharing this function are now measured in one unit.
 
     A mesh that is not already triangles is triangulated first, because ``decimate_pro`` refuses anything else
     (``NotAllTrianglesError``, measured on PyVista 0.48.4) — and a structured grid has its surface extracted
@@ -132,7 +152,7 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
 
     Args:
         mesh: The mesh the drawer built — a `pyvista.PolyData` or `pyvista.StructuredGrid`.
-        budget: The most cells to draw. A mesh at or under it is returned **as it is**: untriangulated,
+        budget: The most triangles to draw. A mesh at or under it is returned **as it is**: untriangulated,
             uncopied, so no render that fits the budget changes.
         kind: The layer kind, named in the log line.
 
@@ -147,13 +167,25 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
             >>> ax = np.arange(40.0)
             >>> xx, yy = np.meshgrid(ax, ax)
             >>> grid = pv.StructuredGrid(xx, yy, xx * 0.1)
-            >>> grid.n_cells
-            1521
+            >>> grid.n_cells, grid.n_cells * 2
+            (1521, 3042)
             >>> reduce_surface(grid, 400, kind="terrain").n_cells <= 400
             True
 
             ```
-        - One under the budget is the very same object:
+        - A sheet whose quads fit the budget but whose triangles do not is still reduced:
+            ```python
+            >>> import numpy as np, pyvista as pv
+            >>> from digitalearth.three_d.bigdata import reduce_surface
+            >>> ax = np.arange(41.0)
+            >>> grid = pv.StructuredGrid(*np.meshgrid(ax, ax), np.zeros((41, 41)))
+            >>> grid.n_cells
+            1600
+            >>> reduce_surface(grid, 2000, kind="terrain").n_cells <= 2000
+            True
+
+            ```
+        - One whose triangles are under the budget is the very same object:
             ```python
             >>> import numpy as np, pyvista as pv
             >>> from digitalearth.three_d.bigdata import reduce_surface
@@ -164,19 +196,23 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
             ```
     """
     cells = int(mesh.n_cells)
-    if cells <= budget:
-        return mesh
-    triangles = _triangles(mesh)
-    if triangles.n_cells == 0:
+    rendered, triangles = _rendered_triangles(mesh)
+    if rendered == 0:
         # `triangulate()` empties a vertex-only mesh (measured, PyVista 0.48.4). Nothing in `REDUCTIONS`
-        # reaches here, but a direct call could, and deleting a layer is not a reduction of it.
-        logger.warning(
-            f"{kind}: {cells:,} cells exceed big_data_threshold={budget:,}, but the mesh has no faces to "
-            f"simplify — drawn whole"
-        )
+        # reaches here, but a direct call could, and deleting a layer is not a reduction of it. Reported
+        # against the mesh's own cells, because a cloud has no triangles for the budget to be about.
+        if cells > budget:
+            logger.warning(
+                f"{kind}: {cells:,} cells exceed big_data_threshold={budget:,}, but the mesh has no faces "
+                f"to simplify — drawn whole"
+            )
         return mesh
+    if rendered <= budget:
+        return mesh
+    if triangles is None:
+        triangles = _triangles(mesh)
     smaller = triangles.decimate_pro(max(0.0, 1.0 - budget / triangles.n_cells))
-    _report_reduction(kind, cells, int(smaller.n_cells), budget, _DECIMATE)
+    _report_reduction(kind, rendered, int(smaller.n_cells), budget, _DECIMATE)
     return smaller
 
 
@@ -316,6 +352,39 @@ def _resample_target(per_axis: np.ndarray, budget: int) -> np.ndarray:
             return target
         pinned |= thin
         target[thin] = floors[thin]
+
+
+def _rendered_triangles(mesh: Any) -> tuple:
+    """Return how many triangles `mesh` is drawn as, and the triangulated copy if one had to be built.
+
+    The budget is a triangle count, so this is the quantity :func:`reduce_surface` gates on. Two shapes answer
+    without triangulating anything, which is what keeps the promise that a surface inside the budget is passed
+    through untouched:
+
+    * an all-triangle `PolyData` — what ``contour`` hands the isosurface route — is its own count;
+    * a **structured sheet** — one of whose three dimensions is a single point, which is how every terrain in
+      this tier is built — is quads, and a quad is drawn as exactly two triangles (measured on PyVista 0.48.4:
+      a 708x708 DEM's 499 849 cells render as 999 698, a ratio of 2.0 at every size tried).
+
+    Anything else is triangulated and counted, which is exact for any class and is what a caller's own mesh
+    arriving through a direct call gets.
+
+    Args:
+        mesh: The mesh the drawer built.
+
+    Returns:
+        tuple: ``(triangles, triangulated)`` — the count, and the all-triangle `PolyData` it was read off, or
+        ``None`` when the count was arrived at without building one. A vertex-only mesh counts 0, since it
+        draws no triangles at all.
+    """
+    import pyvista as pv
+
+    if isinstance(mesh, pv.PolyData) and mesh.is_all_triangles:
+        return int(mesh.n_cells), mesh
+    if isinstance(mesh, pv.StructuredGrid) and 1 in tuple(mesh.dimensions):
+        return 2 * int(mesh.n_cells), None
+    triangulated = _triangles(mesh)
+    return int(triangulated.n_cells), triangulated
 
 
 def _triangles(mesh: Any) -> Any:
