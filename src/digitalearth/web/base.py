@@ -347,7 +347,44 @@ class _DeckOverlay:
 
     It is a queue entry rather than the closure it replaced because a closure could only call the widget,
     and calling it once per builder is exactly what would drop every overlay but the last.
+
+    One overlay does **not** mean one z-position: the widget builds it interleaved, so each layer in it is
+    inserted into MapLibre's own layer stack and carries the style layer it draws beneath as ``beforeId``
+    (:func:`_anchored`). Without that every deck layer drew above every style layer, whatever the queue
+    said, because the overlay is handed over after the whole queue (review H6).
     """
+
+
+def _layer_id_of(layer: Any) -> Optional[str]:
+    """Return the id one MapLibre layer carries, in whichever shape it was built.
+
+    Args:
+        layer: A `maplibre` ``Layer``, a plain MapLibre spec dict, or anything else a caller queued.
+
+    Returns:
+        The id, or `None` for an entry that names no layer — a callable ``apply(widget)`` wiring its own
+        layers is the shape that does, and a deck layer beneath it therefore cannot be ordered against it.
+    """
+    value = layer.get("id") if isinstance(layer, dict) else getattr(layer, "id", None)
+    return str(value) if value is not None else None
+
+
+def _anchored(layer: Any, anchor: Optional[str]) -> Any:
+    """Return one deck.gl JSON layer carrying the MapLibre style layer it draws beneath.
+
+    Args:
+        layer: The deck.gl JSON layer, as its drawer built it.
+        anchor: The id of the style layer it must draw beneath, or `None` to leave it on top of the stack —
+            which is where deck.gl puts a layer naming no ``beforeId``.
+
+    Returns:
+        The layer itself when there is nothing above it, or a copy carrying ``beforeId``. A copy, because
+        the original is what the renderer holds as *drawn*: where a layer sits on one page is a fact about
+        that page's stack, not part of the description a saved figure travels with.
+    """
+    if anchor is None or not isinstance(layer, dict):
+        return layer
+    return {**layer, "beforeId": anchor}
 
 
 def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
@@ -1298,6 +1335,15 @@ class WebMapBase:
             This reaches the page: the widget is built by replaying the queue in order, and the reconcile
             re-arranges the queue (:meth:`~digitalearth.web.renderer.Renderer._arrange`) — so what MapLibre
             adds last, and therefore draws on top, follows.
+
+            A deck.gl layer (`point_cloud`, `model`, and the big-data routes — see
+            :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a MapLibre style layer, and the page
+            composes all of them into **one** overlay handed over after the whole queue. It reaches the page
+            all the same: the overlay is interleaved, so each deck layer names the style layer it draws
+            beneath and deck.gl inserts it there. What cannot be ordered against a deck layer is a layer a
+            caller wired themselves through :meth:`add_layer`/:meth:`add_underlay` with a callable — those
+            layers are added inside the callable under ids this map never sees, so a deck layer is placed
+            relative to the nearest style layer it *can* name.
 
         Examples:
             - Two labels, reordered by id:
@@ -2845,7 +2891,11 @@ class WebMapBase:
         return options
 
     def _apply_layer(
-        self, widget: Any, layer: Any, deck: Optional[List[Any]] = None
+        self,
+        widget: Any,
+        layer: Any,
+        deck: Optional[List[Any]] = None,
+        anchor: Optional[str] = None,
     ) -> None:
         """Apply one queued ``layer`` onto the MapLibre ``widget``.
 
@@ -2869,31 +2919,43 @@ class WebMapBase:
                 the queue one entry at a time, as the renderer contract's adapter does — applies each deck
                 layer on its own instead, which draws the same layers but would drop all but the last if a
                 page were really built that way.
+            anchor: The MapLibre style layer a deck layer queued here draws beneath, as
+                :meth:`_deck_anchors` reads it off the queue. ``None`` leaves it on top, which is where
+                deck.gl puts a layer naming no ``beforeId``; it is also what a single-entry replay passes,
+                having no queue to read a position out of.
         """
         if isinstance(layer, _Described):
             built = self._renderer.drawn.get(layer.layer_id)
             if built is None:
                 return
-            self._apply_drawn(widget, built, deck)
+            self._apply_drawn(widget, built, deck, anchor)
         elif isinstance(layer, _DeckOverlay):
-            self._collect_deck(widget, list(self._deck_layers or ()), deck)
+            self._collect_deck(widget, list(self._deck_layers or ()), deck, anchor)
         elif callable(layer):
             layer(widget)
         else:
             widget.add_layer(layer)
 
-    def _apply_drawn(self, widget: Any, built: Any, deck: Optional[List[Any]]) -> None:
+    def _apply_drawn(
+        self,
+        widget: Any,
+        built: Any,
+        deck: Optional[List[Any]],
+        anchor: Optional[str] = None,
+    ) -> None:
         """Apply what one drawer produced, by the route it built for.
 
         Args:
             widget: The MapLibre ``MapWidget`` being assembled.
             built: The :class:`~digitalearth.web.renderer.DrawnLayer` the renderer holds for the layer.
             deck: The list deck.gl layers are collected into, or ``None`` to apply each on its own.
+            anchor: The style layer a deck-routed drawing draws beneath, or ``None`` for the top of the
+                stack. Read by the deck route alone: a style layer is placed by when it is added.
         """
         from digitalearth.web.renderer import DECK_ROUTE, TERRAIN_ROUTE, shown
 
         if built.route == DECK_ROUTE:
-            self._collect_deck(widget, [built.layer], deck)
+            self._collect_deck(widget, [built.layer], deck, anchor)
             return
         if built.source_id is not None:
             widget.add_source(built.source_id, built.source_spec)
@@ -2909,7 +2971,10 @@ class WebMapBase:
 
     @staticmethod
     def _collect_deck(
-        widget: Any, layers: List[Any], deck: Optional[List[Any]]
+        widget: Any,
+        layers: List[Any],
+        deck: Optional[List[Any]],
+        anchor: Optional[str] = None,
     ) -> None:
         """Add deck.gl layers to the page's one overlay, or apply them on their own.
 
@@ -2917,11 +2982,62 @@ class WebMapBase:
             widget: The MapLibre ``MapWidget`` being assembled.
             layers: The deck.gl JSON layers to add, in draw order.
             deck: The list to collect them into, or ``None`` to hand them to the widget directly.
+            anchor: The MapLibre style layer they draw beneath, written into each of them as ``beforeId``
+                (:func:`_anchored`), or ``None`` to leave them on top of the stack.
         """
+        placed = [_anchored(layer, anchor) for layer in layers]
         if deck is not None:
-            deck.extend(layers)
-        elif layers:
-            widget.add_deck_layers(layers)
+            deck.extend(placed)
+        elif placed:
+            widget.add_deck_layers(placed)
+
+    def _deck_anchors(self) -> List[Optional[str]]:
+        """Return, per queue entry, the MapLibre style layer a deck layer queued there draws beneath.
+
+        The overlay is handed to the widget after the whole queue, so a deck layer's slot in the queue says
+        nothing on its own: without this every deck layer drew above every style layer, and a `move_layer`
+        that crossed the two came out of the build byte-identical (review H6). deck.gl's overlay is
+        interleaved, so the position is expressed as the layer the deck layer must be inserted *before* —
+        which is the next style layer the queue adds after it, or nothing when it is already on top.
+
+        Returns:
+            One entry per queued entry, in the queue's own order: the id of the nearest style layer the
+            queue adds after it, or `None`. Only a deck-bearing entry reads its own; the rest are placed by
+            when they are applied.
+        """
+        anchors: List[Optional[str]] = [None] * len(self._queued)
+        above: Optional[str] = None
+        for index in range(len(self._queued) - 1, -1, -1):
+            anchors[index] = above
+            added = self._style_layer_added_by(self._queued[index])
+            if added is not None:
+                above = added
+        return anchors
+
+    def _style_layer_added_by(self, entry: Any) -> Optional[str]:
+        """Return the id of the first MapLibre style layer one queue entry adds, if it adds one.
+
+        Args:
+            entry: A queue entry — a described layer's marker, the deck overlay marker, a callable
+                ``apply(widget)``, or a caller's own ``Layer``/spec.
+
+        Returns:
+            The style layer's id, or `None` for an entry MapLibre's layer stack cannot be addressed
+            through: a deck or terrain drawing (neither is a style layer), a description nothing was drawn
+            for, and a callable, whose own layers are wired inside it under ids nothing here knows. A deck
+            layer therefore anchors to the next style layer it *can* name, and a caller who wires their own
+            layers orders them themselves.
+        """
+        from digitalearth.web.renderer import STYLE_ROUTE
+
+        if isinstance(entry, _Described):
+            built = self._renderer.drawn.get(entry.layer_id)
+            if built is None or built.route != STYLE_ROUTE:
+                return None
+            return _layer_id_of(built.layer)
+        if isinstance(entry, _DeckOverlay) or callable(entry):
+            return None
+        return _layer_id_of(entry)
 
     def _build_map_widget(self, *, with_controls: bool = True) -> Any:
         """Build the bare MapLibre ``MapWidget`` with every registered layer applied (no temporal wrap).
@@ -2947,10 +3063,12 @@ class WebMapBase:
         widget = MapWidget(**kwargs)
         # One list for the page's deck.gl layers, filled in queue order and handed over below in a single
         # call: ``add_deck_layers`` sends ``addDeckOverlay``, which **replaces** the overlay rather than
-        # adding to it, so a call per builder would leave only the last builder's layers on the page.
+        # adding to it, so a call per builder would leave only the last builder's layers on the page. One
+        # call is not one z-position, though: the overlay is interleaved, and each layer carries the style
+        # layer it draws beneath, which `_deck_anchors` reads off the queue before the build walks it.
         deck: List[Any] = []
-        for layer in self._queued:
-            self._apply_layer(widget, layer, deck)
+        for layer, anchor in zip(self._queued, self._deck_anchors()):
+            self._apply_layer(widget, layer, deck, anchor)
         if deck:
             widget.add_deck_layers(deck)
         if self._panels:

@@ -13,10 +13,13 @@ to the very feature order 23 added. Each records a layer now, and `TestTheKindsT
 holds that to the page rather than to the description, because recording a layer nothing draws differently is
 the drift this seam exists to remove.
 
-**Why the engine reading is the queue.** `_build_map_widget` replays `WebMap._queued` into the widget, entry by
-entry, and MapLibre draws a layer over the ones added before it — so the queue's order is the page's order.
-Until order 23 only the builders and `remove_layer` wrote that list and `Renderer.apply` reconciled the
-renderer's record beside it, so a change reached a record and never the page (review M1).
+**Why the engine reading is the built page.** `_build_map_widget` replays `WebMap._queued` into the widget,
+entry by entry. Until order 23 only the builders and `remove_layer` wrote that list and `Renderer.apply`
+reconciled the renderer's record beside it, so a change reached a record and never the page (review M1) — and
+the first fix read the *queue* back, which is a proxy and not the page: a deck.gl layer's slot in the queue
+does not say where its interleaved overlay draws it, so `move_layer` across a deck layer and a style layer
+reordered the queue and left the widget's calls byte-identical (review H6). So `engine_order` and
+`_page_layer_ids` read the calls the build actually makes.
 """
 
 import pytest
@@ -62,18 +65,22 @@ class WebContract(LayerManagementContract):
         return BOTTOM, TOP
 
     def engine_order(self, tier):
-        """Return the layer ids in the order the widget adds them.
+        """Return the layer ids in the order the built page draws them.
+
+        The page, not the queue. `layers` resolves the queue into the objects a build would hand MapLibre,
+        which reads as an order and is not one: a deck.gl layer goes into an interleaved overlay whose
+        placement the queue does not carry, and it is not even a MapLibre ``Layer``, so reading `.id` off the
+        list dropped it silently. That is the proxy review H6 slipped through — the queue moved and the
+        widget's calls came out byte-identical.
 
         Args:
             tier: The map.
 
         Returns:
-            The ids, bottom first, read off the MapLibre layers `layers` resolves the queue into — so a queue
-            entry the record cannot resolve is absent here, as it is from the page.
+            The ids, bottom first, as :func:`_page_layer_ids` reads them off the calls the build makes — so a
+            queue entry no call comes out of is absent here, as it is from the page.
         """
-        return tuple(
-            drawn.id for drawn in tier.layers if getattr(drawn, "id", None) is not None
-        )
+        return tuple(_page_layer_ids(tier))
 
     def engine_objects(self, tier):
         """Return every MapLibre layer the widget would be given.
@@ -304,20 +311,43 @@ def _page_layer_ids(tier):
     Args:
         tier: The map.
 
+    The deck overlay is **not** read as "whatever the one call carries, last". It is interleaved, so deck.gl
+    places each of its layers by the ``beforeId`` it carries: immediately beneath the style layer it names,
+    in the order the overlay lists them, and on top of everything when it names nothing (or names a layer the
+    style does not hold). Reading the call list in order instead is the proxy that let review H6 through — it
+    agreed with the engine only because every probe drew two layers of one route.
+
+    Args:
+        tier: The map.
+
     Returns:
-        The layer ids the viewer would see, bottom first. The deck overlay is one call, so the ids it carries
-        follow the style layers whatever the queue says — within it they keep the queue's order.
+        The layer ids the viewer would see, bottom first.
     """
-    drawn = []
+    order: list = []
+    hidden: set = set()
+    anchorable: set = set()
+    overlay: list = []
     for method, args in _page_calls(tier):
         if method == "addLayer":
             layer = args[0]
-            if (layer.get("layout") or {}).get("visibility") != "none":
-                drawn.append(layer["id"])
+            order.append(layer["id"])
+            anchorable.add(layer["id"])
+            if (layer.get("layout") or {}).get("visibility") == "none":
+                hidden.add(layer["id"])
         elif method == "setTerrain":
-            drawn.append(args[0]["source"].removesuffix("-src"))
+            order.append(args[0]["source"].removesuffix("-src"))
         elif method == "addDeckOverlay":
-            drawn.extend(layer["id"] for layer in args[0] if layer.get("visible", True))
+            overlay = [
+                (layer.get("beforeId"), layer["id"])
+                for layer in args[0]
+                if layer.get("visible", True)
+            ]
+    drawn = []
+    for layer_id in order:
+        drawn.extend(deck_id for anchor, deck_id in overlay if anchor == layer_id)
+        if layer_id not in hidden:
+            drawn.append(layer_id)
+    drawn.extend(deck_id for anchor, deck_id in overlay if anchor not in anchorable)
     return drawn
 
 
@@ -477,3 +507,158 @@ class TestTheDeckOverlayIsOneCall:
         tier.move_layer("lower", 1)
         assert _page_layer_ids(tier) == ["upper", "lower"], _page_layer_ids(tier)
         tier.close()
+
+
+def _page_overlay(tier):
+    """Return the deck.gl layers the built page composes into its one overlay.
+
+    Args:
+        tier: The map.
+
+    Returns:
+        The deck.gl JSON layers the single ``addDeckOverlay`` call carries, in its own order, or an empty
+        list when the page composes no overlay at all.
+    """
+    for method, args in _page_calls(tier):
+        if method == "addDeckOverlay":
+            return list(args[0])
+    return []
+
+
+@pytest.fixture
+def routed():
+    """Yield a map with a deck-routed layer described **beneath** a MapLibre style layer, in one band.
+
+    `point_cloud` and `points` are both `data` layers, so a move between them is one `LayerTree.move`
+    allows — and they take different routes, which is what `draw_two` cannot express: the shared probes
+    draw two layers of **one kind**, so both always take one route and a reorder across routes is out of
+    their reach (review H6).
+
+    Yields:
+        The map.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    frame = gpd.GeoDataFrame(
+        {"v": [1.0, 2.0]}, geometry=[Point(4.9, 52.4), Point(5.0, 52.2)], crs=4326
+    )
+    built = WebMap()
+    built.point_cloud([(4.9, 52.4, 10.0), (5.0, 52.2, 20.0)], name=BOTTOM)
+    built.points(frame, name=TOP)
+    yield built
+    built.close()
+
+
+class TestADeckLayerOrderedAgainstAStyleLayer:
+    """A deck.gl layer and a MapLibre style layer in one band, held to the page and not to the queue.
+
+    The page composes **one** deck overlay and adds it after the whole queue, so for a while every deck
+    layer drew above every style layer whatever the description said: `move_layer` reordered the queue and
+    the widget's calls came out byte-identical (review H6). deck.gl's overlay is interleaved, so each layer
+    carries the style layer it draws beneath instead.
+    """
+
+    @staticmethod
+    def _routes(tier):
+        """Return the route each layer was drawn for, in draw order.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            One route per described layer, so a fixture that quietly drew two style layers cannot pass the
+            probes below by measuring the easy case.
+        """
+        return [tier._renderer.drawn[layer_id].route for layer_id in tier.layer_ids]
+
+    def test_the_two_layers_really_do_take_different_routes(self, routed):
+        """The fixture is the whole point, so it is checked rather than assumed.
+
+        Args:
+            routed: The map under test.
+        """
+        routes = self._routes(routed)
+        assert routes == ["deck", "style"], f"the fixture drew {routes}"
+
+    def test_the_page_draws_the_deck_layer_beneath_the_style_layer(self, routed):
+        """Described at the bottom of the band is drawn at the bottom of the band.
+
+        Args:
+            routed: The map under test.
+
+        Test scenario:
+            This is the "before" half of H6: the overlay was added after the whole queue, so the layer
+            described **under** the style layer was drawn **over** it, and nothing in the suite read the
+            page closely enough to say so.
+        """
+        assert _page_layer_ids(routed) == [BOTTOM, TOP], _page_layer_ids(routed)
+
+    def test_moving_the_deck_layer_over_the_style_layer_reaches_the_page(self, routed):
+        """`move_layer` across routes has to change what the page draws, not only what it records.
+
+        Args:
+            routed: The map under test.
+        """
+        routed.move_layer(BOTTOM, 1)
+        assert _page_layer_ids(routed) == [TOP, BOTTOM], _page_layer_ids(routed)
+
+    def test_the_overlay_names_the_style_layer_the_deck_layer_draws_beneath(
+        self, routed
+    ):
+        """The page is told the placement, which is the reading the queue could not give.
+
+        Args:
+            routed: The map under test.
+
+        Test scenario:
+            `beforeId` is deck.gl's own answer for an interleaved overlay — the widget builds it with
+            ``interleaved: true`` — and it is what makes the move reach the page rather than the record.
+        """
+        anchors = [layer.get("beforeId") for layer in _page_overlay(routed)]
+        assert anchors == [TOP], anchors
+
+    def test_a_deck_layer_described_on_top_names_no_style_layer(self, routed):
+        """Nothing above it means nothing to draw beneath, and deck.gl puts it on top.
+
+        Args:
+            routed: The map under test.
+        """
+        routed.move_layer(BOTTOM, 1)
+        anchors = [layer.get("beforeId") for layer in _page_overlay(routed)]
+        assert anchors == [None], anchors
+
+    def test_the_placement_is_not_written_into_the_renderer_record(self, routed):
+        """Where a layer goes on one page is not part of what was drawn.
+
+        Args:
+            routed: The map under test.
+
+        Test scenario:
+            The record is rebuilt into a widget on every `render()`, and `figure_spec`/`to_dict` read it —
+            so a placement written back into it would leak a page's layer stack into the description and
+            travel with a saved figure.
+        """
+        _page_overlay(routed)
+        held = routed._renderer.drawn[BOTTOM].layer
+        assert "beforeId" not in held, sorted(held)
+
+    def test_hiding_the_deck_layer_still_takes_it_off_the_page(self, routed):
+        """`set_visible` is the sibling call, and the mixed case has to hold for it too.
+
+        Args:
+            routed: The map under test.
+        """
+        routed.set_visible(BOTTOM, False)
+        assert _page_layer_ids(routed) == [TOP], _page_layer_ids(routed)
+
+    def test_replacing_the_deck_layer_keeps_it_under_the_style_layer(self, routed):
+        """`replace_layer` is the other sibling: a redraw must land back in the described place.
+
+        Args:
+            routed: The map under test.
+        """
+        from dataclasses import replace as with_fields
+
+        routed.replace_layer(with_fields(routed.get_layer(BOTTOM), group="regrouped"))
+        assert _page_layer_ids(routed) == [BOTTOM, TOP], _page_layer_ids(routed)

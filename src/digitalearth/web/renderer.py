@@ -58,6 +58,12 @@ TERRAIN_ROUTE = "terrain"
 #: A drawing the widget takes as one of the deck.gl JSON layers it composes into a single overlay. deck.gl
 #: owns one overlay per page — a second ``addDeckOverlay`` call replaces the first — so these are collected
 #: over the queue and handed over together (see `WebMapBase._build_map_widget`).
+#:
+#: One overlay is not one z-position: the widget builds it **interleaved**, so every layer in it is inserted
+#: into MapLibre's own layer stack, and each carries the style layer it draws beneath as ``beforeId``
+#: (`WebMapBase._deck_anchors`). Without that the overlay — handed over after the whole queue — drew above
+#: every style layer whatever the description said, and a `move_layer` across the two changed nothing on the
+#: page (review H6).
 DECK_ROUTE = "deck"
 
 
@@ -83,8 +89,10 @@ class DrawnLayer:
             style layer answers with — means ``add_source`` then ``add_layer``. The other two are the kinds
             MapLibre does not draw as style layers at all: :data:`TERRAIN_ROUTE` adds the DEM source and
             turns terrain on with ``set_terrain``, and :data:`DECK_ROUTE`'s `layer` is a deck.gl JSON layer
-            that the page composes into its one deck overlay. A drawer says which route it built for, so the
-            widget builder still adds whatever came back without knowing which drawer made it.
+            that the page composes into its one deck overlay — interleaved, and carrying the style layer it
+            draws beneath, so its described position still reaches the page. A drawer says which route it
+            built for, so the widget builder still adds whatever came back without knowing which drawer made
+            it.
 
     Examples:
         - A graticule is one description drawing two MapLibre layers off one source — the lines, and the
