@@ -2,8 +2,17 @@
 
 Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into cleopatra ``ArrayGlyph`` field
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
+
+**A field is read at the size the figure will draw it (ST-5).** Every cell of every raster used to be decoded,
+warped whole, and then handed to matplotlib to be resampled down onto a few hundred thousand device pixels. A
+band well past the canvas is now read through :class:`~digitalearth.base.sources.view.SourceView` instead — the
+canvas and the budget as a :class:`~digitalearth.base.spec.target.RenderTarget` request, answered by pyramids'
+windowed read, and warped one window at a time through ``Dataset.warped_view`` — which is the read the
+interactive tier's viewport loop has driven all along. Below :data:`_DECIMATE_ABOVE` times the canvas on a side
+the full read stands, so nothing already drawn moves.
 """
 
+import logging
 import warnings
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
@@ -16,8 +25,8 @@ from digitalearth.base.autostyle import auto_style
 from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
-from digitalearth.base.sources import get_stack
-from digitalearth.base.spec import Bounds, LayerSpec, Symbology
+from digitalearth.base.sources import Source, get_stack
+from digitalearth.base.spec import Bounds, LayerSpec, RenderTarget, Symbology
 from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
@@ -29,6 +38,10 @@ from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord, drawing_style
+
+#: The tier logs through the standard library, as `static/maps/base.py` does — not loguru, which is the web
+#: tier's choice. One logger per tier, so a skip and a fallback from the same draw land in the same place.
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -56,6 +69,200 @@ FIELD_KINDS = {
 #: belong to a contour render — applying them to ``imshow``/``pcolormesh`` would quietly band a continuous
 #: field the caller asked to see continuously.
 _CONTOUR_KINDS = frozenset({"contour", "contourf"})
+
+#: How much larger than the canvas a band must be before a field render decimates it instead of decoding it
+#: whole — measured on a side, so this squared is the ratio in cells. Below it the decimated read and the full
+#: read differ by less than one output pixel of detail, so the resample would cost more than the saving is
+#: worth; above it most of the decoded cells are thrown away by matplotlib's own downsampling.
+_DECIMATE_ABOVE = 2.0
+
+#: Device pixels assumed when a scene's figure cannot be measured — matplotlib's own default figure at its
+#: default resolution. A budget is needed either way; guessing this one only ever decides *whether* to
+#: decimate, never where the data is.
+_FALLBACK_CANVAS = (640, 480)
+
+
+def _canvas_pixels(scene: Any) -> Tuple[int, int]:
+    """Return the device pixels a scene's figure will be drawn at.
+
+    Device pixels, not inches: a figure saved at 200 dpi draws four times the pixels of the same figure at
+    100, and a budget measured in inches would ask for a ten-thousandth of what is actually drawn.
+
+    Args:
+        scene: The map being drawn on.
+
+    Returns:
+        ``(width, height)`` in pixels, at least one each; :data:`_FALLBACK_CANVAS` for a scene whose figure
+        cannot be measured.
+    """
+    figure = getattr(scene, "fig", None)
+    if figure is None:
+        return _FALLBACK_CANVAS
+    try:
+        width, height = figure.get_size_inches()
+        dpi = float(figure.dpi)
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover - defensive
+        return _FALLBACK_CANVAS
+    return max(int(float(width) * dpi), 1), max(int(float(height) * dpi), 1)
+
+
+def _worth_decimating(data: Any, target: RenderTarget) -> bool:
+    """Whether a band is far enough past the canvas to be read at a lower resolution.
+
+    Args:
+        data: The raster the read would go through.
+        target: Where the figure is going, which carries the canvas.
+
+    Returns:
+        ``True`` only when the raster reports an integer grid, exposes pyramids' windowed read
+        (``read_part``), and holds more than :data:`_DECIMATE_ABOVE` times the canvas on a side. Each of the
+        three is a reason *not* to decimate on its own: an unmeasurable grid is not one to decide a read on, a
+        source with no window has nothing to read, and a raster near the canvas gains nothing.
+    """
+    rows, columns = getattr(data, "rows", None), getattr(data, "columns", None)
+    if not isinstance(rows, int) or not isinstance(columns, int):
+        return False
+    if not hasattr(data, "read_part"):
+        return False
+    canvas = (target.width or 0) * (target.height or 0)
+    return rows * columns > canvas * _DECIMATE_ABOVE**2
+
+
+def _windowable(scene: Any, data: Any) -> Any:
+    """Return the raster to read windows from, warped lazily when the display CRS asks for it.
+
+    Args:
+        scene: The map being drawn on, for its display CRS.
+        data: The raster the caller gave.
+
+    Returns:
+        The raster itself when it is already in the display CRS; pyramids' lazily warped view of it
+        (``Dataset.warped_view``) otherwise, so each window warps only itself. This mirrors the interactive
+        tier's ``_windowable``, which faces the same choice.
+
+    Raises:
+        Exception: whatever pyramids raises for a warp it cannot set up — a raster wholly behind a clipped
+            projection's limb reports ``RuntimeError: Too many points ... failed to transform``. It is raised
+            rather than answered, because only ``Scene._reproject`` knows that report means "nothing to draw
+            here" and turns it into an :class:`~digitalearth.base.crs.OffLimbError`; see
+            :func:`_windowed_field`, which hands the decision back to it.
+    """
+    if not scene._needs_reproject(data):
+        return data
+    warped_view = getattr(data, "warped_view", None)
+    return None if warped_view is None else warped_view(scene.crs)
+
+
+def _windowed_field(scene: Any, data: Any, band: int, target: RenderTarget) -> Any:
+    """Read one band at the canvas, or answer ``None`` when this raster cannot be read that way.
+
+    Args:
+        scene: The map being drawn on, which carries the display CRS.
+        data: The raster the layer draws.
+        band: The 1-based band.
+        target: Where the figure is going, which carries the canvas and the budget.
+
+    Returns:
+        A :class:`~digitalearth.base.sources.view.SourceView` of the band at the canvas, or ``None`` when the
+        windowed read is not available for it — pyramids cannot warp it lazily, or the read itself failed.
+
+        ``None`` rather than an exception, because the full read is not merely a fallback: it is the path that
+        *owns* the off-limb decision. A raster wholly behind a clipped projection's limb makes the lazy warp
+        report a failed transform, which only ``Scene._prepare`` reads as "nothing to draw" — so a read that
+        cannot be done here is handed back to it rather than reinterpreted here. Nothing is hidden: whatever
+        is really wrong surfaces from that read, in the tier's own words.
+    """
+    try:
+        windowable = _windowable(scene, data)
+        if windowable is None:
+            return None
+        from digitalearth.base.sources.view import SourceView
+        from digitalearth.base.spec import Selection, Viewport
+
+        # No `ref=`: this view is never re-read. A still is drawn at one canvas, so the read that answers the
+        # request is the only one — a moving region is `SourceView.reread`'s job, and the tier that has one
+        # (interactive) registers its dataset once per layer and drives the re-reads per frame. Registering
+        # here instead would mint a `DataRef` per *draw* and pin the warped view in the process-global object
+        # table for good, so an animation of a hundred frames would hold a hundred of them alive.
+        return SourceView.of(
+            windowable,
+            selection=Selection.of(band),
+            # An unframed viewport names no region, so the request windows the source's own extent at the
+            # canvas — which is what a still wants.
+            request=target.view_request(Viewport(scene.crs)),
+        )
+    except Exception as error:  # noqa: BLE001 - the full read decides what it means; see Returns
+        logger.debug(
+            "field: reading band %s at the canvas failed (%s), falling back to the full read",
+            band,
+            error,
+        )
+        return None
+
+
+def _band_identity(data: Any, band: int) -> Tuple[str, Optional[str]]:
+    """Return a band's name and units, read from the raster's metadata rather than from its values.
+
+    A windowed read answers with a bare array, which carries neither — pyramids' own docstring says *"pixel
+    values only"* — so a decimated field would lose the variable :func:`~digitalearth.base.autostyle.auto_style`
+    matches on and the units a colorbar labels itself with. Both are attributes of the raster, so they cost no
+    read. The interactive tier makes the same trade for the same reason
+    (``InteractiveMap._auto_cmap_for_band``), for the colormap alone.
+
+    Args:
+        data: The raster.
+        band: The 1-based band.
+
+    Returns:
+        ``(variable, units)``; an empty variable and ``None`` units for a band that names neither, which is
+        exactly what the full read answers for one.
+    """
+    names = list(getattr(data, "band_names", None) or [])
+    units = list(getattr(data, "band_units", None) or [])
+    variable = names[band - 1] if 1 <= band <= len(names) else ""
+    unit = units[band - 1] if 1 <= band <= len(units) else None
+    return str(variable or ""), str(unit) if unit else None
+
+
+def _field_source(scene: Any, data: Any, band: int) -> Tuple[Any, Any]:
+    """Read one band for a field render, at the resolution the figure will draw it (ST-5).
+
+    Args:
+        scene: The map being drawn on, which carries the display CRS and the canvas.
+        data: The raster the layer draws.
+        band: The 1-based band.
+
+    Returns:
+        ``(values, identity)`` — the source the render reads its cells and coordinates from, and the source the
+        style lookup reads the band's identity from. They are the same object for a full read; for a decimated
+        one the identity is restored from the raster's own metadata, because a windowed read answers with a
+        bare array (see :func:`_band_identity`).
+
+    Raises:
+        OffLimbError: when the data lies outside what the display CRS can show, from ``Scene._prepare`` on the
+            full-read path.
+    """
+    target = RenderTarget("image", *_canvas_pixels(scene))
+    # Measured on the raster the caller gave, before anything is warped: a raster near the canvas must not pay
+    # for a lazy warp it will not use, and the full read below is the path that owns the off-limb decision.
+    view = (
+        _windowed_field(scene, data, band, target)
+        if _worth_decimating(data, target)
+        else None
+    )
+    if view is None:
+        whole = scene._prepare(data, band)
+        return whole, whole
+    variable, units = _band_identity(data, band)
+    identity = Source(
+        view.z,
+        view.x,
+        view.y,
+        view.crs,
+        {"kind": "raster", "band": band, "variable": variable},
+        units,
+    )
+    return view, identity
 
 
 def _described_cmap(cmap: Any) -> Tuple[Any, Any]:
@@ -190,7 +397,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
-    src = scene._prepare(data, props["band"])
+    # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
+    # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
+    # (ST-5). For everything smaller the two are one object and the read is the one this always did.
+    src, identity = _field_source(scene, data, props["band"])
     z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
     if opts.pop(
         "cyclic", False
@@ -198,7 +408,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         z_values, x_values = add_cyclic_column(z_values, x_values)
     # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that label a
     # colorbar the caller did not label itself.
-    style = auto_style(src)
+    style = auto_style(identity)
     # A colormap the caller built themselves has no name a description can carry, so it is held beside the
     # layer; a named one was recorded. Either way the caller's choice wins over the variable's own.
     requested = opts.pop("cmap", props["cmap"])
