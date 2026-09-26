@@ -317,6 +317,47 @@ class TestTheCutoffsDefaultIsPerUnitOfMeasure:
             f"contract C8 states the cutoff's default without naming {missing}: {rule}"
         )
 
+    #: How each tier carrying the cutoff is named in prose. A clause is written for a reader rather than
+    #: generated, so the word cannot be derived from the module name — but the *set* can be checked against
+    #: `CUTOFF_TIERS`, which is what makes a tier that gains the cutoff have to be named in the clause too.
+    IN_PROSE = {
+        "digitalearth.interactive": "interactive",
+        "digitalearth.web": "web",
+        "digitalearth.three_d": "3-D",
+    }
+
+    def test_every_tier_with_the_cutoff_has_a_word_in_this_table(self):
+        """The table above may not fall behind `CUTOFF_TIERS`, or the check below asks about fewer tiers."""
+        listed = {module for module, _ in CUTOFF_TIERS}
+        assert listed == set(self.IN_PROSE), sorted(
+            listed.symmetric_difference(self.IN_PROSE)
+        )
+
+    @pytest.mark.parametrize("module", sorted(IN_PROSE))
+    def test_the_clause_names_each_tier_that_has_the_cutoff(self, module):
+        """Counting tiers instead of naming them is what made the clause false.
+
+        Args:
+            module: The tier whose prose word must appear.
+
+        Test scenario:
+            The clause said "the two 2-D tiers", and the two tiers that actually read
+            `DEFAULT_BIG_DATA_THRESHOLD` are interactive and **web**. A reader checking that against a
+            package whose four tiers are matplotlib, interactive, 3-D and web looks at static and interactive
+            and finds the sentence false — while the branch's own guard says the static tier has no size
+            route at all (review R2-M2). A count cannot be checked; a name can.
+        """
+        word = self.IN_PROSE[module]
+        assert word in clause(8).rule, (
+            f"contract C8 does not name the {word} tier, which routes by size: {clause(8).rule}"
+        )
+
+    def test_the_clause_says_the_one_tier_without_the_cutoff_has_none(self):
+        """The other half of naming them: the tier a reader would otherwise count in is named out."""
+        assert "static" in clause(8).rule, (
+            f"contract C8 leaves a reader to work out which tier has no cutoff: {clause(8).rule}"
+        )
+
     @pytest.mark.parametrize("unit", ["rows", "cells"])
     def test_the_clause_names_the_unit_each_default_is_counted_in(self, unit):
         """A number without its unit is the ambiguity the clause was restated to remove.

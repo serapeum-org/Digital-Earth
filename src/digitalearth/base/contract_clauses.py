@@ -186,11 +186,13 @@ def _clauses() -> tuple[Clause, ...]:
             title="one big_data_threshold, two reaches",
             rule=(
                 "One `big_data_threshold`, with one shared default per unit of measure — 50 000 rows on the "
-                "two 2-D tiers, 500 000 cells on the 3-D one, since a row is one feature and a cell is one "
-                "triangle or one voxel. Two reaches either way: an attribute on the map and a per-call "
-                "override of the same name on the builder, with `None` the sentinel that defers to the map. "
-                "It is the **only** spelling of that cutoff on any tier — where a tier spelled it another "
-                "way, that spelling was deleted rather than kept working beside this one."
+                "interactive and web tiers, 500 000 cells on the 3-D one, since a row is one feature and a "
+                "cell is one triangle or one voxel. The static tier draws every row it is given and has no "
+                "cutoff at all, so the tiers are named rather than counted. Two reaches either way: an "
+                "attribute on the map and a per-call override of the same name on the builder, with `None` "
+                "the sentinel that defers to the map. It is the **only** spelling of that cutoff on any "
+                "tier — where a tier spelled it another way, that spelling was deleted rather than kept "
+                "working beside this one."
             ),
             issues=(250,),
         ),
