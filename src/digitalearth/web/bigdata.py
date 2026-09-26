@@ -344,6 +344,13 @@ class BigDataMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Note:
+            One marker for the whole list is also the limit of what these layers can be told: the marker is a
+            single queue slot, so it cannot say where each of them belongs, and they therefore name no
+            ``beforeId`` and draw **above every style layer** whichever order the builders ran in (review
+            R2-H5). A layer that has to sit under a style layer needs a description to be ordered by — which
+            is what `point_cloud` and `model` have and these do not.
         """
         from digitalearth.web.base import _DeckOverlay
 

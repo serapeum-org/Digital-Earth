@@ -662,3 +662,99 @@ class TestADeckLayerOrderedAgainstAStyleLayer:
 
         routed.replace_layer(with_fields(routed.get_layer(BOTTOM), group="regrouped"))
         assert _page_layer_ids(routed) == [BOTTOM, TOP], _page_layer_ids(routed)
+
+
+@pytest.fixture
+def undescribed():
+    """Yield a map with an undescribed `deck_scatter`, a described deck layer and a style layer.
+
+    `deck_scatter` records no `LayerSpec`: it appends to `WebMap._deck_layers` and the queue holds **one**
+    `_DeckOverlay` marker for every builder that does, so that slot is shared and says nothing about where
+    any one of those layers belongs. `point_cloud` is the described counterpart — it owns its own queue slot
+    — and `points` is the style layer both are ordered against, all three in the `data` band.
+
+    Yields:
+        The map.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    frame = gpd.GeoDataFrame(
+        {"v": [1.0, 2.0]}, geometry=[Point(4.9, 52.4), Point(5.0, 52.2)], crs=4326
+    )
+    built = WebMap()
+    built.deck_scatter(frame)
+    built.point_cloud([(4.9, 52.4, 10.0), (5.0, 52.2, 20.0)], name=BOTTOM)
+    built.points(frame, name=TOP)
+    yield built
+    built.close()
+
+
+class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
+    """`deck_scatter`/`deck_polygons`/`tiles_3d` share one queue slot, so nothing anchors them.
+
+    Anchoring reads one anchor per **queue entry**, and these builders have no entry of their own: they
+    accumulate behind a single `_DeckOverlay` marker whichever order they were called in. Anchoring them off
+    that slot gave every one of them the first builder's position — drawn beneath the next style layer the
+    queue adds, where they used to draw on top of every style layer — and since they record no `LayerSpec`
+    they are not in `layer_ids`, so `move_layer` cannot put them back (review R2-H5). They keep no
+    `beforeId`, which is deck.gl's own "on top", and the described deck layers keep theirs.
+    """
+
+    def test_the_overlay_anchors_the_described_layer_and_not_the_shared_slot(
+        self, undescribed
+    ):
+        """The page is where the two are told apart, so the page is what is read.
+
+        Args:
+            undescribed: The map under test.
+        """
+        placed = [
+            (layer["id"], layer.get("beforeId")) for layer in _page_overlay(undescribed)
+        ]
+        assert placed == [("deck-scatter-1", None), (BOTTOM, TOP)], placed
+
+    def test_the_page_draws_the_shared_slot_above_every_style_layer(self, undescribed):
+        """A layer a caller cannot address must not be moved under one they can.
+
+        Args:
+            undescribed: The map under test.
+        """
+        drawn = _page_layer_ids(undescribed)
+        assert drawn == [BOTTOM, TOP, "deck-scatter-1"], drawn
+
+    def test_a_builder_called_after_the_style_layer_is_on_top_too(self, undescribed):
+        """The shared slot is queued once, so its position cannot describe a later builder either.
+
+        Args:
+            undescribed: The map under test.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        undescribed.deck_polygons(
+            gpd.GeoDataFrame(
+                geometry=[Point(4.9, 52.4).buffer(0.1)],
+                crs=4326,
+            )
+        )
+        drawn = _page_layer_ids(undescribed)
+        assert drawn[-2:] == ["deck-scatter-1", "deck-polygons-1"], drawn
+
+    def test_the_described_deck_layer_can_still_be_moved_over_the_style_layer(
+        self, undescribed
+    ):
+        """The half that has a queue slot keeps the ordering the anchors were added for.
+
+        Args:
+            undescribed: The map under test.
+
+        Test scenario:
+            The described cloud starts beneath the style layer and is moved over it, which is the ordering
+            `beforeId` was added for and must survive. It lands above the scatter rather than beneath it
+            because both now name no style layer, and deck.gl draws one bucket in the overlay's own array
+            order — which is the queue's, and the shared slot was queued first.
+        """
+        undescribed.move_layer(BOTTOM, 1)
+        drawn = _page_layer_ids(undescribed)
+        assert drawn == [TOP, "deck-scatter-1", BOTTOM], drawn

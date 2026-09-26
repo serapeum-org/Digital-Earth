@@ -352,6 +352,11 @@ class _DeckOverlay:
     inserted into MapLibre's own layer stack and carries the style layer it draws beneath as ``beforeId``
     (:func:`_anchored`). Without that every deck layer drew above every style layer, whatever the queue
     said, because the overlay is handed over after the whole queue (review H6).
+
+    The layers gathered *here* are the exception: this marker is one slot standing for all of them, so it
+    describes none of them and they carry no ``beforeId`` at all — deck.gl's own "above every style layer",
+    which is where these builders have always drawn (review R2-H5). Only a deck layer with a queue slot of
+    its own — one the renderer drew from a `LayerSpec` — is ordered against the style layers.
     """
 
 
@@ -1338,12 +1343,18 @@ class WebMapBase:
 
             A deck.gl layer (`point_cloud`, `model`, and the big-data routes — see
             :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a MapLibre style layer, and the page
-            composes all of them into **one** overlay handed over after the whole queue. It reaches the page
-            all the same: the overlay is interleaved, so each deck layer names the style layer it draws
-            beneath and deck.gl inserts it there. What cannot be ordered against a deck layer is a layer a
-            caller wired themselves through :meth:`add_layer`/:meth:`add_underlay` with a callable — those
-            layers are added inside the callable under ids this map never sees, so a deck layer is placed
-            relative to the nearest style layer it *can* name.
+            composes all of them into **one** overlay handed over after the whole queue. A **described** one
+            reaches the page all the same: the overlay is interleaved, so it names the style layer it draws
+            beneath and deck.gl inserts it there.
+
+            Two kinds of layer cannot be ordered at all. A layer a caller wired themselves through
+            :meth:`add_layer`/:meth:`add_underlay` with a callable is added inside that callable under ids
+            this map never sees, so a deck layer is placed relative to the nearest style layer it *can*
+            name. And the deck builders that record no description — `deck_scatter`, `deck_polygons`,
+            `tiles_3d`, and the route `points` takes above `big_data_threshold` — mint no layer id, so there
+            is nothing here to address them by; they share one slot in the queue and draw above every style
+            layer, whenever they were called (review R2-H5). Name the layer (`point_cloud`, `model`) to place
+            it, or add it after the layers it belongs above.
 
         Examples:
             - Two labels, reordered by id:
@@ -2922,7 +2933,8 @@ class WebMapBase:
             anchor: The MapLibre style layer a deck layer queued here draws beneath, as
                 :meth:`_deck_anchors` reads it off the queue. ``None`` leaves it on top, which is where
                 deck.gl puts a layer naming no ``beforeId``; it is also what a single-entry replay passes,
-                having no queue to read a position out of.
+                having no queue to read a position out of, and what the shared :class:`_DeckOverlay` slot
+                always reads, one slot being unable to place several layers (review R2-H5).
         """
         if isinstance(layer, _Described):
             built = self._renderer.drawn.get(layer.layer_id)
@@ -3002,14 +3014,26 @@ class WebMapBase:
 
         Returns:
             One entry per queued entry, in the queue's own order: the id of the nearest style layer the
-            queue adds after it, or `None`. Only a deck-bearing entry reads its own; the rest are placed by
-            when they are applied.
+            queue adds after it, or `None`. Only a deck-bearing entry that **owns** its slot reads its own;
+            the rest are placed by when they are applied.
+
+        Note:
+            An anchor describes a queue *slot*, so the one entry that is not a slot of its own reads `None`:
+            the :class:`_DeckOverlay` marker stands for every layer the builders that record no description
+            accumulated, however many there are and wherever they were called. Anchoring them off it gave
+            them all the first builder's position — drawn beneath the next style layer the queue adds, where
+            they had always drawn above every style layer — and, recording no `LayerSpec`, they are not in
+            `layer_ids` for :meth:`move_layer` to put back (review R2-H5). Without an anchor they stay where
+            deck.gl puts a layer naming no ``beforeId``: on top. Ordering them would mean giving each its own
+            queue slot, which is not what one shared marker can say.
         """
         anchors: List[Optional[str]] = [None] * len(self._queued)
         above: Optional[str] = None
         for index in range(len(self._queued) - 1, -1, -1):
-            anchors[index] = above
-            added = self._style_layer_added_by(self._queued[index])
+            entry = self._queued[index]
+            if not isinstance(entry, _DeckOverlay):
+                anchors[index] = above
+            added = self._style_layer_added_by(entry)
             if added is not None:
                 above = added
         return anchors
