@@ -94,9 +94,12 @@ class TestTheTierCanBeFramedAtAll:
             flat: A map in degrees.
 
         Test scenario:
-            The static tier's sequence form is matplotlib's ``[xmin, xmax, ymin, ymax]``, which it keeps
-            because that was already its contract. This tier has no such history, so it takes the bbox
-            order — the one ``Bounds.as_bbox``, the web tier's ``set_bounds`` and pyramids all use.
+            Every tier reads the same order now. The static tier used to keep matplotlib's
+            ``[xmin, xmax, ymin, ymax]`` for its sequence form, so one sequence framed two different
+            rectangles across the 2-D tiers; that ordering is gone rather than aliased. This asserts the
+            surviving one — the bbox order ``Bounds.as_bbox``, the web tier's ``set_bounds`` and pyramids
+            all use. (Review L5: this docstring taught the deleted convention, as the twin sentence in
+            `interactive/projection.py` did until it was corrected.)
         """
         flat.points(_points(NORTH_WEST))
         flat.set_bounds((0.0, 0.0, 10.0, 20.0))
