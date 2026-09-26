@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
 
+from digitalearth.api import contours
 from digitalearth.interactive import InteractiveMap
 
 pytest.importorskip(
@@ -187,3 +188,75 @@ class TestAnIntervalIsSpacing:
         with pytest.raises(ValueError):
             drawn.contours(constant, interval=100.0)
         assert drawn.layer_ids == []
+
+
+class TestTheApiWrapperReachesThisTier:
+    """``api.contours`` picks the render with ``filled=``, and has to mean that here too (review H3).
+
+    The wrapper injects a ``kind`` on the caller's behalf — ``contour`` or ``contourf`` — and the per-tier
+    tables in :mod:`digitalearth.api` turn that back into a method. The interactive table could only name a
+    method, so ``contourf`` reached the second spelling, which has no ``interval=``: the keyword fell through
+    ``**opts`` and HoloViews refused it as a style option. These read the engine's own element, so a ``kind``
+    routed to a method that cannot act on the call fails here rather than passing on a recorded intent.
+    """
+
+    @staticmethod
+    def _api_contours(backend, **kwargs):
+        """Quick-draw the fixture raster through the module-level wrapper on one backend.
+
+        Args:
+            backend: The tier to draw on.
+            **kwargs: Forwarded to :func:`digitalearth.api.contours`.
+
+        Returns:
+            The finished map.
+        """
+        return contours(_raster(), backend=backend, crs=4326, **kwargs)
+
+    def test_a_filled_interval_draws_bands_on_this_tier(self):
+        """``filled=True`` with a spacing reached ``filled_contours``, which refused the spacing."""
+        drawn = self._api_contours("interactive", filled=True, interval=100.0)
+        try:
+            assert type(drawn.layers[0]).__name__ == "Polygons", drawn.layers
+        finally:
+            drawn.close()
+
+    def test_the_spacing_reaches_the_engine_through_the_wrapper(self):
+        """So the check above is not passing on bands laid out at a spacing nobody asked for.
+
+        Test scenario:
+            A filled render writes one value per *band* rather than per level, so the element carries the
+            bands' mid-values (150, 250) and not the level set. The gap between them is still the spacing
+            asked for, and it is the spacing that the wrapper had no way to deliver.
+        """
+        drawn = self._api_contours("interactive", filled=True, interval=100.0)
+        try:
+            values = _traced(drawn.layers[0])
+            gaps = {
+                round(later - earlier, 9) for earlier, later in zip(values, values[1:])
+            }
+            assert gaps == {100.0}, values
+        finally:
+            drawn.close()
+
+    def test_unfilled_still_draws_lines_on_this_tier(self):
+        """The other half of the switch, so the routing is asserted for both values of ``filled=``."""
+        drawn = self._api_contours("interactive", interval=100.0)
+        try:
+            assert type(drawn.layers[0]).__name__ == "Contours", drawn.layers
+        finally:
+            drawn.close()
+
+    @pytest.mark.parametrize("backend", ["matplotlib", "interactive"])
+    def test_both_tiers_record_the_filled_render(self, backend):
+        """One call, two tiers, one recorded kind — which is what "``filled=`` picks the render" means.
+
+        Args:
+            backend: The tier the wrapper draws on.
+        """
+        drawn = self._api_contours(backend, filled=True, interval=100.0)
+        try:
+            kinds = [layer.kind for layer in drawn.figure_spec.layers]
+            assert kinds == ["filled_contours"], kinds
+        finally:
+            drawn.close()

@@ -717,14 +717,23 @@ def quickplot(data: PlottableData, **kwargs) -> Any:
     return quickmap(data, **kwargs)
 
 
-#: The interactive tier's renderer for each ``kind`` `quickmap` accepts. A kind absent from this table is
-#: refused by name rather than drawn as something the caller did not ask for.
+#: The interactive tier's renderer for each ``kind`` `quickmap` accepts, as ``{kind: (method, keywords)}``.
+#: A kind absent from this table is refused by name rather than drawn as something the caller did not ask
+#: for.
+#:
+#: The same shape as :data:`_STATIC_RASTER_KINDS`, and for the reason that table gives: a ``kind`` names a
+#: **renderer**, and telling ``contour`` from ``contourf`` is an *argument* to one method rather than a
+#: second method's name. Naming a method alone was not enough to say it, so ``contourf`` reached this tier's
+#: legacy second spelling ``filled_contours``, which takes no ``interval=`` — and ``interval=`` then fell
+#: through ``**opts`` to HoloViews, which refused it as an unknown style option (review H3). The tables stay
+#: separate because the tiers really do spell their methods differently; what they now share is the ability
+#: to carry the keyword that picks the render.
 _INTERACTIVE_RASTER_KINDS = {
-    "auto": "field",
-    "imshow": "field",
-    "contourf": "filled_contours",
-    "contour": "contours",
-    "pcolormesh": "quadmesh",
+    "auto": ("field", {}),
+    "imshow": ("field", {}),
+    "contour": ("contours", {"filled": False}),
+    "contourf": ("contours", {"filled": True}),
+    "pcolormesh": ("quadmesh", {}),
 }
 
 
@@ -770,7 +779,8 @@ def _draw_interactive_raster(
         raise ValueError(
             f"kind={kind!r} is not a renderer of backend='interactive'; use one of {renderers}"
         )
-    getattr(scene, _INTERACTIVE_RASTER_KINDS[kind])(data, **kwargs)
+    method, picked = _INTERACTIVE_RASTER_KINDS[kind]
+    getattr(scene, method)(data, **picked, **kwargs)
 
 
 def _decorate_interactive(scene: Any, basemap: Any, coastlines: bool) -> None:
@@ -1139,8 +1149,11 @@ field = _method("field", kind="imshow")
 pcolormesh = _method("pcolormesh")
 
 #: The two renderers :func:`contours` picks between, built once rather than per call so each keeps the
-#: capability refusal every other wrapper has. The *kinds* are matplotlib's own two function names;
-#: the method they reach is one ``contours`` on every tier that has both.
+#: capability refusal every other wrapper has. The *kinds* are matplotlib's own two function names; the
+#: method they reach is one ``contours`` on **both** tiers that take a ``kind``, because each tier's kind
+#: table carries the ``filled=`` that tells the two renders apart (:data:`_STATIC_RASTER_KINDS`,
+#: :data:`_INTERACTIVE_RASTER_KINDS`). Until the interactive table could carry it, ``contourf`` reached a
+#: second method there and the rest of the call did not fit it (review H3).
 _UNFILLED_CONTOURS = _method("contours", kind="contour")
 _FILLED_CONTOURS = _method("contours", kind="contourf")
 
@@ -1155,8 +1168,8 @@ def contours(data: PlottableData, *, filled: bool = False, **kwargs) -> Map:
         data: A pyramids ``Dataset`` to trace.
         filled: ``False`` (default) traces the levels as lines; ``True`` fills between them.
         **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
-            ``colorbar``, ``backend``, plus styling kwargs such as ``levels``). ``kind`` is not among
-            them — this function supplies it.
+            ``colorbar``, ``backend``, plus the contour keywords ``levels`` and ``interval``).
+            ``kind`` is not among them — this function supplies it.
 
     Returns:
         The finished map :func:`quickmap` built.
