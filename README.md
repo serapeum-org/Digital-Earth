@@ -80,7 +80,7 @@ The `web` tier renders pyramids rasters/vectors as MapLibre GL JS / deck.gl laye
 self-contained HTML page — `WebMap().choropleth(gdf, column="pop").basemap().save("map.html")`, or
 `quickplot(data, backend="web")`. The runnable gallery in `docs/examples/web/` works through a raster,
 a choropleth, the decoration stack (legend, title, graticule, layer switcher), framing with
-`fit_bounds`, labels and free text, contours and an RGB composite.
+`set_bounds`, labels and free text, contours and an RGB composite.
 
 **What the web tier is for.** Thematic maps (choropleths, points, lines, heatmaps, clustering), 3-D
 (extrusions, point clouds, 3D tiles, glTF, terrain, globe), and sharing the result as one HTML file. It is
@@ -115,8 +115,8 @@ src = Dataset.read_file("examples/data/acc4000.tif")
 points = FeatureCollection.read_file("tests/data/points.geojson")
 
 m = Map(crs=src.epsg)
-m.imshow(src)
-m.scatter(points)
+m.field(src)
+m.points(points)
 m.colorbar(layer=0)
 m.set_title("Flow Accumulation")
 m.save("flow_accumulation_with_labels.png")

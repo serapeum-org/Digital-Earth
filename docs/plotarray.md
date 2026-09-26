@@ -122,5 +122,5 @@ See the [API Reference](reference/static.md) for the full signature.
 
 !!! note "`point_size` here is `StaticGlyph`'s own keyword"
     `StaticGlyph.plot` keeps `point_size=` for its point overlay. On the current `Map` API the same
-    idea is spelled `size=` — `Map.scatter(features, size=100)` — and `point_size=` there is a
-    deprecated alias. See [Renamed keywords](reference/renamed-keywords.md).
+    idea is spelled `size=` — `Map.points(features, size=100)` — and `point_size=` there is a
+    deprecated alias. See [Renamed names](reference/renamed-names.md).
