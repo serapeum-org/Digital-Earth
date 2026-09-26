@@ -48,7 +48,9 @@ def levels_every(values: Any, interval: float) -> List[float]:
         The levels, ascending, as plain floats so a figure can be written down with them.
 
     Raises:
-        ValueError: when ``interval`` is not a positive, finite number; when the band holds no finite value;
+        ValueError: when ``interval`` is not a positive, finite number — including when it is not a number at
+            all, which reached the caller as :func:`math.isfinite`'s own ``TypeError`` before; when the band
+            holds no finite value;
             or when no multiple of ``interval`` lies inside the range. Each is refused here, with the
             argument named, because each otherwise surfaces from inside the rendering engine as a complaint
             about an empty level list — which points at the wrong thing entirely.
@@ -83,7 +85,18 @@ def levels_every(values: Any, interval: float) -> List[float]:
 
             ```
     """
-    if not isfinite(interval) or interval <= 0:
+    # `isfinite` refuses anything it cannot read as a real number with its own `TypeError` — "must be real
+    # number, not str" — which names neither `interval=` nor the caller, and contradicts the `Raises:` above
+    # (review R2-L14). Every way of not being a positive spacing is one refusal, in this function's words.
+    # Text is excluded before the coercion rather than after it: `float("100")` succeeds, and a spacing given
+    # as its own spelling is a caller who has not noticed they are passing a string — accepting it here is how
+    # a `"1e-3"` read out of a config file would reach the arithmetic unremarked.
+    numeric = not isinstance(interval, (str, bytes, bytearray))
+    try:
+        spacing = float(interval) if numeric else float("nan")
+    except (TypeError, ValueError):
+        spacing = float("nan")
+    if not isfinite(spacing) or spacing <= 0:
         raise ValueError(
             f"contours() takes interval= as a positive spacing in the band's units; got {interval!r}"
         )

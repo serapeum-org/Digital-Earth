@@ -80,6 +80,29 @@ class TestWhatHasNoLevelsToGive:
             levels_every(BAND, interval)
         assert "positive spacing" in str(refused.value), refused.value
 
+    @pytest.mark.parametrize("interval", ["100", None, [100.0], object()])
+    def test_a_spacing_that_is_not_a_number_is_refused_by_name(self, interval):
+        """Anything `math.isfinite` cannot read surfaced as its own `TypeError`, naming neither side.
+
+        Args:
+            interval: The spacing under test.
+
+        Test scenario:
+            `levels_every("100", ...)` raised `TypeError: must be real number, not str` from inside
+            `math.isfinite`, while the function's `Raises:` promised a `ValueError` and every other refusal
+            here names `interval=` and the caller (review R2-L14). The class and the wording are the contract
+            a tier's own refusal is built on, so both are asserted.
+        """
+        with pytest.raises(ValueError) as refused:
+            levels_every(BAND, interval)
+        assert "positive spacing" in str(refused.value), refused.value
+
+    def test_the_refusal_for_a_non_number_quotes_what_was_passed(self):
+        """A message that does not show the value cannot be acted on from a traceback alone."""
+        with pytest.raises(ValueError) as refused:
+            levels_every(BAND, "100")
+        assert "'100'" in str(refused.value), refused.value
+
     def test_an_empty_band_is_refused(self):
         """No finite value means no range, and a guessed level would draw a line nothing supports.
 
