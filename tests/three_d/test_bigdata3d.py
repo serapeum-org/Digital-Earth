@@ -31,6 +31,7 @@ from digitalearth.three_d.bigdata import (
     DEFAULT_CELL_BUDGET,
     REDUCTIONS,
     UNREDUCED,
+    reduce_surface,
 )
 from digitalearth.three_d.renderer import DRAWN_KINDS
 from digitalearth.three_d.terrain import ELEVATION
@@ -241,28 +242,83 @@ class TestATerrainOverTheBudgetIsDecimated:
         assert "terrain" in caplog.text, caplog.text
 
 
+class TestASurfaceWithNoFacesIsDrawnWholeRatherThanDeleted:
+    """`reduce_surface`'s own guard, reached by a direct call rather than through a drawn kind.
+
+    Nothing in `REDUCTIONS` routes a vertex-only mesh to the surface filter — `point_cloud` sits in
+    `UNREDUCED` for exactly this reason — but `reduce_surface` is public, so a caller's own cloud can arrive
+    at it. Triangulating one empties it, and an empty mesh drawn in place of the cloud would have deleted the
+    layer rather than thinned it, which is the one outcome a reduction must never have.
+    """
+
+    def test_triangulating_a_cloud_really_does_empty_it(self):
+        """The premise the guard is written from; were PyVista to stop doing this, the guard is dead code."""
+        emptied = pv.PolyData(_points(300)).triangulate()
+        assert emptied.n_cells == 0, (
+            f"a triangulated cloud kept {emptied.n_cells} cells"
+        )
+
+    def test_the_mesh_is_handed_back_as_it_is(self):
+        """Identity, not equality: the caller's own object, not an emptied copy of it."""
+        cloud = pv.PolyData(_points(300))
+        assert reduce_surface(cloud, 100, kind="point_cloud") is cloud, (
+            "reduce_surface returned something other than the faceless mesh it was given"
+        )
+
+    def test_it_says_the_mesh_had_nothing_to_simplify(self, caplog):
+        """A budget that quietly did nothing is #207's complaint, so not reducing has to be reported.
+
+        Args:
+            caplog: Captures the warning the guard logs.
+        """
+        cloud = pv.PolyData(_points(300))
+        with caplog.at_level(logging.WARNING):
+            reduce_surface(cloud, 100, kind="point_cloud")
+        assert "no faces to simplify" in caplog.text, caplog.text
+
+    def test_the_report_names_the_kind_and_the_two_numbers(self, caplog):
+        """The kind and the count against the budget are what a caller acts on.
+
+        Args:
+            caplog: Captures the warning the guard logs.
+        """
+        cloud = pv.PolyData(_points(300))
+        with caplog.at_level(logging.WARNING):
+            reduce_surface(cloud, 100, kind="point_cloud")
+        wanted = ("point_cloud", "300 cells", "big_data_threshold=100")
+        missing = [piece for piece in wanted if piece not in caplog.text]
+        assert missing == [], f"the report left out {missing}: {caplog.text}"
+
+
 class TestABadBudgetIsRefused:
     """The shared guard, so a nonsensical cutoff answers the same way it does on the 2-D tiers."""
 
     def test_a_negative_budget_is_refused(self):
-        """Below zero would reduce every layer, an empty one included."""
+        """Below zero would reduce every layer, an empty one included.
+
+        The source is built before the block, so the builder is the only call in it that can raise — a
+        fixture that failed would otherwise pass this test for the wrong reason.
+        """
+        source = _dem(8)
         scene = Scene3D(off_screen=True)
         with pytest.raises(ValueError, match="must not be negative"):
-            scene.terrain(_dem(8), big_data_threshold=-1)
+            scene.terrain(source, big_data_threshold=-1)
         scene.close()
 
     def test_a_fractional_budget_is_refused(self):
         """A cutoff is a count of cells, so it is not truncated into one."""
+        source = _dem(8)
         scene = Scene3D(off_screen=True)
         with pytest.raises(ValueError, match="whole number"):
-            scene.terrain(_dem(8), big_data_threshold=1.9)
+            scene.terrain(source, big_data_threshold=1.9)
         scene.close()
 
     def test_the_refusal_names_the_call(self):
         """The message points at the builder the keyword was written on, not at the guard."""
+        cube = _cube(8)
         scene = Scene3D(off_screen=True)
         with pytest.raises(ValueError, match="Scene3D.volume") as refusal:
-            scene.volume(_cube(8), big_data_threshold=-1)
+            scene.volume(cube, big_data_threshold=-1)
         scene.close()
         assert "volume" in refusal.value.args[0]
 
