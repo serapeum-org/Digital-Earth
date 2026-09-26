@@ -15,6 +15,8 @@ renderer's record beside it, so a change reached a record and never the page (re
 
 import pytest
 
+pytest.importorskip("maplibre", reason="the web tier needs the web environment")
+
 from digitalearth.web import WebMap
 from digitalearth.web.base import _Described
 from tests.base.layer_management import (
