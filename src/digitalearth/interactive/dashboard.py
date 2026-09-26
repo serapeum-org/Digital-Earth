@@ -13,12 +13,19 @@ WASM/Pyodide export is **out** for a pyramids-backed app: GDAL/pyramids cannot r
 live app must be *served*, not converted. ``save_app`` is the offline path (pre-rendered states only).
 """
 
+import warnings
 from functools import reduce
 from importlib.util import find_spec
 from operator import mul as _mul
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
+from digitalearth.base.controls import (
+    LAYER_CONTROLS,
+    check_control_position,
+    resolved_controls,
+)
+from digitalearth.base.deprecation import REMOVED_IN
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import _require_holoviz
 from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
@@ -30,6 +37,71 @@ _BASEMAP_CHOICES = list(
         [DEFAULT_BASEMAP_PROVIDER, "CartoLight", "CartoDark", "OSM", "EsriImagery"]
     )
 )
+
+
+def _controls_from_flags(
+    controls: Optional[Sequence[str]],
+    *,
+    opacity: Optional[bool],
+    basemap_switch: Optional[bool],
+    caller: str,
+) -> Tuple[Tuple[str, ...], bool]:
+    """Settle which controls a layer manager exposes, from ``controls=`` or the two deprecated booleans.
+
+    ``opacity=`` and ``basemap_switch=`` were this tier's way of saying "expose these controls", one boolean
+    per control, and the web tier had no way of saying it at all. One list says it on both tiers (#264), so
+    the booleans are resolved into it here and warn — the same promise
+    :func:`~digitalearth.base.deprecation.renamed_parameter` keeps for a renamed parameter, written out
+    because this is two old names collapsing into one new one rather than a rename.
+
+    Args:
+        controls: The caller's control names, or ``None`` for "not passed".
+        opacity: The deprecated flag, or ``None`` for "not passed". Its effective default is ``True``.
+        basemap_switch: The deprecated flag, or ``None`` for "not passed" — which is also its documented
+            "offer it unprompted" value, so the two coincide and nothing is lost by the sentinel.
+        caller: The public method the keywords were written on, for every message to quote.
+
+    Returns:
+        ``(controls, requested)`` — the control names to build, and whether the caller asked for them
+        **outright**. The second half is what decides how a basemap switch on a non-Web-Mercator map is
+        answered: a named control is a request, and is refused with the CRS; the unprompted default is
+        furniture, and is dropped with a log line.
+
+    Raises:
+        TypeError: when ``controls`` is passed together with either boolean. They are two spellings of one
+            request, so honouring either would silently drop the other.
+        ValueError: from :func:`~digitalearth.base.controls.resolved_controls`, for a name no tier has or
+            one this tier cannot build.
+
+    Warns:
+        DeprecationWarning: naming the boolean used and ``controls=`` as its replacement.
+    """
+    deprecated = {"opacity": opacity, "basemap_switch": basemap_switch}
+    passed = sorted(name for name, value in deprecated.items() if value is not None)
+    if controls is not None and passed:
+        raise TypeError(
+            f"{caller} got controls= together with {passed}; those are the deprecated spelling of the same "
+            "request, so neither can be silently preferred. Keep controls=."
+        )
+    if controls is not None:
+        return resolved_controls(controls, offered=LAYER_CONTROLS, caller=caller), True
+    if not passed:
+        return tuple(LAYER_CONTROLS), False
+    warnings.warn(
+        f"{caller}: {', '.join(f'{name}=' for name in passed)} is deprecated and will be removed in "
+        f"{REMOVED_IN}; name the controls to expose with controls= instead, e.g. "
+        "controls=('visibility', 'opacity')",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    named = ["visibility"]
+    if opacity is not False:
+        named.append("opacity")
+    if basemap_switch is not False:
+        named.append("basemap")
+    resolved = resolved_controls(named, offered=LAYER_CONTROLS, caller=caller)
+    return resolved, basemap_switch is True
+
 
 #: Element type names that are a tile basemap — replaced (not stacked under) when a basemap widget picks
 #: a provider, so a map that already carries tiles still responds to the switcher.
@@ -409,58 +481,178 @@ class DashboardMixin(_MixinBase):
         render_window = getattr(plotter, "ren_win", plotter)
         return pn.pane.VTK(render_window, **kwargs)
 
+    #: The Panel layer manager the last :meth:`layer_control` built, or ``None`` before the first one.
+    #: Declared on the class rather than in ``__init__`` — which belongs to the shared base, not to this
+    #: capability — so a map that never asks for a layer control never carries one.
+    _layer_control_panel: Any = None
+
+    @property
+    def layer_control_panel(self) -> Any:
+        """The Panel layer manager :meth:`layer_control` built, or ``None`` when none has been built.
+
+        :meth:`layer_control` returns the map, the way every other builder on both 2-D tiers does (#264), so
+        the object a caller *displays* is held on the map and read back here — the same place the static tier
+        keeps its ``fig``/``ax`` and this tier keeps its ``layers``. Read-only on purpose: a panel this map
+        did not build is not this map's control.
+
+        Returns:
+            A ``panel.viewable.Viewable`` whose widgets reactively rebuild the map overlay — toggling a
+            layer hides/shows it, the opacity slider sets its alpha, and the basemap ``Select`` swaps the
+            tiles underneath. ``None`` until :meth:`layer_control` has been called; a second call replaces
+            it rather than stacking a second control.
+
+        Examples:
+            - The control is reached through the map the builder returned:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).layer_control()            # doctest: +SKIP
+                >>> m.layer_control_panel is None                              # doctest: +SKIP
+                False
+
+                ```
+        """
+        return self._layer_control_panel
+
+    def _control_layer_indices(
+        self, layers: Optional[Sequence[str]]
+    ) -> Tuple[int, ...]:
+        """Return the positions of the layers a control offers, in draw order.
+
+        Positions rather than ids, because the toggle labels are indexed (``"0: Image"``) and
+        :meth:`_compose_visible_layers` reads the index back out of the label it was handed.
+        ``self.layers`` and :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` are built in
+        step — each element is inserted at the position its id holds in the tree — so one indexes the other.
+
+        Args:
+            layers: The ids the caller wants offered, or ``None`` for every layer on the map.
+
+        Returns:
+            The positions, ascending, de-duplicated.
+
+        Raises:
+            ValueError: when an id is not on this map. A typo would otherwise build a control over fewer
+                layers than the caller named, and say nothing.
+        """
+        available = self.layer_ids
+        if layers is None:
+            return tuple(range(len(available)))
+        wanted = list(dict.fromkeys(layers))
+        unknown = [layer_id for layer_id in wanted if layer_id not in available]
+        if unknown:
+            raise ValueError(
+                f"layer_control() was given {unknown}, which are not on this map; its layers are "
+                f"{available}"
+            )
+        return tuple(sorted(available.index(layer_id) for layer_id in wanted))
+
+    def _layer_control_widgets(
+        self, pn: Any, wanted: Sequence[str], *, labels: list, requested: bool
+    ) -> dict:
+        """Build the widgets a layer control exposes, keyed by the control each answers to.
+
+        Args:
+            pn: The imported panel module.
+            wanted: The controls to build, from :data:`~digitalearth.base.controls.LAYER_CONTROLS`.
+            labels: The ``"i: Type"`` label per offered layer, which the toggle group lists.
+            requested: Whether the controls were named outright, which decides how a basemap switch on a
+                non-Web-Mercator map is answered — see :meth:`_basemap_select`.
+
+        Returns:
+            ``{control: widget}`` in build order, so the layout lays them out in it. ``"basemap"`` is absent
+            when the switch was offered unprompted and the display CRS cannot take it.
+        """
+        built = {"visibility": pn.widgets.CheckBoxGroup(value=labels, options=labels)}
+        if "opacity" in wanted:
+            built["opacity"] = pn.widgets.FloatSlider(
+                label="Opacity", start=0.0, end=1.0, value=1.0
+            )
+        if "basemap" in wanted:
+            select = self._basemap_select(pn, requested=requested)
+            if select is not None:
+                built["basemap"] = select
+        return built
+
     def layer_control(
         self,
         *,
-        opacity: bool = True,
+        layers: Optional[Sequence[str]] = None,
+        position: str = "top-right",
+        controls: Optional[Sequence[str]] = None,
+        opacity: Optional[bool] = None,
         reorder: bool = False,
         basemap_switch: Optional[bool] = None,
-    ) -> Any:
-        """Build a layer manager: per-layer visibility toggles, opacity slider, basemap switch (DI.13).
+    ) -> Self:
+        """Build a layer manager — per-layer visibility, an opacity slider, a basemap switch (DI.13).
+
+        The three keywords are the ones the Tier-2 contract declares and the web tier answers to as well —
+        the layers to include, the position, the controls to expose — and **the map comes back**, so one call
+        adds a layer control on either tier (#264). The panel itself is held on the map and read back through
+        :attr:`layer_control_panel`; before, this method returned it, and so ended any chain it appeared in.
 
         The toggle order follows **draw** order — the order `layers` is in, which is the band each layer's
         kind declares and then the order they were built in within that band, so a basemap added last is
         still the first toggle. Drag-reorder is **not implemented**: reordering needs a stable
         handle per layer (roadmap IN-1; the static twin is #216), which the registry does not yet give, so
-        ``reorder=True`` is refused outright rather than accepted and ignored.
+        ``reorder=True`` is refused outright rather than accepted and ignored. That is also why ``reorder``
+        is not one of the ``controls``: it names a manipulation no tier can offer, not a widget.
 
         Bokeh renders tiles in EPSG:3857 only, so the basemap switch is Web-Mercator-only — and which
-        way that lands depends on whether it was *asked for*. Left at the ``None`` default the switch
-        is furniture this method offers unprompted, so a non-Mercator map drops it and logs why; passed
-        ``basemap_switch=True`` it is an explicit request, and a non-Mercator map is refused with its
-        CRS named. That is the one policy this module applies to an explicit basemap request — the same
-        answer ``dashboard(widgets=("basemap",))`` gives.
+        way that lands depends on whether it was *asked for*. Left at the default ``controls`` the switch
+        is furniture this method offers unprompted, so a non-Mercator map drops it and logs why; named in
+        ``controls`` it is an explicit request, and a non-Mercator map is refused with its CRS named. That
+        is the one policy this module applies to an explicit basemap request — the same answer
+        ``dashboard(widgets=("basemap",))`` gives.
 
         Args:
-            opacity: Include an opacity slider driving the visible colour-mapped layers.
+            layers: The layers to offer, by id from
+                :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids`; ``None`` (default)
+                offers every layer on the map. A layer left out is hidden from the switch, **not** from the
+                map — it stays in the composed overlay whatever the toggles say, which is what the web
+                tier's ``layers=`` means too.
+            position: Which of :data:`~digitalearth.base.controls.CONTROL_POSITIONS` the widget column sits
+                in. The corner is honoured as far as a two-cell row can: ``*-left`` puts the widgets before
+                the map and ``*-right`` after it, while ``top-*``/``bottom-*`` align the column to the top or
+                the bottom of the row. Note ``"top-right"`` is the default both tiers share, so the widgets
+                sit to the **right** of the map rather than the left.
+            controls: Which controls to expose, from
+                :data:`~digitalearth.base.controls.LAYER_CONTROLS`; ``None`` (default) offers all three, and
+                ``"visibility"`` cannot be dropped. Naming a control is an explicit request — see the
+                basemap policy above.
+            opacity: **Deprecated** spelling of ``"opacity"`` in ``controls`` (effective default ``True``);
+                honoured for one release, after a ``DeprecationWarning``.
             reorder: Must stay ``False``; ``True`` raises ``NotImplementedError``.
-            basemap_switch: Include a basemap-provider ``Select``, bound so picking a provider swaps the
-                tile layer under the map. ``None`` (default) offers it on a Web-Mercator map and drops
-                it (logged) on any other display CRS; ``True`` requires it, so a non-Mercator map
-                raises; ``False`` never builds it.
+            basemap_switch: **Deprecated** spelling of ``"basemap"`` in ``controls``; honoured for one
+                release, after a ``DeprecationWarning``. ``True`` requires the switch, ``False`` drops it,
+                and ``None`` (default) offers it unprompted.
 
         Returns:
-            A ``panel.viewable.Viewable`` whose widgets reactively rebuild the map overlay — toggling
-            a layer hides/shows it; the opacity slider sets its alpha; the basemap ``Select`` swaps tiles.
+            The same map instance, so builder calls chain. The panel is :attr:`layer_control_panel`.
 
         Raises:
-            ValueError: when there are no layers to control, or when ``basemap_switch=True`` is passed
-                on a map whose display CRS is not EPSG:3857 (Bokeh renders tiles in Web Mercator only).
+            TypeError: when ``controls`` is passed together with ``opacity`` or ``basemap_switch`` — two
+                spellings of one request.
+            ValueError: when ``position`` is not one of the four corners; when ``controls`` names something
+                outside the shared vocabulary, drops ``"visibility"``, or names a control this tier cannot
+                build; when there are no layers to control; when a ``layers`` id is not on this map; or when
+                ``"basemap"`` is named on a map whose display CRS is not EPSG:3857 (Bokeh renders tiles in
+                Web Mercator only).
             NotImplementedError: when ``reorder=True`` is passed — reordering is not implemented,
                 and the flag is refused rather than accepted and ignored (roadmap IN-1; the static
                 twin is #216).
 
         Examples:
-            - One toggle per registered layer, labelled by index and element type, in draw order:
+            - One toggle per registered layer, labelled by index and element type, in draw order — and the
+              map comes back, so the control is part of the chain rather than the end of it:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem).points(fc)                 # doctest: +SKIP
-                >>> panel = m.layer_control()                                  # doctest: +SKIP
-                >>> panel[0][0].options                                        # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).points(fc).layer_control()  # doctest: +SKIP
+                >>> m.layer_control_panel[1][0].options                        # doctest: +SKIP
                 ['0: Image', '1: Points']
 
                 ```
@@ -482,25 +674,28 @@ class DashboardMixin(_MixinBase):
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> mercator = InteractiveMap().field(dem).layer_control()     # doctest: +SKIP
-                >>> len(mercator[0])                                           # doctest: +SKIP
+                >>> len(mercator.layer_control_panel[1])                       # doctest: +SKIP
                 3
-                >>> other = InteractiveMap(crs=4326).field(dem)                 # doctest: +SKIP
-                >>> len(other.layer_control()[0])                              # doctest: +SKIP
+                >>> other = InteractiveMap(crs=4326).field(dem).layer_control()  # doctest: +SKIP
+                >>> len(other.layer_control_panel[1])                          # doctest: +SKIP
                 2
 
                 ```
-            - Asked for outright, the same condition is refused instead, with the display CRS named:
+            - Named outright, the same condition is refused instead, with the display CRS named:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> try:                                                       # doctest: +SKIP
-                ...     other.layer_control(basemap_switch=True)
+                ...     other.layer_control(controls=("visibility", "basemap"))
                 ... except ValueError as error:
                 ...     print(str(error).split(" — ")[0])
                 layer_control basemap() needs the Web-Mercator display CRS (crs=3857)
 
                 ```
+
+        See Also:
+            layer_control_panel: the panel this builds, held on the map.
+            digitalearth.base.controls.resolved_controls: the shared control vocabulary.
         """
-        gv, hv = _require_holoviz()
         pn = _require_panel()
         # Before the labels are built. A map built with `tiles=` defers its basemap until something renders,
         # and the flush inserts it at index 0 — so labels frozen beforehand named the layer one place to
@@ -513,34 +708,46 @@ class DashboardMixin(_MixinBase):
                 "(the default); the toggles follow draw order — each layer's band, then the order you "
                 "built in within that band."
             )
+        check_control_position(position)
+        wanted, requested = _controls_from_flags(
+            controls,
+            opacity=opacity,
+            basemap_switch=basemap_switch,
+            caller="InteractiveMap.layer_control()",
+        )
         if not self.layers:
             raise ValueError(
                 "layer_control() needs at least one layer — add a builder call first"
             )
-        names = [f"{i}: {type(layer).__name__}" for i, layer in enumerate(self.layers)]
-        visible = pn.widgets.CheckBoxGroup(value=names, options=names)
-        controls = [visible]
-        alpha = (
-            pn.widgets.FloatSlider(label="Opacity", start=0.0, end=1.0, value=1.0)
-            if opacity
-            else None
+        offered = self._control_layer_indices(layers)
+        labels = [f"{index}: {type(self.layers[index]).__name__}" for index in offered]
+        widgets = self._layer_control_widgets(
+            pn, wanted, labels=labels, requested=requested
         )
-        if alpha is not None:
-            controls.append(alpha)
-        if basemap_switch is False:
-            basemap = None
-        else:
-            basemap = self._basemap_select(pn, requested=basemap_switch is True)
-        if basemap is not None:
-            controls.append(basemap)
-
-        bind_kwargs = {"shown": visible}
-        if alpha is not None:
-            bind_kwargs["op"] = alpha
-        if basemap is not None:
-            bind_kwargs["basemap"] = basemap
-        view = pn.bind(self._compose_visible_layers, **bind_kwargs)
-        return pn.Row(pn.Column(*controls), pn.panel(view))
+        # A layer nobody offered is not a layer the viewer chose to hide, so it is composed in whatever the
+        # toggles say — the same thing `layers=` means on the web tier, where the switch lists a subset of a
+        # map that still draws all of it.
+        bound: dict = {
+            "shown": widgets["visibility"],
+            "always": tuple(
+                index for index in range(len(self.layers)) if index not in offered
+            ),
+        }
+        if "opacity" in widgets:
+            bound["op"] = widgets["opacity"]
+        if "basemap" in widgets:
+            bound["basemap"] = widgets["basemap"]
+        view = pn.bind(self._compose_visible_layers, **bound)
+        # The corner, as far as a row of two cells can honour one: the side is the order of the cells, and
+        # the top/bottom half is the column's own alignment across the row.
+        column = pn.Column(
+            *widgets.values(), align="start" if position.startswith("top") else "end"
+        )
+        body = pn.panel(view)
+        self._layer_control_panel = (
+            pn.Row(column, body) if position.endswith("left") else pn.Row(body, column)
+        )
+        return self
 
     def _basemap_select(self, pn: Any, *, requested: bool) -> Any:
         """Build the layer-control basemap ``Select``, or ``None`` on a non-Web-Mercator map.
@@ -574,7 +781,11 @@ class DashboardMixin(_MixinBase):
         return pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
 
     def _compose_visible_layers(
-        self, shown: list, op: float = 1.0, basemap: Any = None
+        self,
+        shown: list,
+        op: float = 1.0,
+        basemap: Any = None,
+        always: Sequence[int] = (),
     ) -> Any:
         """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
 
@@ -587,17 +798,25 @@ class DashboardMixin(_MixinBase):
             shown: The ``"i: Type"`` labels of the visible layers (from the toggle widget).
             op: Opacity applied to colour-mapped layers.
             basemap: Provider name from the basemap ``Select``, or ``None`` to leave the basemap as built.
+            always: Positions of the layers the control never offered — ``layer_control(layers=...)`` lists a
+                subset, and a layer nobody can toggle is not a layer anybody hid, so it is composed in
+                regardless of ``shown``. Empty when the control offered every layer.
 
         Returns:
-            A blank ``hv.Overlay`` when nothing is shown, else the overlay of the chosen layers at
-            opacity ``op``, over the chosen basemap when one is selected.
+            A blank ``hv.Overlay`` when nothing is shown and nothing is always-on, else the overlay of the
+            chosen layers in draw order at opacity ``op``, over the chosen basemap when one is selected.
         """
         gv, hv = _require_holoviz()
         # The other widget path does this too: a deferred basemap is one of the layers, and composing
         # without flushing drew a map that never had one (review H9). `layer_control` has already flushed,
         # so this is a no-op there and the indices below still mean what the labels meant.
         self._flush_deferred_tiles()
-        chosen = [self.layers[int(label.split(":")[0])] for label in shown]
+        # Back into draw order, and de-duplicated: the toggles and the always-on set are two ways of naming
+        # positions in `self.layers`, and the overlay has to be built bottom-first either way.
+        indices = sorted(
+            {int(label.split(":")[0]) for label in shown} | {int(i) for i in always}
+        )
+        chosen = [self.layers[index] for index in indices]
         if not chosen:
             return hv.Overlay([])
         overlay = self._compose(self._restyled_layers({"alpha": op}, layers=chosen))

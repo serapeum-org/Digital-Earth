@@ -147,17 +147,9 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 ("url",),
                 "a name and a URL both arrive through one overloaded provider= — #268",
             ),
-            ("interactive", "layer_control"): (
-                ("layers", "position"),
-                "shares not one parameter with the web tier's — #264",
-            ),
             ("web", "labels"): (
                 ("crs",),
                 "places labels in EPSG:4326 only, so a column in another CRS cannot be labelled — #265",
-            ),
-            ("web", "layer_control"): (
-                ("layers",),
-                "the layers to include are spelled layer_ids= here — #264",
             ),
         }
     )

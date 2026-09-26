@@ -25,6 +25,7 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.base.controls import check_control_position, resolved_controls
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
@@ -69,8 +70,10 @@ _BASEMAP_DISPLAY_NAMES = {
 #: py-maplibregl's two layer-switcher styles, validated here so a typo is not a pydantic traceback.
 _SWITCHER_THEMES = frozenset({"default", "simple"})
 
-#: The four legal MapLibre control corners.
-_CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
+#: What this tier's ``layer_control`` can actually build: one visibility row per layer, which is what
+#: py-maplibregl's switcher control is. An opacity slider or a basemap picker would each need a control the
+#: library does not ship, so naming either is refused rather than accepted and dropped.
+_OFFERED_CONTROLS = ("visibility",)
 
 
 #: Styling for the small floating panels this tier builds — the legend and the title — kept with the
@@ -287,18 +290,20 @@ def _graticule_line(value: float, suffix: str, coordinates: list) -> dict:
 
 
 def _check_position(position: str) -> None:
-    """Validate a control corner, raising ``ValueError`` for anything but the four legal MapLibre corners.
+    """Validate a control corner, raising ``ValueError`` for anything but the four legal corners.
+
+    The corners themselves are MapLibre's, and they are now
+    :data:`~digitalearth.base.controls.CONTROL_POSITIONS` — the same four the interactive tier anchors its
+    layer control to, so ``position=`` means one thing on both (#264). This stays as the module's own name
+    because seven builders here call it.
 
     Args:
         position: The requested corner placement.
 
     Raises:
-        ValueError: when ``position`` is not one of ``top-left``/``top-right``/``bottom-left``/``bottom-right``.
+        ValueError: when ``position`` is not one of :data:`~digitalearth.base.controls.CONTROL_POSITIONS`.
     """
-    if position not in _CONTROL_POSITIONS:
-        raise ValueError(
-            f"unknown control position {position!r}; choose one of {list(_CONTROL_POSITIONS)}"
-        )
+    check_control_position(position)
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -738,9 +743,11 @@ class DecorationMixin(_MixinBase):
     def layer_control(
         self,
         *,
+        layers: Optional[list] = None,
         position: str = "top-right",
-        layer_ids: Optional[list] = None,
+        controls: Optional[list] = None,
         theme: str = "default",
+        layer_ids: Optional[list] = None,
     ) -> Self:
         """Add a switcher so a viewer can turn the data layers on and off.
 
@@ -748,12 +755,27 @@ class DecorationMixin(_MixinBase):
         single most common thing anyone does with a web map. The switch lists the data layers only:
         basemaps are the ground, not something a viewer toggles.
 
+        The three keywords are the ones the Tier-2 contract declares and the interactive tier now answers to
+        as well — the layers to include, the position, the controls to expose — so the same call adds a layer
+        control on either tier (#264). What was ``layer_ids=`` here is ``layers=``, the name that tier uses
+        for the same thing; the old spelling keeps working for one release.
+
         Args:
-            position: One of the four MapLibre corners.
-            layer_ids: The layers to offer, defaulting to every data layer added so far
+            layers: The layers to offer, by id, defaulting to every data layer added so far
                 (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from
                 the switch without hiding them from the map.
-            theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles.
+            position: One of the four corners in
+                :data:`~digitalearth.base.controls.CONTROL_POSITIONS` — MapLibre's, and now both tiers'.
+            controls: Which controls to expose, from
+                :data:`~digitalearth.base.controls.LAYER_CONTROLS`. ``None`` (the default) offers everything
+                this tier can build, which is ``("visibility",)``: a py-maplibregl switcher is visibility
+                rows and nothing else. Naming ``"opacity"`` or ``"basemap"`` is therefore **refused** rather
+                than accepted and dropped — the interactive tier builds both, and a caller moving a call
+                here should hear that this tier cannot.
+            theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
+                keyword: it styles the switcher rather than choosing what the switcher contains.
+            layer_ids: **Deprecated** spelling of ``layers``; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``layer_ids=`` will be removed in a future release.
 
         Note:
             A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
@@ -766,8 +788,11 @@ class DecorationMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``position`` is not one of the four legal MapLibre corners, when no data layer
-                has been added yet, or when an id was given that is not on this map.
+            TypeError: when both ``layers`` and the deprecated ``layer_ids`` are passed — they name one
+                parameter, so preferring either would silently drop the other.
+            ValueError: when ``position`` is not one of the four legal corners, when ``controls`` names
+                something outside the shared vocabulary or something this tier cannot build, when no data
+                layer has been added yet, or when an id was given that is not on this map.
 
         Examples:
             - Two layers and a switch between them:
@@ -784,9 +809,23 @@ class DecorationMixin(_MixinBase):
 
         See Also:
             digitalearth.web.base.WebMapBase.layer_ids: the ids this offers by default.
+            digitalearth.base.controls.resolved_controls: the shared control vocabulary.
         """
         _require_maplibre()
         _check_position(position)
+        layers = renamed_parameter(
+            new="layers",
+            value=layers,
+            old="layer_ids",
+            alias=layer_ids,
+            caller="WebMap.layer_control()",
+        )
+        if controls is not None:
+            resolved_controls(
+                controls,
+                offered=_OFFERED_CONTROLS,
+                caller="WebMap.layer_control()",
+            )
         if theme not in _SWITCHER_THEMES:
             raise ValueError(
                 f"layer_control(theme={theme!r}) must be one of {sorted(_SWITCHER_THEMES)}"
@@ -797,7 +836,7 @@ class DecorationMixin(_MixinBase):
                 "layer_control() has nothing to switch: no data layer has been added yet. A basemap is "
                 "the ground rather than a layer a viewer toggles."
             )
-        wanted = list(layer_ids) if layer_ids is not None else available
+        wanted = list(layers) if layers is not None else available
         unknown = [layer_id for layer_id in wanted if layer_id not in available]
         if unknown:
             raise ValueError(

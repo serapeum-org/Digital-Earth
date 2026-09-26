@@ -37,9 +37,6 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
         261: (
             "fix(api): legend() now has three incompatible shapes, and web still has no colorbar()"
         ),
-        264: (
-            "fix(api): layer_control() shares zero parameters between the two tiers that have it"
-        ),
         265: (
             "fix(web): title(), fit_bounds() and labels() introduce third names for existing concepts"
         ),
