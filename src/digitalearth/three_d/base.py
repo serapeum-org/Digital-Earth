@@ -1474,7 +1474,7 @@ class Scene3DBase:
 
         There is **no second spelling** here, unlike the interactive tier's former `rasterize_threshold`:
         nothing on this tier ever spelled the cutoff another way, and shipping one in order to retire it would
-        something nobody has written. The web tier has no alias either, for the same reason.
+        be deprecating something nobody has written. The web tier has no alias either, for the same reason.
 
         Args:
             big_data_threshold: The per-call override, or `None` to use the scene's attribute.
