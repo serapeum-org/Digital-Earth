@@ -479,8 +479,11 @@ class LayerManagementConformance:
         Args:
             drawn: The tier under test.
         """
+        # Built before the block, so `replace_layer` is the only call in it that can raise: a `get_layer`
+        # that refused would otherwise pass this probe without the replacement ever being attempted.
+        renamed = with_fields(drawn.get_layer(TOP), id="nope")
         with pytest.raises(KeyError):
-            drawn.replace_layer(with_fields(drawn.get_layer(TOP), id="nope"))
+            drawn.replace_layer(renamed)
 
     def test_replace_layer_returns_the_tier_so_calls_chain(self, drawn):
         """A replacement chains like a builder does.
@@ -513,6 +516,11 @@ class LayerManagementConformance:
     def _refuse_a_replacement(self, tier) -> Exception:
         """Replace one layer with a kind this tier cannot draw, and return the refusal.
 
+        The description is built **before** the block, so `replace_layer` is the only call inside it that can
+        raise. `_undrawable_here` reads the layer back and looks its band up, and either could fail with a
+        `KeyError` — which, on a tier declaring `refuses_by_declaration = False`, is the very class expected
+        here. Keeping it outside is what makes the refusal this returns the tier's, not the fixture's.
+
         Args:
             tier: The tier under test.
 
@@ -521,8 +529,9 @@ class LayerManagementConformance:
             :attr:`LayerManagementContract.refuses_by_declaration`.
         """
         expected = CapabilityError if self.contract.refuses_by_declaration else KeyError
+        replacement = self._undrawable_here(tier)
         with pytest.raises(expected) as refusal:
-            tier.replace_layer(self._undrawable_here(tier))
+            tier.replace_layer(replacement)
         return refusal.value
 
     def test_a_replacement_the_tier_cannot_draw_is_refused_naming_the_kind(self, drawn):
