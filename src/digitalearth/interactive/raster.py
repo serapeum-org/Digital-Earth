@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, 
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.deprecation import renamed_method
+from digitalearth.base.levels import levels_every
 from digitalearth.base.sources.view import SourceView
 from digitalearth.base.spec import (
     Bounds,
@@ -217,9 +218,18 @@ def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     props = held_props(interactive_map, layer)
     src = interactive_map._to_display_source(data, band=props["band"])
-    # A caller's `levels` always wins; `None` consults autostyle for the variable's canonical contour
-    # levels (#230) before falling back to the tier's 10.
-    resolved = interactive_map._auto_levels(src, props.get("levels"))
+    # `interval=` is resolved here rather than in the builder, because it is the *band* that decides which
+    # multiples of the spacing lie inside it — and the band is only read once the layer is drawn. The
+    # arithmetic is `base.levels`, shared so this tier and the static one cannot disagree about which
+    # multiples are inside (#262). The builder has already refused `interval=` together with `levels=`, so
+    # only one of the two branches can be taken.
+    interval = props.get("interval")
+    if interval is not None:
+        resolved = levels_every(src.z.values, interval)
+    else:
+        # A caller's `levels` always wins; `None` consults autostyle for the variable's canonical contour
+        # levels (#230) before falling back to the tier's 10.
+        resolved = interactive_map._auto_levels(src, props.get("levels"))
     element = contour_op(
         interactive_map._image_from_source(src),
         # Already a list: `held_props` thaws the described half once, so a caller's `levels=[0, 5, 10]`
@@ -521,23 +531,46 @@ class RasterMixin(_MixinBase):
         *,
         band: int = 1,
         levels: Any = None,
+        interval: Optional[float] = None,
+        filled: bool = False,
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Add line contours of a raster band.
+        """Trace iso-value lines of a raster band, or fill the bands between them.
+
+        The three keywords the Tier-2 contract declares — ``levels``, ``interval`` and ``filled`` — on the
+        one method that answers to the name, so a call written against the web or static tier runs here
+        unchanged (#262). ``filled=True`` is what :meth:`filled_contours` asks for, and ``interval=`` used
+        to fall through ``**opts`` to HoloViews, which refused it as an unknown *style* option.
 
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to contour.
             levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
                 variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
+                Give at most one of this or ``interval``.
+            interval: Spacing between levels — one level every N, in the band's own units. Resolved
+                against the band when the layer is drawn, because it is the band that decides which
+                multiples of the spacing lie inside it, and only the ones *strictly* inside are traced: a
+                level on an extreme draws the frame's edge or nothing. The arithmetic is
+                :func:`~digitalearth.base.levels.levels_every`, shared with the static tier so the two
+                cannot disagree about which multiples are inside.
+            filled: Fill the bands between the levels instead of drawing the levels as lines. It is also
+                what the layer's kind records — ``"filled_contours"`` against ``"contours"`` — so a figure
+                says which of the two renders it holds.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the drawing (#327).
             **opts: Extra HoloViews style options applied to the element.
+
+        Raises:
+            ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one thing,
+                so neither can be silently preferred; when ``interval`` is not a positive finite number; or
+                when no multiple of it lies inside the band's range. The last two are refused as the layer
+                is drawn, which is where the band is read.
 
         Examples:
             - Contour a raster at five levels:
@@ -550,15 +583,34 @@ class RasterMixin(_MixinBase):
                 1
 
                 ```
+            - One level every 100 m, filled, from the same method:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> m = InteractiveMap().contours(dem, interval=100, filled=True)  # doctest: +SKIP
+                >>> type(m.layers[0]).__name__                                  # doctest: +SKIP
+                'Polygons'
+
+                ```
 
         Returns:
             This map (chainable).
+
+        See Also:
+            digitalearth.base.levels.levels_every: the shared interval-to-levels arithmetic.
         """
+        if levels is not None and interval is not None:
+            raise ValueError(
+                "contours() takes at most one of interval= or levels=; "
+                f"got interval={interval!r} and levels={levels!r}"
+            )
         return self._contour_layer(
             data,
             band=band,
             levels=levels,
-            filled=False,
+            interval=interval,
+            filled=filled,
             name=name,
             visible=visible,
             opts=opts,
@@ -576,6 +628,10 @@ class RasterMixin(_MixinBase):
         **opts: Any,
     ) -> Self:
         """Add filled contour bands of a raster band.
+
+        This tier's own spelling of ``contours(filled=True)``, which is the name the Tier-2 contract
+        declares and the one the web and static tiers answer to (#262). Prefer that; this is kept because it
+        is the name every script already written against this tier uses.
 
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
@@ -621,6 +677,7 @@ class RasterMixin(_MixinBase):
         band: int,
         levels: Any,
         filled: bool,
+        interval: Optional[float] = None,
         name: Optional[str] = None,
         visible: bool = True,
         derived: Optional[Mapping[str, Any]] = None,
@@ -639,6 +696,10 @@ class RasterMixin(_MixinBase):
             levels: Contour levels — an int (count) or explicit sequence; ``None`` auto-resolves.
             filled: Whether the bands between the levels are filled, which is also what the layer's kind
                 records: ``"filled_contours"`` against ``"contours"``.
+            interval: Spacing between levels, or ``None``. Recorded rather than resolved: which multiples of
+                it lie inside the band is a property of the band, which only the drawer reads. It reaches
+                the description mutually exclusive with ``levels`` — :meth:`contours` refuses both — so the
+                drawer never has to choose between them.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -680,6 +741,7 @@ class RasterMixin(_MixinBase):
                     "via": "contours",
                     "band": band,
                     "levels": describe(held, "levels", levels),
+                    "interval": describe(held, "interval", interval),
                     "filled": filled,
                     TIER_BUCKET: described_tier,
                     "opts": described_opts,

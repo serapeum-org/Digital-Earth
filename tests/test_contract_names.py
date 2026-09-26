@@ -147,11 +147,6 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 ("url",),
                 "a name and a URL both arrive through one overloaded provider= — #268",
             ),
-            ("interactive", "contours"): (
-                ("filled", "interval"),
-                "the filled variant is a separate filled_contours() here, and interval is not offered "
-                "at all — #262",
-            ),
             ("interactive", "layer_control"): (
                 ("layers", "position"),
                 "shares not one parameter with the web tier's — #264",
