@@ -90,3 +90,48 @@ class TestTheColormapSamplerIsShared:
             [1.0, 2.0, 3.0, 40.0], scheme="quantiles", k=2, cmap=colours
         )
         assert style["cmap"] == colours
+
+
+class TestTheBigDataCutoffDefaultsToTheCellBudget:
+    """Contract C8's per-unit default, asserted live for the tier that measures in cells.
+
+    ``tests/base/test_shared_tier_defaults.py`` asserts the 50 000-row constant is shared between the
+    interactive and web tiers; it cannot ask this one, because a scene needs PyVista. Nothing checked the
+    clause's words here, which is how it went on claiming a single shared default for ten times the number
+    (review M5).
+    """
+
+    def test_the_scene_starts_from_the_cell_budget(self):
+        """A fresh scene's attribute *is* ``DEFAULT_CELL_BUDGET``, not a literal that matches it today.
+
+        Test scenario:
+            The attribute is what every builder falls back to when the call passes no cutoff, so it is the
+            value a caller actually reduces at. ``is`` rather than ``==`` is what tells the shared constant
+            from a re-declared copy.
+        """
+        from digitalearth.three_d import Scene3D
+        from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+
+        scene = Scene3D(off_screen=True)
+        try:
+            started_from = scene.big_data_threshold
+        finally:
+            scene.close()
+        assert started_from is DEFAULT_CELL_BUDGET, (
+            f"the scene starts from {started_from!r}, not the module's cell budget"
+        )
+
+    def test_it_is_not_the_row_cutoff_the_2d_tiers_share(self):
+        """The two numbers count different things, so this tier must not read the row cutoff.
+
+        Test scenario:
+            Reading `DEFAULT_BIG_DATA_THRESHOLD` here would reduce an ordinary DEM tile — a 708x708 one is
+            499 849 cells against a 50 000-row cutoff — which is the picture the separate budget exists to
+            protect.
+        """
+        from digitalearth.base.bigdata import DEFAULT_BIG_DATA_THRESHOLD
+        from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+
+        assert DEFAULT_CELL_BUDGET != DEFAULT_BIG_DATA_THRESHOLD, (
+            "the cell budget and the row cutoff have converged, which contract C8 no longer claims"
+        )

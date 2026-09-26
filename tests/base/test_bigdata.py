@@ -16,6 +16,7 @@ from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD,
     validate_big_data_threshold,
 )
+from digitalearth.base.contract_clauses import clause
 
 CALLER = "InteractiveMap.points()"
 
@@ -274,4 +275,49 @@ class TestEveryTierWithTheCutoffIsListed:
         assert unlisted == [], (
             f"{unlisted} route a layer by size and are not in CUTOFF_TIERS, so contract C8 is asserted of "
             "them nowhere"
+        )
+
+
+class TestTheCutoffsDefaultIsPerUnitOfMeasure:
+    """Contract C8's wording about the default must be true of the 3-D tier too.
+
+    The clause said "one shared default", which was true while the cutoff existed only on the two 2-D tiers:
+    both read `DEFAULT_BIG_DATA_THRESHOLD`, 50 000 **rows**. The 3-D tier then took the same keyword over
+    `DEFAULT_CELL_BUDGET`, 500 000 **cells** — deliberately, because a row is one feature and a cell is one
+    triangle or one voxel, so one number could not mean both. The clause kept claiming a shared default
+    anyway, and nothing asserted its words for the tier that broke them.
+    """
+
+    def test_the_clause_names_both_defaults_rather_than_one(self):
+        """The rule must state a default per unit of measure, naming each number and its unit.
+
+        Test scenario:
+            A clause that says "one shared default" is checked by the drift guard for citation shape only —
+            nothing proves the sentence true. Reading the numbers out of the rule is what ties the wording to
+            the constants, so retuning either constant without restating the clause fails here.
+        """
+        rule = clause(8).rule
+        missing = [
+            wanted
+            for wanted in ("50 000", "500 000", "rows", "cells")
+            if wanted not in rule
+        ]
+        assert missing == [], (
+            f"contract C8 states the cutoff's default without naming {missing}: {rule}"
+        )
+
+    def test_the_two_defaults_are_different_quantities(self):
+        """The row cutoff and the cell budget are separate constants, and must not be collapsed.
+
+        Test scenario:
+            The other way to make the clause true is to converge the defaults. That would either reduce a
+            single DEM tile — hundreds of thousands of cells — or stop a 50 000-feature vector layer from
+            switching renderer. `three_d/bigdata.py` records the measurements behind the 500 000, so the
+            divergence is the deliberate half and the clause was the wrong half.
+        """
+        from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+
+        assert DEFAULT_CELL_BUDGET > DEFAULT_BIG_DATA_THRESHOLD, (
+            f"a cell budget of {DEFAULT_CELL_BUDGET} is not above the {DEFAULT_BIG_DATA_THRESHOLD}-row "
+            "cutoff, so the two no longer measure different things"
         )
