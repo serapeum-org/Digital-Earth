@@ -214,7 +214,10 @@ CORE: Tuple[Method, ...] = (
     ),
     Method(
         "set_bounds",
-        "Frame the figure on a region; None fits the data.",
+        (
+            "Frame the figure on a region — bounds=Bounds, or (west, south, east, north) in the display "
+            "CRS; None fits the data."
+        ),
         frozenset({"padding"}),
     ),
     Method(

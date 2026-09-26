@@ -162,9 +162,10 @@ class ProjectionMixin(_MixinBase):
             bounds: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to
                 the display CRS, which is the point of passing one — or a bare
                 ``(west, south, east, north)`` sequence taken to be in the display CRS. That is the bbox
-                order :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox`, the web tier's ``set_bounds``
-                and pyramids all use; the static tier's matplotlib ordering is its own history, not a
-                cross-tier convention.
+                order :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox` and pyramids use, and it is the
+                order **every** tier's ``set_bounds`` reads: the static tier kept matplotlib's
+                ``[xmin, xmax, ymin, ymax]`` for one branch, so the same sequence framed two different
+                rectangles across the 2-D tiers, and that ordering is gone rather than aliased.
 
                 ``None`` (the default) **fits the map to its data**: the union of what the panel's data
                 layers cover, read from the elements themselves. Only the ``data`` band counts — a tile

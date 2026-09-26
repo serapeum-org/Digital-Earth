@@ -636,9 +636,10 @@ _UNFRAMED_LIMITS: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
 def _axes_extent(axes: Any) -> Optional[Tuple[float, float, float, float]]:
     """Return what an axes is looking at as ``(xmin, xmax, ymin, ymax)``, or ``None`` when it is unframed.
 
-    The ordering is matplotlib's own — the one
-    :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` takes — and the values are in
-    the display CRS, so the frame is read and written back without a reprojection.
+    The ordering is matplotlib's own, because the axes are what it is read off and written back to; it is
+    **not** what :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` takes, which reads
+    ``(west, south, east, north)`` like every other tier. The values are in the display CRS, so the frame is
+    read and written back without a reprojection.
 
     Args:
         axes: The axes to read.

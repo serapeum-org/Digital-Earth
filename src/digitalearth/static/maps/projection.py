@@ -188,8 +188,9 @@ def _drawn_extent(
 class _Frame(NamedTuple):
     """The rectangle one :meth:`ProjectionMixin.set_bounds` call settles on, and which way its axes run.
 
-    Three spellings arrive at that method — a `Bounds` in any CRS, a matplotlib-ordered sequence, and the
-    ``None`` that fits the data — and exactly two things are done with whichever one came: the axes limits
+    Three spellings arrive at that method — a `Bounds` in any CRS, a bare ``(west, south, east, north)``
+    sequence, and the ``None`` that fits the data — and exactly two things are done with whichever one came:
+    the axes limits
     are set from it, and it is recorded as the region the view reports. A rectangle alone cannot carry both,
     because the sequence form may legitimately run backwards to invert an axis and a `Bounds` refuses corners
     the wrong way round. So the direction travels beside the rectangle rather than inside it.
@@ -403,18 +404,21 @@ class ProjectionMixin(_MixinBase):
 
     def set_bounds(
         self,
-        bbox: Optional[Union[Bounds, Sequence[float]]] = None,
+        bounds: Optional[Union[Bounds, Sequence[float]]] = None,
         *,
         padding: float = 0.0,
     ) -> Self:
         """Frame the figure on a region, or on everything it draws — the Core contract's framing method.
 
         Args:
-            bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to the
-                display CRS, which is the point of passing one — or a bare ``[xmin, xmax, ymin, ymax]``
-                sequence in matplotlib axes order, assumed to be in the display CRS already. The sequence
-                form is accepted because that ordering was this method's contract; prefer `Bounds`, which
-                states both the ordering and the CRS instead of leaving them to position and assumption.
+            bounds: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to
+                the display CRS, which is the point of passing one — or a bare
+                ``(west, south, east, north)`` sequence taken to be in the display CRS already. That is bbox
+                order: the order `Bounds` holds its own four numbers in, the order
+                :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox` writes and
+                :meth:`~digitalearth.base.spec.bounds.Bounds.from_bbox` reads, and the order the interactive
+                and web tiers' ``set_bounds`` take. Prefer `Bounds` even so — it states the CRS as well as
+                the ordering, instead of leaving either to position and assumption.
 
                 ``None`` (the default) **fits the figure to its data**: the union of what the panel's data
                 layers cover, measured from the artists they actually put on the axes. Only the ``data``
@@ -428,22 +432,28 @@ class ProjectionMixin(_MixinBase):
                 ``padding`` is a number of screen pixels.
 
         Returns:
-            This map, so the call chains (``Map(crs=3857).set_bounds(bbox).coastlines()``). The Core
+            This map, so the call chains (``Map(crs=3857).set_bounds(bounds).coastlines()``). The Core
             declares ``returns="self"`` for this name, and every tier answers that way: the spelling
             this tier used to carry returned ``None``, so one line worked on one tier and raised on another.
 
         Raises:
-            ValueError: if the sequence form does not hold exactly four values; if ``bbox=None`` and the
+            ValueError: if the sequence form does not hold exactly four values; if ``bounds=None`` and the
                 figure draws nothing with an extent, because silently doing nothing is indistinguishable
                 from the call being dropped; or, from `Bounds`, for a non-finite edge or a ``padding``
                 below ``-0.5``, which would turn the frame inside out.
 
         Notes:
-            A **flipped** pair is honoured in the sequence form: ``[10, 0, 0, 10]`` inverts the x axis, which
-            is how matplotlib expresses ``invert_xaxis`` through the limits, and ``padding`` grows such an
-            axis outwards rather than inwards. :attr:`viewport` reports the *region* either way round: a
-            `Bounds` refuses corners the wrong way round, and the direction an axis runs in is a property of
-            the axes rather than of the region shown.
+            A **flipped** pair is honoured in the sequence form: an ``east`` west of its ``west`` inverts the
+            x axis, which is how matplotlib expresses ``invert_xaxis`` through the limits, and ``padding``
+            grows such an axis outwards rather than inwards. :attr:`viewport` reports the *region* either way
+            round: a `Bounds` refuses corners the wrong way round, and the direction an axis runs in is a
+            property of the axes rather than of the region shown.
+
+            The sequence used to be read as matplotlib's own ``[xmin, xmax, ymin, ymax]``, which is the order
+            the axes limits are set in and the order the method carried under its old name. It was the only
+            spelling in the package that read four bare numbers that way, so one call framed two different
+            rectangles across the 2-D tiers; the matplotlib ordering is reachable from `Bounds` alone now,
+            through :meth:`~digitalearth.base.spec.bounds.Bounds.as_mpl`.
 
         Examples:
             - A rectangle in another CRS is converted, so the frame lands where the data is:
@@ -458,13 +468,14 @@ class ProjectionMixin(_MixinBase):
                 111319
 
                 ```
-            - The bare sequence is matplotlib's own ordering, in the display CRS, and the view reports it:
+            - The bare sequence is ``(west, south, east, north)``, in the display CRS, and the view reports it
+              back in the order it was written:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=3857)
-                >>> _ = m.set_bounds([0.0, 100.0, 0.0, 50.0])
+                >>> _ = m.set_bounds([0.0, 0.0, 100.0, 50.0])
                 >>> [float(v) for v in m.ax.get_xlim()], [float(v) for v in m.ax.get_ylim()]
                 ([0.0, 100.0], [0.0, 50.0])
                 >>> m.viewport.bounds.as_bbox()
@@ -477,13 +488,13 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=3857)
-                >>> _ = m.set_bounds([0.0, 10.0, 0.0, 10.0], padding=0.1)
+                >>> _ = m.set_bounds([0.0, 0.0, 10.0, 10.0], padding=0.1)
                 >>> [float(v) for v in m.ax.get_xlim()]
                 [-1.0, 11.0]
 
                 ```
         """
-        frame = self._frame_asked(bbox, padding)
+        frame = self._frame_asked(bounds, padding)
         xmin, xmax, ymin, ymax = frame.limits()
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
@@ -492,7 +503,7 @@ class ProjectionMixin(_MixinBase):
 
     def _frame_asked(
         self,
-        bbox: Optional[Union[Bounds, Sequence[float]]],
+        bounds: Optional[Union[Bounds, Sequence[float]]],
         padding: float,
     ) -> "_Frame":
         """Resolve what a caller asked for into one rectangle in the display CRS, padded.
@@ -503,8 +514,8 @@ class ProjectionMixin(_MixinBase):
         twice and none can skip it.
 
         Args:
-            bbox: What the caller passed — a `Bounds`, a matplotlib-ordered sequence, or ``None`` to fit the
-                data.
+            bounds: What the caller passed — a `Bounds`, a ``(west, south, east, north)`` sequence, or
+                ``None`` to fit the data.
             padding: The fraction to grow the rectangle by.
 
         Returns:
@@ -514,24 +525,28 @@ class ProjectionMixin(_MixinBase):
             ValueError: for a sequence that is not four values, for ``None`` with nothing to frame on, or
                 from `Bounds` for a non-finite edge or a padding that would invert the rectangle.
         """
-        if bbox is None:
+        if bounds is None:
             return _Frame(self._fitted_box(padding))
-        if isinstance(bbox, Bounds):
+        if isinstance(bounds, Bounds):
             # to_crs is a no-op when the CRSs already match. Without it a rectangle that carries its CRS
             # would be trusted to be in the display one, which is exactly the mistake Bounds exists to stop.
-            return _Frame(_padded(bbox.to_crs(self.crs), padding))
-        values = [float(value) for value in bbox]
+            return _Frame(_padded(bounds.to_crs(self.crs), padding))
+        values = [float(value) for value in bounds]
         if len(values) != 4:
             raise ValueError(
-                f"set_bounds needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
+                f"set_bounds needs exactly 4 values as (west, south, east, north); got {len(values)}"
             )
-        xmin, xmax, ymin, ymax = values
+        west, south, east, north = values
         # Normalised into a Bounds so the padding and the recorded region are the same arithmetic every
         # other spelling gets; which way each axis runs travels beside it, because a Bounds cannot hold it.
         box = Bounds(
-            min(xmin, xmax), min(ymin, ymax), max(xmin, xmax), max(ymin, ymax), self.crs
+            min(west, east),
+            min(south, north),
+            max(west, east),
+            max(south, north),
+            self.crs,
         )
-        return _Frame(_padded(box, padding), xmax < xmin, ymax < ymin)
+        return _Frame(_padded(box, padding), east < west, north < south)
 
     def _fitted_box(self, padding: float) -> Bounds:
         """Return the region the panel's own data layers cover, padded.
@@ -775,7 +790,9 @@ class ProjectionMixin(_MixinBase):
     def set_global(self) -> None:
         """Set the axes extent to the full projection domain (the whole globe/world)."""
         _, xlim, ylim = self._frame()
-        self.set_bounds([xlim[0], xlim[1], ylim[0], ylim[1]])
+        # `_frame` answers in matplotlib's pairs; `set_bounds` reads (west, south, east, north), so the
+        # four values are re-ordered here rather than handed over in the order they arrived.
+        self.set_bounds([xlim[0], ylim[0], xlim[1], ylim[1]])
 
     def _apply_frame(self) -> Any:
         """Draw the projection boundary + graticule and clip the layers to it (once, at render time).

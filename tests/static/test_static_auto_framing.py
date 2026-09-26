@@ -270,12 +270,12 @@ class TestPadding:
         assert _limits(flat) == ((-5.0, 15.0), (-10.0, 30.0)), _limits(flat)
 
     def test_a_bare_sequence_is_grown_the_same_way(self, flat):
-        """The matplotlib-ordered form takes it too.
+        """The ``(west, south, east, north)`` form takes it too.
 
         Args:
             flat: A map in degrees.
         """
-        flat.set_bounds([0.0, 10.0, 0.0, 20.0], padding=0.5)
+        flat.set_bounds([0.0, 0.0, 10.0, 20.0], padding=0.5)
         assert _limits(flat) == ((-5.0, 15.0), (-10.0, 30.0)), _limits(flat)
 
     def test_no_padding_is_the_default_so_a_named_frame_is_exactly_itself(self, flat):
@@ -284,7 +284,7 @@ class TestPadding:
         Args:
             flat: A map in degrees.
         """
-        flat.set_bounds([0.0, 100.0, 0.0, 50.0])
+        flat.set_bounds([0.0, 0.0, 100.0, 50.0])
         assert _limits(flat) == ((0.0, 100.0), (0.0, 50.0)), _limits(flat)
 
     def test_a_padding_that_would_invert_the_frame_is_refused(self, flat):
@@ -294,7 +294,7 @@ class TestPadding:
             flat: A map in degrees.
         """
         with pytest.raises(ValueError, match="would invert"):
-            flat.set_bounds([0.0, 10.0, 0.0, 10.0], padding=-0.9)
+            flat.set_bounds([0.0, 0.0, 10.0, 10.0], padding=-0.9)
 
 
 class TestTheViewReportsTheFrame:

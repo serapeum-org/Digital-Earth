@@ -58,10 +58,10 @@ def test_field_renders_in_display_crs(dataset):
 
 
 def test_set_bounds(dataset):
-    """set_bounds applies the given bbox to the axes limits."""
+    """set_bounds applies the given (west, south, east, north) rectangle to the axes limits."""
     m = Map(crs=3857)
     m.field(dataset)
-    m.set_bounds([0.0, 100.0, 0.0, 50.0])
+    m.set_bounds([0.0, 0.0, 100.0, 50.0])
     assert m.ax.get_xlim() == (0.0, 100.0)
     assert m.ax.get_ylim() == (0.0, 50.0)
 
