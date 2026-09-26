@@ -39,9 +39,11 @@ CONTROL_POSITIONS: Tuple[str, ...] = (
 )
 
 #: The controls a layer control may expose, as the one name each goes by. ``"reorder"`` is deliberately
-#: **not** here: no tier can reorder layers (the registry has no stable per-layer handle to reorder by), so
-#: listing it would advertise a control every tier would then have to refuse. It stays the interactive tier's
-#: own ``reorder=`` flag, which says ``NotImplementedError`` in those words.
+#: **not** here, and the reason is the **widget**, not the operation: reordering layers is
+#: ``move_layer(layer_id, index)``, which order 23 gave all four tiers, but no tier builds the drag control a
+#: layer switcher would need to expose it — so listing it would advertise a control every tier would then have
+#: to refuse. It stays the interactive tier's own ``reorder=`` flag, which says ``NotImplementedError`` in
+#: those words.
 LAYER_CONTROLS: Tuple[str, ...] = ("visibility", "opacity", "basemap")
 
 #: The one control that is not optional. A layer control whose per-layer toggle was dropped is a box in the

@@ -10,6 +10,9 @@ cannot build a control says so **by name** rather than accepting the request and
 how two of the interactive tier's own flags came to look implemented (#242, #244).
 """
 
+import ast
+import pathlib
+
 import pytest
 
 from digitalearth.base.controls import (
@@ -28,8 +31,10 @@ class TestTheVocabularyItself:
     """Two tables a tier reads rather than re-spells."""
 
     def test_reorder_is_not_a_control(self):
-        """No tier can reorder layers, so advertising it would only create something to refuse."""
-        assert "reorder" not in LAYER_CONTROLS
+        """No tier builds a drag widget, so advertising the control would only create something to refuse."""
+        assert "reorder" not in LAYER_CONTROLS, (
+            f"reorder names an operation, not a widget any tier draws: {list(LAYER_CONTROLS)}"
+        )
 
     def test_visibility_is_one_of_the_controls_it_requires(self):
         """The mandatory control has to be a control, or nothing could ever satisfy the rule."""
@@ -128,3 +133,96 @@ class TestWhatATierWillBuild:
         with pytest.raises(ValueError) as refused:
             resolved_controls(["nonsense"], offered=LAYER_CONTROLS, caller=CALLER)
         assert CALLER in str(refused.value), refused.value
+
+
+class TestTheReorderRationaleIsStillTrue:
+    """M4 — the reason `"reorder"` is omitted must be a reason that still holds.
+
+    The `#:` comment on :data:`LAYER_CONTROLS` said "no tier can reorder layers (the registry has no stable
+    per-layer handle to reorder by)". Order 23 gave all four tiers `move_layer(layer_id, index)` — layers are
+    addressed by id and draw order is manipulated by it — so the blocker the comment cites was removed on the
+    same branch the comment was written on. This is the file that decides the vocabulary every tier shares,
+    so a false reason here is worse than ordinary stale prose.
+    """
+
+    #: The tier modules that define `move_layer`, read as source so no engine has to be installed.
+    MOVERS = (
+        "static/scene.py",
+        "interactive/base.py",
+        "web/base.py",
+        "three_d/base.py",
+    )
+
+    @staticmethod
+    def _rationale() -> str:
+        """The `#:` doc comment block that precedes `LAYER_CONTROLS`.
+
+        Returns:
+            The comment lines joined into one string, with the `#:` markers stripped. Read from the source
+            because `#:` comments do not exist at runtime — the same way
+            `tests/base/test_default_basemap.py` reads the basemap constant's.
+        """
+        from digitalearth.base import controls
+
+        lines = pathlib.Path(controls.__file__).read_text(encoding="utf-8").splitlines()
+        index = next(
+            number
+            for number, line in enumerate(lines)
+            if line.startswith("LAYER_CONTROLS")
+        )
+        block = []
+        while index > 0 and lines[index - 1].startswith("#:"):
+            index -= 1
+            block.insert(0, lines[index].removeprefix("#:").strip())
+        return " ".join(block)
+
+    def test_it_does_not_cite_the_handle_order_23_added(self):
+        """The omission must not be explained by a missing per-layer handle, which now exists.
+
+        Test scenario:
+            A caller reading this comment is told reordering is impossible anywhere. It is not: it is
+            `move_layer`, on every tier. What no tier has is the *widget* — the drag control a layer switcher
+            would need — which is a different claim and the one that is still true.
+        """
+        rationale = self._rationale()
+        stale = [
+            phrase
+            for phrase in ("stable per-layer handle", "no tier can reorder")
+            if phrase in rationale
+        ]
+        assert stale == [], (
+            f"the reorder rationale still cites {stale}, which order 23 removed: {rationale}"
+        )
+
+    def test_it_names_the_reorder_the_tiers_do_have(self):
+        """The comment has to point at `move_layer`, so the omission reads as "no widget", not "no reorder"."""
+        rationale = self._rationale()
+        assert "move_layer" in rationale, (
+            f"the reorder rationale must name the programmatic reorder callers do have: {rationale}"
+        )
+
+    @pytest.mark.parametrize("module", MOVERS, ids=lambda value: value)
+    def test_every_tier_defines_the_reorder_by_id(self, module):
+        """The fact that makes the old reason false: all four tiers take a layer id and an index.
+
+        Args:
+            module: The tier module, relative to `src/digitalearth`.
+
+        Test scenario:
+            Parsed rather than imported, because three of the four need an engine the lean environment has
+            no reason to carry — and the claim is about the surface, which the source states.
+        """
+        root = pathlib.Path(__file__).resolve().parents[2] / "src" / "digitalearth"
+        tree = ast.parse((root / module).read_text(encoding="utf-8"))
+        movers = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "move_layer"
+        ]
+        assert movers != [], (
+            f"{module} defines no move_layer for the rationale to point at"
+        )
+        taken = [arg.arg for arg in movers[0].args.args]
+        assert taken[1:] == ["layer_id", "index"], (
+            f"{module}'s move_layer takes {taken[1:]}, not the (layer_id, index) handle"
+        )
