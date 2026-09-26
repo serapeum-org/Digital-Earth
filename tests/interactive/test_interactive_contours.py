@@ -18,6 +18,10 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.interactive import InteractiveMap
 
+pytest.importorskip(
+    "geoviews", reason="the interactive tier needs the interactive environment"
+)
+
 #: The levels the checks trace at, chosen inside the fixture's range so every one draws something. The same
 #: three the static tier's contour checks use, and the same three an interval of 100 finds there.
 LEVELS = [100.0, 200.0, 300.0]

@@ -13,6 +13,10 @@ record beside it — so a change reached a record and never the picture (review 
 import pytest
 
 from digitalearth.interactive import InteractiveMap
+
+pytest.importorskip(
+    "geoviews", reason="the interactive tier needs the interactive environment"
+)
 from tests.base.layer_management import (
     BOTTOM,
     TOP,
