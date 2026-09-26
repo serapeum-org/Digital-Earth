@@ -6,10 +6,12 @@ and placed by its lon/lat corner coordinates. That is the default, and the only 
 own — every pixel is inside the HTML.
 
 **A raster too big to inline takes a tiled route instead (#189).** ``tiles="xyz"`` writes a
-``{z}/{x}/{y}.png`` pyramid beside the page and points a MapLibre ``raster`` source at it; ``tiles="cog"``
-writes one Cloud-Optimized GeoTIFF and addresses it through a ``cog://`` protocol the page registers. Both
-change what this tier *produces*: the output is a **folder** — the HTML plus the pyramid or the COG — rather
-than one file, which is why neither is the default and why the caller names the destination. Above
+``{z}/{x}/{y}.png`` pyramid beside the page and points a MapLibre ``raster`` source at it, needing nothing of
+the page; ``tiles="cog"`` writes one Cloud-Optimized GeoTIFF and addresses it as ``cog://<file>``, which only
+resolves on a page that has registered a ``cog://`` protocol — MapLibre has none built in, and
+``WebMapBase.save`` has no hook to add the script, so that route is for a map embedded in a page somebody
+else writes. Both change what this tier *produces*: the output is a **folder** — the HTML plus the pyramid or
+the COG — rather than one file, which is why neither is the default and why the caller names the destination. Above
 :data:`_LARGE_RASTER_PIXELS` the inline path is **refused** rather than warned about: 4 M pixels is a
 2000x2000 raster, so a national-scale band used to be warned about and then inlined anyway, into a
 multi-hundred-megabyte page.
@@ -1239,11 +1241,15 @@ class RasterMixin(_MixinBase):
                 the page is one self-contained file — and is refused above :data:`_LARGE_RASTER_PIXELS`
                 cells, because that page would be hundreds of megabytes (#189). ``"xyz"`` writes a
                 ``{z}/{x}/{y}.png`` pyramid under ``tiles_path`` and points a MapLibre ``raster`` source at
-                it, with no client-side dependency. ``"cog"`` writes one Cloud-Optimized GeoTIFF there
-                instead and addresses it as ``cog://<file>``, which needs a COG protocol registered on the
-                page (MapLibre has no built-in reader for one). **Either route makes the output a folder** —
-                the HTML plus the pyramid or the COG — rather than a single file, and the page addresses what
-                sits beside it, so save it into the same directory.
+                it, with **no client-side dependency** — it is the route that works as written. ``"cog"``
+                writes one Cloud-Optimized GeoTIFF there instead and addresses it as ``cog://<file>``: fewer,
+                larger files, read by range request, but MapLibre has no built-in reader for one, so the page
+                showing it must register a ``cog://`` protocol itself. This tier cannot put that script in a
+                page it writes — :meth:`~digitalearth.web.base.WebMapBase.save` has no hook for one — so take
+                the COG route when you control the page the map is embedded in, and ``"xyz"`` when
+                :meth:`~digitalearth.web.base.WebMapBase.save` is the whole pipeline. **Either route makes
+                the output a folder** — the HTML plus the pyramid or the COG — rather than a single file, and
+                the page addresses what sits beside it, so save it into the same directory.
             tiles_path: Where a tiled route writes: the pyramid's root directory for ``"xyz"``, the ``.tif``
                 to write for ``"cog"``. Required by both, and ignored by the inline default.
             zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid. ``None`` derives
