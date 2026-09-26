@@ -118,3 +118,45 @@ class TestAnIntervalIsSpacing:
         assert "at most one of interval= or levels=" in str(refused.value), (
             refused.value
         )
+
+
+class TestAnIntervalTooFineToDrawIsRefused:
+    """A spacing that would cut more levels than a figure can carry is refused before the walk runs."""
+
+    def test_the_static_tier_refuses_by_count_like_the_tier_it_shares_the_walk_with(
+        self, drawn
+    ):
+        """An interval fine enough to cut millions of levels is refused, naming the ceiling.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The fixture runs 0-399, so `interval=1e-5` crosses ~39.9 million levels. Walking them costs
+            seconds and gigabytes of `float64`, and a finer interval costs proportionally more, so the
+            spacing is refused by count rather than walked. Asserted against the shared `MAX_LEVELS`
+            rather than a literal, so this tier and the interval walk cannot drift apart again.
+        """
+        from digitalearth.base.levels import MAX_LEVELS
+
+        with pytest.raises(ValueError) as refused:
+            drawn.contours(_raster(), interval=1e-5)
+        message = str(refused.value)
+        assert str(MAX_LEVELS) in message, (
+            f"the refusal should name the ceiling {MAX_LEVELS}; got {message}"
+        )
+
+    def test_a_spacing_the_band_can_carry_still_draws(self, drawn):
+        """The ceiling refuses only the unreasonable: an ordinary spacing is untouched.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The same fixture at `interval=100.0` traces three levels, far under the ceiling. This is the
+            positive control for the refusal above — a guard that refused everything would pass without it.
+        """
+        artist = drawn.contours(_raster(), interval=100.0)
+        assert len(artist.levels) >= 3, (
+            f"an ordinary interval should still draw; got {artist.levels}"
+        )

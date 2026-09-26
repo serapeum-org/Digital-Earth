@@ -22,6 +22,7 @@ from matplotlib import colormaps
 
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
+from digitalearth.base.levels import levels_every
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import Source, get_stack
 from digitalearth.base.spec import Bounds, LayerSpec, RenderTarget, Symbology
@@ -338,48 +339,6 @@ def _drawing_limits(limits: Any) -> Any:
     ]
 
 
-def _levels_every(values: Any, interval: float) -> List[float]:
-    """Return the multiples of ``interval`` that fall inside a band's finite range.
-
-    The static counterpart of what ``interval=`` means on the web tier, where pyramids walks the band by the
-    same spacing. Only the multiples *inside* the range are returned: a level at or beyond an extreme traces
-    the frame's edge or nothing, so handing matplotlib one would add a contour a reader cannot see.
-
-    Args:
-        values: The band's values, as the drawer read them.
-        interval: The spacing between levels, in the band's own units.
-
-    Returns:
-        The levels, ascending.
-
-    Raises:
-        ValueError: when ``interval`` is not a positive, finite number, or when no multiple of it lies
-            inside the band — either of which would otherwise surface from inside matplotlib as a complaint
-            about an empty level list.
-    """
-    if not isfinite(interval) or interval <= 0:
-        raise ValueError(
-            f"contours() takes interval= as a positive spacing in the band's units; got {interval!r}"
-        )
-    finite = np.asarray(values, dtype="float64")
-    finite = finite[np.isfinite(finite)]
-    if finite.size == 0:
-        raise ValueError(
-            "contours(interval=) has no values to space levels through: the band is empty"
-        )
-    low, high = float(finite.min()), float(finite.max())
-    first = np.floor(low / interval) + 1.0
-    last = np.ceil(high / interval) - 1.0
-    steps = np.arange(first, last + 1.0) * interval
-    inside = [float(level) for level in steps if low < level < high]
-    if not inside:
-        raise ValueError(
-            f"contours(interval={interval!r}) crosses no level inside the band's range "
-            f"({low!r} to {high!r}); pass a smaller interval, or levels= instead"
-        )
-    return inside
-
-
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -430,7 +389,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # range, and the builder records a description without reading the data.
         interval = props.get("interval")
         levels = (
-            _levels_every(z_values, interval)
+            levels_every(z_values, interval)
             if interval is not None
             else style.get("levels")  # the variable's canonical contour levels
         )
