@@ -314,6 +314,29 @@ class TestAViewCanBeRegisteredForOneBlock:
     is symmetry rather than a new idea.
     """
 
+    @staticmethod
+    def _entered(row: NamedView) -> None:
+        """Enter and leave the block for one row, doing nothing inside it.
+
+        Args:
+            row: The row to install for the block.
+        """
+        with temporary_view(row):
+            pass
+
+    @staticmethod
+    def _failing_block(row: NamedView) -> None:
+        """Enter the block for one row and fail inside it.
+
+        Args:
+            row: The row to install for the block.
+
+        Raises:
+            RuntimeError: always — what is being asked is what the table looks like afterwards.
+        """
+        with temporary_view(row):
+            raise RuntimeError("the block failed")
+
     def test_the_view_resolves_inside_the_block_and_is_gone_after(self):
         """The name is registered for the block and the table is put back when it ends."""
         row = NamedView("scratch_top", "view_xy", "from directly above, for one block")
@@ -348,8 +371,7 @@ class TestAViewCanBeRegisteredForOneBlock:
         """A failing block must not leave its view behind — which is the whole reason for the context manager."""
         row = NamedView("scratch_side", "view_yz", "from the side, for one block")
         with pytest.raises(RuntimeError):
-            with temporary_view(row):
-                raise RuntimeError("the block failed")
+            self._failing_block(row)
         assert "scratch_side" not in view_names(), (
             f"a raising block leaked the name: {view_names()}"
         )
@@ -364,10 +386,7 @@ class TestAViewCanBeRegisteredForOneBlock:
         """
         row = NamedView("nowhere", "view_from_behind", "nowhere")
         with pytest.raises(ValueError) as excinfo:
-            with temporary_view(
-                row
-            ):  # pragma: no cover - the block must not be entered
-                pass
+            self._entered(row)
         assert "view_from_behind" in str(excinfo.value), (
             f"the refusal must name the method it could not find, got: {excinfo.value}"
         )

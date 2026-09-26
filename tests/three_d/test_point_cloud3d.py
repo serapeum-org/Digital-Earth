@@ -136,10 +136,11 @@ class TestKeywordsTheDrawerWouldOverwrite:
             overwrote it from `size` — so `point_size=40` rendered at 5.0. Every other tier refuses the
             spelling because the parameter is gone from the signature; this one has to refuse it by name.
         """
+        pts = self._table()
         scene = Scene3D(off_screen=True)
         try:
             with pytest.raises(TypeError) as excinfo:
-                scene.point_cloud(self._table(), point_size=40)
+                scene.point_cloud(pts, point_size=40)
         finally:
             scene.close()
         message = str(excinfo.value)
