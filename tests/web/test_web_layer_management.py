@@ -841,3 +841,85 @@ class TestTheLayerManagementRefusalsShareOneVocabulary:
             f"{moved.value} against {removed.value}"
         )
         m.close()
+
+
+class TestWhatReplaceLayerRefusesAndSaysItRefuses:
+    """`replace_layer` takes a description, and the four tiers gave four answers to an argument that is not one.
+
+    The static tier settled the shape: refuse by **type**, naming the method and what was passed. This tier read
+    the id out of the argument with `getattr(layer, "id", None)`, so the id lookup failed first and answered
+    "no layer None on this map" — an id the caller never wrote, about an argument that was not a description at
+    all (review R2-M9).
+    """
+
+    @pytest.fixture
+    def labelled(self):
+        """Yield a map with one text layer, so a refusal has an id list it could have blamed instead.
+
+        Yields:
+            The map.
+        """
+        built = WebMap().text(4.9, 52.4, "Amsterdam", name="ams")
+        yield built
+        built.close()
+
+    def test_an_id_passed_where_the_description_belongs_is_refused_by_type(
+        self, labelled
+    ):
+        """The mistake this catches is nearly always the id written where the description belongs.
+
+        Args:
+            labelled: A map with one text layer.
+        """
+        with pytest.raises(ValueError, match=r"needs a LayerSpec.*got str"):
+            labelled.replace_layer("ams")
+
+    def test_the_refusal_names_what_was_passed_rather_than_a_missing_id(self, labelled):
+        """The message has to point at the argument, not at the layer list.
+
+        Args:
+            labelled: A map with one text layer.
+        """
+        with pytest.raises(ValueError) as refusal:
+            labelled.replace_layer(42)
+        assert "no layer" not in str(refusal.value), (
+            f"the refusal blamed a missing layer: {refusal.value}"
+        )
+
+    def test_the_two_tiers_refuse_it_with_one_sentence(self, labelled):
+        """Read against the static tier rather than against a literal, since agreeing is the whole point.
+
+        Args:
+            labelled: A map with one text layer.
+
+        Test scenario:
+            Four tiers gave four classes for one bad argument. The static tier's wording is the one its round-1
+            fix settled on, so the two messages must differ only in the class name they open with.
+        """
+        from digitalearth.static import Map
+
+        drawn = Map()
+        drawn.text(4.9, 52.4, "Amsterdam", name="ams")
+        with pytest.raises(ValueError) as here:
+            labelled.replace_layer("ams")
+        with pytest.raises(ValueError) as there:
+            drawn.replace_layer("ams")
+        drawn.close()
+        assert str(here.value).removeprefix("WebMap") == str(there.value).removeprefix(
+            "Map"
+        ), f"{here.value} against {there.value}"
+
+    def test_the_docstring_names_the_class_the_capability_gate_raises(self):
+        """A `Raises:` block naming `KeyError` for the kind refusal sends a caller to the wrong `except`.
+
+        Test scenario:
+            `Capabilities.require` raises `CapabilityError`, which subclasses `ValueError` and not `KeyError`,
+            and the docstring said the unknown-kind refusal was a `KeyError`. The static tier's was corrected
+            in round 1; this reads the two against each other.
+        """
+        from digitalearth.static import Map
+
+        here = WebMap.replace_layer.__doc__ or ""
+        there = Map.replace_layer.__doc__ or ""
+        assert "CapabilityError:" in here, here[here.find("Raises:") :]
+        assert "CapabilityError:" in there, there[there.find("Raises:") :]
