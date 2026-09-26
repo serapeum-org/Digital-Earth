@@ -131,13 +131,25 @@ class TestAnIntervalTooFineToDrawIsRefused:
             f"the refusal must name the ceiling it exceeded, got: {message}"
         )
 
+    #: How many levels ``interval=1e-3`` asks for across :attr:`DEM`. Counted independently of the function:
+    #: the multiples of 0.001 strictly inside 0-8848 run 0.001 to 8847.999, which is 8 848 000 of them less
+    #: the one sitting on 8848 — 8 847 999. The refusal has to name this number, because it is the one that
+    #: tells a caller they typed metres where they meant kilometres.
+    ASKED = 8_847_999
+
     def test_the_refusal_names_how_many_levels_were_asked_for(self):
-        """The count is the number that tells a caller they meant kilometres, so it has to be in the message."""
+        """The count is the number that tells a caller they meant kilometres, so it has to be in the message.
+
+        Test scenario:
+            The first version of this check asserted that *some* token in the message was at least as long as
+            the count's digits. The message's first token is `contours(interval=0.001)`, 24 characters, so it
+            passed with the count deleted from the message entirely (review R2-M4). The count itself is
+            asserted instead.
+        """
         with pytest.raises(ValueError) as excinfo:
             levels_every(self.DEM, 1e-3)
-        asked = len(str(8_847_999))
-        assert any(len(token) >= asked for token in str(excinfo.value).split()), (
-            f"no token in the refusal is as long as the level count it should name: {excinfo.value}"
+        assert str(self.ASKED) in str(excinfo.value), (
+            f"the refusal must name the {self.ASKED} levels it would have cut, got: {excinfo.value}"
         )
 
     def test_it_is_refused_before_the_array_is_built(self):
