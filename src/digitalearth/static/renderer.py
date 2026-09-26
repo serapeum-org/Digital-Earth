@@ -28,14 +28,19 @@ drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as
 a figure is refused half-way — the web and interactive tiers rebuild their engine object on every render and
 can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
 
-**:meth:`Renderer.apply` is record-only in this wave.** It reaches the axes and this module's record of what
-is on it; it does not reach the scene's **description** — the layer tree, the sources, and so what
-:attr:`~digitalearth.static.scene.Scene.figure_spec` reports. (It does touch the scene's colorbar registry,
-because a drawer registers its mappable there and a rollback has to put that back.) Nothing in ``src/``
-calls it — a builder draws through
-:meth:`Renderer.draw_layer` — so a map's description is written by its builders and never by a reconcile.
-Wave 7 (order 23) routes a map-level change through it, and the scene's own state follows then. Until it
-does, read every ``apply`` here as "the artists and the record", never as "what the map reports".
+**:meth:`Renderer.apply` has a caller.** It reaches the axes and this module's record of what is on it,
+and it reached nothing else for a wave: no code in ``src/`` called it, so a map's description was written by
+its builders and never by a reconcile. :meth:`~digitalearth.static.scene.Scene._change` is that caller now —
+the path ``add_layer``, ``get_layer``, ``remove_layer``, ``set_visible``, ``move_layer`` and
+``replace_layer`` take — and it installs the scene's layer tree and its sources once this has returned, so a
+figure this refuses is never one the map describes. ``apply`` itself still writes only the artists, this
+record and the scene's colorbar registry (a drawer registers its mappable there, and a rollback has to put
+that back): read it as "the picture", and the description as what ``_change`` moves with it.
+
+**Draw order reaches the picture.** ``FigureDiff`` reports ``order`` and no renderer acted on it, so a
+reorder changed every tier's description and none of their figures. :meth:`Renderer._repaint` is this tier's
+half: matplotlib paints the artists of one z-order in the order they were added, so re-arranging that list
+re-arranges the picture.
 
 **The drawer table is keyed by kind and then by recipe.** Several builders draw one kind: ``imshow`` and
 ``block`` are both a field render, and ``choropleth``, ``voronoi``, ``cartogram``, ``quadtree`` and
@@ -748,11 +753,11 @@ class Renderer:
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
         """Bring what the axes shows from one figure to another.
 
-        **Record-only, in this wave.** It reconciles the artists on the axes and this renderer's own
-        record of them, and nothing else: the scene's layer tree, its sources and what
-        :attr:`~digitalearth.static.scene.Scene.figure_spec` reports are untouched, so a map that has
-        applied a figure still describes the one its builders made. Nothing in ``src/`` calls this yet —
-        routing a map-level change through it is Wave 7 (order 23), and the description follows then.
+        **This is the picture, not the description.** It reconciles the artists on the axes and this
+        renderer's own record of them: the scene's layer tree and its sources are untouched, so a caller who
+        applies a figure through *this* method still has a map describing the one its builders made.
+        :meth:`~digitalearth.static.scene.Scene._change` is what pairs the two — it calls this and then
+        installs the description, so the figure the map reports is only ever one the axes was brought to.
 
         **A restyle expressed only in a value the description does not carry is invisible to this path.**
         The difference between two figures is read off their descriptions, and of a caller's engine

@@ -92,15 +92,15 @@ class TestARoadmapRefusalCountsTheOrdersTheWayTheRoadmapDoes:
         """The shipped table, whose order happens to be the same either way.
 
         Test scenario:
-            23, 24 and 27a sort identically as text and as numbers, which is why the defect could sit here
+            24 and 27a sort identically as text and as numbers, which is why the defect could sit here
             unseen. The listing is pinned all the same: the fix must not drop the letter suffix, and 27a
             must still sort after 27 rather than being read as 27 with the letter thrown away. It is
             pinned *exactly*, so it also fails the day an order is finished and its row taken out — which
-            is how the framing order left it.
+            is how the framing order and then the layer-management order left it.
         """
         with pytest.raises(KeyError) as refusal:
             roadmap_order(_ABSENT_ORDER)
-        assert refusal.value.args[0].endswith("order 23, order 24, order 27a"), (
+        assert refusal.value.args[0].endswith("order 24, order 27a"), (
             refusal.value.args[0]
         )
 

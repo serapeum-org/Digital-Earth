@@ -69,6 +69,7 @@ from digitalearth.base.spec import (
 )
 from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.layer import layer_name
+from digitalearth.static.capabilities import CAPABILITIES
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import (
     DrawnLayer,
@@ -986,6 +987,12 @@ class Scene(WatermarkMixin):
                 ```
         """
         self._require_layer(getattr(layer, "id", None))
+        # The first production caller of `Capabilities.require` (D-10). A replacement is the one
+        # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
+        # something it does not have — and refusing here, off the declaration, refuses before a description
+        # is built or the engine is touched. Without it the refusal came from the drawer table, part-way
+        # through a reconcile, and said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="Map.replace_layer")
         if layer.source_id is None and kind_info(layer.kind).takes != "none":
             raise ValueError(
                 f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "

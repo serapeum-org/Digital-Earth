@@ -27,15 +27,15 @@ place; HoloViews elements are immutable values composed into an overlay on every
 and the observable contract it signs is the one the shared renderer conformance suite states, which is why
 all four tiers can sign it.
 
-**On this tier, for this wave, `apply` is record-only** — with one exception a caller can see. It does not
-change *which* elements `render()` overlays, which is the map's `layers`, and it does not change what
-`figure_spec` reports, which is the map's own layer tree. The exception is visibility: a layer `diff`
-reports as shown or hidden is toggled on the very element the map registered, because `.opts()` writes into
-HoloViews' global `Store` against that object. So a figure applied with a hidden layer draws it hidden
-while `figure_spec` still describes it visible.
-Nothing in the tier calls it: every builder draws through :meth:`Renderer.draw_layer`, one layer at a time.
-Wiring `apply` into the map's public state is Wave 7 (order 23); until then a caller who applies a figure
-has moved the record and nothing a viewer sees.
+**`apply` reaches what the map draws.** It was record-only for a wave: it changed neither *which*
+elements `render()` overlays — the map's `layers` — nor what `figure_spec` reports, so a caller who applied
+a figure had moved a record and nothing a viewer sees. Two halves close that. :meth:`Renderer._arrange`
+re-lays `InteractiveMap.layers` from the applied figure's draw order, so a removed layer leaves the overlay,
+an added one enters it and a moved one changes what is on top; and
+:meth:`~digitalearth.interactive.base.InteractiveMapBase._change` — the path `get_layer`, `remove_layer`,
+`set_visible`, `move_layer` and `replace_layer` take — installs the description once this has returned, so a
+figure `apply` refuses is never one the map describes. Visibility was the one thing that always reached the
+element, because `.opts()` writes into HoloViews' global `Store` against the object the map holds.
 """
 
 import warnings

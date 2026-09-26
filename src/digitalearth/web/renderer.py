@@ -24,12 +24,15 @@ against: :meth:`Renderer.apply` reconciles the renderer's own *record* of what i
 :attr:`Renderer.drawn` — and the contract it signs is the one the shared renderer conformance suite states
 for all four tiers.
 
-**On this tier, for this wave, `apply` is record-only.** It does not change what `WebMap` queues, which is
-what the widget is built from, and it does not change what `figure_spec` reports, which is the map's own
-layer tree. A layer it adds is in the record and never reaches the widget; a layer it removes leaves the
-record and stays on the widget. Nothing in the tier calls it: every builder draws through
-:meth:`Renderer.draw_layer`, one layer at a time. Wiring `apply` into the map's public state is Wave 7
-(order 23); until then a caller who applies a figure has moved the record and nothing a viewer sees.
+**`apply` reaches what the page is built from.** It was record-only for a wave: it changed neither what
+`WebMap` queues — which is what the widget is built from — nor what `figure_spec` reports, so a layer it
+added was in the record and never reached the widget, and one it removed left the record and stayed on the
+page. :meth:`Renderer._arrange` brings the queue to the applied figure's layers, in its draw order, band by
+band; and :meth:`~digitalearth.web.base.WebMapBase._change` — the path `set_visible`, `move_layer` and
+`replace_layer` take — installs the description once this has returned, so a figure `apply` refuses is never
+one the map describes. What `_arrange` does **not** move is a queue entry no layer id addresses: the
+`basemap`, `terrain`, `point_cloud` and `model` builders still queue their own closures and record no layer,
+so those keep their slots.
 """
 
 from dataclasses import dataclass, field

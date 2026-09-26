@@ -62,11 +62,13 @@ class Method:
             ('self', True)
 
             ```
-        - A name nobody has built yet says which order builds it:
+        - Nothing is waiting: every Core name is drawn on at least one tier, so no `builds_in` is set. It
+          stays a field because the *next* name the contract declares ahead of its tiers needs one, which is
+          the bargain :data:`PLANNED_RENAMES` strikes for a rename nobody is waiting on either:
             ```python
-            >>> from digitalearth.base.contract import core_method
-            >>> core_method("move_layer").builds_in
-            'order 23'
+            >>> from digitalearth.base.contract import CORE
+            >>> [method.name for method in CORE if method.builds_in]
+            []
 
             ```
     """
@@ -78,32 +80,13 @@ class Method:
     builds_in: Optional[str] = None
 
 
-#: When the three live layer-management methods are built. Named once because it is one decision — the order
-#: that adds toggle, reorder and replace to the tiers still without them — rather than nine independent notes
-#: that happen to agree today.
-#:
-#: It names the **order** and not the wave. This said "Wave 5, order 23" until a wave was inserted ahead of it
-#: and every later wave renumbered, after which it told callers their methods were coming in a wave that had
-#: already shipped without them (#317). Orders keep their numbers when the plan moves; waves do not, so a wave
-#: number in a message a user reads is a fact with a shelf life.
-#:
-#: Three tiers are waiting, and only one of them has an open issue: #216 for the static half. The web half's
-#: issue, #188, is **closed** — it closed with the identity work, while `set_visible`, `move_layer` and
-#: `replace_layer` are still absent from `WebMap`, so nothing open tracks that half. The interactive half was
-#: never filed. The 3-D tier is not waiting at all: measured, `Scene3D` answers to all three already, which is
-#: why `PENDING` lists none of them against it. The issue numbers stay out of the reasons below deliberately —
-#: a reason is held to :data:`~tests.open_issues.KNOWN_OPEN_ISSUES`, and a closed issue could not pass it.
-_LAYER_MANAGEMENT_ORDER = "order 23"
-
-#: Why a tier has none of them yet. The two spellings differ in what "layer management" means on that tier:
-#: on a live page the layers are there to be toggled while the viewer watches, which is the harder half.
-_PENDING_LAYERS = f"layer management — {_LAYER_MANAGEMENT_ORDER}"
-_PENDING_LIVE_LAYERS = f"layer management on a live page — {_LAYER_MANAGEMENT_ORDER}"
-
-#: Why a tier cannot add, read back or drop a layer by id. The same order, because it is the same decision seen
-#: from its other side: every renderer already indexes its layers, so what order 23 adds is the **public**
-#: method on each tier rather than the machinery underneath it.
-_PENDING_IDENTITY = f"layer identity — {_LAYER_MANAGEMENT_ORDER}"
+# `_LAYER_MANAGEMENT_ORDER`, and the three reasons interpolated into it — `_PENDING_LAYERS`,
+# `_PENDING_LIVE_LAYERS` and `_PENDING_IDENTITY` — stood here while nine `PENDING` rows and three `builds_in`
+# citations named order 23. That order has built them: `add_layer`, `get_layer`, `remove_layer`,
+# `set_visible`, `move_layer` and `replace_layer` are on all four facades, each over its tier's own renderer.
+# The constants go with the rows rather than staying as a spelling nobody interpolates, and the entry in
+# `ROADMAP_ORDERS` goes with them — a vendored order nothing cites is the next thing to go stale, which
+# `tests/base/test_contract.py::TestAPendingReasonPointsAtLiveWork` refuses.
 
 #: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the "canonical
 #: names + deprecated aliases" half of the contract (DE-26, folded into U-3), which PR #304 froze without any
@@ -145,10 +128,6 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: The keys are the constants above rather than repeated strings, so a citation and its entry cannot disagree.
 ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
     {
-        _LAYER_MANAGEMENT_ORDER: (
-            "layer management — the public toggle, reorder and replace on each tier, over the renderers' "
-            "own set_visible/is_visible that Wave 6 landed"
-        ),
         _GUIDES_ORDER: (
             "a legend and a colorbar that follow their own layer, as guides on its encoding rather than on "
             "the most recent classification"
@@ -236,13 +215,11 @@ CORE: Tuple[Method, ...] = (
         "set_visible",
         "Show or hide a layer, by id.",
         frozenset({"visible"}),
-        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "move_layer",
         "Move a layer in draw order, by id.",
         frozenset({"index"}),
-        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "replace_layer",
@@ -252,7 +229,6 @@ CORE: Tuple[Method, ...] = (
             "belongs to, as adding it there would."
         ),
         frozenset(),
-        builds_in=_LAYER_MANAGEMENT_ORDER,
     ),
     Method(
         "layer_ids",
@@ -733,7 +709,7 @@ def roadmap_order(order: str) -> str:
             ...     roadmap_order("order 99")
             ... except KeyError as error:
             ...     print(error.args[0])
-            'order 99' is not a roadmap order this contract names; it names order 23, order 24, order 27a
+            'order 99' is not a roadmap order this contract names; it names order 24, order 27a
 
             ```
     """

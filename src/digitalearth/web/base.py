@@ -68,6 +68,7 @@ from digitalearth.base.spec.layer import (
     layer_name,
 )
 from digitalearth.base.symbology import sample_cmap
+from digitalearth.web.capabilities import CAPABILITIES
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
 #: point, so a page, a PNG snapshot and an animation frame are titled alike.
@@ -1336,6 +1337,12 @@ class WebMapBase:
                 ```
         """
         self._require_layer(getattr(layer, "id", None))
+        # The first production caller of `Capabilities.require` (D-10). A replacement is the one
+        # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
+        # something it does not have — and refusing here, off the declaration, refuses before a description
+        # is built or the engine is touched. Without it the refusal came from the drawer table, part-way
+        # through a reconcile, and said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="WebMap.replace_layer")
         if layer.source_id is None and kind_info(layer.kind).takes != "none":
             raise ValueError(
                 f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "

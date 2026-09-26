@@ -34,6 +34,7 @@ from typing import Any, Optional, Tuple
 
 import pytest
 
+from digitalearth.base.capabilities import CapabilityError
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import LayerSpec
 
@@ -59,11 +60,18 @@ class LayerManagementContract:
         backend: The tier's name as its `Capabilities` spells it, used in failure messages.
         undrawable_kind: A registered layer kind this tier has **no drawer for**, whose data class is
             `"none"` so a replacement naming it carries no source. Replacing a layer with it is how the
-            probes reach a refusal inside `apply` — the one path a change has to roll back from.
+            probes reach this tier's refusal.
+        refuses_by_declaration: Whether `replace_layer` checks the new kind against the tier's own
+            `Capabilities` — and so refuses with `CapabilityError`, before a description is built or the
+            engine is touched — or reaches its drawer table part-way through the reconcile and answers with
+            `KeyError`. The three tiers order 23 touched do the first; the 3-D tier does the second, which is
+            why this is an adapter's answer rather than one rule, and why the divergence is written down here
+            rather than absorbed by a probe that accepts either.
     """
 
     backend: str = ""
     undrawable_kind: str = ""
+    refuses_by_declaration: bool = True
 
     def make(self) -> Any:
         """Return an open tier object with nothing drawn on it.
@@ -485,25 +493,58 @@ class LayerManagementConformance:
             "replace_layer must return the tier"
         )
 
-    def _refuse_a_replacement(self, tier) -> None:
-        """Replace one layer with a kind this tier cannot draw, expecting the refusal.
+    def _undrawable_here(self, tier) -> LayerSpec:
+        """Return a replacement for the top layer naming a kind this tier cannot draw.
 
         Args:
             tier: The tier under test.
+
+        Returns:
+            The description. It keeps the layer's band, spelled out, because a replacement that changes the
+            band is re-placed at the top of its new one — which would make this a move as well as a refusal.
         """
         held = tier.get_layer(TOP)
-        undrawable = LayerSpec(
+        return LayerSpec(
             TOP,
             self.contract.undrawable_kind,
-            # The band the layer already sits in, spelled out: a replacement that changes the band is
-            # re-placed at the top of its new one, which would make this a move as well as a refusal.
             band=held.band or band_of(held.kind),
         )
-        with pytest.raises(KeyError):
-            tier.replace_layer(undrawable)
+
+    def _refuse_a_replacement(self, tier) -> Exception:
+        """Replace one layer with a kind this tier cannot draw, and return the refusal.
+
+        Args:
+            tier: The tier under test.
+
+        Returns:
+            The exception raised, of the class this tier's adapter declares through
+            :attr:`LayerManagementContract.refuses_by_declaration`.
+        """
+        expected = CapabilityError if self.contract.refuses_by_declaration else KeyError
+        with pytest.raises(expected) as refusal:
+            tier.replace_layer(self._undrawable_here(tier))
+        return refusal.value
+
+    def test_a_replacement_the_tier_cannot_draw_is_refused_naming_the_kind(self, drawn):
+        """A caller who is told only "no" cannot tell which of the two things they asked for was wrong.
+
+        Args:
+            drawn: The tier under test.
+
+        Test scenario:
+            The class matters as much as the message on a tier that refuses by declaration: a `CapabilityError`
+            says the *tier* does not have the kind, and is raised before a description is built, while the
+            `KeyError` a drawer table answers with comes part-way through a reconcile and says only that a
+            lookup failed. `Capabilities.require` had no production caller at all until order 23 (D-10), so
+            this is the first check that a facade consults what its tier declares.
+        """
+        refusal = self._refuse_a_replacement(drawn)
+        assert self.contract.undrawable_kind in str(refusal), (
+            f"the {self.contract.backend} tier refused a replacement without naming the kind: {refusal}"
+        )
 
     def test_a_refused_change_is_not_the_figure_the_tier_reports(self, drawn):
-        """The change path installs the new description only once the engine has drawn it.
+        """A refusal leaves the tier describing what it was drawing, whenever it comes.
 
         Args:
             drawn: The tier under test.
@@ -511,8 +552,11 @@ class LayerManagementConformance:
         Test scenario:
             The 3-D scene installed the figure first and kept it when `apply` raised, so `layer_ids`,
             `figure_spec` and `to_dict` all advertised a layer that was never drawn and could not be
-            (review H7). Its `_change` is the fix, and this is the same question asked of the three change
-            paths order 23 adds.
+            (review H7). Two things make that untrue here, and this probe does not care which one answered:
+            the declaration is consulted before a description is built, and `_change` installs the figure
+            only once the renderer has drawn it. The second half is asked on its own in
+            `tests/base/test_renderer_conformance.py`, where `apply` is handed a figure that is refused
+            part-way through.
         """
         held = drawn.figure_spec
         self._refuse_a_replacement(drawn)
@@ -520,15 +564,40 @@ class LayerManagementConformance:
             f"the {self.contract.backend} tier kept a figure it could not draw"
         )
 
-    def test_a_refused_change_leaves_the_engine_as_it_found_it(self, drawn):
-        """The drawing rolls back with the description, or the two disagree.
+    def _drawings(self, tier) -> dict:
+        """Return whether the engine holds a drawing for each layer the tier describes.
+
+        Args:
+            tier: The tier under test.
+
+        Returns:
+            Layer id to whether the engine draws it.
+        """
+        return {
+            layer_id: self.contract.engine_holds(tier, layer_id) is not None
+            for layer_id in tier.layer_ids
+        }
+
+    def test_a_refused_change_leaves_a_drawing_for_every_layer_it_describes(
+        self, drawn
+    ):
+        """A refusal must not leave a described layer with nothing drawn for it.
 
         Args:
             drawn: The tier under test.
+
+        Test scenario:
+            The half of the first defect that survives a rollback which **re-draws**: the 3-D scene brings its
+            plotter back by applying the old figure again, so the actors it ends with are new objects, and a
+            probe comparing them by identity would fail on a tier that is behaving correctly. What has to be
+            true on all four is that every layer the tier still describes is still drawn — the failure mode
+            was a layer left described with its drawing taken off, which `remove_layer` could then never
+            reach. The identity-level reading is `test_a_refused_figure_leaves_the_engine_as_it_found_it` in
+            `tests/base/test_renderer_conformance.py`, against a refusal reached part-way through `apply`.
         """
-        before = self.contract.engine_order(drawn)
+        before = self._drawings(drawn)
         self._refuse_a_replacement(drawn)
-        assert self.contract.engine_order(drawn) == before, (
-            f"a refused change left the {self.contract.backend} tier's engine drawing "
-            f"{self.contract.engine_order(drawn)}; it drew {before}"
+        assert self._drawings(drawn) == before, (
+            f"a refused change left the {self.contract.backend} tier drawing "
+            f"{self._drawings(drawn)}; it drew {before}"
         )

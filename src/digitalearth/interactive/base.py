@@ -1023,6 +1023,12 @@ class InteractiveMapBase:
                 ```
         """
         self._require_layer(getattr(layer, "id", None))
+        # The first production caller of `Capabilities.require` (D-10). A replacement is the one
+        # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
+        # something it does not have — and refusing here, off the declaration, refuses before a description
+        # is built or the engine is touched. Without it the refusal came from the drawer table, part-way
+        # through a reconcile, and said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="InteractiveMap.replace_layer")
         if layer.source_id is None and kind_info(layer.kind).takes != "none":
             raise ValueError(
                 f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "

@@ -70,13 +70,16 @@ renderer and so has no drawer to ask, which it declares in :data:`UNDRAWN_KINDS`
 it to. C7's other half, a kind the tier does not draw at all, *is* asked of all four, in
 ``tests/base/test_custom_layers.py::TestWhatC7DoesNotCover``.
 
-**Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
-updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
-the overlay from `layers` — and on none of the 2-D tiers does it move the figure the tier reports. That is
-deliberate for now; wiring it through is later work (review M1). A check that reads what `apply` never
-touches passes whatever `apply` did, so each adapter declares what its `apply` reaches, and the checks that
-read the engine or the description run only where it does. The rollback and the redraw guard are also held
-to the one thing every tier's `apply` does change, the renderer's own record, so no tier goes unchecked.
+**Every tier's `apply` reaches what the tier draws, and every adapter goes through its tier's change
+path.** It was not so for a wave: on the web and interactive tiers `Renderer.apply` updated the renderer's
+own record and nothing the tier renders from — the widget is built from the queue, the overlay from `layers`
+— and on none of the 2-D tiers did it move the figure the tier reports (review M1). So each adapter declared
+what its `apply` reached, and the checks that read the engine or the description ran only where it did: three
+tiers of four skipped the description check and two skipped the engine checks, which is exactly the shape of a
+check that passes whatever the code did. Order 23 wired all three: the queue and the overlay follow `apply`,
+and every `apply_figure` goes through the tier's own `_change`, so `apply_reaches_engine` and
+`apply_reaches_description` are now true on all four. The two flags stay, because the next tier to sign has
+to say the same thing before a check may rely on it.
 """
 
 import importlib.util
@@ -1399,8 +1402,8 @@ class TestTheTiersAgreeOnWhatARefusalIs:
         Test scenario:
             Static caught `BaseException`, web and interactive `Exception`. So a `KeyboardInterrupt` part-way
             through a change left the static record consistent and the other two holding layers no figure
-            owned — three tiers signing one contract with two answers to what a refusal is. Cosmetic while
-            `apply` is record-only, and not once it is wired into what a viewer sees.
+            owned — three tiers signing one contract with two answers to what a refusal is. It was cosmetic
+            while `apply` was record-only; since order 23 each of these three rolls back what a viewer sees.
         """
         import importlib
 

@@ -183,10 +183,11 @@ class TestAQueueEntryNoLayerIdAddresses:
         Args:
             mixed: The map under test.
         """
+        from digitalearth.base.capabilities import CapabilityError
         from digitalearth.base.spec import LayerSpec
 
         held = (mixed._underlay_count, mixed._reference_count, mixed._overlay_count)
-        with pytest.raises(KeyError):
+        with pytest.raises(CapabilityError):
             mixed.replace_layer(LayerSpec(TOP, "custom:pyvista", band="overlay"))
         counts = (
             mixed._underlay_count,

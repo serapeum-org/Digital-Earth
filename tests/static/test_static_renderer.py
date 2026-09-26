@@ -894,14 +894,15 @@ class TestAFailingGraticuleLeavesNothingBehind:
         assert kept, "the refused replacement changed what the map draws"
 
 
-class TestApplyIsRecordOnlyOnThisTier:
-    """``apply`` reconciles this renderer's record and the axes — and nothing else, in this wave.
+class TestApplyDrawsAndDoesNotDescribe:
+    """``apply`` reconciles this renderer's record and the axes; the description is ``_change``'s to install.
 
-    Nothing in ``src/`` calls it yet: the scene's own state (its layer tree, its sources, what
-    :attr:`Map.figure_spec` reports) is not routed through it, and will be in Wave 7 (order 23). Pinning
-    that here is what keeps the checks around it honest — a test that asserted the map "still reports the
-    figure it can draw" after a *refused* change passed whatever ``apply`` did, because ``apply`` cannot
-    change what the map reports either way.
+    The split is deliberate rather than a limitation. :meth:`Scene._change` calls ``apply`` and installs the
+    scene's layer tree and sources only once it has returned, which is what makes "a figure the tier refuses
+    is never one it reports" true of the six public layer-management methods. Pinning the halves separately is
+    what keeps the checks around them honest — a test that asserted the map "still reports the figure it can
+    draw" after a *refused* ``apply`` passed whatever ``apply`` did, because ``apply`` does not touch what the
+    map reports either way.
     """
 
     def test_a_successful_apply_does_not_change_what_the_map_reports(self, drawn_map):
@@ -911,8 +912,9 @@ class TestApplyIsRecordOnlyOnThisTier:
             drawn_map: A map with one drawn layer.
 
         Test scenario:
-            When Wave 7 wires a map-level change through ``apply``, this fails — which is the point: the
-            contract it pins is a limitation, and it has to be re-stated deliberately rather than drift.
+            A caller may hand ``apply`` a figure of their own — the conformance adapter did until order 23 —
+            and that must not leave the map describing something nobody asked it to draw. The description
+            moves through :meth:`Scene._change` and nowhere else.
         """
         figure = drawn_map.figure_spec
         added = with_fields(
