@@ -131,8 +131,9 @@ class TestLargeImage:
         class _Plain:
             epsg = 3857
 
+        plain = _Plain()
         with pytest.raises(AttributeError) as refused:
-            scene.large_image(_Plain())
+            scene.large_image(plain)
         return str(refused.value)
 
     def test_the_refusal_offers_the_builder_for_a_small_raster(self, m):

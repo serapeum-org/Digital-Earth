@@ -569,9 +569,10 @@ class TestARefusalWhileArrangingTheOverlay:
         """
         held = dict(drawn_map._renderer.drawn)
         figure = drawn_map.figure_spec
+        added = _with_a_second_drawable_layer(drawn_map)
         drawn_map.layers = _RefusesTheFirstWrite(drawn_map.layers)
         with pytest.raises(RuntimeError):
-            drawn_map._renderer.apply(figure, _with_a_second_drawable_layer(drawn_map))
+            drawn_map._renderer.apply(figure, added)
         after = dict(drawn_map._renderer.drawn)
         assert after == held, f"the record kept {sorted(after)}, was {sorted(held)}"
 
@@ -587,9 +588,10 @@ class TestARefusalWhileArrangingTheOverlay:
             the element `second` was drawn as and the overlay did not.
         """
         figure = drawn_map.figure_spec
+        added = _with_a_second_drawable_layer(drawn_map)
         drawn_map.layers = _RefusesTheFirstWrite(drawn_map.layers)
         with pytest.raises(RuntimeError):
-            drawn_map._renderer.apply(figure, _with_a_second_drawable_layer(drawn_map))
+            drawn_map._renderer.apply(figure, added)
         assert self._recorded(drawn_map) == self._overlaid(drawn_map), (
             f"record {self._recorded(drawn_map)} against overlay {self._overlaid(drawn_map)}"
         )
@@ -601,9 +603,10 @@ class TestARefusalWhileArrangingTheOverlay:
             drawn_map: A map with one drawn layer.
         """
         figure = drawn_map.figure_spec
+        added = _with_a_second_drawable_layer(drawn_map)
         drawn_map.layers = _RefusesTheFirstWrite(drawn_map.layers)
         with pytest.raises(RuntimeError):
-            drawn_map._renderer.apply(figure, _with_a_second_drawable_layer(drawn_map))
+            drawn_map._renderer.apply(figure, added)
         assert drawn_map.layers.refusals == 1, drawn_map.layers.refusals
 
 
