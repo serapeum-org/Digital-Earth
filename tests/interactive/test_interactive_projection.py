@@ -283,7 +283,9 @@ class TestElementExtent:
             reordered pair could not pass this.
         """
         extent = _element_extent(hv.Scatter([(0.0, 1.0), (4.0, 9.0)]))
-        assert extent == (0.0, 1.0, 4.0, 9.0), f"expected the four edges in order, got {extent}"
+        assert extent == (0.0, 1.0, 4.0, 9.0), (
+            f"expected the four edges in order, got {extent}"
+        )
 
     def test_no_element_has_no_extent(self):
         """``None`` in place of an element answers ``None`` rather than raising.
@@ -291,7 +293,9 @@ class TestElementExtent:
         Test scenario:
             A panel with no layer to measure passes ``None``; a frame cannot be set from it.
         """
-        assert _element_extent(None) is None, "None in place of an element must not be measured"
+        assert _element_extent(None) is None, (
+            "None in place of an element must not be measured"
+        )
 
     def test_an_element_built_from_no_data_has_no_extent(self):
         """An empty element ranges to ``(None, None)``, which is not a rectangle.
@@ -300,7 +304,9 @@ class TestElementExtent:
             ``hv.Scatter([])`` — HoloViews answers ``None`` for both ends of both dimensions, so the
             edges are present as values but name no region.
         """
-        assert _element_extent(hv.Scatter([])) is None, "an element built from no data must not yield a frame"
+        assert _element_extent(hv.Scatter([])) is None, (
+            "an element built from no data must not yield a frame"
+        )
 
     @pytest.mark.parametrize(
         "edges, which",
