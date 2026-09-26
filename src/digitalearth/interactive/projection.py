@@ -10,9 +10,10 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self
+from math import isfinite
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple, Union
 
-from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec import Bounds, LayerSpec, Symbology, Viewport
 from digitalearth.interactive.base import (
     _require_holoviz,
     describe_opts,
@@ -29,6 +30,47 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: **symmetric** (the same spacing in longitude and latitude) — so anything else is refused rather than
 #: silently rounded to the nearest shipped layer.
 _GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
+
+
+def _padded(box: Bounds, fraction: float) -> Bounds:
+    """Return `box` grown by `fraction` of its own span, or `box` itself for no padding.
+
+    Args:
+        box: The rectangle to grow.
+        fraction: How much to grow it by, as a proportion of its width and height.
+
+    Returns:
+        The padded rectangle.
+
+    Raises:
+        ValueError: from :meth:`~digitalearth.base.spec.bounds.Bounds.padded`, for a fraction below ``-0.5``.
+    """
+    return box if not fraction else box.padded(fraction)
+
+
+def _element_extent(element: Any) -> Optional[Tuple[float, float, float, float]]:
+    """Return the region one HoloViews element covers, as ``(xmin, ymin, xmax, ymax)``.
+
+    Asked of the element rather than of the data behind it: ``range`` is HoloViews' own answer for every
+    element type, so an image, a scatter, a path and a caller's own object are all measured the same way and
+    each reports where it was actually placed.
+
+    Args:
+        element: The element a layer composed into.
+
+    Returns:
+        The rectangle it covers, or ``None`` when it has no finite range to give — an element built from no
+        data ranges to ``(None, None)``, and a frame cannot be set from that.
+    """
+    if element is None:
+        return None
+    xmin, xmax = element.range(0)
+    ymin, ymax = element.range(1)
+    edges = (xmin, ymin, xmax, ymax)
+    if any(edge is None for edge in edges):
+        return None
+    floats = tuple(float(edge) for edge in edges)
+    return floats if all(isfinite(edge) for edge in floats) else None
 
 
 def draw_graticule(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
@@ -81,6 +123,182 @@ class ProjectionMixin(_MixinBase):
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
+
+    #: The region the last :meth:`set_bounds` call asked for, in the display CRS, or ``None`` while nothing
+    #: has framed the map. Declared on the class rather than set in a constructor, because this mixin is
+    #: composed into :class:`~digitalearth.interactive.map.InteractiveMap` and owns no ``__init__`` — the
+    #: class attribute is the default every instance reads until :meth:`set_bounds` writes one of its own.
+    _frame_bounds: Optional[Bounds] = None
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value — including the region it has been framed on.
+
+        Returns:
+            The view :class:`~digitalearth.interactive.base.InteractiveMapBase` builds from the display CRS,
+            carrying the region :meth:`set_bounds` asked for when there has been one. It still carries no
+            centre or zoom: this tier is framed by an extent, not by a camera position.
+        """
+        view = super().viewport
+        framed = self._frame_bounds
+        return view if framed is None else view.framed(framed)
+
+    def set_bounds(
+        self,
+        bounds: Optional[Union[Bounds, Sequence[float]]] = None,
+        *,
+        padding: float = 0.0,
+    ) -> Self:
+        """Frame the map on a region, or on everything it draws.
+
+        Bokeh pans and zooms, so before this the view was whatever HoloViews autoranged to and there was no
+        call a caller could make to open the map on a region — the tier had no framing method under any
+        spelling. It still pans: this sets the *initial* view rather than locking it.
+
+        Args:
+            bounds: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to
+                the display CRS, which is the point of passing one — or a bare
+                ``(west, south, east, north)`` sequence taken to be in the display CRS. That is the bbox
+                order :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox`, the web tier's ``set_bounds``
+                and pyramids all use; the static tier's matplotlib ordering is its own history, not a
+                cross-tier convention.
+
+                ``None`` (the default) **fits the map to its data**: the union of what the panel's data
+                layers cover, read from the elements themselves. Only the ``data`` band counts — a tile
+                basemap, a graticule and a coastline are drawn around the subject rather than being it, and
+                GeoViews reports a ``Feature``'s range in degrees whatever the display CRS is, so unioning
+                one in would be wrong in units as well as in extent.
+            padding: Breathing room around the frame, as a fraction of its own span — ``0.05`` leaves a 5%
+                margin. Note the **units are this tier's**: a HoloViews figure is framed by data-coordinate
+                limits, so a proportion of the span is the only padding that means anything, where the web
+                tier's ``padding`` is a number of screen pixels.
+
+        Returns:
+            The same map instance, so builder calls chain — which is what the Core declares and what the web
+            and 3-D tiers already answer.
+
+        Raises:
+            ValueError: for a sequence that is not four values; when ``bounds`` is ``None`` and the map
+                draws nothing with an extent, because silently doing nothing is indistinguishable from the
+                call being dropped; or, from `Bounds`, for a non-finite edge or a ``padding`` below
+                ``-0.5``, which would turn the frame inside out.
+
+        Examples:
+            - Open the map on a region rather than on whatever the data autoranges to:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> m = InteractiveMap(crs=4326).set_bounds((3.0, 50.0, 7.0, 54.0))  # doctest: +SKIP
+                >>> m.viewport.bounds.as_bbox()                              # doctest: +SKIP
+                [3.0, 50.0, 7.0, 54.0]
+
+                ```
+        """
+        self._frame_bounds = self._frame_asked(bounds, padding)
+        return self
+
+    def _frame_asked(
+        self,
+        bounds: Optional[Union[Bounds, Sequence[float]]],
+        padding: float,
+    ) -> Bounds:
+        """Resolve what a caller asked for into one rectangle in the display CRS, padded.
+
+        Split from :meth:`set_bounds` because the two halves answer different questions: this one is *which
+        rectangle*, its caller is *what to do with it*. Each of the three spellings pads exactly once, inside
+        its own branch, so no route can pad twice and none can skip it.
+
+        Args:
+            bounds: What the caller passed — a `Bounds`, a ``(west, south, east, north)`` sequence, or
+                ``None`` to fit the data.
+            padding: The fraction to grow the rectangle by.
+
+        Returns:
+            The region to frame on, in the display CRS.
+
+        Raises:
+            ValueError: as described on :meth:`set_bounds`.
+        """
+        if bounds is None:
+            return self._fitted_box(padding)
+        if isinstance(bounds, Bounds):
+            # to_crs is a no-op when the CRSs already match. Without it a rectangle that carries its CRS
+            # would be trusted to be in the display one, which is the mistake Bounds exists to stop.
+            return _padded(bounds.to_crs(self.crs), padding)
+        values = [float(value) for value in bounds]
+        if len(values) != 4:
+            raise ValueError(
+                f"set_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
+            )
+        return _padded(Bounds(*values, self.crs), padding)
+
+    def _fitted_box(self, padding: float) -> Bounds:
+        """Return the region the panel's own data layers cover, padded.
+
+        Args:
+            padding: The fraction to grow the union by.
+
+        Returns:
+            The union, in the display CRS. The panel does the merging
+            (:meth:`~digitalearth.base.spec.figure.PanelSpec.bounds_of`): which layers count is its layer
+            list and which CRS they meet in is its view, and neither is this tier's to decide.
+
+        Raises:
+            ValueError: when no data layer had an extent to give.
+        """
+        panel = self.figure_spec.panels[0]
+        box = panel.bounds_of(self._data_extents(), padding=padding)
+        if box is None:
+            raise ValueError(
+                "set_bounds() has nothing to frame on: this map draws no data layer with an extent — a "
+                "basemap, graticule or coastline is drawn around the subject rather than being it, and a "
+                "hidden layer is not drawn at all. Add the data first, or pass (west, south, east, north)."
+            )
+        return box
+
+    def _data_extents(self) -> dict:
+        """Return what each of the panel's data layers covers, by layer id, in the display CRS.
+
+        Read from the **elements**, not from the sources: a layer is placed where the reprojection left it,
+        and that is the region the frame has to hold. An element HoloViews cannot range — one with no data
+        in it — simply has no entry, which
+        :meth:`~digitalearth.base.spec.figure.PanelSpec.bounds_of` reads as "no extent to give".
+
+        Returns:
+            ``{layer_id: Bounds}`` for the visible layers of the ``data`` band.
+        """
+        measured = {}
+        for layer in self._layer_tree.layers:
+            if self._renderer.band_for(layer) != "data":
+                continue
+            if not self._layer_tree.is_visible(layer.id):
+                continue
+            drawn = self._renderer.drawn.get(layer.id)
+            covered = None if drawn is None else _element_extent(drawn.element)
+            if covered is not None:
+                measured[layer.id] = Bounds(*covered, self.crs)
+        return measured
+
+    def _projected(self, obj: Any) -> Any:
+        """Return `obj` drawn in the view this map was asked for — its projection, and its frame.
+
+        The one hook both render paths share (``render`` and the dashboard's widget builders each call it),
+        which is why the frame goes on here rather than in ``render``: a framed map has to stay framed when
+        it is composed into a dashboard.
+
+        Args:
+            obj: The composed figure.
+
+        Returns:
+            `obj` carrying the projection, from the base implementation, plus the ``xlim``/``ylim`` of the
+            region :meth:`set_bounds` asked for. Unframed, it is whatever the base returned — this tier's
+            default is the view the engine autoranges to, and an unasked-for limit would take that away.
+        """
+        projected = super()._projected(obj)
+        framed = self._frame_bounds
+        if framed is None:
+            return projected
+        xmin, xmax, ymin, ymax = framed.as_mpl()
+        return projected.opts(xlim=(xmin, xmax), ylim=(ymin, ymax))
 
     def projection(self, name: Any, **opts: Any) -> Self:
         """Set the display projection, rendering through the matplotlib backend.

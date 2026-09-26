@@ -410,9 +410,10 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "web": MappingProxyType(
             {
-                "set_visible": _PENDING_LIVE_LAYERS,
-                "move_layer": _PENDING_LIVE_LAYERS,
-                "replace_layer": _PENDING_LIVE_LAYERS,
+                # `set_visible`, `move_layer` and `replace_layer` were listed here against order 23, which
+                # has now built all three: the tier answers to each over its own renderer, through
+                # `WebMapBase._change`, and the queue the page is built from follows. The table is empty for
+                # this tier as a result, and stays here so the next unbuilt name has a home.
             }
         ),
         "3d": MappingProxyType(
@@ -442,7 +443,10 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer` were listed
                 # here against order 23, which has now built all five: the tier answers to each over its own
                 # renderer, through `InteractiveMapBase._change`.
-                "set_bounds": f"no framing method here under any spelling — {_FRAMING_ORDER}",
+                # `set_bounds` was listed here, "no framing method here under any spelling", against the
+                # framing order — which has now built it: the tier frames on a region or on its own data,
+                # takes `padding`, and reports the region through its viewport. The table is empty for this
+                # tier as a result, and stays here so the next unbuilt name has a home.
             }
         ),
         "matplotlib": MappingProxyType(
@@ -610,8 +614,8 @@ def orders_named_in(reason: str) -> Tuple[str, ...]:
         - A reason that names one:
             ```python
             >>> from digitalearth.base.contract import orders_named_in, pending_for
-            >>> orders_named_in(pending_for("interactive")["set_bounds"])
-            ('order 26',)
+            >>> orders_named_in(pending_for("3d")["colorbar"])
+            ('order 24',)
 
             ```
         - The letter is part of the number:
