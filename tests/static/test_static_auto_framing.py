@@ -3,8 +3,8 @@
 Order 27a took the *name*. ``set_bounds`` framed the axes on a rectangle a caller worked out themselves, and
 that was all it did: there was no ``padding``, no ``None`` that fits the figure to what it draws, and — the
 part nothing else could work around — the view the figure reported carried no region at all, so a map framed
-by its own data described itself as unframed. Wave 6's basemap guard had to record the axes extent on the
-layer for exactly that reason, rather than reading it off the panel.
+by its own data described itself as unframed. The basemap coverage guard had to record the axes extent on
+its own layer for exactly that reason, rather than reading it off the panel.
 
 This module holds the capability: what ``set_bounds(None)`` frames on, what it refuses to frame on, what
 ``padding`` does to a frame that came from either spelling, and what the panel's view says afterwards. The
@@ -196,7 +196,7 @@ class TestTheViewReportsTheFrame:
     """A figure framed on a region has to be able to say which region."""
 
     def test_a_named_rectangle_is_reported_by_the_panel(self, flat):
-        """What Wave 6's basemap guard had to read off the axes instead.
+        """What the basemap coverage guard had to read off the axes instead.
 
         Args:
             flat: A map in degrees.
