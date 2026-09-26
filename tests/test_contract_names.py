@@ -546,7 +546,7 @@ class TestWhatARoadmapOrderPromises:
     """An order reference is a pointer into a plan the repository does not hold, so the number has to resolve.
 
     :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they say
-    "order 26" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
+    "order 24" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
     above ask whether a cited order is *in* the table; nothing asked what following one gives back, so a
     lookup that returned the key, or that let a bare `KeyError` out with no message, would still leave both
     guards green while the pointer answered nothing.
@@ -556,11 +556,12 @@ class TestWhatARoadmapOrderPromises:
         """Following a pointer gives the line that tells a waiting caller what they are waiting for.
 
         Test scenario:
-            `order 26` is what `interactive.set_bounds` is pending on. A lookup answering the key back, or
-            the short handle, would read as a plan while saying nothing a reader can act on.
+            `order 24` is what a keyed `colorbar` is pending on, across three tiers. A lookup answering
+            the key back, or the short handle, would read as a plan while saying nothing a reader can
+            act on.
         """
-        built = roadmap_order("order 26")
-        assert built.startswith("auto-framing and camera round-trip"), built
+        built = roadmap_order("order 24")
+        assert built.startswith("a legend and a colorbar"), built
 
     def test_an_order_nobody_wrote_down_is_refused_with_the_ones_there_are(self):
         """A number that is not a step of the plan fails loudly rather than reading as one (review R-L3).
@@ -575,7 +576,7 @@ class TestWhatARoadmapOrderPromises:
             roadmap_order("order 99")
         message = refused.value.args[0]
         assert "'order 99' is not a roadmap order" in message, message
-        assert "order 26" in message, message
+        assert "order 24" in message, message
 
 
 class TestAPlannedRenameIsNotAnAlias:

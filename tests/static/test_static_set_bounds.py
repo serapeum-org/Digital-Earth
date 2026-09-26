@@ -7,9 +7,10 @@ not chain it on one of them.
 
 ``set_extent`` is a live alias now, and it was deliberately **not** in ``PLANNED_RENAMES``: the two are not
 the same method under two names, because the Core declares ``set_bounds(padding=)`` and a ``None`` that fits
-the data, and this tier has neither. Order 27a takes the *name*; the auto-framing behind it is order 26, and
-``KEYWORD_SHORTFALLS`` says so. What this module holds is the part 27a is responsible for — that the Core
-name frames the axes, that it chains, and that the old spelling still frames them identically.
+the data, and when 27a landed this tier had neither. Order 27a takes the *name*; the auto-framing behind it
+is the framing order, which has since built both — see ``tests/static/test_static_auto_framing.py``. What
+this module holds is the part 27a is responsible for: that the Core name frames the axes, that it chains,
+and that the old spelling still frames them identically.
 """
 
 import warnings

@@ -110,9 +110,6 @@ _PENDING_IDENTITY = f"layer identity — {_LAYER_MANAGEMENT_ORDER}"
 #: tier adopting. :data:`PLANNED_RENAMES` is the record of what each tier agreed to call these.
 _RENAME_ORDER = "order 27a"
 
-#: Where a figure learns to frame itself: order 26, auto-framing and camera round-trip.
-_FRAMING_ORDER = "order 26"
-
 #: Where a colour key stops being the most recent classification and becomes a guide on its own layer's
 #: encoding. Named here so the two 3-D rows that cite it are held to the same table as every other citation.
 _GUIDES_ORDER = "order 24"
@@ -129,7 +126,7 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: Every roadmap order a user-facing reason may name, with one line saying what it builds.
 #:
 #: **The roadmap is not in this repository** — it is the maintainer's planning document, and a reason naming
-#: `order 26` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
+#: `order 24` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
 #: "order 99" satisfied every guard, because the guards only ever asked whether the *form* was an order rather
 #: than a wave (review R-L3). Measured before this table: a `PENDING` row rewritten to name order 99 passed all
 #: three checks in `TestAPendingReasonPointsAtLiveWork`.
@@ -139,7 +136,11 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: orders this contract points at, and what each one builds. That is enough for a reader to know what they are
 #: being promised without going and finding the plan, and enough for the guard to refuse a number nobody wrote
 #: down. It is the bargain :data:`~tests.open_issues.KNOWN_OPEN_ISSUES` strikes for issue numbers, for the same
-#: reason and with the same cost: extending it is a deliberate act.
+#: reason and with the same cost: extending it is a deliberate act. **Taking a row out is the same act in
+#: reverse**, and is what finishing an order looks like here: the framing order held auto-framing and the
+#: camera round-trip, both of which are built, so nothing cites it any more and its row is gone.
+#: `TestAPendingReasonPointsAtLiveWork` is what makes that a requirement rather than tidying — it refuses a
+#: declared order no reason points at, in the same breath as a reason pointing at an order nobody declared.
 #:
 #: The keys are the constants above rather than repeated strings, so a citation and its entry cannot disagree.
 ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
@@ -151,10 +152,6 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
         _GUIDES_ORDER: (
             "a legend and a colorbar that follow their own layer, as guides on its encoding rather than on "
             "the most recent classification"
-        ),
-        _FRAMING_ORDER: (
-            "auto-framing and camera round-trip: a figure that frames itself on its data, and a viewport "
-            "that carries the bounds it was framed on"
         ),
         _RENAME_ORDER: (
             "the Core contract's remainder — the renames each tier has agreed to and not adopted "
@@ -386,11 +383,11 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
 #: Two names deliberately never joined it, and the reasons outlive the rows:
 #:
 #: - `set_extent` was **not** `set_bounds` under an older name, and listing it as one told a caller the
-#:   method already existed under another spelling while `PENDING` dated it at order 26 — the same arrival,
-#:   two answers (review R-L4). Order 27a resolved that by splitting the two claims rather than by adopting
-#:   the row: the tier answers to `set_bounds` now, returning `self`, with `set_extent` a live alias in
-#:   :data:`ALIASES`; the `padding` it still does not take, and the `None` that would fit the data, are
-#:   auto-framing at order 26 and are recorded as a keyword shortfall against that order.
+#:   method already existed under another spelling while `PENDING` dated it at the framing order — the same
+#:   arrival, two answers (review R-L4). Order 27a resolved that by splitting the two claims rather than by
+#:   adopting the row: the tier answers to `set_bounds` now, returning `self`, with `set_extent` a live
+#:   alias in :data:`ALIASES`; the `padding` it did not take, and the `None` that fits the data, were a
+#:   keyword shortfall against the framing order until that order built them both.
 #: - `point_cloud` is a second *current* spelling of `grid_points`, which the static tier offers and
 #:   deprecates neither of. A rename is a name on its way out, and nothing has been agreed about that one
 #:   (review M5).
@@ -711,7 +708,7 @@ def roadmap_order(order: str) -> str:
     """Return what one roadmap order builds.
 
     Args:
-        order: The order, spelled as a reason names it — `"order 26"`.
+        order: The order, spelled as a reason names it — `"order 24"`.
 
     Returns:
         One line saying what that order builds.
@@ -722,11 +719,11 @@ def roadmap_order(order: str) -> str:
             reading as a plan (review R-L3).
 
     Examples:
-        - What a caller waiting on `set_bounds` is waiting for:
+        - What a caller waiting on a keyed `colorbar` is waiting for:
             ```python
             >>> from digitalearth.base.contract import roadmap_order
-            >>> roadmap_order("order 26").split(":")[0]
-            'auto-framing and camera round-trip'
+            >>> roadmap_order("order 24").split(",")[0]
+            'a legend and a colorbar that follow their own layer'
 
             ```
         - An order nobody wrote down is refused with the ones there are:
@@ -736,7 +733,7 @@ def roadmap_order(order: str) -> str:
             ...     roadmap_order("order 99")
             ... except KeyError as error:
             ...     print(error.args[0])
-            'order 99' is not a roadmap order this contract names; it names order 23, order 24, order 26, order 27a
+            'order 99' is not a roadmap order this contract names; it names order 23, order 24, order 27a
 
             ```
     """
