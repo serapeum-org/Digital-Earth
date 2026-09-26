@@ -132,8 +132,9 @@ class TestAPyramidsDemIsEncodedHere:
         Args:
             dataset: The shared pyramids raster fixture.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match="tiles_path"):
-            WebMap().terrain_tiles(dataset)
+            m.terrain_tiles(dataset)
 
     def test_the_template_carries_no_local_path_into_the_page(self, dataset, tmp_path):
         """A saved page is shared, and an absolute path names the machine that made it.
@@ -172,8 +173,9 @@ class TestWhatTerrainRefuses:
             "url": "https://tiles.example/{z}/{x}/{y}.png?key={apikey}",
             "apikey": "s3cr3t",
         }
+        m = WebMap()
         with pytest.raises(TypeError, match="tile-URL template"):
-            WebMap().terrain_tiles(provider)
+            m.terrain_tiles(provider)
 
     def test_a_string_that_is_no_template_is_read_as_a_dem_path(self, tmp_path):
         """A plain path is a DEM to encode, and a missing one says so rather than becoming a tile URL.
@@ -181,10 +183,10 @@ class TestWhatTerrainRefuses:
         Args:
             tmp_path: pytest's temporary directory, naming a file that does not exist.
         """
+        m = WebMap()
+        nowhere = str(tmp_path / "nowhere.tif")
         with pytest.raises(FileNotFoundError):
-            WebMap().terrain_tiles(
-                str(tmp_path / "nowhere.tif"), tiles_path=tmp_path / "dem"
-            )
+            m.terrain_tiles(nowhere, tiles_path=tmp_path / "dem")
 
     @pytest.mark.parametrize("given", [(4, 1), (-1, 2), (1, 2, 3), 7])
     def test_a_zoom_range_that_writes_nothing_is_refused(
@@ -197,5 +199,6 @@ class TestWhatTerrainRefuses:
             tmp_path: pytest's temporary directory.
             given: A ``zooms=`` value no pyramid can be written for.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match="zooms"):
-            WebMap().terrain_tiles(dataset, tiles_path=tmp_path / "dem", zooms=given)
+            m.terrain_tiles(dataset, tiles_path=tmp_path / "dem", zooms=given)

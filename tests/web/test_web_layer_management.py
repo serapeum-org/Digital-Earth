@@ -196,8 +196,9 @@ class TestAQueueEntryNoLayerIdAddresses:
         from digitalearth.base.spec import LayerSpec
 
         held = (mixed._underlay_count, mixed._reference_count, mixed._overlay_count)
+        described = LayerSpec(TOP, "custom:pyvista", band="overlay")
         with pytest.raises(CapabilityError):
-            mixed.replace_layer(LayerSpec(TOP, "custom:pyvista", band="overlay"))
+            mixed.replace_layer(described)
         counts = (
             mixed._underlay_count,
             mixed._reference_count,

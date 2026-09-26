@@ -312,8 +312,9 @@ class TestTheBandCountGuardIsTheSharedOne:
             The half that was already right, pinned so the extraction below cannot quietly replace it with a
             locally worded check again.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match=r"needs exactly three bands, got 2"):
-            WebMap().rgb_composite(dataset, bands=(1, 2))
+            m.rgb_composite(dataset, bands=(1, 2))
 
     def test_the_drawer_refuses_in_the_same_words(self, mercator_rgb):
         """A described composite with two bands is refused by count, not by array shape.
@@ -326,10 +327,10 @@ class TestTheBandCountGuardIsTheSharedOne:
             input array from shape (4,9,2) into shape (4,9,3)`` — a message about an array the caller never
             named, from inside a renderer they did not call.
         """
+        m = WebMap()
+        described = self._described_with((1, 2))
         with pytest.raises(ValueError, match=r"needs exactly three bands, got 2"):
-            web_raster.draw_rgb_composite(
-                WebMap(), mercator_rgb, self._described_with((1, 2))
-            )
+            web_raster.draw_rgb_composite(m, mercator_rgb, described)
 
 
 class TestACompositeTheWarpReshapes:
@@ -555,8 +556,9 @@ class TestTheCompositeSizeCeiling:
         from digitalearth.web import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        m = WebMap().basemap()
         with pytest.raises(ValueError, match="rgb_composite") as refusal:
-            WebMap().basemap().rgb_composite(dataset, bands=(1, 1, 1))
+            m.rgb_composite(dataset, bands=(1, 1, 1))
         message = str(refusal.value)
         assert '"xyz"' in message, message
         assert '"cog"' in message, message
@@ -698,6 +700,114 @@ class TestTheTiledCompositeRoutes:
         assert len(recorded) == 3, recorded
         assert len(set(recorded)) == 1, (
             f"three copies of one band must freeze to one pair: {recorded}"
+        )
+
+    def test_a_composite_tile_off_the_raster_is_left_out_of_the_pyramid(
+        self, dataset, tmp_path, monkeypatch
+    ):
+        """An extent's bounding box is not the extent, so a composite pyramid legitimately has holes.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, holding both pyramids written below.
+            monkeypatch: Used to make one window miss the raster, which one this small never does.
+
+        Test scenario:
+            The same range is written twice — once whole, once with the first window standing in a miss —
+            and the two are counted against each other rather than against a literal tile count, which
+            depends on where the fixture's extent falls in the tile grid. One hole must leave exactly one
+            tile out; a blank tile written for it would leave the counts equal.
+        """
+        from digitalearth.web import raster as raster_module
+
+        real_stack = raster_module._tile_stack
+        missed: list = []
+
+        def _the_first_window_misses(opened, zoom, x, y, *, bands):
+            """Answer ``None`` for the first window asked for, then read as usual.
+
+            Args:
+                opened: The dataset the real reader is given.
+                zoom: The zoom level.
+                x: The tile column.
+                y: The tile row.
+                bands: The three 1-based bands the composite reads.
+
+            Returns:
+                ``None`` the first time, then whatever the real reader answers.
+            """
+            if not missed:
+                missed.append((zoom, x, y))
+                return None
+            return real_stack(opened, zoom, x, y, bands=bands)
+
+        WebMap().rgb_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "whole",
+            zooms=(8, 9),
+        )
+        monkeypatch.setattr(raster_module, "_tile_stack", _the_first_window_misses)
+        WebMap().rgb_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "holed",
+            zooms=(8, 9),
+        )
+        complete = sorted((tmp_path / "whole").rglob("*.png"))
+        holed = sorted((tmp_path / "holed").rglob("*.png"))
+        assert missed, "the stand-in never saw a window"
+        assert holed, "the windows that do meet the raster must still be written"
+        assert len(holed) == len(complete) - 1, (
+            f"one hole must leave one tile out: {len(holed)} against {len(complete)}"
+        )
+
+    def test_a_declined_tiled_composite_is_not_the_maps_last_layer(
+        self, dataset, tmp_path, monkeypatch
+    ):
+        """The description is written before the drawer runs, so a decline has to take the record back.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+            monkeypatch: Used to make the composite drawer decline, which the tiled route's own never does.
+
+        Test scenario:
+            The tiled drawer places a reference rather than pixels, so nothing in it can decline — but the
+            builder shares the registration check with the inline path, where an unplaceable raster can. A
+            declined layer that still became ``_last_layer_id`` would have a later ``colorbar()`` label
+            itself from a layer no widget holds.
+        """
+        from digitalearth.web import raster as raster_module
+
+        def _declines(web_map, data, layer):
+            """Behave like a drawer that found nothing to draw.
+
+            Args:
+                web_map: Unused — the drawer declines before it would read the map.
+                data: Unused — the raster it would have placed.
+                layer: Unused — the description it would have drawn.
+
+            Returns:
+                ``None``, the shape a drawer answers in when it declines.
+            """
+            return None
+
+        m = WebMap().rgb_composite(dataset, bands=(1, 1, 1), name="inline")
+        monkeypatch.setattr(raster_module, "draw_rgb_composite", _declines)
+        m.hsv_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "scene",
+            zooms=(9, 9),
+            name="tiled",
+        )
+        assert m.layer_ids == ["inline"], m.layer_ids
+        assert m._last_layer_id == "inline", (
+            f"a declined tiled composite became the map's last layer: {m._last_layer_id!r}"
         )
 
 
@@ -1065,8 +1175,9 @@ class TestTheHsvComposite:
                 }
             ),
         )
+        m = WebMap()
         with pytest.raises(ValueError, match="cmyk_composite"):
-            web_raster.draw_rgb_composite(WebMap(), hue_wheel, described)
+            web_raster.draw_rgb_composite(m, hue_wheel, described)
 
     def test_three_bands_are_required_here_too(self, hue_wheel):
         """The shared guard names this builder, not its sibling.
@@ -1074,8 +1185,9 @@ class TestTheHsvComposite:
         Args:
             hue_wheel: The three-band raster.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match=r"hsv_composite\(\) needs exactly three"):
-            WebMap().hsv_composite(hue_wheel, bands=(1, 2))
+            m.hsv_composite(hue_wheel, bands=(1, 2))
 
     def test_an_empty_composite_names_this_builder(self):
         """A stack with nothing to draw is refused in the name of the call that was made.
@@ -1085,10 +1197,11 @@ class TestTheHsvComposite:
             builder reached it. Naming the wrong sibling sends the reader to the wrong call.
         """
         empty = _hue_dataset([[-9999.0] * 3] * 2)
+        m = WebMap()
         with pytest.raises(
             ValueError, match=r"hsv_composite got a stack with no pixel"
         ):
-            WebMap().hsv_composite(empty, bands=_BANDS)
+            m.hsv_composite(empty, bands=_BANDS)
 
     def test_an_oversized_composite_is_refused_in_its_own_name(
         self, hue_wheel, monkeypatch
@@ -1104,8 +1217,9 @@ class TestTheHsvComposite:
             was, a caller of ``hsv_composite`` would be sent to ``rgb_composite``.
         """
         monkeypatch.setattr(web_raster, "_LARGE_RASTER_PIXELS", 1)
+        m = WebMap()
         with pytest.raises(ValueError, match="hsv_composite"):
-            WebMap().hsv_composite(hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS)
+            m.hsv_composite(hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS)
 
     def test_the_two_tiers_agree_on_the_shared_parameters(self):
         """Every parameter both tiers' ``hsv_composite`` take is spelled and defaulted the same.

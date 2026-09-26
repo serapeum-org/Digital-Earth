@@ -378,14 +378,16 @@ class TestWhatItRefuses:
             The complement of the fallback. Falling back on a band with no range would hand pyramids ten
             identical levels, and the "no level lies within the data" skip would report the wrong cause.
         """
+        flat = _Band([3.0, 3.0, 3.0])
         with pytest.raises(ValueError) as refused:
-            _even_levels(_Band([3.0, 3.0, 3.0]), 10)
+            _even_levels(flat, 10)
         assert "no range to cut into levels" in str(refused.value), refused.value
 
     def test_a_band_with_no_finite_values_is_refused_too(self):
         """The other empty case: every value masked out."""
+        masked = _Band([float("nan"), float("nan")])
         with pytest.raises(ValueError) as refused:
-            _even_levels(_Band([float("nan"), float("nan")]), 10)
+            _even_levels(masked, 10)
         assert "no range to cut into levels" in str(refused.value), refused.value
 
     def test_an_interval_coarser_than_the_data_skips_and_warns(
