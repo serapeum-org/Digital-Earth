@@ -5,13 +5,18 @@ The GeoLibre 3-D surface without VTK, all on the GPU:
 * ``extrusion`` — a MapLibre ``fill-extrusion`` layer (3-D choropleth: height and colour from a column);
 * ``point_cloud`` / ``tiles_3d`` / ``gltf`` — deck.gl ``PointCloudLayer`` / ``Tile3DLayer`` / ``ScenegraphLayer``
   driven through the maplibre widget's ``add_deck_layers`` (deck.gl JSON);
-* ``terrain`` — draped 3-D terrain from a served ``raster-dem`` tile source (defaults to the public AWS
-  *terrarium* terrain-RGB tiles; MapLibre terrain reads tiles over the network, so a self-contained map points
-  at hosted tiles rather than embedding a DEM — encode your own with pyramids ``Dataset.to_terrain_rgb``);
+* ``terrain_tiles`` — draped 3-D terrain from a ``raster-dem`` tile source: **a pyramids DEM, which is encoded
+  here** (:meth:`~pyramids.dataset.Dataset.to_terrain_rgb`), a tile-URL template for a pyramid already served,
+  or nothing at all for the public AWS *terrarium* tiles (DE-28);
 * ``globe`` — switch the map to the spherical (globe) projection.
 
 extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; deck builders reuse the
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.
+
+MapLibre terrain reads its heights from *tiles*, which is why this tier's terrain writes a pyramid rather than
+embedding a DEM the way :mod:`digitalearth.web.raster` can embed a band. The tile writing is pyramids'
+(``to_terrain_rgb`` packs heights into R/G/B and warps to Web Mercator); what is here is the choice of where it
+goes and the promise that the page decodes with the scheme it was written with.
 """
 
 import warnings
@@ -22,12 +27,25 @@ from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
 
-#: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
-#: needs a served ``raster-dem`` tile source, so the default is hosted tiles; to use your own DEM, encode it to
-#: terrain-RGB tiles with pyramids ``Dataset.to_terrain_rgb``, serve them, and pass the tile-URL template as ``dem``.
+# The tier writes two kinds of tile pyramid — a coloured raster and a terrain-RGB DEM — and they agree on where
+# the tiles go, how the zoom range is resolved and how the page addresses them. Shared rather than re-derived,
+# so a terrain pyramid cannot end up addressed one way and a raster pyramid another.
+from digitalearth.web.raster import (  # noqa: E402 - see the comment above
+    _TILE_SIZE,
+    _destination,
+    _lonlat_bounds,
+    _zoom_range,
+)
+
+#: Default DEM for ``terrain_tiles`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. It is the
+#: fallback for a map that names no DEM of its own; a pyramids ``Dataset`` passed as ``dem`` is encoded to a
+#: pyramid beside the page instead, so a caller with their own elevation data serves nothing.
 _DEFAULT_TERRAIN_TILES = (
     "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 )
+
+#: What marks a string as a tile-URL template rather than a path to a DEM — MapLibre's own zoom placeholder.
+_TILE_TEMPLATE_MARK = "{z}"
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -151,39 +169,139 @@ class ThreeDMixin(_MixinBase):
 
     def terrain_tiles(
         self,
-        dem: Optional[str] = None,
+        dem: Any = None,
         *,
         exaggeration: float = 1.0,
         encoding: str = "terrarium",
+        tiles_path: Any = None,
+        zooms: Any = None,
     ) -> Self:
-        """Drape the map over 3-D terrain from a raster-DEM source (recipe W5).
+        """Drape the map over 3-D terrain, from a pyramids DEM or from tiles already served (recipe W5).
+
+        This took a tile-URL template and nothing else, and its documentation told the caller to encode their
+        DEM to terrain-RGB tiles and serve them — work pyramids does in one call
+        (:meth:`~pyramids.dataset.Dataset.to_terrain_rgb`), so the advice was pointing at a route the tier
+        could have wired itself (DE-28). It now takes the DEM, exactly as the raster builders take a dataset.
 
         Args:
-            dem: An XYZ terrain-RGB tile URL template (``{z}/{x}/{y}``). ``None`` uses the public AWS
-                terrarium terrain tiles. To use your own DEM, encode it to terrain-RGB tiles with pyramids
-                ``Dataset.to_terrain_rgb`` and serve them, then pass the tile-URL template here.
+            dem: What supplies the heights. A pyramids ``Dataset`` (or a path to one) is **encoded here** to a
+                ``{z}/{x}/{y}.png`` terrain-RGB pyramid under ``tiles_path``, and the layer reads that. A
+                string holding ``{z}`` is taken as a tile-URL template for a pyramid already served, and used
+                unchanged. ``None`` uses the public AWS terrarium tiles.
             exaggeration: Vertical exaggeration factor.
-            encoding: Terrain-RGB encoding of the DEM tiles (``"terrarium"`` or ``"mapbox"``).
+            encoding: Terrain-RGB scheme — ``"terrarium"`` or ``"mapbox"``. It is what the page decodes with
+                **and** what an encoded DEM is written with, so the two cannot disagree; the schemes are exact
+                inverses of different formulae, so a mismatch misreads every height on the map.
+            tiles_path: The pyramid's root directory, required when ``dem`` is a DEM to encode and ignored
+                otherwise. As with a tiled raster, the page addresses what sits beside it, so the output is a
+                **folder** — save the page into the same directory.
+            zooms: ``(lowest, highest)`` zoom levels to encode. ``None`` derives ``(0, native)``, the same
+                range a tiled raster derives, so terrain and imagery over one extent stop at the same level.
 
         Returns:
             This map (chainable).
+
+        Raises:
+            TypeError: when ``dem`` is neither ``None``, a string, a path, nor a pyramids ``Dataset`` — an
+                ``xyzservices.TileProvider`` in particular, which is a ``dict`` and would otherwise be written
+                into the saved page whole, API key included.
+            ValueError: when a DEM is given with no ``tiles_path``, or ``zooms`` is not an ordered pair of
+                levels.
+            FileNotFoundError: when ``dem`` is a path that names nothing.
+
+        Examples:
+            - Encode a DEM and drape the map over it (needs the ``web`` extra, so the block is skipped):
+                ```python
+                >>> from pyramids.dataset import Dataset                          # doctest: +SKIP
+                >>> from digitalearth.web import WebMap                           # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/LisbonElevation.tif")  # doctest: +SKIP
+                >>> m = WebMap().basemap().terrain_tiles(dem, tiles_path="out/dem")  # doctest: +SKIP
+                >>> m.save("out/index.html")                                      # doctest: +SKIP
+
+                ```
         """
         _require_layer_api()
         from maplibre.sources import RasterDEMSource
 
+        template = self._terrain_template(
+            dem, encoding=encoding, tiles_path=tiles_path, zooms=zooms
+        )
         src_id = self._uid("dem")
         source = RasterDEMSource(
-            tiles=[dem or _DEFAULT_TERRAIN_TILES], encoding=encoding, tile_size=256
+            tiles=[template], encoding=encoding, tile_size=_TILE_SIZE
         )
 
         def apply(widget: Any) -> None:
+            """Register the DEM source on the widget and turn terrain on.
+
+            Args:
+                widget: The MapLibre widget being built.
+            """
             widget.add_source(src_id, source)
             widget.set_terrain(src_id, exaggeration)
 
         return self._queue(apply)
 
-    #: Deprecated spelling of :meth:`terrain_tiles` (#299). The 3-D tier's `terrain` takes a pyramids DEM
-    #: and this one a terrain-RGB tile URL; one name cannot mean both, so the tile reader says so.
+    def _terrain_template(
+        self, dem: Any, *, encoding: str, tiles_path: Any, zooms: Any
+    ) -> str:
+        """Return the tile-URL template the terrain source reads, encoding a DEM first when given one.
+
+        Args:
+            dem: The caller's ``dem=``.
+            encoding: The terrain-RGB scheme to write with, which is the one the page decodes with.
+            tiles_path: Where an encoded pyramid goes.
+            zooms: The zoom range to encode, or ``None`` to derive it.
+
+        Returns:
+            A served template unchanged, the tier's default when nothing was named, or — for a DEM — the
+            relative reference to the pyramid just written. Relative, because an absolute path names the
+            machine that made the page and travels with it when the page is shared.
+
+        Raises:
+            TypeError: for anything that is neither a template, a path, nor a raster pyramids can encode.
+            ValueError: from :func:`~digitalearth.web.raster._destination` when a DEM names no destination,
+                or from :func:`~digitalearth.web.raster._zoom_range` for an unusable range.
+            FileNotFoundError: when ``dem`` is a path that names nothing.
+        """
+        caller = "WebMap.terrain_tiles()"
+        if dem is None:
+            return _DEFAULT_TERRAIN_TILES
+        if isinstance(dem, str) and _TILE_TEMPLATE_MARK in dem:
+            return dem
+        # A mapping is refused before `_opened` sees it: an `xyzservices.TileProvider` *is* a `dict`, and one
+        # handed to the source's `tiles` list lands in the saved page with every field it holds — this repo
+        # has leaked a key that way once already. Pull the URL out of it and pass that instead.
+        if isinstance(dem, dict):
+            raise TypeError(
+                f"{caller} dem must be a tile-URL template (a string holding "
+                f"'{_TILE_TEMPLATE_MARK}'), a pyramids Dataset, or a path to one; got a "
+                f"{type(dem).__name__}, whose every field — an API key among them — would be written into "
+                "the saved page. Pass its URL template instead"
+            )
+        opened = self._opened(dem)
+        if not hasattr(opened, "to_terrain_rgb"):
+            raise TypeError(
+                f"{caller} dem must be a tile-URL template (a string holding "
+                f"'{_TILE_TEMPLATE_MARK}'), a pyramids Dataset, or a path to one; got a "
+                f"{type(dem).__name__}"
+            )
+        destination = _destination(tiles_path, "xyz", caller)
+        lowest, highest = _zoom_range(_lonlat_bounds(opened), opened, zooms, caller)
+        opened.to_terrain_rgb(
+            destination,
+            encoding=encoding,
+            tiles=True,
+            min_zoom=lowest,
+            max_zoom=highest,
+            tile_size=_TILE_SIZE,
+        )
+        return f"{destination.name}/{{z}}/{{x}}/{{y}}.png"
+
+    #: Deprecated spelling of :meth:`terrain_tiles` (#299). Both tiers' terrain now takes a pyramids DEM, so
+    #: the names no longer disagree about the *input* — they still disagree about the output, and that is what
+    #: this one says: the 3-D tier renders a surface from the heights in memory, while this one writes (or
+    #: reads) a served tile pyramid, because MapLibre takes its terrain from tiles and nothing else.
     terrain = renamed_method(new="terrain_tiles", old="terrain", owner="WebMap")
 
     def projection(self, name: str = "globe") -> Self:
