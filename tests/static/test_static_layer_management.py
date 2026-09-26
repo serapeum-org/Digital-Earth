@@ -538,3 +538,30 @@ class TestWhatReplaceLayerRefusesAndSaysItRefuses:
         assert "no layer" not in str(refusal.value), (
             f"the refusal blamed a missing layer: {refusal.value}"
         )
+
+
+class TestAnUnknownIdIsRefusedInOneVoice:
+    """Every layer-management call on this tier names the figure, not whichever structure noticed."""
+
+    def test_move_layer_refuses_an_unknown_id_the_way_get_layer_does(self, blank):
+        """`move_layer` asks the facade first, so its refusal reads like its siblings'.
+
+        Args:
+            blank: An empty map.
+
+        Test scenario:
+            `move_layer` left the question to `LayerTree.move`, whose refusal names *the tree* — "no layer
+            'nope' in this tree; layers are [...]" — while `get_layer`, `set_visible`, `remove_layer` and
+            `replace_layer` all go through `_require_layer` and name *the figure*. Two spellings of one
+            refusal, decided by which structure happened to notice. The two messages are produced by
+            different calls on different code paths, so comparing them is a real assertion rather than a
+            tautology.
+        """
+        blank.text(0.0, 0.0, "a", name="one")
+        with pytest.raises(KeyError) as from_get:
+            blank.get_layer("nope")
+        with pytest.raises(KeyError) as from_move:
+            blank.move_layer("nope", 0)
+        assert str(from_move.value) == str(from_get.value), (
+            f"move_layer said {from_move.value} where get_layer said {from_get.value}"
+        )
