@@ -61,17 +61,17 @@ class LayerManagementContract:
         undrawable_kind: A registered layer kind this tier has **no drawer for**, whose data class is
             `"none"` so a replacement naming it carries no source. Replacing a layer with it is how the
             probes reach this tier's refusal.
-        refuses_by_declaration: Whether `replace_layer` checks the new kind against the tier's own
-            `Capabilities` — and so refuses with `CapabilityError`, before a description is built or the
-            engine is touched — or reaches its drawer table part-way through the reconcile and answers with
-            `KeyError`. The three tiers order 23 touched do the first; the 3-D tier does the second, which is
-            why this is an adapter's answer rather than one rule, and why the divergence is written down here
-            rather than absorbed by a probe that accepts either.
+
+    All four tiers refuse such a replacement the same way — `replace_layer` checks the new kind against the
+    tier's own `Capabilities` and raises `CapabilityError` before a description is built or the engine is
+    touched. That was an adapter's answer (`refuses_by_declaration`) while the 3-D tier still reached its
+    drawer table part-way through the reconcile and answered with `KeyError`; commits 3e192f1b/a31effce gave
+    it the same `CAPABILITIES.require` gate, after which no adapter set the flag and its `KeyError` arm could
+    not be satisfied by any tier. So the class is one rule again, asserted directly.
     """
 
     backend: str = ""
     undrawable_kind: str = ""
-    refuses_by_declaration: bool = True
 
     def make(self) -> Any:
         """Return an open tier object with nothing drawn on it.
@@ -518,19 +518,18 @@ class LayerManagementConformance:
 
         The description is built **before** the block, so `replace_layer` is the only call inside it that can
         raise. `_undrawable_here` reads the layer back and looks its band up, and either could fail with a
-        `KeyError` — which, on a tier declaring `refuses_by_declaration = False`, is the very class expected
-        here. Keeping it outside is what makes the refusal this returns the tier's, not the fixture's.
+        `KeyError` — a different class, but one that would still read as a refusal if it were raised inside.
+        Keeping it outside is what makes the refusal this returns the tier's, not the fixture's.
 
         Args:
             tier: The tier under test.
 
         Returns:
-            The exception raised, of the class this tier's adapter declares through
-            :attr:`LayerManagementContract.refuses_by_declaration`.
+            The `CapabilityError` raised. All four tiers refuse from their own declaration, so the class is
+            the rule rather than an adapter's answer (see :class:`LayerManagementContract`).
         """
-        expected = CapabilityError if self.contract.refuses_by_declaration else KeyError
         replacement = self._undrawable_here(tier)
-        with pytest.raises(expected) as refusal:
+        with pytest.raises(CapabilityError) as refusal:
             tier.replace_layer(replacement)
         return refusal.value
 
@@ -541,11 +540,11 @@ class LayerManagementConformance:
             drawn: The tier under test.
 
         Test scenario:
-            The class matters as much as the message on a tier that refuses by declaration: a `CapabilityError`
-            says the *tier* does not have the kind, and is raised before a description is built, while the
-            `KeyError` a drawer table answers with comes part-way through a reconcile and says only that a
-            lookup failed. `Capabilities.require` had no production caller at all until order 23 (D-10), so
-            this is the first check that a facade consults what its tier declares.
+            The class matters as much as the message, and all four tiers are held to the same one: a
+            `CapabilityError` says the *tier* does not have the kind, and is raised before a description is
+            built, while the `KeyError` a drawer table answers with comes part-way through a reconcile and
+            says only that a lookup failed. `Capabilities.require` had no production caller at all until
+            order 23 (D-10), so this is the first check that a facade consults what its tier declares.
         """
         refusal = self._refuse_a_replacement(drawn)
         assert self.contract.undrawable_kind in str(refusal), (

@@ -8,8 +8,8 @@ divergence between the reference and its copies fails here rather than being dis
 Subscribing it closed a divergence rather than recording one. `replace_layer` here used to reach its drawer
 table part-way through the reconcile and answer with `KeyError`, where the other three check the new kind
 against the tier's own `Capabilities` and refuse with `CapabilityError` before anything is built; this tier now
-does the same, so all four refuse from what they declare and
-:attr:`~tests.base.layer_management.LayerManagementContract.refuses_by_declaration` is left at its default.
+does the same, so all four refuse from what they declare and the probes assert that one class outright — the
+`refuses_by_declaration` flag that carried the divergence is gone with it.
 
 **The engine has no draw order to read.** VTK composites its actors by depth, not by the order they were
 added, so `move_layer` on this tier records draw order and does not apply it — the scene's own docstring says
