@@ -506,72 +506,17 @@ class TestBigDataThreshold:
         )
 
     @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
-    def test_every_big_data_builder_takes_both_names(self, builder):
-        """All three call sites carry the new name plus the deprecated alias.
+    def test_every_big_data_builder_takes_the_cutoff(self, builder):
+        """All three call sites carry the Core name, with `None` as the "not passed" sentinel.
 
         Args:
             builder: The builder to inspect.
         """
         parameters = inspect.signature(getattr(InteractiveMap, builder)).parameters
         assert parameters["big_data_threshold"].default is None, builder
-        assert parameters["rasterize_threshold"].default is None, builder
-
-
-class TestDeprecatedAliases:
-    """Every rename keeps the old spelling working for one release — and says so while it does."""
-
-    def test_rasterize_threshold_still_works(self, m, point_fc):
-        """The deprecated alias routes exactly as ``big_data_threshold`` would."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            m.points(point_fc, rasterize_threshold=1)
-        assert isinstance(m.layers[0], hv.DynamicMap), type(m.layers[0])
-
-    @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
-    def test_rasterize_threshold_warns(self, builder, point_fc, polygon_fc):
-        """Using it emits a ``DeprecationWarning`` naming the replacement.
-
-        Args:
-            builder: The builder to call with the deprecated alias.
-            point_fc: The point fixture (``points``/``trimesh``).
-            polygon_fc: The polygon fixture (``polygons``).
-        """
-        data = polygon_fc if builder == "polygons" else point_fc
-        build = getattr(InteractiveMap(), builder)
-        with pytest.warns(DeprecationWarning, match="big_data_threshold"):
-            build(data, rasterize_threshold=10_000)
-
-    def test_the_new_name_does_not_warn(self, m, point_fc):
-        """Passing only the new name is silent — otherwise the warning trains users to ignore it."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            m.points(point_fc, big_data_threshold=10_000)
-
-    @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
-    def test_both_spellings_at_once_is_refused(self, builder, point_fc, polygon_fc):
-        """Both spellings of the cutoff at once is a ``TypeError`` naming both, on every builder.
-
-        Args:
-            builder: The builder called with the contradictory pair.
-            point_fc: The point fixture (``points``/``trimesh``).
-            polygon_fc: The polygon fixture (``polygons``).
-
-        Test scenario:
-            This tier used to resolve the pair silently in favour of the new name, which meant a caller who
-            set both got one of their two numbers honoured and no hint that the other was dropped. All four
-            tiers now refuse it through the shared
-            :func:`~digitalearth.base.deprecation.renamed_parameter`, and the message names both spellings
-            plus the one to keep.
-        """
-        data = polygon_fc if builder == "polygons" else point_fc
-        build = getattr(InteractiveMap(), builder)
-        with pytest.raises(TypeError) as excinfo:
-            build(data, big_data_threshold=10_000, rasterize_threshold=1)
-        message = str(excinfo.value)
-        assert "both big_data_threshold= and the deprecated rasterize_threshold=" in (
-            message
-        ), message
-        assert "pass only big_data_threshold=" in message, message
+        assert "rasterize_threshold" not in parameters, (
+            f"{builder} still takes the spelling big_data_threshold replaced"
+        )
 
 
 class TestBasemapDefault:

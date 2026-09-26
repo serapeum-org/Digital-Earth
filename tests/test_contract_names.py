@@ -812,11 +812,10 @@ class TestTheAttachedIssues:
         web = _facade("web")
         assert "crs" in inspect.signature(web.text).parameters, "text() must take crs="
 
-    def test_web_text_still_accepts_the_old_keyword(self):
-        """The rename is a promise to the caller who already wrote `string=`."""
+    def test_web_text_takes_the_string_positionally(self):
+        """#260: the string is the third positional argument, as it is on the other tiers."""
         built = _facade("web")()
-        with pytest.warns(DeprecationWarning, match="string"):
-            drawn = built.text(4.9, 52.4, string="Amsterdam")
+        drawn = built.text(4.9, 52.4, "Amsterdam")
         assert drawn.layer_ids, drawn.layer_ids
 
     def test_web_graticule_takes_two_steps(self):

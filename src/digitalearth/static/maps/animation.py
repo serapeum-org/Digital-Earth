@@ -137,7 +137,7 @@ _ANIMATION_KINDS = (
 #: Where the method that draws a ``kind`` differs from the kind itself, as ``{kind: (method, keywords)}``.
 #:
 #: A ``kind`` is the *renderer* a caller names, and order 27a moved the methods it dispatches to — so
-#: dispatching on the kind alone would reach a deprecated alias and warn the caller about a spelling they
+#: dispatching on the kind alone would reach a method that has been renamed, and fail from inside the
 #: never wrote. The old kinds stay in the vocabulary because they are what a caller may already have
 #: written; the keywords are what tells ``contour`` and ``contourf`` apart now that they are one method.
 _KIND_METHODS = {

@@ -8,10 +8,9 @@ The headline of the tier: turn any ``WebMap`` into a shareable artifact.
 * PNG snapshot — render the HTML in a headless browser and screenshot it. The browser is an **optional,
   gated** dependency (not in the ``[web]`` extra): ``save(*.png)`` raises an actionable ``ImportError`` when
   neither Playwright nor Selenium is installed, rather than failing obscurely.
-* ``animate`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate every
-  tier's animation entry point takes). ``animate`` and ``to_gif`` were its older names, and
-  ``duration=`` its deprecated
-  seconds-per-frame spelling, converted to ``fps`` rather than reinterpreted.
+* ``save_animation`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate
+  every tier's animation entry point takes). ``animate``, ``to_gif`` and a seconds-per-frame ``duration=``
+  were its older spellings.
 
 ``WebMapBase.save`` dispatches HTML vs. PNG and the ``offline`` flag here (the base sits first in the MRO, so
 these are hooks it calls, not overrides). urllib / browser libs are imported lazily.
@@ -25,59 +24,12 @@ import warnings
 from typing import TYPE_CHECKING, Any, Optional
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import DEFAULT_TITLE
 
 # `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
 # defaults to lives in `digitalearth.base.animation`, so one number means one speed whichever backend renders
 # the series. It stays importable from this module because that is where this tier's callers and tests already
 # reach for it.
-
-
-def _fps_from_duration(seconds: Any) -> float:
-    """Convert the deprecated ``duration=`` (seconds held per frame) into the ``fps`` it means.
-
-    The rename is a unit change, not a spelling change, so the value is *converted* rather than
-    reinterpreted: ``duration=0.5`` has always meant a half-second hold, i.e. two frames a second, and it
-    still does. The positivity check lives here rather than at the call site so it runs after the
-    both-spellings guard in :func:`~digitalearth.base.deprecation.renamed_parameter` — a contradictory call
-    is a ``TypeError`` about the two names, not a complaint about one of the values.
-
-    A non-finite hold is refused by name, before the arithmetic. ``nan`` compares ``False`` against every
-    bound, so it slipped the positivity check here *and* the one on the resolved ``fps``, and ``1 / nan`` is
-    ``nan`` — a rate that means nothing reached the encoder silently (review M10). ``inf`` is refused the
-    same way: a frame held forever is not an animation, and ``1 / inf`` is a zero rate this then re-rejects
-    in terms of a number the caller never wrote.
-
-    Args:
-        seconds: Seconds to hold each frame, as the caller wrote it.
-
-    Returns:
-        The equivalent frames per second.
-
-    Raises:
-        ValueError: when ``seconds`` is not a finite positive number — a zero hold has no rate and would
-            divide by zero, and ``nan``/``inf`` have no rate to convert to at all.
-
-    Examples:
-        - A hold that is not a number is named as such, rather than becoming a ``nan`` frame rate:
-            ```python
-            >>> from digitalearth.web.export import _fps_from_duration
-            >>> _fps_from_duration(float("nan"))
-            Traceback (most recent call last):
-                ...
-            ValueError: duration= must be a finite number of seconds; got nan
-
-            ```
-    """
-    value = float(seconds)
-    if not math.isfinite(value):
-        raise ValueError(
-            f"duration= must be a finite number of seconds; got {seconds!r}"
-        )
-    if value <= 0:
-        raise ValueError(f"duration= must be positive; got {seconds!r}")
-    return 1.0 / value
 
 
 def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
@@ -256,10 +208,9 @@ class ExportMixin(_MixinBase):
         self,
         path: str,
         *,
-        fps: Optional[float] = None,
+        fps: float = DEFAULT_FPS,
         loop: int = 0,
         title: str = DEFAULT_TITLE,
-        duration: Optional[float] = None,
     ) -> pathlib.Path:
         """Write a temporal map's steps as an animated GIF (recipe W7).
 
@@ -273,27 +224,21 @@ class ExportMixin(_MixinBase):
         Args:
             path: Where to write the GIF.
             fps: Frames per second — the rate every tier's animation entry point takes, with the same
-                default (:data:`DEFAULT_FPS`, ``3.0``, declared once in :mod:`digitalearth.base.animation`;
-                the signature's ``None`` is the "not passed" sentinel the deprecated spelling is resolved
-                against), so one number means one speed across the whole package. This entry point used to
-                be spelled ``duration=0.8`` (one frame held 0.8 s, i.e. 1.25 fps); a call that names no rate
-                now renders faster, and ``fps=1.25`` restores the previous speed.
+                default (:data:`DEFAULT_FPS`, ``3.0``, declared once in
+                :mod:`digitalearth.base.animation`), so one number means one speed across the whole
+                package. This entry point used to be spelled ``duration=0.8`` (one frame held 0.8 s, i.e.
+                1.25 fps); a call that names no rate now renders faster, and ``fps=1.25`` restores the
+                previous speed.
             loop: How many times to repeat; ``0`` loops forever.
             title: HTML document title used while rendering.
-            duration: **Deprecated** spelling of the frame rate, in seconds held per frame. Passing
-                it warns that ``duration=`` will be removed in a future release and to write
-                ``fps=`` instead. It is *converted* (``fps = 1 / duration``), never
-                reinterpreted, so an old call produces the animation it always did.
 
         Returns:
             The :class:`pathlib.Path` written.
 
         Raises:
-            TypeError: when both ``fps`` and the deprecated ``duration`` are passed — one rate, two
-                spellings, so neither can be silently preferred.
-            ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` /
-                ``duration`` is not a finite positive number — a zero rate has no frame to hold, and a
-                ``nan``/``inf`` one is no rate at all.
+            ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` is
+                not a finite positive number — a zero rate has no frame to hold, and a ``nan``/``inf`` one
+                is no rate at all.
             ImportError: when no headless browser is installed — the same gated dependency the PNG
                 snapshot needs, and deliberately not part of ``digitalearth[web]``.
 
@@ -310,15 +255,6 @@ class ExportMixin(_MixinBase):
         See Also:
             digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
         """
-        fps = renamed_parameter(
-            new="fps",
-            value=fps,
-            old="duration",
-            alias=duration,
-            caller="WebMap.save_animation()",
-            default=DEFAULT_FPS,
-            convert=_fps_from_duration,
-        )
         if not math.isfinite(float(fps)):
             raise ValueError(f"fps= must be a finite rate; got {fps!r}")
         if float(fps) <= 0:

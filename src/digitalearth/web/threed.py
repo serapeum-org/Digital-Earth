@@ -21,7 +21,6 @@ goes and the promise that the page decodes with the scheme it was written with.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
@@ -521,8 +520,7 @@ class ThreeDMixin(_MixinBase):
         *,
         z_column: Optional[str] = None,
         color: Sequence[int] = (255, 140, 0),
-        size: Optional[float] = None,
-        point_size: Optional[float] = None,
+        size: float = 2.0,
         name: Optional[str] = None,
     ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
@@ -532,11 +530,7 @@ class ThreeDMixin(_MixinBase):
                 ``(N, 2|3)`` coordinate array.
             z_column: Elevation column for a GeoDataFrame input (0 when omitted).
             color: RGB point colour (0-255 per channel).
-            size: Point size in pixels (``2.0`` when omitted — the signature's ``None`` is the "not
-                passed" sentinel the deprecated spelling is resolved against). The same ``size`` that
-                means marker size on every tier.
-            point_size: **Deprecated** spelling of ``size``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``point_size=`` will be removed in a future release.
+            size: Point size in pixels. The same ``size`` that means marker size on every tier.
             name: What the cloud is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
                 ``remove_layer`` all take it. ``None`` generates ``deck-pointcloud-1``,
                 ``deck-pointcloud-2``, … as every other unnamed layer is numbered.
@@ -547,8 +541,7 @@ class ThreeDMixin(_MixinBase):
         Raises:
             TypeError: when ``points`` is a raster. The full vector guard would be too strict
                 here — a bare ``(N, 2|3)`` coordinate array is a valid input — so only a raster
-                is refused. Also when both ``size`` and the deprecated ``point_size`` are passed,
-                since they name one parameter.
+                is refused.
 
         Examples:
             - An ``(N, 3)`` xyz table becomes deck.gl positions verbatim, in lon/lat/height order
@@ -578,33 +571,11 @@ class ThreeDMixin(_MixinBase):
                 [{'position': [0.0, 0.0, 12.0]}, {'position': [1.0, 1.0, 30.0]}]
 
                 ```
-            - The old ``point_size=`` spelling still lands on ``size``, after saying it is going
-              away:
-                ```python
-                >>> import warnings                                  # doctest: +SKIP
-                >>> with warnings.catch_warnings(record=True) as caught:  # doctest: +SKIP
-                ...     warnings.simplefilter("always")
-                ...     m = WebMap().point_cloud(xyz, point_size=6.0)
-                >>> m.layers[0]["pointSize"]                         # doctest: +SKIP
-                6.0
-                >>> caught[0].category.__name__                      # doctest: +SKIP
-                'DeprecationWarning'
-
-                ```
-
         See Also:
             digitalearth.web.threed.ThreeDMixin.tiles_3d: streams a prebuilt 3-D tileset instead.
             digitalearth.three_d.Scene3D.point_cloud: the PyVista tier's desktop counterpart.
         """
         _require_layer_api()
-        size = renamed_parameter(
-            new="size",
-            value=size,
-            old="point_size",
-            alias=point_size,
-            caller="WebMap.point_cloud()",
-            default=2.0,
-        )
         # point_cloud also accepts a raw sequence of xyz triples, so the full vector guard would be too
         # strict here; reject only a raster, which would otherwise die inside `_point_cloud_data`.
         self._reject_raster(points, "point_cloud")

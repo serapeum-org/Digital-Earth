@@ -11,9 +11,9 @@ Returning the map is the part that took work here, because the thing this tier b
 keeps its ``layers``, and read back through :attr:`InteractiveMap.layer_control_panel`. That is also what
 makes ``layer_control()`` composable with the rest of the builders for the first time.
 
-``opacity=`` and ``basemap_switch=`` are the same request spelled as two booleans, so they become entries in
-``controls=`` and keep working for one release. ``reorder=`` is **not** one of them: it names a manipulation
-this tier cannot do at all, which is refused rather than exposed, so it stays its own flag.
+``opacity=`` and ``basemap_switch=`` were the same request spelled as two booleans, and are entries in
+``controls=`` now. ``reorder=`` is **not** one of them: it names a manipulation this tier cannot do at all,
+which is refused rather than exposed, so it stays its own flag.
 """
 
 import pytest
@@ -303,50 +303,6 @@ class TestAskingForABasemapSwitchOutright:
             controls=("visibility", "basemap")
         ).layer_control_panel
         assert panel_obj.select(pn.widgets.Select), "basemap switch missing"
-
-
-class TestTheOldFlagsAreAPromise:
-    """``opacity=`` and ``basemap_switch=`` are in every script already written against this tier."""
-
-    def test_the_old_opacity_flag_still_drops_the_slider(self, two_layers, recwarn):
-        """It forwards to the same control set, so the panel it produces is the old panel.
-
-        Args:
-            two_layers: The map under test.
-            recwarn: pytest's warning recorder, so the deprecation does not escape the test.
-        """
-        panel_obj = two_layers.layer_control(opacity=False).layer_control_panel
-        assert panel_obj.select(pn.widgets.FloatSlider) == []
-
-    def test_the_old_basemap_flag_still_builds_the_select(self, two_layers, recwarn):
-        """The other half of the same promise.
-
-        Args:
-            two_layers: The map under test.
-            recwarn: pytest's warning recorder, so the deprecation does not escape the test.
-        """
-        panel_obj = two_layers.layer_control(basemap_switch=True).layer_control_panel
-        assert panel_obj.select(pn.widgets.Select), "basemap switch missing"
-
-    @pytest.mark.parametrize("flag", [{"opacity": True}, {"basemap_switch": False}])
-    def test_each_old_flag_warns_and_names_controls(self, two_layers, flag):
-        """A deprecated spelling that says nothing is one nobody stops writing.
-
-        Args:
-            two_layers: The map under test.
-            flag: The deprecated keyword under test.
-        """
-        with pytest.warns(DeprecationWarning, match="controls"):
-            two_layers.layer_control(**flag)
-
-    def test_an_old_flag_beside_controls_is_refused(self, two_layers):
-        """They name one thing, so preferring either would silently drop the other.
-
-        Args:
-            two_layers: The map under test.
-        """
-        with pytest.raises(TypeError):
-            two_layers.layer_control(controls=("visibility",), opacity=False)
 
 
 class TestReorderIsNotAControl:

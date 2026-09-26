@@ -1474,8 +1474,8 @@ class Scene3DBase:
         apply, so a negative or fractional cutoff is refused the same way on all three rather than raising on
         two and reducing everything on this one.
 
-        There is **no deprecated alias** here, unlike the interactive tier's `rasterize_threshold`: nothing on
-        this tier ever spelled the cutoff another way, and shipping a keyword already deprecated would deprecate
+        There is **no second spelling** here, unlike the interactive tier's former `rasterize_threshold`:
+        nothing on this tier ever spelled the cutoff another way, and shipping one in order to retire it would
         something nobody has written. The web tier has no alias either, for the same reason.
 
         Args:

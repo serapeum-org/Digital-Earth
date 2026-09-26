@@ -13,7 +13,6 @@ WASM/Pyodide export is **out** for a pyramids-backed app: GDAL/pyramids cannot r
 live app must be *served*, not converted. ``save_app`` is the offline path (pre-rendered states only).
 """
 
-import warnings
 from functools import reduce
 from importlib.util import find_spec
 from operator import mul as _mul
@@ -25,7 +24,6 @@ from digitalearth.base.controls import (
     check_control_position,
     resolved_controls,
 )
-from digitalearth.base.deprecation import REMOVED_IN
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import _require_holoviz
 from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
@@ -39,27 +37,19 @@ _BASEMAP_CHOICES = list(
 )
 
 
-def _controls_from_flags(
+def _controls_named(
     controls: Optional[Sequence[str]],
     *,
-    opacity: Optional[bool],
-    basemap_switch: Optional[bool],
     caller: str,
 ) -> Tuple[Tuple[str, ...], bool]:
-    """Settle which controls a layer manager exposes, from ``controls=`` or the two deprecated booleans.
+    """Settle which controls a layer manager exposes, and whether the caller asked for them outright.
 
-    ``opacity=`` and ``basemap_switch=`` were this tier's way of saying "expose these controls", one boolean
-    per control, and the web tier had no way of saying it at all. One list says it on both tiers (#264), so
-    the booleans are resolved into it here and warn — the same promise
-    :func:`~digitalearth.base.deprecation.renamed_parameter` keeps for a renamed parameter, written out
-    because this is two old names collapsing into one new one rather than a rename.
+    One list says it on both tiers (#264): this tier once spelled the same request as one boolean per
+    control, and the web tier had no way of spelling it at all.
 
     Args:
         controls: The caller's control names, or ``None`` for "not passed".
-        opacity: The deprecated flag, or ``None`` for "not passed". Its effective default is ``True``.
-        basemap_switch: The deprecated flag, or ``None`` for "not passed" — which is also its documented
-            "offer it unprompted" value, so the two coincide and nothing is lost by the sentinel.
-        caller: The public method the keywords were written on, for every message to quote.
+        caller: The public method the keyword was written on, for every message to quote.
 
     Returns:
         ``(controls, requested)`` — the control names to build, and whether the caller asked for them
@@ -68,39 +58,12 @@ def _controls_from_flags(
         furniture, and is dropped with a log line.
 
     Raises:
-        TypeError: when ``controls`` is passed together with either boolean. They are two spellings of one
-            request, so honouring either would silently drop the other.
         ValueError: from :func:`~digitalearth.base.controls.resolved_controls`, for a name no tier has or
             one this tier cannot build.
-
-    Warns:
-        DeprecationWarning: naming the boolean used and ``controls=`` as its replacement.
     """
-    deprecated = {"opacity": opacity, "basemap_switch": basemap_switch}
-    passed = sorted(name for name, value in deprecated.items() if value is not None)
-    if controls is not None and passed:
-        raise TypeError(
-            f"{caller} got controls= together with {passed}; those are the deprecated spelling of the same "
-            "request, so neither can be silently preferred. Keep controls=."
-        )
-    if controls is not None:
-        return resolved_controls(controls, offered=LAYER_CONTROLS, caller=caller), True
-    if not passed:
+    if controls is None:
         return tuple(LAYER_CONTROLS), False
-    warnings.warn(
-        f"{caller}: {', '.join(f'{name}=' for name in passed)} is deprecated and will be removed in "
-        f"{REMOVED_IN}; name the controls to expose with controls= instead, e.g. "
-        "controls=('visibility', 'opacity')",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    named = ["visibility"]
-    if opacity is not False:
-        named.append("opacity")
-    if basemap_switch is not False:
-        named.append("basemap")
-    resolved = resolved_controls(named, offered=LAYER_CONTROLS, caller=caller)
-    return resolved, basemap_switch is True
+    return resolved_controls(controls, offered=LAYER_CONTROLS, caller=caller), True
 
 
 #: Element type names that are a tile basemap — replaced (not stacked under) when a basemap widget picks
@@ -580,9 +543,7 @@ class DashboardMixin(_MixinBase):
         layers: Optional[Sequence[str]] = None,
         position: str = "top-right",
         controls: Optional[Sequence[str]] = None,
-        opacity: Optional[bool] = None,
         reorder: bool = False,
-        basemap_switch: Optional[bool] = None,
     ) -> Self:
         """Build a layer manager — per-layer visibility, an opacity slider, a basemap switch (DI.13).
 
@@ -620,19 +581,12 @@ class DashboardMixin(_MixinBase):
                 :data:`~digitalearth.base.controls.LAYER_CONTROLS`; ``None`` (default) offers all three, and
                 ``"visibility"`` cannot be dropped. Naming a control is an explicit request — see the
                 basemap policy above.
-            opacity: **Deprecated** spelling of ``"opacity"`` in ``controls`` (effective default ``True``);
-                honoured for one release, after a ``DeprecationWarning``.
             reorder: Must stay ``False``; ``True`` raises ``NotImplementedError``.
-            basemap_switch: **Deprecated** spelling of ``"basemap"`` in ``controls``; honoured for one
-                release, after a ``DeprecationWarning``. ``True`` requires the switch, ``False`` drops it,
-                and ``None`` (default) offers it unprompted.
 
         Returns:
             The same map instance, so builder calls chain. The panel is :attr:`layer_control_panel`.
 
         Raises:
-            TypeError: when ``controls`` is passed together with ``opacity`` or ``basemap_switch`` — two
-                spellings of one request.
             ValueError: when ``position`` is not one of the four corners; when ``controls`` names something
                 outside the shared vocabulary, drops ``"visibility"``, or names a control this tier cannot
                 build; when there are no layers to control; when a ``layers`` id is not on this map; or when
@@ -709,11 +663,8 @@ class DashboardMixin(_MixinBase):
                 "built in within that band."
             )
         check_control_position(position)
-        wanted, requested = _controls_from_flags(
-            controls,
-            opacity=opacity,
-            basemap_switch=basemap_switch,
-            caller="InteractiveMap.layer_control()",
+        wanted, requested = _controls_named(
+            controls, caller="InteractiveMap.layer_control()"
         )
         if not self.layers:
             raise ValueError(
@@ -754,8 +705,8 @@ class DashboardMixin(_MixinBase):
 
         Args:
             pn: The imported panel module.
-            requested: Whether the caller asked for the switch outright (``basemap_switch=True``) rather
-                than leaving it at the ``None`` default. An explicit request on a non-Web-Mercator map is
+            requested: Whether the caller named ``"basemap"`` in ``controls`` rather than leaving the
+                default. An explicit request on a non-Web-Mercator map is
                 refused — the answer ``dashboard(widgets=("basemap",))`` already gives — while an
                 unprompted one is dropped and logged, since nothing was asked for.
 

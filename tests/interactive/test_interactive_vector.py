@@ -63,7 +63,7 @@ class TestPoints:
         )
 
     def test_value_column_drives_colour_and_hover(self, m, point_fc):
-        m.points(point_fc, value_column="fid", cmap="magma")
+        m.points(point_fc, column="fid", cmap="magma")
         element = m.layers[0]
         assert "fid" in [d.name for d in element.vdims], (
             "value column must be a vdim for hover"
@@ -92,7 +92,7 @@ class TestPoints:
 
     def test_mpl_render_smoke(self, m, point_fc, tmp_path):
         out = tmp_path / "points.png"
-        m.points(point_fc, value_column="fid").save(str(out))
+        m.points(point_fc, column="fid").save(str(out))
         assert out.exists() and out.stat().st_size > 0
 
 
@@ -250,12 +250,12 @@ _ONE_WARP_CALLS = {
     "points-graduated": (
         "points",
         "point",
-        {"value_column": "fid", "scheme": "quantiles", "k": 3},
+        {"column": "fid", "scheme": "quantiles", "k": 3},
     ),
     "points-categorical": (
         "points",
         "point",
-        {"value_column": "fid", "scheme": "categorical"},
+        {"column": "fid", "scheme": "categorical"},
     ),
     "polygons": ("polygons", "polygon", {}),
     "polygons-column": ("polygons", "polygon", {"column": "fid"}),
@@ -339,7 +339,7 @@ class TestGraduatedPoints:
     """``points(scheme=...)`` classifies through the same path a classified polygon layer uses."""
 
     def test_a_classified_point_layer_records_its_breaks(self, m, point_fc):
-        """``points(value_column=, scheme=)`` colours by class and records the edges on ``last_breaks``.
+        """``points(column=, scheme=)`` colours by class and records the edges on ``last_breaks``.
 
         Args:
             m: The map under test.
@@ -350,7 +350,7 @@ class TestGraduatedPoints:
             layer was impossible here and routine there. It now goes through the one classifier this tier
             uses for polygons, which is what makes the edges — and so the legend — agree between the two.
         """
-        m.points(point_fc, value_column="fid", scheme="quantiles", k=3)
+        m.points(point_fc, column="fid", scheme="quantiles", k=3)
         assert m.last_breaks is not None, (
             f"a classified layer must record its edges, got {m.last_breaks!r}"
         )
@@ -372,7 +372,7 @@ class TestGraduatedPoints:
             The classification is opt-in on every tier, so the default must not start binning a column that
             a caller expects to read as a continuous ramp.
         """
-        m.points(point_fc, value_column="fid")
+        m.points(point_fc, column="fid")
         assert not m.last_breaks, (
             f"an unclassified layer must record no breaks, got {m.last_breaks!r}"
         )
@@ -496,13 +496,13 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
 
         Test scenario:
             A dropped styling request, on the same branch that added ``_reject_unsupported`` specifically so
-            requests are refused rather than dropped. The message has to name ``value_column``, because that
+            requests are refused rather than dropped. The message has to name ``column``, because that
             is the half the caller has to add.
         """
         with pytest.raises(ValueError) as excinfo:
             m.points(point_fc, scheme="quantiles", k=2)
         message = str(excinfo.value)
-        assert "value_column=" in message, (
+        assert "column=" in message, (
             f"the message must name the half the caller has to add: {message}"
         )
         assert "scheme=" in message, (
@@ -524,7 +524,7 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
         """
         fc = point_fc.copy()
         fc["label"] = [("a", "b", "c")[index % 3] for index in range(len(fc))]
-        m.points(fc, value_column="label", scheme="categorical")
+        m.points(fc, column="label", scheme="categorical")
         style = m.style_of(m.layers[0])["common"]
         assert isinstance(style["cmap"], dict), (
             f"a categorical point layer maps label -> colour, got {style['cmap']!r}"
@@ -549,7 +549,7 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
         fc["label"] = [str(value % 3) for value in range(len(fc))]
         polygons = fc.copy()
         polygons["geometry"] = polygons.geometry.buffer(500.0)
-        m.points(fc, value_column="label", scheme="categorical")
+        m.points(fc, column="label", scheme="categorical")
         other = InteractiveMap().choropleth(polygons, "label", scheme="categorical")
         point_cmap = m.style_of(m.layers[0])["common"]["cmap"]
         polygon_cmap = other.style_of(other.layers[0])["common"]["cmap"]
@@ -573,9 +573,7 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
             classified point layer. The caller's explicit value wins on both.
         """
         if builder == "points":
-            m.points(
-                point_fc, value_column="fid", scheme="quantiles", k=2, colorbar=False
-            )
+            m.points(point_fc, column="fid", scheme="quantiles", k=2, colorbar=False)
         else:
             m.choropleth(polygon_fc, "fid", scheme="quantiles", k=2, colorbar=False)
         style = m.style_of(m.layers[0])["common"]
@@ -706,7 +704,7 @@ class TestAClassifiedLayerTakesThePathEveryOtherBuilderTakes:
             Reported against `choropleth`, but the two helpers are shared with `points`, which fails the
             same way. Fixing only the reported builder would leave half the class.
         """
-        m.points(self.POINTS, value_column="fid", scheme=scheme, k=3)
+        m.points(self.POINTS, column="fid", scheme=scheme, k=3)
         assert self._stored(m) == {"points-1": self.POINTS}, self._stored(m)
 
     def test_the_classes_are_the_ones_the_opened_frame_yields(self, m, point_fc):

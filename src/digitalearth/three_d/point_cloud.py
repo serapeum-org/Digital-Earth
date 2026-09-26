@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.three_d.base import classified_scalars
 
@@ -105,13 +104,12 @@ class PointCloudMixin(_MixinBase):
         name: Any = None,
         values: np.ndarray | None = None,
         value_column: str | None = None,
-        size: float | None = None,
+        size: float = 5.0,
         scheme: Any | None = None,
         k: int = 5,
         render_points_as_spheres: bool = True,
         eye_dome_lighting: bool = True,
         cmap: str = "viridis",
-        point_size: float | None = None,
         **kwargs: Any,
     ) -> Any:
         """Render a point cloud (LiDAR / observations / raster cells) and register it as a layer.
@@ -135,9 +133,6 @@ class PointCloudMixin(_MixinBase):
             render_points_as_spheres: Draw points as shaded spheres (cleaner than flat dots).
             eye_dome_lighting: Enable depth-cueing eye-dome lighting (recommended for dense clouds).
             cmap: Colormap used when the cloud is coloured by a scalar.
-            point_size: **Deprecated** alias of ``size``; passing it warns that ``point_size=`` will be
-                removed in a future release and forwards the value unchanged. Passing both is a
-                ``TypeError``.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`.
 
         Returns:
@@ -145,8 +140,6 @@ class PointCloudMixin(_MixinBase):
             points (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
 
         Raises:
-            TypeError: if both ``size`` and the deprecated ``point_size`` are given — they name one
-                parameter, so neither can be silently preferred.
             ValueError: if ``values`` does not have one entry per point, if ``scheme`` cannot classify
                 the values, or if `data` declares a CRS other than the scene's and cannot be reprojected (a
                 `PointArrays`). Also — only when the scene was built with ``strict=True`` —
@@ -190,14 +183,6 @@ class PointCloudMixin(_MixinBase):
 
                 ```
         """
-        size = renamed_parameter(
-            new="size",
-            value=size,
-            old="point_size",
-            alias=point_size,
-            caller="Scene3D.point_cloud()",
-            default=5.0,
-        )
         return self._add_described_layer(
             kind="point_cloud",
             data=data,

@@ -26,7 +26,6 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.controls import check_control_position, resolved_controls
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
@@ -793,7 +792,6 @@ class DecorationMixin(_MixinBase):
         position: str = "top-right",
         controls: Optional[list] = None,
         theme: str = "default",
-        layer_ids: Optional[list] = None,
     ) -> Self:
         """Add a switcher so a viewer can turn the data layers on and off.
 
@@ -804,7 +802,7 @@ class DecorationMixin(_MixinBase):
         The three keywords are the ones the Tier-2 contract declares and the interactive tier now answers to
         as well — the layers to include, the position, the controls to expose — so the same call adds a layer
         control on either tier (#264). What was ``layer_ids=`` here is ``layers=``, the name that tier uses
-        for the same thing; the old spelling keeps working for one release.
+        for the same thing.
 
         Args:
             layers: The layers to offer, by id, defaulting to every data layer added so far — that is,
@@ -822,8 +820,6 @@ class DecorationMixin(_MixinBase):
                 here should hear that this tier cannot.
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
                 keyword: it styles the switcher rather than choosing what the switcher contains.
-            layer_ids: **Deprecated** spelling of ``layers``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``layer_ids=`` will be removed in a future release.
 
         Note:
             A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
@@ -836,8 +832,6 @@ class DecorationMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when both ``layers`` and the deprecated ``layer_ids`` are passed — they name one
-                parameter, so preferring either would silently drop the other.
             ValueError: when ``position`` is not one of the four legal corners, when ``controls`` names
                 something outside the shared vocabulary or something this tier cannot build, when no data
                 layer has been added yet, or when an id was given that is not on this map.
@@ -861,13 +855,6 @@ class DecorationMixin(_MixinBase):
         """
         _require_maplibre()
         _check_position(position)
-        layers = renamed_parameter(
-            new="layers",
-            value=layers,
-            old="layer_ids",
-            alias=layer_ids,
-            caller="WebMap.layer_control()",
-        )
         if controls is not None:
             resolved_controls(
                 controls,
@@ -920,13 +907,11 @@ class DecorationMixin(_MixinBase):
         s: Optional[str] = None,
         *,
         crs: Any = 4326,
-        text_size: Optional[float] = None,
+        text_size: float = 14.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
         name: Optional[str] = None,
-        size: Optional[float] = None,
-        string: Optional[str] = None,
     ) -> Self:
         """Place a single line of text at a coordinate.
 
@@ -940,24 +925,18 @@ class DecorationMixin(_MixinBase):
                 follow matplotlib's own spelling.
             crs: What `lon`/`lat` are measured in. EPSG:4326 by default; a point in another CRS is
                 reprojected into the CRS this tier places data in, exactly as a feature is (#260).
-            text_size: Text size in pixels (``14.0`` when omitted — the signature's ``None`` is the
-                "not passed" sentinel the deprecated spelling is resolved against). Named for the text
-                rather than ``size``, which means the visual size of a marker everywhere else.
+            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
+                visual size of a marker everywhere else.
             color: Text colour.
             halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
-            string: **Deprecated** spelling of `s`; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``string=`` will be removed in a future release.
             name: What a layer switcher calls this annotation; ``None`` uses its generated id.
-            size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``size=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one
-                parameter, so preferring either would silently drop the other.
+            TypeError: when the string to draw is not given.
             ValueError: when ``lon``, ``lat``, ``text_size`` or ``halo_width`` is not a finite number —
                 refused at this call, because a figure holding NaN or infinity could not be written
                 down.
@@ -975,13 +954,6 @@ class DecorationMixin(_MixinBase):
         """
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.text()"
-        s = renamed_parameter(
-            new="s",
-            value=s,
-            old="string",
-            alias=string,
-            caller=call,
-        )
         if s is None:
             raise TypeError(
                 "text() needs the string to draw; pass it as the third argument"
@@ -992,18 +964,7 @@ class DecorationMixin(_MixinBase):
             crs,
         )
         _require_layer_api()
-        text_size = as_finite(
-            renamed_parameter(
-                new="text_size",
-                value=text_size,
-                old="size",
-                alias=size,
-                caller=call,
-                default=14.0,
-            ),
-            "text_size",
-            call,
-        )
+        text_size = as_finite(text_size, "text_size", call)
         halo_width = as_finite(halo_width, "halo_width", call)
         layer_id = self._layer_id("text", name)
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is

@@ -720,7 +720,7 @@ class TestTheSwitchReachesTheViewer:
 
         m = WebMap().basemap().choropleth(polygons, column="pop").points(points)
         keep, dropped = m.layer_ids[0], m.layer_ids[1]
-        payload = _payload(m.layer_control(layer_ids=[keep]).to_html())
+        payload = _payload(m.layer_control(layers=[keep]).to_html())
         assert f'"layerIds": ["{keep}"]' in payload, payload[-400:]
         assert dropped in payload, "the excluded layer should still be drawn"
 
@@ -738,7 +738,7 @@ class TestTheSwitchReachesTheViewer:
 
         web_map = WebMap().basemap().points(points)
         with pytest.raises(ValueError, match="not on this map"):
-            web_map.layer_control(layer_ids=["circle-999"])
+            web_map.layer_control(layers=["circle-999"])
 
     def test_a_bad_position_is_refused(self, points):
         """The four corners are MapLibre's; a typo is silently ignored by the browser."""

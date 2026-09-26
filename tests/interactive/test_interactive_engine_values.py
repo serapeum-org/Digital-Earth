@@ -231,7 +231,7 @@ class TestAHeldColormapStillReachesTheEngine:
         ramp = ListedColormap(list(self.RAMP), name="homemade-ramp")
         interactive_map = new_map()
         if builder == "points":
-            interactive_map.points(point_fc, value_column="fid", cmap=ramp)
+            interactive_map.points(point_fc, column="fid", cmap=ramp)
         elif builder == "polygons":
             interactive_map.polygons(polygon_fc, column="fid", cmap=ramp)
         elif builder == "choropleth":
@@ -264,7 +264,7 @@ class TestAStyleDictDescribesItsColormapByName:
         from matplotlib import colormaps
 
         interactive_map = new_map()
-        interactive_map.points(point_fc, value_column="fid", cmap=colormaps["magma"])
+        interactive_map.points(point_fc, column="fid", cmap=colormaps["magma"])
         props = dict(
             interactive_map.figure_spec.layers.get(
                 interactive_map.layer_ids[-1]

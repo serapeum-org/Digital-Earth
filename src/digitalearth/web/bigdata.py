@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 from loguru import logger
 
 from digitalearth.base.bigdata import validate_big_data_threshold
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import LayerSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
@@ -359,8 +358,7 @@ class BigDataMixin(_MixinBase):
         features: Any,
         *,
         fill_color: Sequence[int] = (51, 136, 255, 200),
-        size: Optional[float] = None,
-        radius: Optional[float] = None,
+        size: float = 5.0,
     ) -> Self:
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
@@ -372,20 +370,16 @@ class BigDataMixin(_MixinBase):
                 (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
-            size: Point radius in pixels (``5.0`` when omitted — the signature's ``None`` is the "not
-                passed" sentinel the deprecated spelling is resolved against). The same ``size`` that
-                means marker size on every tier, and the same number
+            size: Point radius in pixels. The same ``size`` that means marker size on every tier, and
+                the same number
                 :meth:`~digitalearth.web.vector.VectorMixin.points` hands down when it routes a large
                 layer here.
-            radius: **Deprecated** spelling of ``size``; forwarded unchanged, after a
-                ``DeprecationWarning`` that ``radius=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when ``features`` is a raster rather than a vector layer, or when both ``size``
-                and the deprecated ``radius`` are passed — they name one parameter.
+            TypeError: when ``features`` is a raster rather than a vector layer.
 
         Examples:
             - Build the overlay and read back the spec that will be handed to deck.gl (needs the
@@ -412,19 +406,6 @@ class BigDataMixin(_MixinBase):
                 []
 
                 ```
-            - The old ``radius=`` spelling still lands on ``size``, after saying it is going away:
-                ```python
-                >>> import warnings                                  # doctest: +SKIP
-                >>> with warnings.catch_warnings(record=True) as caught:  # doctest: +SKIP
-                ...     warnings.simplefilter("always")
-                ...     m = WebMap().deck_scatter(gdf, radius=4.0)
-                >>> m._deck_layers[0]["getPointRadius"]              # doctest: +SKIP
-                4.0
-                >>> caught[0].category.__name__                      # doctest: +SKIP
-                'DeprecationWarning'
-
-                ```
-
         See Also:
             digitalearth.web.vector.VectorMixin.points: the per-feature path, which routes
                 here above ``big_data_threshold``.
@@ -433,14 +414,6 @@ class BigDataMixin(_MixinBase):
         from maplibre.sources import geopandas_to_geojson
 
         _require_layer_api()
-        size = renamed_parameter(
-            new="size",
-            value=size,
-            old="radius",
-            alias=radius,
-            caller="WebMap.deck_scatter()",
-            default=5.0,
-        )
         gdf = self._display_gdf(features, method="deck_scatter")
         layer = {
             DECK_TYPE_KEY: "GeoJsonLayer",

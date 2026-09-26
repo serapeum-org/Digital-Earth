@@ -6,9 +6,9 @@ could add a layer control without knowing which backend it was talking to. The s
 layers to include, the position, and the controls to expose — with both tiers returning the map.
 
 This tier already returned the map and already took ``position``, so what changes here is the *spelling*:
-``layer_ids=`` becomes ``layers=``, the Tier-2 name the contract declares, and keeps working for one release.
-``controls=`` arrives as the third shared name; this tier can only build visibility rows, and says so rather
-than accepting a control it cannot draw.
+``layer_ids=`` becomes ``layers=``, the Tier-2 name the contract declares. ``controls=`` arrives as the third
+shared name; this tier can only build visibility rows, and says so rather than accepting a control it cannot
+draw.
 
 Every check reads the **exported page** where it can, because the switch is a control in a saved file rather
 than a Python-side flag: what the request records is only interesting if it reaches the viewer.
@@ -150,37 +150,3 @@ class TestTheControlsThisTierCanOffer:
         with pytest.raises(ValueError) as refused:
             two_layers.layer_control(controls=("visibilty",))
         assert "visibilty" in str(refused.value), refused.value
-
-
-class TestTheOldSpellingIsAPromise:
-    """``layer_ids=`` is in every script already written against this tier."""
-
-    def test_the_old_name_still_offers_the_subset(self, two_layers, recwarn):
-        """It forwards unchanged, so the page it produces is the page it always produced.
-
-        Args:
-            two_layers: The map under test.
-            recwarn: pytest's warning recorder, so the deprecation does not escape the test.
-        """
-        keep = two_layers.layer_ids[0]
-        payload = _payload(two_layers.layer_control(layer_ids=[keep]).to_html())
-        assert f'"layerIds": ["{keep}"]' in payload, payload[-400:]
-
-    def test_the_old_name_warns_and_names_the_new_one(self, two_layers):
-        """A deprecated spelling that says nothing is one nobody stops writing.
-
-        Args:
-            two_layers: The map under test.
-        """
-        with pytest.warns(DeprecationWarning, match="layers"):
-            two_layers.layer_control(layer_ids=two_layers.layer_ids[:1])
-
-    def test_both_spellings_at_once_is_refused(self, two_layers):
-        """They name one parameter, so preferring either would silently drop the other.
-
-        Args:
-            two_layers: The map under test.
-        """
-        offered = two_layers.layer_ids[:1]
-        with pytest.raises(TypeError):
-            two_layers.layer_control(layers=offered, layer_ids=offered)

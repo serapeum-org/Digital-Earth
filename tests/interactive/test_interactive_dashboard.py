@@ -323,7 +323,7 @@ class TestBasemapWidgetIsWired:
         ], "a non-Mercator map must not offer a basemap switch"
 
     def test_explicit_switch_is_refused_off_mercator(self, dataset, point_fc):
-        """``basemap_switch=True`` is a request, and an impossible request is refused, not dropped.
+        """Naming ``"basemap"`` is a request, and an impossible request is refused, not dropped.
 
         Args:
             dataset: The raster fixture.
@@ -698,7 +698,7 @@ class TestOverridesMergeOverRecordedStyle:
             record now, which is what stops two rasters sharing the last one's colours (#300).
         """
         m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
-        m.points(point_fc, value_column="fid", cmap="magma")
+        m.points(point_fc, column="fid", cmap="magma")
         raster = m._restyled_layers({"alpha": 0.5})[0]
         style = hv.Store.lookup_options("bokeh", raster, "style").kwargs
         plot = hv.Store.lookup_options("bokeh", raster, "plot").kwargs
