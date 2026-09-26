@@ -29,6 +29,7 @@ from digitalearth.base.spec._serial import (
     refuse_unknown,
     require,
 )
+from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.furniture import Furniture
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
@@ -208,6 +209,97 @@ class PanelSpec:
                 f"panel {self.id!r} lists furniture {repeated_kinds} more than once"
             )
         object.__setattr__(self, "furniture", furniture)
+
+    def bounds_of(
+        self,
+        extents: Mapping[str, Optional[Bounds]],
+        *,
+        padding: float = 0.0,
+    ) -> Optional[Bounds]:
+        """Return the region this panel's own layers cover, in the CRS the panel draws in.
+
+        What a tier needs to frame a figure on its data, composed where both halves of the question are
+        already held: *which* layers count is this panel's `layers`, and *which CRS* they have to meet in is
+        its `view`. Neither is the figure's — a linked-view figure frames each panel on its own subset — and
+        neither is the tier's, which can measure a layer's extent but not decide those two things.
+
+        Nothing is computed here that :class:`~digitalearth.base.spec.bounds.Bounds` did not already do:
+        :meth:`~digitalearth.base.spec.bounds.Bounds.to_crs` converts,
+        :meth:`~digitalearth.base.spec.bounds.Bounds.union` merges and
+        :meth:`~digitalearth.base.spec.bounds.Bounds.padded` grows. This is the order they go in.
+
+        Args:
+            extents: What each layer covers, by layer id, as the tier measured it — from the artists or
+                elements it actually drew, in any CRS. It is read as *what is known* rather than as one
+                entry per layer: a layer with no key, and a layer whose value is ``None``, are both skipped,
+                because a text label carries a point and a graticule is computed from the CRS rather than
+                covering anything. Ids this panel does not show are ignored.
+            padding: Breathing room around the union, as a fraction of its own span — ``0.05`` leaves a 5%
+                margin. The default leaves the frame exactly the rectangle the layers cover.
+
+        Returns:
+            The padded union, in the view's CRS, or ``None`` when no layer this panel shows had an extent to
+            give — which a caller has to be able to tell from a frame that came out empty.
+
+        Raises:
+            TypeError: if `extents` is not a mapping, or if one of its values is neither a `Bounds` nor
+                ``None`` — named with the layer id, because a figure has many layers and only one is wrong.
+            ValueError: from `Bounds` — for two extents that cannot be made to meet (a view with no CRS
+                cannot convert, so rectangles in two CRSs are refused rather than reinterpreted), or for a
+                `padding` below ``-0.5``, which would turn the frame inside out.
+
+        Examples:
+            - Two layers, framed on the rectangle that holds both:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, PanelSpec, Viewport
+                >>> panel = PanelSpec("main", Viewport(3857), layers=("dem", "gauges"))
+                >>> covers = {
+                ...     "dem": Bounds(0.0, 0.0, 10.0, 10.0, crs=3857),
+                ...     "gauges": Bounds(5.0, 20.0, 30.0, 40.0, crs=3857),
+                ... }
+                >>> panel.bounds_of(covers).as_bbox()
+                [0.0, 0.0, 30.0, 40.0]
+
+                ```
+            - A layer measured in the data's CRS is converted into the panel's before it is merged:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, PanelSpec, Viewport
+                >>> panel = PanelSpec("main", Viewport(3857), layers=("here",))
+                >>> framed = panel.bounds_of({"here": Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)})
+                >>> framed.crs, round(framed.xmax)
+                (3857, 111319)
+
+                ```
+            - A panel whose layers measured nothing has no region to report:
+                ```python
+                >>> from digitalearth.base.spec import PanelSpec
+                >>> PanelSpec("main", layers=("grid",)).bounds_of({}) is None
+                True
+
+                ```
+        """
+        if not isinstance(extents, Mapping):
+            raise TypeError(
+                f"bounds_of takes a mapping of layer id to Bounds; got {type(extents).__name__}"
+            )
+        target = self.view.crs
+        total: Optional[Bounds] = None
+        for layer_id in self.layers:
+            covered = extents.get(layer_id)
+            if covered is None:
+                continue
+            if not isinstance(covered, Bounds):
+                raise TypeError(
+                    f"bounds_of needs a Bounds for layer {layer_id!r}; got "
+                    f"{type(covered).__name__}"
+                )
+            # Converted before the merge, not after: `union` refuses two CRSs outright rather than
+            # reinterpreting the numbers, which is the whole reason the panel is the one doing this.
+            placed = covered if target is None else covered.to_crs(target)
+            total = placed if total is None else total.union(placed)
+        if total is None or not padding:
+            return total
+        return total.padded(padding)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a figure stores.
