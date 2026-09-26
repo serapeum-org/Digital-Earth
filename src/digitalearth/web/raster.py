@@ -533,6 +533,38 @@ def _tile_props(
     }
 
 
+def _windowed_raster(web_map: Any, data: Any, *, route: str, caller: str) -> Any:
+    """Open what a tiled route was handed, refusing an input it cannot read one window at a time.
+
+    Args:
+        web_map: The map, whose :meth:`~digitalearth.web.base.WebMapBase._opened` reads a path, a URL or a
+            `DataRef` into the raster it names.
+        data: The caller's ``data=``/``dataset=``, as they gave it.
+        route: The resolved route, named in the refusal.
+        caller: The builder, for the refusal.
+
+    Returns:
+        The opened pyramids ``Dataset`` the tiled route reads its tiles out of.
+
+    Raises:
+        TypeError: when the input is not a raster pyramids can window — a `Source`, a bare array, a
+            `GeoDataFrame`. The inline route takes the first two (they are values already in memory, and it
+            encodes the whole band as one image), so this is the one place the two routes' inputs differ, and
+            it is refused by name here rather than as ``cannot build a Source from Source`` out of the
+            colour-limit scan or ``no attribute 'bbox'`` out of the extent (review R2-L12).
+    """
+    from pyramids.dataset import Dataset
+
+    dataset = web_map._opened(data)
+    if not isinstance(dataset, Dataset):
+        raise TypeError(
+            f'{caller} tiles="{route}" reads its pixels one window at a time through pyramids\' overviews, '
+            f"so it needs a raster it can window: a pyramids Dataset, or a path or URL to one; got "
+            f"{type(data).__name__}. Drop tiles= to draw the pixels this input already holds"
+        )
+    return dataset
+
+
 def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
     """Return where a tiled route writes.
 
@@ -1286,7 +1318,10 @@ class RasterMixin(_MixinBase):
                 ``tiles`` names no route this tier writes, ``tiles_path`` is missing, ``zooms`` is not an
                 ordered pair of levels, or the range produced no tile with any value in it.
             KeyError: when `cmap` names no registered colormap, or `dataset` is a URL with no resolver.
-            TypeError: when `cmap` is neither a name, a ``Colormap``, nor a sequence of colours.
+            TypeError: when `cmap` is neither a name, a ``Colormap``, nor a sequence of colours; and, for a
+                tiled route, when `data` is not a raster pyramids can read windows out of — a `Source` or a
+                bare array is drawn by the inline route, which encodes the whole band at once, but a pyramid
+                is written one window at a time and needs a ``Dataset``, or a path or URL to one.
             FileNotFoundError: when `data` is a path that names nothing.
             OffLimbError: only when the map was built with ``strict=True`` and the band cannot be
                 placed; by default that layer is skipped with a warning instead, so one unplaceable
@@ -1426,9 +1461,10 @@ class RasterMixin(_MixinBase):
 
         Raises:
             ValueError: as :meth:`field` documents for a tiled route.
+            TypeError: as :meth:`field` documents, when the input is not a raster pyramids can window.
         """
         caller = _FIELD_CALLER
-        dataset = self._opened(data)
+        dataset = _windowed_raster(self, data, route=route, caller=caller)
         styling = _styling_source(dataset, band)
         cmap_name = self._auto_cmap(styling, cmap)
         low, high = _scan_limits(dataset, band, vmin=vmin, vmax=vmax)
@@ -1549,6 +1585,8 @@ class RasterMixin(_MixinBase):
                 refused at this call, because a figure holding NaN or infinity could not be written down.
             FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
                 is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
+            TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;
+                see :meth:`field`, whose tiled route shares this one's writer.
 
         Examples:
             - A true-colour composite from a Landsat-ordered dataset:
@@ -1640,6 +1678,8 @@ class RasterMixin(_MixinBase):
                 refused at this call, because a figure holding NaN or infinity could not be written down.
             FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
                 is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
+            TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;
+                see :meth:`field`, whose tiled route shares this one's writer.
 
         Examples:
             - Three bands read as hue, saturation and value (needs the ``web`` extra, so the block is
@@ -1806,11 +1846,12 @@ class RasterMixin(_MixinBase):
 
         Raises:
             ValueError: as :meth:`field` documents for a tiled route.
+            TypeError: as :meth:`field` documents, when the input is not a raster pyramids can window.
         """
         from digitalearth.base.stretch import stretch_to_unit
 
         caller = f"WebMap.{via}()"
-        opened = self._opened(dataset)
+        opened = _windowed_raster(self, dataset, route=route, caller=caller)
         channels = [int(band) for band in bands]
         frozen = _composite_limits(opened, channels) if limits is None else limits
 

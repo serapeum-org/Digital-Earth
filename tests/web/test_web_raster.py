@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.sources import get_source
 from digitalearth.web import WebMap
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -722,6 +723,49 @@ class TestTheTiledRasterRoutes:
         drawn = web_raster.draw_field(WebMap(), None, described)
         assert drawn.source_spec["tiles"] == ["acc/{z}/{x}/{y}.png"], drawn.source_spec
         assert "bounds" not in drawn.source_spec, drawn.source_spec
+
+    @pytest.mark.parametrize(
+        "make",
+        [
+            pytest.param(lambda dataset: get_source(dataset, band=1), id="source"),
+            pytest.param(lambda dataset: np.zeros((4, 4)), id="array"),
+        ],
+    )
+    def test_an_input_the_route_cannot_window_is_refused_by_name(
+        self, make, dataset, tmp_path
+    ):
+        """An input the inline path takes has to be refused in the builder's own words, not two frames down.
+
+        Args:
+            make: Builds the input under test from the shared raster.
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, which must stay empty.
+
+        Test scenario:
+            A `Source` and a bare array are documented inputs of `field` and draw on the inline path. The
+            tiled route reads windows through pyramids' overviews, which neither can answer, and said so as
+            ``TypeError: cannot build a Source from Source`` from inside the colour-limit scan and
+            ``AttributeError: 'numpy.ndarray' object has no attribute 'bbox'`` from inside the extent
+            (review R2-L12). The refusal now names the call, the route and what it needs.
+        """
+        destination = tmp_path / "acc"
+        m = WebMap()
+        with pytest.raises(TypeError, match="needs a raster it can window"):
+            m.field(make(dataset), tiles="xyz", tiles_path=destination, zooms=(9, 9))
+        assert not destination.exists(), sorted(destination.rglob("*"))
+
+    def test_the_inline_route_still_draws_the_input_the_tiled_one_refuses(self, dataset):
+        """The refusal is about the route, so the other route has to keep taking the same input.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            Measured rather than asserted of one side alone: refusing the input in `field` itself, before the
+            route is chosen, would read as a fix and would take a documented inline input away.
+        """
+        m = WebMap().field(get_source(dataset, band=1))
+        assert m.layer_ids == ["raster-1"], m.layer_ids
 
     def test_a_refused_zoom_range_leaves_nothing_on_disk(self, dataset, tmp_path):
         """A call that never writes a tile must not leave a directory claiming it did.
