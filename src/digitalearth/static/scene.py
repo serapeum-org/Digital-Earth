@@ -994,7 +994,15 @@ class Scene(WatermarkMixin):
 
                 ```
         """
-        self._require_layer(getattr(layer, "id", None))
+        # By type before by id: `getattr(layer, "id", None)` made the id lookup fail first, so a caller who
+        # passed the id where the description belongs was answered "no layer None on this figure" — an id
+        # they never wrote, about an argument that was not a description at all (review L1).
+        if not isinstance(layer, LayerSpec):
+            raise ValueError(
+                f"{type(self).__name__}.replace_layer needs a LayerSpec — the new description, not an id; "
+                f"got {type(layer).__name__}"
+            )
+        self._require_layer(layer.id)
         # The first production caller of `Capabilities.require` (D-10). A replacement is the one
         # layer-management call that can name a **new kind**, so it is the one that can ask this tier for
         # something it does not have — and refusing here, off the declaration, refuses before a description

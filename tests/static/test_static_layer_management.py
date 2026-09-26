@@ -429,3 +429,28 @@ class TestWhatReplaceLayerRefusesAndSaysItRefuses:
         assert raised in (Map.replace_layer.__doc__ or ""), (
             f"replace_layer raises {raised} and its docstring does not name it"
         )
+
+    def test_a_replacement_that_is_not_a_spec_is_refused_by_type(self, labelled):
+        """Review L1: an id passed where the description belongs was answered with "no layer None".
+
+        Args:
+            labelled: A map with one text layer.
+
+        Test scenario:
+            `getattr(layer, "id", None)` made the id lookup fail first, so the message named an id the
+            caller never passed and said nothing about the argument that was actually wrong.
+        """
+        with pytest.raises(ValueError, match=r"needs a LayerSpec.*got str"):
+            labelled.replace_layer("ams")
+
+    def test_the_refusal_names_what_was_passed_rather_than_a_missing_id(self, labelled):
+        """The message a caller reads has to point at the argument, not at the layer list.
+
+        Args:
+            labelled: A map with one text layer.
+        """
+        with pytest.raises(ValueError) as refusal:
+            labelled.replace_layer(42)
+        assert "no layer" not in str(refusal.value), (
+            f"the refusal blamed a missing layer: {refusal.value}"
+        )
