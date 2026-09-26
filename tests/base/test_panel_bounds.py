@@ -168,3 +168,53 @@ class TestWhatItRefuses:
         panel = PanelSpec("main", Viewport(3857), layers=("a",))
         with pytest.raises(TypeError, match="'a'"):
             panel.bounds_of({"a": (0.0, 0.0, 1.0, 1.0)})
+
+
+class TestThePaddingIsJudgedOnItsOwn:
+    """L2 — the padding is validated before anything is measured, so the refusal is state-free.
+
+    ``bounds_of`` returned early on ``total is None``, which put the ``padded`` call — and with it the only
+    check of the fraction — behind "did any layer measure something". The same bad call was therefore a hard
+    error on a figure with data and a silent ``None`` on one without, which is the state a caller least
+    expects to decide whether an argument is legal.
+    """
+
+    def test_it_is_refused_even_when_nothing_has_an_extent(self):
+        """A panel whose layers measured nothing still refuses a fraction that inverts a rectangle.
+
+        Test scenario:
+            The empty case is the one that used to slip through: no extent, so no `Bounds`, so nothing to
+            call `padded` on and nothing to object. A caller framing a figure before its first draw got
+            `None` back and no hint the fraction was wrong.
+        """
+        panel = PanelSpec("main", Viewport(3857), layers=("a",))
+        with pytest.raises(ValueError) as excinfo:
+            panel.bounds_of({}, padding=-3.0)
+        assert "-3.0" in str(excinfo.value), (
+            f"the refusal must name the fraction it refused, got: {excinfo.value}"
+        )
+
+    def test_a_legal_fraction_still_reports_no_region(self):
+        """Validating first must not turn "nothing measured" into a refusal of its own."""
+        panel = PanelSpec("main", Viewport(3857), layers=("a",))
+        assert panel.bounds_of({}, padding=0.1) is None, (
+            "a panel whose layers measured nothing has no region to pad"
+        )
+
+    def test_the_same_fraction_is_refused_with_and_without_data(self):
+        """One fraction, one answer — the two branches must not disagree about what is legal.
+
+        Test scenario:
+            This is the finding's shape rather than either half of it: the frame a call produces may depend
+            on what was measured, but whether the call is legal may not.
+        """
+        panel = PanelSpec("main", Viewport(3857), layers=("a",))
+        refused = []
+        for extents in ({}, {"a": LEFT}):
+            try:
+                panel.bounds_of(extents, padding=-0.9)
+            except ValueError:
+                refused.append(sorted(extents))
+        assert len(refused) == 2, (
+            f"only {refused} refused padding=-0.9; the other branch accepted it"
+        )

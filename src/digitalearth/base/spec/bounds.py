@@ -29,7 +29,7 @@ from digitalearth.base.spec._serial import (
     require,
 )
 
-__all__ = ["Bounds"]
+__all__ = ["MIN_PADDING", "Bounds", "check_padding"]
 
 
 def same_crs(one: Any, other: Any) -> bool:
@@ -82,6 +82,51 @@ def same_crs(one: Any, other: Any) -> bool:
     except TypeError:
         return False
     return bool(crs_equal(first, second))
+
+
+#: The smallest padding fraction that still leaves a rectangle. At exactly ``-0.5`` the two sides meet at the
+#: centre; below it they cross, and the rectangle comes out inside out.
+MIN_PADDING: float = -0.5
+
+
+def check_padding(fraction: float) -> None:
+    """Refuse a padding fraction that would turn a rectangle inside out.
+
+    Judged on the fraction alone, so the answer does not depend on which rectangle — or whether any rectangle
+    — is being padded. :meth:`PanelSpec.bounds_of` reaches it that way: it has a padding to validate before it
+    knows whether any layer measured an extent, and used to skip the check entirely on the branch where none
+    had (review L2).
+
+    Args:
+        fraction: How much to grow the rectangle by, as a proportion of its own span.
+
+    Raises:
+        ValueError: when `fraction` is below :data:`MIN_PADDING`. The message names the fraction and the rule,
+            because letting the `Bounds` constructor catch it reported only the numbers that came out —
+            leaving a caller who wrote ``-0.75`` to work out where a 7.5 and a 2.5 came from.
+
+    Examples:
+        - A legal fraction passes through silently:
+            ```python
+            >>> from digitalearth.base.spec.bounds import check_padding
+            >>> check_padding(-0.5)
+
+            ```
+        - Anything below the floor names itself:
+            ```python
+            >>> from digitalearth.base.spec.bounds import check_padding
+            >>> check_padding(-0.75)                             # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: padded(-0.75) would invert this rectangle: ...
+
+            ```
+    """
+    if fraction < MIN_PADDING:
+        raise ValueError(
+            f"padded({fraction}) would invert this rectangle: a fraction below {MIN_PADDING} removes more "
+            "than the rectangle has. Use a fraction above it to shrink it"
+        )
 
 
 @dataclass(frozen=True)
@@ -569,15 +614,9 @@ class Bounds:
 
                 ```
         """
+        check_padding(fraction)
         dx = (self.xmax - self.xmin) * fraction
         dy = (self.ymax - self.ymin) * fraction
-        if dx * 2 < -(self.xmax - self.xmin) or dy * 2 < -(self.ymax - self.ymin):
-            # Constructing the rectangle would raise, but its message names only the numbers that came out
-            # — leaving the caller to work out where a 6.0 and a 4.0 came from when they wrote -0.6.
-            raise ValueError(
-                f"padded({fraction}) would invert this rectangle: a fraction below -0.5 removes more than "
-                "the rectangle has. Use a fraction above -0.5 to shrink it"
-            )
         return Bounds(
             self.xmin - dx, self.ymin - dy, self.xmax + dx, self.ymax + dy, self.crs
         )

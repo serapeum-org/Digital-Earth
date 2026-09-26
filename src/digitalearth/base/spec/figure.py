@@ -29,7 +29,7 @@ from digitalearth.base.spec._serial import (
     refuse_unknown,
     require,
 )
-from digitalearth.base.spec.bounds import Bounds
+from digitalearth.base.spec.bounds import Bounds, check_padding
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.furniture import Furniture
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
@@ -282,6 +282,10 @@ class PanelSpec:
             raise TypeError(
                 f"bounds_of takes a mapping of layer id to Bounds; got {type(extents).__name__}"
             )
+        # Before anything is measured, so the fraction is judged on its own. Behind the union it was checked
+        # only by `padded`, on the branch where some layer had an extent — so the same bad call was a hard
+        # error on a figure with data and a silent `None` on one without (review L2).
+        check_padding(padding)
         target = self.view.crs
         total: Optional[Bounds] = None
         for layer_id in self.layers:
