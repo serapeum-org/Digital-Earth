@@ -4,9 +4,9 @@
 **pyramids** API only (no ``xarray``/``rasterio``) and returns numpy arrays + coordinate vectors + CRS +
 metadata wrapped in a :class:`Source`.
 
-Band convention: the Digital-Earth API is **1-based** (``band=1`` is the first band, matching ``StaticGlyph``
-and GDAL), while pyramids' ``read_array(band=)`` and the per-band metadata tuples are **0-based** — so we
-read ``band - 1`` internally.
+Band convention: the Digital-Earth API is **1-based** (``band=1`` is the first band, matching GDAL), while
+pyramids' ``read_array(band=)`` and the per-band metadata tuples are **0-based** — so we read ``band - 1``
+internally.
 
 Two cross-cutting rules every builder follows:
 

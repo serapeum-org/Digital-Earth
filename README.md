@@ -124,17 +124,3 @@ m.save("flow_accumulation_with_labels.png")
 ![Flowaccumulation](examples/images/flow_accumulation_with_labels.png)
 
 [other code samples](https://digitalearth.readthedocs.io/en/latest/?badge=latest)
-
-Legacy API (deprecated)
------------------------
-
-`StaticGlyph` is the original entry point and is **deprecated** — it emits a `DeprecationWarning` and will be
-removed in a future release. Prefer `quickmap` / `Map` above. It still works for now:
-
-```python
-from pyramids.dataset import Dataset
-from digitalearth.static import StaticGlyph
-
-src = Dataset.read_file("examples/data/acc4000.tif")
-fig, ax = StaticGlyph.plot(src, title="Flow Accumulation", cbar_label="Flow Accumulation")
-```
