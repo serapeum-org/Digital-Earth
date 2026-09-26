@@ -8,6 +8,7 @@ PNG export. Runs in the ``interactive`` pixi env.
 import pytest
 
 from digitalearth.interactive import InteractiveMap
+from digitalearth.interactive.projection import _element_extent
 
 hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
@@ -240,3 +241,87 @@ class TestGraticuleSpacing:
 
     def test_chains(self, m):
         assert m.graticule(lon_step=15, lat_step=15) is m
+
+
+class _RangesTo:
+    """An object that answers ``range`` with fixed edges, the way a caller's own element may.
+
+    ``_element_extent`` asks the element for its range rather than reading the data behind it, so an object
+    that answers ``range`` is a supported input — the docstring says so. It is also the only way to reach the
+    non-finite guard: HoloViews drops an infinity out of its own elements before ``range`` ever sees it, so a
+    real ``hv.Scatter`` carrying ``inf`` reports a finite range instead.
+    """
+
+    def __init__(self, edges):
+        """Store the edges to report.
+
+        Args:
+            edges: The ``(xmin, ymin, xmax, ymax)`` this element should claim to cover.
+        """
+        self._xmin, self._ymin, self._xmax, self._ymax = edges
+
+    def range(self, dimension):
+        """Return the low/high pair for one dimension, as a HoloViews element would.
+
+        Args:
+            dimension: ``0`` for x, ``1`` for y.
+
+        Returns:
+            The ``(low, high)`` pair for that dimension.
+        """
+        return (self._xmin, self._xmax) if dimension == 0 else (self._ymin, self._ymax)
+
+
+class TestElementExtent:
+    """``_element_extent`` — the rectangle one element covers, or ``None`` when it has no frame to give."""
+
+    def test_a_finite_element_reports_its_four_edges(self):
+        """A scatter with real coordinates answers ``(xmin, ymin, xmax, ymax)``.
+
+        Test scenario:
+            Two points spanning x 0..4 and y 1..9. Every edge is a different number, so a transposed or
+            reordered pair could not pass this.
+        """
+        extent = _element_extent(hv.Scatter([(0.0, 1.0), (4.0, 9.0)]))
+        assert extent == (0.0, 1.0, 4.0, 9.0), f"expected the four edges in order, got {extent}"
+
+    def test_no_element_has_no_extent(self):
+        """``None`` in place of an element answers ``None`` rather than raising.
+
+        Test scenario:
+            A panel with no layer to measure passes ``None``; a frame cannot be set from it.
+        """
+        assert _element_extent(None) is None, "None in place of an element must not be measured"
+
+    def test_an_element_built_from_no_data_has_no_extent(self):
+        """An empty element ranges to ``(None, None)``, which is not a rectangle.
+
+        Test scenario:
+            ``hv.Scatter([])`` — HoloViews answers ``None`` for both ends of both dimensions, so the
+            edges are present as values but name no region.
+        """
+        assert _element_extent(hv.Scatter([])) is None, "an element built from no data must not yield a frame"
+
+    @pytest.mark.parametrize(
+        "edges, which",
+        [
+            ((0.0, 1.0, float("inf"), 9.0), "an infinite east edge"),
+            ((float("-inf"), 1.0, 4.0, 9.0), "an infinite west edge"),
+            ((0.0, 1.0, 4.0, float("nan")), "a NaN north edge"),
+            ((0.0, float("nan"), 4.0, 9.0), "a NaN south edge"),
+        ],
+    )
+    def test_a_non_finite_edge_has_no_extent(self, edges, which):
+        """A range that is present but not finite is refused instead of reaching the frame.
+
+        Args:
+            edges: The ``(xmin, ymin, xmax, ymax)`` the element reports.
+            which: Which edge is not finite, so a failure names it.
+
+        Test scenario:
+            ``inf`` and ``nan`` both have to be refused, and on either end of either dimension: each one
+            becomes an axes limit that cannot be drawn, and ``nan`` additionally compares false against
+            everything, so a bounds check downstream would silently pass it.
+        """
+        extent = _element_extent(_RangesTo(edges))
+        assert extent is None, f"{which} must not yield a frame, got {extent}"
