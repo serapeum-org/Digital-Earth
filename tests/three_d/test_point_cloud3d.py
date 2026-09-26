@@ -107,3 +107,99 @@ def test_values_length_mismatch_raises():
     with pytest.raises(ValueError, match="does not match"):
         scene.point_cloud(zeros, values=zeros2)
     scene.close()
+
+
+class TestKeywordsTheDrawerWouldOverwrite:
+    """H4 — `**kwargs` a caller passes must not be silently overwritten by the drawer.
+
+    PyVista refuses a keyword it does not know (`_common_arg_parser` raises `TypeError`), so an arbitrary
+    typo is already caught. What is not caught is a keyword PyVista *does* take and this drawer writes
+    itself: `point_size`, the deleted spelling of `size` that the size fold overwrites, and the colour
+    keywords the classification derives. Those drew a picture the caller did not ask for, with no
+    diagnostic.
+    """
+
+    @staticmethod
+    def _table() -> np.ndarray:
+        """A small xyz point table.
+
+        Returns:
+            An ``(N, 3)`` float array of ascending points.
+        """
+        return np.column_stack([np.arange(12.0), np.arange(12.0), np.zeros(12)])
+
+    def test_the_deleted_point_size_spelling_is_refused(self):
+        """`point_size=` is the deleted spelling of `size=` and must raise, not draw at the default.
+
+        Test scenario:
+            The builder's `**kwargs` swallowed `point_size` into the layer's props, and the drawer then
+            overwrote it from `size` — so `point_size=40` rendered at 5.0. Every other tier refuses the
+            spelling because the parameter is gone from the signature; this one has to refuse it by name.
+        """
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(TypeError) as excinfo:
+                scene.point_cloud(self._table(), point_size=40)
+        finally:
+            scene.close()
+        message = str(excinfo.value)
+        assert "point_size=" in message, (
+            f"the refusal must name the keyword it refuses, got {message}"
+        )
+        assert "size=" in message, (
+            f"the refusal must name the live spelling to use instead, got {message}"
+        )
+
+    def test_the_live_spelling_still_reaches_the_actor(self):
+        """`size=` is the live spelling and the actor must draw at exactly what it was given."""
+        asked = 40.0
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.point_cloud(self._table(), size=asked)
+            drawn = float(actor.prop.point_size)
+        finally:
+            scene.close()
+        assert drawn == asked, f"the cloud must draw at size={asked}, got {drawn}"
+
+    @pytest.mark.parametrize("keyword", ["clim", "n_colors", "nan_color", "scalars"])
+    def test_a_colour_keyword_the_classification_owns_is_named(self, keyword):
+        """A pinned colour keyword on a coloured cloud is refused by name, not silently replaced.
+
+        Args:
+            keyword: A colour setting `classified_scalars` derives, or the scalar binding itself.
+
+        Test scenario:
+            `props.update(scalars=SCALAR, **style)` let the derived style win over whatever the caller
+            pinned, so `clim=(0, 100)` on a classified cloud drew the class-index range instead and said
+            nothing. The extruded-polygon drawer already refuses the same clash by name; this one did not.
+        """
+        values = {
+            "clim": (0.0, 100.0),
+            "n_colors": 3,
+            "nan_color": "#000000",
+            "scalars": "elevation",
+        }[keyword]
+        pts = self._table()
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(TypeError) as excinfo:
+                scene.point_cloud(
+                    pts, values=pts[:, 0], scheme="quantiles", k=4, **{keyword: values}
+                )
+        finally:
+            scene.close()
+        message = str(excinfo.value)
+        assert f"{keyword}=" in message, (
+            f"the refusal must name the keyword {keyword}=, got {message}"
+        )
+
+    def test_the_same_keyword_is_fine_on_an_uncoloured_cloud(self):
+        """An uncoloured cloud derives no colour style, so a pinned `clim` is the caller's to set."""
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.point_cloud(self._table(), clim=(0.0, 30.0))
+            assert actor is not None, (
+                "an uncoloured cloud with a pinned clim still draws"
+            )
+        finally:
+            scene.close()

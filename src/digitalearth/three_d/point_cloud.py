@@ -10,7 +10,7 @@ module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competit
 all CRS work upstream.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Mapping
 
 import numpy as np
 
@@ -199,6 +199,57 @@ class PointCloudMixin(_MixinBase):
         )
 
 
+def _refuse_folded_marker_size(props: Dict[str, Any]) -> None:
+    """Refuse ``point_size=``, the deleted spelling this drawer folds ``size=`` onto.
+
+    ``point_size`` is a real :meth:`pyvista.Plotter.add_points` keyword, so PyVista's own unknown-keyword
+    guard never sees it: it arrived through the builder's ``**kwargs``, and the size fold on the next line
+    then overwrote it. ``point_cloud(point_size=40)`` therefore drew at the ``size`` default of 5.0 — it
+    neither worked nor refused, while every other tier refuses the spelling outright because the parameter is
+    gone from the signature (review H4).
+
+    Args:
+        props: The layer's drawing properties, before the ``size`` → ``point_size`` fold.
+
+    Raises:
+        TypeError: when ``point_size`` is among them.
+    """
+    if "point_size" in props:
+        raise TypeError(
+            "point_cloud() got point_size=, which is the deleted spelling of size=: the marker size is "
+            "size= on every tier, and point_size= is the PyVista keyword size= is folded onto here, so "
+            "passing it is overwritten — pass size= instead"
+        )
+
+
+def _refuse_derived_colours(
+    props: Mapping[str, Any], style: Mapping[str, Any], *, scheme: Any
+) -> None:
+    """Refuse a colour keyword the cloud's own colouring derives, naming it.
+
+    The style :func:`~digitalearth.three_d.base.classified_scalars` builds is splatted over ``props``, so a
+    caller pinning ``clim=`` on a coloured cloud silently lost it to the class-index range — the same clash
+    :func:`~digitalearth.three_d.vector._classify_or_refuse` already refuses for an extruded polygon, which
+    this drawer did not (review H4). ``scalars`` is in the same position: the cloud binds its own array name.
+
+    Args:
+        props: The caller's remaining keywords.
+        style: The colour keywords the classification derived, ``scalars`` already taken out.
+        scheme: How the values were classified, named in the message so the caller can drop one side.
+
+    Raises:
+        TypeError: when a keyword the colouring sets was also passed by the caller.
+    """
+    clashing = sorted((set(style) | {"scalars"}) & set(props))
+    if not clashing:
+        return
+    names = ", ".join(f"{name}=" for name in clashing)
+    raise TypeError(
+        f"point_cloud() got {names} together with the values it colours by (scheme={scheme!r}), which "
+        f"sets {names} itself; drop it, or drop values=/value_column="
+    )
+
+
 def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the cloud a `point_cloud` layer describes and add it to the scene's plotter.
 
@@ -221,6 +272,7 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
     k = props.pop("k", 5)
     cmap = props.pop("cmap", "viridis")
     eye_dome_lighting = props.pop("eye_dome_lighting", True)
+    _refuse_folded_marker_size(props)
     props["point_size"] = props.pop("size", None)
     placed = scene._place(data, layer="point_cloud")
     if hasattr(placed, "geometry"):
@@ -248,6 +300,7 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
             )
         style = classified_scalars(scalar, scheme=scheme, k=k, cmap=cmap)
         cloud[SCALAR] = style.pop("scalars")
+        _refuse_derived_colours(props, style, scheme=scheme)
         props.update(scalars=SCALAR, **style)
 
     actor = scene.plotter.add_points(cloud, **props)
