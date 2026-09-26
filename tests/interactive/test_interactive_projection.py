@@ -36,6 +36,59 @@ def _graticule_parameters():
     )
 
 
+def _set_bounds_parameters():
+    """Return both 2-D tiers' `set_bounds` parameters, so the two signatures can be compared.
+
+    Returns:
+        `(interactive, static)`, each a mapping of parameter name to `inspect.Parameter`.
+    """
+    import inspect
+
+    from digitalearth.static.maps.projection import ProjectionMixin as StaticMixin
+
+    return (
+        inspect.signature(InteractiveMap.set_bounds).parameters,
+        inspect.signature(StaticMixin.set_bounds).parameters,
+    )
+
+
+class TestBothTiersSpellTheFramingArgumentTheSameWay:
+    """One Core name has to take one argument, under one name, on both 2-D tiers (review H2).
+
+    The static tier's parameter was `bbox` and this tier's was `bounds`, so `set_bounds(bounds=...)` raised
+    `TypeError` there and `set_bounds(bbox=...)` raised it here — a Core name whose argument ported in
+    neither direction. `tests/base/test_map_conformance.py` holds the *behaviour* of a keyword call on every
+    tier; this holds the signatures against each other, the same shape as the `graticule` comparison above,
+    and it needs no engine call to fail.
+    """
+
+    def test_the_rectangle_is_the_first_parameter_under_one_name(self):
+        """Both tiers call it `bounds`, which is the name the Core method and `Bounds` are named for.
+
+        Test scenario:
+            Read off the signatures rather than by calling, so a rename fails here before it reaches any
+            figure — and asserted against the literal rather than against the other tier, because the two
+            agreeing on `bbox` would be the same defect with one name.
+        """
+        interactive, static = _set_bounds_parameters()
+        written = (
+            next(name for name in interactive if name != "self"),
+            next(name for name in static if name != "self"),
+        )
+        assert written == ("bounds", "bounds"), written
+
+    def test_the_two_signatures_name_the_same_parameters_in_the_same_order(self):
+        """Neither tier carries an extra spelling of the rectangle, nor a differently named `padding`.
+
+        Test scenario:
+            The name check above would pass if one tier grew `bbox=` back as a second parameter beside
+            `bounds`, which is the shape a deprecation would take — and nothing here is released, so there
+            is nothing to deprecate. Compared as ordered tuples, so a positional call ports too.
+        """
+        interactive, static = _set_bounds_parameters()
+        assert tuple(interactive) == tuple(static), (tuple(interactive), tuple(static))
+
+
 class TestProjection:
     """``projection`` — arbitrary display projections via the matplotlib backend."""
 
