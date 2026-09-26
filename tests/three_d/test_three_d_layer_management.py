@@ -5,11 +5,11 @@ the implementation they were written against. Subscribing it here is not coverag
 makes the probes a statement about the **package** rather than about the three tiers that changed, so a
 divergence between the reference and its copies fails here rather than being discovered by a caller.
 
-One such divergence is written down rather than papered over: `replace_layer` on the other three tiers checks
-the new kind against the tier's own `Capabilities` and refuses with `CapabilityError` before anything is
-built, while this tier reaches its drawer table part-way through the reconcile and answers with `KeyError`.
-:attr:`~tests.base.layer_management.LayerManagementContract.refuses_by_declaration` is where the adapter says
-so.
+Subscribing it closed a divergence rather than recording one. `replace_layer` here used to reach its drawer
+table part-way through the reconcile and answer with `KeyError`, where the other three check the new kind
+against the tier's own `Capabilities` and refuse with `CapabilityError` before anything is built; this tier now
+does the same, so all four refuse from what they declare and
+:attr:`~tests.base.layer_management.LayerManagementContract.refuses_by_declaration` is left at its default.
 
 **The engine has no draw order to read.** VTK composites its actors by depth, not by the order they were
 added, so `move_layer` on this tier records draw order and does not apply it — the scene's own docstring says
@@ -40,8 +40,6 @@ class ThreeDContract(LayerManagementContract):
     backend = "3d"
     #: A string at a coordinate: registered, drawn from no data, and a 2-D tier's layer throughout.
     undrawable_kind = "text"
-    #: The scene refuses from its drawer table rather than from its declaration — see the module docstring.
-    refuses_by_declaration = False
 
     def make(self):
         """Return an off-screen scene.

@@ -43,6 +43,7 @@ from digitalearth.base.spec import (
     Symbology,
 )
 from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+from digitalearth.three_d.capabilities import CAPABILITIES
 from digitalearth.three_d.layer import next_layer_id, stored_props
 from digitalearth.three_d.renderer import Renderer3D
 from digitalearth.three_d.views import named_view
@@ -815,7 +816,10 @@ class Scene3DBase:
                 volume=volume,
                 **kwargs,
             )
-        except Exception:
+        except BaseException:
+            # `BaseException`, the class the three renderers already catch: what the restore has to survive is
+            # the draw stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
+            # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._custom.pop(layer_id, None)
             raise
         if (
@@ -1143,8 +1147,9 @@ class Scene3DBase:
             This scene (chainable).
 
         Raises:
-            KeyError: if no layer has that id, or if the replacement names a kind nobody registered — a
-                plugin's kind on a machine without the plugin reads as the second.
+            CapabilityError: if the replacement names a kind this tier does not declare — a plugin's kind on
+                a machine without the plugin reads as that.
+            KeyError: if no layer has that id.
             ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
                 the drawers read the source from the figure, and a missing one reached `get_source(None)`
                 and answered with a `TypeError` nothing documents.
@@ -1171,6 +1176,12 @@ class Scene3DBase:
             raise KeyError(
                 f"no layer {layer.id!r} in this scene; its layers are {self.layer_ids}"
             )
+        # The fourth production caller of `Capabilities.require` (D-10), joining the other three tiers. A
+        # replacement is the one layer-management call that can name a **new kind**, so it is the one that can
+        # ask this tier for something it does not have — and refusing here, off the declaration, refuses
+        # before a description is built or the plotter is touched. Without it the refusal came from the drawer
+        # table part-way through a reconcile, as a `KeyError` that said nothing about what the tier declares.
+        CAPABILITIES.require(layer.kind, caller="Scene3D.replace_layer")
         if layer.source_id is None and kind_info(layer.kind).takes != "none":
             # The drawers hand `_source_object`'s `None` straight to `get_source`, which answers with a
             # `TypeError` nothing documents — and, going through `_change`, used to leave the scene holding
@@ -1440,7 +1451,11 @@ class Scene3DBase:
         candidate = _with_panel_layers(figure)
         try:
             self._renderer.apply(before, candidate)
-        except Exception:
+        except BaseException:
+            # `BaseException` for the same reason the three renderers' `apply` catches it (review N2): the
+            # scene must not keep a figure the plotter never reached, and a `KeyboardInterrupt` mid-reconcile
+            # leaves exactly that. The inner `suppress` stays at `Exception` deliberately — a Ctrl-C *during*
+            # the rollback is the caller asking to stop, so it propagates instead of being swallowed.
             # Best effort, and second: the caller's failure is the one worth raising. A rollback that fails
             # leaves the scene as the original exception found it, which is what it would have been anyway.
             with suppress(Exception):
