@@ -1469,13 +1469,17 @@ class RasterMixin(_MixinBase):
         # later `colorbar()` would otherwise label itself from a layer that was never built.
         self.last_units = self._auto_units(styling, units)
         layer_id = self._layer_id("raster", name)
+        # No source, the way `terrain` records none: `_tiled_layer` builds the MapLibre source out of the
+        # `tiles_*` props alone and never opens the caller's raster, so filing it described a read that does
+        # not happen. It also cost the route the two things a description is for — an in-memory `Dataset`'s
+        # only honest reference is `object:<process>:<id>`, which `FigureSpec.to_dict` refuses, so the figure
+        # could not be written down at all; and a replacement carrying the `source_id` the tree now holds as
+        # `None` was refused as a raster that had lost its data (review R2-M13).
         if self._index_layer(
             layer_id,
             name,
             kind="raster",
             visible=visible,
-            source=data,
-            placed=dataset,
             symbology=Symbology(props=props),
         ):
             self._last_layer_id = layer_id
@@ -1840,13 +1844,14 @@ class RasterMixin(_MixinBase):
             )
         )
         layer_id = self._layer_id(_COMPOSITE_RECIPES[via], name)
+        # No source, for the reason `_tiled_field` records none: `draw_rgb_composite` takes the same
+        # `tiles`-prop branch into `_tiled_layer`, which reads the template and never the bands (review
+        # R2-M13).
         if self._index_layer(
             layer_id,
             name,
             kind="rgb",
             visible=visible,
-            source=dataset,
-            placed=opened,
             symbology=Symbology(props=props),
         ):
             self._last_layer_id = layer_id

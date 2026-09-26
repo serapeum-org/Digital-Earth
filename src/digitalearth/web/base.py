@@ -1389,7 +1389,9 @@ class WebMapBase:
             KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
             ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
                 the drawers read the source out of the figure, and a missing one reaches the drawer as
-                `None` and fails somewhere it cannot explain.
+                `None` and fails somewhere it cannot explain. A layer this tier draws from its description
+                alone — `terrain`, and a raster or composite whose pixels are a tile pyramid or a COG beside
+                the page — needs no `source_id` and is not asked for one.
 
         Examples:
             - A label re-described keeps its id and its place:
@@ -1412,17 +1414,18 @@ class WebMapBase:
         CAPABILITIES.require(layer.kind, caller="WebMap.replace_layer")
         # Imported here, not at module scope: the renderer resolves its drawers from the builder modules, and
         # every one of those imports this module, so a top-level import would close a cycle.
-        from digitalearth.web.renderer import DESCRIPTION_ONLY_KINDS
+        from digitalearth.web.renderer import draws_from_description
 
-        # `DESCRIPTION_ONLY_KINDS` is the tier's own answer to "does this kind's drawer read a figure
+        # `draws_from_description` is the tier's own answer to "does this layer's drawer read a figure
         # source?", which is the question this guard means to ask; the registry answers a different one —
         # what the kind *is* across all four tiers. This tier's terrain draws from a tile-URL template its
-        # description carries, so demanding a `source_id` for it would refuse every replacement of a layer
+        # description carries, and so does a raster or a composite whose pixels were written beside the page
+        # (review R2-M13), so demanding a `source_id` for either would refuse every replacement of a layer
         # that never had one.
         if (
             layer.source_id is None
             and kind_info(layer.kind).takes != "none"
-            and layer.kind not in DESCRIPTION_ONLY_KINDS
+            and not draws_from_description(layer)
         ):
             raise ValueError(
                 f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "

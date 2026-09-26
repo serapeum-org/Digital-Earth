@@ -764,6 +764,58 @@ class TestTheTiledCompositeRoutes:
             f"one hole must leave one tile out: {len(holed)} against {len(complete)}"
         )
 
+    def test_the_route_records_no_source_for_the_pixels_its_drawer_never_reads(
+        self, dataset, tmp_path
+    ):
+        """A tiled composite draws from its description too, so it records no source either.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+
+        Test scenario:
+            `draw_rgb_composite` takes the same ``tiles``-prop branch `draw_field` does and hands the layer
+            to `_tiled_layer`, which reads the template and nothing else. The two builders therefore have to
+            record the same thing about their source: nothing (review R2-M13).
+        """
+        m = WebMap().rgb_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "scene",
+            zooms=(9, 9),
+            name="scene",
+        )
+        assert m.get_layer("scene").source_id is None, m.get_layer("scene")
+        assert dict(m.figure_spec.sources) == {}, dict(m.figure_spec.sources)
+
+    def test_a_tiled_composite_of_an_in_memory_dataset_travels_as_json(
+        self, dataset, tmp_path
+    ):
+        """The shareable half: a page written on one machine has to describe the layer on another.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+        """
+        import json
+
+        from digitalearth.base.spec import FigureSpec
+
+        built = WebMap().hsv_composite(
+            dataset,
+            bands=(1, 1, 1),
+            tiles="xyz",
+            tiles_path=tmp_path / "scene",
+            zooms=(9, 9),
+            name="scene",
+        )
+        reloaded = FigureSpec.from_dict(
+            json.loads(json.dumps(built.figure_spec.to_dict()))
+        )
+        drawn = WebMap()._renderer.draw_layer(reloaded, "scene")
+        assert drawn.source_spec["tiles"] == ["scene/{z}/{x}/{y}.png"], drawn.source_spec
+
     def test_a_declined_tiled_composite_is_not_the_maps_last_layer(
         self, dataset, tmp_path, monkeypatch
     ):

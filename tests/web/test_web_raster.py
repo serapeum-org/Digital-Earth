@@ -723,6 +723,79 @@ class TestTheTiledRasterRoutes:
         assert drawn.source_spec["tiles"] == ["acc/{z}/{x}/{y}.png"], drawn.source_spec
         assert "bounds" not in drawn.source_spec, drawn.source_spec
 
+    def test_the_route_records_no_source_for_the_pixels_its_drawer_never_reads(
+        self, dataset, tmp_path
+    ):
+        """A tiled layer is drawn from its description, so the caller's raster is not its source.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+
+        Test scenario:
+            `_tiled_layer` builds the MapLibre source out of ``tiles_url``/``tiles_bounds``/``tiles_size``/
+            ``tiles_zooms`` alone and never opens `data`. Filing the raster as the layer's source therefore
+            described a read that does not happen — and, for an in-memory ``Dataset``, an ``object:`` id no
+            other process can resolve (review R2-M13). `terrain` has always recorded none for the same
+            reason.
+        """
+        m = WebMap().field(
+            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9), name="acc"
+        )
+        assert m.get_layer("acc").source_id is None, m.get_layer("acc")
+        assert dict(m.figure_spec.sources) == {}, dict(m.figure_spec.sources)
+
+    def test_a_tiled_raster_of_an_in_memory_dataset_travels_as_json(
+        self, dataset, tmp_path
+    ):
+        """The route exists to be shared, and a figure it cannot be written into is not shareable.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+
+        Test scenario:
+            The sibling probe above writes the figure from a *path*, which round-trips whatever is recorded.
+            This one hands the builder the opened ``Dataset`` — the shape a notebook holds — whose only
+            honest reference is ``object:<process>:<id>``, and `FigureSpec.to_dict` refuses that by design.
+            Nothing about a tiled layer needs it: the tiles are on disk and the template addresses them.
+        """
+        import json
+
+        from digitalearth.base.spec import FigureSpec
+
+        built = WebMap().field(
+            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9), name="acc"
+        )
+        reloaded = FigureSpec.from_dict(
+            json.loads(json.dumps(built.figure_spec.to_dict()))
+        )
+        drawn = WebMap()._renderer.draw_layer(reloaded, "acc")
+        assert drawn.source_spec["tiles"] == ["acc/{z}/{x}/{y}.png"], drawn.source_spec
+
+    def test_a_tiled_raster_can_still_be_restyled(self, dataset, tmp_path):
+        """Recording no source must not make the layer unreplaceable, which is the other half of the fix.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, where the pyramid is written.
+
+        Test scenario:
+            `replace_layer` refuses a description that draws from data and names no `source_id`, because the
+            drawers read the source out of the figure. A tiled raster's drawer does not — so the description
+            `get_layer` hands back, which now carries no `source_id`, has to be a legal replacement for
+            itself. The redraw re-reads the template rather than the pyramid: the writing was the builder's.
+        """
+        from dataclasses import replace as with_fields
+
+        m = WebMap().field(
+            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9), name="acc"
+        )
+        m.replace_layer(with_fields(m.get_layer("acc"), group="regrouped"))
+        assert m.get_layer("acc").group == "regrouped", m.get_layer("acc")
+        spec = m._renderer.drawn["acc"].source_spec
+        assert spec["tiles"] == ["acc/{z}/{x}/{y}.png"], spec
+
     def test_a_declined_tiled_layer_is_not_the_maps_last_layer(
         self, dataset, tmp_path, monkeypatch
     ):

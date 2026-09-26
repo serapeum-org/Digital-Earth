@@ -167,8 +167,58 @@ DRAWN_KINDS: Tuple[str, ...] = (
 #: renders a surface from heights held in memory. MapLibre reads terrain from a **tile pyramid** and nothing
 #: else, so `WebMap.terrain_tiles` encodes a DEM to tiles when it is given one and the layer then draws from
 #: the tile-URL template its description carries. There is no figure source for a replacement to name, which
-#: is why :meth:`~digitalearth.web.base.WebMapBase.replace_layer` asks this before it demands a `source_id`.
+#: is why :func:`draws_from_description` — the question
+#: :meth:`~digitalearth.web.base.WebMapBase.replace_layer` actually asks — starts here.
 DESCRIPTION_ONLY_KINDS: FrozenSet[str] = frozenset({"terrain"})
+
+
+#: The prop a layer whose pixels were written beside the page records the template under. A kind is not the
+#: unit here: `raster` and `rgb` reach MapLibre either inline, as an image encoded from the band, or as a
+#: reference to a pyramid/COG the builder wrote — and only the second draws from its description alone.
+_TILED_PROP = "tiles"
+
+
+def draws_from_description(layer: LayerSpec) -> bool:
+    """Whether this tier draws `layer` without reading any source out of the figure.
+
+    Args:
+        layer: The layer's description.
+
+    Returns:
+        `True` when its drawer builds the layer from the description and nothing else — a `terrain` layer,
+        whose heights are a tile pyramid rather than data (:data:`DESCRIPTION_ONLY_KINDS`), and a `raster` or
+        `rgb` layer whose pixels were written beside the page and are addressed by ``tiles_url``. `False` for
+        every layer whose drawer opens the figure's source, which is what has to name a `source_id`.
+
+    Note:
+        Asked of the layer, not of its kind, because the tiled routes are a *route* through two kinds that
+        otherwise draw from data. Recording the caller's raster as the source of a layer nothing reads it for
+        made the figure unwritable whenever that raster was an in-memory object (review R2-M13); recording
+        none of it then needed this question to be asked per layer, or every tiled raster would have been
+        refused as a replacement for itself.
+
+    Examples:
+        - A tiled raster carries its own pixels' address, so it needs no source:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec, Symbology
+            >>> from digitalearth.web.renderer import draws_from_description
+            >>> tiled = Symbology(props={"tiles": "xyz", "tiles_url": "acc/{z}/{x}/{y}.png"})
+            >>> draws_from_description(LayerSpec("acc", "raster", symbology=tiled))
+            True
+
+            ```
+        - An inline one is encoded from the band, which the drawer has to be handed:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.web.renderer import draws_from_description
+            >>> draws_from_description(LayerSpec("acc", "raster", source_id="acc"))
+            False
+
+            ```
+    """
+    if layer.kind in DESCRIPTION_ONLY_KINDS:
+        return True
+    return layer.symbology.props.get(_TILED_PROP) is not None
 
 
 #: The MapLibre layer ids a kind's drawer adds beside the layer's own, as suffixes of that id — a graticule's
