@@ -18,7 +18,6 @@ has a failing test to delete rather than a silent behaviour change to discover.
 import inspect
 import logging
 import re
-import warnings
 
 import numpy as np
 import pytest
@@ -638,25 +637,6 @@ class TestAnimationState:
         m = Map(crs=4326)
         m.animate([global_field, global_field], fps=6)
         assert m._animation_fps == 6.0, "the built rate was not recorded"
-
-
-def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
-    """The renamed parameters are silent — only the old spellings warn.
-
-    Args:
-        points_fc: The committed point fixture.
-        recwarn: Records every warning the calls emit.
-
-    Test scenario:
-        A deprecation that fires for callers who already migrated is noise, and trains people to filter the
-        warning that matters.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("always")
-        Map(crs=points_fc.epsg).points(points_fc, size_column="fid", size=30)
-    assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)], (
-        "the modern spellings must not warn"
-    )
 
 
 #: Every public data builder on `Map` and the argument that names what it draws. A path or URL is accepted

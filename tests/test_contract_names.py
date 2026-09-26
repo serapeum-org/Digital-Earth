@@ -19,7 +19,6 @@ guarded so it cannot outlive the gap.
 
 import inspect
 import re
-import warnings
 from types import MappingProxyType
 from typing import Mapping, Tuple
 
@@ -741,16 +740,22 @@ class TestTheAttachedIssues:
         assert web().colorbar(visible=False)._panels == {}, "no key was asked for"
 
 
-class TestTheDispatcherPassesUnderDeprecationErrors:
-    """Nothing the package calls itself may go through a deprecated spelling."""
+class TestTheDispatcherReachesNamesTheTiersHave:
+    """Nothing the package calls itself may go through a spelling that has been renamed away."""
 
     @pytest.mark.parametrize("backend", SEAMED)
     def test_quickmap_uses_the_canonical_names(self, backend, tmp_path):
-        """`quickmap` on a seamed backend raises no deprecation warning of its own.
+        """`quickmap` on a seamed backend draws rather than reaching a name its tier no longer has.
 
         Args:
             backend: The tier under test.
             tmp_path: Unused; keeps the signature uniform with the other cases.
+
+        Test scenario:
+            The dispatcher reaches its builders by name, so a table entry left on a spelling this wave
+            deleted raises `AttributeError` from inside the package. Running the dispatch is what catches
+            that; asserting the map came back is what stops the run passing for having raised nothing
+            *because* it drew nothing.
         """
         # The engine, not the tier: a tier imports without its engine (#290), so a missing extra would only
         # surface when the drawing started.
@@ -759,20 +764,9 @@ class TestTheDispatcherPassesUnderDeprecationErrors:
 
         from digitalearth import quickmap
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            drawn = quickmap(
-                Dataset.read_file("examples/data/acc4000.tif"), backend=backend
-            )
-        # Only this package's own warnings: PyVista and NumPy warn about things neither the caller nor this
-        # package can act on, and failing on those would make the gate about the installed versions.
-        ours = [
-            str(record.message)
-            for record in caught
-            if issubclass(record.category, DeprecationWarning)
-            and "digitalearth" in record.filename
-        ]
-        assert ours == [], f"quickmap reached a deprecated spelling: {ours}"
+        drawn = quickmap(
+            Dataset.read_file("examples/data/acc4000.tif"), backend=backend
+        )
         assert drawn is not None, "quickmap must draw"
         if hasattr(drawn, "close"):
             drawn.close()

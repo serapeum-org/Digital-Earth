@@ -1,10 +1,8 @@
-"""Tests for the StaticGlyph deprecation (PD-1 / L-2) and the digitalearth.static public surface.
+"""The ``digitalearth.static`` public surface.
 
-``StaticGlyph`` moved to ``digitalearth/static/glyph.py`` and is re-exported from the package's
-``__init__``. That re-export carries a contract worth pinning: ``from digitalearth.static import
-StaticGlyph`` must keep working, and importing it must stay *silent* — the deprecation belongs on every
-entry point of the class, not on the import, so a user who merely imports the backend is not warned about a
-class they may never touch.
+The backend's ``__init__`` is a pure re-export layer, and that carries a contract worth pinning: every name
+it advertises is the object its own submodule defines, importing the package is *silent*, and a name it does
+not export fails as an ordinary missing module attribute rather than resolving to something.
 """
 
 import importlib
@@ -14,56 +12,15 @@ import warnings
 import pytest
 
 import digitalearth
-from digitalearth.static import StaticGlyph
 
 #: ``digitalearth.static.__all__``, and the submodule each name is defined in.
 STATIC_EXPORTS = {
     "Scene": "digitalearth.static.scene",
     "Map": "digitalearth.static.map",
     "TexturedGlobe": "digitalearth.static.textured_globe",
-    "StaticGlyph": "digitalearth.static.glyph",
     "grid": "digitalearth.static.figure",
     "shared_colorbar": "digitalearth.static.figure",
 }
-
-
-class TestStaticGlyphDeprecation:
-    """StaticGlyph entry points emit a DeprecationWarning while still working."""
-
-    def test_init_warns(self):
-        """Constructing StaticGlyph emits a DeprecationWarning pointing at Map/quickmap.
-
-        Test scenario:
-            ``StaticGlyph()`` warns; the message names the modern replacement.
-        """
-        with pytest.warns(DeprecationWarning, match="StaticGlyph is deprecated"):
-            StaticGlyph()
-
-    def test_plot_warns_and_still_renders(self, dataset):
-        """StaticGlyph.plot warns but still returns a figure/axes.
-
-        Test scenario:
-            Calling the legacy plot path emits the warning and produces a (fig, ax) pair.
-        """
-        with pytest.warns(DeprecationWarning, match="digitalearth.Map"):
-            fig, ax = StaticGlyph.plot(dataset)
-        assert fig is not None, "legacy plot should still render"
-        assert ax is not None, "legacy plot should still render"
-
-    def test_message_recommends_modern_api(self):
-        """The deprecation message recommends quickmap / Map.
-
-        Test scenario:
-            The shared message mentions both ``quickmap`` and ``Map`` so users know where to go.
-        """
-        from digitalearth.static.glyph import _DEPRECATION_MSG
-
-        assert "quickmap" in _DEPRECATION_MSG, (
-            f"message should point to the modern API: {_DEPRECATION_MSG!r}"
-        )
-        assert "Map" in _DEPRECATION_MSG, (
-            f"message should point to the modern API: {_DEPRECATION_MSG!r}"
-        )
 
 
 class TestStaticPackageSurface:
@@ -77,8 +34,8 @@ class TestStaticPackageSurface:
 
         Test scenario:
             The package body is re-executed with the module cache evicted and every warning recorded; it
-            must produce none. StaticGlyph is re-exported here, so a warning at import time would fire for
-            everyone who touches the matplotlib backend at all, not just legacy users.
+            must produce none. A warning raised here would fire for everyone who touches the matplotlib
+            backend at all, whatever they went on to draw.
         """
         monkeypatch.setattr(digitalearth, "static", digitalearth.static, raising=False)
         monkeypatch.delitem(sys.modules, "digitalearth.static", raising=False)
@@ -90,21 +47,8 @@ class TestStaticPackageSurface:
             f"importing digitalearth.static should be silent, got: {messages}"
         )
 
-    def test_static_glyph_import_path_works(self):
-        """``from digitalearth.static import StaticGlyph`` binds the class from static.glyph.
-
-        Test scenario:
-            The re-export must be the very class defined in ``static/glyph.py`` — not a subclass or an
-            alias — so ``isinstance`` checks agree across both import paths.
-        """
-        from digitalearth.static.glyph import StaticGlyph as Defined
-
-        assert StaticGlyph is Defined, (
-            "the re-export should be the class defined in static.glyph"
-        )
-
     def test_all_is_the_expected_surface(self):
-        """``__all__`` advertises exactly the six documented names.
+        """``__all__`` advertises exactly the five documented names.
 
         Test scenario:
             The backend's public surface must not drift silently; additions and removals should be a
@@ -135,9 +79,9 @@ class TestStaticPackageSurface:
             f"digitalearth.static.{name} is not {module_path}.{name}"
         )
 
-    @pytest.mark.parametrize("name", sorted(set(STATIC_EXPORTS) - {"StaticGlyph"}))
-    def test_non_deprecated_exports_match_the_package_root(self, name):
-        """The five non-deprecated names are the ones the package root exports.
+    @pytest.mark.parametrize("name", sorted(STATIC_EXPORTS))
+    def test_exports_match_the_package_root(self, name):
+        """Every name the backend exports is the one the package root exports.
 
         Args:
             name: The exported attribute under test.
@@ -152,30 +96,17 @@ class TestStaticPackageSurface:
             f"digitalearth.static.{name} is not digitalearth.{name}"
         )
 
-    def test_static_glyph_is_not_re_exported_at_the_package_root(self):
-        """The deprecated class stays off the package's public facade.
-
-        Test scenario:
-            ``StaticGlyph`` is reachable from the backend for backward compatibility but must not appear in
-            ``digitalearth.__all__``, which advertises the API new code should use.
-        """
-        assert "StaticGlyph" not in digitalearth.__all__, (
-            "a deprecated class should not be advertised on the package facade"
-        )
-
     @pytest.mark.parametrize("name", ["geostatistics", "definitely_not_a_module"])
     def test_unknown_attribute_raises_attribute_error(self, name):
-        """The lazy hook resolves ``StaticGlyph`` and refuses everything else.
+        """A name the backend does not export fails as a missing module attribute.
 
         Args:
             name: A name the backend does not define.
 
         Test scenario:
-            ``__getattr__`` exists only to keep the deprecated class off the eager import path, so any
-            other name must fail exactly as it would without the hook -- a hook that returned something
-            for an unknown name would turn a typo into a silent ``None``. ``geostatistics`` is the case
-            that matters now: the module was deleted, so this fallback is what a stale
-            ``digitalearth.static.geostatistics`` reference lands on.
+            A lookup that returned something for an unknown name would turn a typo into a silent ``None``.
+            ``geostatistics`` is the case that matters: the module was deleted and moved upstream, so this
+            is what a stale ``digitalearth.static.geostatistics`` reference lands on.
         """
         from digitalearth import static
 
