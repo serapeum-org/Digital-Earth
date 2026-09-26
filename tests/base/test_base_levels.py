@@ -82,15 +82,26 @@ class TestWhatHasNoLevelsToGive:
         assert "positive spacing" in str(refused.value), refused.value
 
     def test_an_empty_band_is_refused(self):
-        """No finite value means no range, and a guessed level would draw a line nothing supports."""
+        """No finite value means no range, and a guessed level would draw a line nothing supports.
+
+        Test scenario:
+            The band is built above the block, so `levels_every` is the only call inside it that can raise —
+            a fixture that failed would otherwise pass this test for the wrong reason (S5778).
+        """
+        empty = np.full((4, 4), math.nan)
         with pytest.raises(ValueError) as refused:
-            levels_every(np.full((4, 4), math.nan), 100.0)
+            levels_every(empty, 100.0)
         assert "no values to space levels through" in str(refused.value), refused.value
 
     def test_a_constant_band_is_refused(self):
-        """One value is not a range: no multiple can lie strictly between it and itself."""
+        """One value is not a range: no multiple can lie strictly between it and itself.
+
+        Test scenario:
+            The band is built above the block, for the reason given on the test above.
+        """
+        flat = np.full((4, 4), 5.0)
         with pytest.raises(ValueError) as refused:
-            levels_every(np.full((4, 4), 5.0), 100.0)
+            levels_every(flat, 100.0)
         assert "crosses no level inside the band's range" in str(refused.value), (
             refused.value
         )
