@@ -897,7 +897,7 @@ class VectorMixin(_MixinBase):
         """Draw polygons as a value-filled (``values`` given) or outline-only ``PolygonGlyph`` layer.
 
         Consolidates the fill-vs-outline branch shared by :meth:`grid_cells`, :meth:`choropleth`,
-        :meth:`shapes`, :meth:`voronoi`, :meth:`cartogram` and :meth:`quadtree`. The Scene owns the
+        :meth:`polygons`, :meth:`voronoi`, :meth:`cartogram` and :meth:`quadtree`. The Scene owns the
         aggregated colorbar, so the glyph's own colorbar is suppressed by default — except under
         ``scheme="categorical"``, where the value key is a per-class swatch legend the glyph builds from its
         own mapping (``PolygonGlyph.category_legend``). The Scene's colorbar cannot stand in for it: a
@@ -1832,7 +1832,7 @@ class VectorMixin(_MixinBase):
         Tessellates the points into Voronoi cells (``shapely.voronoi_polygons`` with ``ordered=True``, so cell
         *i* belongs to point *i*) and renders them. With ``column`` the cells are filled and coloured by that
         point's value (like :meth:`choropleth`); without it only the cell outlines are drawn (like
-        :meth:`shapes`). Points that reproject to non-finite coordinates (the far side of a clipped/globe
+        :meth:`polygons`). Points that reproject to non-finite coordinates (the far side of a clipped/globe
         display CRS), and duplicate points, produce no cell and are silently skipped.
 
         Args:
@@ -1926,7 +1926,7 @@ class VectorMixin(_MixinBase):
         Each feature's geometry is affine-scaled about its own centroid by a factor derived from ``scale``
         (linearly normalised across the layer to ``limits``), distorting area to encode magnitude. With
         ``column`` the scaled polygons are filled and coloured by that column (like :meth:`choropleth`);
-        without it only the outlines are drawn (like :meth:`shapes`).
+        without it only the outlines are drawn (like :meth:`polygons`).
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries, or a path or URL to one
