@@ -92,8 +92,8 @@ CAPABILITIES = Capabilities(
     ),
     absent={
         "domain": (
-            "the map pans and zooms, so it is framed by what the viewer does rather than by a region set "
-            "before it is drawn"
+            "no domain= on the constructor: a region is asked for with set_bounds(), which frames the map "
+            "on a rectangle or on its own data, and the viewer pans on from there"
         ),
         "height": (
             "HoloViews has no z-height option: an extrusion is a 3-D or web layer (measured in #298)"

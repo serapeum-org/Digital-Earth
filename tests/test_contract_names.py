@@ -120,14 +120,11 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 ("subtitle",),
                 "one axes title, with no second line to carry a subtitle — #265",
             ),
-            ("matplotlib", "set_bounds"): (
-                ("padding",),
-                # The row that keeps order 27a's rename from reading as order 26's capability. The name and
-                # the chainable return landed at 27a; padding and the `None` that fits the data are
-                # auto-framing, which is what `PENDING` used to date this whole method at.
-                "the Core name and the chainable return landed at order 27a; padding, and the None that "
-                "fits the figure to its data, are auto-framing — order 26",
-            ),
+            # `("matplotlib", "set_bounds")` was listed here against `("padding",)`, to keep order 27a's
+            # rename from reading as the capability behind it: the name and the chainable return landed at
+            # 27a, and `padding` with the `None` that fits the data did not. Both landed at the framing
+            # order, on this tier and on the interactive one, so the row is off and `set_bounds` is no
+            # longer short of anything the Core declares for it.
             ("interactive", "polygons"): (
                 ("k", "scheme"),
                 # This said the scheme/k half was "unscheduled", and #331 — open, and titled for exactly
