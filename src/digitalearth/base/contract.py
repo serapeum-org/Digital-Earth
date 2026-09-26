@@ -453,12 +453,9 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # spelling. All three are adopted at order 27a: the tier answers to the Core name and the old
                 # spelling is a live alias, so neither is pending any more.
                 "lines": "line features on the static tier — #226",
-                "add_layer": _PENDING_IDENTITY,
-                "get_layer": _PENDING_IDENTITY,
-                "remove_layer": _PENDING_IDENTITY,
-                "set_visible": _PENDING_LAYERS,
-                "move_layer": _PENDING_LAYERS,
-                "replace_layer": _PENDING_LAYERS,
+                # `add_layer`, `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer`
+                # were listed here against order 23, which has now built all six: the tier answers to each
+                # over its own renderer, through `Scene._change`.
                 # `set_bounds` was listed here, "framed by set_extent(bbox) here, which neither pads nor
                 # fits the data". Order 27a took the *name*: the tier answers to `set_bounds` and returns
                 # `self`, and `set_extent` is a live alias. What it still does not take is `padding`, and it

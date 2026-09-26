@@ -51,8 +51,10 @@ from matplotlib.figure import Figure
 
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.registry import (
+    KIND_BANDS,
     forget_namespace,
     forget_object,
+    kind_info,
     object_namespace,
 )
 from digitalearth.base.spec import (
@@ -68,7 +70,12 @@ from digitalearth.base.spec import (
 from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.layer import layer_name
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
-from digitalearth.static.renderer import DrawnLayer, Renderer, drawing_opts
+from digitalearth.static.renderer import (
+    DrawnLayer,
+    Renderer,
+    drawing_opts,
+)
+from digitalearth.static.renderer import _is_visible as artist_is_visible
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
 #: the constant is named — and spelled the same as every other tier's — so a reader of :attr:`Scene.figure_spec`
@@ -673,7 +680,22 @@ class Scene(WatermarkMixin):
             ``to_dict()`` refuses an ``object:`` source, because a reference into this process's memory would
             be unreadable everywhere else. Give a builder a path or a URL to get a figure that can be stored.
         """
-        tree = self._layer_tree
+        return self._figure_with(self._layer_tree)
+
+    def _figure_with(self, tree: LayerTree) -> FigureSpec:
+        """Return the figure this scene would report if its layers were `tree`.
+
+        The panel is **derived** rather than maintained beside the tree: this tier draws one axes, so its one
+        panel shows every layer, and a figure whose panel named a layer the tree does not hold is refused by
+        `FigureSpec` — correctly. Writing that derivation once is what lets :meth:`_change` take a tree and
+        keep the panel in step with it.
+
+        Args:
+            tree: The layers the figure describes.
+
+        Returns:
+            The figure, with the sources of exactly those layers.
+        """
         panel = PanelSpec(PANEL_ID, self.viewport, layers=tuple(tree.ids))
         return FigureSpec(
             panels=(panel,),
@@ -682,6 +704,312 @@ class Scene(WatermarkMixin):
                 key: ref for key, ref in self._sources.items() if key in set(tree.ids)
             },
         )
+
+    def _change(self, figure: FigureSpec) -> None:
+        """Move the scene to another figure, drawing the difference onto the axes first.
+
+        The one path every layer-management method goes through, and the 3-D scene's `_change` in this
+        tier's terms. The order is the point: the renderer draws the difference, and the description is
+        installed **only if** it did. A figure that cannot be drawn — a kind this tier has no drawer for, a
+        layer whose data will not load — was installed first on the 3-D tier and left in place when `apply`
+        raised, so `layer_ids`, `figure_spec` and `to_dict` all advertised a layer that was never drawn and
+        could not be (review H7).
+
+        There is no rollback written here, and that is deliberate: :meth:`~digitalearth.static.renderer.Renderer.apply`
+        is atomic on this tier. It snapshots what the axes, this record and the colorbar registry held, and
+        puts all three back before it re-raises — so by the time a refusal reaches this method the axes is
+        already as it was, and the only thing left to do is not install the description. The 3-D scene
+        re-applies the figure in reverse instead, because its renderer's `apply` has no rollback of its own.
+
+        Args:
+            figure: The figure the scene should show. Its panel is ignored — :meth:`_figure_with` derives
+                one from the tree — so a caller may hand in a tree wrapped by either.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.
+            ValueError: when a layer's description does not carry what its drawer needs.
+            OffLimbError: when a layer's data cannot be placed and the scene is ``strict``.
+        """
+        candidate = self._figure_with(figure.layers)
+        self._renderer.apply(self.figure_spec, candidate)
+        self._layer_tree = candidate.layers
+        # The reference goes out of this scene's figure; the object stays registered, because a
+        # `figure_spec` captured before the change still names it and `close()` is where a scene lets its
+        # data go — the policy `Renderer.apply` states and the web tier settled on too.
+        held = set(candidate.layers.ids)
+        self._sources = {key: ref for key, ref in self._sources.items() if key in held}
+
+    def get_layer(self, layer_id: str) -> LayerSpec:
+        """Return the description of one layer, by id.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            Its :class:`~digitalearth.base.spec.LayerSpec` — kind, source, symbology, band and visibility.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - What a builder recorded, read back by id:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m.get_layer("ams").kind
+                'text'
+                >>> m.close()
+
+                ```
+        """
+        self._require_layer(layer_id)
+        return self._layer_tree.get(layer_id)
+
+    def add_layer(
+        self, artist: Any, *, name: Optional[str] = None, band: Optional[str] = None
+    ) -> Self:
+        """Register an artist **you built yourself** as a layer, and return this scene (chainable).
+
+        The Core spelling of what :meth:`_add_layer` has always done, and the point of having it in public:
+        an artist added this way is addressable like any other layer — :attr:`layer_ids` lists it,
+        :meth:`get_layer` describes it, :meth:`set_visible` hides it and :meth:`remove_layer` takes it off.
+        What the figure keeps is the *description* (id, kind `custom:matplotlib`, label, band, visibility);
+        the artist itself is held by this scene, because a matplotlib artist has no description to write, so
+        a figure read back elsewhere names the layer and cannot rebuild it
+        (:mod:`digitalearth.base.custom`).
+
+        Drawing straight onto :attr:`ax` is still the escape hatch, and is still invisible to the figure.
+
+        Args:
+            artist: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the
+                web tier reads it off a MapLibre layer: an artist built with ``visible=False`` is described
+                hidden rather than described as something the figure does not draw (review L10).
+            name: The id to address it by; ``None`` generates ``custom-1``, ``custom-2``, …. A name already
+                on the figure is suffixed, as every builder's ``name=`` is.
+            band: Where it is drawn — ``"underlay"``, ``"reference"``, ``"data"`` or ``"overlay"``. ``None``
+                takes the kind's own band, which is ``data``. A caller's artist can draw anything, so only
+                the caller can say whether it is ground cover or a label.
+
+        Returns:
+            This scene, so calls chain.
+
+        Raises:
+            ValueError: if `band` is not one of the four bands.
+            TypeError: if `name` is neither a string nor ``None``.
+
+        Examples:
+            - An artist of your own, addressable afterwards:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from matplotlib.text import Text
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.add_layer(m.ax.add_artist(Text(0.0, 0.0, "mine")), name="mine")
+                >>> m.get_layer("mine").kind
+                'custom:matplotlib'
+                >>> m.close()
+
+                ```
+        """
+        if band is not None and band not in KIND_BANDS:
+            raise ValueError(
+                f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
+            )
+        self._add_layer(
+            None, artist, name=name, band=band, visible=artist_is_visible(artist)
+        )
+        return self
+
+    def remove_layer(self, layer_id: str) -> Self:
+        """Take a layer off the figure, by id.
+
+        Args:
+            layer_id: The layer to remove.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do — a silent no-op here would look
+                exactly like a layer that refused to go away.
+
+        Note:
+            The **id** goes back to the pool, so a name removed and asked for again is handed back
+            unsuffixed: an id is reserved exactly while the layer is on the figure, which is the lifetime
+            all four tiers share (:func:`~digitalearth.base.spec.layer.free_layer_id`).
+
+            The in-memory **data** is not forgotten. A `figure_spec` captured before the removal still names
+            it, and drawing that figure again needs it; :meth:`close` is where this scene lets its data go.
+
+        Examples:
+            - A layer added and then removed leaves nothing behind:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m.remove_layer("ams").layer_ids
+                []
+                >>> m.close()
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(self._figure_with(self._layer_tree.remove(layer_id)))
+        # After the change, not before: the drawer reads the key, the keywords and the caller's own artist
+        # out of these, so dropping them first would leave the rollback inside `apply` unable to draw the
+        # layer it has just taken off.
+        self._layer_keys.pop(layer_id, None)
+        self._layer_opts.pop(layer_id, None)
+        self._held_objects.pop(layer_id, None)
+        self._issued_ids.discard(layer_id)
+        return self
+
+    def set_visible(self, layer_id: str, visible: bool = True) -> Self:
+        """Show or hide a layer, by id.
+
+        The layer stays on the figure and in its description — which is what lets it be switched back on,
+        and what tells a saved figure that the layer is there but not drawn.
+
+        Args:
+            layer_id: The layer to toggle.
+            visible: Whether it is drawn.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - A hidden layer is still described, and comes back on:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m.set_visible("ams", False).figure_spec.layers.is_visible("ams")
+                False
+                >>> m._renderer.is_visible("ams")
+                False
+                >>> m.set_visible("ams")._renderer.is_visible("ams")
+                True
+                >>> m.close()
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(
+            self._figure_with(self._layer_tree.set_visible(layer_id, bool(visible)))
+        )
+        return self
+
+    def move_layer(self, layer_id: str, index: int) -> Self:
+        """Move a layer in draw order, by id.
+
+        Args:
+            layer_id: The layer to move.
+            index: Its position afterwards, counted as a list index is — ``0`` is the bottom, ``-1`` the
+                top. A layer moves within its band: reordering the data layers is what a layer switcher
+                does, and dragging the basemap over them is not.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id.
+            IndexError: if the position is outside the figure, or outside the layer's band.
+
+        Note:
+            matplotlib paints the artists of one z-order in the order they were added, so this reaches the
+            picture and not only the description: the renderer repaints the layers it holds in the new order
+            (:meth:`~digitalearth.static.renderer.Renderer._repaint`).
+
+        Examples:
+            - Two labels, reordered by id:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> _ = m.text(2.35, 48.86, "Paris", name="par")
+                >>> m.move_layer("par", 0).layer_ids
+                ['par', 'ams']
+                >>> m.close()
+
+                ```
+        """
+        self._change(self._figure_with(self._layer_tree.move(layer_id, index)))
+        return self
+
+    def replace_layer(self, layer: LayerSpec) -> Self:
+        """Swap a layer's description for another, keeping its id and its place in draw order.
+
+        This is how a layer is restyled or re-pointed after it has been drawn: a cleopatra glyph bakes its
+        colormap and its class breaks into the artist it built, so the renderer draws the layer again from
+        the new description rather than setting a property on what is there.
+
+        Args:
+            layer: The new description. Its id names the layer it replaces.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
+            ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
+                the drawers read the source out of the figure, and a missing one reaches the drawer as
+                ``None`` and fails somewhere it cannot explain.
+
+        Examples:
+            - A label re-described keeps its id and its place:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from dataclasses import replace
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> held = m.get_layer("ams")
+                >>> _ = m.replace_layer(replace(held, label="Capital"))
+                >>> m.get_layer("ams").label
+                'Capital'
+                >>> m.close()
+
+                ```
+        """
+        self._require_layer(getattr(layer, "id", None))
+        if layer.source_id is None and kind_info(layer.kind).takes != "none":
+            raise ValueError(
+                f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
+                f"needs a source_id; got None"
+            )
+        self._change(self._figure_with(self._layer_tree.replace(layer)))
+        return self
+
+    def _require_layer(self, layer_id: Any) -> None:
+        """Refuse an id this scene does not draw, naming the ids it does.
+
+        Written once because five public methods ask the same question, and a refusal that named neither the
+        id nor the alternatives is the one a caller cannot act on.
+
+        Args:
+            layer_id: The id the caller passed.
+
+        Raises:
+            KeyError: when no layer has that id.
+        """
+        if layer_id not in self._layer_tree:
+            raise KeyError(
+                f"no layer {layer_id!r} on this figure; its layers are {self.layer_ids}"
+            )
 
     @property
     def viewport(self) -> Viewport:
@@ -748,6 +1076,7 @@ class Scene(WatermarkMixin):
         label: Optional[str] = None,
         *,
         name: Optional[str] = None,
+        band: Optional[str] = None,
         visible: bool = True,
     ) -> Any:
         """Register an artist the caller built themselves, and describe it as a custom layer.
@@ -768,6 +1097,9 @@ class Scene(WatermarkMixin):
             name: The caller's own name for the layer, used as its id; ``None`` (default) generates
                 ``custom-1``, ``custom-2``, … A name already on the figure is suffixed ``-2``, ``-3``, …
                 (#321).
+            band: Where the layer is drawn — one of :data:`~digitalearth.base.registry.KIND_BANDS`.
+                ``None`` takes the kind's own band, which is ``data``. The kind names the *engine* and says
+                nothing about what the artist draws, so a backdrop or a label can only say so here.
             visible: Whether the layer is drawn. ``False`` registers it hidden **and** describes it
                 hidden (#327).
 
@@ -778,6 +1110,7 @@ class Scene(WatermarkMixin):
             LayerRecord(
                 custom_kind(ENGINE),
                 name=name,
+                band=band,
                 visible=visible,
                 symbology=Symbology(props={"via": "custom"}),
                 held=(glyph, mappable, label),

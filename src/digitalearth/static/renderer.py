@@ -834,6 +834,51 @@ class Renderer:
             self.set_visible(layer_id, True)
         for layer_id in change.hidden:
             self.set_visible(layer_id, False)
+        if change.order is not None:
+            # Last, so the layers a redraw or an add has just appended are in the arrangement too.
+            self._repaint(change.order)
+
+    def _repaint(self, order: Tuple[str, ...]) -> None:
+        """Paint the layers this renderer holds in `order`, leaving every other artist where it is.
+
+        ``FigureDiff`` has reported ``order`` since the seam landed and no renderer acted on it, so a
+        reorder reached every tier's *description* and none of their pictures. On this tier it does reach
+        one: matplotlib draws the artists of a single z-order in the order they were added, and
+        :func:`_painted` is that order, so re-arranging the list re-arranges the painting.
+
+        The layers' own slots are refilled and nothing else moves. The axes' patch, its spines, a colorbar's
+        axes and anything a caller drew straight onto :attr:`Scene.ax` are not layers, and a reorder is not
+        licence to move them.
+
+        Args:
+            order: The layer ids in the draw order the figure now describes, bottom first.
+        """
+        painted = _painted(self._scene.ax)
+        if painted is None:
+            return
+        owner = {
+            id(artist): layer_id
+            for layer_id, drawn in self._drawn.items()
+            for artist in drawn.artists
+        }
+        slots = [index for index, artist in enumerate(painted) if id(artist) in owner]
+        blocks: Dict[str, List[Any]] = {}
+        for index in slots:
+            blocks.setdefault(owner[id(painted[index])], []).append(painted[index])
+        arranged = [artist for layer_id in order for artist in blocks.get(layer_id, ())]
+        if len(arranged) != len(slots):
+            # An artist owned by a layer the new order does not name would be dropped from the axes by the
+            # assignment below, and one named twice would be painted twice. Neither is reachable from
+            # `apply` — `order` is the new figure's full draw order — and leaving the axes alone is the
+            # answer that cannot lose a drawing.
+            logger.debug(
+                "not repainting: %d artists to place in %d slots",
+                len(arranged),
+                len(slots),
+            )
+            return
+        for slot, artist in zip(slots, arranged):
+            painted[slot] = artist
 
     def _rollback(self, held: _Held, before: FigureSpec) -> None:
         """Put the axes and this record back the way a refused :meth:`apply` found them.
@@ -867,6 +912,10 @@ class Renderer:
             if layer_id in self._drawn
         }
         self._restore_registry(held)
+        # The arrangement goes back with the artists. `_restore` puts a *re-drawn* layer back where it stood,
+        # but a refused change that reordered the layers it kept moved artists nothing re-drew — so the
+        # rollback has to say what the order was, which is what `before` is.
+        self._repaint(before.layers.ids)
 
     def _restore(self, layer_id: str, before: FigureSpec, held: _Held) -> None:
         """Draw one removed layer again and move what it drew back to where the layer stood on the axes.

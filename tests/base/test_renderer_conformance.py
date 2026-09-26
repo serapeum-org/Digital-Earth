@@ -1162,13 +1162,18 @@ class StaticContract(RendererContract):
 
     The last tier to sign it, and the one closest in shape to the 3-D reference: matplotlib hands out live
     artists on a live axes, and `Renderer.apply` draws onto and takes off that axes, so the engine follows
-    `apply` and `engine_holds` reads the axes themselves. The figure the map reports does not follow it:
-    `apply_figure` calls the renderer, which never touches the scene's `figure_spec` (review M1), so
-    `apply_reaches_description` stays `False`.
+    `apply` and `engine_holds` reads the axes themselves.
+
+    **The figure the map reports follows it too, since order 23.** `apply_figure` goes through
+    `Scene._change`, the path every public layer-management call on this tier takes, so both halves move
+    together and both are checked. It called the renderer directly while `apply` had no production caller at
+    all (review M1), which left `test_a_refused_figure_is_not_the_one_the_tier_reports` skipping on three
+    tiers of four.
     """
 
     backend = "matplotlib"
     apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an empty map in Web Mercator.
@@ -1242,13 +1247,13 @@ class StaticContract(RendererContract):
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:
-        """Move the map to `figure` through the renderer.
+        """Move the map to `figure` through the path every change goes through.
 
         Args:
             tier: The map.
             figure: The figure.
         """
-        tier._renderer.apply(tier.figure_spec, figure)
+        tier._change(figure)
 
     def engine_holds(self, tier):
         """Return every artist on every axes of the map's figure, in the order matplotlib holds them.
