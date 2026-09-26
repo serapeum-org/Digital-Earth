@@ -136,6 +136,13 @@ FLAT_STYLE_KEYS = frozenset(
 #: every builder.
 MARKER_SIZE_KEY = "size"
 
+#: The point-overlay keys whose live spelling **on a layer of points** is the same styling without the
+#: ``point_`` prefix, used to re-spell them in :func:`prepare_plot_kwargs`' refusal. Only the marker's size is
+#: here: ``point_color`` and the ``point_label_*``/``pid_*`` keys style the overlay's own colouring and its
+#: per-point labels, which a point layer reaches through its colour group and ``column=`` rather than through
+#: a keyword of that name, so they get the corrected diagnosis and no re-spelling.
+_MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
+
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
 #: where it drives one. That is the **27** flat members cleopatra's constructors reject, the 6 typed group
 #: parameters they fold into, and :data:`MARKER_SIZE_KEY` — 34 keywords that were in no signature anywhere.
@@ -393,8 +400,32 @@ _GROUP_MEMBERS = {
 }
 
 #: The point-overlay keys (the ``points`` array plus its ``point_*`` styling), rejected on a glyph with no
-#: ``points`` parameter the same way an unsupported group is.
+#: ``points`` parameter — but with a refusal of their own, not the unsupported-group one (review N3).
 _POINT_OVERLAY_KEYS = frozenset({"points", *_POINT_FIELDS})
+
+
+def _marker_respellings(overlay: Dict[str, Any]) -> str:
+    """Return the clause that re-spells a point overlay's keys as a point layer's own marker styling.
+
+    Args:
+        overlay: The point-overlay keys the caller wrote and this glyph cannot take.
+
+    Returns:
+        A sentence naming each key that has a live counterpart in :data:`_MARKER_RESPELLINGS`, or ``""``
+        when none of them does — the corrected diagnosis stands on its own, and inventing a spelling for
+        the label keys would send the caller after a keyword no builder takes.
+    """
+    renamed = [
+        f"{key}= is {_MARKER_RESPELLINGS[key]}="
+        for key in sorted(overlay)
+        if key in _MARKER_RESPELLINGS
+    ]
+    if not renamed:
+        return ""
+    return (
+        ". On a layer of points the same styling is spelled without the prefix: "
+        + "; ".join(renamed)
+    )
 
 
 def _fold_points(out: Dict[str, Any]) -> None:
@@ -556,10 +587,12 @@ def prepare_plot_kwargs(
 
     Only the groups the glyph's ``plot`` accepts are built (the vector glyphs take ``color``/``contour``/
     ``classify`` but not ``data_style``/``cells``, so folding those blindly would raise an opaque ``TypeError``).
-    A leftover flat member the glyph cannot take (including an unsupported ``points`` overlay) raises a clear
-    ``ValueError`` naming it — except ``alpha``, which every layer should honour: it is returned as
-    ``deferred_alpha`` for the caller to apply to the rendered artist, since the vector glyphs expose no
-    ``alpha`` parameter upstream.
+    A leftover flat member the glyph cannot take raises a clear ``ValueError`` naming it — except ``alpha``,
+    which every layer should honour: it is returned as ``deferred_alpha`` for the caller to apply to the
+    rendered artist, since the vector glyphs expose no ``alpha`` parameter upstream. An unsupported
+    ``points`` overlay is refused too, in a sentence of its own: those keys style the overlay a raster or
+    mesh layer draws *over* itself, so calling them raster options misnames them, and where one has a live
+    spelling on a layer of points the refusal gives it (review N3).
 
     This assumes each glyph advertises its supported groups as *explicit named* ``plot`` parameters — true for
     every cleopatra glyph today (``ArrayGlyph`` names ``color``/``contour``/``cells``/``data_style``/``points``;
@@ -586,15 +619,25 @@ def prepare_plot_kwargs(
             continue
         for key in [k for k in grouped if k in members]:
             leftover[key] = grouped.pop(key)
-    if (
-        "points" not in accepted
-    ):  # a point overlay on a glyph with no `points` parameter is unsupported too
+    # A point overlay on a glyph with no `points` parameter is unsupported too, but it is its *own* refusal:
+    # sharing the sentence below said "they apply to raster/mesh layers" of `point_size=`, which is the wrong
+    # diagnosis twice over (review N3). These keys do belong to a raster or mesh layer — as the point overlay
+    # it draws over itself — and what a caller migrating an old script wanted is the same styling without the
+    # prefix, which is what `_marker_respellings` tells them.
+    overlay = {}
+    if "points" not in accepted:
         for key in [k for k in grouped if k in _POINT_OVERLAY_KEYS]:
-            leftover[key] = grouped.pop(key)
+            overlay[key] = grouped.pop(key)
     deferred_alpha = leftover.pop("alpha", None)
     if leftover:
         raise ValueError(
             f"{type(glyph).__name__} does not support the styling option(s) {sorted(leftover)}; "
             "they apply to raster/mesh layers, not this layer type"
+        )
+    if overlay:
+        raise ValueError(
+            f"{type(glyph).__name__} does not support the styling option(s) {sorted(overlay)}; they style "
+            "the point overlay a raster or mesh layer draws over itself, and this layer type has no such "
+            f"overlay{_marker_respellings(overlay)}"
         )
     return grouped, deferred_alpha
