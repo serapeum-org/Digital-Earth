@@ -203,66 +203,37 @@ __all__ = [
     "load_plugins",
 ]
 
-# --- back-compat: submodules that moved in the backend restructure -------------------------------------------
-#
-# Before the restructure these eleven names were bound as attributes of `digitalearth` -- some because
-# `__init__` imported from them, the rest as a side effect of those imports -- so `digitalearth.charts` and
-# `from digitalearth import series` both worked. Moving them under base/, static/ and ops/ silently unbound
-# every one: attribute access raised a bare AttributeError and the `from` form an ImportError, neither
-# mentioning where the module went.
-#
-# PEP 562 module __getattr__ restores them as deprecated aliases that say where to go. It covers the attribute
-# forms only; `import digitalearth.charts` and `from digitalearth.charts import histogram` still fail, because
-# those need a real module on disk -- `digitalearth.scene` is the one such shim we ship.
-_MOVED_SUBMODULES = {
-    "animation": "digitalearth.static.animation",
-    "autostyle": "digitalearth.base.autostyle",
-    "batch": "digitalearth.ops.batch",
-    "browser": "digitalearth.ops.browser",
-    "charts": "digitalearth.static.charts",
-    "cli": "digitalearth.ops.cli",
-    "plugins": "digitalearth.ops.plugins",
-    "scene": "digitalearth.scene",
-    "series": "digitalearth.static.series",
-    "sources": "digitalearth.base.sources",
-    "temporal": "digitalearth.static.temporal",
-}
-
 # --- removed: the geostatistics presets, which move upstream --------------------------------------------
 #
 # `lisa_map`/`hotspot_map`/`kriging_map` and `digitalearth.static.geostatistics` drew another package's
 # output and nothing else, so the drawing moves to the package that produces the labels
 # (serapeum-org/geostatista#61). They are removed outright rather than deprecated: a forwarding shim would
 # keep the wrong dependency direction documented as supported. But a bare "module 'digitalearth' has no
-# attribute 'lisa_map'" is the diagnostic `_MOVED_SUBMODULES` above exists to avoid, so the removed names
-# still fail with a message naming the replacement. The standard prefix is kept, so `hasattr` is still
-# False and code matching on the usual wording still matches.
+# attribute 'lisa_map'" sends a reader looking for a typo, so the removed names still fail with a message
+# naming the replacement. The standard prefix is kept, so `hasattr` is still False and code matching on the
+# usual wording still matches.
 _REMOVED_GEOSTATISTICS = ("geostatistics", "hotspot_map", "kriging_map", "lisa_map")
 
 
 def __getattr__(name: str) -> Any:
     """Resolve an attribute the package does not bind yet.
 
-    That is a public name, a subpackage, a moved submodule, or a removed geostatistics name. A public name from
-    `__all__` is imported from its home module on first use and cached, as is one of the subpackages the package
-    used to bind eagerly — so importing the package imports no renderer until something asks for one. The
-    removed names are tested next and always raise: the ``geostatistics`` submodule and the
+    That is a public name, a subpackage, or a removed geostatistics name. A public name from `__all__` is
+    imported from its home module on first use and cached, as is one of the subpackages the package used to
+    bind eagerly — so importing the package imports no renderer until something asks for one. The removed
+    names are tested next and always raise: the ``geostatistics`` submodule and the
     ``lisa_map``/``hotspot_map``/``kriging_map`` presets went upstream to geostatista, so there is nothing here
-    to forward them to and the error says where they went. A name listed in ``_MOVED_SUBMODULES`` is imported
-    from its new location, cached in the module globals so the :class:`DeprecationWarning` fires once per
-    process, and returned.
+    to forward them to and the error says where they went.
 
     Args:
         name: The attribute being looked up on the ``digitalearth`` package.
 
     Returns:
-        The public object or subpackage, or the moved submodule imported from its new location. The removed names
-        never reach this path.
+        The public object or subpackage. The removed names never reach this path.
 
     Raises:
         AttributeError: for one of the removed geostatistics names, with a message naming its replacement; and
-            for any other name that is neither a real attribute, a lazily resolved name or subpackage, nor a moved
-            submodule.
+            for any other name that is neither a real attribute nor a lazily resolved name or subpackage.
     """
     if name in _LAZY_EXPORTS:
         import importlib
@@ -283,33 +254,14 @@ def __getattr__(name: str) -> Any:
             "serapeum-org/geostatista#61). Until it ships them, draw the result directly with "
             "digitalearth.Map().choropleth(..., scheme='categorical') and your own colour mapping."
         )
-    target = _MOVED_SUBMODULES.get(name)
-    if target is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    import importlib
-    import warnings
-
-    warnings.warn(
-        f"digitalearth.{name} moved to {target} in the backend restructure; import it from there. "
-        "This alias will be removed in a future release.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    module = importlib.import_module(target)
-    globals()[name] = module  # cache, so the warning fires once per process
-    return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__() -> list:
     """List the package's attributes, including the ones it has not resolved yet.
 
     Returns:
-        The bound module globals, the lazily resolved public names and subpackages, and the moved-submodule
-        aliases, as one sorted list — so tab-completion and `dir()` find a name before its first use imports it.
+        The bound module globals and the lazily resolved public names and subpackages, as one sorted list — so
+        tab-completion and `dir()` find a name before its first use imports it.
     """
-    return sorted(
-        set(globals())
-        | set(_MOVED_SUBMODULES)
-        | set(_LAZY_EXPORTS)
-        | set(_LAZY_SUBPACKAGES)
-    )
+    return sorted(set(globals()) | set(_LAZY_EXPORTS) | set(_LAZY_SUBPACKAGES))

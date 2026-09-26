@@ -200,8 +200,8 @@ class TestSubpackageLayout:
         """Each subpackage is a package, not a module.
 
         Test scenario:
-            ``__path__`` exists only on packages — the check that distinguishes these from
-            ``digitalearth.scene``, which the split deliberately turned into a plain shim module.
+            ``__path__`` exists only on packages, so this is what refuses a subpackage that has become a
+            plain module — which is what the restructure's own forwarding shim was.
         """
         module = importlib.import_module(package)
         assert hasattr(module, "__path__"), (
