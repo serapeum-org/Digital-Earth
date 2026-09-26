@@ -1,28 +1,23 @@
-"""The contract as data, and the helper that keeps a renamed method working (U-3, #299).
+"""The contract as data (U-3, #299).
 
-`base/contract.py` is what a tier is held against, and `renamed_method` is how a spelling is retired without
-breaking the caller who already wrote it. These cover both in the environment that owns them — no engine, no
-facade, just the vocabulary and the shim.
+`base/contract.py` is what a tier is held against. These cover it in the environment that owns it — no engine,
+no facade, just the vocabulary.
 """
 
 import re
-import warnings
 
 import pytest
 
 from digitalearth.base.contract import (
     CORE,
     PENDING,
-    PLANNED_RENAMES,
     ROADMAP_ORDERS,
     TIER2,
     Method,
-    alias_table,
     core_method,
     orders_named_in,
     pending_for,
 )
-from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from tests.open_issues import KNOWN_OPEN_ISSUES, issues_named_in
 
 #: A wave reference inside a reason. It is the form that rots: inserting one wave renumbers every wave after
@@ -46,10 +41,6 @@ class TestReadingTheContract:
         """The lookup walks the whole table, not just its head."""
         assert core_method(CORE[-1].name).name == CORE[-1].name, CORE[-1]
 
-    def test_a_tier_that_renamed_nothing_has_an_empty_table(self):
-        """`alias_table` answers for every backend, including one nobody renamed."""
-        assert alias_table("nobody") == {}, alias_table("nobody")
-
     def test_a_tier_with_nothing_pending_answers_the_same_way(self):
         """`pending_for` is a question about a tier, not about the table's keys."""
         assert pending_for("nobody") == {}, pending_for("nobody")
@@ -66,234 +57,6 @@ class TestReadingTheContract:
             frozenset(),
             None,
         ), built
-
-
-class TestRenamingAMethod:
-    """The alias keeps the old call working, and says what to write instead."""
-
-    class _Map:
-        """A stand-in facade with one renamed method and one renamed parameter."""
-
-        def set_bounds(self, bounds, *, padding=0):
-            """Frame on a region.
-
-            Args:
-                bounds: The region.
-                padding: Pixels around it.
-
-            Returns:
-                A description of what was framed.
-            """
-            return f"{bounds} with {padding}"
-
-        def save_animation(self, path, *, fps=None, framerate=None):
-            """Write frames to a file, resolving the deprecated frame-rate spelling.
-
-            Args:
-                path: Where to write.
-                fps: Frames per second.
-                framerate: The deprecated spelling.
-
-            Returns:
-                A description of what was written.
-            """
-            rate = renamed_parameter(
-                new="fps",
-                value=fps,
-                old="framerate",
-                alias=framerate,
-                caller="Map.save_animation()",
-                default=3.0,
-            )
-            return f"{path} at {rate}"
-
-        fit_bounds = renamed_method(new="set_bounds", old="fit_bounds", owner="Map")
-        animate = renamed_method(new="save_animation", old="animate", owner="Map")
-
-    def test_the_old_name_still_works(self):
-        """A promise to the caller who already wrote it."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            assert self._Map().fit_bounds([0, 0, 1, 1]) == "[0, 0, 1, 1] with 0", (
-                "forwarded"
-            )
-
-    def test_keywords_travel_through_the_alias(self):
-        """A whole call keeps working, not only its positional half."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            assert self._Map().fit_bounds([0, 0, 1, 1], padding=8) == (
-                "[0, 0, 1, 1] with 8"
-            ), "keywords must travel"
-
-    def test_the_warning_names_both_spellings(self):
-        """The other half of the promise: the old name must not linger silently."""
-        facade = self._Map()
-        with pytest.warns(DeprecationWarning) as caught:
-            facade.fit_bounds([0, 0, 1, 1])
-        message = str(caught[0].message)
-        assert "Map.fit_bounds()" in message, message
-        assert "Map.set_bounds()" in message, message
-
-    def test_the_warning_lands_on_the_caller_s_line(self):
-        """A warning pointing at the helper is one nobody can act on."""
-        facade = self._Map()
-        with pytest.warns(DeprecationWarning) as caught:
-            facade.fit_bounds([0, 0, 1, 1])
-        assert caught[0].filename == __file__, caught[0].filename
-
-    def test_a_parameter_rename_inside_the_new_method_also_points_at_the_caller(self):
-        """The alias counts the frame it added, so both warnings name the caller's line.
-
-        Test scenario:
-            The case the one hand-written alias handled by hand: calling the old method *and* the old keyword
-            raised two warnings, and without the frame count the second landed in `deprecation.py`.
-        """
-        facade = self._Map()
-        with pytest.warns(DeprecationWarning) as caught:
-            facade.animate("out.gif", framerate=9.0)
-        attributed = {
-            str(record.message).split("(")[0]: record.filename for record in caught
-        }
-        assert len(attributed) == 2, [str(record.message) for record in caught]
-        for label, filename in attributed.items():
-            assert filename == __file__, f"{label} landed in {filename}"
-
-    def test_the_frame_count_is_put_back_afterwards(self):
-        """A later call through the new name is not credited with the alias's frame."""
-        facade = self._Map()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            facade.animate("out.gif", framerate=9.0)
-        with pytest.warns(DeprecationWarning) as caught:
-            facade.save_animation("out.gif", framerate=9.0)
-        assert caught[0].filename == __file__, caught[0].filename
-
-    def test_the_alias_carries_the_names_it_was_built_with(self):
-        """A traceback and a `help()` should show the method a caller actually wrote."""
-        held = self._Map.__dict__["fit_bounds"]
-        assert (held.__name__, held.__qualname__) == ("fit_bounds", "Map.fit_bounds"), (
-            held
-        )
-
-    def test_the_alias_documents_where_it_forwards(self):
-        """`help(Map.fit_bounds)` must name its replacement."""
-        assert "set_bounds" in (self._Map.__dict__["fit_bounds"].__doc__ or ""), "doc"
-
-
-class TestTheRenamesNobodyHasAdopted:
-    """Review M5 — `PLANNED_RENAMES` is read through its own accessor.
-
-    **The table is empty**, because order 27a adopted all six rows it held. This class used to assert one of
-    them by name (`planned_renames("matplotlib")["imshow"] == "field"`), which is why it is the first thing
-    the adoption broke. What replaces that is the positive statement the emptiness has to mean: each of the
-    six is a *live alias* now, which is what puts it under `TestAnAliasIsAPromiseToTwoCallers` and
-    `tests/test_contract_names.py`'s liveness checks. The two guards below are kept, deliberately vacuous
-    while the table is empty, because they are what the **next** agreed-but-unadopted row will be held to —
-    and a guard deleted for being vacuous is a guard the next row ships without.
-    """
-
-    def test_nothing_is_still_waiting_to_be_renamed(self):
-        """The emptiness itself, stated where a reader of this class will look for it.
-
-        Test scenario:
-            `PLANNED_RENAMES` is not empty because nobody ever agreed a rename — it is empty because every
-            rename that was agreed has been adopted. Saying so here is what stops the two checks below being
-            read as "there were never any".
-        """
-        assert dict(PLANNED_RENAMES) == {}, (
-            f"PLANNED_RENAMES holds {dict(PLANNED_RENAMES)}; this class's docstring says it is empty"
-        )
-
-    def test_a_tier_with_none_answers_empty(self):
-        """`planned_renames` is a question about a tier, not about the table's keys."""
-        from digitalearth.base.contract import planned_renames
-
-        assert dict(planned_renames("nobody")) == {}, planned_renames("nobody")
-
-    def test_each_planned_rename_is_why_its_core_name_is_pending(self):
-        """The two tables must not date the same arrival differently (review R-L4).
-
-        Test scenario:
-            `_drawn_as`'s docstring promises that "the old spelling is the one `PLANNED_RENAMES` records, so
-            the two tables answer consistently" — and for `set_extent` they did not: `PLANNED_RENAMES` dated
-            static's `set_bounds` at the rename order and `PENDING` at the framing order, two different
-            answers to when a caller gets it. A row belongs here only when the tier already draws the thing
-            and the spelling is all that is missing, which is exactly what `_drawn_as` says; a row whose
-            reason says something else is a capability gap wearing a rename's clothes.
-
-            **Vacuous while `PLANNED_RENAMES` is empty** (order 27a adopted all six), and kept because it is
-            what the seventh row will be held to.
-            :meth:`test_the_pairing_rule_refuses_a_row_whose_core_name_is_pending_for_another_reason` keeps
-            the rule itself exercised meanwhile, against a synthetic table — a check that cannot fail is a
-            guard nobody has seen work.
-        """
-        assert self._pairing(PLANNED_RENAMES) == ({}, {})
-
-    @staticmethod
-    def _pairing(table, pending=None):
-        """Return the pairing this rule compares: what `PENDING` states, and what the renames imply.
-
-        Args:
-            table: A `{backend: {old: new}}` mapping in `PLANNED_RENAMES`' shape.
-            pending: The `{backend: {name: reason}}` mapping to read the stated reasons from; the real
-                :data:`~digitalearth.base.contract.PENDING` when omitted. Taken as an argument so the two
-                checks below can pair a synthetic rename against a synthetic reason and show the rule
-                answering both ways while the live table is empty.
-
-        Returns:
-            `(stated, expected)` — the reason filed against each Core name, and the `_drawn_as` reason its
-            rename implies. Equal when the two tables date the same arrival the same way.
-        """
-        from digitalearth.base.contract import _drawn_as
-
-        filed = PENDING if pending is None else pending
-        stated = {
-            (backend, new): filed.get(backend, {}).get(new)
-            for backend, renames in table.items()
-            for new in renames.values()
-        }
-        expected = {
-            (backend, new): _drawn_as(old)
-            for backend, renames in table.items()
-            for old, new in renames.items()
-        }
-        return stated, expected
-
-    def test_the_pairing_rule_refuses_a_row_whose_core_name_is_pending_for_another_reason(
-        self,
-    ):
-        """The rule above, run against a table that really breaks it.
-
-        Test scenario:
-            The defect R-L4 named: a rename claiming the tier draws the thing already, while `PENDING` dates
-            the Core name at a *capability* order instead. `lines` is pending on the static tier for #226 —
-            "line features on the static tier" — so a row claiming `lines` is merely `path` renamed would
-            pair a `_drawn_as` reason against an issue about building it, and the two sides must differ.
-        """
-        stated, expected = self._pairing({"matplotlib": {"path": "lines"}})
-        assert stated != expected, (
-            f"a rename whose Core name is pending for a capability reason paired cleanly: {stated}"
-        )
-
-    def test_the_pairing_rule_accepts_a_row_whose_reason_is_the_rename(self):
-        """The negative control, so the check above is not passing by refusing everything.
-
-        Test scenario:
-            A rule that reported every table would satisfy the check above and be useless. The same
-            synthetic rename is paired against a synthetic `PENDING` that gives the reason `_drawn_as` says
-            it should — "drawn as path() here" — and the two sides have to agree.
-        """
-        from digitalearth.base.contract import _drawn_as
-
-        stated, expected = self._pairing(
-            {"matplotlib": {"path": "lines"}},
-            {"matplotlib": {"lines": _drawn_as("path")}},
-        )
-        assert stated == expected, (
-            f"a rename whose Core name is pending for the rename's own reason did not pair: {stated} vs "
-            f"{expected}"
-        )
 
 
 def _issues_named_in_reasons():

@@ -7,13 +7,11 @@ facade you were holding. Every one of those was defensible where it grew and ind
 
 This module is the agreement that ends it, written down rather than described: :data:`CORE` is the vocabulary
 every tier answers to where it can draw the thing at all, :data:`TIER2` the names that must agree wherever they
-appear, :data:`ALIASES` what each tier used to call them, and :data:`PENDING` what a tier has not built yet and
-which roadmap order builds it. A contract test per tier reads this and compares; nothing here imports a
-renderer, so the comparison costs no engine.
+appear, and :data:`PENDING` what a tier has not built yet and which roadmap order builds it. A contract test
+per tier reads this and compares; nothing here imports a renderer, so the comparison costs no engine.
 
-**A spelling never means two things.** Where a tier called a contract method something else, that spelling
-was deleted rather than kept working: nothing here is released, so there is no caller to keep a promise to.
-:data:`ALIASES` records that the table is empty and which rows it held.
+**A spelling never means two things.** Where a tier called a contract method something else, that spelling was
+deleted rather than kept working: nothing here is released, so there is no caller to keep a promise to.
 """
 
 import re
@@ -22,18 +20,14 @@ from types import MappingProxyType
 from typing import FrozenSet, Iterable, Mapping, Optional, Tuple
 
 __all__ = [
-    "ALIASES",
-    "PLANNED_RENAMES",
     "CORE",
     "PENDING",
     "ROADMAP_ORDERS",
     "TIER2",
     "Method",
-    "alias_table",
     "core_method",
     "orders_named_in",
     "pending_for",
-    "planned_renames",
     "roadmap_order",
 ]
 
@@ -62,8 +56,7 @@ class Method:
 
             ```
         - Nothing is waiting: every Core name is drawn on at least one tier, so no `builds_in` is set. It
-          stays a field because the *next* name the contract declares ahead of its tiers needs one, which is
-          the bargain :data:`PLANNED_RENAMES` strikes for a rename nobody is waiting on either:
+          stays a field because the *next* name the contract declares ahead of its tiers needs one:
             ```python
             >>> from digitalearth.base.contract import CORE
             >>> [method.name for method in CORE if method.builds_in]
@@ -87,9 +80,9 @@ class Method:
 # `ROADMAP_ORDERS` goes with them — a vendored order nothing cites is the next thing to go stale, which
 # `tests/base/test_contract.py::TestAPendingReasonPointsAtLiveWork` refuses.
 
-#: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the "canonical
-#: names + deprecated aliases" half of the contract (DE-26, folded into U-3), which PR #304 froze without any
-#: tier adopting. :data:`PLANNED_RENAMES` is the record of what each tier agreed to call these.
+#: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the
+#: "canonical names" half of the contract (DE-26, folded into U-3), which PR #304 froze without any tier
+#: adopting.
 _RENAME_ORDER = "order 27a"
 
 #: Where a colour key stops being the most recent classification and becomes a guide on its own layer's
@@ -132,27 +125,11 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
             "the most recent classification"
         ),
         _RENAME_ORDER: (
-            "the Core contract's remainder — the renames each tier has agreed to and not adopted "
-            "(:data:`PLANNED_RENAMES`), plus the divergences the frozen contract did not settle"
+            "the Core contract's remainder — the renames each tier agreed to and had not adopted, plus the "
+            "divergences the frozen contract did not settle"
         ),
     }
 )
-
-
-def _drawn_as(old: str) -> str:
-    """Say that only the spelling is missing, and where the Core one is adopted.
-
-    A tier that draws the thing under its own name is not missing the capability, and a reason that implies it
-    is sends the reader looking for work nobody is going to do. The old spelling is the one
-    :data:`PLANNED_RENAMES` records, so the two tables answer consistently.
-
-    Args:
-        old: What the tier calls the method today.
-
-    Returns:
-        The reason to list against the Core name.
-    """
-    return f"drawn as {old}() here; adopting the Core spelling is {_RENAME_ORDER}"
 
 
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
@@ -289,43 +266,6 @@ TIER2: Tuple[Method, ...] = (
     Method("projection", "Draw in another projection, by name.", frozenset()),
 )
 
-#: What each tier used to call a contract name, as `{backend: {old: new}}`.
-#:
-#: **It is empty, and that is the arrangement rather than an omission.** Nothing in this package is released,
-#: so a tier that renamed a method renamed it outright: the eighteen rows this table held — `add_raster`,
-#: `fit_bounds`, `title`, `animate`, `to_gif`, `save_gif`, `terrain` and `globe` on web, `animate` on 3-D,
-#: `imshow`, `scatter`, `shapes`, `set_extent`, `contour` and `contourf` on static, and `image`, `path` and
-#: `add_element` on interactive — were deleted along with the methods they named, not deprecated. Every recipe
-#: key underneath is unchanged (`via="imshow"`, `"scatter"`, `"shapes"`, `"image"`), so a figure written
-#: before the renames still reads back into the drawer that made it.
-ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
-
-#: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
-#: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
-#: it will be called once the tier adopts it.
-#:
-#: **It is empty, and that is a result rather than an omission.** It held six — `image`/`path`/`add_element` on
-#: the interactive tier and `imshow`/`scatter`/`shapes` on the static one — and all six were adopted at order
-#: 27a, which moved them to :data:`ALIASES` where their liveness is checked. `alias_table` is where a caller
-#: looks now; this is where the *next* agreed-but-unadopted spelling is recorded, kept because the agreement
-#: is part of the contract — a tier should not have to re-decide a spelling — and kept apart from
-#: :data:`ALIASES` because "you may still write this" and "we intend to rename this" are answers to different
-#: questions. :func:`_drawn_as` is the `PENDING` reason such a row explains itself by, and has no caller for
-#: the same reason: nothing is waiting.
-#:
-#: Two names deliberately never joined it, and the reasons outlive the rows:
-#:
-#: - `set_extent` was **not** `set_bounds` under an older name, and listing it as one told a caller the
-#:   method already existed under another spelling while `PENDING` dated it at the framing order — the same
-#:   arrival, two answers (review R-L4). Order 27a resolved that by splitting the two claims rather than by
-#:   adopting the row: the tier answers to `set_bounds` now, returning `self`, with `set_extent` a live
-#:   alias in :data:`ALIASES`; the `padding` it did not take, and the `None` that fits the data, were a
-#:   keyword shortfall against the framing order until that order built them both.
-#: - `point_cloud` is a second *current* spelling of `grid_points`, which the static tier offers and
-#:   deprecates neither of. A rename is a name on its way out, and nothing has been agreed about that one
-#:   (review M5).
-PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
-
 #: What a tier has not built yet, as `{backend: {name: why}}`. This is the honest half of the contract: a name
 #: absent because the tier cannot draw it at all reads differently from one absent because nobody has written
 #: it, and only the tier can say which. A contract test holds each facade against `CORE` minus its pending list.
@@ -367,9 +307,8 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "interactive": MappingProxyType(
             {
-                # `field`, `lines` and `add_layer` were listed here, each `_drawn_as` the tier's own
-                # spelling. All three are adopted at order 27a: the tier answers to the Core name and the old
-                # spelling is a live alias, so neither is pending any more.
+                # `field`, `lines` and `add_layer` were listed here, each against the tier's own older
+                # spelling. All three are adopted at order 27a, so none is pending any more.
                 # `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer` were listed
                 # here against order 23, which has now built all five: the tier answers to each over its own
                 # renderer, through `InteractiveMapBase._change`.
@@ -381,16 +320,15 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "matplotlib": MappingProxyType(
             {
-                # `field`, `points` and `polygons` were listed here, each `_drawn_as` the tier's own
-                # spelling. All three are adopted at order 27a: the tier answers to the Core name and the old
-                # spelling is a live alias, so neither is pending any more.
+                # `field`, `points` and `polygons` were listed here, each against the tier's own older
+                # spelling. All three are adopted at order 27a, so none is pending any more.
                 "lines": "line features on the static tier — #226",
                 # `add_layer`, `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer`
                 # were listed here against order 23, which has now built all six: the tier answers to each
                 # over its own renderer, through `Scene._change`.
                 # `set_bounds` was listed here, "framed by set_extent(bbox) here, which neither pads nor
                 # fits the data". Order 27a took the *name*: the tier answers to `set_bounds` and returns
-                # `self`, and `set_extent` is a live alias. What it still does not take is `padding`, and it
+                # `self`. What it still does not take is `padding`, and it
                 # has no `None` that fits the data — that half is auto-framing, and `KEYWORD_SHORTFALLS`
                 # records it against the framing order so the rename cannot be read as the capability.
             }
@@ -435,67 +373,6 @@ def core_method(name: str) -> Method:
     raise KeyError(
         f"{name!r} is not a Core method; the Core is {sorted(entry.name for entry in CORE)}"
     )
-
-
-def alias_table(backend: str) -> Mapping[str, str]:
-    """Return what one tier used to call the contract's names.
-
-    Args:
-        backend: The tier, as `quickmap(backend=...)` spells it.
-
-    Returns:
-        `{old: new}` for the aliases that are **live** — every one of them forwards and warns. Empty for
-        every tier today, because this package deletes an old spelling rather than deprecating it; a tier
-        whose renames are agreed but unadopted names them through :func:`planned_renames` instead.
-
-    Examples:
-        - Every tier answers empty, because every old spelling was deleted rather than aliased:
-            ```python
-            >>> from digitalearth.base.contract import alias_table
-            >>> dict(alias_table("web"))
-            {}
-
-            ```
-        - A tier that has renamed nothing answers empty, rather than raising:
-            ```python
-            >>> from digitalearth.base.contract import alias_table
-            >>> dict(alias_table("nobody"))
-            {}
-
-            ```
-    """
-    return ALIASES.get(backend, MappingProxyType({}))
-
-
-def planned_renames(backend: str) -> Mapping[str, str]:
-    """Return the renames one tier has agreed to and not yet adopted.
-
-    Args:
-        backend: The tier, as `quickmap(backend=...)` spells it.
-
-    Returns:
-        `{old: new}`, empty for a tier with none. Nothing here forwards or warns today: the old name is what
-        the tier still calls the method.
-
-    Examples:
-        - **Every tier answers empty right now**, because order 27a adopted all six rows this table held;
-          they are live aliases in :data:`ALIASES` instead, which is where a caller looks for what still
-          works. The next agreed-but-unadopted spelling is recorded here:
-            ```python
-            >>> from digitalearth.base.contract import planned_renames
-            >>> dict(planned_renames("matplotlib"))
-            {}
-
-            ```
-        - A tier the table has never held answers the same way, rather than raising:
-            ```python
-            >>> from digitalearth.base.contract import planned_renames
-            >>> dict(planned_renames("web"))
-            {}
-
-            ```
-    """
-    return PLANNED_RENAMES.get(backend, MappingProxyType({}))
 
 
 def pending_for(backend: str) -> Mapping[str, str]:

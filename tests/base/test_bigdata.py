@@ -6,7 +6,6 @@ bad value escape as a bare ``ValueError``/``TypeError`` from ``int`` itself, nam
 the call. A cutoff is a count of rows, so anything that is not one is now refused by name.
 """
 
-import ast
 import importlib
 import inspect
 from pathlib import Path
@@ -144,50 +143,6 @@ def _cutoff_builders(facade) -> dict:
     return found
 
 
-def _renamed_onto_the_cutoff(module: str) -> set:
-    """Return the deprecated spellings a tier resolves onto the Core cutoff name.
-
-    Read off the tier's own sources rather than off a builder's, because a builder need not apply the rename
-    rule itself: the interactive tier's three hand both spellings to one resolver, which is the arrangement
-    `renamed_parameter` exists to encourage. What has to be true is that *somewhere in the tier* each extra
-    spelling is named as the `old=` of a `renamed_parameter` whose `new=` is the Core name.
-
-    Args:
-        module: The tier's package, e.g. `"digitalearth.web"`.
-
-    Returns:
-        The `old=` spellings found, as a set. Empty for a tier that deprecates nothing, which is what the
-        clause allows.
-    """
-    package = Path(importlib.import_module(module).__file__).parent
-    found = set()
-    for path in sorted(package.rglob("*.py")):
-        text = path.read_text(encoding="utf-8")
-        if "renamed_parameter" not in text or CUTOFF not in text:
-            continue
-        for tree in (ast.parse(text),):
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                named = getattr(node.func, "id", None) or getattr(
-                    node.func, "attr", None
-                )
-                if named != "renamed_parameter":
-                    continue
-                keywords = {
-                    keyword.arg: keyword.value
-                    for keyword in node.keywords
-                    if keyword.arg in {"new", "old"}
-                }
-                new = keywords.get("new")
-                old = keywords.get("old")
-                if not isinstance(new, ast.Constant) or new.value != CUTOFF:
-                    continue
-                if isinstance(old, ast.Constant):
-                    found.add(old.value)
-    return found
-
-
 def _cutoff_facade(module: str, name: str):
     """Return a tier's facade class, skipping the test when the package will not import.
 
@@ -202,15 +157,14 @@ def _cutoff_facade(module: str, name: str):
 
 
 class TestTheCutoffIsSpelledOneWayWhereverItAppears:
-    """Contract C8, held across every tier that has the cutoff — including the two with no alias.
+    """Contract C8, held across every tier that has the cutoff.
 
-    The clause used to end "with one deprecated alias", which described the **interactive** tier's history as
-    though it were a universal rule. Measured: `InteractiveMap` really does carry a prior spelling
-    (`rasterize_threshold`, on `points`, `polygons` and `trimesh`), and `WebMap` and `Scene3D` never had one
-    — so neither could keep the clause without inventing a keyword purely in order to deprecate it. The
-    clause makes the alias conditional on there *having been* another spelling, and this is what holds the
-    conditional form: the Core name everywhere, `None` as the per-call sentinel, and any second spelling
-    resolved through `renamed_parameter` naming the Core one.
+    The clause once ended "with one deprecated alias", which described the **interactive** tier's history as
+    though it were a universal rule: that tier really did carry a prior spelling (`rasterize_threshold`, on
+    `points`, `polygons` and `trimesh`), and `WebMap` and `Scene3D` never had one, so neither could keep the
+    clause without inventing a keyword purely in order to retire it. Nothing here is released, so the prior
+    spelling was deleted instead and the clause says what is left: the Core name everywhere, `None` as the
+    per-call sentinel, and **no** second spelling on any tier.
     """
 
     @pytest.mark.parametrize(("module", "name"), CUTOFF_TIERS, ids=lambda value: value)
@@ -264,42 +218,26 @@ class TestTheCutoffIsSpelledOneWayWhereverItAppears:
         )
 
     @pytest.mark.parametrize(("module", "name"), CUTOFF_TIERS, ids=lambda value: value)
-    def test_any_second_spelling_is_a_deprecated_alias_for_it(self, module, name):
-        """The conditional half: a second spelling must forward, and having none is keeping the clause.
+    def test_no_builder_takes_a_second_spelling_of_it(self, module, name):
+        """The other half of "one way wherever it appears": there is no second name to pass instead.
 
         Args:
             module: The tier's package.
             name: The facade's class name.
 
         Test scenario:
-            The check the old wording could not have. It passes for a tier with one alias (interactive's
-            `rasterize_threshold`) **and** for a tier with none (web, 3-D). Demanding exactly one, as "with
-            one deprecated alias" read, fails on two of the three — which is why the clause was the thing to
-            fix rather than the tiers. The alias is checked by reading the builder's source for the shared
-            resolver, the same way `tests/test_contract_names.py` checks a renamed *method* is a shim rather
-            than a second copy of the body.
-
-            Two readings, because a builder need not resolve the pair itself: the interactive tier's three
-            hand both spellings to `_resolve_big_data_threshold`, which is the one place the rename rule is
-            applied. So the builder must *pass the spelling on*, and the tier must resolve it through
-            `renamed_parameter` naming the Core name. Deleting that resolution — which would make the old
-            spelling work silently, the exact thing a deprecation exists to prevent — fails this.
+            The builders are read for **any** parameter ending in the cutoff's suffix, so a tier that grew a
+            second spelling — or kept its old one working beside the Core name — is reported with the builder
+            that takes it. That is what the clause's earlier wording allowed and what it no longer does.
         """
         facade = _cutoff_facade(module, name)
-        resolved = _renamed_onto_the_cutoff(module)
-        unforwarded = {}
-        for builder, spellings in _cutoff_builders(facade).items():
-            source = inspect.getsource(getattr(facade, builder))
-            for spelling in spellings:
-                if spelling == CUTOFF:
-                    continue
-                if spelling not in resolved:
-                    unforwarded[f"{builder}({spelling}=)"] = "nothing deprecates it"
-                elif spelling not in source:
-                    unforwarded[f"{builder}({spelling}=)"] = "the builder drops it"
-        assert unforwarded == {}, (
-            f"{name} takes a second spelling of the cutoff that is not a deprecated alias of it: "
-            f"{unforwarded}"
+        extra = {
+            builder: [spelling for spelling in spellings if spelling != CUTOFF]
+            for builder, spellings in _cutoff_builders(facade).items()
+            if any(spelling != CUTOFF for spelling in spellings)
+        }
+        assert extra == {}, (
+            f"{name} takes a second spelling of the cutoff beside {CUTOFF!r}: {extra}"
         )
 
 

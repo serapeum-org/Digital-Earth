@@ -840,8 +840,7 @@ class VectorMixin(_MixinBase):
         because the two draw the same element yet are different layers to a reader of the figure: the
         continuous ramp used to reach here through `polygons()` and so was described as `polygons`, while
         the categorical and graduated schemes said `choropleth` (review L6). The big-data cutoff arrives
-        resolved, since the deprecation warning for its old spelling has to be raised by the public builder
-        the caller wrote, a fixed number of frames above them.
+        resolved, because the public builders take it and this body does not.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries.

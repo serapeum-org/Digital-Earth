@@ -1,10 +1,8 @@
 """The web tier's half of the cross-backend contract (Wave 0, batch B).
 
-One class per contract point, each proving the tier behaves the way every other tier does — and, for each
-rename, that the old spelling still works **and** warns, so no caller is broken in this batch, **and**
-that passing both spellings at once is a ``TypeError`` naming both (the shared
-:func:`~digitalearth.base.deprecation.renamed_parameter` rule; this tier used to prefer the old one
-silently).
+One class per contract point, each proving the tier behaves the way every other tier does. Where a rename
+landed, the spelling it replaced is gone rather than kept beside it, so what is checked is that the Core name
+reaches the engine.
 
 The clauses themselves are stated once, in :data:`digitalearth.base.contract_clauses.CLAUSES`, so amending
 one is an edit in ``base/`` rather than one per tier (#326). This tier is held to C1 through C10 and C13;

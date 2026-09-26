@@ -35,9 +35,6 @@ What lives here:
 * :mod:`~digitalearth.base.registry` — the open registries: data resolvers keyed by URI scheme, the
   in-process object table an ``object:`` reference resolves through, and the classifier seam that lets
   ``Scale`` reach cleopatra's arithmetic without ``base/`` importing it.
-* :mod:`~digitalearth.base.deprecation` — ``renamed_parameter``, the single rule for a renamed keyword: the
-  old spelling keeps working with a ``DeprecationWarning``, and passing both spellings is a ``TypeError``.
-  Every backend resolves its renames through it, so the four tiers cannot drift apart on the contract again.
 * :mod:`~digitalearth.base.crs` — the CRS readers every tier shares: the best-effort EPSG lookup,
   ``declared_crs`` (an input's own code or definition) and ``is_geographic``, which asks pyramids to
   interpret a CRS in any spelling a ``Source`` may carry — so no tier re-invents that with string

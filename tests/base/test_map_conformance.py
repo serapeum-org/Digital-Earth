@@ -1,7 +1,7 @@
 """One set of behavioural questions every tier's map answers the same way (U-4, #323).
 
 The conformance suite had a name half and no behavioural half. `tests/test_contract_names.py`,
-`tests/base/test_contract.py` and `tests/base/test_capabilities.py` hold every facade to CORE / ALIASES /
+`tests/base/test_contract.py` and `tests/base/test_capabilities.py` hold every facade to CORE /
 PENDING and to its own `Capabilities`; `tests/base/test_renderer_conformance.py` holds all four renderers to
 one behaviour. Between them nothing asked the question a caller actually asks: **does the same call, on any
 tier, produce the same described result?** A tier can answer to every Core name, with every declared keyword,

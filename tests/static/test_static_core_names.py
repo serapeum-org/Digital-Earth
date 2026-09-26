@@ -1,6 +1,6 @@
 """The static tier's three Core spellings, and the dispatch tables that have to reach them (order 27a).
 
-``field``, ``points`` and ``polygons`` sat in ``PLANNED_RENAMES`` — agreed and unadopted — from the day the
+``field``, ``points`` and ``polygons`` were agreed and unadopted from the day the
 Core contract was frozen. Order 27a adopts them, and the spellings they replaced are **deleted** rather than
 aliased: nothing here is released, so there is no caller to keep a promise to.
 

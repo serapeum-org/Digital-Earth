@@ -1003,10 +1003,8 @@ class Scene3DBase:
         Note:
             This is a **compatibility view** of what the renderer holds, not the scene's state: the scene is
             described by :attr:`figure_spec`, and layers are addressed by id through :attr:`layer_ids`,
-            :meth:`mesh_of`, :meth:`actor_of`, :meth:`remove_layer` and :meth:`set_visible`. It is kept —
-            without a deprecation warning — because it is what `animate`'s callback and a good deal of user
-            code reach for; the rename that retires it belongs with the tier method names (#299), so callers
-            get one migration rather than two.
+            :meth:`mesh_of`, :meth:`actor_of`, :meth:`remove_layer` and :meth:`set_visible`. It is kept
+            because it is what `record`'s callback and a good deal of user code reach for.
         """
         drawn = self._renderer.drawn
         return [

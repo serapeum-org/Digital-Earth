@@ -1,6 +1,6 @@
 """The interactive tier's three Core spellings (order 27a).
 
-``field``, ``lines`` and ``add_layer`` sat in ``PLANNED_RENAMES`` — agreed and unadopted — from the day the
+``field``, ``lines`` and ``add_layer`` were agreed and unadopted from the day the
 Core contract was frozen. Order 27a adopts them, and the spellings they replaced are **deleted** rather than
 aliased: nothing here is released, so there is no caller to keep a promise to.
 

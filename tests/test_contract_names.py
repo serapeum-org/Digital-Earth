@@ -2,9 +2,10 @@
 
 Four tiers grew four vocabularies: a raster field was `imshow`, `image`, `add_raster` and `terrain`; a colour
 key was a builder on two tiers and a toggle on a third; `render` returned the engine's object on two and `None`
-on one; and eight names meant two different things depending on which facade you held. `base/contract.py` is
-the agreement that ends that, and these are what hold the tiers to it — including the honest half, which is
-what a tier has *not* built and which order builds it.
+on one; and eight names meant two different things depending on which facade you held. Every one of those old
+spellings is deleted rather than aliased. `base/contract.py` is the agreement that ends that, and these are
+what hold the tiers to it — including the honest half, which is what a tier has *not* built and which order
+builds it.
 
 The tiers that adopted the Core names (web, 3-D) must answer to every one they can draw; interactive and
 static carry pending lists, each entry naming the roadmap order that empties it.
@@ -25,12 +26,10 @@ from typing import Mapping, Tuple
 import pytest
 
 from digitalearth.base.contract import (
-    ALIASES,
     CORE,
     PENDING,
     ROADMAP_ORDERS,
     TIER2,
-    alias_table,
     orders_named_in,
     pending_for,
     roadmap_order,
@@ -206,15 +205,6 @@ class TestTheContractIsWellFormed:
             f"names in both tiers of the contract: {sorted(overlap)}"
         )
 
-    def test_every_alias_points_at_a_name_the_contract_declares(self):
-        """An alias to nowhere would deprecate a spelling for a name nothing promises."""
-        declared = {method.name for method in CORE} | {method.name for method in TIER2}
-        # `record` and `terrain_tiles` are tier-native names a collision freed up, not contract names.
-        native = {"record", "terrain_tiles", "grid_points"}
-        for backend, table in ALIASES.items():
-            unknown = sorted(set(table.values()) - declared - native)
-            assert unknown == [], f"{backend} aliases point at {unknown}"
-
     def test_every_pending_entry_names_a_core_method(self):
         """A pending list is about the Core, so an entry outside it is a stale note."""
         declared = {method.name for method in CORE}
@@ -262,38 +252,6 @@ class TestTheSeamedTiersAnswerToTheCore:
         facade = _facade(backend)
         built = [name for name in pending_for(backend) if hasattr(facade, name)]
         assert built == [], f"{backend} lists {built} as pending, but has them"
-
-    @pytest.mark.parametrize("backend", sorted(FACADES))
-    def test_every_old_spelling_still_works(self, backend):
-        """An alias is a promise to the caller who already wrote the old name.
-
-        Args:
-            backend: The tier under test.
-        """
-        facade = _facade(backend)
-        broken = [old for old in alias_table(backend) if not hasattr(facade, old)]
-        assert broken == [], f"{backend} dropped {broken} instead of deprecating them"
-
-    @pytest.mark.parametrize("backend", sorted(FACADES))
-    def test_every_alias_warns_and_names_its_replacement(self, backend):
-        """The other half of the promise: the old name must not linger silently.
-
-        Args:
-            backend: The tier under test.
-
-        Test scenario:
-            The alias is read off the class rather than called, since calling one draws a map. What is checked
-            is that it is a deprecation shim at all — a plain method assigned to two names would pass every
-            other test here and warn nobody.
-        """
-        facade = _facade(backend)
-        for old, new in alias_table(backend).items():
-            held = inspect.getattr_static(facade, old)
-            source = inspect.getsource(held) if inspect.isfunction(held) else ""
-            assert "DeprecationWarning" in source, f"{backend}.{old} does not warn"
-            assert new in source or new in (held.__doc__ or ""), (
-                f"{backend}.{old} does not name {new} as its replacement"
-            )
 
 
 def _declared_methods():
@@ -577,129 +535,6 @@ class TestWhatARoadmapOrderPromises:
         message = refused.value.args[0]
         assert "'order 99' is not a roadmap order" in message, message
         assert "order 24" in message, message
-
-
-class TestAPlannedRenameIsNotAnAlias:
-    """Review M5 — `ALIASES` promises the old name works; a rename nobody has adopted promises nothing.
-
-    **`PLANNED_RENAMES` is empty as of order 27a**, which adopted all six rows it held. The two checks over
-    the live table therefore iterate nothing and cannot fail — and a check that cannot fail is a finding
-    rather than a convenience, because the day a seventh rename is agreed it ships under a guard nobody has
-    seen work. So each is paired with the same predicate applied to a **synthetic** one-row table, which is
-    what keeps the rule itself exercised while the real table is empty. The synthetic rows are deliberately
-    built from methods the tier really has, so they describe a shape the package really holds: a method
-    present under the name a row calls old, and one present under both names.
-    """
-
-    #: A planned rename that does describe the tier, for the predicate checks: `Map` has `pcolormesh`, so a
-    #: row naming it as the *old* spelling of something the tier does **not** have is well-formed.
-    UNADOPTED = {"pcolormesh": "a_name_no_tier_has"}
-
-    #: A planned rename that no longer describes the tier: `Map` has both `pcolormesh` and `field`, so the
-    #: row has been adopted and belongs in `ALIASES`.
-    ADOPTED = {"pcolormesh": "field"}
-
-    @staticmethod
-    def _missing(facade, table) -> list:
-        """Return the old spellings a table names that the facade does not have.
-
-        Args:
-            facade: The tier's facade class.
-            table: A `{old: new}` mapping.
-
-        Returns:
-            The old names, so a row naming nothing is reported.
-        """
-        return [old for old in table if not hasattr(facade, old)]
-
-    @staticmethod
-    def _adopted(facade, table) -> list:
-        """Return the rows whose *new* spelling the facade already answers to.
-
-        Args:
-            facade: The tier's facade class.
-            table: A `{old: new}` mapping.
-
-        Returns:
-            The old names, so a row the tier has already adopted is reported.
-        """
-        return [old for old, new in table.items() if hasattr(facade, new)]
-
-    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
-    def test_the_old_name_is_what_the_tier_still_calls_it(self, backend):
-        """A planned rename names a method that exists today under its old spelling.
-
-        Args:
-            backend: The tier under test.
-
-        Test scenario:
-            Vacuous while `PLANNED_RENAMES` is empty, and kept for the row that comes next;
-            :meth:`test_the_predicate_reports_a_row_naming_a_method_nobody_has` is what shows the predicate
-            still works.
-        """
-        from digitalearth.base.contract import planned_renames
-
-        facade = _facade(backend)
-        missing = self._missing(facade, planned_renames(backend))
-        assert missing == [], f"{backend} has no {missing}, so the rename names nothing"
-
-    def test_the_predicate_reports_a_row_naming_a_method_nobody_has(self):
-        """The check above, run against a table that really breaks the rule.
-
-        Test scenario:
-            The rule is "an unadopted rename's *old* name is what the tier calls the method today". A row
-            whose old spelling is absent names nothing, and has to be reported — asked of a synthetic table
-            because the real one is empty.
-        """
-        facade = _facade("matplotlib")
-        assert self._missing(facade, {"a_name_no_tier_has": "field"}) == [
-            "a_name_no_tier_has"
-        ]
-
-    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
-    def test_a_planned_rename_is_not_claimed_as_live(self, backend):
-        """The two tables must not overlap: one says "still works", the other says "will be called".
-
-        Args:
-            backend: The tier under test.
-
-        Test scenario:
-            This is the guard that makes the split self-correcting, and it is the one that fired when order
-            27a adopted the six ("matplotlib has adopted ['imshow', 'scatter', 'shapes']; move them to
-            ALIASES so their liveness is checked"). Vacuous now that the table is empty, so
-            :meth:`test_the_predicate_reports_a_row_the_tier_has_already_adopted` keeps the predicate itself
-            under test.
-        """
-        from digitalearth.base.contract import planned_renames
-
-        facade = _facade(backend)
-        adopted = self._adopted(facade, planned_renames(backend))
-        assert adopted == [], (
-            f"{backend} has adopted {adopted}; move them to ALIASES so their liveness is checked"
-        )
-
-    def test_the_predicate_reports_a_row_the_tier_has_already_adopted(self):
-        """And the same for the overlap rule, against a table that really breaks it.
-
-        Test scenario:
-            `Map` answers to both `pcolormesh` and `field`, so a `PLANNED_RENAMES` row saying
-            `pcolormesh` is *to become* `field` would be claiming a rename that has already happened. That
-            is what the predicate has to report.
-        """
-        facade = _facade("matplotlib")
-        assert self._adopted(facade, self.ADOPTED) == ["pcolormesh"]
-
-    def test_the_unadopted_shape_is_reported_as_neither(self):
-        """The negative control: a well-formed unadopted row must trip neither predicate.
-
-        Test scenario:
-            Two checks that reported every table would pass the two above and be useless. A row whose old
-            spelling the tier has and whose new spelling it does not is exactly what `PLANNED_RENAMES` is
-            for, and it has to come back clean from both.
-        """
-        facade = _facade("matplotlib")
-        assert self._missing(facade, self.UNADOPTED) == []
-        assert self._adopted(facade, self.UNADOPTED) == []
 
 
 class TestTheUnseamedTiersDeclareTheirGap:

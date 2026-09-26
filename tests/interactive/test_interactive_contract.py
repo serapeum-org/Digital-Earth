@@ -10,10 +10,8 @@ The clauses themselves are stated once, in :data:`digitalearth.base.contract_cla
 below names the clause it pins and then says only what *this* tier brings to it, so amending a clause is one
 edit in ``base/`` rather than one per tier (#326).
 
-Every rename in the batch keeps its old spelling working for one release, so each deprecated alias is
-tested three ways: that it still does its job, that it warns while doing it, and that passing it
-alongside the new spelling is a ``TypeError`` naming both — the one answer all four tiers give, from
-:func:`~digitalearth.base.deprecation.renamed_parameter`.
+Every rename in the batch deleted the spelling it replaced, so each check reads what reaches the engine
+under the Core name rather than which of two names a call may use.
 
 Runs in the ``interactive`` pixi env (``pixi run -e interactive test-interactive``).
 """
@@ -440,7 +438,6 @@ class TestOffLimbIsSkipped:
         "builder",
         [
             # The Core spellings adopted at order 27a: the guard is a decorator on the *builder*, and
-            # `image`/`path` are `renamed_method` aliases now, which carry no `__wrapped__` of their own.
             "field",
             "rgb",
             "quadmesh",
