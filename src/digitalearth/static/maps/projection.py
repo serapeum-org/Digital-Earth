@@ -487,7 +487,7 @@ class ProjectionMixin(_MixinBase):
         return patch
 
     def _own_the_graticule(self, artists: Tuple[Any, ...]) -> None:
-        """Give the described graticule layer the artists the projection frame drew for it.
+        """Give the described graticule layer the artists the projection frame drew for it, and its flag.
 
         Args:
             artists: The line artists the frame added, in the order it added them.
@@ -496,6 +496,14 @@ class ProjectionMixin(_MixinBase):
             This writes into the renderer's record of what it drew, which no public method reaches — every
             other layer's artists are known to its drawer, and a graticule's are not. A
             ``Renderer.attach_artists`` would be the tidier home for it.
+
+            **The flag is applied here because this is the only place it can be.** ``Renderer.draw_layer``
+            applies a layer's ``visible`` the moment its drawer returns, which for every other layer is the
+            moment its artists exist. A graticule's do not: they are drawn by ``apply_projection_frame``,
+            after the funnel has run and found nothing on the axes to toggle — so a grid built
+            ``visible=False`` was described hidden and drawn visible (#333). Adopting the artists and
+            applying the flag are one step for that reason, and the flag is read from the tree, exactly as
+            the funnel reads it, so the two cannot answer differently.
         """
         layer_id = self._graticule_id
         if layer_id is None or not artists:
@@ -504,6 +512,13 @@ class ProjectionMixin(_MixinBase):
         if drawn is None:
             return
         self._renderer._drawn[layer_id] = with_fields(drawn, artists=artists)
+        # Guarded on membership rather than caught: `_reset_layers` clears the tree between animation frames
+        # while `_graticule_id` survives it, so the remembered id can outlive its layer — and `is_visible`
+        # answers a missing id with a `KeyError`, which is not a question about visibility.
+        if layer_id in self._layer_tree.ids and not self._layer_tree.is_visible(
+            layer_id
+        ):
+            self._renderer.set_visible(layer_id, False)
 
     def render(self) -> None:
         """Apply the projection frame if this is a globe map (idempotent). Call before showing/saving."""
