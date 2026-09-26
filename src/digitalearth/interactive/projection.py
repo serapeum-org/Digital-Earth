@@ -70,7 +70,10 @@ def _element_extent(element: Any) -> Optional[Tuple[float, float, float, float]]
     if any(edge is None for edge in edges):
         return None
     floats = tuple(float(edge) for edge in edges)
-    return floats if all(isfinite(edge) for edge in floats) else None
+    if not all(isfinite(edge) for edge in floats):
+        return None
+    xmin_f, ymin_f, xmax_f, ymax_f = floats
+    return xmin_f, ymin_f, xmax_f, ymax_f
 
 
 def draw_graticule(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
@@ -229,7 +232,8 @@ class ProjectionMixin(_MixinBase):
             raise ValueError(
                 f"set_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
             )
-        return _padded(Bounds(*values, self.crs), padding)
+        west, south, east, north = values
+        return _padded(Bounds(west, south, east, north, self.crs), padding)
 
     def _fitted_box(self, padding: float) -> Bounds:
         """Return the region the panel's own data layers cover, padded.
