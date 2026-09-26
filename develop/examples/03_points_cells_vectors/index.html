@@ -746,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    5 · Choropleth, shapes &amp; map decoration
+    5 · Choropleth, polygons &amp; map decoration
   
 
     
@@ -4416,7 +4416,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <ul>
 <li><code>grid_points</code> / <code>point_cloud</code> — raster cell centres as a coloured scatter (cleopatra <code>ScatterGlyph</code>).</li>
 <li><code>grid_cells</code> — one coloured polygon per cell (cleopatra <code>PolygonGlyph</code>).</li>
-<li><code>scatter</code> — an arbitrary <code>FeatureCollection</code> of points.</li>
+<li><code>points</code> — an arbitrary <code>FeatureCollection</code> of points.</li>
 <li><code>quiver</code> / <code>barbs</code> / <code>streamplot</code> — a vector field from two rasters <code>(u, v)</code> (cleopatra <code>VectorGlyph</code>).</li>
 </ul>
 <p>Markers/polygons get unreadable at full resolution, so the DEM is <strong>resampled coarser</strong> (via pyramids) for these demos, and the vector field is the DEM's own gradient (arrows point downhill).</p>

@@ -666,7 +666,7 @@
   <span class="md-ellipsis">
     
   
-    5 · Choropleth, shapes &amp; map decoration
+    5 · Choropleth, polygons &amp; map decoration
   
 
     
@@ -4413,7 +4413,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="7-one-call-api-quickplot-quickmap">7 · One-call API — quickplot / quickmap<a class="anchor-link" href="#7-one-call-api-quickplot-quickmap">¶</a></h1><p><code>digitalearth.quickplot</code> (alias <code>quickmap</code>) builds a <strong>finished, decorated <code>Map</code> in a single call</strong>: it dispatches on the input type (raster → field, point features → points, polygons → choropleth), auto-styles by variable, draws, and adds a colorbar — returning the <code>Map</code> so you can keep tweaking it.</p>
-<p>Module-level functions (<code>api.imshow</code>, <code>api.contourf</code>, …) mirror the <code>Map</code> methods for a terse functional style. This is the highest-level entry point; everything in notebooks 2–6 is what it orchestrates under the hood.</p>
+<p>Module-level functions (<code>api.field</code>, <code>api.contours</code>, …) mirror the <code>Map</code> methods for a terse functional style. This is the highest-level entry point; everything in notebooks 2–6 is what it orchestrates under the hood.</p>
 </div>
 </div>
 </div>
@@ -4615,7 +4615,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Pick the renderer with a module function — <code>api.contourf</code> is the functional twin of <code>Map.contours(filled=True)</code>; the same <code>levels</code>/<code>cmap</code> kwargs apply.</p>
+<p>Pick the renderer with a module function — <code>api.contours(filled=True)</code> is the functional twin of <code>Map.contours(filled=True)</code>; the same <code>levels</code>/<code>cmap</code> kwargs apply.</p>
 </div>
 </div>
 </div>
@@ -4638,12 +4638,12 @@ m.fig;</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'api.contourf'</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'api.contours (filled)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">m = api.contourf(ds, crs=ds.epsg, levels=12, cmap='terrain')
-m.set_title('api.contourf')
+<div class="clipboard-copy-txt" id="cell-4">m = api.contours(ds, crs=ds.epsg, levels=12, cmap='terrain', filled=True)
+m.set_title('api.contours (filled)')
 m.fig;</div>
 </div>
 </div>
@@ -4680,7 +4680,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Reproject in the same one call — <code>api.imshow(..., crs=3857)</code> builds the map directly in Web Mercator.</p>
+<p>Reproject in the same one call — <code>api.field(..., crs=3857)</code> builds the map directly in Web Mercator.</p>
 </div>
 </div>
 </div>
@@ -4703,12 +4703,12 @@ m.fig;</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gist_earth'</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'api.imshow (EPSG:3857)'</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gist_earth'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'api.field (EPSG:3857)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">m = api.imshow(ds, crs=3857, cmap='gist_earth')
-m.set_title('api.imshow (EPSG:3857)')
+<div class="clipboard-copy-txt" id="cell-5">m = api.field(ds, crs=3857, cmap='gist_earth')
+m.set_title('api.field (EPSG:3857)')
 m.fig;</div>
 </div>
 </div>

@@ -661,7 +661,7 @@
   <span class="md-ellipsis">
     
   
-    5 · Choropleth, shapes &amp; map decoration
+    5 · Choropleth, polygons &amp; map decoration
   
 
     
@@ -9552,7 +9552,7 @@ pyramids cannot read — which the message names. A string is not checked.</p>
 <a id="__codelineno-0-632" name="__codelineno-0-632"></a>            <span class="n">from_crs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
 <a id="__codelineno-0-633" name="__codelineno-0-633"></a>            <span class="n">to_crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span>
 <a id="__codelineno-0-634" name="__codelineno-0-634"></a>            <span class="c1"># pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a>            <span class="c1"># into a degenerate one — and set_extent would hand matplotlib a singular limit.</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a>            <span class="c1"># into a degenerate one — and set_bounds would hand matplotlib a singular limit.</span>
 <a id="__codelineno-0-636" name="__codelineno-0-636"></a>            <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-637" name="__codelineno-0-637"></a>        <span class="p">)</span>
 <a id="__codelineno-0-638" name="__codelineno-0-638"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="o">*</span><span class="n">ys</span><span class="p">)):</span>
@@ -11561,7 +11561,7 @@ or, as pyramids' <code>CRSError</code> (a <code>ValueError</code> subclass), whe
 <a id="__codelineno-0-632" name="__codelineno-0-632"></a>        <span class="n">from_crs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
 <a id="__codelineno-0-633" name="__codelineno-0-633"></a>        <span class="n">to_crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span>
 <a id="__codelineno-0-634" name="__codelineno-0-634"></a>        <span class="c1"># pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a>        <span class="c1"># into a degenerate one — and set_extent would hand matplotlib a singular limit.</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a>        <span class="c1"># into a degenerate one — and set_bounds would hand matplotlib a singular limit.</span>
 <a id="__codelineno-0-636" name="__codelineno-0-636"></a>        <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-637" name="__codelineno-0-637"></a>    <span class="p">)</span>
 <a id="__codelineno-0-638" name="__codelineno-0-638"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="o">*</span><span class="n">ys</span><span class="p">)):</span>
@@ -18683,7 +18683,7 @@ described. Carried, not interpreted — a resolver that understands versioning r
 <a id="__codelineno-0-101" name="__codelineno-0-101"></a>            <span class="c1"># An `object:` uri is exempt because its tail is not a path but the **key**</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a>            <span class="c1"># `digitalearth.base.registry.register_object` stored, verbatim, whitespace included. Stripping</span>
 <a id="__codelineno-0-103" name="__codelineno-0-103"></a>            <span class="c1"># it here rewrote the reference away from the entry it had just been handed, so</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a>            <span class="c1"># `Map.scatter(features, name=&quot;roads &quot;)` raised a `KeyError` naming neither the layer nor the</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>            <span class="c1"># `Map.points(features, name=&quot;roads &quot;)` raised a `KeyError` naming neither the layer nor the</span>
 <a id="__codelineno-0-105" name="__codelineno-0-105"></a>            <span class="c1"># name (review R2-H4). `layer_name` now keeps a padded key from ever being registered; this</span>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a>            <span class="c1"># keeps a reference honest even when something registers one anyway.</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a>            <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">uri</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
@@ -18988,7 +18988,7 @@ or if <code>driver</code> or <code>version</code> is neither a string nor <code>
 <a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="c1"># An `object:` uri is exempt because its tail is not a path but the **key**</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="c1"># `digitalearth.base.registry.register_object` stored, verbatim, whitespace included. Stripping</span>
 <a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="c1"># it here rewrote the reference away from the entry it had just been handed, so</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="c1"># `Map.scatter(features, name=&quot;roads &quot;)` raised a `KeyError` naming neither the layer nor the</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="c1"># `Map.points(features, name=&quot;roads &quot;)` raised a `KeyError` naming neither the layer nor the</span>
 <a id="__codelineno-0-105" name="__codelineno-0-105"></a>        <span class="c1"># name (review R2-H4). `layer_name` now keeps a padded key from ever being registered; this</span>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="c1"># keeps a reference honest even when something registers one anyway.</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a>        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">uri</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
