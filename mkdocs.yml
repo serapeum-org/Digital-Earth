@@ -150,6 +150,12 @@ nav:
       - 'GIS data — rasters in 3-D': examples/pyvista/08_raster_3d.ipynb
       - 'GIS data — vectors in 3-D': examples/pyvista/09_vector_3d.ipynb
       - 'GIS data — combined raster + vector scene': examples/pyvista/10_gis_scene_3d.ipynb
+    # The gallery's labels are the *method* vocabulary; its filenames are the *render* vocabulary — the
+    # `kind=`/`via` token each notebook demonstrates (`imshow`, `contour`, `contourf`, `scatter`, `shapes`,
+    # and `pcolormesh`, `quiver`, `tricontourf`, … beside them). Those tokens are all live, so the five that
+    # read like deleted method spellings are not stale (review N4): they are not being read as methods.
+    # Renaming them would mix two vocabularies inside one numbered set, force `contour`/`contourf` to share
+    # one word, and change published URLs. The labels below are where the method names belong.
     - Plot gallery:
       - Fields:
         - field: examples/plots/01_imshow.ipynb
