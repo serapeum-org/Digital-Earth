@@ -958,7 +958,7 @@ class RasterMixin(_MixinBase):
         if not hasattr(dataset, "read_part") or not hasattr(dataset, "preview"):
             raise AttributeError(
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
-                ".preview); upgrade pyramids or use image() for a small raster"
+                ".preview); upgrade pyramids or use field() for a small raster"
             )
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
