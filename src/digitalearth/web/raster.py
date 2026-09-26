@@ -460,7 +460,8 @@ def _written_pyramid(
     """Write a ``{z}/{x}/{y}.png`` pyramid over an extent and return how many tiles it holds.
 
     Args:
-        directory: The pyramid's root, created along with every level it needs.
+        directory: The pyramid's root, created by the first tile written along with every level it needs — so
+            a range that writes nothing creates nothing (review R2-L11).
         encode: Called with ``(zoom, x, y)``; answers the tile's PNG bytes, or ``None`` for a tile the raster
             does not reach — which is not written at all, rather than written blank.
         bounds: The lon/lat extent to cover.
@@ -471,8 +472,9 @@ def _written_pyramid(
         How many tiles were written.
 
     Raises:
-        ValueError: when the whole range produced nothing. An empty directory beside a page that points into
-            it is a map that draws nothing, with no other symptom.
+        ValueError: when the whole range produced nothing. A pyramid with no tile in it, beside a page that
+            points into it, is a map that draws nothing with no other symptom — and since the levels are made
+            tile by tile, the refusal leaves no directory at all.
     """
     lowest, highest = zooms
     written = 0
@@ -532,12 +534,17 @@ def _tile_props(
 
 
 def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
-    """Return where a tiled route writes, making room for it.
+    """Return where a tiled route writes.
+
+    Nothing is created here. A refused call must leave the filesystem as it found it, and every other reason
+    a tiled route can refuse — the zoom range, an extent that will not express as lon/lat, a range holding no
+    value at all — is checked after this one, so making room up front left an empty pyramid root behind beside
+    a page that was never written (review R2-L11). The writers make their own room:
+    :func:`_written_pyramid` makes each tile's parents, and the COG route makes the file's parent.
 
     Args:
         tiles_path: The caller's ``tiles_path=``.
-        route: The resolved route. ``xyz`` writes into a directory of its own; ``cog`` writes one file, so
-            only its parent is made.
+        route: The resolved route, named in the message.
         caller: The builder, for the message.
 
     Returns:
@@ -547,7 +554,6 @@ def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
         ValueError: when ``tiles_path`` is ``None``. A route that writes files cannot invent a place to put
             them, and defaulting to the working directory would scatter pyramids wherever a script was run
             from.
-        OSError: when the destination cannot be created.
     """
     if tiles_path is None:
         raise ValueError(
@@ -555,11 +561,7 @@ def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
             "where — a directory for the tile pyramid, or the .tif to write for a COG. Save the page into "
             "the same folder: the layer addresses what sits next to it"
         )
-    destination = pathlib.Path(tiles_path)
-    (destination if route == "xyz" else destination.parent).mkdir(
-        parents=True, exist_ok=True
-    )
-    return destination
+    return pathlib.Path(tiles_path)
 
 
 def _tiled_reference(
@@ -590,7 +592,9 @@ def _tiled_reference(
         The tile props, as :func:`_tile_props` builds them.
 
     Raises:
-        ValueError: from :func:`_destination`, :func:`_zoom_range` or :func:`_written_pyramid`.
+        ValueError: from :func:`_destination`, :func:`_zoom_range` or :func:`_written_pyramid`. None of them
+            has created anything when it refuses: the destination is only resolved here, and each writer makes
+            its own room (review R2-L11).
     """
     destination = _destination(tiles_path, route, caller)
     bounds = _lonlat_bounds(dataset)
@@ -601,6 +605,8 @@ def _tiled_reference(
             destination, encode, bounds=bounds, zooms=levels, caller=caller
         )
     else:
+        # A COG is one file, so the directory it goes in has to exist before pyramids writes it.
+        destination.parent.mkdir(parents=True, exist_ok=True)
         dataset.to_cog(destination)
     return _tile_props(route, destination, bounds=bounds, zooms=levels)
 

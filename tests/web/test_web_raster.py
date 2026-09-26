@@ -723,6 +723,61 @@ class TestTheTiledRasterRoutes:
         assert drawn.source_spec["tiles"] == ["acc/{z}/{x}/{y}.png"], drawn.source_spec
         assert "bounds" not in drawn.source_spec, drawn.source_spec
 
+    def test_a_refused_zoom_range_leaves_nothing_on_disk(self, dataset, tmp_path):
+        """A call that never writes a tile must not leave a directory claiming it did.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, which must stay empty.
+
+        Test scenario:
+            The destination was created before the zoom range was checked, although the check needs nothing
+            from the filesystem — so a typo in `zooms=` left an empty pyramid root behind, beside a page that
+            was never written (review R2-L11). The in-map half of the same promise is already kept: no
+            described layer, no reserved id, no queue entry.
+        """
+        destination = tmp_path / "acc"
+        m = WebMap()
+        with pytest.raises(ValueError, match="lowest to the highest"):
+            m.field(dataset, tiles="xyz", tiles_path=destination, zooms=(9, 3))
+        assert not destination.exists(), sorted(destination.rglob("*"))
+
+    def test_a_range_that_writes_no_tile_leaves_nothing_on_disk(
+        self, dataset, tmp_path, monkeypatch
+    ):
+        """The other refusal from inside the write has to leave the filesystem as it found it too.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            tmp_path: pytest's temporary directory, which must stay empty.
+            monkeypatch: pytest's patcher, used to make every tile read miss the raster.
+
+        Test scenario:
+            `_written_pyramid` refuses a range that produced no tile with any value in it, and that refusal
+            came after the root had been made. Each tile now makes its own parents, so a pyramid that holds
+            nothing writes nothing at all.
+        """
+        from digitalearth.web import raster as raster_module
+
+        def _misses(*args, **kwargs):
+            """Behave like a window that falls outside the raster.
+
+            Args:
+                *args: Unused — the dataset, zoom and tile address.
+                **kwargs: Unused — the band.
+
+            Returns:
+                ``None``, which is how a tile off the raster is reported.
+            """
+            return None
+
+        monkeypatch.setattr(raster_module, "_tile_values", _misses)
+        destination = tmp_path / "acc"
+        m = WebMap()
+        with pytest.raises(ValueError, match="produced no tile"):
+            m.field(dataset, tiles="xyz", tiles_path=destination, zooms=(9, 9))
+        assert not destination.exists(), sorted(destination.rglob("*"))
+
     def test_the_route_records_no_source_for_the_pixels_its_drawer_never_reads(
         self, dataset, tmp_path
     ):
