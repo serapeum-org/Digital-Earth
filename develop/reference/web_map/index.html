@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/develop/reference/web_map/">
       
       
-        <link rel="prev" href="../renamed-keywords/">
+        <link rel="prev" href="../renamed-names/">
       
       
         <link rel="next" href="../basemaps/">
@@ -3148,14 +3148,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../renamed-keywords/" class="md-nav__link">
+      <a href="../renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -3291,10 +3291,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#keywords-that-were-renamed" class="md-nav__link">
+  <a href="#names-that-were-renamed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Keywords that were renamed
+        Names that were renamed
       
     </span>
   </a>
@@ -3314,17 +3314,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#digitalearth.web.map.WebMap.fit_bounds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        fit_bounds
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#digitalearth.web.map.WebMap.layer_ids" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3336,21 +3325,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#digitalearth.web.map.WebMap.title" class="md-nav__link">
+  <a href="#digitalearth.web.map.WebMap.set_bounds" class="md-nav__link">
     <span class="md-ellipsis">
       
-        title
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#digitalearth.web.map.WebMap.animate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        animate
+        set_bounds
       
     </span>
   </a>
@@ -3384,6 +3362,17 @@
     <span class="md-ellipsis">
       
         legend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.web.map.WebMap.set_title" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_title
       
     </span>
   </a>
@@ -3439,6 +3428,17 @@
     <span class="md-ellipsis">
       
         rgb_composite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.web.map.WebMap.save_animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_animation
       
     </span>
   </a>
@@ -3857,10 +3857,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#keywords-that-were-renamed" class="md-nav__link">
+  <a href="#names-that-were-renamed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Keywords that were renamed
+        Names that were renamed
       
     </span>
   </a>
@@ -3880,17 +3880,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#digitalearth.web.map.WebMap.fit_bounds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        fit_bounds
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#digitalearth.web.map.WebMap.layer_ids" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3902,21 +3891,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#digitalearth.web.map.WebMap.title" class="md-nav__link">
+  <a href="#digitalearth.web.map.WebMap.set_bounds" class="md-nav__link">
     <span class="md-ellipsis">
       
-        title
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#digitalearth.web.map.WebMap.animate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        animate
+        set_bounds
       
     </span>
   </a>
@@ -3950,6 +3928,17 @@
     <span class="md-ellipsis">
       
         legend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.web.map.WebMap.set_title" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_title
       
     </span>
   </a>
@@ -4011,6 +4000,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#digitalearth.web.map.WebMap.save_animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_animation
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4060,7 +4060,7 @@ self-contained HTML page.</p>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">.</span><span class="n">choropleth</span><span class="p">(</span><span class="n">gdf</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">&quot;pop&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Population&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;People per km²&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="o">.</span><span class="n">layer_control</span><span class="p">()</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Population, 2024&quot;</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="s2">&quot;Source: CBS&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Population, 2024&quot;</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="s2">&quot;Source: CBS&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;map.html&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
 </code></pre></div>
@@ -4107,13 +4107,16 @@ group; the layer switcher toggles only that main layer, because that is what py-
 step picker instead — the steps are labelled with the times you passed, because those labels become the layer
 ids. <code>save("out.gif")</code> writes the steps as an animation, which needs a headless browser (Playwright or
 Selenium); that is deliberately not part of <code>digitalearth[web]</code>. The method behind that suffix is
-<code>animate(path, fps=...)</code>; <code>to_gif</code> is a deprecated alias of it, kept for one release.</p>
-<h2 id="keywords-that-were-renamed"><a class="toclink" href="#keywords-that-were-renamed">Keywords that were renamed</a><a class="headerlink" href="#keywords-that-were-renamed" title="Permanent link">#</a></h2>
+<code>save_animation(path, fps=...)</code>; <code>animate</code>, <code>to_gif</code> and <code>save_gif</code> are deprecated aliases of it, kept for one
+release.</p>
+<h2 id="names-that-were-renamed"><a class="toclink" href="#names-that-were-renamed">Names that were renamed</a><a class="headerlink" href="#names-that-were-renamed" title="Permanent link">#</a></h2>
 <p>The web tier's marker size is <code>size=</code> (was <code>radius=</code> on <code>points</code>/<code>deck_scatter</code>, <code>point_size=</code> on
 <code>point_cloud</code>), its font size is <code>text_size=</code> (was <code>size=</code> on <code>labels</code>/<code>text</code>), and its frame rate is
 <code>fps=</code> (was <code>duration=</code>, which held a frame for that many <em>seconds</em> — the reciprocal). Every old
-spelling still works for one release and warns at your call; see
-<a href="../renamed-keywords/">Renamed keywords</a> for the table across all four backends.</p>
+spelling still works for one release and warns at your call. The methods were renamed too — <code>field</code> for
+<code>add_raster</code>, <code>set_bounds</code> for <code>fit_bounds</code>, <code>set_title</code> for <code>title</code>, <code>save_animation</code> for <code>animate</code>,
+<code>terrain_tiles</code> for <code>terrain</code> and <code>projection</code> for <code>globe</code>. See
+<a href="../renamed-names/">Renamed names</a> for the tables across all four backends.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -4332,27 +4335,6 @@ digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.</p>
 
 
 
-<h3 id="digitalearth.web.map.WebMap.fit_bounds" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.fit_bounds" class="toclink">
-            <code class="highlight language-python"><span class="n">fit_bounds</span> <span class="o">=</span> <span class="n">renamed_method</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="s1">&#39;set_bounds&#39;</span><span class="p">,</span> <span class="n">old</span><span class="o">=</span><span class="s1">&#39;fit_bounds&#39;</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="s1">&#39;WebMap&#39;</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
-  </span>
-
-</a><a href="#digitalearth.web.map.WebMap.fit_bounds" class="headerlink" title="Permanent link">#</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
 <h3 id="digitalearth.web.map.WebMap.layer_ids" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.layer_ids" class="toclink">
             <code class="highlight language-python"><span class="n">layer_ids</span></code>
 
@@ -4467,50 +4449,265 @@ caller could not address a layer afterwards to hide, remove or switch it.</p>
 
 </div>
 
-<div class="doc doc-object doc-attribute">
 
 
 
-<h3 id="digitalearth.web.map.WebMap.title" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.title" class="toclink">
-            <code class="highlight language-python"><span class="n">title</span> <span class="o">=</span> <span class="n">renamed_method</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="s1">&#39;set_title&#39;</span><span class="p">,</span> <span class="n">old</span><span class="o">=</span><span class="s1">&#39;title&#39;</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="s1">&#39;WebMap&#39;</span><span class="p">)</span></code>
+<div class="doc doc-object doc-function">
 
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
-  </span>
 
-</a><a href="#digitalearth.web.map.WebMap.title" class="headerlink" title="Permanent link">#</a></h3>
+<h3 id="digitalearth.web.map.WebMap.set_bounds" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.set_bounds" class="toclink">
+            <code class="highlight language-python"><span class="n">set_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">animate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+</a><a href="#digitalearth.web.map.WebMap.set_bounds" class="headerlink" title="Permanent link">#</a></h3>
 
 
     <div class="doc doc-contents ">
 
+        <p>Frame the map on <code>bounds</code>, or on everything added so far.</p>
+<p>Without this the view comes only from the <code>center</code>/<code>zoom</code> given to the constructor, so a map of
+one country opened on the whole world unless the caller worked out a centre themselves.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>bounds</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>(west, south, east, north)</code> in lon/lat. <code>None</code> uses the extent of the data added
+so far, which is what most callers want and is applied automatically anyway (see
+:meth:<code>_map_view</code>).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>padding</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Breathing room left around the extent — a number of pixels, or MapLibre's
+per-edge mapping (<code>{"top": 40, "bottom": 10, ...}</code>).</p>
+              </div>
+            </td>
+            <td>
+                  <code>20</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>animate</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the browser eases into the new view rather than jumping.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The same map instance, so builder calls chain.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when <code>bounds</code> is <code>None</code> and nothing with an extent has been added yet — there
+is nothing to frame on, and silently doing nothing would look like the call was ignored.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <ul>
+<li>Frame on an explicit box:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebMap</span>                     <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">basemap</span><span class="p">()</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">((</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">51.0</span><span class="p">,</span> <span class="mf">7.0</span><span class="p">,</span> <span class="mf">54.0</span><span class="p">))</span>  <span class="c1"># doctest: +SKIP</span>
+</code></pre></div></li>
+</ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/digitalearth/web/base.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-915">915</a></span>
+<span class="normal"><a href="#__codelineno-0-916">916</a></span>
+<span class="normal"><a href="#__codelineno-0-917">917</a></span>
+<span class="normal"><a href="#__codelineno-0-918">918</a></span>
+<span class="normal"><a href="#__codelineno-0-919">919</a></span>
+<span class="normal"><a href="#__codelineno-0-920">920</a></span>
+<span class="normal"><a href="#__codelineno-0-921">921</a></span>
+<span class="normal"><a href="#__codelineno-0-922">922</a></span>
+<span class="normal"><a href="#__codelineno-0-923">923</a></span>
+<span class="normal"><a href="#__codelineno-0-924">924</a></span>
+<span class="normal"><a href="#__codelineno-0-925">925</a></span>
+<span class="normal"><a href="#__codelineno-0-926">926</a></span>
+<span class="normal"><a href="#__codelineno-0-927">927</a></span>
+<span class="normal"><a href="#__codelineno-0-928">928</a></span>
+<span class="normal"><a href="#__codelineno-0-929">929</a></span>
+<span class="normal"><a href="#__codelineno-0-930">930</a></span>
+<span class="normal"><a href="#__codelineno-0-931">931</a></span>
+<span class="normal"><a href="#__codelineno-0-932">932</a></span>
+<span class="normal"><a href="#__codelineno-0-933">933</a></span>
+<span class="normal"><a href="#__codelineno-0-934">934</a></span>
+<span class="normal"><a href="#__codelineno-0-935">935</a></span>
+<span class="normal"><a href="#__codelineno-0-936">936</a></span>
+<span class="normal"><a href="#__codelineno-0-937">937</a></span>
+<span class="normal"><a href="#__codelineno-0-938">938</a></span>
+<span class="normal"><a href="#__codelineno-0-939">939</a></span>
+<span class="normal"><a href="#__codelineno-0-940">940</a></span>
+<span class="normal"><a href="#__codelineno-0-941">941</a></span>
+<span class="normal"><a href="#__codelineno-0-942">942</a></span>
+<span class="normal"><a href="#__codelineno-0-943">943</a></span>
+<span class="normal"><a href="#__codelineno-0-944">944</a></span>
+<span class="normal"><a href="#__codelineno-0-945">945</a></span>
+<span class="normal"><a href="#__codelineno-0-946">946</a></span>
+<span class="normal"><a href="#__codelineno-0-947">947</a></span>
+<span class="normal"><a href="#__codelineno-0-948">948</a></span>
+<span class="normal"><a href="#__codelineno-0-949">949</a></span>
+<span class="normal"><a href="#__codelineno-0-950">950</a></span>
+<span class="normal"><a href="#__codelineno-0-951">951</a></span>
+<span class="normal"><a href="#__codelineno-0-952">952</a></span>
+<span class="normal"><a href="#__codelineno-0-953">953</a></span>
+<span class="normal"><a href="#__codelineno-0-954">954</a></span>
+<span class="normal"><a href="#__codelineno-0-955">955</a></span>
+<span class="normal"><a href="#__codelineno-0-956">956</a></span>
+<span class="normal"><a href="#__codelineno-0-957">957</a></span>
+<span class="normal"><a href="#__codelineno-0-958">958</a></span>
+<span class="normal"><a href="#__codelineno-0-959">959</a></span>
+<span class="normal"><a href="#__codelineno-0-960">960</a></span>
+<span class="normal"><a href="#__codelineno-0-961">961</a></span>
+<span class="normal"><a href="#__codelineno-0-962">962</a></span>
+<span class="normal"><a href="#__codelineno-0-963">963</a></span>
+<span class="normal"><a href="#__codelineno-0-964">964</a></span>
+<span class="normal"><a href="#__codelineno-0-965">965</a></span>
+<span class="normal"><a href="#__codelineno-0-966">966</a></span>
+<span class="normal"><a href="#__codelineno-0-967">967</a></span>
+<span class="normal"><a href="#__codelineno-0-968">968</a></span>
+<span class="normal"><a href="#__codelineno-0-969">969</a></span>
+<span class="normal"><a href="#__codelineno-0-970">970</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-915" name="__codelineno-0-915"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_bounds</span><span class="p">(</span>
+<a id="__codelineno-0-916" name="__codelineno-0-916"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-917" name="__codelineno-0-917"></a>    <span class="n">bounds</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-918" name="__codelineno-0-918"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-919" name="__codelineno-0-919"></a>    <span class="n">padding</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-0-920" name="__codelineno-0-920"></a>    <span class="n">animate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-921" name="__codelineno-0-921"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-922" name="__codelineno-0-922"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Frame the map on ``bounds``, or on everything added so far.</span>
+<a id="__codelineno-0-923" name="__codelineno-0-923"></a>
+<a id="__codelineno-0-924" name="__codelineno-0-924"></a><span class="sd">    Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of</span>
+<a id="__codelineno-0-925" name="__codelineno-0-925"></a><span class="sd">    one country opened on the whole world unless the caller worked out a centre themselves.</span>
+<a id="__codelineno-0-926" name="__codelineno-0-926"></a>
+<a id="__codelineno-0-927" name="__codelineno-0-927"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-928" name="__codelineno-0-928"></a><span class="sd">        bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added</span>
+<a id="__codelineno-0-929" name="__codelineno-0-929"></a><span class="sd">            so far, which is what most callers want and is applied automatically anyway (see</span>
+<a id="__codelineno-0-930" name="__codelineno-0-930"></a><span class="sd">            :meth:`_map_view`).</span>
+<a id="__codelineno-0-931" name="__codelineno-0-931"></a><span class="sd">        padding: Breathing room left around the extent — a number of pixels, or MapLibre&#39;s</span>
+<a id="__codelineno-0-932" name="__codelineno-0-932"></a><span class="sd">            per-edge mapping (``{&quot;top&quot;: 40, &quot;bottom&quot;: 10, ...}``).</span>
+<a id="__codelineno-0-933" name="__codelineno-0-933"></a><span class="sd">        animate: Whether the browser eases into the new view rather than jumping.</span>
+<a id="__codelineno-0-934" name="__codelineno-0-934"></a>
+<a id="__codelineno-0-935" name="__codelineno-0-935"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-936" name="__codelineno-0-936"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-937" name="__codelineno-0-937"></a>
+<a id="__codelineno-0-938" name="__codelineno-0-938"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-939" name="__codelineno-0-939"></a><span class="sd">        ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there</span>
+<a id="__codelineno-0-940" name="__codelineno-0-940"></a><span class="sd">            is nothing to frame on, and silently doing nothing would look like the call was ignored.</span>
+<a id="__codelineno-0-941" name="__codelineno-0-941"></a>
+<a id="__codelineno-0-942" name="__codelineno-0-942"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-943" name="__codelineno-0-943"></a><span class="sd">        - Frame on an explicit box:</span>
+<a id="__codelineno-0-944" name="__codelineno-0-944"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-945" name="__codelineno-0-945"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
+<a id="__codelineno-0-946" name="__codelineno-0-946"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().set_bounds((4.0, 51.0, 7.0, 54.0))  # doctest: +SKIP</span>
+<a id="__codelineno-0-947" name="__codelineno-0-947"></a>
+<a id="__codelineno-0-948" name="__codelineno-0-948"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-949" name="__codelineno-0-949"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-950" name="__codelineno-0-950"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-951" name="__codelineno-0-951"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-952" name="__codelineno-0-952"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-953" name="__codelineno-0-953"></a>                <span class="s2">&quot;set_bounds() has nothing to frame on: no layer with an extent has been added yet. &quot;</span>
+<a id="__codelineno-0-954" name="__codelineno-0-954"></a>                <span class="s2">&quot;Add the data first, or pass bounds=(west, south, east, north).&quot;</span>
+<a id="__codelineno-0-955" name="__codelineno-0-955"></a>            <span class="p">)</span>
+<a id="__codelineno-0-956" name="__codelineno-0-956"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span><span class="p">)</span>
+<a id="__codelineno-0-957" name="__codelineno-0-957"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">bounds</span><span class="p">]</span>
+<a id="__codelineno-0-958" name="__codelineno-0-958"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+<a id="__codelineno-0-959" name="__codelineno-0-959"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-960" name="__codelineno-0-960"></a>            <span class="sa">f</span><span class="s2">&quot;set_bounds(bounds=...) takes (west, south, east, north); got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> values&quot;</span>
+<a id="__codelineno-0-961" name="__codelineno-0-961"></a>        <span class="p">)</span>
+<a id="__codelineno-0-962" name="__codelineno-0-962"></a>    <span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span> <span class="o">=</span> <span class="n">values</span>
+<a id="__codelineno-0-963" name="__codelineno-0-963"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_fit</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-964" name="__codelineno-0-964"></a>        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span><span class="p">],</span>
+<a id="__codelineno-0-965" name="__codelineno-0-965"></a>        <span class="c1"># Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a</span>
+<a id="__codelineno-0-966" name="__codelineno-0-966"></a>        <span class="c1"># TypeError about int() rather than about the argument.</span>
+<a id="__codelineno-0-967" name="__codelineno-0-967"></a>        <span class="s2">&quot;padding&quot;</span><span class="p">:</span> <span class="n">padding</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">padding</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">padding</span><span class="p">),</span>
+<a id="__codelineno-0-968" name="__codelineno-0-968"></a>        <span class="s2">&quot;animate&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">animate</span><span class="p">),</span>
+<a id="__codelineno-0-969" name="__codelineno-0-969"></a>    <span class="p">}</span>
+<a id="__codelineno-0-970" name="__codelineno-0-970"></a>    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></table></div>
+            </details>
     </div>
 
 </div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h3 id="digitalearth.web.map.WebMap.animate" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.animate" class="toclink">
-            <code class="highlight language-python"><span class="n">animate</span> <span class="o">=</span> <span class="n">renamed_method</span><span class="p">(</span><span class="n">new</span><span class="o">=</span><span class="s1">&#39;save_animation&#39;</span><span class="p">,</span> <span class="n">old</span><span class="o">=</span><span class="s1">&#39;animate&#39;</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="s1">&#39;WebMap&#39;</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
-  </span>
-
-</a><a href="#digitalearth.web.map.WebMap.animate" class="headerlink" title="Permanent link">#</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-    </div>
-
-</div>
-
-
-
 
 <div class="doc doc-object doc-function">
 
@@ -5696,6 +5893,225 @@ all — there is nothing to build a key from, and an empty box would be worse th
 <a id="__codelineno-0-739" name="__codelineno-0-739"></a>    <span class="c1"># in the same corner, and it is built into the widget rather than appended as a layer.</span>
 <a id="__codelineno-0-740" name="__codelineno-0-740"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_panels</span><span class="p">[</span><span class="s2">&quot;legend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;div&gt;</span><span class="si">{</span><span class="n">head</span><span class="si">}{</span><span class="n">rows</span><span class="si">}</span><span class="s2">&lt;/div&gt;&quot;</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
 <a id="__codelineno-0-741" name="__codelineno-0-741"></a>    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="digitalearth.web.map.WebMap.set_title" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.set_title" class="toclink">
+            <code class="highlight language-python"><span class="n">set_title</span><span class="p">(</span><span class="n">heading</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="s1">&#39;top-left&#39;</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</a><a href="#digitalearth.web.map.WebMap.set_title" class="headerlink" title="Permanent link">#</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Put a title on the map itself, so a saved page carries its own heading.</p>
+<p>An exported page travels alone: whatever context the notebook around it had is gone. The title is
+a control rather than a layer, so it sits above the map and moves with the corner it is pinned to.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>heading</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The title text.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>position</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One of the four MapLibre corners.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;top-left&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>subtitle</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A smaller second line — a date, a source, a unit.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The same map instance, so builder calls chain.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when <code>position</code> is not one of the four legal MapLibre corners.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <ul>
+<li>Title a saved map:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebMap</span>                            <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">basemap</span><span class="p">()</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Population, 2024&quot;</span><span class="p">)</span>                   <span class="c1"># doctest: +SKIP</span>
+</code></pre></div></li>
+</ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/digitalearth/web/decoration.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-972"> 972</a></span>
+<span class="normal"><a href="#__codelineno-0-973"> 973</a></span>
+<span class="normal"><a href="#__codelineno-0-974"> 974</a></span>
+<span class="normal"><a href="#__codelineno-0-975"> 975</a></span>
+<span class="normal"><a href="#__codelineno-0-976"> 976</a></span>
+<span class="normal"><a href="#__codelineno-0-977"> 977</a></span>
+<span class="normal"><a href="#__codelineno-0-978"> 978</a></span>
+<span class="normal"><a href="#__codelineno-0-979"> 979</a></span>
+<span class="normal"><a href="#__codelineno-0-980"> 980</a></span>
+<span class="normal"><a href="#__codelineno-0-981"> 981</a></span>
+<span class="normal"><a href="#__codelineno-0-982"> 982</a></span>
+<span class="normal"><a href="#__codelineno-0-983"> 983</a></span>
+<span class="normal"><a href="#__codelineno-0-984"> 984</a></span>
+<span class="normal"><a href="#__codelineno-0-985"> 985</a></span>
+<span class="normal"><a href="#__codelineno-0-986"> 986</a></span>
+<span class="normal"><a href="#__codelineno-0-987"> 987</a></span>
+<span class="normal"><a href="#__codelineno-0-988"> 988</a></span>
+<span class="normal"><a href="#__codelineno-0-989"> 989</a></span>
+<span class="normal"><a href="#__codelineno-0-990"> 990</a></span>
+<span class="normal"><a href="#__codelineno-0-991"> 991</a></span>
+<span class="normal"><a href="#__codelineno-0-992"> 992</a></span>
+<span class="normal"><a href="#__codelineno-0-993"> 993</a></span>
+<span class="normal"><a href="#__codelineno-0-994"> 994</a></span>
+<span class="normal"><a href="#__codelineno-0-995"> 995</a></span>
+<span class="normal"><a href="#__codelineno-0-996"> 996</a></span>
+<span class="normal"><a href="#__codelineno-0-997"> 997</a></span>
+<span class="normal"><a href="#__codelineno-0-998"> 998</a></span>
+<span class="normal"><a href="#__codelineno-0-999"> 999</a></span>
+<span class="normal"><a href="#__codelineno-0-1000">1000</a></span>
+<span class="normal"><a href="#__codelineno-0-1001">1001</a></span>
+<span class="normal"><a href="#__codelineno-0-1002">1002</a></span>
+<span class="normal"><a href="#__codelineno-0-1003">1003</a></span>
+<span class="normal"><a href="#__codelineno-0-1004">1004</a></span>
+<span class="normal"><a href="#__codelineno-0-1005">1005</a></span>
+<span class="normal"><a href="#__codelineno-0-1006">1006</a></span>
+<span class="normal"><a href="#__codelineno-0-1007">1007</a></span>
+<span class="normal"><a href="#__codelineno-0-1008">1008</a></span>
+<span class="normal"><a href="#__codelineno-0-1009">1009</a></span>
+<span class="normal"><a href="#__codelineno-0-1010">1010</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-972" name="__codelineno-0-972"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_title</span><span class="p">(</span>
+<a id="__codelineno-0-973" name="__codelineno-0-973"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-974" name="__codelineno-0-974"></a>    <span class="n">heading</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-975" name="__codelineno-0-975"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-976" name="__codelineno-0-976"></a>    <span class="n">position</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;top-left&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-977" name="__codelineno-0-977"></a>    <span class="n">subtitle</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-978" name="__codelineno-0-978"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-979" name="__codelineno-0-979"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Put a title on the map itself, so a saved page carries its own heading.</span>
+<a id="__codelineno-0-980" name="__codelineno-0-980"></a>
+<a id="__codelineno-0-981" name="__codelineno-0-981"></a><span class="sd">    An exported page travels alone: whatever context the notebook around it had is gone. The title is</span>
+<a id="__codelineno-0-982" name="__codelineno-0-982"></a><span class="sd">    a control rather than a layer, so it sits above the map and moves with the corner it is pinned to.</span>
+<a id="__codelineno-0-983" name="__codelineno-0-983"></a>
+<a id="__codelineno-0-984" name="__codelineno-0-984"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-985" name="__codelineno-0-985"></a><span class="sd">        heading: The title text.</span>
+<a id="__codelineno-0-986" name="__codelineno-0-986"></a><span class="sd">        position: One of the four MapLibre corners.</span>
+<a id="__codelineno-0-987" name="__codelineno-0-987"></a><span class="sd">        subtitle: A smaller second line — a date, a source, a unit.</span>
+<a id="__codelineno-0-988" name="__codelineno-0-988"></a>
+<a id="__codelineno-0-989" name="__codelineno-0-989"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-990" name="__codelineno-0-990"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-991" name="__codelineno-0-991"></a>
+<a id="__codelineno-0-992" name="__codelineno-0-992"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-993" name="__codelineno-0-993"></a><span class="sd">        ValueError: when ``position`` is not one of the four legal MapLibre corners.</span>
+<a id="__codelineno-0-994" name="__codelineno-0-994"></a>
+<a id="__codelineno-0-995" name="__codelineno-0-995"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-996" name="__codelineno-0-996"></a><span class="sd">        - Title a saved map:</span>
+<a id="__codelineno-0-997" name="__codelineno-0-997"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-998" name="__codelineno-0-998"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                            # doctest: +SKIP</span>
+<a id="__codelineno-0-999" name="__codelineno-0-999"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().title(&quot;Population, 2024&quot;)                   # doctest: +SKIP</span>
+<a id="__codelineno-0-1000" name="__codelineno-0-1000"></a>
+<a id="__codelineno-0-1001" name="__codelineno-0-1001"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1002" name="__codelineno-0-1002"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1003" name="__codelineno-0-1003"></a>    <span class="n">_require_maplibre</span><span class="p">()</span>
+<a id="__codelineno-0-1004" name="__codelineno-0-1004"></a>    <span class="n">_check_position</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
+<a id="__codelineno-0-1005" name="__codelineno-0-1005"></a>    <span class="n">body</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;&lt;div style=&quot;font-weight:600;font-size:15px&quot;&gt;</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">heading</span><span class="p">)</span><span class="si">}</span><span class="s1">&lt;/div&gt;&#39;</span>
+<a id="__codelineno-0-1006" name="__codelineno-0-1006"></a>    <span class="k">if</span> <span class="n">subtitle</span><span class="p">:</span>
+<a id="__codelineno-0-1007" name="__codelineno-0-1007"></a>        <span class="n">body</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39;&lt;div style=&quot;opacity:.75;margin-top:2px&quot;&gt;</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">subtitle</span><span class="p">)</span><span class="si">}</span><span class="s1">&lt;/div&gt;&#39;</span>
+<a id="__codelineno-0-1008" name="__codelineno-0-1008"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_panels</span><span class="p">[</span><span class="s2">&quot;title&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;div&gt;</span><span class="si">{</span><span class="n">body</span><span class="si">}</span><span class="s2">&lt;/div&gt;&quot;</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
+<a id="__codelineno-0-1009" name="__codelineno-0-1009"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_title</span> <span class="o">=</span> <span class="n">heading</span>
+<a id="__codelineno-0-1010" name="__codelineno-0-1010"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8350,6 +8766,382 @@ digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped pat
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h3 id="digitalearth.web.map.WebMap.save_animation" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.save_animation" class="toclink">
+            <code class="highlight language-python"><span class="n">save_animation</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">loop</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">DEFAULT_TITLE</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</a><a href="#digitalearth.web.map.WebMap.save_animation" class="headerlink" title="Permanent link">#</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Write a temporal map's steps as an animated GIF (recipe W7).</p>
+<p>A time series is the case where a moving image says most, and it is also the case a web page
+carries worst — a saved page shows a step picker, not an animation, and nothing could be pasted
+into a report. The other two tiers have had <code>save_animation</code> all along.</p>
+<p>One frame is rendered per time step, by making that step the only visible one and screenshotting
+the page, so the frames are the same pixels the map draws.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Where to write the GIF.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fps</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="float">float</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Frames per second — the rate every tier's animation entry point takes, with the same
+default (:data:<code>DEFAULT_FPS</code>, <code>3.0</code>, declared once in :mod:<code>digitalearth.base.animation</code>;
+the signature's <code>None</code> is the "not passed" sentinel the deprecated spelling is resolved
+against), so one number means one speed across the whole package. This entry point used to
+be spelled <code>duration=0.8</code> (one frame held 0.8 s, i.e. 1.25 fps); a call that names no rate
+now renders faster, and <code>fps=1.25</code> restores the previous speed.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>loop</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How many times to repeat; <code>0</code> loops forever.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>title</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>HTML document title used while rendering.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="digitalearth.web.base.DEFAULT_TITLE">DEFAULT_TITLE</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>duration</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="float">float</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><strong>Deprecated</strong> spelling of the frame rate, in seconds held per frame. Passing
+it warns that <code>duration=</code> will be removed in a future release and to write
+<code>fps=</code> instead. It is <em>converted</em> (<code>fps = 1 / duration</code>), never
+reinterpreted, so an old call produces the animation it always did.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>The</code></td>            <td>
+                  <code><span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>class:<code>pathlib.Path</code> written.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when both <code>fps</code> and the deprecated <code>duration</code> are passed — one rate, two
+spellings, so neither can be silently preferred.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when the map has no time steps to animate, or fewer than two, or when <code>fps</code> /
+<code>duration</code> is not a finite positive number — a zero rate has no frame to hold, and a
+<code>nan</code>/<code>inf</code> one is no rate at all.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ImportError">ImportError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>when no headless browser is installed — the same gated dependency the PNG
+snapshot needs, and deliberately not part of <code>digitalearth[web]</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <ul>
+<li>Animate a raster stack:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebMap</span>                           <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>   <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">stack</span> <span class="o">=</span> <span class="n">DatasetCollection</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="s2">&quot;jan.tif&quot;</span><span class="p">,</span> <span class="s2">&quot;feb.tif&quot;</span><span class="p">])</span>  <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">basemap</span><span class="p">()</span><span class="o">.</span><span class="n">timeslider</span><span class="p">(</span><span class="n">stack</span><span class="p">)</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="s2">&quot;out.gif&quot;</span><span class="p">)</span>       <span class="c1"># doctest: +SKIP</span>
+</code></pre></div></li>
+</ul>
+
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
+digitalearth.web.export.ExportMixin.to_gif: the deprecated name of this method.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/digitalearth/web/export.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+<span class="normal"><a href="#__codelineno-0-259">259</a></span>
+<span class="normal"><a href="#__codelineno-0-260">260</a></span>
+<span class="normal"><a href="#__codelineno-0-261">261</a></span>
+<span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+<span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span>
+<span class="normal"><a href="#__codelineno-0-313">313</a></span>
+<span class="normal"><a href="#__codelineno-0-314">314</a></span>
+<span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="k">def</span><span class="w"> </span><span class="nf">save_animation</span><span class="p">(</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">fps</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">loop</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_TITLE</span><span class="p">,</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a>    <span class="n">duration</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Write a temporal map&#39;s steps as an animated GIF (recipe W7).</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">    A time series is the case where a moving image says most, and it is also the case a web page</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">    carries worst — a saved page shows a step picker, not an animation, and nothing could be pasted</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">    into a report. The other two tiers have had ``save_animation`` all along.</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">    One frame is rendered per time step, by making that step the only visible one and screenshotting</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">    the page, so the frames are the same pixels the map draws.</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">        path: Where to write the GIF.</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">        fps: Frames per second — the rate every tier&#39;s animation entry point takes, with the same</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">            default (:data:`DEFAULT_FPS`, ``3.0``, declared once in :mod:`digitalearth.base.animation`;</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">            the signature&#39;s ``None`` is the &quot;not passed&quot; sentinel the deprecated spelling is resolved</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">            against), so one number means one speed across the whole package. This entry point used to</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">            be spelled ``duration=0.8`` (one frame held 0.8 s, i.e. 1.25 fps); a call that names no rate</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">            now renders faster, and ``fps=1.25`` restores the previous speed.</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">        loop: How many times to repeat; ``0`` loops forever.</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">        title: HTML document title used while rendering.</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">        duration: **Deprecated** spelling of the frame rate, in seconds held per frame. Passing</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">            it warns that ``duration=`` will be removed in a future release and to write</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">            ``fps=`` instead. It is *converted* (``fps = 1 / duration``), never</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">            reinterpreted, so an old call produces the animation it always did.</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">        The :class:`pathlib.Path` written.</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">        TypeError: when both ``fps`` and the deprecated ``duration`` are passed — one rate, two</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">            spellings, so neither can be silently preferred.</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a><span class="sd">        ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` /</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">            ``duration`` is not a finite positive number — a zero rate has no frame to hold, and a</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">            ``nan``/``inf`` one is no rate at all.</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="sd">        ImportError: when no headless browser is installed — the same gated dependency the PNG</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">            snapshot needs, and deliberately not part of ``digitalearth[web]``.</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">        - Animate a raster stack:</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                           # doctest: +SKIP</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">            &gt;&gt;&gt; stack = DatasetCollection.from_files([&quot;jan.tif&quot;, &quot;feb.tif&quot;])  # doctest: +SKIP</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().timeslider(stack).animate(&quot;out.gif&quot;)       # doctest: +SKIP</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">        digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">        digitalearth.web.export.ExportMixin.to_gif: the deprecated name of this method.</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a>    <span class="n">fps</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;fps&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>        <span class="n">value</span><span class="o">=</span><span class="n">fps</span><span class="p">,</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a>        <span class="n">old</span><span class="o">=</span><span class="s2">&quot;duration&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>        <span class="n">alias</span><span class="o">=</span><span class="n">duration</span><span class="p">,</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>        <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;WebMap.save_animation()&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_FPS</span><span class="p">,</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a>        <span class="n">convert</span><span class="o">=</span><span class="n">_fps_from_duration</span><span class="p">,</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="p">)</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">fps</span><span class="p">)):</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;fps= must be a finite rate; got </span><span class="si">{</span><span class="n">fps</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="k">if</span> <span class="nb">float</span><span class="p">(</span><span class="n">fps</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;fps= must be positive; got </span><span class="si">{</span><span class="n">fps</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="n">frames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_temporal_frames</span><span class="p">()</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>    <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">work</span><span class="p">:</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>        <span class="n">images</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_frame_png</span><span class="p">(</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">work</span><span class="p">)</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;frame</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">,</span> <span class="n">frame</span><span class="p">,</span> <span class="n">title</span><span class="p">)</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>            <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">frame</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>        <span class="p">]</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">_write_gif</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">fps</span><span class="p">),</span> <span class="n">loop</span><span class="o">=</span><span class="n">loop</span><span class="p">)</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a>    <span class="k">return</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
 
 
   </div>
@@ -8392,7 +9184,7 @@ digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped pat
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../renamed-keywords/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Renamed keywords">
+          <a href="../renamed-names/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Renamed names">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -8402,7 +9194,7 @@ digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped pat
                 Previous
               </span>
               <div class="md-ellipsis">
-                Renamed keywords
+                Renamed names
               </div>
             </div>
           </a>

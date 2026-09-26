@@ -3162,14 +3162,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4305,7 +4305,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="18-shapes">18 · <code>shapes</code><a class="anchor-link" href="#18-shapes">¶</a></h1><p><code>Map.shapes</code> draws polygon outlines only (no fill) — for boundaries/footprints (cleopatra <code>PolygonGlyph</code>, outline mode).</p>
+<h1 id="18-polygons">18 · <code>polygons</code><a class="anchor-link" href="#18-polygons">¶</a></h1><p><code>Map.polygons</code> draws polygon outlines only (no fill) — for boundaries/footprints (cleopatra <code>PolygonGlyph</code>, outline mode).</p>
 </div>
 </div>
 </div>
@@ -4404,12 +4404,12 @@ cells['elevation'] = coarse.read_array(band=0).astype('float64').ravel()</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">shapes</span><span class="p">(</span><span class="n">cells</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s1">'steelblue'</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">0.4</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">polygons</span><span class="p">(</span><span class="n">cells</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s1">'steelblue'</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">0.4</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'shapes'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">m = Map(crs=coarse.epsg, figsize=(9, 7))
-m.shapes(cells, edgecolor='steelblue', linewidth=0.4)
+m.polygons(cells, edgecolor='steelblue', linewidth=0.4)
 m.set_title('shapes')
 m.fig;</div>
 </div>

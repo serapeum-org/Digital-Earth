@@ -3160,14 +3160,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4449,9 +4449,9 @@ def show(m, static=False, dpi=96):
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="35adeeb8-9d6c-4369-b333-ff7a7e42b78e" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="638be8de-f9f5-4a60-a67f-e08778a4a5a6" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('35adeeb8-9d6c-4369-b333-ff7a7e42b78e');
+var element = document.getElementById('638be8de-f9f5-4a60-a67f-e08778a4a5a6');
 (function(root) {
   function now() {
     return new Date();
@@ -4708,9 +4708,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="a24f93ce-a5eb-4521-b52b-96cb315aef22" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="5a356565-3554-4f25-969f-247faad2b54f" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('a24f93ce-a5eb-4521-b52b-96cb315aef22');
+var element = document.getElementById('5a356565-3554-4f25-969f-247faad2b54f');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5188,7 +5188,7 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>One call, one finished map: <code>InteractiveMap().image(...)</code>. <code>show(m)</code> renders it.</p>
+<p>One call, one finished map: <code>InteractiveMap().field(...)</code>. <code>show(m)</code> renders it.</p>
 </div>
 </div>
 </div>
@@ -5216,7 +5216,7 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 
 <span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s2">"LisbonElevation.tif"</span><span class="p">))</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Lisbon elevation"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">from pyramids.dataset import Dataset
@@ -5224,7 +5224,7 @@ from digitalearth.interactive import InteractiveMap
 
 dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))
 m = InteractiveMap(crs=dem.epsg, title="Lisbon elevation")
-m.image(dem, cmap="terrain")
+m.field(dem, cmap="terrain")
 show(m)</div>
 </div>
 </div>
@@ -5346,11 +5346,11 @@ show(m)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"elevation + contours"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"black"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"black"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">m = InteractiveMap(crs=dem.epsg, title="elevation + contours")
-m.image(dem, cmap="terrain").contours(dem, levels=8, color="black")
+m.field(dem, cmap="terrain").contours(dem, levels=8, color="black")
 show(m)</div>
 </div>
 </div>

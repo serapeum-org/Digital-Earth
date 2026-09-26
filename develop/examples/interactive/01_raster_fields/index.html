@@ -3252,14 +3252,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4458,7 +4458,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="1-raster-fields">1 · Raster fields<a class="anchor-link" href="#1-raster-fields">¶</a></h1><p>The raster builders turn a pyramids <code>Dataset</code> into an interactive field: <code>image</code> (regular grid),
+<h1 id="1-raster-fields">1 · Raster fields<a class="anchor-link" href="#1-raster-fields">¶</a></h1><p>The raster builders turn a pyramids <code>Dataset</code> into an interactive field: <code>field</code> (regular grid),
 <code>quadmesh</code> (irregular/curvilinear cells), <code>contours</code> / <code>filled_contours</code> (iso-lines), <code>rgb</code>
 (three-band composite) and <code>spaghetti</code> (one contour set per ensemble member). NoData is rendered
 transparent automatically.</p>
@@ -4603,9 +4603,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="5cfc18c6-284e-42ee-9a70-dbc5d82e3a29" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="abc585b5-4a66-4cda-851c-fccecfebf66e" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('5cfc18c6-284e-42ee-9a70-dbc5d82e3a29');
+var element = document.getElementById('abc585b5-4a66-4cda-851c-fccecfebf66e');
 (function(root) {
   function now() {
     return new Date();
@@ -4862,9 +4862,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="58d24107-58d6-40d3-b809-6099fff62755" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="a6571d94-e050-49ac-a882-b420b997ecb5" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('58d24107-58d6-40d3-b809-6099fff62755');
+var element = document.getElementById('a6571d94-e050-49ac-a882-b420b997ecb5');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5342,7 +5342,7 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="image-a-pixel-field"><code>image</code> — a pixel field<a class="anchor-link" href="#image-a-pixel-field">¶</a></h3><p><code>image</code> draws the raster as a regular pixel grid. <code>cmap=None</code> (the default) picks a colormap from the variable via auto-style; here we ask for <code>terrain</code>.</p>
+<h3 id="field-a-pixel-field"><code>field</code> — a pixel field<a class="anchor-link" href="#field-a-pixel-field">¶</a></h3><p><code>field</code> draws the raster as a regular pixel grid. <code>cmap=None</code> (the default) picks a colormap from the variable via auto-style; here we ask for <code>terrain</code>.</p>
 </div>
 </div>
 </div>
@@ -5366,11 +5366,11 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"image"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">m = InteractiveMap(crs=dem.epsg, title="image")
-m.image(dem, cmap="terrain")
+m.field(dem, cmap="terrain")
 show(m)</div>
 </div>
 </div>
@@ -5468,7 +5468,7 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="quadmesh-irregular-cells"><code>quadmesh</code> — irregular cells<a class="anchor-link" href="#quadmesh-irregular-cells">¶</a></h3><p><code>quadmesh</code> draws every cell from its coordinate arrays, so non-uniform or curvilinear grids render without resampling. On a regular grid it matches <code>image</code>.</p>
+<h3 id="quadmesh-irregular-cells"><code>quadmesh</code> — irregular cells<a class="anchor-link" href="#quadmesh-irregular-cells">¶</a></h3><p><code>quadmesh</code> draws every cell from its coordinate arrays, so non-uniform or curvilinear grids render without resampling. On a regular grid it matches <code>field</code>.</p>
 </div>
 </div>
 </div>

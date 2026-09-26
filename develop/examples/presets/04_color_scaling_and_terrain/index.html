@@ -3241,14 +3241,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4529,12 +4529,12 @@ skewed = Dataset.from_array(arr=skew, geo_ref=GeoReference(geo=GEO, epsg=4326))<
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">cs</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">maps</span><span class="p">,</span> <span class="p">[</span><span class="s1">'linear'</span><span class="p">,</span> <span class="s1">'power'</span><span class="p">,</span> <span class="s1">'sym_log'</span><span class="p">]):</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="n">cs</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'color_scale='</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="n">cs</span><span class="p">))</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="n">cs</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'color_scale='</span> <span class="o">+</span> <span class="nb">repr</span><span class="p">(</span><span class="n">cs</span><span class="p">))</span>
 <span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">fig, maps = grid(1, 3, crs=4326, figsize=(15, 4))
 for m, cs in zip(maps, ['linear', 'power', 'sym_log']):
-    m.imshow(skewed, color_scale=cs, cmap='viridis'); m.set_title('color_scale=' + repr(cs))
+    m.field(skewed, color_scale=cs, cmap='viridis'); m.set_title('color_scale=' + repr(cs))
 fig;</div>
 </div>
 </div>
@@ -4584,13 +4584,13 @@ fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
-<span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'power'</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'magma'</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'power, gamma=0.3'</span><span class="p">)</span>
-<span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'power'</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'magma'</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'power, gamma=0.7'</span><span class="p">)</span>
+<span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'power'</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'magma'</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'power, gamma=0.3'</span><span class="p">)</span>
+<span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'power'</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'magma'</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'power, gamma=0.7'</span><span class="p">)</span>
 <span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">fig, maps = grid(1, 2, crs=4326, figsize=(13, 4))
-maps[0].imshow(skewed, color_scale='power', gamma=0.3, cmap='magma'); maps[0].set_title('power, gamma=0.3')
-maps[1].imshow(skewed, color_scale='power', gamma=0.7, cmap='magma'); maps[1].set_title('power, gamma=0.7')
+maps[0].field(skewed, color_scale='power', gamma=0.3, cmap='magma'); maps[0].set_title('power, gamma=0.3')
+maps[1].field(skewed, color_scale='power', gamma=0.7, cmap='magma'); maps[1].set_title('power, gamma=0.7')
 fig;</div>
 </div>
 </div>
@@ -4643,14 +4643,14 @@ fig;</div>
 <span class="n">anom</span> <span class="o">=</span> <span class="p">(</span><span class="mi">7</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">lon</span><span class="p">))</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">lat</span><span class="p">)))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">)</span>
 <span class="n">anomaly</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">anom</span><span class="p">,</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">GEO</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="mi">4326</span><span class="p">))</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">anomaly</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'midpoint'</span><span class="p">,</span> <span class="n">midpoint</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdBu_r'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">anomaly</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'midpoint'</span><span class="p">,</span> <span class="n">midpoint</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdBu_r'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'anomaly'</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">"color_scale='midpoint', midpoint=0"</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">lat = np.linspace(60, -60, 120)[:, None]; lon = np.linspace(-180, 180, 160)[None, :]
 anom = (7 * np.sin(np.deg2rad(3 * lon)) * np.cos(np.deg2rad(2 * lat))).astype('float32')
 anomaly = Dataset.from_array(arr=anom, geo_ref=GeoReference(geo=GEO, epsg=4326))
 m = Map(crs=4326, figsize=(10, 5))
-m.imshow(anomaly, color_scale='midpoint', midpoint=0, cmap='RdBu_r')
+m.field(anomaly, color_scale='midpoint', midpoint=0, cmap='RdBu_r')
 m.colorbar(label='anomaly'); m.set_title("color_scale='midpoint', midpoint=0"); m.fig;</div>
 </div>
 </div>
@@ -4700,11 +4700,11 @@ m.colorbar(label='anomaly'); m.set_title("color_scale='midpoint', midpoint=0"); 
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'boundary'</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">3000</span><span class="p">,</span> <span class="mi">5001</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlOrRd'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">skewed</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'boundary'</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">3000</span><span class="p">,</span> <span class="mi">5001</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlOrRd'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'value'</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">"color_scale='boundary'"</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">m = Map(crs=4326, figsize=(10, 5))
-m.imshow(skewed, color_scale='boundary', bounds=[0, 50, 200, 1000, 3000, 5001], cmap='YlOrRd')
+m.field(skewed, color_scale='boundary', bounds=[0, 50, 200, 1000, 3000, 5001], cmap='YlOrRd')
 m.colorbar(label='value'); m.set_title("color_scale='boundary'"); m.fig;</div>
 </div>
 </div>
@@ -4754,13 +4754,13 @@ m.colorbar(label='value'); m.set_title("color_scale='boundary'"); m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">hillshade</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gray'</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'hillshade'</span><span class="p">)</span>
-<span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'elevation'</span><span class="p">,</span> <span class="n">hillshade</span><span class="o">=</span><span class="kc">True</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">"style='elevation' + hillshade"</span><span class="p">)</span>
+<span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">hillshade</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gray'</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'hillshade'</span><span class="p">)</span>
+<span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'elevation'</span><span class="p">,</span> <span class="n">hillshade</span><span class="o">=</span><span class="kc">True</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">"style='elevation' + hillshade"</span><span class="p">)</span>
 <span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-6">fig, maps = grid(1, 2, crs=dem.epsg, figsize=(13, 5))
-maps[0].imshow(dem, hillshade=True, cmap='gray'); maps[0].set_title('hillshade')
-maps[1].imshow(dem, style='elevation', hillshade=True); maps[1].set_title("style='elevation' + hillshade")
+maps[0].field(dem, hillshade=True, cmap='gray'); maps[0].set_title('hillshade')
+maps[1].field(dem, style='elevation', hillshade=True); maps[1].set_title("style='elevation' + hillshade")
 fig;</div>
 </div>
 </div>

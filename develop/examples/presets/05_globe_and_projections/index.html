@@ -3252,14 +3252,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4653,7 +4653,7 @@ sst = sst_month(nc.band_count - 1)   # the most recent month in the record</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">proj</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=-</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">20</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
 <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">sst</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'sea_surface_temperature'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">sst</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'sea_surface_temperature'</span><span class="p">)</span>
 <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'sea-surface temperature (</span><span class="se">\u00b0</span><span class="s1">C)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'ERSST v5 - most recent month'</span><span class="p">)</span>
@@ -4661,7 +4661,7 @@ sst = sst_month(nc.band_count - 1)   # the most recent month in the record</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">m = Map(crs=proj.orthographic(lon=-30, lat=20), globe=True, figsize=(7, 7))
 backdrop(m, ocean=True)
-m.imshow(sst, style='sea_surface_temperature')
+m.field(sst, style='sea_surface_temperature')
 annotate(m)
 m.colorbar(label='sea-surface temperature (\u00b0C)')
 m.set_title('ERSST v5 - most recent month')
@@ -4719,7 +4719,7 @@ m.fig;</div>
 <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">crs</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">views</span><span class="p">):</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span>
-    <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">sst</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'sea_surface_temperature'</span><span class="p">);</span> <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+    <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">sst</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'sea_surface_temperature'</span><span class="p">);</span> <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
     <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
 <span class="n">fig</span><span class="p">;</span>
 </pre></div>
@@ -4729,7 +4729,7 @@ m.fig;</div>
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 for ax, (name, crs) in zip(axes, views):
     m = Map(crs=crs, globe=True, ax=ax, fig=fig)
-    backdrop(m, ocean=True); m.imshow(sst, style='sea_surface_temperature'); annotate(m)
+    backdrop(m, ocean=True); m.field(sst, style='sea_surface_temperature'); annotate(m)
     ax.set_title(name)
 fig;</div>
 </div>
@@ -4783,7 +4783,7 @@ fig;</div>
 <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">14</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">crs</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">worlds</span><span class="p">):</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span>
-    <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">sst</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'sea_surface_temperature'</span><span class="p">);</span> <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+    <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">sst</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'sea_surface_temperature'</span><span class="p">);</span> <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
     <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
 <span class="n">fig</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">();</span> <span class="n">fig</span><span class="p">;</span>
 </pre></div>
@@ -4791,7 +4791,7 @@ fig;</div>
 fig, axes = plt.subplots(3, 1, figsize=(9, 14))
 for ax, (name, crs) in zip(axes, worlds):
     m = Map(crs=crs, ax=ax, fig=fig)
-    backdrop(m); m.imshow(sst, style='sea_surface_temperature'); annotate(m, step=60)
+    backdrop(m); m.field(sst, style='sea_surface_temperature'); annotate(m, step=60)
     ax.set_title(name)
 fig.tight_layout(); fig;</div>
 </div>
@@ -4848,7 +4848,7 @@ fig.tight_layout(); fig;</div>
 <span class="n">anomaly</span> <span class="o">=</span> <span class="n">to_dataset</span><span class="p">(</span><span class="n">cube</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">climatology</span><span class="p">)</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">proj</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="o">-</span><span class="mi">160</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
 <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">anomaly</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'anomaly'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">anomaly</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">'anomaly'</span><span class="p">)</span>
 <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'SST anomaly (</span><span class="se">\u00b0</span><span class="s1">C)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'most recent month minus 52-year mean'</span><span class="p">)</span>
@@ -4861,7 +4861,7 @@ with warnings.catch_warnings():
 anomaly = to_dataset(cube[-1] - climatology)
 m = Map(crs=proj.orthographic(-160, 0), globe=True, figsize=(7, 7))
 backdrop(m, ocean=True)
-m.imshow(anomaly, style='anomaly')
+m.field(anomaly, style='anomaly')
 annotate(m)
 m.colorbar(label='SST anomaly (\u00b0C)')
 m.set_title('most recent month minus 52-year mean')
@@ -4918,7 +4918,7 @@ m.fig;</div>
     <span class="n">swing</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">cube</span><span class="p">[</span><span class="mi">0</span><span class="p">::</span><span class="mi">12</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">cube</span><span class="p">[</span><span class="mi">6</span><span class="p">::</span><span class="mi">12</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">proj</span><span class="o">.</span><span class="n">robinson</span><span class="p">(),</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 <span class="n">backdrop</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">swing</span><span class="p">),</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'midpoint'</span><span class="p">,</span> <span class="n">midpoint</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdBu_r'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">swing</span><span class="p">),</span> <span class="n">color_scale</span><span class="o">=</span><span class="s1">'midpoint'</span><span class="p">,</span> <span class="n">midpoint</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdBu_r'</span><span class="p">)</span>
 <span class="n">annotate</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'seasonal SST difference (</span><span class="se">\u00b0</span><span class="s1">C)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'six-month seasonal swing'</span><span class="p">)</span>
@@ -4929,7 +4929,7 @@ m.fig;</div>
     swing = np.nanmean(cube[0::12], axis=0) - np.nanmean(cube[6::12], axis=0)
 m = Map(crs=proj.robinson(), figsize=(11, 6))
 backdrop(m)
-m.imshow(to_dataset(swing), color_scale='midpoint', midpoint=0, cmap='RdBu_r')
+m.field(to_dataset(swing), color_scale='midpoint', midpoint=0, cmap='RdBu_r')
 annotate(m, step=60)
 m.colorbar(label='seasonal SST difference (\u00b0C)')
 m.set_title('six-month seasonal swing')

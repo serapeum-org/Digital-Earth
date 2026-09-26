@@ -3137,14 +3137,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4459,7 +4459,7 @@ DATA = Path('../../../examples/data')  # notebook CWD is this folder; data lives
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="raster-over-a-basemap">Raster over a basemap<a class="anchor-link" href="#raster-over-a-basemap">¶</a></h2><p><code>add_raster</code> reprojects the band to lon/lat, colour-maps it to a transparent-NoData PNG, and places it as
+<h2 id="raster-over-a-basemap">Raster over a basemap<a class="anchor-link" href="#raster-over-a-basemap">¶</a></h2><p><code>field</code> reprojects the band to lon/lat, colour-maps it to a transparent-NoData PNG, and places it as
 a MapLibre image source; <code>basemap</code> adds a dark tile layer beneath it.</p>
 </div>
 </div>
@@ -4484,12 +4484,12 @@ a MapLibre image source; <code>basemap</code> adds a dark tile layer beneath it.
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'acc4000.tif'</span><span class="p">))</span>
-<span class="n">raster_map</span> <span class="o">=</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">add_raster</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.85</span><span class="p">)</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="s1">'CartoDark'</span><span class="p">)</span>
+<span class="n">raster_map</span> <span class="o">=</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.85</span><span class="p">)</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="s1">'CartoDark'</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'raster layers:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">raster_map</span><span class="o">.</span><span class="n">layers</span><span class="p">))</span>
 <span class="c1"># In a live notebook, evaluate `raster_map` on its own line to render the interactive map.</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">dem = Dataset.read_file(str(DATA / 'acc4000.tif'))
-raster_map = WebMap().add_raster(dem, cmap='viridis', opacity=0.85).basemap('CartoDark')
+raster_map = WebMap().field(dem, cmap='viridis', opacity=0.85).basemap('CartoDark')
 print('raster layers:', len(raster_map.layers))
 # In a live notebook, evaluate `raster_map` on its own line to render the interactive map.</div>
 </div>
@@ -4621,7 +4621,7 @@ switcher captions each row with the layer's <strong>id</strong>, which is why <c
     <span class="o">.</span><span class="n">polygons</span><span class="p">(</span><span class="n">basin</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">'#4c78a8'</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.35</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">'Rhine basin'</span><span class="p">)</span>
     <span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s1">'datum(m)'</span><span class="p">,</span> <span class="n">scheme</span><span class="o">=</span><span class="s1">'quantiles'</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">'Gauge datum'</span><span class="p">)</span>
     <span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s1">'Gauge datum (m)'</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">'Rhine gauging network'</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="s1">'Levels from PegelOnline'</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'Rhine gauging network'</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="s1">'Levels from PegelOnline'</span><span class="p">)</span>
     <span class="o">.</span><span class="n">layer_control</span><span class="p">()</span>
 <span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'layer ids (what the switcher shows):'</span><span class="p">,</span> <span class="n">thematic</span><span class="o">.</span><span class="n">layer_ids</span><span class="p">)</span>
@@ -4636,7 +4636,7 @@ thematic = (
     .polygons(basin, color='#4c78a8', opacity=0.35, name='Rhine basin')
     .points(gauges, column='datum(m)', scheme='quantiles', k=4, name='Gauge datum')
     .legend(title='Gauge datum (m)')
-    .title('Rhine gauging network', subtitle='Levels from PegelOnline')
+    .set_title('Rhine gauging network', subtitle='Levels from PegelOnline')
     .layer_control()
 )
 print('layer ids (what the switcher shows):', thematic.layer_ids)</div>
@@ -4652,7 +4652,7 @@ print('layer ids (what the switcher shows):', thematic.layer_ids)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="framing-and-dropping-a-layer">Framing and dropping a layer<a class="anchor-link" href="#framing-and-dropping-a-layer">¶</a></h3><p>The map frames itself on everything you added, so <code>fit_bounds</code> is only for a window of your own — pass one
+<h3 id="framing-and-dropping-a-layer">Framing and dropping a layer<a class="anchor-link" href="#framing-and-dropping-a-layer">¶</a></h3><p>The map frames itself on everything you added, so <code>set_bounds</code> is only for a window of your own — pass one
 as <code>(west, south, east, north)</code> in lon/lat. <code>remove_layer</code> takes a layer by id, and takes the whole group a
 multi-layer builder drew.</p>
 </div>
@@ -4677,11 +4677,11 @@ multi-layer builder drew.</p>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">thematic</span><span class="o">.</span><span class="n">fit_bounds</span><span class="p">((</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">45.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mf">52.5</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">thematic</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">((</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">45.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mf">52.5</span><span class="p">),</span> <span class="n">padding</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
 <span class="n">thematic</span><span class="o">.</span><span class="n">remove_layer</span><span class="p">(</span><span class="s1">'Rhine basin'</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'after remove_layer:'</span><span class="p">,</span> <span class="n">thematic</span><span class="o">.</span><span class="n">layer_ids</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">thematic.fit_bounds((3.0, 45.0, 12.0, 52.5), padding=40)
+<div class="clipboard-copy-txt" id="cell-5">thematic.set_bounds((3.0, 45.0, 12.0, 52.5), padding=40)
 thematic.remove_layer('Rhine basin')
 print('after remove_layer:', thematic.layer_ids)</div>
 </div>

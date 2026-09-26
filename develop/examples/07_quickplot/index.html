@@ -3228,14 +3228,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4412,7 +4412,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="7-one-call-api-quickplot-quickmap">7 · One-call API — quickplot / quickmap<a class="anchor-link" href="#7-one-call-api-quickplot-quickmap">¶</a></h1><p><code>digitalearth.quickplot</code> (alias <code>quickmap</code>) builds a <strong>finished, decorated <code>Map</code> in a single call</strong>: it dispatches on the input type (raster → field, points → scatter, polygons → choropleth), auto-styles by variable, draws, and adds a colorbar — returning the <code>Map</code> so you can keep tweaking it.</p>
+<h1 id="7-one-call-api-quickplot-quickmap">7 · One-call API — quickplot / quickmap<a class="anchor-link" href="#7-one-call-api-quickplot-quickmap">¶</a></h1><p><code>digitalearth.quickplot</code> (alias <code>quickmap</code>) builds a <strong>finished, decorated <code>Map</code> in a single call</strong>: it dispatches on the input type (raster → field, point features → points, polygons → choropleth), auto-styles by variable, draws, and adds a colorbar — returning the <code>Map</code> so you can keep tweaking it.</p>
 <p>Module-level functions (<code>api.imshow</code>, <code>api.contourf</code>, …) mirror the <code>Map</code> methods for a terse functional style. This is the highest-level entry point; everything in notebooks 2–6 is what it orchestrates under the hood.</p>
 </div>
 </div>
@@ -4615,7 +4615,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Pick the renderer with a module function — <code>api.contourf</code> is the functional twin of <code>Map.contourf</code>; the same <code>levels</code>/<code>cmap</code> kwargs apply.</p>
+<p>Pick the renderer with a module function — <code>api.contourf</code> is the functional twin of <code>Map.contours(filled=True)</code>; the same <code>levels</code>/<code>cmap</code> kwargs apply.</p>
 </div>
 </div>
 </div>

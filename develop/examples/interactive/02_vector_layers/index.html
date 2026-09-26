@@ -3241,14 +3241,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4437,7 +4437,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="2-vector-layers">2 · Vector layers<a class="anchor-link" href="#2-vector-layers">¶</a></h1><p>The vector builders draw a pyramids <code>FeatureCollection</code>: <code>points</code> (optionally coloured/sized by an
-attribute), <code>path</code> (lines), <code>polygons</code> (outlines or fills) and <code>choropleth</code> (polygons coloured by a
+attribute), <code>lines</code> (line geometries), <code>polygons</code> (outlines or fills) and <code>choropleth</code> (polygons coloured by a
 column). We use the real <strong>Rhine-basin</strong> layers — 34 discharge gauges, the river centre-lines and the
 basin outline (all EPSG:3035, reprojected to the display CRS by pyramids).</p>
 </div>
@@ -4585,9 +4585,9 @@ basin  = FeatureCollection.read_file(str(DATA / "rhine_basin.geojson"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="86709771-5204-4557-aaf5-c1dfad2bdbad" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="c8d95bd2-a29c-4350-b94e-daa4afeb9bfc" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('86709771-5204-4557-aaf5-c1dfad2bdbad');
+var element = document.getElementById('c8d95bd2-a29c-4350-b94e-daa4afeb9bfc');
 (function(root) {
   function now() {
     return new Date();
@@ -4844,9 +4844,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="8708ef46-44d2-46a6-9243-79fae43f7632" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="22adff27-f25b-441a-a414-cf63a230cc5b" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('8708ef46-44d2-46a6-9243-79fae43f7632');
+var element = document.getElementById('22adff27-f25b-441a-a414-cf63a230cc5b');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5348,11 +5348,11 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Rhine gauges by discharge"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">m = InteractiveMap(crs=3857, title="Rhine gauges by discharge")
-m.points(gauges, value_column="discharge", size=10, cmap="plasma")
+m.points(gauges, column="discharge", size=10, cmap="plasma")
 show(m)</div>
 </div>
 </div>
@@ -5450,7 +5450,7 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="path-line-features"><code>path</code> — line features<a class="anchor-link" href="#path-line-features">¶</a></h3><p><code>path</code> draws line geometries — here the river centre-lines.</p>
+<h3 id="lines-line-features"><code>lines</code> — line features<a class="anchor-link" href="#lines-line-features">¶</a></h3><p><code>lines</code> draws line geometries — here the river centre-lines.</p>
 </div>
 </div>
 </div>
@@ -5474,11 +5474,11 @@ show(m)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Rhine river network"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">river</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"navy"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">lines</span><span class="p">(</span><span class="n">river</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"navy"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">m = InteractiveMap(crs=3857, title="Rhine river network")
-m.path(river, color="navy")
+m.lines(river, color="navy")
 show(m)</div>
 </div>
 </div>
@@ -5859,14 +5859,14 @@ show(m)</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Rhine basin overview"</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">polygons</span><span class="p">(</span><span class="n">basin</span><span class="p">,</span> <span class="n">line_color</span><span class="o">=</span><span class="s2">"grey"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">river</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"steelblue"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">lines</span><span class="p">(</span><span class="n">river</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"steelblue"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-6">m = InteractiveMap(crs=3857, title="Rhine basin overview")
 m.polygons(basin, line_color="grey")
-m.path(river, color="steelblue")
-m.points(gauges, value_column="discharge", size=8, cmap="plasma")
+m.lines(river, color="steelblue")
+m.points(gauges, column="discharge", size=8, cmap="plasma")
 show(m)</div>
 </div>
 </div>

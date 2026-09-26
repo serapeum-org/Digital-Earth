@@ -3230,14 +3230,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4417,7 +4417,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <h1 id="animation-orbit-frame-by-frame">Animation — orbit &amp; frame-by-frame<a class="anchor-link" href="#animation-orbit-frame-by-frame">¶</a></h1><p>Three deliverables on top of a built scene:</p>
 <ul>
 <li><strong><code>orbit</code></strong> — sweep the camera around the scene and write a GIF/MP4 fly-through.</li>
-<li><strong><code>animate</code></strong> — drive a frame-by-frame animation from a sequence of states via an <code>update</code> callback.</li>
+<li><strong><code>record</code></strong> — drive a frame-by-frame animation from a sequence of states via an <code>update</code> callback.</li>
 <li><strong><code>jupyter</code></strong> — switch PyVista to the trame backend for an interactive widget in a live notebook.</li>
 </ul>
 <p>GIF/MP4 writing needs <code>imageio</code> / <code>imageio-ffmpeg</code> (both in the <code>3d</code> extra). A <code>.mp4</code>/<code>.mov</code>/<code>.avi</code> path writes a movie; anything else a GIF.</p>
@@ -4588,7 +4588,7 @@ display(IPyImage(filename=gif))</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="animate-a-custom-frame-loop"><code>animate</code> — a custom frame loop<a class="anchor-link" href="#animate-a-custom-frame-loop">¶</a></h2><p><code>animate(frames, path, update)</code> calls <code>update(scene, frame)</code> before capturing each frame. Here we sweep the camera azimuth ourselves to spin an isosurface — any per-frame scene mutation works (swap scalars, re-add a layer, walk a <code>DatasetCollection</code> time stack…).</p>
+<h2 id="record-a-custom-frame-loop"><code>record</code> — a custom frame loop<a class="anchor-link" href="#record-a-custom-frame-loop">¶</a></h2><p><code>record(frames, path, update)</code> calls <code>update(scene, frame)</code> before capturing each frame. Here we sweep the camera azimuth ourselves to spin an isosurface — any per-frame scene mutation works (swap scalars, re-add a layer, walk a <code>DatasetCollection</code> time stack…).</p>
 </div>
 </div>
 </div>
@@ -4624,9 +4624,9 @@ display(IPyImage(filename=gif))</div>
     <span class="n">s</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">azimuth</span>
 
 <span class="n">gif</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span> <span class="o">/</span> <span class="s1">'spin.gif'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">gif</span><span class="p">,</span> <span class="n">spin</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">gif</span><span class="p">,</span> <span class="n">spin</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="s1">'animate GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'record GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
 <span class="n">display</span><span class="p">(</span><span class="n">IPyImage</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">gif</span><span class="p">))</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3"># An asymmetric field (two Gaussians) so the spin actually shows the shape turning — a single Gaussian is a
@@ -4642,9 +4642,9 @@ def spin(s, azimuth):
     s.plotter.camera.azimuth = azimuth
 
 gif = str(Path(tempfile.mkdtemp()) / 'spin.gif')
-scene.animate(range(0, 360, 20), gif, spin, fps=12)
+scene.record(range(0, 360, 20), gif, spin, fps=12)
 scene.close()
-print('animate GIF bytes:', os.path.getsize(gif))
+print('record GIF bytes:', os.path.getsize(gif))
 display(IPyImage(filename=gif))</div>
 </div>
 </div>

@@ -635,10 +635,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#imshow-pixel-grid-an-aggregated-colorbar" class="md-nav__link">
+  <a href="#field-pixel-grid-an-aggregated-colorbar" class="md-nav__link">
     <span class="md-ellipsis">
       
-        imshow (pixel grid) + an aggregated colorbar
+        field (pixel grid) + an aggregated colorbar
       
     </span>
   </a>
@@ -3261,14 +3261,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -3653,10 +3653,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#imshow-pixel-grid-an-aggregated-colorbar" class="md-nav__link">
+  <a href="#field-pixel-grid-an-aggregated-colorbar" class="md-nav__link">
     <span class="md-ellipsis">
       
-        imshow (pixel grid) + an aggregated colorbar
+        field (pixel grid) + an aggregated colorbar
       
     </span>
   </a>
@@ -4489,15 +4489,15 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </thead>
 <tbody>
 <tr>
-<td><code>imshow</code></td>
+<td><code>field</code></td>
 <td>pixel grid (honours <code>extent</code>)</td>
 </tr>
 <tr>
-<td><code>contourf</code></td>
+<td><code>contours(filled=True)</code></td>
 <td>filled contours</td>
 </tr>
 <tr>
-<td><code>contour</code></td>
+<td><code>contours()</code></td>
 <td>line contours</td>
 </tr>
 <tr>
@@ -4634,7 +4634,7 @@ ds = Dataset.read_file(DEM)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="imshow-pixel-grid-an-aggregated-colorbar">imshow (pixel grid) + an aggregated colorbar<a class="anchor-link" href="#imshow-pixel-grid-an-aggregated-colorbar">¶</a></h2>
+<h2 id="field-pixel-grid-an-aggregated-colorbar">field (pixel grid) + an aggregated colorbar<a class="anchor-link" href="#field-pixel-grid-an-aggregated-colorbar">¶</a></h2>
 </div>
 </div>
 </div>
@@ -4645,7 +4645,7 @@ ds = Dataset.read_file(DEM)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>imshow</strong> — create a <code>Map</code> in the DEM's own CRS (no reprojection) and draw the raster as a pixel grid. <code>colorbar(label=…)</code> adds one aggregated colorbar for the layer; <code>cmap='terrain'</code> is an elevation-friendly colormap.</p>
+<p><strong>field</strong> — create a <code>Map</code> in the DEM's own CRS (no reprojection) and draw the raster as a pixel grid. <code>colorbar(label=…)</code> adds one aggregated colorbar for the layer; <code>cmap='terrain'</code> is an elevation-friendly colormap.</p>
 </div>
 </div>
 </div>
@@ -4669,13 +4669,13 @@ ds = Dataset.read_file(DEM)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'Lisbon DEM — imshow'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">m = Map(crs=ds.epsg, figsize=(9, 7))
-m.imshow(ds, cmap='terrain')
+m.field(ds, cmap='terrain')
 m.colorbar(label='elevation (m)')
 m.set_title('Lisbon DEM — imshow')
 m.fig;</div>
@@ -4714,7 +4714,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>contourf</strong> — the same data as filled contours. <code>levels=12</code> sets the number of class breaks; the colorbar becomes discrete to match.</p>
+<p><strong>contours(filled=True)</strong> — the same data as filled contours. <code>levels=12</code> sets the number of class breaks; the colorbar becomes discrete to match.</p>
 </div>
 </div>
 </div>
@@ -4738,13 +4738,13 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'contourf'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">m = Map(crs=ds.epsg, figsize=(9, 7))
-m.contourf(ds, levels=12, cmap='terrain')
+m.contours(ds, levels=12, cmap='terrain', filled=True)
 m.colorbar(label='elevation (m)')
 m.set_title('contourf')
 m.fig;</div>
@@ -4783,7 +4783,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>contour</strong> — line contours (isolines) of elevation. No fill, so no colorbar is needed here.</p>
+<p><strong>contours()</strong> — line contours (isolines) of elevation. No fill, so no colorbar is needed here.</p>
 </div>
 </div>
 </div>
@@ -4807,12 +4807,12 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">contour</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'contour'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">m = Map(crs=ds.epsg, figsize=(9, 7))
-m.contour(ds, levels=15)
+m.contours(ds, levels=15)
 m.set_title('contour')
 m.fig;</div>
 </div>
@@ -4850,7 +4850,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>pcolormesh</strong> — a quadrilateral mesh; like <code>imshow</code> but each cell is a true quad (correct for non-uniform/curvilinear grids). <code>block</code> is the same renderer on cell edges.</p>
+<p><strong>pcolormesh</strong> — a quadrilateral mesh; like <code>field</code> but each cell is a true quad (correct for non-uniform/curvilinear grids). <code>block</code> is the same renderer on cell edges.</p>
 </div>
 </div>
 </div>
@@ -4943,13 +4943,13 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'reprojected to EPSG:3857'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-7">m = Map(crs=3857, figsize=(9, 7))
-m.imshow(ds, cmap='terrain')
+m.field(ds, cmap='terrain')
 m.colorbar(label='elevation (m)')
 m.set_title('reprojected to EPSG:3857')
 m.fig;</div>

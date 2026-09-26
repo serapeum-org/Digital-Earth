@@ -3305,14 +3305,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4571,7 +4571,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <li><strong>elevation</strong> (<code>wc2.1_10m_elev</code>) — a 2160x1080 global DEM, and</li>
 <li><strong>monthly average temperature</strong> (<code>wc2.1_10m_tavg</code>) — 12 global grids.</li>
 </ul>
-<p>The data is reprojected to each display CRS by <strong>pyramids</strong>, drawn on a plain axes by <strong>cleopatra</strong>, and framed into a globe by Digital-Earth — <code>imshow</code> / <code>contourf</code> / <code>pcolormesh</code> all work on a projection. Ocean cells are nodata in WorldClim, so the <code>ocean()</code> disc shows through the sea automatically.</p>
+<p>The data is reprojected to each display CRS by <strong>pyramids</strong>, drawn on a plain axes by <strong>cleopatra</strong>, and framed into a globe by Digital-Earth — <code>field</code> / <code>contours</code> / <code>pcolormesh</code> all work on a projection. Ocean cells are nodata in WorldClim, so the <code>ocean()</code> disc shows through the sea automatically.</p>
 <blockquote>
 <p>The download cell caches into <code>examples/data/global/</code> (git-ignored) and is skipped once the files are present. It needs network on first run; everything after is offline.</p>
 </blockquote>
@@ -4882,7 +4882,7 @@ range: -10301 m (deep ocean) .. 7446 m (peaks)
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="1-global-elevation-on-an-orthographic-globe">1. Global elevation on an orthographic globe<a class="anchor-link" href="#1-global-elevation-on-an-orthographic-globe">¶</a></h2><p><code>ocean()</code> fills the disc, <code>imshow</code> draws the reprojected DEM (ocean cells are nodata, so the disc shows through the sea), and <code>coastlines()</code> + <code>graticule()</code> finish it. <code>colorbar()</code> adds the elevation scale.</p>
+<h2 id="1-global-elevation-on-an-orthographic-globe">1. Global elevation on an orthographic globe<a class="anchor-link" href="#1-global-elevation-on-an-orthographic-globe">¶</a></h2><p><code>ocean()</code> fills the disc, <code>field</code> draws the reprojected DEM (ocean cells are nodata, so the disc shows through the sea), and <code>coastlines()</code> + <code>graticule()</code> finish it. <code>colorbar()</code> adds the elevation scale.</p>
 </div>
 </div>
 </div>
@@ -4907,7 +4907,7 @@ range: -10301 m (deep ocean) .. 7446 m (peaks)
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">30</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.5</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">))</span>
 <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">elevation</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">elevation</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -4918,7 +4918,7 @@ range: -10301 m (deep ocean) .. 7446 m (peaks)
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">m = Map(crs=projections.orthographic(lon=10, lat=30), globe=True, figsize=(6.5, 6.5))
 m.ocean()
-m.imshow(elevation, cmap='terrain', vmin=-1000, vmax=5000)
+m.field(elevation, cmap='terrain', vmin=-1000, vmax=5000)
 context(m)
 m.graticule(lon_step=30, lat_step=30)
 m.set_global()
@@ -4950,7 +4950,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="2-july-temperature-filled-contours">2. July temperature — filled contours<a class="anchor-link" href="#2-july-temperature-filled-contours">¶</a></h2><p><code>contourf</code> of the July mean temperature over a globe centred on Asia. The ocean disc shows through where the land grid is nodata.</p>
+<h2 id="2-july-temperature-filled-contours">2. July temperature — filled contours<a class="anchor-link" href="#2-july-temperature-filled-contours">¶</a></h2><p><code>contours</code> of the July mean temperature over a globe centred on Asia. The ocean disc shows through where the land grid is nodata.</p>
 </div>
 </div>
 </div>
@@ -4975,7 +4975,7 @@ m.fig;</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">25</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.5</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">))</span>
 <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-<span class="n">m</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">jul</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">jul</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -4986,7 +4986,7 @@ m.fig;</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">m = Map(crs=projections.orthographic(lon=80, lat=25), globe=True, figsize=(6.5, 6.5))
 m.ocean()
-m.contourf(jul, cmap='RdYlBu_r', vmin=-40, vmax=40)
+m.contours(jul, cmap='RdYlBu_r', vmin=-40, vmax=40, filled=True)
 context(m)
 m.graticule(lon_step=30, lat_step=30)
 m.set_global()
@@ -5018,7 +5018,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="3-whole-world-projections">3. Whole-world projections<a class="anchor-link" href="#3-whole-world-projections">¶</a></h2><p>The same data on the two equal-ish world projections. <strong>Robinson</strong> with <code>pcolormesh</code>, <strong>Mollweide</strong> with <code>contourf</code> — both framed and set to the full domain.</p>
+<h2 id="3-whole-world-projections">3. Whole-world projections<a class="anchor-link" href="#3-whole-world-projections">¶</a></h2><p>The same data on the two equal-ish world projections. <strong>Robinson</strong> with <code>pcolormesh</code>, <strong>Mollweide</strong> with <code>contours</code> — both framed and set to the full domain.</p>
 </div>
 </div>
 </div>
@@ -5100,7 +5100,7 @@ m.fig;</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">mollweide</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">9.5</span><span class="p">,</span> <span class="mf">5.2</span><span class="p">))</span>
 <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-<span class="n">m</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">jan</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">jan</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -5111,7 +5111,7 @@ m.fig;</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-7">m = Map(crs=projections.mollweide(lon=0), globe=True, figsize=(9.5, 5.2))
 m.ocean()
-m.contourf(jan, cmap='RdYlBu_r', vmin=-40, vmax=40)
+m.contours(jan, cmap='RdYlBu_r', vmin=-40, vmax=40, filled=True)
 context(m)
 m.graticule(lon_step=60, lat_step=30)
 m.set_global()
@@ -5170,7 +5170,7 @@ m.fig;</div>
 <span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="p">[(</span><span class="n">axL</span><span class="p">,</span> <span class="n">jan</span><span class="p">,</span> <span class="s1">'January'</span><span class="p">),</span> <span class="p">(</span><span class="n">axR</span><span class="p">,</span> <span class="n">jul</span><span class="p">,</span> <span class="s1">'July'</span><span class="p">)]:</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">month</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">month</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">45</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -5182,7 +5182,7 @@ m.fig;</div>
 for ax, month, label in [(axL, jan, 'January'), (axR, jul, 'July')]:
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True, ax=ax)
     m.ocean()
-    m.contourf(month, cmap='RdYlBu_r', vmin=-40, vmax=40)
+    m.contours(month, cmap='RdYlBu_r', vmin=-40, vmax=40, filled=True)
     context(m)
     m.graticule(lon_step=45, lat_step=30)
     m.set_global()
@@ -5241,7 +5241,7 @@ fig.tight_layout(); fig;</div>
 <span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">9</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axs</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">places</span><span class="p">):</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="n">lat</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
     <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -5254,7 +5254,7 @@ fig.tight_layout(); fig;</div>
 fig, axs = plt.subplots(2, 2, figsize=(9, 9))
 for ax, (name, lon, lat) in zip(axs.ravel(), places):
     m = Map(crs=projections.orthographic(lon=lon, lat=lat), globe=True, ax=ax)
-    m.imshow(relief, cmap='terrain', vmin=-8000, vmax=8000)
+    m.field(relief, cmap='terrain', vmin=-8000, vmax=8000)
     context(m)
     m.graticule(lon_step=30, lat_step=30)
     m.set_global()
@@ -5309,7 +5309,7 @@ fig.tight_layout(); fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">50</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.5</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -5320,7 +5320,7 @@ fig.tight_layout(); fig;</div>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-10">m = Map(crs=projections.orthographic(lon=10, lat=50), globe=True, figsize=(6.5, 6.5))
-m.imshow(relief, cmap='terrain', vmin=-8000, vmax=8000)
+m.field(relief, cmap='terrain', vmin=-8000, vmax=8000)
 context(m)
 m.graticule(lon_step=10, lat_step=10)
 m.set_global()
@@ -5377,7 +5377,7 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=-</span><span class="mi">20</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">20</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.5</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -5387,7 +5387,7 @@ m.fig;</div>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-11">m = Map(crs=projections.orthographic(lon=-20, lat=20), globe=True, figsize=(6.5, 6.5))
-m.imshow(relief, cmap='terrain', vmin=-8000, vmax=8000)
+m.field(relief, cmap='terrain', vmin=-8000, vmax=8000)
 context(m)
 m.graticule(lon_step=30, lat_step=30)
 m.set_global()
@@ -5432,7 +5432,7 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">robinson</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">9.5</span><span class="p">,</span> <span class="mf">5.2</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">relief</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">8000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
@@ -5442,7 +5442,7 @@ m.fig;</div>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-12">m = Map(crs=projections.robinson(lon=0), globe=True, figsize=(9.5, 5.2))
-m.imshow(relief, cmap='terrain', vmin=-8000, vmax=8000)
+m.field(relief, cmap='terrain', vmin=-8000, vmax=8000)
 context(m)
 m.graticule(lon_step=60, lat_step=30)
 m.set_global()
@@ -5500,7 +5500,7 @@ m.fig;</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">out</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'global_elevation_globe.png'</span><span class="p">)</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=-</span><span class="mi">60</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">10</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.5</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">))</span>
 <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">elevation</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">elevation</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
 <span class="n">context</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">();</span> <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">)</span>
@@ -5511,7 +5511,7 @@ m.fig;</div>
 <div class="clipboard-copy-txt" id="cell-13">out = Path('global_elevation_globe.png')
 m = Map(crs=projections.orthographic(lon=-60, lat=10), globe=True, figsize=(6.5, 6.5))
 m.ocean()
-m.imshow(elevation, cmap='terrain', vmin=-1000, vmax=5000)
+m.field(elevation, cmap='terrain', vmin=-1000, vmax=5000)
 context(m)
 m.graticule(); m.set_global()
 m.colorbar(label='elevation (m)')

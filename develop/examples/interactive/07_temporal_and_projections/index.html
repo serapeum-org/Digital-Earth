@@ -3241,14 +3241,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4594,9 +4594,9 @@ cube = DatasetCollection.from_files(months) if _tavg.exists() else None</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="285cc2a9-8d6d-452a-a900-076666467eb4" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="6b3f8ad2-2c43-42d2-9f0a-53f66815e8c8" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('285cc2a9-8d6d-452a-a900-076666467eb4');
+var element = document.getElementById('6b3f8ad2-2c43-42d2-9f0a-53f66815e8c8');
 (function(root) {
   function now() {
     return new Date();
@@ -4853,9 +4853,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="dddc2a67-6b53-44f3-a571-206ff6c75faf" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="2063e725-6370-47a8-9537-0c05c6d1fba5" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('dddc2a67-6b53-44f3-a571-206ff6c75faf');
+var element = document.getElementById('2063e725-6370-47a8-9537-0c05c6d1fba5');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5702,7 +5702,7 @@ else:
     <span class="p">)</span>
 
     <span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"July mean temperature + graticule"</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">temp</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"inferno"</span><span class="p">)</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="s2">"Robinson"</span><span class="p">)</span><span class="o">.</span><span class="n">graticule</span><span class="p">()</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">temp</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"inferno"</span><span class="p">)</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="s2">"Robinson"</span><span class="p">)</span><span class="o">.</span><span class="n">graticule</span><span class="p">()</span>
     <span class="n">display</span><span class="p">(</span><span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">))</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">"skipped — the WorldClim sample (examples/data/global/) is not bundled with the repo"</span><span class="p">)</span>
@@ -5720,7 +5720,7 @@ if _tavg7.exists():
     )
 
     m = InteractiveMap(crs=4326, title="July mean temperature + graticule")
-    m.image(temp, cmap="inferno").projection("Robinson").graticule()
+    m.field(temp, cmap="inferno").projection("Robinson").graticule()
     display(show(m))
 else:
     print("skipped — the WorldClim sample (examples/data/global/) is not bundled with the repo")</div>

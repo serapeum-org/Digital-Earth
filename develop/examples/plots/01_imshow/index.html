@@ -3162,14 +3162,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4305,7 +4305,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="1-imshow">1 · <code>imshow</code><a class="anchor-link" href="#1-imshow">¶</a></h1><p><code>Map.imshow</code> renders a raster as <strong>a pixel grid</strong> (cleopatra <code>ArrayGlyph</code>, <code>kind="imshow"</code>). <code>Map</code> reprojects via pyramids and draws on a shared axes; <code>colorbar()</code> adds one aggregated bar.</p>
+<h1 id="1-field">1 · <code>field</code><a class="anchor-link" href="#1-field">¶</a></h1><p><code>Map.field</code> renders a raster as <strong>a pixel grid</strong> (cleopatra <code>ArrayGlyph</code>, <code>kind="imshow"</code>). <code>Map</code> reprojects via pyramids and draws on a shared axes; <code>colorbar()</code> adds one aggregated bar.</p>
 </div>
 </div>
 </div>
@@ -4374,7 +4374,7 @@ ds = Dataset.read_file(DEM)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Draw the Lisbon DEM with <code>Map.imshow</code>. Honours the data extent; fastest for dense rasters.</p>
+<p>Draw the Lisbon DEM with <code>Map.field</code>. Honours the data extent; fastest for dense rasters.</p>
 </div>
 </div>
 </div>
@@ -4398,13 +4398,13 @@ ds = Dataset.read_file(DEM)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'imshow'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">m = Map(crs=ds.epsg, figsize=(9, 7))
-m.imshow(ds, cmap='terrain')
+m.field(ds, cmap='terrain')
 m.colorbar(label='elevation (m)')
 m.set_title('imshow')
 m.fig;</div>

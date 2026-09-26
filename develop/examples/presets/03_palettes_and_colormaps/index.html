@@ -3241,14 +3241,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4550,14 +4550,14 @@ available_palettes()</div>
 <span class="nb">print</span><span class="p">(</span><span class="n">pal</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">'|'</span><span class="p">,</span> <span class="n">pal</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="s1">'|'</span><span class="p">,</span> <span class="n">pal</span><span class="o">.</span><span class="n">colors</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span> <span class="s1">'...'</span><span class="p">)</span>
 <span class="n">cmap</span> <span class="o">=</span> <span class="n">LinearSegmentedColormap</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span><span class="n">pal</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">pal</span><span class="o">.</span><span class="n">colors</span><span class="p">))</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'palette: '</span> <span class="o">+</span> <span class="n">pal</span><span class="o">.</span><span class="n">name</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">pal = get_palette('diverging_blue_red')
 print(pal.name, '|', pal.kind, '|', pal.colors[:3], '...')
 cmap = LinearSegmentedColormap.from_list(pal.name, list(pal.colors))
 m = Map(crs=dem.epsg, figsize=(9, 7))
-m.imshow(dem, cmap=cmap)
+m.field(dem, cmap=cmap)
 m.colorbar(label='elevation (m)'); m.set_title('palette: ' + pal.name); m.fig;</div>
 </div>
 </div>
@@ -4615,12 +4615,12 @@ m.colorbar(label='elevation (m)'); m.set_title('palette: ' + pal.name); m.fig;</
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">maps</span><span class="p">,</span> <span class="p">[</span><span class="s1">'batlow'</span><span class="p">,</span> <span class="s1">'broc'</span><span class="p">,</span> <span class="s1">'hawaii'</span><span class="p">,</span> <span class="s1">'davos'</span><span class="p">,</span> <span class="s1">'imola'</span><span class="p">,</span> <span class="s1">'bilbao'</span><span class="p">]):</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">name</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">name</span><span class="p">);</span> <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
 <span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">fig, maps = grid(2, 3, crs=dem.epsg, figsize=(13, 8))
 for m, name in zip(maps, ['batlow', 'broc', 'hawaii', 'davos', 'imola', 'bilbao']):
-    m.imshow(dem, style=name); m.set_title(name)
+    m.field(dem, style=name); m.set_title(name)
 fig;</div>
 </div>
 </div>
@@ -4672,15 +4672,15 @@ fig;</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">diverging</span> <span class="o">=</span> <span class="n">make_diverging</span><span class="p">(</span><span class="s1">'#2166ac'</span><span class="p">,</span> <span class="s1">'#b2182b'</span><span class="p">)</span>
 <span class="n">ocean</span> <span class="o">=</span> <span class="n">perceptual_colormap</span><span class="p">(</span><span class="s1">'ocean'</span><span class="p">,</span> <span class="p">[</span><span class="s1">'#001219'</span><span class="p">,</span> <span class="s1">'#005f73'</span><span class="p">,</span> <span class="s1">'#0a9396'</span><span class="p">,</span> <span class="s1">'#94d2bd'</span><span class="p">,</span> <span class="s1">'#e9d8a6'</span><span class="p">])</span>
 <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">diverging</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'make_diverging'</span><span class="p">)</span>
-<span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">ocean</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'perceptual_colormap'</span><span class="p">)</span>
+<span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">diverging</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'make_diverging'</span><span class="p">)</span>
+<span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">ocean</span><span class="p">);</span> <span class="n">maps</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'perceptual_colormap'</span><span class="p">)</span>
 <span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">diverging = make_diverging('#2166ac', '#b2182b')
 ocean = perceptual_colormap('ocean', ['#001219', '#005f73', '#0a9396', '#94d2bd', '#e9d8a6'])
 fig, maps = grid(1, 2, crs=dem.epsg, figsize=(13, 5))
-maps[0].imshow(dem, cmap=diverging); maps[0].set_title('make_diverging')
-maps[1].imshow(dem, cmap=ocean); maps[1].set_title('perceptual_colormap')
+maps[0].field(dem, cmap=diverging); maps[0].set_title('make_diverging')
+maps[1].field(dem, cmap=ocean); maps[1].set_title('perceptual_colormap')
 fig;</div>
 </div>
 </div>

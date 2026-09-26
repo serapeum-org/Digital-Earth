@@ -3294,14 +3294,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../reference/renamed-names/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Renamed names
   
 
     
@@ -4847,14 +4847,14 @@ fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlGnBu'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlGnBu'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">quiver</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">quiverkey</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="s1">'1 unit'</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mf">1.03</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'quiver + quiverkey'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">m = Map(crs=4326, figsize=(7, 5))
-m.imshow(FIELD, cmap='YlGnBu')
+m.field(FIELD, cmap='YlGnBu')
 m.quiver(U, V)
 m.quiverkey(1.0, '1 unit', x=0.9, y=1.03)
 m.set_title('quiver + quiverkey')
@@ -4907,7 +4907,7 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
 <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">lon_</span><span class="p">,</span> <span class="n">lat_</span> <span class="ow">in</span> <span class="p">[(</span><span class="s1">'Paris'</span><span class="p">,</span> <span class="mf">2.35</span><span class="p">,</span> <span class="mf">48.85</span><span class="p">),</span> <span class="p">(</span><span class="s1">'Berlin'</span><span class="p">,</span> <span class="mf">13.4</span><span class="p">,</span> <span class="mf">52.5</span><span class="p">),</span> <span class="p">(</span><span class="s1">'Madrid'</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.7</span><span class="p">,</span> <span class="mf">40.4</span><span class="p">)]:</span>
     <span class="n">m</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">lon_</span><span class="p">,</span> <span class="n">lat_</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">ha</span><span class="o">=</span><span class="s1">'center'</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">'black'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">46.5</span><span class="p">,</span> <span class="s1">'Alps'</span><span class="p">,</span> <span class="n">xytext</span><span class="o">=</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">30</span><span class="p">),</span> <span class="n">textcoords</span><span class="o">=</span><span class="s1">'offset points'</span><span class="p">,</span>
@@ -4916,7 +4916,7 @@ m.fig;</div>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-6">m = Map(crs=4326, figsize=(7, 5))
-m.imshow(FIELD, cmap='terrain')
+m.field(FIELD, cmap='terrain')
 for name, lon_, lat_ in [('Paris', 2.35, 48.85), ('Berlin', 13.4, 52.5), ('Madrid', -3.7, 40.4)]:
     m.text(lon_, lat_, name, ha='center', fontsize=9, color='black')
 m.annotate(10.0, 46.5, 'Alps', xytext=(20, 30), textcoords='offset points',
@@ -4979,7 +4979,7 @@ m.fig;</div>
 <span class="p">)</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 <span class="n">m</span><span class="o">.</span><span class="n">stock_img</span><span class="p">(</span><span class="n">backdrop</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'Greys'</span><span class="p">)</span>    <span class="c1"># backdrop, drawn beneath everything</span>
-<span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">HOLED</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">)</span>        <span class="c1"># data with a hole -&gt; backdrop shows through</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">HOLED</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">)</span>        <span class="c1"># data with a hole -&gt; backdrop shows through</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'stock_img() backdrop visible through the data hole'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
@@ -4992,7 +4992,7 @@ backdrop = Dataset.from_array(
 )
 m = Map(crs=4326, figsize=(7, 5))
 m.stock_img(backdrop, cmap='Greys')    # backdrop, drawn beneath everything
-m.imshow(HOLED, cmap='viridis')        # data with a hole -&gt; backdrop shows through
+m.field(HOLED, cmap='viridis')        # data with a hole -&gt; backdrop shows through
 m.set_title('stock_img() backdrop visible through the data hole')
 m.fig;</div>
 </div>
@@ -5019,7 +5019,7 @@ m.fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="6b-labelled-contours-mapcontourlabelstrue">6b. Labelled contours — <code>Map.contour(labels=True)</code><a class="anchor-link" href="#6b-labelled-contours-mapcontourlabelstrue">¶</a></h2><p>cleopatra 0.14.0 adds inline contour labels; <code>Map.contour(labels=True)</code> draws them (pass <code>label_kw</code> to tune <code>fmt</code>/<code>fontsize</code>). <code>contourf</code> ignores <code>labels</code> (filled contours aren't line-labelled). The unstructured equivalent <code>Map.tricontour(labels=True)</code> labels triangulated line contours the same way (cleopatra 0.15.0).</p>
+<h2 id="6b-labelled-contours-mapcontourslabelstrue">6b. Labelled contours — <code>Map.contours(labels=True)</code><a class="anchor-link" href="#6b-labelled-contours-mapcontourslabelstrue">¶</a></h2><p>cleopatra 0.14.0 adds inline contour labels; <code>Map.contours(labels=True)</code> draws them (pass <code>label_kw</code> to tune <code>fmt</code>/<code>fontsize</code>). A filled contour set ignores <code>labels</code> (filled contours aren't line-labelled). The unstructured equivalent <code>Map.tricontour(labels=True)</code> labels triangulated line contours the same way (cleopatra 0.15.0).</p>
 </div>
 </div>
 </div>
@@ -5043,14 +5043,14 @@ m.fig;</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">m</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlGnBu'</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">contour</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gray'</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">label_kw</span><span class="o">=</span><span class="p">{</span><span class="s1">'fmt'</span><span class="p">:</span> <span class="s1">'</span><span class="si">%.0f</span><span class="s1">'</span><span class="p">,</span> <span class="s1">'fontsize'</span><span class="p">:</span> <span class="mi">8</span><span class="p">})</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlGnBu'</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gray'</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">label_kw</span><span class="o">=</span><span class="p">{</span><span class="s1">'fmt'</span><span class="p">:</span> <span class="s1">'</span><span class="si">%.0f</span><span class="s1">'</span><span class="p">,</span> <span class="s1">'fontsize'</span><span class="p">:</span> <span class="mi">8</span><span class="p">})</span>
 <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'contour(labels=True) — inline isoline labels'</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">;</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-8">m = Map(crs=4326, figsize=(7, 5))
-m.contourf(FIELD, cmap='YlGnBu', levels=10)
-m.contour(FIELD, levels=10, cmap='gray', labels=True, label_kw={'fmt': '%.0f', 'fontsize': 8})
+m.contours(FIELD, cmap='YlGnBu', levels=10, filled=True)
+m.contours(FIELD, levels=10, cmap='gray', labels=True, label_kw={'fmt': '%.0f', 'fontsize': 8})
 m.set_title('contour(labels=True) — inline isoline labels')
 m.fig;</div>
 </div>
@@ -5103,7 +5103,7 @@ m.fig;</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
 <span class="n">im</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">maps</span><span class="p">):</span>
-    <span class="n">im</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+    <span class="n">im</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">FIELD</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">'panel </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
 <span class="n">shared_colorbar</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">im</span><span class="p">,</span> <span class="n">maps</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">'value'</span><span class="p">)</span>
 <span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="s1">'grid(2, 2) with a shared colorbar'</span><span class="p">)</span>
@@ -5112,7 +5112,7 @@ m.fig;</div>
 <div class="clipboard-copy-txt" id="cell-9">fig, maps = grid(2, 2, crs=4326, figsize=(9, 7))
 im = None
 for k, m in enumerate(maps):
-    im = m.imshow(FIELD, cmap='RdYlBu_r', vmin=0, vmax=30)
+    im = m.field(FIELD, cmap='RdYlBu_r', vmin=0, vmax=30)
     m.set_title(f'panel {k}')
 shared_colorbar(fig, im, maps, label='value')
 fig.suptitle('grid(2, 2) with a shared colorbar')
