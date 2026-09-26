@@ -554,10 +554,11 @@ class DashboardMixin(_MixinBase):
 
         The toggle order follows **draw** order — the order `layers` is in, which is the band each layer's
         kind declares and then the order they were built in within that band, so a basemap added last is
-        still the first toggle. Drag-reorder is **not implemented**: reordering needs a stable
-        handle per layer (roadmap IN-1; the static twin is #216), which the registry does not yet give, so
-        ``reorder=True`` is refused outright rather than accepted and ignored. That is also why ``reorder``
-        is not one of the ``controls``: it names a manipulation no tier can offer, not a widget.
+        still the first toggle. Drag-reorder is **not implemented**, and the reason is the **widget**, not
+        the operation: reordering a layer is ``move_layer(layer_id, index)``, which this tier has, but no tier
+        builds the drag control a switcher would need to expose it — so ``reorder=True`` is refused outright
+        rather than accepted and ignored. That is also why ``reorder`` is not one of the ``controls``: it would
+        advertise a control every tier would then have to refuse.
 
         Bokeh renders tiles in EPSG:3857 only, so the basemap switch is Web-Mercator-only — and which
         way that lands depends on whether it was *asked for*. Left at the default ``controls`` the switch
@@ -610,8 +611,8 @@ class DashboardMixin(_MixinBase):
                 ['0: Image', '1: Points']
 
                 ```
-            - ``reorder=True`` is refused outright: the registry has no stable per-layer handle to
-              reorder by, and silently ignoring the flag was how the control looked inert:
+            - ``reorder=True`` is refused outright: the operation exists as ``move_layer``, but no tier
+              builds the drag control, and silently ignoring the flag was how the control looked inert:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> m = InteractiveMap().field(dem)                            # doctest: +SKIP
@@ -657,8 +658,9 @@ class DashboardMixin(_MixinBase):
         self._flush_deferred_tiles()
         if reorder:
             raise NotImplementedError(
-                "layer_control(reorder=True) is not implemented — reordering needs a stable per-layer "
-                "handle (roadmap IN-1; static twin #216) before draw order can be manipulated. Pass reorder=False "
+                "layer_control(reorder=True) is not implemented — the operation is move_layer(layer_id, "
+                "index), which this tier has, but no tier builds the drag control a switcher would need to "
+                "expose it. Pass reorder=False "
                 "(the default); the toggles follow draw order — each layer's band, then the order you "
                 "built in within that band."
             )
