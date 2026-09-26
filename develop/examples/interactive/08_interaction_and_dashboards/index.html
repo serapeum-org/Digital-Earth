@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4609,9 +4609,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="43134bdd-93d0-4f3f-b2fd-b8414081e519" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="9a3646f1-0ef1-49ed-9174-33b506455700" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('43134bdd-93d0-4f3f-b2fd-b8414081e519');
+var element = document.getElementById('9a3646f1-0ef1-49ed-9174-33b506455700');
 (function(root) {
   function now() {
     return new Date();
@@ -4868,9 +4868,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="9052098a-1fe7-4b3c-974c-09b62819acbc" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="41f0adec-2a58-429c-ab2b-2af294df58ee" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('9052098a-1fe7-4b3c-974c-09b62819acbc');
+var element = document.getElementById('41f0adec-2a58-429c-ab2b-2af294df58ee');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5737,7 +5737,7 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="layer_control-a-layer-panel"><code>layer_control</code> — a layer panel<a class="anchor-link" href="#layer_control-a-layer-panel">¶</a></h3><p><code>layer_control</code> wraps the map in a Panel app with opacity sliders and a basemap switch (live only); the static image shows the composed map.</p>
+<h3 id="layer_control-a-layer-panel"><code>layer_control</code> — a layer panel<a class="anchor-link" href="#layer_control-a-layer-panel">¶</a></h3><p><code>layer_control</code> builds a Panel app with per-layer toggles, an opacity slider and a basemap switch, keeps it on the map, and returns the map so the call chains; read the app back from <code>layer_control_panel</code> (live only). The static image shows the composed map.</p>
 </div>
 </div>
 </div>
@@ -5762,12 +5762,12 @@ show(m)</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"layer control"</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">tiles</span><span class="p">(</span><span class="s2">"CartoLight"</span><span class="p">)</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">9</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
-<span class="n">app</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">layer_control</span><span class="p">()</span>         <span class="c1"># a Panel app (live only)</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">layer_control</span><span class="p">()</span><span class="o">.</span><span class="n">layer_control_panel</span>   <span class="c1"># the Panel app it built (live only)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">m = InteractiveMap(crs=3857, title="layer control")
 m.tiles("CartoLight").points(gauges, value_column="discharge", size=9, cmap="plasma")
-app = m.layer_control()         # a Panel app (live only)
+app = m.layer_control().layer_control_panel   # the Panel app it built (live only)
 show(m)</div>
 </div>
 </div>
@@ -5928,9 +5928,9 @@ show(m)</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="06153b26-5458-4d43-83fe-b0781111b606" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="0d17bef8-aff9-4f1c-8a0d-e7ae613c2c37" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('06153b26-5458-4d43-83fe-b0781111b606');
+var element = document.getElementById('0d17bef8-aff9-4f1c-8a0d-e7ae613c2c37');
 (function(root) {
   function now() {
     return new Date();
@@ -6205,9 +6205,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="3a003f40-32ed-43c5-bfb7-c3b2fe6edc77" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="88ef7b48-4223-47ac-9111-17bebdfea8ee" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('3a003f40-32ed-43c5-bfb7-c3b2fe6edc77');
+var element = document.getElementById('88ef7b48-4223-47ac-9111-17bebdfea8ee');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
