@@ -16,6 +16,7 @@ from dataclasses import replace as with_fields
 
 import numpy as np
 import pytest
+from matplotlib.text import Text
 from pyramids.feature import FeatureCollection
 
 from digitalearth.base.custom import MissingObject
@@ -1417,12 +1418,12 @@ class TestAskingWhetherALayerIsDrawn:
         )
 
     def test_a_layer_with_no_addressable_artist_reads_back_drawn(self):
-        """A decoration that leaves nothing to switch off has nothing that could have been switched off.
+        """A decoration nobody switched off, with nothing to switch off, is still drawn.
 
         Test scenario:
             A graticule is described before the projection frame draws its lines, so between the two it
-            owns no artists at all. `all()` over nothing is `True`, which is the honest answer — a reader
-            that treated an empty record as hidden would report an unframed globe's grid as off.
+            owns no artists at all. Nothing has been asked of it, so the answer is `True` — a reader that
+            treated an absence as hidden would report an unframed globe's grid as off.
         """
         canvas = Map(crs=projections.orthographic(-9, 39), globe=True)
         canvas.graticule(lon_step=30.0, lat_step=30.0)
@@ -1433,3 +1434,75 @@ class TestAskingWhetherALayerIsDrawn:
             f"the frame has not run, so the layer owns nothing; got {owned}"
         )
         assert answer is True, "a layer with no artists must not read back hidden"
+
+    def test_a_layer_with_no_artist_reads_back_hidden_once_it_is_hidden(self):
+        """The half `all(())` got wrong: an empty aggregate answered `True` whatever was asked.
+
+        Test scenario:
+            A **flat** graticule owns no artists at all — its lines reach the axes with a globe frame, and a
+            flat map has none — so `all(())` made `set_visible(id, False)` followed by `is_visible(id)`
+            answer `True` for the layer it had just hidden. No pixel was wrong either way, and that is the
+            point: what was wrong was the renderer's *answer*, which is what `Scene.set_visible`, the
+            behavioural conformance suite and any layer switcher read. Measured at the reviewed HEAD: `True`.
+        """
+        flat = Map(crs=4326)
+        flat.graticule(lon_step=30.0, lat_step=30.0)
+        owned = flat._renderer.drawn["graticule-1"].artists
+        flat.set_visible("graticule-1", False)
+        answer = flat._renderer.is_visible("graticule-1")
+        flat.close()
+        assert owned == (), f"a flat graticule owns no artists; got {owned}"
+        assert answer is False, "a layer asked to hide must not read back drawn"
+
+    def test_a_layer_with_no_artist_comes_back_on(self):
+        """The other direction, so the check above cannot be passed by answering `False` always.
+
+        Test scenario:
+            The remembered answer is a record of the last request, not a latch.
+        """
+        flat = Map(crs=4326)
+        flat.graticule(lon_step=30.0, lat_step=30.0)
+        flat.set_visible("graticule-1", False)
+        answer = flat.set_visible("graticule-1")._renderer.is_visible("graticule-1")
+        flat.close()
+        assert answer is True, "a layer switched back on must read back drawn"
+
+    def test_a_layer_drawn_again_does_not_inherit_what_was_asked_of_the_last_one(self):
+        """An id is reserved only while the layer is on the figure, so an answer must not outlive it.
+
+        Test scenario:
+            The record of what was asked is keyed by layer id, and an id is handed back when its layer is
+            removed (`free_layer_id`). A remembered `False` left behind would answer for whatever took the
+            id next — a layer nobody hid, reported hidden.
+        """
+        flat = Map(crs=4326)
+        flat.graticule(lon_step=30.0, lat_step=30.0, name="grid")
+        flat.set_visible("grid", False)
+        flat.remove_layer("grid")
+        flat.graticule(lon_step=30.0, lat_step=30.0, name="grid")
+        answer = flat._renderer.is_visible("grid")
+        flat.close()
+        assert answer is True, "a new layer inherited the answer the old one left"
+
+    def test_hiding_a_layer_hides_every_artist_it_owns(self, drawn_map):
+        """Read the artists, not the aggregate: a half-applied hide reads clean from `is_visible`.
+
+        Args:
+            drawn_map: A map whose renderer is under test.
+
+        Test scenario:
+            A layer can own several artists — a limb-split coastline is one polyline per piece — and
+            `is_visible` is `all(...)` over them, so hiding only the first already answers `False`. A check
+            that read the aggregate would pass a hide that left half the layer on the figure, which is why
+            this reads each artist. The pair stands in for such a layer: nothing a builder here draws owns
+            two artists a test can reach as cheaply, and what is under test is the loop, not the drawer.
+        """
+        first, second = Text(0.0, 0.0, "one"), Text(1.0, 1.0, "two")
+        renderer = drawn_map._renderer
+        renderer._drawn["pair"] = DrawnLayer(
+            artist=first, glyph=None, artists=(first, second)
+        )
+        renderer.set_visible("pair", False)
+        assert [first.get_visible(), second.get_visible()] == [False, False], (
+            "every artist a layer owns is hidden with it"
+        )

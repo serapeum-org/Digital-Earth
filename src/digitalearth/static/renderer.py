@@ -686,6 +686,10 @@ class Renderer:
         """
         self._scene = scene
         self._drawn: Dict[str, DrawnLayer] = {}
+        #: The visibility asked of a layer that owns **no** artist to carry it, by layer id. A graticule is
+        #: the one that gets there (see :meth:`is_visible`); every other layer's flag lives on its artists,
+        #: where matplotlib reads it, and is not duplicated here.
+        self._asked: Dict[str, bool] = {}
 
     @property
     def drawn(self) -> Mapping[str, DrawnLayer]:
@@ -729,6 +733,10 @@ class Renderer:
         if drawn is None:
             partial.undo()
             return None
+        # Before the record, so a layer drawn again does not inherit what was asked of the one that held
+        # this id before it: the ask is only consulted for a layer with no artist, where nothing else could
+        # correct it.
+        self._asked.pop(layer_id, None)
         self._drawn[layer_id] = drawn
         if not figure.layers.is_visible(layer_id):
             self.set_visible(layer_id, False)
@@ -1029,6 +1037,9 @@ class Renderer:
             layer_id: The layer to remove. One that was never drawn — skipped, or described but not yet
                 rendered — is ignored, so removing a layer twice is harmless.
         """
+        # First, and unconditionally: a layer that never drew has no entry in `_drawn` to reach the body
+        # below, and its ask would outlive it and answer for whatever took the id next.
+        self._asked.pop(layer_id, None)
         drawn = self._drawn.pop(layer_id, None)
         if drawn is None:
             return
@@ -1039,13 +1050,26 @@ class Renderer:
     def set_visible(self, layer_id: str, visible: bool) -> None:
         """Show or hide every artist drawn for a layer.
 
+        **Every** artist, not the first: a layer can own several — a limb-split coastline is one polyline per
+        piece — and they are one layer to a viewer, so a half-applied hide leaves part of the layer on the
+        figure while :meth:`is_visible` already answers ``False`` over the aggregate.
+
         Args:
             layer_id: The layer to toggle. An id nothing was drawn for is ignored.
-            visible: Whether it is drawn.
+            visible: Whether it is drawn. For a layer that owns **no** artist the request is *remembered*
+                rather than written anywhere, because there is nothing to write it to — see
+                :meth:`is_visible`.
         """
         drawn = self._drawn.get(layer_id)
         if drawn is None:
             return
+        if not drawn.artists:
+            # Nothing on the axes carries the flag, so the renderer carries it instead. Without this a
+            # layer asked to hide answered `True` when asked back, because `all(())` is `True` — and
+            # `Scene.set_visible`, whose whole contract is that this answer can be trusted, inherited that.
+            self._asked[layer_id] = bool(visible)
+            return
+        self._asked.pop(layer_id, None)
         for artist in drawn.artists:
             _set_visible(artist, visible)
 
@@ -1060,11 +1084,18 @@ class Renderer:
             layer_id: The layer to ask about.
 
         Returns:
-            ``True`` when every artist the layer owns is on. A layer that owns no artist answers ``True``
-            as well: there is nothing that could have been switched off. A graticule is the one that does —
-            its lines reach the axes with the globe frame, so it owns none until
-            :meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` has run, and none at
-            all on a flat map.
+            ``True`` when every artist the layer owns is on.
+
+            **A layer that owns no artist answers what was last asked of it**, and ``True`` when nothing has
+            been. A graticule is the one that gets there: its lines reach the axes with the globe frame, so it
+            owns none until
+            :meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` has run, and none at all
+            on a flat map. The answer used to be ``all(())`` — unconditionally ``True`` — so a flat graticule
+            described ``visible=False`` read back as drawn, and ``set_visible(id, False)`` followed by this
+            could answer ``True`` for the layer it had just hidden. Nothing was drawn either way, so no pixel
+            was wrong; the renderer's *answer* was, and that answer is what the behavioural conformance suite
+            and a layer switcher read. An unframed globe's grid still reads ``True``, because nobody asked for
+            it to be off — which is the case the empty aggregate got right.
 
         Raises:
             KeyError: when nothing was drawn for `layer_id`, naming it. A layer the axes does not hold has
@@ -1098,6 +1129,8 @@ class Renderer:
                 f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the static "
                 f"tier holds {sorted(self._drawn)}"
             )
+        if not drawn.artists:
+            return self._asked.get(layer_id, True)
         return all(_is_visible(artist) for artist in drawn.artists)
 
     def band_for(self, layer: LayerSpec) -> str:
