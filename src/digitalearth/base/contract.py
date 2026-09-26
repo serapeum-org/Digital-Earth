@@ -330,10 +330,17 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # were listed here against order 23, which has now built all six: the tier answers to each
                 # over its own renderer, through `Scene._change`.
                 # `set_bounds` was listed here, "framed by set_extent(bbox) here, which neither pads nor
-                # fits the data". Order 27a took the *name*: the tier answers to `set_bounds` and returns
-                # `self`. What it still does not take is `padding`, and it
-                # has no `None` that fits the data — that half is auto-framing, and `KEYWORD_SHORTFALLS`
-                # records it against the framing order so the rename cannot be read as the capability.
+                # fits the data". Orders 27a and 26 between them built all of it: the tier answers to
+                # `set_bounds`, returns `self`, takes `padding`, and fits the figure to its own data on
+                # `None` (`static/maps/projection.py`'s `_fitted_box`). The `KEYWORD_SHORTFALLS` row that
+                # recorded the missing half came off with it, so nothing is owed on this name — this comment
+                # went on citing that record after it was gone, and claiming the two capabilities were still
+                # missing, for a release (round 3, L3).
+                # What was owing after that was the *argument*, not a capability: the tier read matplotlib's
+                # `[xmin, xmax, ymin, ymax]` under the name `bbox` while the other two read
+                # `bounds=(west, south, east, north)`, so one call framed two rectangles. That is fixed
+                # rather than tracked — a Core name meaning two things is a broken contract, and there is no
+                # order to wait for.
             }
         ),
     }
