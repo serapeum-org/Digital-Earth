@@ -32,6 +32,7 @@ from digitalearth.three_d.bigdata import (
     REDUCTIONS,
     UNREDUCED,
     reduce_surface,
+    reduce_volume,
 )
 from digitalearth.three_d.renderer import DRAWN_KINDS
 from digitalearth.three_d.terrain import ELEVATION
@@ -504,3 +505,107 @@ class TestTheKindsWithNoRouteSaySo:
             scene.globe(_dem(40), coastlines=False)
         scene.close()
         assert "raster" in caplog.text, caplog.text
+
+
+class TestAReductionNeverClaimsAnOvershootAsASuccess:
+    """R2-H6 — the one postcondition both routes document: the result is at or under the budget.
+
+    `reduce_volume` derived a single rate from the cube root of the cell ratio and applied it to all three
+    axes. `floor(p * r)` is 0 for an axis of one cell at any rate below 1, and the `maximum(..., 1)` clamp
+    that rescued the empty axis put the product back **over** the budget: a `(1, 1000, 1000)` volume came
+    back at 628 849 cells against a 500 000 budget, and the log reported the overshoot in the same words it
+    reports a reduction that worked. A budget is the only protection this module offers against the page
+    #207 measured at 39 MB, so a reduction that reports success while exceeding it is worse than one that
+    refuses.
+    """
+
+    #: Volumes over the default budget with at least one axis too thin to take the rate — the case the
+    #: clamp reached and the existing suite's cubes, whose every axis shrinks, never did.
+    THIN = [(1, 1000, 1000), (1, 2000, 500), (2, 800, 800)]
+
+    @staticmethod
+    def _grid(shape):
+        """Return an `ImageData` of `shape` cells carrying a cell field.
+
+        Args:
+            shape: The cube's shape, in cells per axis.
+
+        Returns:
+            The grid `reduce_volume` is given.
+        """
+        grid = pv.ImageData(dimensions=np.asarray(shape[::-1]) + 1)
+        grid.cell_data[FIELD] = np.zeros(int(np.prod(shape)), dtype="float64")
+        return grid
+
+    @pytest.mark.parametrize("shape", THIN)
+    def test_a_thin_volume_comes_back_at_or_under_the_budget(self, shape):
+        """The postcondition, on the shape the clamp used to rescue by breaking it.
+
+        Args:
+            shape: The cube's shape in cells.
+        """
+        reduced = reduce_volume(
+            self._grid(shape),
+            DEFAULT_CELL_BUDGET,
+            kind="volume",
+            scalars=FIELD,
+            preference="cell",
+        )
+        assert reduced.n_cells <= DEFAULT_CELL_BUDGET, (
+            f"a {shape} volume reduced to {reduced.n_cells} cells, over the "
+            f"{DEFAULT_CELL_BUDGET} budget"
+        )
+
+    @pytest.mark.parametrize("shape", THIN)
+    def test_each_thin_volume_really_crosses_the_budget(self, shape):
+        """Without this the postcondition above would hold for a fixture that never needed reducing.
+
+        Args:
+            shape: The cube's shape in cells.
+        """
+        cells = self._grid(shape).n_cells
+        assert cells > DEFAULT_CELL_BUDGET, (
+            f"a {shape} volume has {cells} cells, already inside the {DEFAULT_CELL_BUDGET} budget"
+        )
+
+    def test_a_small_budget_on_a_thin_volume_is_honoured_too(self):
+        """A budget 10x smaller must not overshoot 10x: the rate is recomputed, not clamped."""
+        reduced = reduce_volume(
+            self._grid((1, 1000, 1000)),
+            SMALL,
+            kind="volume",
+            scalars=FIELD,
+            preference="cell",
+        )
+        assert reduced.n_cells <= SMALL, (
+            f"a budget of {SMALL} produced {reduced.n_cells} cells"
+        )
+
+    def test_the_drawn_grid_of_a_thin_volume_is_under_the_budget(self):
+        """Through the public builder, read off the `ImageData` the plotter was handed."""
+        scene = Scene3D(off_screen=True)
+        scene.volume(np.zeros((1, 400, 400)), big_data_threshold=SMALL)
+        cells = scene.mesh_of("volume-1").n_cells
+        scene.close()
+        assert cells <= SMALL, (
+            f"the plotter was handed {cells} cells against a {SMALL} budget"
+        )
+
+    def test_a_budget_no_grid_can_meet_is_reported_as_unreached(self, caplog):
+        """The honest half: one cell per axis is the floor, so a budget under it cannot be met.
+
+        Args:
+            caplog: Captures the line the report logs.
+
+        Test scenario:
+            `validate_big_data_threshold(0)` returns 0, so `volume(big_data_threshold=0)` reaches this. The
+            old line said "reduced to 1,000,000" for a grid it had not changed at all.
+        """
+        grid = self._grid((1, 1000, 1000))
+        with caplog.at_level(logging.WARNING):
+            reduced = reduce_volume(
+                grid, 0, kind="volume", scalars=FIELD, preference="cell"
+            )
+        assert "could not reach" in caplog.text, (
+            f"a reduction that stayed over the budget ({reduced.n_cells} cells) reported: {caplog.text}"
+        )

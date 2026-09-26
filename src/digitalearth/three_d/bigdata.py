@@ -183,7 +183,7 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
 def reduce_volume(
     grid: Any, budget: int, *, kind: str, scalars: str, preference: str
 ) -> Any:
-    """Return `grid` with at most `budget` voxels, resampled to fewer per axis if it has more.
+    """Return `grid` at or under `budget` voxels, resampled to fewer per axis if it has more.
 
     The route for a **uniform volume**. ``resample`` is output-driven — it costs what it produces, not what it
     is given (0.01-0.06 s from 2 M to 17 M input cells, measured) — which is why a volume needs no threshold on
@@ -191,7 +191,8 @@ def reduce_volume(
 
     The target is given as explicit **dimensions** rather than a sample rate: a rate is applied to the point
     dimensions, and the budget counts cells, so rounding could land a rate-resampled grid just over the number
-    the caller asked for. Truncating the per-axis cell counts cannot.
+    the caller asked for. Truncating the per-axis cell counts cannot — provided the rate is one every axis can
+    actually take, which :func:`_resample_target` is what settles.
 
     Args:
         grid: The `pyvista.ImageData` the drawer built.
@@ -202,7 +203,9 @@ def reduce_volume(
             `ImageData` layouts is resampled.
 
     Returns:
-        The grid to draw: `grid` itself, or a resampled copy of it.
+        The grid to draw: `grid` itself, or a resampled copy of it. At or under `budget` whenever any grid can
+        be — one cell per axis is the floor, so a budget below a single cell is unreachable, and
+        :func:`_report_reduction` says so rather than reporting the overshoot as a reduction.
 
     Examples:
         - A cube over the budget comes back at or under it, still carrying its field:
@@ -217,13 +220,23 @@ def reduce_volume(
             (True, ['field'])
 
             ```
+        - A volume with one thin axis is reduced by the axes that can shrink, so the budget still holds:
+            ```python
+            >>> import numpy as np, pyvista as pv
+            >>> from digitalearth.three_d.bigdata import reduce_volume
+            >>> grid = pv.ImageData(dimensions=(1001, 1001, 2))
+            >>> grid.cell_data["field"] = np.zeros(1_000_000)
+            >>> smaller = reduce_volume(grid, 500_000, kind="volume", scalars="field", preference="cell")
+            >>> smaller.n_cells <= 500_000
+            True
+
+            ```
     """
     cells = int(grid.n_cells)
     if cells <= budget:
         return grid
     per_axis = np.maximum(np.asarray(grid.dimensions, dtype="int64") - 1, 1)
-    rate = (budget / cells) ** (1.0 / 3.0)
-    target = np.maximum((per_axis * rate).astype("int64"), 1)
+    target = _resample_target(per_axis, budget)
     smaller = grid.resample(
         dimensions=target + 1, scalars=scalars, preference=preference
     )
@@ -253,6 +266,56 @@ def report_unreduced(kind: str, drawn: Any, budget: int) -> None:
         f"{kind}: {int(cells):,} cells exceed big_data_threshold={budget:,} and this tier has no reduction "
         f"for them — {reason}. Drawn whole; a heavy scene exports to a heavy page"
     )
+
+
+def _resample_target(per_axis: np.ndarray, budget: int) -> np.ndarray:
+    """Return the per-axis cell counts to resample to, whose product is at or under `budget`.
+
+    One rate over every axis holds the budget only while no axis floors away under it. ``floor(p * r)`` is 0
+    for a one-cell axis at any rate below 1, and raising that 0 back to 1 — which it has to be, since an axis
+    of no cells has no cells to draw — multiplies the product back up by the very factor the rate had divided
+    out. Measured on the clamp this replaces: a ``(1, 1000, 1000)`` volume at a 500 000 budget came back at
+    **628 849** cells, and at a 1 000 budget at 10 000, ten times over (review R2-H6).
+
+    An axis pinned at its floor is a known factor rather than a shrinking one, so the answer is to take it out
+    of the rate and divide the budget by it, then recompute over the axes that can still shrink. That
+    converges: each pass either pins an axis — there are three — or produces a target no axis floored away,
+    and ``prod(floor(p_i * r))`` is then at most ``prod(p_i) * r ** k``, which is the room left by
+    construction.
+
+    **The floor is two cells, not one, wherever the axis has two to give.** ``ImageData.resample`` declines a
+    target of two *points* on an axis and leaves that axis exactly as it arrived — measured on PyVista 0.48.4:
+    a ``(801, 801, 3)`` grid asked for ``(585, 585, 2)`` comes back ``(585, 585, 3)``, and a 12-point cube
+    asked for ``(2, 2, 2)`` comes back unchanged, while 3 and above are honoured. So an axis that arrives with
+    two or more cells can be taken down to two and no further, and only an axis that already had one keeps it.
+
+    Args:
+        per_axis: Cells along each axis of the grid being reduced, each at least 1.
+        budget: The most cells the resampled grid may have.
+
+    Returns:
+        The per-axis cell counts to resample to, each at its floor or above. Their product is at or under
+        `budget` whenever the floors themselves are; a budget below the smallest grid ``resample`` can produce
+        has no answer, so the floors come back and :func:`_report_reduction` says the budget was not reached.
+    """
+    target = np.asarray(per_axis, dtype="int64").copy()
+    floors = np.minimum(target, 2)
+    pinned = np.zeros(target.shape, dtype=bool)
+    while True:
+        free = ~pinned
+        if not free.any():
+            return target
+        room = (
+            budget / float(np.prod(target[pinned])) if pinned.any() else float(budget)
+        )
+        rate = (room / float(np.prod(target[free]))) ** (1.0 / int(free.sum()))
+        scaled = np.floor(target * rate).astype("int64")
+        thin = free & (scaled < floors)
+        if not thin.any():
+            target[free] = scaled[free]
+            return target
+        pinned |= thin
+        target[thin] = floors[thin]
 
 
 def _triangles(mesh: Any) -> Any:
@@ -293,6 +356,17 @@ def _report_reduction(
         budget: The budget that triggered it.
         filter_name: The PyVista filter that did it.
     """
+    if after > budget:
+        # A reduction that overshot and said "reduced to N" read as a success, so a caller who saw the line
+        # believed the scene fitted (review R2-H6). What cannot be reached is reported as what it is: the
+        # floor of one cell per axis is a grid of one cell, so a budget under that has no answer, and
+        # `ImageData.resample` declines a target of two points on every axis outright (measured, PyVista
+        # 0.48.4), which leaves the grid as it was.
+        logger.warning(
+            f"{kind}: {before:,} cells exceed big_data_threshold={budget:,} and {filter_name} could not "
+            f"reach it — drawn at {after:,} cells. Raise the budget, or pass a coarser layer"
+        )
+        return
     logger.info(
         f"{kind}: {before:,} cells exceed big_data_threshold={budget:,} — reduced to {after:,} with "
         f"{filter_name} (raise the budget to draw it whole)"
