@@ -517,7 +517,8 @@ def _painted(axes: Any) -> Optional[List[Any]]:
 
     matplotlib draws artists sorted by z-order, and artists of one z-order in the order they were added —
     so that order is part of what the axes shows, and a layer put back last is painted over layers it was
-    under. The list is the one matplotlib draws from, so reordering it reorders the painting.
+    under. The list is the one matplotlib draws from, so reordering it reorders the painting **within one
+    z-order**; reaching across two takes :func:`_deal_zorders` as well.
 
     Args:
         axes: The axes being drawn on.
@@ -533,6 +534,61 @@ def _painted(axes: Any) -> Optional[List[Any]]:
     """
     children = getattr(axes, "_children", None)
     return children if isinstance(children, list) else None
+
+
+def _zorder_of(artist: Any) -> float:
+    """Return one matplotlib artist's z-order.
+
+    Args:
+        artist: The artist to ask.
+
+    Returns:
+        Its z-order, or ``0.0`` for something that carries none — matplotlib's own default.
+
+    Note:
+        The ``AttributeError`` is caught rather than asked about with ``hasattr``, for the reason
+        :func:`_set_visible` gives: a property getter can have side effects, so call and answer the failure.
+    """
+    try:
+        return float(artist.get_zorder())
+    except AttributeError:  # pragma: no cover - every matplotlib artist has one
+        return 0.0
+
+
+def _deal_zorders(arranged: List[Any]) -> None:
+    """Deal the artists' own z-orders back out along `arranged`, so the list order is the painted order.
+
+    matplotlib draws an axes' artists ``sorted(children, key=attrgetter("zorder"))`` — a **stable** sort, so
+    the list order decides only between artists that already share a z-order. Rearranging the list therefore
+    reaches the picture within one z-order and nowhere else, which was the whole of review H5: a raster
+    (``AxesImage``, z-order 0) under a point layer (``PathCollection``, z-order 1) is the ordinary
+    composition of a map, and a move between the two left the figure exactly as it had been while
+    ``layer_ids`` reported the new order.
+
+    Reaching across the z-orders means writing them, and what is written is the **same multiset** back in the
+    new positions — not a fresh scale counted off the tree. That is what keeps a move inside the layers' own
+    slice of the z stack: every value the layers held is still held, so a basemap at ``-3``, a coastline at
+    ``2.5``, a colorbar's axes and anything a caller drew straight onto :attr:`Scene.ax` keep their place
+    against the block, and only *which* layer sits at which of those values changes. It also makes a move
+    undoable, since moving the layer back deals the same values back the way they were.
+
+    Where the description and the z-orders already agree — every layer on one z-order, which is every figure
+    two layers of one kind can build — each artist is written the value it already carried and nothing moves.
+    Where they disagree, a ``zorder=`` the caller gave a layer is superseded: both it and the move say where
+    the layer is painted, and the move is the later word.
+
+    Args:
+        arranged: The layers' artists in the order the figure now describes, bottom first, each layer's own
+            artists already in the order matplotlib paints them.
+    """
+    for artist, zorder in zip(arranged, sorted(_zorder_of(held) for held in arranged)):
+        try:
+            artist.set_zorder(zorder)
+        except AttributeError:  # pragma: no cover - every matplotlib artist has one
+            logger.debug(
+                "%r cannot carry a z-order; leaving it where matplotlib paints it",
+                artist,
+            )
 
 
 @contextmanager
@@ -855,13 +911,16 @@ class Renderer:
         """Paint the layers this renderer holds in `order`, leaving every other artist where it is.
 
         ``FigureDiff`` has reported ``order`` since the seam landed and no renderer acted on it, so a
-        reorder reached every tier's *description* and none of their pictures. On this tier it does reach
-        one: matplotlib draws the artists of a single z-order in the order they were added, and
-        :func:`_painted` is that order, so re-arranging the list re-arranges the painting.
+        reorder reached every tier's *description* and none of their pictures. On this tier it reaches both,
+        in two steps: the layers' artists are re-arranged in :func:`_painted`, which matplotlib honours
+        between artists of one z-order, and then :func:`_deal_zorders` writes the layers' own z-orders back
+        out along that arrangement, which is what carries the move across two of them. Review H5: the first
+        step alone left a raster moved above a point layer still painted underneath it.
 
         The layers' own slots are refilled and nothing else moves. The axes' patch, its spines, a colorbar's
         axes and anything a caller drew straight onto :attr:`Scene.ax` are not layers, and a reorder is not
-        licence to move them.
+        licence to move them — nor to renumber them, which is why the z-orders are dealt out of the multiset
+        the layers already held rather than counted off `order`.
 
         Args:
             order: The layer ids in the draw order the figure now describes, bottom first.
@@ -878,6 +937,11 @@ class Renderer:
         blocks: Dict[str, List[Any]] = {}
         for index in slots:
             blocks.setdefault(owner[id(painted[index])], []).append(painted[index])
+        for artists in blocks.values():
+            # One layer's artists in the order matplotlib paints them, so a layer whose pieces carry
+            # different z-orders — a limb-split coastline is one, a glyph that drew its own overlay another —
+            # keeps its own stacking when `_deal_zorders` writes the block's values back out.
+            artists.sort(key=_zorder_of)
         arranged = [artist for layer_id in order for artist in blocks.get(layer_id, ())]
         if len(arranged) != len(slots):
             # An artist owned by a layer the new order does not name would be dropped from the axes by the
@@ -892,6 +956,7 @@ class Renderer:
             return
         for slot, artist in zip(slots, arranged):
             painted[slot] = artist
+        _deal_zorders(arranged)
 
     def _rollback(self, held: _Held, before: FigureSpec) -> None:
         """Put the axes and this record back the way a refused :meth:`apply` found them.
