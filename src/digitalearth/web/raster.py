@@ -1412,8 +1412,6 @@ class RasterMixin(_MixinBase):
         dataset = self._opened(data)
         styling = _styling_source(dataset, band)
         cmap_name = self._auto_cmap(styling, cmap)
-        # Carried for a key built from this band (see `_auto_units`); `None` when unknown.
-        self.last_units = self._auto_units(styling, units)
         low, high = _scan_limits(dataset, band, vmin=vmin, vmax=vmax)
         nodata = _band_nodata(dataset, band)
 
@@ -1454,6 +1452,9 @@ class RasterMixin(_MixinBase):
                 caller=caller,
             )
         )
+        # After the write, so a call refused for want of a destination leaves nothing of itself behind: a
+        # later `colorbar()` would otherwise label itself from a layer that was never built.
+        self.last_units = self._auto_units(styling, units)
         layer_id = self._layer_id("raster", name)
         if self._index_layer(
             layer_id,
