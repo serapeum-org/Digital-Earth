@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -540,17 +540,6 @@
     <span class="md-ellipsis">
       
         Default plot
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#plotting-a-numpy-array" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Plotting a NumPy array
       
     </span>
   </a>
@@ -3267,34 +3256,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/renamed-names/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Renamed names
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../reference/web_map/" class="md-nav__link">
         
   
@@ -3415,34 +3376,6 @@
     
   
     Composite stretch
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../reference/static/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    StaticGlyph
   
 
     
@@ -3681,17 +3614,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#plotting-a-numpy-array" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Plotting a NumPy array
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#figure-and-color-bar-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3769,29 +3691,33 @@
 
 
 <h1 id="plot-rasterarray"><a class="toclink" href="#plot-rasterarray">Plot raster/array</a><a class="headerlink" href="#plot-rasterarray" title="Permanent link">#</a></h1>
-<p><code>digitalearth</code> plots rasters and arrays through the <code>StaticGlyph</code> class. It
-accepts either a <a href="https://github.com/serapeum-org/pyramids">pyramids</a>
-<code>Dataset</code> or a raw NumPy array.</p>
+<p><code>digitalearth</code> plots rasters through the <code>Map</code> scene — one matplotlib figure that several layers render
+onto — or in a single call through <code>quickmap</code>. Both read a
+<a href="https://github.com/serapeum-org/pyramids">pyramids</a> <code>Dataset</code>.</p>
 <h2 id="read-the-raster"><a class="toclink" href="#read-the-raster">Read the raster</a><a class="headerlink" href="#read-the-raster" title="Permanent link">#</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="default-plot"><a class="toclink" href="#default-plot">Default plot</a><a class="headerlink" href="#default-plot" title="Permanent link">#</a></h2>
-<p>With all the default parameters, <code>StaticGlyph.plot</code> plots the dataset directly
-and returns the matplotlib <code>(fig, ax)</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">StaticGlyph</span>
+<p><code>quickmap</code> returns a finished <code>Map</code>: the raster field, a color bar, and a frame around the data.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">quickmap</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">StaticGlyph</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Flow Accumulation&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">m</span> <span class="o">=</span> <span class="n">quickmap</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Flow Accumulation&quot;</span><span class="p">)</span>
 </code></pre></div>
-<h2 id="plotting-a-numpy-array"><a class="toclink" href="#plotting-a-numpy-array">Plotting a NumPy array</a><a class="headerlink" href="#plotting-a-numpy-array" title="Permanent link">#</a></h2>
-<p>When the first argument is a <code>numpy.ndarray</code>, you must pass <code>no_data_value</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<p>Compose the same figure yourself when you want to decide what goes on it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">StaticGlyph</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">m</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">layer</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Flow Accumulation&quot;</span><span class="p">)</span>
 </code></pre></div>
+<p><code>Map(crs=...)</code> is the display CRS: every layer is reprojected to it before it is drawn, and your own
+<code>Dataset</code> is left as it was.</p>
 <h2 id="figure-and-color-bar-options"><a class="toclink" href="#figure-and-color-bar-options">Figure and color-bar options</a><a class="headerlink" href="#figure-and-color-bar-options" title="Permanent link">#</a></h2>
-<p>Styling is forwarded to the underlying <code>cleopatra.array.Array.plot</code> through
+<p>Styling is forwarded to the underlying <code>cleopatra.glyphs.gridded.array_glyph.ArrayGlyph</code> through
 <code>**kwargs</code>. Common options:</p>
 <table>
 <thead>
@@ -3812,7 +3738,7 @@ and returns the matplotlib <code>(fig, ax)</code>:</p>
 <tr>
 <td><code>title</code></td>
 <td>str</td>
-<td><code>"Total Discharge"</code></td>
+<td><code>None</code></td>
 <td>plot title</td>
 </tr>
 <tr>
@@ -3828,7 +3754,7 @@ and returns the matplotlib <code>(fig, ax)</code>:</p>
 <td>ratio controlling color-bar height</td>
 </tr>
 <tr>
-<td><code>orientation</code></td>
+<td><code>cbar_orientation</code></td>
 <td>str</td>
 <td><code>"vertical"</code></td>
 <td>color-bar orientation</td>
@@ -3842,13 +3768,13 @@ and returns the matplotlib <code>(fig, ax)</code>:</p>
 <tr>
 <td><code>cbar_label</code></td>
 <td>str</td>
-<td><code>"Color bar label"</code></td>
+<td><code>None</code></td>
 <td>color-bar label</td>
 </tr>
 <tr>
-<td><code>rotation</code></td>
+<td><code>cbar_label_rotation</code></td>
 <td>number</td>
-<td><code>-90</code></td>
+<td><code>None</code></td>
 <td>color-bar label rotation</td>
 </tr>
 <tr>
@@ -3865,25 +3791,66 @@ and returns the matplotlib <code>(fig, ax)</code>:</p>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">StaticGlyph</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Flow Accumulation map&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">title_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;terrain&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">ticks_spacing</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Flow Accumulation map&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">title_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;terrain&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">ticks_spacing</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
 </code></pre></div>
 <h2 id="color-scales"><a class="toclink" href="#color-scales">Color scales</a><a class="headerlink" href="#color-scales" title="Permanent link">#</a></h2>
-<p><code>color_scale</code> selects the normalization applied to the data:</p>
-<ol>
-<li>normal (linear) scale</li>
-<li>power scale (<code>gamma</code>)</li>
-<li><code>SymLogNorm</code> scale (<code>linthresh</code>, <code>linscale</code>)</li>
-<li><code>PowerNorm</code> scale</li>
-<li><code>BoundaryNorm</code> scale (<code>midpoint</code>)</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">StaticGlyph</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;terrain&quot;</span><span class="p">)</span>
+<p><code>color_scale</code> names the normalization applied to the data, and each scale reads its own knob:</p>
+<table>
+<thead>
+<tr>
+<th><code>color_scale</code></th>
+<th>Knob</th>
+<th>Normalization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"linear"</code></td>
+<td>—</td>
+<td>the default, straight through</td>
+</tr>
+<tr>
+<td><code>"power"</code></td>
+<td><code>gamma</code></td>
+<td><code>PowerNorm</code></td>
+</tr>
+<tr>
+<td><code>"lognorm"</code></td>
+<td>—</td>
+<td><code>LogNorm</code></td>
+</tr>
+<tr>
+<td><code>"sym_log"</code></td>
+<td><code>line_threshold</code>, <code>line_scale</code></td>
+<td><code>SymLogNorm</code></td>
+</tr>
+<tr>
+<td><code>"boundary"</code></td>
+<td><code>bounds</code></td>
+<td><code>BoundaryNorm</code></td>
+</tr>
+<tr>
+<td><code>"midpoint"</code></td>
+<td><code>midpoint</code></td>
+<td>a norm centred on <code>midpoint</code></td>
+</tr>
+<tr>
+<td><code>"equalize"</code></td>
+<td><code>samples</code></td>
+<td>histogram equalization</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">color_scale</span><span class="o">=</span><span class="s2">&quot;power&quot;</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;terrain&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="cell-value-annotations"><a class="toclink" href="#cell-value-annotations">Cell-value annotations</a><a class="headerlink" href="#cell-value-annotations" title="Permanent link">#</a></h2>
 <p>Display each cell's value as text on top of the map:</p>
@@ -3917,39 +3884,30 @@ and returns the matplotlib <code>(fig, ax)</code>:</p>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">StaticGlyph</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">display_cell_value</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">num_size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">background_color_threshold</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">ticks_spacing</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">display_cell_value</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">num_size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">background_color_threshold</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">ticks_spacing</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">)</span>
 </code></pre></div>
 <h2 id="plotting-points"><a class="toclink" href="#plotting-points">Plotting points</a><a class="headerlink" href="#plotting-points" title="Permanent link">#</a></h2>
-<p>Overlay vector points on the raster. The <code>GeoDataFrame</code> must carry an <code>id</code>
-column and share the raster's coordinate system:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">geopandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gpd</span>
+<p>Overlay vector points on the raster. <code>Map.points</code> reads a pyramids <code>FeatureCollection</code> and reprojects it to
+the display CRS, so it need not already share the raster's coordinate system:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.feature</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureCollection</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">points</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;tests/data/points.geojson&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">points</span> <span class="o">=</span> <span class="n">FeatureCollection</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;tests/data/points.geojson&quot;</span><span class="p">)</span>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">StaticGlyph</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">points</span><span class="o">=</span><span class="n">points</span><span class="p">,</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">point_color</span><span class="o">=</span><span class="s2">&quot;blue&quot;</span><span class="p">,</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">point_size</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">pid_color</span><span class="o">=</span><span class="s2">&quot;green&quot;</span><span class="p">,</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="n">pid_size</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">display_cell_value</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">ticks_spacing</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="p">)</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">display_cell_value</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ticks_spacing</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
 </code></pre></div>
-<p>See the <a href="../reference/static/">API Reference</a> for the full signature.</p>
-<div class="admonition note">
-<p class="admonition-title"><code>point_size</code> here is <code>StaticGlyph</code>'s own keyword</p>
-<p><code>StaticGlyph.plot</code> keeps <code>point_size=</code> for its point overlay. On the current <code>Map</code> API the same
-idea is spelled <code>size=</code> — <code>Map.points(features, size=100)</code> — and <code>point_size=</code> there is a
-deprecated alias. See <a href="../reference/renamed-names/">Renamed names</a>.</p>
-</div>
+<p><code>size=</code> is the marker's visual size, spelled the same way on every backend. To vary it per point, name the
+column that drives it with <code>size_column=</code> and pair that with <code>size_legend=True</code>.</p>
+<p>Work through the <a href="../examples/02_maps_and_fields/">Maps &amp; raster fields</a> example for the rest of the layer
+methods.</p>
 
 
 
