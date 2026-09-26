@@ -308,9 +308,6 @@ def _page_layer_ids(tier):
     derived from the layer's id, and a hidden one is **not called at all**; and a deck.gl layer is an entry of
     the one ``addDeckOverlay`` whose own ``visible`` property is not off.
 
-    Args:
-        tier: The map.
-
     The deck overlay is **not** read as "whatever the one call carries, last". It is interleaved, so deck.gl
     places each of its layers by the ``beforeId`` it carries: immediately beneath the style layer it names,
     in the order the overlay lists them, and on top of everything when it names nothing (or names a layer the
