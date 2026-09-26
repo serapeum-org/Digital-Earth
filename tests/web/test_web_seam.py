@@ -58,9 +58,14 @@ class TestTheTwoPathsAreDisjoint:
         assert unresolved == [], f"{unresolved} are declared drawable with no drawer"
 
     def test_a_kind_from_another_tier_is_refused_by_name(self):
-        """A figure written for another backend should say so, not fail obscurely."""
-        with pytest.raises(KeyError, match="does not draw 'terrain'"):
-            drawer_for("terrain")
+        """A figure written for another backend should say so, not fail obscurely.
+
+        Test scenario:
+            It asked about `terrain` until this tier started drawing terrain from a description. `volume` is
+            a registered kind only the 3-D tier renders, so it is what a figure written there would carry.
+        """
+        with pytest.raises(KeyError, match="does not draw 'volume'"):
+            drawer_for("volume")
 
     def test_no_builder_both_describes_and_queues_a_layer(self, points_gdf):
         """Drawing a layer twice is what a half-open seam looks like.
@@ -126,41 +131,45 @@ class TestTheTwoPathsAreDisjoint:
                 """
                 added.append(getattr(layer, "id", layer))
 
-        for entry in m.layers:
+        # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+        # and `layers` reports each described entry already resolved to the object it drew.
+        for entry in m._queued:
             m._apply_layer(Recorder(), entry)
         assert len(added) == len(set(added)), f"a layer was added twice: {added}"
         for layer_id in m.layer_ids:
             assert layer_id in added, f"{layer_id} is described but never drawn"
 
-    def test_a_kind_the_seam_has_not_reached_is_described_but_left_to_the_queue(self):
-        """The seam opens one kind at a time, so a kind it has not reached must not be drawn from its record.
+    def test_a_kind_with_no_drawer_is_described_and_not_drawn(self):
+        """Recording a layer is not the same as drawing one, and `DRAWN_KINDS` is what decides.
 
         Test scenario:
-            `DRAWN_KINDS` is a growing subset: a kind joins it in the same step its builder stops queuing
-            a closure. Drawing every described layer regardless of that list would hand an unconverted
-            kind to `drawer_for`, which refuses it by name — so a builder that has not been converted yet
-            would stop working the moment it recorded a description. Its layer is still registered; it is
-            simply drawn by its own queued closure rather than from the tree.
+            The seam opened one kind at a time, and this asked about the kind it had not reached yet —
+            `terrain`, until terrain started being drawn from its description. Every kind the tier declares
+            is drawn from one now, so what is left to ask about is a kind the tier does **not** declare:
+            drawing every described layer regardless of `DRAWN_KINDS` would hand it to `drawer_for`, which
+            refuses it by name, and turn a recorded layer into a `KeyError` from a builder that never asked
+            for one. `volume` is such a kind — registered, so `_index_layer` accepts it, and drawn by the
+            3-D tier alone.
         """
         from digitalearth.web import WebMap
 
-        unconverted = "terrain"
-        assert unconverted in CAPABILITIES.kinds, (
-            f"{unconverted} must be a kind the tier declares, or this asks nothing"
+        undrawn = "volume"
+        assert undrawn not in CAPABILITIES.kinds, (
+            f"{undrawn} must be a kind the tier does not declare, or this asks nothing"
         )
-        assert unconverted not in DRAWN_KINDS, (
-            f"{unconverted} is drawn from its description now; ask about a kind that is not"
+        assert undrawn not in DRAWN_KINDS, (
+            f"{undrawn} is drawn from its description now; ask about a kind that is not"
         )
 
         m = WebMap()
-        registered = m._index_layer("dem", "dem", kind=unconverted)
-        assert registered is True, "an unconverted kind is still a registered layer"
-        assert m.layer_ids == ["dem"], m.layer_ids
+        registered = m._index_layer("cube", "cube", kind=undrawn)
+        assert registered is True, "a kind with no drawer is still a registered layer"
+        assert m.layer_ids == ["cube"], m.layer_ids
         assert m._renderer.drawn == {}, (
-            f"an unconverted kind was drawn from its description: {m._renderer.drawn}"
+            f"a kind with no drawer was drawn from its description: {m._renderer.drawn}"
         )
         assert m._queued == [], (
-            f"an unconverted kind was queued as a description: {m._queued}"
+            f"a kind with no drawer was queued as a description: {m._queued}"
         )
 
     def test_a_custom_layer_hands_the_widget_no_source_of_its_own(self):
@@ -288,6 +297,50 @@ class TestAFigureSurvivesBeingWrittenDown:
         drawn = elsewhere._renderer.draw_layer(reloaded, "grid")
         assert drawn is not None, "a reloaded description must be drawable"
         assert drawn.layer.id == "grid", drawn.layer.id
+
+    @pytest.mark.parametrize(
+        "build, layer_id",
+        [
+            (
+                lambda m: m.tiles(
+                    "https://tiles.example/{z}/{x}/{y}.png", name="ground"
+                ),
+                "ground",
+            ),
+            (lambda m: m.terrain_tiles(name="relief"), "relief"),
+            (
+                lambda m: m.gltf(
+                    "https://example.invalid/model.glb", 4.9, 52.4, name="statue"
+                ),
+                "statue",
+            ),
+        ],
+        ids=["basemap", "terrain", "model"],
+    )
+    def test_a_converted_source_less_kind_reloads_and_draws(self, build, layer_id):
+        """The three converted kinds that draw from a URL survive `to_dict` and draw again from it.
+
+        Args:
+            build: The builder call under test.
+            layer_id: The name it was given.
+
+        Test scenario:
+            A basemap, terrain and a glTF model each drew from a closure and recorded nothing, so a saved
+            figure did not know they were there. Each is described by values now — a MapLibre raster source,
+            a tile-URL template, a model URL and a position — and none of them names a figure source, so all
+            three are figures that leave the process. The fourth converted kind, `point_cloud`, draws from
+            data: given a frame in memory it records an `object:` reference and `to_dict` refuses it, exactly
+            as it does for `points(gdf)`.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.web import WebMap
+
+        built = WebMap()
+        build(built)
+        reloaded = FigureSpec.from_dict(built.figure_spec.to_dict())
+        drawn = WebMap()._renderer.draw_layer(reloaded, layer_id)
+        assert drawn is not None, "a reloaded description must be drawable"
+        assert reloaded.layers.get(layer_id).kind == built.get_layer(layer_id).kind
 
     def test_the_drawing_uses_the_recorded_values_rather_than_its_own_defaults(self):
         """A description that survives but is not *read* is a description in name only.

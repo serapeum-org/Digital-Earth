@@ -13,9 +13,12 @@ real figure rather than a label for one.
 
 **Which figures can be written, and which only drawn.** `to_dict` refuses an `object:` source, so a map whose
 builders were handed a GeoDataFrame or a dataset in memory describes itself and draws from that description,
-but cannot be stored; give a builder a path or a URL for a figure that survives leaving the process. The
-layers a description cannot rebuild at all — a basemap, a point cloud, terrain, a glTF model — are drawn
-straight onto the widget and are named in `DRAWN_KINDS`' own note below.
+but cannot be stored; give a builder a path or a URL for a figure that survives leaving the process.
+
+**Every kind the tier declares is drawn from its description.** A basemap, terrain, a point cloud and a glTF
+model were the last four to be drawn straight onto the widget by a closure their builder queued, which is
+what made them the four kinds layer management could not address at all. They are described now, and say how
+the widget takes them through :attr:`DrawnLayer.route` — see `DRAWN_KINDS`' own note below.
 
 **This tier rebuilds rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
 place, so :mod:`digitalearth.three_d.renderer` reconciles a diff against it. MapLibre's widget is built
@@ -30,9 +33,8 @@ added was in the record and never reached the widget, and one it removed left th
 page. :meth:`Renderer._arrange` brings the queue to the applied figure's layers, in its draw order, band by
 band; and :meth:`~digitalearth.web.base.WebMapBase._change` — the path `set_visible`, `move_layer` and
 `replace_layer` take — installs the description once this has returned, so a figure `apply` refuses is never
-one the map describes. What `_arrange` does **not** move is a queue entry no layer id addresses: the
-`basemap`, `terrain`, `point_cloud` and `model` builders still queue their own closures and record no layer,
-so those keep their slots.
+one the map describes. What `_arrange` does **not** move is a queue entry no layer id addresses: the one deck
+overlay marker, and whatever a caller queued through `add_layer` as a callable, keep their slots.
 """
 
 from dataclasses import dataclass, field
@@ -44,6 +46,19 @@ from digitalearth.base.spec import Encoding, FigureSpec, LayerSpec, Symbology
 from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.spec.style import asked_constants
 from digitalearth.web.capabilities import CAPABILITIES
+
+#: A drawing the widget takes as a MapLibre style layer: ``add_source``, then ``add_layer``. Every kind but
+#: the three below, which MapLibre does not draw as style layers at all.
+STYLE_ROUTE = "style"
+
+#: A drawing the widget takes by turning terrain on: the DEM source, then ``set_terrain``. MapLibre reads
+#: terrain from a ``raster-dem`` source and nothing else, so there is no style layer to add for it.
+TERRAIN_ROUTE = "terrain"
+
+#: A drawing the widget takes as one of the deck.gl JSON layers it composes into a single overlay. deck.gl
+#: owns one overlay per page — a second ``addDeckOverlay`` call replaces the first — so these are collected
+#: over the queue and handed over together (see `WebMapBase._build_map_widget`).
+DECK_ROUTE = "deck"
 
 
 @dataclass(frozen=True)
@@ -64,6 +79,12 @@ class DrawnLayer:
             addresses.
         extra_layers: Further layers drawn from the same source and owned by the same description, such as
             a graticule's degree labels. They follow `layer` and are removed with it.
+        route: How the widget takes this drawing. :data:`STYLE_ROUTE` — the default, and what every MapLibre
+            style layer answers with — means ``add_source`` then ``add_layer``. The other two are the kinds
+            MapLibre does not draw as style layers at all: :data:`TERRAIN_ROUTE` adds the DEM source and
+            turns terrain on with ``set_terrain``, and :data:`DECK_ROUTE`'s `layer` is a deck.gl JSON layer
+            that the page composes into its one deck overlay. A drawer says which route it built for, so the
+            widget builder still adds whatever came back without knowing which drawer made it.
 
     Examples:
         - A graticule is one description drawing two MapLibre layers off one source — the lines, and the
@@ -91,6 +112,7 @@ class DrawnLayer:
     source_spec: Any
     layer: Any
     extra_layers: Tuple[Any, ...] = field(default=())
+    route: str = STYLE_ROUTE
 
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
@@ -100,10 +122,14 @@ class DrawnLayer:
 #:
 #: Every kind a builder records is here: the seam is closed (#296), and contours — the last kinds still
 #: replayed from the queue — joined when they started recording under their own kind (review L3). A kind here
-#: is built by its drawer and must not also be queued by its builder. The kinds the tier declares and does
-#: not list — a basemap, a point cloud, terrain and a glTF model — are drawn straight onto the widget without
-#: a description, because they are the map's style or deck.gl/terrain objects rather than MapLibre layers a
-#: description can rebuild.
+#: is built by its drawer and must not also be queued by its builder.
+#:
+#: **This is now every kind the tier declares.** A basemap, terrain, a point cloud and a glTF model were the
+#: four that queued a closure and recorded no layer, which left them unaddressable by the layer management
+#: order 23 added — `set_visible`, `move_layer` and `replace_layer` address a layer by its id, and these had
+#: none. They are not MapLibre style layers, so each says how the widget takes it through
+#: :attr:`DrawnLayer.route`: a basemap is a raster style layer after all, terrain turns terrain on, and the
+#: two deck.gl kinds are composed into the page's one deck overlay.
 DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",
     "text",
@@ -119,8 +145,22 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "heatmap",
     "clusters",
     "extrusion",
+    "basemap",
+    "terrain",
+    "point_cloud",
+    "model",
     "custom:maplibre",
 )
+
+
+#: Kinds this tier draws from their description alone, although the registry says they take data.
+#:
+#: The registry names what a kind *is* across all four tiers: `terrain` takes a raster because the 3-D tier
+#: renders a surface from heights held in memory. MapLibre reads terrain from a **tile pyramid** and nothing
+#: else, so `WebMap.terrain_tiles` encodes a DEM to tiles when it is given one and the layer then draws from
+#: the tile-URL template its description carries. There is no figure source for a replacement to name, which
+#: is why :meth:`~digitalearth.web.base.WebMapBase.replace_layer` asks this before it demands a `source_id`.
+DESCRIPTION_ONLY_KINDS: FrozenSet[str] = frozenset({"terrain"})
 
 
 #: The MapLibre layer ids a kind's drawer adds beside the layer's own, as suffixes of that id — a graticule's
@@ -553,7 +593,14 @@ def _show(drawn: DrawnLayer, visible: bool) -> None:
         A caller's own layer may be a plain MapLibre spec dict rather than a `Layer`, so both shapes are
         set; a callable ``apply(widget)`` wires its own layers, has no layout to reach, and is left alone.
         The layout is replaced rather than edited in place, so a recorded mapping is never written through.
+
+        A deck.gl layer is the one drawing with no MapLibre `layout` at all — it is deck's own JSON, read by
+        deck and not by MapLibre — and it carries its own ``visible`` property instead. Writing a `layout`
+        into it would put a key deck.gl does not read into the page and leave the layer drawn.
     """
+    if drawn.route == DECK_ROUTE:
+        drawn.layer["visible"] = bool(visible)
+        return
     value = "visible" if visible else "none"
     for layer in (drawn.layer, *drawn.extra_layers):
         if isinstance(layer, dict):
@@ -579,17 +626,24 @@ def _layout_of(layer: Any) -> Mapping[str, Any]:
     return layout or {}
 
 
-def _shown(drawn: DrawnLayer) -> bool:
+def shown(drawn: DrawnLayer) -> bool:
     """Whether every MapLibre layer one drawing holds is currently drawn.
+
+    Public because the widget builder asks it too: a terrain drawing is hidden by **not making** the
+    ``setTerrain`` call, which is a decision at application time rather than a property on a layer object
+    (:meth:`~digitalearth.web.base.WebMapBase._apply_drawn`).
 
     Args:
         drawn: What a drawer produced — its own layer and the extra layers the same description owns.
 
     Returns:
-        `False` as soon as one of them carries ``layout.visibility == "none"``. A layer with no layout to
-        read — a callable ``apply(widget)`` wiring its own layers — cannot be hidden, so it is never
-        reported hidden, which is the same carve-out :func:`_show` makes when it writes.
+        `False` as soon as one of them carries ``layout.visibility == "none"``, or — for a deck.gl layer,
+        whose visibility is deck's own ``visible`` property rather than a MapLibre layout — when that
+        property is off. A layer with neither to read (a callable ``apply(widget)`` wiring its own layers)
+        cannot be hidden, so it is never reported hidden, which is the carve-out :func:`_show` also makes.
     """
+    if drawn.route == DECK_ROUTE:
+        return bool(drawn.layer.get("visible", True))
     return all(
         _layout_of(layer).get("visibility") != "none"
         for layer in (drawn.layer, *drawn.extra_layers)
@@ -702,13 +756,13 @@ def drawer_for(kind: str) -> Any:
             KeyError: "the web tier does not draw 'mesh' layers — a raster is drawn as an image ...
 
             ```
-        - A kind the tier has simply not reached yet carries no reason, because it declared none:
+        - A kind the tier neither draws nor decided against carries no reason, because it declared none:
             ```python
             >>> from digitalearth.web.renderer import drawer_for
-            >>> drawer_for("terrain")  # doctest: +ELLIPSIS
+            >>> drawer_for("volume")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "the web tier does not draw 'terrain' layers; it draws [...]"
+            KeyError: "the web tier does not draw 'volume' layers; it draws [...]"
 
             ```
     """
@@ -745,6 +799,12 @@ def drawer_for(kind: str) -> Any:
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
         "extrusion": threed.draw_extruded_polygons,
+        # The four that used to queue their own closure and record nothing. Each draws through a route of
+        # its own because none of them is an ordinary MapLibre style layer — bar the basemap, which is one.
+        "basemap": decoration.draw_tiles,
+        "terrain": threed.draw_terrain,
+        "point_cloud": threed.draw_point_cloud,
+        "model": threed.draw_model,
         "custom:maplibre": _custom_drawer(),
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
@@ -1198,7 +1258,7 @@ class Renderer:
                 f"nothing is drawn for layer {layer_id!r}, so it has no visibility to report; the web "
                 f"tier holds {sorted(self._drawn)}"
             )
-        return _shown(drawn)
+        return shown(drawn)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.

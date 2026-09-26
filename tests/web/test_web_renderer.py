@@ -12,6 +12,7 @@ import pytest
 
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.renderer import (
+    DECK_ROUTE,
     DRAWN_KINDS,
     PAINT_CHANNELS,
     Renderer,
@@ -87,9 +88,15 @@ class TestAKindThisTierDoesNotDraw:
     """A figure written for another backend should say so."""
 
     def test_it_is_refused_by_name_and_told_what_is_drawn(self):
-        """The message lists the kinds, so the caller can see what they meant."""
-        with pytest.raises(KeyError, match="does not draw 'point_cloud'"):
-            drawer_for("point_cloud")
+        """The message lists the kinds, so the caller can see what they meant.
+
+        Test scenario:
+            It asked about `point_cloud` until this tier started drawing point clouds from a description.
+            `volume` is a registered kind no 2-D tier draws, so it is what a figure written for the 3-D
+            tier would carry here.
+        """
+        with pytest.raises(KeyError, match="does not draw 'volume'"):
+            drawer_for("volume")
 
     def test_the_drawer_table_is_held_against_the_declared_kinds(self, monkeypatch):
         """Drift either way is a defect in this module, not in the caller.
@@ -316,8 +323,12 @@ def _visibilities(drawn) -> list:
     Returns:
         One entry per layer — the drawing's own, then its extra layers — reading `None` where the layout
         says nothing, which MapLibre draws as visible. A caller's own layer may be a plain dict spec, so
-        that shape is read too.
+        that shape is read too. A deck.gl drawing has no MapLibre layout at all: deck reads its own
+        ``visible`` property, so that is translated into the same two words rather than read as absent —
+        which is what "visible" would have meant for a hidden point cloud.
     """
+    if drawn.route == DECK_ROUTE:
+        return ["visible" if drawn.layer.get("visible", True) else "none"]
     visibilities = []
     for layer in (drawn.layer, *drawn.extra_layers):
         layout = layer.get("layout") if isinstance(layer, dict) else layer.layout
@@ -563,8 +574,8 @@ class TestWhatTheRendererReports:
     def test_the_declared_kinds_are_the_ones_drawn_from_a_description(self):
         """The tuple is the tier's answer to "what do you draw?"."""
         assert "points" in DRAWN_KINDS
-        assert "terrain" not in DRAWN_KINDS, (
-            "terrain is a deck.gl path, still queued, and must not claim to be described"
+        assert "volume" not in DRAWN_KINDS, (
+            "a volume has no MapLibre rendering, so claiming to draw it would be a capability lie"
         )
 
     def test_band_for_prefers_the_layer_s_own_band(self, drawn_map):

@@ -332,10 +332,13 @@ class BigDataMixin(_MixinBase):
         return self
 
     def _add_deck_layer(self, layer: dict) -> Self:
-        """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.
+        """Accumulate a deck.gl JSON ``layer`` for the page's one deck overlay.
 
-        All deck layers are applied together (deck.gl owns one overlay), so the first deck builder registers
-        one applier bound to the shared list and later builders just append to it.
+        All deck layers are applied together — deck.gl owns one overlay, and a second ``add_deck_layers``
+        call replaces the first rather than adding to it — so the first deck builder queues the marker that
+        says where this list joins the overlay, and later builders just append to it. The described deck
+        kinds (`point_cloud`, `model`) join the same overlay from their own queue slots, which is what lets
+        `move_layer` reorder them against these.
 
         Args:
             layer: A deck.gl JSON layer dict (``{"@@type": ..., ...}``).
@@ -343,14 +346,11 @@ class BigDataMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
+        from digitalearth.web.base import _DeckOverlay
+
         if self._deck_layers is None:
             self._deck_layers = []
-            deck_layers = self._deck_layers
-
-            def apply(widget: Any) -> None:
-                widget.add_deck_layers(deck_layers)
-
-            self._queue(apply)
+            self._queue(_DeckOverlay())
         self._deck_layers.append(layer)
         return self
 

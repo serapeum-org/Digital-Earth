@@ -148,9 +148,6 @@ def _identities(record) -> dict:
     return {layer_id: id(value) for layer_id, value in record.items()}
 
 
-#: The reason a declared kind is drawn but not from a description: its builder queues the drawing itself.
-_QUEUED = "still drawn through the queue"
-
 #: The kinds each tier declares but has no drawer for, each with the reason that is allowed.
 #:
 #: The drift guard lets `declared - drawn` through only by these names, and only while they are true: an
@@ -159,19 +156,20 @@ _QUEUED = "still drawn through the queue"
 #: live here rather than on each adapter so the web adapter, which sits beside the web tier's own tests, is
 #: held to the same list.
 #:
-#: **The web tier's four kinds are named in a second place**, as `DRAWN_BUT_NOT_DESCRIBED` in
-#: `tests/web/test_web_capabilities.py`, which holds a builder call per kind where this holds the reason —
-#: two payloads over one set, because neither job collects the other's module (review M6). They cannot drift
-#: silently: a kind that starts recording a layer fails the guard below until it is taken off here, and fails
-#: the capability test there until it is taken off that list, so the two are corrected together or not at all.
-#: A reader changing either has to know both exist, which is what this note is for (review N6).
+#: **A kind named here is named in a second place too**, in the tier's own capability test, which holds a
+#: builder call per kind where this holds the reason — two payloads over one set, because neither job collects
+#: the other's module (review M6). They cannot drift silently: a kind that starts recording a layer fails the
+#: guard below until it is taken off here, and fails the capability test there until it is taken off that
+#: list, so the two are corrected together or not at all. A reader changing either has to know both exist,
+#: which is what this note is for (review N6).
+#:
+#: The web tier's four — `basemap`, `terrain`, `point_cloud` and `model`, each of which queued a closure and
+#: recorded no layer, which is what left them unaddressable by the layer management of order 23 — came off
+#: this list when they started recording one, and `tests/web/test_web_capabilities.py`'s
+#: `DRAWN_BUT_NOT_DESCRIBED` went with them in the same change. So the second place is the interactive tier's
+#: alone today; the rule stands for whichever tier defers a kind next.
 THREE_D_UNDRAWN_KINDS: dict[str, str] = {}
-WEB_UNDRAWN_KINDS: dict[str, str] = {
-    "basemap": f"{_QUEUED}: `tiles` queues an underlay and records no layer to draw it from",
-    "terrain": f"{_QUEUED}: `terrain_tiles` queues `set_terrain` and records no layer",
-    "point_cloud": f"{_QUEUED}: a deck.gl layer, added in one queued `add_deck_layers` call, records no layer",
-    "model": f"{_QUEUED}: `gltf` adds a deck.gl layer the way `point_cloud` does, and records no layer",
-}
+WEB_UNDRAWN_KINDS: dict[str, str] = {}
 INTERACTIVE_UNDRAWN_KINDS: dict[str, str] = {
     "custom:holoviews": (
         "a caller's own element, drawn by being kept: `add_element` holds no description to rebuild it from"

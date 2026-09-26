@@ -5,9 +5,10 @@ its docstrings told the caller to encode and serve the tiles themselves. pyramid
 ``Dataset.to_terrain_rgb`` writes a ``{z}/{x}/{y}.png`` terrain-RGB pyramid — so the wiring was the only thing
 missing, and the advice was pointing at work the caller did not have to do.
 
-The tests read what the widget is actually handed, by replaying the queued closure against a recorder: terrain
-is one of the layers a figure cannot describe (it is applied straight onto the widget), so there is no
-description to read it back from.
+The tests read what the widget is actually handed, by replaying the map's queue against a recorder — the same
+way `_build_map_widget` replays it. Terrain is described like every other kind now, and its drawer answers on
+the terrain route: a ``raster-dem`` source and a ``setTerrain`` call, which is what MapLibre takes in place of
+a style layer. Reading the widget calls rather than the description is what holds the two to each other.
 """
 
 import pytest
@@ -18,7 +19,7 @@ from digitalearth.web import WebMap  # noqa: E402
 
 
 def _recorded_terrain(web_map):
-    """Return what a map's queued terrain hands the widget.
+    """Return what a map's terrain hands the widget.
 
     Args:
         web_map: A ``WebMap`` ``terrain_tiles`` has been called on.
@@ -57,9 +58,11 @@ def _recorded_terrain(web_map):
                 layer: The MapLibre layer, unused.
             """
 
-    for entry in web_map.layers:
+    # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it, and `layers`
+    # reports each described entry already resolved to the object it drew.
+    for entry in web_map._queued:
         web_map._apply_layer(Recorder(), entry)
-    assert "source" in seen, "the terrain closure registered no DEM source"
+    assert "source" in seen, "the terrain drawer registered no DEM source"
     return seen["source"], seen.get("terrain")
 
 

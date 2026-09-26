@@ -136,6 +136,22 @@ def _layout(web_map, key):
     return _last_layer(web_map).layout[key]
 
 
+def _deck_layer(web_map, key):
+    """Return one property of the deck.gl layer the map's last described layer drew.
+
+    A deck.gl layer is not a MapLibre style layer, so it is not what `_last_layer` replays: it is the deck
+    JSON the page composes into its one overlay, held by the renderer under the layer's own id.
+
+    Args:
+        web_map: The map whose last layer is read.
+        key: The deck.gl property to read.
+
+    Returns:
+        The property's value.
+    """
+    return web_map._renderer.drawn[web_map.layer_ids[-1]].layer[key]
+
+
 def _last_layer(web_map):
     """Replay the map's layers against a recorder and return the last MapLibre layer registered.
 
@@ -157,7 +173,9 @@ def _last_layer(web_map):
             """Record the built layer."""
             built.append(layer)
 
-    for entry in web_map.layers:
+    # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+    # and `layers` reports each described entry already resolved to the object it drew.
+    for entry in web_map._queued:
         web_map._apply_layer(Recorder(), entry)
     assert built, "no layer was registered"
     return built[-1]
@@ -184,7 +202,9 @@ def _sources_of(web_map) -> list:
         def add_layer(self, layer):
             """Ignore the layer; only the source is under test."""
 
-    for entry in web_map.layers:
+    # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+    # and `layers` reports each described entry already resolved to the object it drew.
+    for entry in web_map._queued:
         web_map._apply_layer(Recorder(), entry)
     return specs
 
@@ -425,14 +445,14 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
     def test_point_cloud_takes_size(self):
         """A 3-D point is a marker as much as a 2-D one."""
         m = WebMap().point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], size=4.0)
-        assert m._deck_layers[0]["pointSize"] == 4.0
+        assert _deck_layer(m, "pointSize") == 4.0
 
     def test_point_cloud_point_size_still_works_and_warns(self):
         """``point_size`` was the third spelling of one idea; it is deprecated, not dropped."""
         scene = WebMap()
         with pytest.warns(DeprecationWarning, match="point_size= is deprecated"):
             m = scene.point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], point_size=4.0)
-        assert m._deck_layers[0]["pointSize"] == 4.0
+        assert _deck_layer(m, "pointSize") == 4.0
 
     @pytest.mark.parametrize(
         "call, new_name, old_name",

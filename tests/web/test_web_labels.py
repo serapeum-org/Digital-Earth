@@ -110,7 +110,8 @@ class TestLabelsFromAColumn:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().points(places).labels(places, "name", name="Names")
-        assert len(m.layer_ids) == 2, m.layer_ids
+        # Three ids: the basemap, the points, and the labels over them.
+        assert len(m.layer_ids) == 3, m.layer_ids
         assert "Names" in m.layer_ids, m.layer_ids
         payload = _payload(m.layer_control().to_html())
         assert '"Names"' in payload, "the caller's name never reaches the switcher"

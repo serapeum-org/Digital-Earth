@@ -73,7 +73,8 @@ class TestTracingIsPyramids:
         m = WebMap().basemap().contours(dataset, interval=10)
         payload = _payload(m.to_html())
         assert '"line"' in payload
-        assert len(m.layer_ids) == 1
+        # The basemap is a described layer too, so it is in the ids beside the contour.
+        assert m.layer_ids == ["tiles-1", "line-1"], m.layer_ids
 
     def test_filled_contours_are_polygons(self, dataset):
         """Bands between levels are areas, not lines.
@@ -113,7 +114,8 @@ class TestTracingIsPyramids:
             dataset: The shared pyramids raster fixture.
         """
         m = WebMap().basemap().contours(dataset, interval=10, labels=True)
-        assert len(m.layer_ids) == 2, m.layer_ids
+        # Three ids: the basemap beneath, the traced lines, and the labels over them.
+        assert len(m.layer_ids) == 3, m.layer_ids
         assert any("label" in layer_id for layer_id in m.layer_ids)
 
     def test_a_single_colour_skips_the_classification(self, dataset):

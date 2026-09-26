@@ -668,7 +668,9 @@ class TestTimeSliderRasterStack:
                 self.added.append(layer)
 
         recorder = _Recorder()
-        for entry in m.layers:
+        # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+        # and `layers` reports each described entry already resolved to the object it drew.
+        for entry in m._queued:
             m._apply_layer(recorder, entry)
         return recorder.added
 

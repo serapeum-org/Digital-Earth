@@ -369,6 +369,44 @@ def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     )
 
 
+def draw_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre raster source and layer for a tile basemap.
+
+    A basemap draws from no data in the figure: the XYZ service, its attribution, its tile size and whatever
+    coverage was declared for it are values the caller passed, recorded on its symbology, which is why
+    `_data` is unused. They are also plain JSON, so a map whose only layer is a basemap describes itself in a
+    figure that can be written down and read back.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — a basemap has no source in the figure to open.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the raster source and the raster layer
+        reading it. It is an ordinary style layer, so it takes the ordinary route.
+
+    Raises:
+        ValueError: when the description carries neither the MapLibre source the tiles are served from nor
+            the opacity they are drawn at, naming the layer, its kind and what is missing.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    props = required_props(layer, "source", "opacity")
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=dict(props["source"]),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.RASTER,
+            source=source_id,
+            paint={"raster-opacity": float(props["opacity"])},
+        ),
+    )
+
+
 def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre lines (and degree labels) for a graticule layer.
 
@@ -470,6 +508,7 @@ class DecorationMixin(_MixinBase):
         opacity: float = 1.0,
         max_zoom: Optional[int] = None,
         bounds: Optional[Any] = None,
+        name: Optional[str] = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -485,6 +524,9 @@ class DecorationMixin(_MixinBase):
                 to the MapLibre source's ``bounds``. It is a **declaration**, not a check: the map stays
                 pannable everywhere, and MapLibre simply stops requesting tiles outside the box instead
                 of collecting 404s across the rest of the world. ``None`` means global.
+            name: What the basemap is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``tiles-1``, ``tiles-2``, … as every other
+                unnamed layer is numbered.
 
         Returns:
             The same map instance, so builder calls chain; the basemap is registered as an underlay so
@@ -495,9 +537,10 @@ class DecorationMixin(_MixinBase):
                 ``bounds``, so the coverage would quietly go undeclared.
 
         Examples:
-            - Put an XYZ service on the ground. It draws, but it is not a *data* layer, so it
-              never shows up in the registry a layer switcher lists (needs the ``web`` extra, so
-              the block is skipped without it):
+            - Put an XYZ service on the ground. It is described and addressable like any other layer —
+              what keeps it out of a layer switcher is that
+              :meth:`~digitalearth.web.decoration.DecorationMixin.layer_control` offers the data layers
+              rather than every id (needs the ``web`` extra, so the block is skipped without it):
                 ```python
                 >>> from digitalearth.web import WebMap              # doctest: +SKIP
                 >>> m = WebMap().tiles(                              # doctest: +SKIP
@@ -505,7 +548,7 @@ class DecorationMixin(_MixinBase):
                 ...     attribution="© Example", max_zoom=12,
                 ... )
                 >>> len(m.layers), m.layer_ids                       # doctest: +SKIP
-                (1, [])
+                (1, ['tiles-1'])
 
                 ```
             - Call order does not decide draw order: tiles added *after* the data still land
@@ -540,9 +583,8 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.base.WebMapBase.add_underlay: the registration that keeps it at the
                 bottom of the stack.
         """
-        layer_cls, layer_types = _require_layer_api()
-        src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
-        source = {
+        _require_layer_api()
+        source: dict = {
             "type": "raster",
             "tiles": [url],
             "tileSize": int(tile_size),
@@ -558,18 +600,18 @@ class DecorationMixin(_MixinBase):
                     f"tiles(bounds=...) takes (west, south, east, north) in lon/lat; got {bounds!r}"
                 )
             source["bounds"] = box
-        layer = layer_cls(
-            id=layer_id,
-            type=layer_types.RASTER,
-            source=src_id,
-            paint={"raster-opacity": float(opacity)},
+        layer_id = self._layer_id("tiles", name)
+        # The service, as values: :func:`draw_tiles` builds the MapLibre source and the raster layer from
+        # exactly this, so the figure describes the basemap rather than naming one a closure drew elsewhere.
+        # The MapLibre source id is derived from the layer's, as it is for every other described kind, so
+        # the basemap no longer takes a second number beside itself (#296).
+        self._index_layer(
+            layer_id,
+            name,
+            kind="basemap",
+            symbology=Symbology(props={"source": source, "opacity": float(opacity)}),
         )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(layer)
-
-        return self.add_underlay(apply)
+        return self
 
     def basemap(
         self,
@@ -578,6 +620,7 @@ class DecorationMixin(_MixinBase):
         opacity: float = 1.0,
         api_key: Optional[str] = None,
         preset: Optional[dict] = None,
+        name: Optional[str] = None,
     ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
@@ -601,6 +644,8 @@ class DecorationMixin(_MixinBase):
                 ``mosaic``). A dict rather than loose keywords so that all three tiers take a preset the
                 same way, and so a mistyped style argument is an unexpected keyword rather than something
                 ``**preset`` silently swallows.
+            name: What the basemap is addressed by, forwarded to
+                :meth:`~digitalearth.web.decoration.DecorationMixin.tiles`.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -630,6 +675,7 @@ class DecorationMixin(_MixinBase):
                 opacity=opacity,
                 max_zoom=keyed.max_zoom,
                 bounds=keyed.bounds,
+                name=name,
             )
         if api_key is not None:
             # Dropping it silently would leave a caller believing they had authenticated.
@@ -650,7 +696,7 @@ class DecorationMixin(_MixinBase):
                 f"({', '.join(sorted(KEYED_BASEMAP_NAMES.values()))}), or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
-        return self.tiles(url, attribution=attribution, opacity=opacity)
+        return self.tiles(url, attribution=attribution, opacity=opacity, name=name)
 
     def legend(
         self,
@@ -761,9 +807,11 @@ class DecorationMixin(_MixinBase):
         for the same thing; the old spelling keeps working for one release.
 
         Args:
-            layers: The layers to offer, by id, defaulting to every data layer added so far
-                (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from
-                the switch without hiding them from the map.
+            layers: The layers to offer, by id, defaulting to every data layer added so far — that is,
+                :attr:`~digitalearth.web.base.WebMapBase.layer_ids` without the basemaps, which are
+                addressable but are the ground rather than something a viewer toggles. Pass a subset to
+                hide the rest from the switch without hiding them from the map, or name a basemap to offer
+                it after all.
             position: One of the four corners in
                 :data:`~digitalearth.base.controls.CONTROL_POSITIONS` — MapLibre's, and now both tiers'.
             controls: Which controls to expose, from
@@ -831,12 +879,21 @@ class DecorationMixin(_MixinBase):
                 f"layer_control(theme={theme!r}) must be one of {sorted(_SWITCHER_THEMES)}"
             )
         available = self.layer_ids
-        if not available:
+        # The default offers the *data* layers, not every id: a basemap is described and addressable like
+        # any other layer since it started recording one, and offering it here would put "turn the ground
+        # off" at the top of every switcher. A caller who means to offer it still can, by naming it in
+        # `layers=` — which is why the filter is on the default rather than on what is accepted.
+        offered = [
+            layer_id
+            for layer_id in available
+            if self._layer_tree.get(layer_id).kind != "basemap"
+        ]
+        if not offered:
             raise ValueError(
                 "layer_control() has nothing to switch: no data layer has been added yet. A basemap is "
                 "the ground rather than a layer a viewer toggles."
             )
-        wanted = list(layers) if layers is not None else available
+        wanted = list(layers) if layers is not None else offered
         unknown = [layer_id for layer_id in wanted if layer_id not in available]
         if unknown:
             raise ValueError(

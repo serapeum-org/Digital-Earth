@@ -111,6 +111,26 @@ def raster():
     )
 
 
+def _data_layer_ids(web_map):
+    """Return the ids of a map's layers that are not the ground.
+
+    A basemap records a layer like every other kind since the four undescribed ones were converted, so it is
+    in `layer_ids` and addressable by id. A check about the *data* layers therefore has to say so rather than
+    counting every id, which is what these tests used a basemap as scenery to demonstrate.
+
+    Args:
+        web_map: The map.
+
+    Returns:
+        `layer_ids` without the basemaps, in the same order.
+    """
+    return [
+        layer_id
+        for layer_id in web_map.layer_ids
+        if web_map._layer_tree.get(layer_id).kind != "basemap"
+    ]
+
+
 def _drawn(web_map):
     """Return the ids of a map's addressable layers in the order they are drawn, bottom first.
 
@@ -118,8 +138,8 @@ def _drawn(web_map):
         web_map: The map.
 
     Returns:
-        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none. A
-        caller's own object carries no marker either, so it is looked up in the map's custom table by identity.
+        Each registered layer's id, in `layers` order, skipping the controls, which carry none. A caller's own
+        object carries no marker either, so it is looked up in the map's custom table by identity.
 
     Note:
         A layer drawn from its description (#296) is a MapLibre ``Layer``, which carries its id as ``.id``
@@ -136,7 +156,7 @@ def _drawn(web_map):
             layer: One entry of the map's `layers`.
 
         Returns:
-            Its layer id, or `None` when it carries none — a basemap or a control.
+            Its layer id, or `None` when it carries none — a control, or the deck overlay marker.
         """
         marker = getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
         if marker is not None:
@@ -170,9 +190,10 @@ class TestTheRegistryIsAddressable:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().choropleth(polygons, column="pop").points(points)
-        assert len(m.layer_ids) == 2, m.layer_ids
-        assert m.layer_ids[0].startswith("fill"), m.layer_ids
-        assert m.layer_ids[1].startswith("circle"), m.layer_ids
+        data = _data_layer_ids(m)
+        assert len(data) == 2, m.layer_ids
+        assert data[0].startswith("fill"), m.layer_ids
+        assert data[1].startswith("circle"), m.layer_ids
 
     def test_each_data_layer_is_described_with_its_kind_and_label(
         self, points, polygons
@@ -193,8 +214,8 @@ class TestTheRegistryIsAddressable:
             .choropleth(polygons, column="pop", name="Population")
             .points(points)
         )
-        fill, circle = m.layer_ids
-        assert m._layer_tree.ids == (fill, circle), m._layer_tree.ids
+        fill, circle = _data_layer_ids(m)
+        assert m._layer_tree.ids[1:] == (fill, circle), m._layer_tree.ids
         assert m._layer_tree.get(fill).kind == "choropleth", m._layer_tree.get(fill)
         assert m._layer_tree.get(fill).display_label == "Population", m._layer_tree.get(
             fill
@@ -246,7 +267,7 @@ class TestTheRegistryIsAddressable:
         m = getattr(WebMap().basemap(), method)(
             request.getfixturevalue(fixture), **kwargs
         )
-        recorded = m._layer_tree.get(m.layer_ids[0]).kind
+        recorded = m._layer_tree.get(_data_layer_ids(m)[0]).kind
         assert recorded == kind, (
             f"{method} recorded kind {recorded!r}, expected {kind!r}"
         )
@@ -338,10 +359,9 @@ class TestTheRegistryIsAddressable:
 
         inputs = () if fixture is None else (request.getfixturevalue(fixture),)
         m = getattr(WebMap().basemap(), method)(*inputs, *args, **kwargs)
-        assert len(m.layer_ids) == 1, (
-            f"{method} should index one layer; got {m.layer_ids}"
-        )
-        recorded = m._layer_tree.get(m.layer_ids[0])
+        data = _data_layer_ids(m)
+        assert len(data) == 1, f"{method} should index one layer; got {m.layer_ids}"
+        recorded = m._layer_tree.get(data[0])
         assert recorded.kind == kind, (
             f"{method} recorded kind {recorded.kind!r}, expected {kind!r}"
         )
@@ -391,8 +411,9 @@ class TestTheRegistryIsAddressable:
 
         inputs = () if fixture is None else (request.getfixturevalue(fixture),)
         m = getattr(WebMap().basemap(), method)(*inputs, visible=False, **kwargs)
-        assert m.layer_ids, f"{method} indexed no layer"
-        shown = [layer for layer in m.layer_ids if m._layer_tree.is_visible(layer)]
+        data = _data_layer_ids(m)
+        assert data, f"{method} indexed no layer"
+        shown = [layer for layer in data if m._layer_tree.is_visible(layer)]
         assert shown == [], f"{method}(visible=False) recorded {shown} as visible"
 
     def test_a_layer_built_visible_is_recorded_visible(self, points):
@@ -438,7 +459,7 @@ class TestTheRegistryIsAddressable:
 
         inputs = () if fixture is None else (request.getfixturevalue(fixture),)
         m = getattr(WebMap().basemap(), method)(*inputs, visible=visible)
-        recorded = [m._layer_tree.get(layer).visible for layer in m.layer_ids]
+        recorded = [m._layer_tree.get(layer).visible for layer in _data_layer_ids(m)]
         assert recorded == [drawn], recorded
 
     def test_only_the_first_timeslider_frame_is_recorded_visible(self, raster_stack):
@@ -464,7 +485,7 @@ class TestTheRegistryIsAddressable:
         """
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap().text(4.9, 52.4, "A", name="data-1").graticule()
+        m = WebMap().text(4.9, 52.4, "A", name="data-1").graticule()
         assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
         assert _drawn(m) == ["Graticule", "data-1"], _drawn(m)
 
@@ -478,7 +499,7 @@ class TestTheRegistryIsAddressable:
         """
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap().text(4.9, 52.4, "A", name="data-1").graticule()
+        m = WebMap().text(4.9, 52.4, "A", name="data-1").graticule()
         m.remove_layer("Graticule").graticule()
         (graticule,) = [layer for layer in m.layer_ids if layer != "data-1"]
         assert _drawn(m) == [graticule, "data-1"], _drawn(m)
@@ -593,34 +614,41 @@ class TestTheRegistryIsAddressable:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().points(points).points(points)
-        first, second = m.layer_ids
+        ground, first, second = m.layer_ids
         m.remove_layer(first)
         assert first not in m._layer_tree, m._layer_tree.ids
-        assert m._layer_tree.ids == (second,), m._layer_tree.ids
+        assert m._layer_tree.ids == (ground, second), m._layer_tree.ids
 
-    def test_a_basemap_is_not_a_data_layer(self, points):
-        """The basemap is the ground; listing it among the toggles would invite turning the map off.
+    def test_a_basemap_is_addressable_and_still_not_offered_as_a_toggle(self, points):
+        """The basemap is the ground: addressable by id, and not what a switcher offers by default.
+
+        Args:
+            points: The fixture points.
 
         Test scenario:
-            Two basemaps and one data layer — the index must hold exactly the data layer, and nothing
-            whose id came from the tile builder.
+            It recorded no layer at all until the four undescribed kinds were converted, which is what left
+            it — and terrain, point clouds and models — unreachable by `set_visible`/`move_layer`. It is a
+            layer now, so the promise that a viewer is not offered "turn the map off" is `layer_control()`'s
+            default rather than an absent id. Two basemaps and one data layer: the ids hold all three, and
+            the switch offers only the data layer.
         """
         from digitalearth.web import WebMap
 
-        assert WebMap().basemap().layer_ids == []
+        assert WebMap().basemap().layer_ids == ["tiles-1"]
         m = WebMap().basemap().tiles("https://a/{z}/{x}/{y}.png").points(points)
-        assert len(m.layer_ids) == 1, m.layer_ids
-        assert not any("tiles" in layer_id for layer_id in m.layer_ids), m.layer_ids
+        assert len(m.layer_ids) == 3, m.layer_ids
+        offered = m.layer_control()._switcher["layer_ids"]
+        assert offered == _data_layer_ids(m), offered
 
     def test_removing_a_layer_drops_it_from_the_map_and_the_index(self, points):
         """A mistake used to mean starting over."""
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().points(points).points(points)
-        first, second = m.layer_ids
+        ground, first, second = m.layer_ids
         before = len(m.layers)
         m.remove_layer(first)
-        assert m.layer_ids == [second]
+        assert m.layer_ids == [ground, second]
         assert len(m.layers) == before - 1, (
             "the layer is gone from the index but still drawn"
         )
@@ -733,7 +761,7 @@ class TestANamedLayerIsAddressableByItsName:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().choropleth(polygons, column="pop", name="Population")
-        assert m.layer_ids == ["Population"], m.layer_ids
+        assert _data_layer_ids(m) == ["Population"], m.layer_ids
 
     def test_a_repeated_name_is_uniquified(self, polygons, points):
         """Two layers cannot share a MapLibre id, and the second must still be addressable.
@@ -750,7 +778,7 @@ class TestANamedLayerIsAddressableByItsName:
             .choropleth(polygons, column="pop", name="Layer")
             .points(points, name="Layer")
         )
-        assert m.layer_ids == ["Layer", "Layer-2"], m.layer_ids
+        assert _data_layer_ids(m) == ["Layer", "Layer-2"], m.layer_ids
 
     def test_an_unnamed_layer_keeps_a_generated_id(self, points):
         """The generated ids stay the default, so nothing that worked before changes.
@@ -760,7 +788,9 @@ class TestANamedLayerIsAddressableByItsName:
         """
         from digitalearth.web import WebMap
 
-        assert WebMap().basemap().points(points).layer_ids[0].startswith("circle-")
+        assert _data_layer_ids(WebMap().basemap().points(points))[0].startswith(
+            "circle-"
+        )
 
     def test_removing_a_named_layer_works_by_name(self, polygons):
         """The name is the handle a caller would reach for.
@@ -772,7 +802,7 @@ class TestANamedLayerIsAddressableByItsName:
 
         m = WebMap().basemap().choropleth(polygons, column="pop", name="Population")
         m.remove_layer("Population")
-        assert m.layer_ids == []
+        assert _data_layer_ids(m) == []
 
 
 class TestTheBigDataPathIsHonestAboutTheRegistry:
@@ -800,10 +830,10 @@ class TestTheBigDataPathIsHonestAboutTheRegistry:
         """
         from digitalearth.web import WebMap
 
-        assert WebMap().basemap().heatmap(points).layer_ids, (
+        assert _data_layer_ids(WebMap().basemap().heatmap(points)), (
             "heatmap is not addressable"
         )
-        assert WebMap().basemap().cluster(points).layer_ids, (
+        assert _data_layer_ids(WebMap().basemap().cluster(points)), (
             "cluster is not addressable"
         )
 
@@ -832,7 +862,7 @@ class TestRemovingAStepKeepsTheMapRenderable:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().timeslider(raster_stack)
-        for layer_id in list(m.layer_ids)[:2]:
+        for layer_id in _data_layer_ids(m)[:2]:
             m.remove_layer(layer_id)
         assert m._temporal is None, m._temporal
 
@@ -872,12 +902,13 @@ class TestRemovalReachesThePage:
 
         m = WebMap().basemap()
         getattr(m, builder)(points)
-        assert m.layer_ids, f"{builder} is not in the registry"
+        data = _data_layer_ids(m)
+        assert data, f"{builder} is not in the registry"
         before = _emitted_layer_ids(m.to_html())
-        m.remove_layer(m.layer_ids[0])
+        m.remove_layer(data[0])
         after = _emitted_layer_ids(m.to_html())
         assert len(after) < len(before), f"{builder} survived removal: {after}"
-        assert m.layer_ids == []
+        assert _data_layer_ids(m) == []
 
     def test_a_cluster_removes_all_three_of_its_layers(self, points):
         """Bubbles, counts and loose points are one entry, so they go together.
@@ -888,7 +919,7 @@ class TestRemovalReachesThePage:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().cluster(points)
-        m.remove_layer(m.layer_ids[0])
+        m.remove_layer(_data_layer_ids(m)[0])
         assert _emitted_layer_ids(m.to_html()) == ["tiles-1"], _emitted_layer_ids(
             m.to_html()
         )
@@ -1496,7 +1527,7 @@ class TestOneMapsSourcesAreItsOwn:
             .points(points, name="Layer")
             .points(points, name="Layer")
         )
-        assert m.layer_ids == ["Layer", "Layer-2", "Layer-3"], m.layer_ids
+        assert _data_layer_ids(m) == ["Layer", "Layer-2", "Layer-3"], m.layer_ids
 
 
 class TestTheDeckRefusalNamesTheRealCause:

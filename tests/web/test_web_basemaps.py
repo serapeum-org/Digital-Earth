@@ -44,7 +44,9 @@ def _first_raster_source(web_map):
         def add_layer(self, layer):
             """Ignore the layer; only the source is under test."""
 
-    for entry in web_map.layers:
+    # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+    # and `layers` reports each described entry already resolved to the object it drew.
+    for entry in web_map._queued:
         web_map._apply_layer(Recorder(), entry)
     assert recorded, "no source was registered"
     return next(iter(recorded.values()))
@@ -72,7 +74,9 @@ class TestWebTierDispatch:
                 pass
 
         m = WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
-        for entry in m.layers:
+        # The queue, not `layers`: `_apply_layer` takes the entries the widget build hands it,
+        # and `layers` reports each described entry already resolved to the object it drew.
+        for entry in m._queued:
             m._apply_layer(Recorder(), entry)
         assert recorded, "no source was registered"
         source = next(iter(recorded.values()))

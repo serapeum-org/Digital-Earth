@@ -232,7 +232,7 @@ class TestTheCompositeOnTheMap:
             .basemap()
             .rgb_composite(dataset, bands=(1, 1, 1), name="True colour")
         )
-        assert m.layer_ids == ["True colour"], m.layer_ids
+        assert m.layer_ids == ["tiles-1", "True colour"], m.layer_ids
         html = m.layer_control().to_html()
         payload = html[html.rfind("var data = ") :]
         assert '"layerIds": ["True colour"]' in payload, (

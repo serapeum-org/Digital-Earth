@@ -89,6 +89,134 @@ def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     )
 
 
+def draw_terrain(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre DEM source that drapes the map over terrain.
+
+    Terrain draws from no source in the figure. MapLibre reads heights from a **tile pyramid** and nothing
+    else, so :meth:`ThreeDMixin.terrain_tiles` encodes a DEM to tiles when it is given one and records the
+    tile-URL template it then reads — a plain string, which is why `_data` is unused and why a terrain layer
+    survives being written down and read back.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — terrain has no source in the figure to open (see
+            :data:`~digitalearth.web.renderer.DESCRIPTION_ONLY_KINDS`).
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` on the terrain route: its source is the
+        ``raster-dem`` source, and its "layer" is the ``set_terrain`` call's own arguments, which is what
+        MapLibre takes in place of a style layer. Its visibility is read there, so hiding a terrain layer
+        leaves the map flat instead of half-draped.
+
+    Raises:
+        ValueError: when the description carries neither the tiles the heights are read from, the scheme
+            they are encoded with, nor the exaggeration they are drawn at — naming the layer, its kind and
+            what is missing.
+    """
+    from maplibre.sources import RasterDEMSource
+
+    from digitalearth.web.renderer import TERRAIN_ROUTE, DrawnLayer, required_props
+
+    _require_layer_api()
+    props = required_props(layer, "tiles", "encoding", "exaggeration")
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=RasterDEMSource(
+            tiles=[props["tiles"]],
+            encoding=props["encoding"],
+            tile_size=_TILE_SIZE,
+        ),
+        layer={
+            "id": layer.id,
+            "source": source_id,
+            "exaggeration": float(props["exaggeration"]),
+        },
+        route=TERRAIN_ROUTE,
+    )
+
+
+def draw_point_cloud(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the deck.gl ``PointCloudLayer`` for a described point cloud.
+
+    Args:
+        web_map: The map being drawn, whose display CRS a GeoDataFrame source is placed in.
+        data: The layer's source — the frame or coordinate array the builder already placed, or whatever
+            the figure's reference opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        the page composes into its one overlay.
+
+    Raises:
+        ValueError: when the description records none of the values the cloud is built from — its colour,
+            its point size or the column its heights come from — naming the layer, its kind and what is
+            missing.
+    """
+    from digitalearth.web.renderer import DECK_ROUTE, DrawnLayer, required_props
+
+    _require_layer_api()
+    props = required_props(layer, "color", "size", "z_column")
+    placed = (
+        placed_features(web_map, data, layer) if hasattr(data, "geometry") else data
+    )
+    return DrawnLayer(
+        source_id=None,
+        source_spec=None,
+        layer={
+            DECK_TYPE_KEY: "PointCloudLayer",
+            "id": layer.id,
+            "data": ThreeDMixin._point_cloud_data(placed, props["z_column"]),
+            "getPosition": "@@=position",
+            "getColor": list(props["color"]),
+            "pointSize": float(props["size"]),
+        },
+        route=DECK_ROUTE,
+    )
+
+
+def draw_model(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the deck.gl ``ScenegraphLayer`` for a described glTF/GLB model.
+
+    A model draws from no source in the figure: the asset is fetched by the page from the URL its
+    description carries, and the one position it stands at is what the caller passed — which is why `_data`
+    is unused and why a model layer survives being written down and read back.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — a model has no source in the figure to open.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        the page composes into its one overlay.
+
+    Raises:
+        ValueError: when the description records none of the values the model is placed from — its URL, its
+            position or its size scale — naming the layer, its kind and what is missing.
+    """
+    from digitalearth.web.renderer import DECK_ROUTE, DrawnLayer, required_props
+
+    _require_layer_api()
+    props = required_props(layer, "url", "lng", "lat", "size")
+    return DrawnLayer(
+        source_id=None,
+        source_spec=None,
+        layer={
+            DECK_TYPE_KEY: "ScenegraphLayer",
+            "id": layer.id,
+            "data": [{"position": [float(props["lng"]), float(props["lat"])]}],
+            "scenegraph": props["url"],
+            "getPosition": "@@=position",
+            "sizeScale": float(props["size"]),
+            "_lighting": "pbr",
+        },
+        route=DECK_ROUTE,
+    )
+
+
 class ThreeDMixin(_MixinBase):
     """3-D builders for :class:`~digitalearth.web.map.WebMap` (fill-extrusion + deck.gl + terrain/globe)."""
 
@@ -175,6 +303,7 @@ class ThreeDMixin(_MixinBase):
         encoding: str = "terrarium",
         tiles_path: Any = None,
         zooms: Any = None,
+        name: Optional[str] = None,
     ) -> Self:
         """Drape the map over 3-D terrain, from a pyramids DEM or from tiles already served (recipe W5).
 
@@ -197,6 +326,9 @@ class ThreeDMixin(_MixinBase):
                 **folder** — save the page into the same directory.
             zooms: ``(lowest, highest)`` zoom levels to encode. ``None`` derives ``(0, native)``, the same
                 range a tiled raster derives, so terrain and imagery over one extent stop at the same level.
+            name: What the terrain is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it, and hiding it leaves the map flat. ``None`` generates
+                ``dem-1``, ``dem-2``, … as every other unnamed layer is numbered.
 
         Returns:
             This map (chainable).
@@ -205,8 +337,9 @@ class ThreeDMixin(_MixinBase):
             TypeError: when ``dem`` is neither ``None``, a string, a path, nor a pyramids ``Dataset`` — an
                 ``xyzservices.TileProvider`` in particular, which is a ``dict`` and would otherwise be written
                 into the saved page whole, API key included.
-            ValueError: when a DEM is given with no ``tiles_path``, or ``zooms`` is not an ordered pair of
-                levels.
+            ValueError: when a DEM is given with no ``tiles_path``, ``zooms`` is not an ordered pair of
+                levels, or ``exaggeration`` is not a finite number — refused at this call, because a figure
+                holding NaN or infinity could not be written down.
             FileNotFoundError: when ``dem`` is a path that names nothing.
 
         Examples:
@@ -221,26 +354,29 @@ class ThreeDMixin(_MixinBase):
                 ```
         """
         _require_layer_api()
-        from maplibre.sources import RasterDEMSource
-
         template = self._terrain_template(
             dem, encoding=encoding, tiles_path=tiles_path, zooms=zooms
         )
-        src_id = self._uid("dem")
-        source = RasterDEMSource(
-            tiles=[template], encoding=encoding, tile_size=_TILE_SIZE
+        layer_id = self._layer_id("dem", name)
+        # The pyramid, as values: :func:`draw_terrain` builds the DEM source and the `set_terrain` call from
+        # exactly this, so the figure describes the terrain rather than naming a closure that drew it. The
+        # template is what is recorded rather than the DEM — a DEM is encoded to tiles here, and the tiles
+        # are what the page reads — so a terrain layer round-trips through `to_dict` whatever it was given.
+        self._index_layer(
+            layer_id,
+            name,
+            kind="terrain",
+            symbology=Symbology(
+                props={
+                    "tiles": template,
+                    "encoding": encoding,
+                    "exaggeration": as_finite(
+                        exaggeration, "exaggeration", "WebMap.terrain_tiles()"
+                    ),
+                }
+            ),
         )
-
-        def apply(widget: Any) -> None:
-            """Register the DEM source on the widget and turn terrain on.
-
-            Args:
-                widget: The MapLibre widget being built.
-            """
-            widget.add_source(src_id, source)
-            widget.set_terrain(src_id, exaggeration)
-
-        return self._queue(apply)
+        return self
 
     def _terrain_template(
         self, dem: Any, *, encoding: str, tiles_path: Any, zooms: Any
@@ -412,6 +548,7 @@ class ThreeDMixin(_MixinBase):
         color: Sequence[int] = (255, 140, 0),
         size: Optional[float] = None,
         point_size: Optional[float] = None,
+        name: Optional[str] = None,
     ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
 
@@ -425,6 +562,9 @@ class ThreeDMixin(_MixinBase):
                 means marker size on every tier.
             point_size: **Deprecated** spelling of ``size``; forwarded unchanged, after a
                 ``DeprecationWarning`` that ``point_size=`` will be removed in a future release.
+            name: What the cloud is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``deck-pointcloud-1``,
+                ``deck-pointcloud-2``, … as every other unnamed layer is numbered.
 
         Returns:
             This map (chainable).
@@ -443,9 +583,9 @@ class ThreeDMixin(_MixinBase):
                 >>> from digitalearth.web import WebMap              # doctest: +SKIP
                 >>> xyz = np.array([[0.0, 0.0, 5.0], [1.0, 1.0, 9.0]])  # doctest: +SKIP
                 >>> m = WebMap().point_cloud(xyz, size=3.0)          # doctest: +SKIP
-                >>> m._deck_layers[0]["pointSize"]                   # doctest: +SKIP
+                >>> m.layers[0]["pointSize"]                         # doctest: +SKIP
                 3.0
-                >>> m._deck_layers[0]["data"]                        # doctest: +SKIP
+                >>> m.layers[0]["data"]                              # doctest: +SKIP
                 [{'position': [0.0, 0.0, 5.0]}, {'position': [1.0, 1.0, 9.0]}]
 
                 ```
@@ -459,7 +599,7 @@ class ThreeDMixin(_MixinBase):
                 ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
                 ... )
                 >>> m = WebMap().point_cloud(gdf, z_column="h")      # doctest: +SKIP
-                >>> m._deck_layers[0]["data"]                        # doctest: +SKIP
+                >>> m.layers[0]["data"]                              # doctest: +SKIP
                 [{'position': [0.0, 0.0, 12.0]}, {'position': [1.0, 1.0, 30.0]}]
 
                 ```
@@ -470,7 +610,7 @@ class ThreeDMixin(_MixinBase):
                 >>> with warnings.catch_warnings(record=True) as caught:  # doctest: +SKIP
                 ...     warnings.simplefilter("always")
                 ...     m = WebMap().point_cloud(xyz, point_size=6.0)
-                >>> m._deck_layers[0]["pointSize"]                   # doctest: +SKIP
+                >>> m.layers[0]["pointSize"]                         # doctest: +SKIP
                 6.0
                 >>> caught[0].category.__name__                      # doctest: +SKIP
                 'DeprecationWarning'
@@ -493,21 +633,30 @@ class ThreeDMixin(_MixinBase):
         # point_cloud also accepts a raw sequence of xyz triples, so the full vector guard would be too
         # strict here; reject only a raster, which would otherwise die inside `_point_cloud_data`.
         self._reject_raster(points, "point_cloud")
-        data = self._point_cloud_data(
+        placed = (
             self._display_gdf(points, method="point_cloud")
             if hasattr(points, "geometry")
-            else points,
-            z_column,
+            else points
         )
-        layer = {
-            DECK_TYPE_KEY: "PointCloudLayer",
-            "id": self._uid("deck-pointcloud"),
-            "data": data,
-            "getPosition": "@@=position",
-            "getColor": list(color),
-            "pointSize": float(size),
-        }
-        return self._add_deck_layer(layer)
+        layer_id = self._layer_id("deck-pointcloud", name)
+        # The colour, the point size and the height column, as values: :func:`draw_point_cloud` builds the
+        # deck.gl layer from exactly this plus the source. The caller's own reference is what a figure can be
+        # written down with; the placed frame is handed to the first draw so nothing is warped twice.
+        self._index_layer(
+            layer_id,
+            name,
+            kind="point_cloud",
+            source=points,
+            placed=placed,
+            symbology=Symbology(
+                props={
+                    "color": list(color),
+                    "size": float(size),
+                    "z_column": z_column,
+                }
+            ),
+        )
+        return self
 
     def tiles_3d(self, url: str, *, opacity: float = 1.0) -> Self:
         """Render an OGC 3D Tiles / Cesium tileset as a deck.gl ``Tile3DLayer`` (recipe W5).
@@ -539,6 +688,7 @@ class ThreeDMixin(_MixinBase):
         lat: float,
         *,
         size: float = 1.0,
+        name: Optional[str] = None,
     ) -> Self:
         """Place a glTF/GLB 3-D model at ``(lng, lat)`` as a deck.gl ``ScenegraphLayer`` (recipe W5).
 
@@ -551,18 +701,33 @@ class ThreeDMixin(_MixinBase):
             lng: Longitude to place the model at.
             lat: Latitude to place the model at.
             size: Model size scale factor.
+            name: What the model is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``deck-gltf-1``, ``deck-gltf-2``, … as
+                every other unnamed layer is numbered.
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: when ``lng``, ``lat`` or ``size`` is not a finite number — refused at this call,
+                because a figure holding NaN or infinity could not be written down.
         """
         _require_layer_api()
-        layer = {
-            DECK_TYPE_KEY: "ScenegraphLayer",
-            "id": self._uid("deck-gltf"),
-            "data": [{"position": [float(lng), float(lat)]}],
-            "scenegraph": url,
-            "getPosition": "@@=position",
-            "sizeScale": float(size),
-            "_lighting": "pbr",
-        }
-        return self._add_deck_layer(layer)
+        caller = "WebMap.gltf()"
+        layer_id = self._layer_id("deck-gltf", name)
+        # The asset and where it stands, as values: :func:`draw_model` builds the deck.gl layer from exactly
+        # this. A URL is the whole source, so a model layer round-trips through `to_dict` unchanged.
+        self._index_layer(
+            layer_id,
+            name,
+            kind="model",
+            symbology=Symbology(
+                props={
+                    "url": url,
+                    "lng": as_finite(lng, "lng", caller),
+                    "lat": as_finite(lat, "lat", caller),
+                    "size": as_finite(size, "size", caller),
+                }
+            ),
+        )
+        return self
