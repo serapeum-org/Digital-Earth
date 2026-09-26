@@ -18,6 +18,11 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.contract_clauses import clause
 
+# The 3-D tier's own cutoff, read here rather than restated: `three_d.bigdata` is numpy and `logging` only, so
+# naming it costs the lean `dev` environment no engine import (`tests/three_d/test_lazy_engine.py` holds that
+# for the tier). Reading it is what ties C8's wording to the constant instead of to a copy of it (R2-M1).
+from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+
 CALLER = "InteractiveMap.points()"
 
 
@@ -292,18 +297,36 @@ class TestTheCutoffsDefaultIsPerUnitOfMeasure:
         """The rule must state a default per unit of measure, naming each number and its unit.
 
         Test scenario:
-            A clause that says "one shared default" is checked by the drift guard for citation shape only —
-            nothing proves the sentence true. Reading the numbers out of the rule is what ties the wording to
-            the constants, so retuning either constant without restating the clause fails here.
+            The first version of this guard looked for the literals `"50 000"` and `"500 000"` written into
+            the test, which is a second copy of the clause rather than a reading of the code: retuning
+            `DEFAULT_CELL_BUDGET` to 777 000 left both this test and its sibling green while the clause named
+            a number nothing used (review R2-M1). The numbers are now spelled **from the constants**, in the
+            space-separated form the clause writes them in, so either constant moving breaks this.
         """
         rule = clause(8).rule
+        spelled = {
+            "the row cutoff": f"{DEFAULT_BIG_DATA_THRESHOLD:,}".replace(",", " "),
+            "the cell budget": f"{DEFAULT_CELL_BUDGET:,}".replace(",", " "),
+        }
         missing = [
-            wanted
-            for wanted in ("50 000", "500 000", "rows", "cells")
-            if wanted not in rule
+            f"{what} ({number})"
+            for what, number in spelled.items()
+            if number not in rule
         ]
         assert missing == [], (
             f"contract C8 states the cutoff's default without naming {missing}: {rule}"
+        )
+
+    @pytest.mark.parametrize("unit", ["rows", "cells"])
+    def test_the_clause_names_the_unit_each_default_is_counted_in(self, unit):
+        """A number without its unit is the ambiguity the clause was restated to remove.
+
+        Args:
+            unit: The unit under test.
+        """
+        rule = clause(8).rule
+        assert unit in rule, (
+            f"contract C8 states a default without saying it counts {unit}: {rule}"
         )
 
     def test_the_two_defaults_are_different_quantities(self):
@@ -315,8 +338,6 @@ class TestTheCutoffsDefaultIsPerUnitOfMeasure:
             switching renderer. `three_d/bigdata.py` records the measurements behind the 500 000, so the
             divergence is the deliberate half and the clause was the wrong half.
         """
-        from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
-
         assert DEFAULT_CELL_BUDGET > DEFAULT_BIG_DATA_THRESHOLD, (
             f"a cell budget of {DEFAULT_CELL_BUDGET} is not above the {DEFAULT_BIG_DATA_THRESHOLD}-row "
             "cutoff, so the two no longer measure different things"
