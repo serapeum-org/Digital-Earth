@@ -40,7 +40,7 @@ has moved the record and nothing a viewer sees.
 
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
@@ -483,14 +483,17 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring the renderer's record of what is drawn from one figure to another.
+        """Bring what the map overlays from one figure to another, or leave it as it was.
 
-        **Record-only on this tier, for this wave** — with one exception. It reconciles :attr:`drawn`
-        and nothing else: *which* elements the map's `render()` overlays, and the figure its `figure_spec`
-        reports, are the map's own and neither follows. The exception is visibility: a layer `diff` reports
-        as shown or hidden is toggled on the very element the map holds, so applying a figure that hides a
-        layer draws it hidden while `figure_spec` still describes it visible. Nothing in the tier calls
-        this yet; wiring it into the map is Wave 7 (order 23).
+        **It reaches what the tier draws.** `render()` composes `InteractiveMap.layers`, and until order 23
+        only the builders wrote that list: `apply` reconciled :attr:`drawn` and nothing a viewer would see,
+        so after a remove and an add the overlay still showed what the builders had put down (review M1).
+        Now :meth:`_arrange` re-arranges the list from `after`'s draw order — which is what makes a removed
+        layer leave the picture, an added one enter it, and a moved one change what is on top.
+
+        The figure the map *reports* is still the map's own:
+        :meth:`~digitalearth.interactive.base.InteractiveMapBase._change` installs that once this has
+        returned, so a figure this refuses is never one the map describes.
 
         **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
         difference between two figures is read off their descriptions, and a keyword that does not travel in
@@ -507,13 +510,15 @@ class Renderer:
             after: The figure it should hold.
 
         Raises:
-            KeyError: when a layer names a kind this tier does not draw. The record is rolled back to what it
-                held before the call, so a refusal part-way through leaves no layer drawn that no figure owns.
+            KeyError: when a layer names a kind this tier does not draw. The record **and** the overlay are
+                rolled back to what they held before the call, so a refusal part-way through leaves no layer
+                drawn that no figure owns.
         """
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third has already drawn the
         # first two. Rolling back only the caller's description would leave this record holding layers no
         # figure owns — the defect the shared conformance contract states, and which the other tiers hit too.
         held = dict(self._drawn)
+        overlay = list(self._map.layers)
         try:
             self._reconcile(before, after)
         except BaseException:
@@ -521,7 +526,51 @@ class Renderer:
             # change stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
             # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._drawn = held
+            self._map.layers[:] = overlay
             raise
+        self._arrange(before, after, held, overlay)
+
+    def _arrange(
+        self,
+        before: FigureSpec,
+        after: FigureSpec,
+        held: Mapping[str, DrawnLayer],
+        overlay: List[Any],
+    ) -> None:
+        """Re-arrange what the map overlays so it is `after`'s layers, in `after`'s draw order.
+
+        In place, because `colorbar`, `legend` and `add_tool` assign into
+        :attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` by index and a caller may hold the
+        list: replacing the object would leave those writing into a list nothing composes.
+
+        Which element each layer contributes is the part worth reading. A layer this reconcile **drew** — one
+        added, rebuilt or restyled — contributes the element it has just built. A layer it did not touch
+        contributes the object the map already holds, rather than an equal element built again: `.opts()`
+        writes into HoloViews' option store against the object it is called on, so the colorbar and legend a
+        caller switched are on *that* element and nowhere else. A layer neither has — a caller's own element
+        the map let go of — contributes nothing, so nothing is overlaid for it.
+
+        Args:
+            before: The figure the map drew, which is the order `overlay` stood in: `add_layer` inserts each
+                element at its layer's index in the tree, so the tree's order **is** the overlay's order —
+                custom layers, which this record never holds, included.
+            after: The figure the map now draws, whose layer order is the overlay order.
+            held: What this renderer had drawn before the reconcile, by layer id.
+            overlay: The elements the map overlaid before it, in that order.
+        """
+        was = dict(zip(before.layers.ids, overlay))
+        arranged = []
+        for layer_id in after.layers.ids:
+            now = self._drawn.get(layer_id)
+            if now is not None and now is not held.get(layer_id):
+                arranged.append(now.element)
+            elif layer_id in was:
+                arranged.append(was[layer_id])
+            elif (
+                now is not None
+            ):  # pragma: no cover - a drawn layer the map never overlaid
+                arranged.append(now.element)
+        self._map.layers[:] = arranged
 
     def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
         """Draw the difference between two figures, layer by layer.

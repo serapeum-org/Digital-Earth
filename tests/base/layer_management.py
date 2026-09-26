@@ -123,6 +123,23 @@ class LayerManagementContract:
         """
         return tier._renderer.drawn.get(layer_id)
 
+    def engine_objects(self, tier: Any) -> Tuple[Any, ...]:
+        """Return everything the engine currently draws, as the objects themselves.
+
+        The counterpart to :meth:`engine_holds`, and what the removal probe asks: a record cleared beside an
+        engine that still draws the layer is the defect the shared renderer contract was written from, and
+        only a reading that lists the engine's own objects can tell the two apart. Compared by **identity**,
+        so a tier is held to having let go of the very object it drew.
+
+        Args:
+            tier: The object :meth:`make` returned.
+
+        Returns:
+            The objects, in any order — the artists on the axes, the elements the overlay composes, the
+            entries the widget is built from, the actors on the plotter.
+        """
+        return tuple(tier._renderer.drawn.values())
+
     def drawn_is_visible(self, tier: Any, layer_id: str) -> bool:
         """Return whether the engine is currently drawing what was drawn for a layer.
 
@@ -243,10 +260,16 @@ class LayerManagementConformance:
             The defect the shared renderer contract was written from, in its public form — an actor left on
             the engine under an id no layer owned, which `remove_layer` could then never reach.
         """
+        held = self.contract.engine_holds(drawn, BOTTOM)
+        assert held is not None, (
+            f"the {self.contract.backend} tier's adapter reports nothing drawn for {BOTTOM!r}, so the check "
+            "below would pass vacuously"
+        )
         drawn.remove_layer(BOTTOM)
-        assert self.contract.engine_holds(drawn, BOTTOM) is None, (
-            f"the {self.contract.backend} tier removed {BOTTOM!r} from its description and left it on the "
-            "engine"
+        left = [obj for obj in self.contract.engine_objects(drawn) if obj is held]
+        assert left == [], (
+            f"the {self.contract.backend} tier removed {BOTTOM!r} from its description and left what it "
+            "drew on the engine"
         )
 
     def test_remove_layer_refuses_an_id_nobody_drew(self, drawn):

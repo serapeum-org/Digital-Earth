@@ -977,19 +977,19 @@ class TestThreeDRendererConformance(RendererConformance):
 class InteractiveContract(RendererContract):
     """The interactive tier's adapter for the shared contract (#300).
 
-    **`apply` does not reach this tier's engine.** What the tier renders is the overlay `render()` composes
-    from `InteractiveMap.layers`, and only the builders write that list. `Renderer.apply` builds elements
-    into its own record and stops there, so after a remove and an add, `render()` still overlays what the
-    builders put down (review M1). That stays so for this wave; wiring `apply` into the overlay is later
-    work. Until then `apply_reaches_engine` is `False`, and the engine checks skip here, because they would
-    pass whatever `apply` did. The rollback and the redraw guard are held to the renderer's record instead,
-    the one thing `apply` does change here, and those checks run on this tier as on every other.
+    **`apply` reaches this tier's engine, since order 23.** What the tier renders is the overlay `render()`
+    composes from `InteractiveMap.layers`, and only the builders used to write that list: `Renderer.apply`
+    built elements into its own record and stopped there, so after a remove and an add `render()` still
+    overlaid what the builders had put down (review M1). It re-arranges the list now, and rolls it back with
+    the record when a change is refused — so the engine checks run here rather than skipping.
 
-    `apply_reaches_description` stays `False` too: `apply_figure` calls the renderer, and the renderer never
-    touches the map's `figure_spec`.
+    `apply_figure` goes through `InteractiveMapBase._change`, the path every public layer-management call
+    takes, which installs the description once the overlay has moved. So both halves are checked.
     """
 
     backend = "interactive"
+    apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an empty map.
@@ -1050,21 +1050,21 @@ class InteractiveContract(RendererContract):
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:
-        """Move the map to `figure` through the renderer.
+        """Move the map to `figure` through the path every change goes through.
 
         Args:
             tier: The map.
             figure: The figure.
         """
-        tier._renderer.apply(tier.figure_spec, figure)
+        tier._change(figure)
 
     def engine_holds(self, tier):
         """Return the elements `render()` overlays, bottom first.
 
-        No check reads this while `apply_reaches_engine` is `False` — `apply` never changes this list, which
-        is the point of the class docstring. It is still the honest answer to "what does the engine hold",
-        and it is what the engine checks will read once `apply` is wired into the overlay and the flag is
-        turned on. HoloViews elements compare by identity, so a redraw reads as a change.
+        The list the overlay is composed from, not the renderer's record of what it built: a rollback that
+        restored the record and left an element overlaid reads clean from the record, which is the 3-D
+        tier's first defect in this tier's terms. HoloViews elements compare by identity, so a redraw reads
+        as a change.
 
         Args:
             tier: The map.

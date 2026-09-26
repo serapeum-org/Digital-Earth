@@ -390,36 +390,81 @@ class TestARefusalLeavesTheRecordAsItWas:
         assert "second" in drawn_map._renderer.drawn, sorted(drawn_map._renderer.drawn)
 
 
-class TestApplyIsRecordOnly:
-    """On this tier, for this wave, `apply` reconciles the renderer's record and nothing the map reports."""
+class TestApplyReachesTheOverlay:
+    """`apply` moves the elements `render()` composes, and leaves the figure the map *reports* alone."""
 
-    def test_a_successful_apply_moves_the_record_and_not_the_map(self, drawn_map):
-        """Even an `apply` that succeeds leaves `figure_spec` and the composed elements as they were.
+    @staticmethod
+    def _emptied(drawn_map):
+        """Return the map's figure with its one layer taken out.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Returns:
+            The figure, and the panel emptied with it so `FigureSpec` accepts it.
+        """
+        figure = drawn_map.figure_spec
+        panel = with_fields(figure.panels[0], layers=())
+        return with_fields(
+            figure, layers=figure.layers.remove("points-1"), panels=(panel,)
+        )
+
+    def test_a_successful_apply_takes_the_element_out_of_the_overlay(self, drawn_map):
+        """A removed layer has to leave the picture, not only the record beside it.
 
         Args:
             drawn_map: A map with one drawn layer.
 
         Test scenario:
-            This replaces a check that, after a *refused* `apply`, `figure_spec` was unchanged. Nothing
-            `apply` does reaches `figure_spec` on this tier, rollback or not, so that check passed with the
-            rollback deleted (review M1). What is true — and what the module docstring now says — is that
-            `apply` is record-only here: the record follows the new figure, while the map's description and
-            the elements `render()` overlays stay where they were. Wiring `apply` into the map is Wave 7
-            (order 23); this test is meant to fail then, and to be rewritten with that change.
+            `apply` was record-only here until order 23: it reconciled `drawn` and nothing a viewer would
+            see, so a figure that removed a layer left `render()` overlaying it (review M1). This is the
+            same call, asked of the list the overlay is composed from.
         """
-        held_figure = drawn_map.figure_spec
-        held_elements = [id(element) for element in drawn_map.layers]
-        panel = with_fields(held_figure.panels[0], layers=())
-        emptied = with_fields(
-            held_figure, layers=held_figure.layers.remove("points-1"), panels=(panel,)
-        )
-        drawn_map._renderer.apply(held_figure, emptied)
-        # The record moved, so the two checks after this are not passing because `apply` did nothing.
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert drawn_map.layers == [], drawn_map.layers
+
+    def test_a_successful_apply_moves_the_record_too(self, drawn_map):
+        """So the check above is not passing because `apply` emptied the overlay and nothing else.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
         assert drawn_map._renderer.drawn == {}, drawn_map._renderer.drawn
-        assert drawn_map.figure_spec == held_figure, drawn_map.layer_ids
-        assert [id(element) for element in drawn_map.layers] == held_elements, (
-            drawn_map.layers
-        )
+
+    def test_a_successful_apply_leaves_the_figure_the_map_reports_alone(
+        self, drawn_map
+    ):
+        """The description is the map's own, installed by `_change` once `apply` has returned.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The split matters: `apply` called directly — by a caller composing a figure of their own, or by
+            the conformance adapter — must not leave the map describing something nobody asked it to. That
+            is what makes "a figure this refuses is never one the map reports" true of the public methods,
+            which install the description themselves.
+        """
+        held = drawn_map.figure_spec
+        drawn_map._renderer.apply(held, self._emptied(drawn_map))
+        assert drawn_map.figure_spec == held, drawn_map.layer_ids
+
+    def test_a_refused_apply_puts_the_overlay_back(self, drawn_map):
+        """The overlay rolls back with the record, or the two disagree about what is drawn.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            `apply` is not atomic — it draws layer by layer — so a refusal on the second layer has already
+            drawn the first. Rolling back only the record would leave that element overlaid under an id no
+            figure owns, which is the first defect the shared renderer contract states.
+        """
+        held = list(drawn_map.layers)
+        with pytest.raises(KeyError):
+            drawn_map._renderer.apply(drawn_map.figure_spec, _refused_figure(drawn_map))
+        assert drawn_map.layers == held, drawn_map.layers
 
 
 class TestRemovingALayer:

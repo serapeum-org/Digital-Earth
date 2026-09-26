@@ -39,6 +39,7 @@ from digitalearth.base.display import (
 from digitalearth.base.registry import (
     forget_namespace,
     forget_object,
+    kind_info,
     object_namespace,
 )
 from digitalearth.base.sources import get_source
@@ -778,7 +779,22 @@ class InteractiveMapBase:
 
                 ```
         """
-        tree = self._layer_tree
+        return self._figure_with(self._layer_tree)
+
+    def _figure_with(self, tree: LayerTree) -> FigureSpec:
+        """Return the figure this map would report if its layers were `tree`.
+
+        The panel is **derived** rather than maintained beside the tree: this tier composes one overlay, so
+        its one panel shows every layer, and a figure whose panel named a layer the tree does not hold is
+        refused by `FigureSpec` — correctly. Writing the derivation once is what lets :meth:`_change` take a
+        tree and keep the panel in step with it.
+
+        Args:
+            tree: The layers the figure describes.
+
+        Returns:
+            The figure, with the sources of exactly those layers.
+        """
         panel = PanelSpec(
             PANEL_ID,
             self.viewport,
@@ -791,6 +807,246 @@ class InteractiveMapBase:
                 key: ref for key, ref in self._sources.items() if key in set(tree.ids)
             },
         )
+
+    def _change(self, figure: FigureSpec) -> None:
+        """Move the map to another figure: reconcile the drawing, then install the description.
+
+        The one path every layer-management method goes through, and the 3-D scene's `_change` in this tier's
+        terms. Two things happen in an order that matters.
+
+        **The renderer draws the difference first**, and the description is installed only if it did. A
+        figure that cannot be drawn — a kind this tier has no drawer for — was installed first on the 3-D
+        tier and left in place when `apply` raised, so `layer_ids` and `figure_spec` advertised a layer that
+        was never drawn and could not be (review H7). Nothing is rolled back here because
+        :meth:`~digitalearth.interactive.renderer.Renderer.apply` rolls its own record back before it
+        re-raises, and :attr:`layers` is not touched until it has returned.
+
+        **`apply` moves the overlay with it.** :attr:`layers` is what `render()` composes, and only the
+        builders used to write it — so `Renderer.apply` reached the renderer's record and nothing a viewer
+        would see (review M1). It re-arranges that list now, which is what makes a change through this path
+        a change to the picture rather than to a record beside it.
+
+        Args:
+            figure: The figure the map should draw. Its panel is ignored — :meth:`_figure_with` derives one
+                from the tree — so a caller may hand in a tree wrapped by either.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+        """
+        candidate = self._figure_with(figure.layers)
+        self._renderer.apply(self.figure_spec, candidate)
+        self._layer_tree = candidate.layers
+        # The reference goes out of this map's figure and the object stays registered: a `figure_spec`
+        # captured before the change still names it, and `close()` is where a map lets its data go — the
+        # policy the static and web tiers settled on for the same reason.
+        kept = set(candidate.layers.ids)
+        self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+
+    def get_layer(self, layer_id: str) -> LayerSpec:
+        """Return the description of one layer, by id.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            Its :class:`~digitalearth.base.spec.LayerSpec` — kind, source, symbology, band and visibility.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - What a builder recorded, read back by id:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().add_layer("mine", name="obs").get_layer("obs").kind
+                'custom:holoviews'
+
+                ```
+        """
+        self._require_layer(layer_id)
+        return self._layer_tree.get(layer_id)
+
+    def remove_layer(self, layer_id: str) -> Self:
+        """Take a layer off the map, by id.
+
+        Args:
+            layer_id: The layer to remove.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do — a silent no-op here would look
+                exactly like a layer that refused to go away.
+
+        Note:
+            The **id** goes back to the pool, so a name removed and asked for again is handed back
+            unsuffixed: an id is reserved exactly while the layer is on the map, which is the lifetime all
+            four tiers share (:func:`~digitalearth.base.spec.layer.free_layer_id`).
+
+            The in-memory **data** is not forgotten. A `figure_spec` captured before the removal still names
+            it, and drawing that figure again needs it; :meth:`close` is where this map lets its data go.
+
+        Examples:
+            - A layer added and then removed leaves nothing behind:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("mine", name="obs")
+                >>> m.remove_layer("obs").layer_ids
+                []
+                >>> m.layers
+                []
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(self._figure_with(self._layer_tree.remove(layer_id)))
+        # After the change, not before: a drawer reads the credential and the engine values out of these,
+        # so dropping them first would leave the reconcile unable to draw the layer it is taking off.
+        self._layer_keys.pop(layer_id, None)
+        self._layer_held.pop(layer_id, None)
+        self._issued_ids.discard(layer_id)
+        if self._last_layer_id == layer_id:
+            remaining = self._layer_tree.ids
+            self._last_layer_id = remaining[-1] if remaining else None
+        return self
+
+    def set_visible(self, layer_id: str, visible: bool = True) -> Self:
+        """Show or hide a layer, by id.
+
+        The layer stays on the map and in its description — which is what lets it be switched back on, and
+        what tells a saved figure that the layer is there but not drawn.
+
+        Args:
+            layer_id: The layer to toggle.
+            visible: Whether it is drawn.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Warns:
+            UserWarning: when the element has no keyword to say it with — a basemap, or a `dynamic=True`
+                layer whose `DynamicMap` has produced no frame yet. The layer stays drawn and the warning
+                says so (:func:`~digitalearth.interactive.renderer._show`).
+
+        Note:
+            A layer of a kind this tier draws is hidden **on its element**, so `render()` leaves it out. A
+            :meth:`add_layer` layer of the caller's own is described hidden and nothing more: the tier holds
+            no description to rebuild such an element from, which is why `custom:holoviews` is named in the
+            renderer contract's `UNDRAWN_KINDS`, and there is no recorded element to write the option onto.
+
+        Examples:
+            - A hidden layer is still described, and comes back on:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("mine", name="obs")
+                >>> m.set_visible("obs", False).figure_spec.layers.is_visible("obs")
+                False
+                >>> m.set_visible("obs").figure_spec.layers.is_visible("obs")
+                True
+
+                ```
+        """
+        self._require_layer(layer_id)
+        self._change(
+            self._figure_with(self._layer_tree.set_visible(layer_id, bool(visible)))
+        )
+        return self
+
+    def move_layer(self, layer_id: str, index: int) -> Self:
+        """Move a layer in draw order, by id.
+
+        Args:
+            layer_id: The layer to move.
+            index: Its position afterwards, counted as a list index is — `0` is the bottom, `-1` the top. A
+                layer moves within its band: reordering the data layers is what a layer switcher does, and
+                dragging the basemap over them is not.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id.
+            IndexError: if the position is outside the map, or outside the layer's band.
+
+        Note:
+            This reaches the picture: `render()` overlays :attr:`layers` bottom first, and :meth:`_change`
+            rebuilds that list in the new order.
+
+        Examples:
+            - Two layers, reordered by id:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("under", name="under")
+                >>> m = m.add_layer("over", name="over")
+                >>> m.move_layer("over", 0).layer_ids
+                ['over', 'under']
+                >>> m.layers
+                ['over', 'under']
+
+                ```
+        """
+        self._change(self._figure_with(self._layer_tree.move(layer_id, index)))
+        return self
+
+    def replace_layer(self, layer: LayerSpec) -> Self:
+        """Swap a layer's description for another, keeping its id and its place in draw order.
+
+        This is how a layer is restyled or re-pointed after it has been drawn: the drawer builds the element
+        again from the new description, since a HoloViews element carries the options it was built with.
+
+        Args:
+            layer: The new description. Its id names the layer it replaces.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, or if the replacement names a kind this tier does not draw.
+            ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
+                the drawers read the source out of the figure, and a missing one reaches the drawer as
+                `None` and fails somewhere it cannot explain.
+
+        Examples:
+            - A layer re-described keeps its id and its place:
+                ```python
+                >>> from dataclasses import replace
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_layer("mine", name="obs")
+                >>> _ = m.replace_layer(replace(m.get_layer("obs"), label="Observations"))
+                >>> m.get_layer("obs").label
+                'Observations'
+
+                ```
+        """
+        self._require_layer(getattr(layer, "id", None))
+        if layer.source_id is None and kind_info(layer.kind).takes != "none":
+            raise ValueError(
+                f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
+                f"needs a source_id; got None"
+            )
+        self._change(self._figure_with(self._layer_tree.replace(layer)))
+        return self
+
+    def _require_layer(self, layer_id: Any) -> None:
+        """Refuse an id this map does not draw, naming the ids it does.
+
+        Written once because five public methods ask the same question, and a refusal that named neither the
+        id nor the alternatives is the one a caller cannot act on.
+
+        Args:
+            layer_id: The id the caller passed.
+
+        Raises:
+            KeyError: when no layer has that id.
+        """
+        if layer_id not in self._layer_tree:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; its layers are {self.layer_ids}"
+            )
 
     @property
     def viewport(self) -> Viewport:

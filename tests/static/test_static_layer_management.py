@@ -60,6 +60,22 @@ class StaticContract(LayerManagementContract):
         tier.text(1.0, 1.0, "upper", name=TOP)
         return BOTTOM, TOP
 
+    @staticmethod
+    def _owners(tier):
+        """Return the id of the artist each layer owns, keyed by `id()` of the artist.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            Artist identity to layer id.
+        """
+        return {
+            id(artist): layer_id
+            for layer_id, drawn in tier._renderer.drawn.items()
+            for artist in drawn.artists
+        }
+
     def engine_order(self, tier):
         """Return the layer ids in the order the axes paints them.
 
@@ -70,17 +86,45 @@ class StaticContract(LayerManagementContract):
             The ids, bottom first, with an artist no layer owns — the axes' own spines, its patch — left
             out.
         """
-        owner = {
-            id(artist): layer_id
-            for layer_id, drawn in tier._renderer.drawn.items()
-            for artist in drawn.artists
-        }
+        owner = self._owners(tier)
         painted = []
         for artist in _painted(tier.ax) or ():
             layer_id = owner.get(id(artist))
             if layer_id is not None and layer_id not in painted:
                 painted.append(layer_id)
         return tuple(painted)
+
+    def engine_objects(self, tier):
+        """Return every artist the axes paints, in painting order.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            The artists themselves, so a removal is held to having taken the very artist it drew off the
+            axes rather than only out of the renderer's record.
+        """
+        return tuple(_painted(tier.ax) or ())
+
+    def engine_holds(self, tier, layer_id):
+        """Return the first artist the axes paints for one layer.
+
+        The axes rather than the renderer's record: the record is what a redraw is decided from, so reading
+        it back would be asking the decision about itself. A matplotlib artist is a stable object, so its
+        identity is what tells a layer drawn again from one merely re-described.
+
+        Args:
+            tier: The map.
+            layer_id: The layer to look up.
+
+        Returns:
+            The artist, or `None` when nothing the layer owns is on the axes.
+        """
+        owner = self._owners(tier)
+        for artist in _painted(tier.ax) or ():
+            if owner.get(id(artist)) == layer_id:
+                return artist
+        return None
 
 
 class TestStaticLayerManagement(LayerManagementConformance):

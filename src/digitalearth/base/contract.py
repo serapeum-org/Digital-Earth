@@ -439,11 +439,9 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # `field`, `lines` and `add_layer` were listed here, each `_drawn_as` the tier's own
                 # spelling. All three are adopted at order 27a: the tier answers to the Core name and the old
                 # spelling is a live alias, so neither is pending any more.
-                "get_layer": _PENDING_IDENTITY,
-                "remove_layer": _PENDING_IDENTITY,
-                "set_visible": _PENDING_LAYERS,
-                "move_layer": _PENDING_LAYERS,
-                "replace_layer": _PENDING_LAYERS,
+                # `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer` were listed
+                # here against order 23, which has now built all five: the tier answers to each over its own
+                # renderer, through `InteractiveMapBase._change`.
                 "set_bounds": f"no framing method here under any spelling — {_FRAMING_ORDER}",
             }
         ),
