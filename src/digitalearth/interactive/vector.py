@@ -1,6 +1,6 @@
 """VectorMixin — vector builders for :class:`~digitalearth.interactive.map.InteractiveMap`.
 
-Owns ``points`` / ``path`` / ``polygons`` / ``choropleth`` (DI.1b) and the u/v vector fields
+Owns ``points`` / ``lines`` / ``polygons`` / ``choropleth`` (DI.1b) and the u/v vector fields
 ``vectorfield`` / ``streamlines`` / ``barbs`` (DI.5, recipe I6); meshes/density (DI.6) and graphs
 (DI.15) land later.
 

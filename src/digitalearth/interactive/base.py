@@ -4,7 +4,7 @@
 (``figure_spec``), and the HoloViews elements those descriptions were drawn into, in draw order — the display-CRS
 reproject-through-pyramids plumbing, and the render/save/show lifecycle. Capability mixins (raster, vector,
 big-data, temporal, decoration, interaction, projection, animation, dashboard) live in sibling modules and add
-``image()`` / ``points()`` / … builder methods that call ``self.add_layer(...)``; the public
+``field()`` / ``points()`` / … builder methods that call ``self.add_layer(...)``; the public
 :class:`digitalearth.interactive.map.InteractiveMap` composes the base with those mixins — exactly mirroring the
 2-D ``Map(GeoLayerBase, RasterMixin, …)`` and 3-D ``Scene3D(Scene3DBase, TerrainMixin, …)`` patterns.
 
@@ -217,7 +217,7 @@ def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, An
     The bag that goes round the rule. :func:`describe` asks
     :func:`~digitalearth.base.spec._serial.travels_in_a_figure` per value — but every builder used to record
     its `**opts` wholesale into `held`, untested. So which of the caller's keywords a figure kept was decided
-    by which ones the builder happened to name in its signature: `image(alpha=0.25)` survived because
+    by which ones the builder happened to name in its signature: `field(alpha=0.25)` survived because
     `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
     channels the shared vocabulary declares. A figure read back elsewhere then drew the engine's defaults
     where the caller's styling had been, silently (review M3).
@@ -1229,7 +1229,7 @@ class InteractiveMapBase:
         """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
 
         A basemap, land or ocean is drawn beneath the data and carries no colorbar, legend or hover of its
-        own, so `image(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
+        own, so `field(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
         inserted at the front of `layers` and so never became the layer these acted on; the web tier's
         `_last_layer_id` likewise counts data layers only. An underlay still takes the slot while nothing
         above the underlay band has been added, so a map of tiles alone can be configured at all.
@@ -1529,7 +1529,7 @@ class InteractiveMapBase:
         """Return the value-dimension name for ``source`` (variable → z name → ``"value"``).
 
         The single naming recipe the raster/temporal builders share, so the value dimension is
-        labelled consistently across ``image`` / ``quadmesh`` / ``timecube`` frames.
+        labelled consistently across ``field`` / ``quadmesh`` / ``timecube`` frames.
 
         Args:
             source: The display-CRS :class:`Source` whose value dimension is being named.

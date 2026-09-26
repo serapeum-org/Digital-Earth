@@ -1,6 +1,6 @@
 """RasterMixin — raster builders for :class:`~digitalearth.interactive.map.InteractiveMap`.
 
-Owns ``image`` / ``rgb`` / ``quadmesh`` / ``contours`` / ``filled_contours`` / ``spaghetti`` (DI.1a);
+Owns ``field`` / ``rgb`` / ``quadmesh`` / ``contours`` / ``filled_contours`` / ``spaghetti`` (DI.1a);
 ``large_image`` viewport loading lands later (DI.14).
 
 Every builder records what it draws; its drawer funnels through ``_to_display_source`` (reproject in
@@ -489,16 +489,16 @@ class RasterMixin(_MixinBase):
     ) -> Self:
         """Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).
 
-        Unlike :meth:`image` (regular grid), a ``QuadMesh`` draws each cell from its coordinate
+        Unlike :meth:`field` (regular grid), a ``QuadMesh`` draws each cell from its coordinate
         arrays, so irregularly spaced or 2-D (curvilinear) coordinates render without resampling.
 
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to render.
             cmap: Colormap name; ``None`` (default) resolves it from the variable via
-                ``autostyle.auto_style`` (DI.12) — consistent with :meth:`image`.
+                ``autostyle.auto_style`` (DI.12) — consistent with :meth:`field`.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
-                ``autostyle.auto_style`` (#230), as :meth:`image` does.
+                ``autostyle.auto_style`` (#230), as :meth:`field` does.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).

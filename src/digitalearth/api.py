@@ -770,9 +770,9 @@ def _draw_interactive_raster(
         kwargs: The caller's remaining keywords.
 
     Raises:
-        ValueError: if `kind` names a renderer this tier does not have. It used to fall back to `image`
-            and draw something the caller never asked for; the matplotlib backend has always refused it
-            (review M7).
+        ValueError: if `kind` names a renderer this tier does not have. It used to fall back to the
+            tier's own default raster builder — `field` — and draw something the caller never asked
+            for; the matplotlib backend has always refused it (review M7).
     """
     if kind not in _INTERACTIVE_RASTER_KINDS:
         renderers = ", ".join(repr(name) for name in sorted(_INTERACTIVE_RASTER_KINDS))
@@ -835,7 +835,7 @@ def _quickmap_interactive(
 
     Raises:
         ValueError: if ``data`` is an empty ``FeatureCollection``, or if ``kind`` names a renderer this
-            tier does not have — it is refused by name rather than quietly drawn as an ``image``.
+            tier does not have — it is refused by name rather than quietly drawn with ``field``.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
     from digitalearth.interactive import InteractiveMap
