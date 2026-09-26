@@ -20,6 +20,9 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 
+import numpy as np
+
+from digitalearth.base.sources import get_source
 from digitalearth.base.spec import Camera
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.views import (
@@ -28,6 +31,7 @@ from digitalearth.three_d.views import (
     forget_view,
     named_view,
     register_view,
+    temporary_view,
     view_names,
 )
 
@@ -299,3 +303,90 @@ class TestACallerCanExtendTheTable:
         """`NAMED_VIEWS` is a view *of* the live table, not a copy taken at import."""
         register_view("underside", method="view_xy", describes="from below")
         assert "underside" in NAMED_VIEWS
+
+
+class TestAViewCanBeRegisteredForOneBlock:
+    """L7 — `temporary_view`, the scoped registration `base/registry.py` already set the precedent for.
+
+    `_VIEWS` is a process-global dict, and `register_view`/`forget_view` were the only way in and out — so a
+    test or a notebook that registered a view had to remember `forget_view` in a `finally`, or leak the name
+    into everything that ran afterwards. `registry.temporary_kind` is the same shape for layer kinds, so this
+    is symmetry rather than a new idea.
+    """
+
+    def test_the_view_resolves_inside_the_block_and_is_gone_after(self):
+        """The name is registered for the block and the table is put back when it ends."""
+        row = NamedView("scratch_top", "view_xy", "from directly above, for one block")
+        with temporary_view(row):
+            inside = "scratch_top" in view_names()
+        assert inside, "the view must resolve inside the block"
+        assert "scratch_top" not in view_names(), (
+            f"the block leaked the name: {view_names()}"
+        )
+
+    def test_a_shipped_view_is_restored_rather_than_dropped(self):
+        """Replacing a built-in for a block puts the built-in back, not nothing.
+
+        Test scenario:
+            This is the half a `try/finally` around `register_view(replace=True)` gets wrong: `forget_view`
+            deletes the name, so the shipped row is gone for the rest of the process.
+        """
+        shipped = named_view("top")
+        stand_in = NamedView(
+            "top", "view_xy", "a stand-in description", shipped.options
+        )
+        with temporary_view(stand_in):
+            described = named_view("top").describes
+        assert described == "a stand-in description", (
+            f"the stand-in did not take effect, got {described!r}"
+        )
+        assert named_view("top").describes == shipped.describes, (
+            f"the shipped row was not restored, got {named_view('top').describes!r}"
+        )
+
+    def test_the_table_is_restored_even_when_the_block_raises(self):
+        """A failing block must not leave its view behind — which is the whole reason for the context manager."""
+        row = NamedView("scratch_side", "view_yz", "from the side, for one block")
+        with pytest.raises(RuntimeError):
+            with temporary_view(row):
+                raise RuntimeError("the block failed")
+        assert "scratch_side" not in view_names(), (
+            f"a raising block leaked the name: {view_names()}"
+        )
+
+    def test_the_row_is_checked_against_pyvista_before_the_block_runs(self):
+        """A method PyVista does not have is refused where it was written, as `register_view` refuses it.
+
+        Test scenario:
+            A scoped registration that skipped the check would move the `AttributeError` from the line that
+            wrote the row into `NamedView.apply`, in a scene that was drawing a moment earlier — which is the
+            trade `register_view` explicitly declines to make.
+        """
+        row = NamedView("nowhere", "view_from_behind", "nowhere")
+        with pytest.raises(ValueError) as excinfo:
+            with temporary_view(
+                row
+            ):  # pragma: no cover - the block must not be entered
+                pass
+        assert "view_from_behind" in str(excinfo.value), (
+            f"the refusal must name the method it could not find, got: {excinfo.value}"
+        )
+        assert "nowhere" not in view_names(), "a refused row must not be in the table"
+
+    def test_a_scene_really_looks_from_a_temporary_view(self):
+        """The registration is the real one, so a scene can be aimed by the name inside the block."""
+        row = NamedView(
+            "scratch_under", "view_xy", "from below, for one block", {"negative": True}
+        )
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.terrain(
+                get_source(np.add.outer(np.arange(4.0), np.arange(5.0))), name="dem"
+            )
+            with temporary_view(row):
+                aimed = scene.view("scratch_under").camera.position[2]
+        finally:
+            scene.close()
+        assert aimed < 0.0, (
+            f"a view from below puts the camera under the scene, got z={aimed}"
+        )

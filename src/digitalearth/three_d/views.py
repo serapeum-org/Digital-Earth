@@ -22,9 +22,10 @@ the plotter really ends up with — not against the record the scene keeps of it
 worth the import, because the error then lands on the line that wrote the bad row — and when one is applied.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 __all__ = [
     "NAMED_VIEWS",
@@ -32,6 +33,7 @@ __all__ = [
     "forget_view",
     "named_view",
     "register_view",
+    "temporary_view",
     "view_names",
 ]
 
@@ -299,6 +301,69 @@ def forget_view(name: str) -> NamedView:
     view = named_view(name)
     del _VIEWS[view.name]
     return view
+
+
+@contextmanager
+def temporary_view(view: NamedView) -> Iterator[None]:
+    """Register a view for the duration of a block, then put the table back as it was.
+
+    The scoped half of :func:`register_view`, and the same shape
+    :func:`~digitalearth.base.registry.temporary_kind` gives a layer kind. The table is process-global, so a
+    test or a notebook that registered a view had to remember :func:`forget_view` in a ``finally`` — and
+    ``register_view(replace=True)`` paired with ``forget_view`` gets the replacement case wrong, because
+    forgetting *deletes* the name rather than restoring the row that was there (review L7).
+
+    Unlike :func:`register_view` this may replace a name already in the table; that is what swapping a shipped
+    view for one block needs. The row is still checked against PyVista before the block is entered, so a
+    method that does not exist is refused on the line that wrote it rather than from inside
+    :meth:`NamedView.apply`.
+
+    Args:
+        view: The row to install for the block.
+
+    Yields:
+        Nothing; the view is registered inside the block.
+
+    Raises:
+        TypeError: if `view` is not a :class:`NamedView`.
+        ValueError: if its method is not a ``view_*`` method of :class:`pyvista.Plotter`, or its options do
+            not bind to that method's signature.
+
+    Examples:
+        - The view resolves inside the block and is gone afterwards:
+            ```python
+            >>> from digitalearth.three_d.views import NamedView, temporary_view, view_names
+            >>> row = NamedView("demo:scratch", "view_xy", "from directly above, for one block")
+            >>> with temporary_view(row):
+            ...     "demo:scratch" in view_names()
+            True
+            >>> "demo:scratch" in view_names()
+            False
+
+            ```
+        - Swapping a shipped view for a block puts the shipped row back afterwards:
+            ```python
+            >>> from digitalearth.three_d.views import NamedView, named_view, temporary_view
+            >>> with temporary_view(NamedView("top", "view_xy", "a stand-in description")):
+            ...     named_view("top").describes
+            'a stand-in description'
+            >>> named_view("top").describes
+            'straight down, north up — the plan view'
+
+            ```
+    """
+    if not isinstance(view, NamedView):
+        raise TypeError(f"temporary_view needs a NamedView; got {type(view).__name__}")
+    _check_method(view.name, view.method, view.options)
+    previous = _VIEWS.get(view.name)
+    _VIEWS[view.name] = view
+    try:
+        yield
+    finally:
+        if previous is None:
+            _VIEWS.pop(view.name, None)
+        else:
+            _VIEWS[view.name] = previous
 
 
 def _check_method(name: str, method: str, options: Mapping[str, Any]) -> None:
