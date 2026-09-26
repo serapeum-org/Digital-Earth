@@ -1,7 +1,7 @@
 """RasterMixin — raster builders for :class:`~digitalearth.interactive.map.InteractiveMap`.
 
-Owns ``field`` / ``rgb`` / ``quadmesh`` / ``contours`` / ``filled_contours`` / ``spaghetti`` (DI.1a);
-``large_image`` viewport loading lands later (DI.14).
+Owns ``field`` / ``rgb`` / ``quadmesh`` / ``contours`` / ``spaghetti`` (DI.1a); ``large_image`` viewport
+loading lands later (DI.14).
 
 Every builder records what it draws; its drawer funnels through ``_to_display_source`` (reproject in
 **pyramids**, option A), then emits a **plain HoloViews** element (``hv.Image``/``hv.RGB``/``hv.QuadMesh``)
@@ -10,10 +10,11 @@ PlateCarree ``crs`` would re-project already-projected coordinates at render tim
 masked array from pyramids and renders transparent (``NaN``).
 
 **Naming note** — the interactive builders use HoloViews-idiomatic names that differ from the static
-``Map``: ``rgb`` (static ``rgb_composite``), ``contours``/``filled_contours`` (one
-``contours(filled=)`` there). ``field``/``spaghetti``/``quadmesh`` match. The divergence
-is intentional (this tier reads as HoloViews to its users); the static↔interactive mapping is documented
-in the tier plan's feature-parity matrix.
+``Map``: ``rgb`` (static ``rgb_composite``). ``field``/``spaghetti``/``quadmesh``/``contours`` match —
+``contours`` because this tier's own second spelling ``filled_contours`` was deleted in review M3, leaving
+one method taking ``filled=`` on every tier that draws it. The remaining divergence is intentional (this
+tier reads as HoloViews to its users); the static↔interactive mapping is documented in the tier plan's
+feature-parity matrix.
 """
 
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
@@ -77,9 +78,10 @@ def _travelling_pair(pair: Any) -> Any:
 def _one_spacing_only(caller: str, levels: Any, interval: Optional[float]) -> None:
     """Refuse a contour call that asks for its levels two ways at once.
 
-    Shared by the tier's two contour spellings so neither can answer the pair differently from the other,
-    and taking the caller's name rather than hard-coding one: the message names the method the caller
-    actually wrote, which is the same rule the builders' own refusals follow.
+    Written once for the tier's two contour spellings, so neither could answer the pair differently from
+    the other; the second spelling is gone (review M3) and this is :meth:`RasterMixin.contours`' refusal
+    alone. It still takes the caller's name rather than hard-coding one, which is the rule every builder
+    refusal on this tier follows: the message names the method the caller actually wrote.
 
     Args:
         caller: The public method to name in the message.
@@ -559,8 +561,9 @@ class RasterMixin(_MixinBase):
 
         The three keywords the Tier-2 contract declares — ``levels``, ``interval`` and ``filled`` — on the
         one method that answers to the name, so a call written against the web or static tier runs here
-        unchanged (#262). ``filled=True`` is what :meth:`filled_contours` asks for, and ``interval=`` used
-        to fall through ``**opts`` to HoloViews, which refused it as an unknown *style* option.
+        unchanged (#262). This tier also had a second method, ``filled_contours``, for what ``filled=True``
+        says here; it was deleted in review M3, and ``interval=`` used to fall through ``**opts`` to
+        HoloViews, which refused it as an unknown *style* option.
 
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
@@ -630,78 +633,6 @@ class RasterMixin(_MixinBase):
             opts=opts,
         )
 
-    @_skips_off_limb
-    def filled_contours(
-        self,
-        data: Any,
-        *,
-        band: int = 1,
-        levels: Any = None,
-        interval: Optional[float] = None,
-        name: Optional[str] = None,
-        visible: bool = True,
-        **opts: Any,
-    ) -> Self:
-        """Add filled contour bands of a raster band.
-
-        This tier's own spelling of ``contours(filled=True)``, which is the name the Tier-2 contract
-        declares and the one the web and static tiers answer to (#262). Prefer that; this is kept because it
-        is the name every script already written against this tier uses.
-
-        A spelling of a call takes that call's keywords, so ``interval=`` is here too. It was not, and fell
-        through ``**opts`` to HoloViews as an unknown style option — the trap the one ``contours`` closed,
-        left open on the other name (review H3).
-
-        Args:
-            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
-            band: 1-based band to contour.
-            levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
-                variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
-                Give at most one of this or ``interval``.
-            interval: Spacing between levels — one level every N, in the band's own units, resolved
-                against the band by the drawer exactly as :meth:`contours` resolves it.
-            name: The caller's own name for the layer, used as its id and its label; ``None``
-                (default) generates one from the kind, and a name already on the figure is suffixed
-                ``-2``, ``-3``, … (#321).
-            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
-                hidden, so a switcher reading the figure agrees with the drawing (#327).
-            **opts: Extra HoloViews style options applied to the element.
-
-        Raises:
-            ValueError: on the same terms as :meth:`contours` — both ``levels`` and ``interval`` given, a
-                non-positive or non-finite ``interval``, or a spacing no multiple of which lies inside the
-                band. The message names this method, because this is the name the caller wrote.
-
-        Examples:
-            - Fill the bands between contour levels:
-                ```python
-                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
-                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
-                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().filled_contours(dem, levels=5)         # doctest: +SKIP
-                >>> m.save("b.html").name                                      # doctest: +SKIP
-                'b.html'
-
-                ```
-
-        Returns:
-            This map (chainable).
-
-        See Also:
-            digitalearth.base.levels.levels_every: the shared interval-to-levels arithmetic.
-        """
-        _one_spacing_only("filled_contours", levels, interval)
-        return self._contour_layer(
-            data,
-            band=band,
-            levels=levels,
-            interval=interval,
-            filled=True,
-            name=name,
-            visible=visible,
-            opts=opts,
-        )
-
     def _contour_layer(
         self,
         data: Any,
@@ -717,8 +648,8 @@ class RasterMixin(_MixinBase):
     ) -> Self:
         """Record the shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
 
-        The one place :meth:`contours` and :meth:`filled_contours` describe their layer, so the two cannot
-        drift in what they record; :func:`draw_contours` traces it. A caller's ``levels`` always wins there;
+        The one place :meth:`contours` and :meth:`spaghetti` describe their layer, so the two cannot drift
+        in what they record; :func:`draw_contours` traces it. A caller's ``levels`` always wins there;
         ``None`` consults ``autostyle.auto_style`` for the variable's canonical contour levels (#230) before
         falling back to the tier's 10.
 

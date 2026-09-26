@@ -442,7 +442,6 @@ class TestOffLimbIsSkipped:
             "rgb",
             "quadmesh",
             "contours",
-            "filled_contours",
             "large_image",
             "points",
             "lines",

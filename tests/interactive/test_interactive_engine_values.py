@@ -129,7 +129,9 @@ def _builder_calls(dataset, collection, point_fc, polygon_fc, **extra):
         "rgb": lambda m: m.rgb(dataset, bands=(1, 1, 1), **extra),
         "quadmesh": lambda m: m.quadmesh(dataset, **extra),
         "contours": lambda m: m.contours(dataset, levels=3, **extra),
-        "filled_contours": lambda m: m.filled_contours(dataset, levels=3, **extra),
+        "filled_contours": lambda m: m.contours(
+            dataset, levels=3, filled=True, **extra
+        ),
         "large_image": lambda m: m.large_image(dataset, dynamic=False, **extra),
         "timecube": lambda m: m.timecube(collection, **extra),
         "spaghetti": lambda m: m.spaghetti(collection, **extra),

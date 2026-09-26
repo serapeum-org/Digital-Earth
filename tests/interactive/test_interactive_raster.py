@@ -226,7 +226,7 @@ class TestRgb:
 
 
 class TestQuadmeshAndContours:
-    """``quadmesh`` / ``contours`` / ``filled_contours``."""
+    """``quadmesh`` / ``contours``, lines and filled bands."""
 
     def test_quadmesh_type(self, m, dataset):
         m.quadmesh(dataset)
@@ -237,7 +237,7 @@ class TestQuadmeshAndContours:
         assert isinstance(m.layers[0], hv.element.Contours), f"got {type(m.layers[0])}"
 
     def test_filled_contours_are_polygons(self, m, dataset):
-        m.filled_contours(dataset, levels=5)
+        m.contours(dataset, levels=5, filled=True)
         assert isinstance(m.layers[0], hv.element.Polygons), f"got {type(m.layers[0])}"
 
     def test_contours_mpl_render_smoke(self, m, dataset, tmp_path):

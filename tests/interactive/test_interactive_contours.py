@@ -104,14 +104,24 @@ class TestOneMethodDrawsBothRenders:
         drawn.contours(_raster(), levels=LEVELS)
         assert _traced(drawn.layers[0]) == LEVELS
 
-    def test_the_separate_filled_method_still_fills(self, drawn):
-        """``filled_contours`` is a promise to every script already written against this tier.
+    def test_the_second_method_spelling_is_gone(self, drawn):
+        """Review M3: `filled_contours` survived the deprecation sweep on this tier alone.
 
         Args:
-            drawn: The map under test.
+            drawn: The map under test, for the class's own fixture.
+
+        Test scenario:
+            Part B's premise is that nothing is released, so a replaced spelling is deleted rather than
+            aliased — 18 of them were, and the contract clauses were restated to say so ("gone rather than
+            kept as second names"). This one was kept because it was "the name every script already written
+            against this tier uses", and then gained an `interval=` of its own, so one render was reachable
+            by two method names on one of the three tiers that draw it. The layer **kind**
+            `"filled_contours"` is a different thing and stays: it is what a saved figure reads back, which
+            `TestTheApiWrapperReachesThisTier.test_both_tiers_record_the_filled_render` holds.
         """
-        drawn.filled_contours(_raster(), levels=LEVELS)
-        assert type(drawn.layers[0]).__name__ == "Polygons"
+        assert not hasattr(type(drawn), "filled_contours"), (
+            "InteractiveMap still answers to filled_contours, the spelling contours(filled=True) replaced"
+        )
 
 
 class TestAnIntervalIsSpacing:
@@ -189,45 +199,22 @@ class TestAnIntervalIsSpacing:
             drawn.contours(constant, interval=100.0)
         assert drawn.layer_ids == []
 
-    def test_the_tiers_own_filled_spelling_takes_a_spacing_too(self, drawn):
-        """``filled_contours`` is documented as this tier's spelling of ``contours(filled=True)``.
+    def test_the_spacing_reaches_the_engine_when_the_bands_are_filled(self, drawn):
+        """So `test_an_interval_fills_too` is not passing on bands laid out at a spacing nobody asked for.
 
         Args:
             drawn: The map under test.
 
         Test scenario:
-            A spelling of a call takes the call's keywords, or it is a different call wearing the name. This
-            one took ``levels=`` alone, so a spacing fell through ``**opts`` and HoloViews refused it as a
-            style option — the same trap the one ``contours`` closed, still open on the other name.
+            A filled render writes one value per *band* rather than per level, so the element carries the
+            bands' mid-values and not the level set. The gap between them is still the spacing asked for.
+            This read the deleted second spelling until review M3 (the keyword reached the engine from
+            there, which was the point at the time); the one method has to answer for it now.
         """
-        drawn.filled_contours(_raster(), interval=100.0)
-        assert type(drawn.layers[0]).__name__ == "Polygons", drawn.layers
-
-    def test_the_spacing_reaches_the_engine_from_that_spelling(self, drawn):
-        """So the check above is not passing on bands laid out at a spacing nobody asked for.
-
-        Args:
-            drawn: The map under test.
-        """
-        drawn.filled_contours(_raster(), interval=100.0)
+        drawn.contours(_raster(), interval=100.0, filled=True)
         values = _traced(drawn.layers[0])
         gaps = {round(later - earlier, 9) for earlier, later in zip(values, values[1:])}
         assert gaps == {100.0}, values
-
-    def test_that_spelling_refuses_a_spacing_and_levels_together_under_its_own_name(
-        self, drawn
-    ):
-        """Two ways of asking for one thing is refused on both names, each naming the one written.
-
-        Args:
-            drawn: The map under test.
-        """
-        raster = _raster()
-        with pytest.raises(ValueError) as refused:
-            drawn.filled_contours(raster, levels=LEVELS, interval=100.0)
-        assert "filled_contours() takes at most one of" in str(refused.value), (
-            refused.value
-        )
 
 
 class TestTheApiWrapperReachesThisTier:

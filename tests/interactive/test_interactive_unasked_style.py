@@ -155,7 +155,7 @@ UNSTYLED: Dict[str, Callable[[Any], Any]] = {
     "rgb": lambda m: m.rgb(_dem(), bands=(1, 1, 1)),
     "quadmesh": lambda m: m.quadmesh(_dem()),
     "contours": lambda m: m.contours(_dem(), levels=LEVELS),
-    "filled_contours": lambda m: m.filled_contours(_dem(), levels=LEVELS),
+    "filled_contours": lambda m: m.contours(_dem(), levels=LEVELS, filled=True),
     "large_image": lambda m: m.large_image(_dem()),
     "spaghetti": lambda m: m.spaghetti(_collection(2), levels=4),
     "rasterize": lambda m: m.rasterize(_points()),
