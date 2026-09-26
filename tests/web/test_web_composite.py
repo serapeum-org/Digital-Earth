@@ -814,7 +814,9 @@ class TestTheTiledCompositeRoutes:
             json.loads(json.dumps(built.figure_spec.to_dict()))
         )
         drawn = WebMap()._renderer.draw_layer(reloaded, "scene")
-        assert drawn.source_spec["tiles"] == ["scene/{z}/{x}/{y}.png"], drawn.source_spec
+        assert drawn.source_spec["tiles"] == ["scene/{z}/{x}/{y}.png"], (
+            drawn.source_spec
+        )
 
     def test_a_declined_tiled_composite_is_not_the_maps_last_layer(
         self, dataset, tmp_path, monkeypatch

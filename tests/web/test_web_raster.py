@@ -783,7 +783,9 @@ class TestTheTiledRasterRoutes:
             m.field(target, tiles="xyz", tiles_path=destination, zooms=(9, 9))
         assert not destination.exists(), sorted(destination.rglob("*"))
 
-    def test_the_inline_route_still_draws_the_input_the_tiled_one_refuses(self, dataset):
+    def test_the_inline_route_still_draws_the_input_the_tiled_one_refuses(
+        self, dataset
+    ):
         """The refusal is about the route, so the other route has to keep taking the same input.
 
         Args:
