@@ -15,9 +15,21 @@ uses two of them:
   do with it, and a string placed at a coordinate really is drawn in the scene's coordinates.
 - **Figure furniture.** :meth:`DecorationMixin.set_title` is the panel's own `title`, which `PanelSpec` already
   carries, so it is described and is drawn again from the description — the web tier's answer for the same
-  name. It is applied through :func:`redraw_decoration`, which puts the scene's own furniture onto whichever
-  plotter it is drawing on, exactly as :meth:`~digitalearth.three_d.base.Scene3DBase._dress_plotter` does for
-  the vertical exaggeration and the camera.
+  name. :meth:`DecorationMixin.axes` (the labelled bounds box) and
+  :meth:`DecorationMixin.orientation_axes` (the corner triad) are furniture too, but **drawn view state**
+  rather than described: they are held on the scene and re-applied to whichever plotter it is drawing on,
+  exactly as its vertical exaggeration and its camera are. All three go through :func:`redraw_decoration`,
+  which :meth:`~digitalearth.three_d.base.Scene3DBase._dress_plotter` calls for the same reason it applies the
+  view scale.
+
+**Why the box and the triad are not described, and what would change that.** The only description that fits a
+coordinate frame is a :class:`~digitalearth.base.spec.Furniture` on the panel, and `Furniture` refuses a kind
+nobody registered. Registering one means two entries in `base/`: a `FurnitureInfo` in `base/registry.py` and the
+matching name in `base/capabilities.py`'s feature table, since `tests/base/test_capabilities.py` refuses
+registered furniture no tier could declare. Both are outside this tier, so they are **reported rather than
+made** — with the names `axes_box` and `orientation_axes`. Until then the two follow the static tier's own answer
+for figure-level decoration (`Scene.set_title`, `Scene.colorbar`, `Scene.legend` are drawn and not described):
+the scene keeps them, the figure does not carry them, and removing a layer never takes them with it.
 
 **What this module deliberately does not build.** A scalar bar and a legend. Both are Core names, and
 `contract.PENDING["3d"]` schedules both against order 24 — "the scalar bar is PyVista's, and becomes a guide on
@@ -25,7 +37,7 @@ the encoding", "a keyed list beside a scene" — so `colorbar()` and `legend()` 
 spellings, keyed to a layer's `Encoding`. Adding a differently shaped `scalar_bar()` here would put two
 spellings on one concept, which is the single thing the Core contract exists to prevent. A north arrow is not
 built either: the tier declares it absent, with its reason (a scene can be looked at from any direction, so
-there is no fixed north on screen), and PyVista has no `add_north_arrow` to wire to anyway.
+there is no fixed north on screen).
 """
 
 import math
@@ -34,12 +46,19 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 import numpy as np
 
+from digitalearth.base.crs import is_geographic
 from digitalearth.base.spec import LayerSpec
 from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.three_d.layer import drawing_props
 
-__all__ = ["DecorationMixin", "draw_text", "redraw_decoration"]
+__all__ = [
+    "DecorationMixin",
+    "axis_labels",
+    "axis_titles",
+    "draw_text",
+    "redraw_decoration",
+]
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
@@ -53,6 +72,134 @@ TITLE_SLOT: int = 7
 
 #: The actor name PyVista files a subtitle under, so a second `set_title` replaces it rather than stacking.
 SUBTITLE_ACTOR: str = "digitalearth-subtitle"
+
+#: What the axes are called when the scene's display CRS says nothing useful: the plain survey words, which are
+#: what #203 asked for in place of PyVista's `X`/`Y`/`Z`. A bare array has no CRS to read, and `X`/`Y`/`Z`
+#: labels a figure with the letters of its own array indices.
+FALLBACK_AXIS_TITLES: Tuple[str, str, str] = ("Easting", "Northing", "Elevation")
+
+#: The axis titles of a geographic display CRS, used when the CRS resolves but names no axes of its own.
+GEOGRAPHIC_AXIS_TITLES: Tuple[str, str, str] = ("Longitude", "Latitude", "Elevation")
+
+#: The short labels a corner triad is drawn with when the scene is projected. The triad is a widget a couple of
+#: centimetres across, so it takes abbreviations rather than the box's full titles — but never `X`/`Y`/`Z`.
+#: **Not** the CRS's own `abbrev` fields: measured, EPSG:3857 abbreviates its axes `X` and `Y`, which is exactly
+#: the labelling #203 asked to be rid of, so the short forms are chosen from geographic-or-projected instead.
+FALLBACK_AXIS_LABELS: Tuple[str, str, str] = ("E", "N", "Up")
+
+#: The short labels a geographic scene's triad is drawn with.
+GEOGRAPHIC_AXIS_LABELS: Tuple[str, str, str] = ("Lon", "Lat", "Up")
+
+#: Which of a CRS's axes is the scene's x, y and z, by the direction the axis points. A CRS declares its axes
+#: in its own order — EPSG:4326 is (latitude, longitude) — while a scene always draws x east and y north, so
+#: the axes are matched by direction rather than by position. Taking them in CRS order labelled a lon/lat scene
+#: back to front.
+_AXIS_DIRECTIONS: Tuple[Tuple[str, ...], ...] = (
+    ("east", "west"),
+    ("north", "south"),
+    ("up", "down"),
+)
+
+
+def axis_titles(crs: Any) -> Tuple[str, str, str]:
+    """Return what to call a scene's three axes, read off its display CRS.
+
+    A 3-D figure labelled `X`/`Y`/`Z` says nothing about what is being looked at, which is what PyVista's own
+    default does and what #203 asked for instead. The CRS knows the answer — a projected CRS calls its axes
+    Easting and Northing, a geographic one calls them longitude and latitude, and a 3-D CRS names its vertical
+    axis too — so the titles are read from it through pyramids rather than written out per tier.
+
+    Args:
+        crs: The scene's display CRS, in any spelling pyramids reads, or `None` for a scene whose layers
+            declared none.
+
+    Returns:
+        The `(x, y, z)` titles. From the CRS's own axis names where it has them, matched by the direction each
+        axis points rather than by the order the CRS declares them in; else the geographic or the plain survey
+        words; and :data:`FALLBACK_AXIS_TITLES` for a scene with no CRS at all, which is a bare array drawn in
+        whatever units it was handed in.
+
+    Examples:
+        - A projected CRS names its own axes, and the vertical one is filled in:
+            ```python
+            >>> from digitalearth.three_d.decoration import axis_titles
+            >>> axis_titles(32618)
+            ('Easting', 'Northing', 'Elevation')
+
+            ```
+        - A geographic CRS is labelled in its own terms, east first however the CRS orders its axes:
+            ```python
+            >>> from digitalearth.three_d.decoration import axis_titles
+            >>> axis_titles(4326)
+            ('Geodetic longitude', 'Geodetic latitude', 'Elevation')
+
+            ```
+        - A scene with no CRS is labelled with the survey words rather than with array indices:
+            ```python
+            >>> from digitalearth.three_d.decoration import axis_titles
+            >>> axis_titles(None)
+            ('Easting', 'Northing', 'Elevation')
+
+            ```
+    """
+    if is_geographic(crs) is None:
+        return FALLBACK_AXIS_TITLES
+    default = GEOGRAPHIC_AXIS_TITLES if is_geographic(crs) else FALLBACK_AXIS_TITLES
+    return tuple(  # type: ignore[return-value]
+        _named_axis(crs, directions) or fallback
+        for directions, fallback in zip(_AXIS_DIRECTIONS, default)
+    )
+
+
+def axis_labels(crs: Any) -> Tuple[str, str, str]:
+    """Return the short axis labels a corner triad is drawn with, for a scene's display CRS.
+
+    :func:`axis_titles`' companion for the widget that has no room for a title. The two are chosen the same
+    way — from the data rather than from the engine's defaults — but a triad gets `Lon`/`Lat`/`Up` where the
+    box gets `Geodetic longitude`.
+
+    Args:
+        crs: The scene's display CRS, in any spelling pyramids reads, or `None`.
+
+    Returns:
+        :data:`GEOGRAPHIC_AXIS_LABELS` for a geographic CRS, :data:`FALLBACK_AXIS_LABELS` otherwise — which
+        covers a projected CRS and a scene with none, both of which are drawn in a plane's own coordinates.
+
+    Examples:
+        - A lon/lat scene and a projected one are labelled in their own terms:
+            ```python
+            >>> from digitalearth.three_d.decoration import axis_labels
+            >>> axis_labels(4326), axis_labels(32618)
+            (('Lon', 'Lat', 'Up'), ('E', 'N', 'Up'))
+
+            ```
+    """
+    return GEOGRAPHIC_AXIS_LABELS if is_geographic(crs) else FALLBACK_AXIS_LABELS
+
+
+def _named_axis(crs: Any, directions: Tuple[str, ...]) -> Optional[str]:
+    """Return the name of the CRS axis pointing one way, or `None` when it declares none.
+
+    Args:
+        crs: The display CRS, in any spelling pyramids reads.
+        directions: The directions that count as this axis — `("east", "west")` for the scene's x.
+
+    Returns:
+        The axis's own name, or `None` when the CRS has no axis pointing that way (a 2-D CRS has no vertical
+        axis) or cannot be read at all.
+    """
+    from pyramids.base.crs import crs_from_user_input
+
+    try:
+        axes = crs_from_user_input(crs).axis_info
+    # Any CRS-resolution failure means "no name to read", never a guess — the rule `base.crs` follows.
+    except Exception:  # noqa: BLE001
+        return None
+    for axis in axes:
+        if str(getattr(axis, "direction", "")).lower() in directions:
+            name = getattr(axis, "name", None)
+            return str(name) if name else None
+    return None
 
 
 def _finite(value: Any, name: str, caller: str) -> float:
@@ -143,6 +290,40 @@ def _draw_title(plotter: Any, heading: str, style: Dict[str, Any]) -> None:
         )
 
 
+def _draw_axes_box(plotter: Any, crs: Any, style: Dict[str, Any]) -> None:
+    """Put a labelled bounds box onto a plotter, titled for the CRS the scene draws in.
+
+    Args:
+        plotter: The plotter to draw on.
+        crs: The scene's display CRS, which the untitled axes are named from.
+        style: The keywords :meth:`DecorationMixin.axes` recorded — the caller's own titles among them.
+    """
+    titles = axis_titles(crs)
+    options = dict(style)
+    for key, title in zip(("xtitle", "ytitle", "ztitle"), titles):
+        # The caller's own title wins; `None` means "name it from the data", which is the whole point.
+        if options.get(key) is None:
+            options[key] = title
+    # PyVista replaces the renderer's one `CubeAxesActor` rather than stacking a second, so re-applying this
+    # on every plotter the scene is dressed with leaves one box (measured, PyVista 0.48.4).
+    plotter.show_bounds(**options)
+
+
+def _draw_orientation_axes(plotter: Any, crs: Any, style: Dict[str, Any]) -> None:
+    """Put the corner orientation triad onto a plotter, labelled for the CRS the scene draws in.
+
+    Args:
+        plotter: The plotter to draw on.
+        crs: The scene's display CRS, which the unlabelled axes are named from.
+        style: The keywords :meth:`DecorationMixin.orientation_axes` recorded.
+    """
+    options = dict(style)
+    for key, label in zip(("xlabel", "ylabel", "zlabel"), axis_labels(crs)):
+        if options.get(key) is None:
+            options[key] = label
+    plotter.add_axes(**options)
+
+
 def redraw_decoration(scene: Any) -> None:
     """Put the scene's own decoration onto the plotter it is about to draw on.
 
@@ -168,6 +349,13 @@ def redraw_decoration(scene: Any) -> None:
     heading = scene._figure.panels[0].title
     if heading is not None:
         _draw_title(plotter, heading, held.get("title", {}))
+    # An absence is the "off" state: `axes(False)` drops the entry, so a window the scene is dressed with next
+    # does not get the box back. That is what makes turning it off a property of the scene rather than of one
+    # call on one plotter.
+    if "axes" in held:
+        _draw_axes_box(plotter, scene.display_crs, held["axes"])
+    if "orientation_axes" in held:
+        _draw_orientation_axes(plotter, scene.display_crs, held["orientation_axes"])
 
 
 def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[Tuple[Any, Any]]:
@@ -307,6 +495,139 @@ class DecorationMixin(_MixinBase):
             "font_size": int(font_size),
             "color": color,
             "subtitle": subtitle,
+        }
+        redraw_decoration(self)
+        return self
+
+    def axes(
+        self,
+        show: bool = True,
+        *,
+        xtitle: Optional[str] = None,
+        ytitle: Optional[str] = None,
+        ztitle: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Self:
+        """Draw a labelled box round the data, so the scene says what its coordinates are.
+
+        A 3-D render is otherwise an object floating in space: nothing on the window says how wide the ground
+        is or how high the relief goes. This is PyVista's `show_bounds` — the box with ticks and axis titles —
+        reached in the tier's own vocabulary, and **titled from the scene's display CRS** rather than from
+        PyVista's `X`/`Y`/`Z` (see :func:`axis_titles`). The box's extent follows the renderer, so calling this
+        before the data is added is fine: the box grows with what is drawn.
+
+        It is figure furniture, not a layer: it frames the data rather than being data, so it is not in the
+        layer tree and removing a layer never takes it with it. It is **not** written into the figure either —
+        see the module docstring for the two `base/` registrations that would let it be.
+
+        Args:
+            show: Whether the box is drawn. `False` takes it off, and keeps it off the next window the scene
+                is given.
+            xtitle: What to call the x axis. `None` names it from the display CRS.
+            ytitle: What to call the y axis. `None` names it from the display CRS.
+            ztitle: What to call the z axis. `None` names it from the display CRS.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.show_bounds` — `grid`, `location`, `ticks`,
+                `n_xlabels`, `font_size`, `all_edges`, ….
+
+        Returns:
+            This scene, so decoration chains.
+
+        Examples:
+            - A projected scene names its own axes rather than showing letters:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True, crs=32618)
+                >>> _ = scene.axes()
+                >>> box = scene.plotter.renderer.cube_axes_actor
+                >>> box.GetXTitle(), box.GetYTitle(), box.GetZTitle()
+                ('Easting', 'Northing', 'Elevation')
+                >>> scene.close()
+
+                ```
+            - Off again, in one keyword rather than a second method:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.axes().axes(False)
+                >>> scene.plotter.renderer.cube_axes_actor is None
+                True
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            orientation_axes: the corner triad, which says which way the axes point.
+        """
+        if not show:
+            self._decoration.pop("axes", None)
+            if self._plotter is not None:
+                self._plotter.remove_bounds_axes()
+            return self
+        self._decoration["axes"] = {
+            "xtitle": xtitle,
+            "ytitle": ytitle,
+            "ztitle": ztitle,
+            **kwargs,
+        }
+        redraw_decoration(self)
+        return self
+
+    def orientation_axes(
+        self,
+        show: bool = True,
+        *,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        zlabel: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Self:
+        """Show the corner triad, so a reader can tell which way the scene is being looked at from.
+
+        A 3-D scene has no fixed orientation — the camera decides — which is why this tier declares a north
+        arrow absent. The triad is the answer that does hold: three arrows in the corner of the window,
+        turning with the camera, labelled for the CRS the scene draws in rather than `X`/`Y`/`Z` (see
+        :func:`axis_labels`).
+
+        Figure furniture, like :meth:`axes`: it sits in a corner of the window rather than in the scene's
+        coordinates, so it is not a layer.
+
+        Args:
+            show: Whether the triad is drawn. `False` hides it, and keeps it hidden on the next window.
+            xlabel: What to label the x arrow. `None` labels it from the display CRS.
+            ylabel: What to label the y arrow. `None` labels it from the display CRS.
+            zlabel: What to label the z arrow. `None` labels it from the display CRS.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_axes` — `line_width`, `x_color`, `viewport`,
+                `labels_off`, ….
+
+        Returns:
+            This scene, so decoration chains.
+
+        Examples:
+            - A lon/lat scene's triad is labelled in its own terms:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True, crs=4326)
+                >>> _ = scene.orientation_axes()
+                >>> triad = scene.plotter.renderer.axes_actor
+                >>> triad.GetXAxisLabelText(), triad.GetZAxisLabelText()
+                ('Lon', 'Up')
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            axes: the labelled box, which says how far the coordinates reach.
+        """
+        if not show:
+            self._decoration.pop("orientation_axes", None)
+            if self._plotter is not None:
+                self._plotter.hide_axes()
+            return self
+        self._decoration["orientation_axes"] = {
+            "xlabel": xlabel,
+            "ylabel": ylabel,
+            "zlabel": zlabel,
+            **kwargs,
         }
         redraw_decoration(self)
         return self

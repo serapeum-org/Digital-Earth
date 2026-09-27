@@ -28,6 +28,8 @@ from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
 from digitalearth.three_d.decoration import (  # noqa: E402
     SUBTITLE_ACTOR,
     TITLE_SLOT,
+    axis_labels,
+    axis_titles,
 )
 
 #: The corner-annotation slot a subtitle is written into — `vtkCornerAnnotation`'s upper-left, which is where
@@ -345,3 +347,270 @@ class TestTextIsALayer:
         """
         with pytest.raises(ValueError, match="must be a finite number"):
             scene.text(float("nan"), 0.0, "nowhere")
+
+
+class TestTheSurfaceExists:
+    """#203's own probe, as an assertion: the tier had nothing decoration-shaped on it at all."""
+
+    def test_the_scene_names_a_title_a_text_and_a_coordinate_frame(self):
+        """`dir(Scene3D)` answers with the decoration verbs rather than with nothing.
+
+        Test scenario:
+            The issue's evidence is a list comprehension over `dir(Scene3D)` that returns `[]`. That is the
+            measurement this replaces, so it is written the same way — over the composed class, not over the
+            mixin, because composition is what a caller holds.
+        """
+        assert _decoration_names(Scene3D) == [
+            "axes",
+            "orientation_axes",
+            "set_title",
+            "text",
+        ], f"the 3-D tier's decoration surface is {_decoration_names(Scene3D)}"
+
+
+class TestTheAxisTitlesComeFromTheData:
+    """#203's acceptance criterion: meaningful axis names, never PyVista's `X`/`Y`/`Z`."""
+
+    def test_a_projected_crs_names_its_own_axes(self):
+        """A UTM zone calls its axes Easting and Northing, and the CRS is what says so."""
+        assert axis_titles(32618) == ("Easting", "Northing", "Elevation"), axis_titles(
+            32618
+        )
+
+    def test_a_geographic_crs_is_read_east_first_however_it_orders_its_axes(self):
+        """EPSG:4326 declares latitude first; a scene draws x east, so the axes are matched by direction.
+
+        Test scenario:
+            Taking the CRS's axes in the order it declares them labels a lon/lat scene back to front — the x
+            axis reading "Geodetic latitude". This is the probe that the direction, not the position, decides.
+        """
+        assert axis_titles(4326)[:2] == (
+            "Geodetic longitude",
+            "Geodetic latitude",
+        ), axis_titles(4326)
+
+    def test_a_three_dimensional_crs_names_its_vertical_axis_too(self):
+        """EPSG:4979 has an `up` axis of its own, and it is read rather than defaulted."""
+        assert axis_titles(4979)[2] == "Ellipsoidal height", axis_titles(4979)
+
+    def test_a_scene_with_no_crs_is_still_not_labelled_with_array_indices(self):
+        """A bare array has no CRS to read, and `X`/`Y`/`Z` is what #203 asked not to see."""
+        assert axis_titles(None) == ("Easting", "Northing", "Elevation"), axis_titles(
+            None
+        )
+
+    def test_an_unreadable_crs_is_not_guessed_at(self):
+        """Anything pyramids cannot read as a CRS falls back rather than raising."""
+        assert axis_titles("not-a-crs") == ("Easting", "Northing", "Elevation"), (
+            axis_titles("not-a-crs")
+        )
+
+    def test_the_triad_labels_are_short_forms_rather_than_the_full_names(self):
+        """A corner widget has room for `Lon`, not for `Geodetic longitude`."""
+        assert axis_labels(4326) == ("Lon", "Lat", "Up"), axis_labels(4326)
+
+    def test_a_projected_scenes_triad_is_labelled_for_a_survey(self):
+        """Easting and Northing abbreviate to E and N, which is what a projected scene's triad reads."""
+        assert axis_labels(32618) == ("E", "N", "Up"), axis_labels(32618)
+
+
+class TestTheAxesBoxIsFigureFurniture:
+    """`axes()` draws PyVista's labelled bounds box, titled from the scene's own display CRS."""
+
+    def test_the_box_is_drawn_and_titled_from_the_display_crs(self):
+        """A projected scene's box reads Easting / Northing / Elevation, not X / Y / Z."""
+        placed = Scene3D(off_screen=True, crs=32618)
+        placed.axes()
+        box = placed.plotter.renderer.cube_axes_actor
+        titles = (box.GetXTitle(), box.GetYTitle(), box.GetZTitle())
+        assert titles == ("Easting", "Northing", "Elevation"), (
+            f"the box is titled {titles}"
+        )
+        placed.close()
+
+    def test_the_callers_own_titles_win(self, scene):
+        """A caller who knows what the axis is gets to say so.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.axes(xtitle="Chainage (m)")
+        assert scene.plotter.renderer.cube_axes_actor.GetXTitle() == "Chainage (m)", (
+            scene.plotter.renderer.cube_axes_actor.GetXTitle()
+        )
+
+    def test_the_box_is_taken_off_again(self, scene):
+        """`axes(False)` removes it, so the switch is one keyword rather than two methods.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The window is opened **first**: reading `scene.plotter` afterwards builds it and re-applies the
+            furniture, which on a scene that has dropped the box produces an empty window whether or not
+            `axes(False)` ever removed anything.
+        """
+        opened = scene.plotter
+        scene.axes()
+        scene.axes(False)
+        assert opened.renderer.cube_axes_actor is None, (
+            "axes(False) left the bounds box on the plotter"
+        )
+
+    def test_a_removed_box_is_not_redrawn_by_a_later_dressing(self, scene):
+        """Turning it off has to survive the next time the scene dresses a plotter.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The furniture is re-applied on every plotter the scene is given, so "off" has to be an absence
+            in what it re-applies, not just a call that happened once.
+        """
+        # Open the window, so the box is really drawn before it is removed.
+        assert scene.plotter is not None, "the scene built no render window"
+        scene.axes()
+        scene.axes(False)
+        scene.plotter = pv.Plotter(off_screen=True)
+        assert scene.plotter.renderer.cube_axes_actor is None, (
+            "the removed bounds box came back on the next window"
+        )
+
+    def test_the_box_survives_a_plotter_swap(self, scene):
+        """Handing the scene another window keeps its box, as it keeps its scale and camera.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.axes(xtitle="Chainage (m)")
+        scene.plotter = pv.Plotter(off_screen=True)
+        box = scene.plotter.renderer.cube_axes_actor
+        assert box is not None, "the new window has no bounds box"
+        assert box.GetXTitle() == "Chainage (m)", box.GetXTitle()
+
+    def test_the_box_is_not_a_layer(self, scene):
+        """It is drawn round the data rather than being data, so it is not in the tree.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.axes()
+        assert scene.layer_ids == [], f"axes() added the layers {scene.layer_ids}"
+
+    def test_the_call_chains(self, scene):
+        """`axes` returns the scene, so decoration reads as one expression.
+
+        Args:
+            scene: The scene under test.
+        """
+        assert scene.axes() is scene, (
+            "axes() must return the scene so decoration chains"
+        )
+
+
+class TestTheOrientationTriadIsFigureFurniture:
+    """`orientation_axes()` is the corner triad: which way is up, in the scene's own terms."""
+
+    def test_the_triad_is_labelled_from_the_display_crs(self):
+        """A geographic scene's triad reads Lon / Lat / Up rather than X / Y / Z."""
+        placed = Scene3D(off_screen=True, crs=4326)
+        placed.orientation_axes()
+        triad = placed.plotter.renderer.axes_actor
+        labels = (
+            triad.GetXAxisLabelText(),
+            triad.GetYAxisLabelText(),
+            triad.GetZAxisLabelText(),
+        )
+        assert labels == ("Lon", "Lat", "Up"), f"the triad is labelled {labels}"
+        placed.close()
+
+    def test_the_callers_own_labels_win(self, scene):
+        """A caller who knows what the axis is gets to say so, here as well.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.orientation_axes(xlabel="Downstream")
+        assert scene.plotter.renderer.axes_actor.GetXAxisLabelText() == "Downstream", (
+            scene.plotter.renderer.axes_actor.GetXAxisLabelText()
+        )
+
+    def test_the_triad_is_shown(self, scene):
+        """The widget is enabled, which is what PyVista reports for a triad that is on the window.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.orientation_axes()
+        assert scene.plotter.renderer.axes_enabled is True, (
+            "orientation_axes() left the widget disabled"
+        )
+
+    def test_the_triad_is_hidden_again(self, scene):
+        """`orientation_axes(False)` hides it, matching `axes(False)`.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The window is opened **first**, for the reason :meth:`axes`' own removal probe states: a scene
+            with no window yet would report a hidden triad whether or not anything hid it.
+        """
+        opened = scene.plotter
+        scene.orientation_axes()
+        scene.orientation_axes(False)
+        assert opened.renderer.axes_enabled is False, (
+            "orientation_axes(False) left the widget enabled"
+        )
+
+    def test_the_triad_survives_a_plotter_swap(self, scene):
+        """The triad is scene state, so the next window gets it too.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.orientation_axes(xlabel="Downstream")
+        scene.plotter = pv.Plotter(off_screen=True)
+        assert scene.plotter.renderer.axes_actor.GetXAxisLabelText() == "Downstream", (
+            scene.plotter.renderer.axes_actor.GetXAxisLabelText()
+        )
+
+    def test_a_hidden_triad_is_not_brought_back_by_a_later_dressing(self, scene):
+        """Hiding it has to survive the next time the scene dresses a plotter, as `axes(False)` does.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The other half of the same rule: "off" is an absence in what the scene re-applies, not a call
+            that happened once on one window.
+        """
+        # Open the window, so the triad is really shown before it is hidden.
+        assert scene.plotter is not None, "the scene built no render window"
+        scene.orientation_axes()
+        scene.orientation_axes(False)
+        scene.plotter = pv.Plotter(off_screen=True)
+        assert scene.plotter.renderer.axes_enabled is False, (
+            "the hidden triad came back on the next window"
+        )
+
+    def test_the_triad_is_not_a_layer(self, scene):
+        """It sits in a corner of the window rather than in the scene's coordinates.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.orientation_axes()
+        assert scene.layer_ids == [], (
+            f"orientation_axes() added the layers {scene.layer_ids}"
+        )
+
+    def test_the_call_chains(self, scene):
+        """`orientation_axes` returns the scene, so the whole surface chains.
+
+        Args:
+            scene: The scene under test.
+        """
+        assert scene.orientation_axes() is scene, (
+            "orientation_axes() must return the scene so decoration chains"
+        )

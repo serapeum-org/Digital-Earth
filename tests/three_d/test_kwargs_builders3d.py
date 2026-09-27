@@ -57,6 +57,8 @@ DRAWS_WITH_KWARGS = {
 #: the reason — the same "declared, with a reason" shape :data:`~digitalearth.three_d.bigdata.UNREDUCED` uses. A
 #: method here is exempt because of what it does, not because nobody got round to it.
 NOT_A_DRAWING_CALL = {
+    "axes": "decoration: its keywords reach show_bounds, which takes no scalars and derives nothing from data",
+    "orientation_axes": "decoration: its keywords reach add_axes, which draws a widget rather than the data",
     "from_figure": "a constructor: the keywords configure the new scene, and no style is derived from data",
     "orbit": "an animation loop over layers already drawn; its keywords reach the writer, not a drawer",
     "save": "writes the scene that was already drawn; its keywords reach the exporter",
