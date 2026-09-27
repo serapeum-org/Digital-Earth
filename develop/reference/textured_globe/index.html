@@ -5922,7 +5922,7 @@ direction that shades a day/night terminator), <code>ambient</code>, <code>fig</
 <a id="__codelineno-0-1104" name="__codelineno-0-1104"></a>        <span class="bp">cls</span><span class="p">,</span>
 <a id="__codelineno-0-1105" name="__codelineno-0-1105"></a>        <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-1106" name="__codelineno-0-1106"></a>        <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1107" name="__codelineno-0-1107"></a>        <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-1107" name="__codelineno-0-1107"></a>        <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
 <a id="__codelineno-0-1108" name="__codelineno-0-1108"></a>        <span class="n">cmap</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="s2">&quot;viridis&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-1109" name="__codelineno-0-1109"></a>        <span class="n">vmin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1110" name="__codelineno-0-1110"></a>        <span class="n">vmax</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -9222,7 +9222,7 @@ the caller supplies is never closed by :meth:<code>close</code>.</p>
 
 
 <h3 id="digitalearth.static.textured_globe.TexturedGlobe.from_dataset" class="doc doc-heading"><a href="#digitalearth.static.textured_globe.TexturedGlobe.from_dataset" class="toclink">
-            <code class="highlight language-python"><span class="n">from_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;viridis&#39;</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">DEFAULT_TEXTURE_SHAPE</span><span class="p">,</span> <span class="n">resampling</span><span class="o">=</span><span class="s1">&#39;nearest&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">from_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">DEFAULT_BAND</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;viridis&#39;</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">DEFAULT_TEXTURE_SHAPE</span><span class="p">,</span> <span class="n">resampling</span><span class="o">=</span><span class="s1">&#39;nearest&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -9281,7 +9281,11 @@ as a patch on the globe rather than being smeared over it.</p>
               </div>
             </td>
             <td>
-                  <code>1</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;highlight language-python&quot;&gt;&lt;span class=&quot;n&quot;&gt;digitalearth&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;base&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;spec&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;selection&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;DEFAULT_BAND&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;/code&gt;
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-module-attribute&quot;&gt;&lt;code&gt;module-attribute&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt; (&lt;code&gt;digitalearth.base.spec.DEFAULT_BAND&lt;/code&gt;)" href="../vocabulary/#digitalearth.base.spec.selection.DEFAULT_BAND">DEFAULT_BAND</a></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -9624,7 +9628,7 @@ the sphere mesh and so would not be drawn — see :meth:<code>_warn_if_finer_tha
 <a id="__codelineno-0-1104" name="__codelineno-0-1104"></a>    <span class="bp">cls</span><span class="p">,</span>
 <a id="__codelineno-0-1105" name="__codelineno-0-1105"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-1106" name="__codelineno-0-1106"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1107" name="__codelineno-0-1107"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-1107" name="__codelineno-0-1107"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
 <a id="__codelineno-0-1108" name="__codelineno-0-1108"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="s2">&quot;viridis&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-1109" name="__codelineno-0-1109"></a>    <span class="n">vmin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1110" name="__codelineno-0-1110"></a>    <span class="n">vmax</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
