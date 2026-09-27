@@ -409,3 +409,53 @@ class TestAViewCanBeRegisteredForOneBlock:
         assert aimed < 0.0, (
             f"a view from below puts the camera under the scene, got z={aimed}"
         )
+
+    def test_a_padded_name_is_installed_stripped_as_register_view_installs_it(self):
+        """One row may not reach the table under two names depending on which door it came through.
+
+        Test scenario:
+            `register_view` strips the name it is given, so ``" padded "`` is registered as ``"padded"``.
+            `temporary_view` installed the row's name verbatim, so the same row was reachable as
+            ``" padded "`` through one door and ``"padded"`` through the other, and `named_view("padded")`
+            raised inside a block that had just installed it (review R2-L15).
+        """
+        row = NamedView(" spaced ", "view_xy", "from directly above, for one block")
+        with temporary_view(row):
+            names = view_names()
+        assert "spaced" in names, f"the block installed the name unstripped: {names}"
+
+    def test_a_padded_name_leaves_no_unstripped_row_behind(self):
+        """The other half: nothing is installed under the spelling the name was written with."""
+        row = NamedView(" spaced ", "view_xy", "from directly above, for one block")
+        with temporary_view(row):
+            names = view_names()
+        assert " spaced " not in names, (
+            f"the block installed two rows for one view: {names}"
+        )
+
+    def test_the_row_the_block_installs_carries_the_stripped_name(self):
+        """A row whose `name` disagrees with its key is a row `forget_view` hands back mis-keyed."""
+        row = NamedView(" spaced ", "view_xy", "from directly above, for one block")
+        with temporary_view(row):
+            installed = named_view("spaced").name
+        assert installed == "spaced", f"the installed row is named {installed!r}"
+
+    def test_a_name_that_is_not_a_name_is_refused_as_register_view_refuses_it(self):
+        """A blank name sits in the table unreachable, which is why one door already refuses it.
+
+        Test scenario:
+            `register_view("   ")` raises; `temporary_view` accepted the same name and installed a row under
+            ``""``. Two doors into one table have to ask the same question of what goes through them.
+        """
+        row = NamedView("   ", "view_xy", "from directly above, for one block")
+        with pytest.raises(ValueError, match="name"):
+            self._entered(row)
+
+    def test_a_refused_name_leaves_the_table_as_it_was(self):
+        """A refusal is not an installation, so nothing may be left under the empty spelling."""
+        row = NamedView("   ", "view_xy", "from directly above, for one block")
+        with pytest.raises(ValueError, match="name"):
+            self._entered(row)
+        assert "" not in view_names(), (
+            f"a refused row reached the table: {view_names()}"
+        )

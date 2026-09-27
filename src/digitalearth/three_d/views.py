@@ -22,6 +22,7 @@ the plotter really ends up with — not against the record the scene keeps of it
 worth the import, because the error then lands on the line that wrote the bad row — and when one is applied.
 """
 
+import dataclasses
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -254,9 +255,7 @@ def register_view(
 
             ```
     """
-    if not isinstance(name, str) or not name.strip():
-        raise ValueError(f"a view's name must be a non-empty string; got {name!r}")
-    name = name.strip()
+    name = _checked_name(name)
     if name in _VIEWS and not replace:
         raise ValueError(
             f"view {name!r} is already registered ({_VIEWS[name].describes}); "
@@ -354,16 +353,42 @@ def temporary_view(view: NamedView) -> Iterator[None]:
     """
     if not isinstance(view, NamedView):
         raise TypeError(f"temporary_view needs a NamedView; got {type(view).__name__}")
-    _check_method(view.name, view.method, view.options)
-    previous = _VIEWS.get(view.name)
-    _VIEWS[view.name] = view
+    # The same key `register_view` would have used, and the row rewritten to agree with it — a row whose
+    # `name` disagrees with the key it sits under is one `forget_view` hands back mis-keyed.
+    key = _checked_name(view.name)
+    installed = view if key == view.name else dataclasses.replace(view, name=key)
+    _check_method(key, view.method, view.options)
+    previous = _VIEWS.get(key)
+    _VIEWS[key] = installed
     try:
         yield
     finally:
         if previous is None:
-            _VIEWS.pop(view.name, None)
+            _VIEWS.pop(key, None)
         else:
-            _VIEWS[view.name] = previous
+            _VIEWS[key] = previous
+
+
+def _checked_name(name: Any) -> str:
+    """Return the name a row goes into the table under, refusing one that is not a name.
+
+    The hygiene both doors share. :func:`register_view` did this itself and :func:`temporary_view` did not, so
+    one row reached the table under two spellings depending on which door it came through — ``" padded "`` was
+    registered as ``"padded"`` by one and as ``" padded "`` by the other, and a blank name that one refuses the
+    other installed under ``""``, where nothing can reach it (review R2-L15).
+
+    Args:
+        name: The name as the caller wrote it.
+
+    Returns:
+        The name with surrounding whitespace removed, which is the key the table uses.
+
+    Raises:
+        ValueError: when `name` is not a string, or holds nothing but whitespace.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError(f"a view's name must be a non-empty string; got {name!r}")
+    return name.strip()
 
 
 def _check_method(name: str, method: str, options: Mapping[str, Any]) -> None:
