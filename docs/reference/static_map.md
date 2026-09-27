@@ -23,8 +23,9 @@ Cartopy, because the projection is applied to the *data* rather than to the axes
 
 Scientific field rendering and anything that has to come back as a file: rasters, contours, unstructured
 meshes, vector and flow fields, KDE, ensemble series and animations. It is the one tier installed without an
-extra, and the one the other three are measured against — `digitalearth.interactive`, `digitalearth.web` and
-`digitalearth.three_d` answer to the same method names where they can draw the same thing.
+extra, which is all that distinguishes it: `digitalearth.interactive`, `digitalearth.web` and
+`digitalearth.three_d` are peers, answering to the same method names wherever they can draw the same thing,
+and each owns what the others have no primitive for.
 
 ## The layer list
 
