@@ -73,21 +73,15 @@ group; the layer switcher toggles only that main layer, because that is what py-
 step picker instead — the steps are labelled with the times you passed, because those labels become the layer
 ids. `save("out.gif")` writes the steps as an animation, which needs a headless browser (Playwright or
 Selenium); that is deliberately not part of `digitalearth[web]`. The method behind that suffix is
-`save_animation(path, fps=...)`. It was once spelled `animate`, `to_gif` and `save_gif` as well; those three
-are gone.
+`save_animation(path, fps=...)`.
 
-## Names that were renamed
+## How this tier spells a few things
 
-The web tier's marker size is `size=` (it was `radius=` on `points`/`deck_scatter` and `point_size=` on
-`point_cloud`), its font size is `text_size=` (it was `size=` on `labels`/`text`), and its frame rate is
-`fps=` (it was `duration=`, which held a frame for that many *seconds* — the reciprocal, so an old call needs
-`fps = 1 / duration`). The methods were renamed too: `field` for `add_raster`, `set_bounds` for `fit_bounds`,
-`set_title` for `title`, `save_animation` for `animate`, `terrain_tiles` for `terrain` and `projection` for
-`globe` — where `globe(True)` is now `projection("globe")`.
-
-**None of the old spellings still works.** Nothing in this package is released, so each was deleted rather
-than kept as a second name: a call that uses one raises `TypeError` for an unexpected keyword, or
-`AttributeError` for a method that is not there.
+Three keywords are worth naming, because the word alone does not say which of two sizes it means: a marker's
+visual size is `size=`, a label's font size is `text_size=`, and a frame rate is `fps=` — frames per second,
+not seconds per frame. `padding` on `set_bounds` is a number of **screen pixels** here, where the two 2-D
+tiers pad by a fraction of the frame's own span; a page is framed in pixels, so that is the only padding that
+means anything on it.
 
 ::: digitalearth.web.map.WebMap
     options:
