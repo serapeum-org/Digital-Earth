@@ -1164,10 +1164,11 @@ class Scene3DBase:
         Raises:
             CapabilityError: if the replacement names a kind this tier does not declare — a plugin's kind on
                 a machine without the plugin reads as that.
-            KeyError: if no layer has that id.
-            ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
-                the drawers read the source from the figure, and a missing one reached `get_source(None)`
-                and answered with a `TypeError` nothing documents.
+            KeyError: if no layer has that id, naming the ids that do.
+            ValueError: if `layer` is not a `LayerSpec` — naming the method and the type it was handed, since
+                the commonest form of this is passing the id where the description belongs — or if it draws
+                from data and names no `source_id`: the drawers read the source from the figure, and a missing
+                one reached `get_source(None)` and answered with a `TypeError` nothing documents.
 
         Examples:
             - A layer redrawn in another colormap keeps its id:
@@ -1187,6 +1188,17 @@ class Scene3DBase:
 
                 ```
         """
+        # By type before by id: `layer.id` was read straight off the argument, so anything that is not a
+        # description died as `AttributeError: 'str' object has no attribute 'id'` — Python's words about this
+        # tier's internals, naming neither the method nor what it wanted. `isinstance` rather than a duck-typed
+        # `hasattr`, because an object carrying only `.id` and `.kind` got past the id lookup *and* the
+        # capability gate and died three checks deep at `layer.source_id`, having already been accepted twice
+        # (review R2-M9). The four tiers gave four classes for one bad argument; this is the fourth to settle.
+        if not isinstance(layer, LayerSpec):
+            raise ValueError(
+                f"{type(self).__name__}.replace_layer needs a LayerSpec — the new description, not an id; "
+                f"got {type(layer).__name__}"
+            )
         self._require_layer(layer.id)
         # The fourth production caller of `Capabilities.require` (D-10), joining the other three tiers. A
         # replacement is the one layer-management call that can name a **new kind**, so it is the one that can

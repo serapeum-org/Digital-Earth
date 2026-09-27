@@ -1155,6 +1155,100 @@ class TestTheContractNames:
         with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
             scene.replace_layer(absent)
 
+    @pytest.mark.parametrize(
+        ("given", "described"),
+        [("terrain-1", "str"), (None, "NoneType"), (object(), "object")],
+        ids=["the-id-by-mistake", "none", "a-plain-object"],
+    )
+    def test_a_replacement_that_is_not_a_layer_spec_is_refused_by_type(
+        self, scene, given, described
+    ):
+        """Four tiers gave four exception classes for one bad argument; this is the fourth.
+
+        Args:
+            scene: The scene under test.
+            given: The argument standing in for a description.
+            described: The type name the refusal has to quote back.
+
+        Test scenario:
+            `layer.id` was read straight off the argument, so anything that is not a description died as
+            `AttributeError: 'str' object has no attribute 'id'` — Python's words about this tier's
+            internals, naming neither the method nor what was expected. The static and web tiers settled the
+            shape; this matches it (review R2-M9).
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(ValueError) as refused:
+            scene.replace_layer(given)
+        message = str(refused.value)
+        assert described in message, (
+            f"the refusal must name the type it was handed, got: {message}"
+        )
+
+    def test_the_replacement_refusal_names_the_method_and_what_it_wanted(self, scene):
+        """A caller who passed the id where the description belongs has to be told which is which.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(ValueError) as refused:
+            scene.replace_layer("terrain-1")
+        message = str(refused.value)
+        missing = [
+            wanted
+            for wanted in ("Scene3D.replace_layer", "LayerSpec")
+            if wanted not in message
+        ]
+        assert missing == [], f"the refusal left out {missing}: {message}"
+
+    def test_an_object_that_merely_looks_like_a_layer_is_refused_too(self, scene):
+        """The shape a duck-typed check lets through: `.id` and `.kind` and nothing else.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            An object carrying only those two got past the id lookup *and* the capability gate and died at
+            `layer.source_id` — `AttributeError: 'DuckLayer' object has no attribute 'source_id'`, three
+            checks deep, having already been accepted twice. Checking the type refuses it at the door. The
+            web tier found this fifth shape, which the review's four did not cover.
+        """
+
+        class DuckLayer:
+            """Carries the two attributes the old checks read, and nothing else."""
+
+            id = "terrain-1"
+            kind = "terrain"
+
+        scene.terrain(get_source(_dem()))
+        # Built above the block, so `replace_layer` is the only call inside it that can raise (S5778).
+        duck = DuckLayer()
+        with pytest.raises(ValueError) as refused:
+            scene.replace_layer(duck)
+        assert "DuckLayer" in str(refused.value), (
+            f"the refusal must name the type it was handed, got: {refused.value}"
+        )
+
+    def test_a_real_layer_spec_is_still_accepted(self, scene):
+        """The type check may not refuse the argument the method exists for.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Without this the three refusals above would all pass for a method that refused everything.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Symbology
+
+        scene.terrain(get_source(_dem()))
+        held = scene.get_layer("terrain-1")
+        scene.replace_layer(replace(held, symbology=Symbology(props={"cmap": "magma"})))
+        assert scene.get_layer("terrain-1").symbology.props["cmap"] == "magma", (
+            "a real LayerSpec must still replace the layer it names"
+        )
+
     def test_render_hands_back_the_plotter(self, scene):
         """Every tier's `render` returns its own engine object; here that is the plotter.
 
