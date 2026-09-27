@@ -190,10 +190,10 @@ class _Frame(NamedTuple):
 
     Three spellings arrive at that method — a `Bounds` in any CRS, a bare ``(west, south, east, north)``
     sequence, and the ``None`` that fits the data — and exactly two things are done with whichever one came:
-    the axes limits
-    are set from it, and it is recorded as the region the view reports. A rectangle alone cannot carry both,
-    because the sequence form may legitimately run backwards to invert an axis and a `Bounds` refuses corners
-    the wrong way round. So the direction travels beside the rectangle rather than inside it.
+    the axes limits are set from it, and the rectangle the axes is then left holding is recorded as the region
+    the view reports. A rectangle alone cannot carry both, because the sequence form may legitimately run
+    backwards to invert an axis and a `Bounds` refuses corners the wrong way round. So the direction travels
+    beside the rectangle rather than inside it.
 
     Attributes:
         box: The region, always corners-in-order, in the display CRS.
