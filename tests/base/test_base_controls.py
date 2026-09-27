@@ -140,7 +140,9 @@ class TestWhatATierWillBuild:
         """
         with pytest.raises(ValueError) as refused:
             resolved_controls(["opacity"], offered=("visibility",), caller=CALLER)
-        assert "cannot build the controls ['opacity']" in str(refused.value), refused.value
+        assert "cannot build the controls ['opacity']" in str(refused.value), (
+            refused.value
+        )
 
     def test_the_missing_toggle_is_still_refused_when_every_name_is_buildable(self):
         """Reordering must not swallow the other refusal, so the tier that builds all three still hears it."""
