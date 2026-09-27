@@ -345,8 +345,9 @@ class TestTextIsALayer:
         Args:
             scene: The scene under test.
         """
+        nowhere = float("nan")
         with pytest.raises(ValueError, match="must be a finite number"):
-            scene.text(float("nan"), 0.0, "nowhere")
+            scene.text(nowhere, 0.0, "nowhere")
 
 
 class TestTheSurfaceExists:
