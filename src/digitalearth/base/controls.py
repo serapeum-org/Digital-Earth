@@ -102,10 +102,12 @@ def resolved_controls(
         The requested names, de-duplicated, in the caller's own order.
 
     Raises:
-        ValueError: when a name is not in :data:`LAYER_CONTROLS` (a typo, which would otherwise build
-            nothing and say nothing); when :data:`REQUIRED_CONTROL` was left out; or when a name is a real
-            control this tier has no widget for. The last is the case worth refusing loudly: accepting it
-            and building nothing is precisely how two of this tier's own flags came to look implemented.
+        ValueError: when a name is not in :data:`LAYER_CONTROLS` (a typo, which would otherwise build nothing
+            and say nothing); when a name is a real control this tier has no widget for; or when
+            :data:`REQUIRED_CONTROL` was left out. In that order, and the middle one is why: it is the case
+            worth refusing loudly — accepting it and building nothing is precisely how two of these tiers'
+            own flags came to look implemented — and checking the required control first made it unreachable
+            for any tier that offers a subset, unless the caller happened to spell `visibility` as well.
 
     Examples:
         - A tier that can build all three honours all three:
@@ -136,15 +138,20 @@ def resolved_controls(
             f"{caller} was given controls={unknown}, which name no control; choose from "
             f"{list(LAYER_CONTROLS)}"
         )
-    if REQUIRED_CONTROL not in named:
-        raise ValueError(
-            f"{caller} needs {REQUIRED_CONTROL!r} among its controls: a layer control without a per-layer "
-            f"toggle has nothing to switch. Got controls={list(named)}"
-        )
+    # Before the required-control check, not after it: a tier whose `offered` omits a control could otherwise
+    # never reach this message unless the caller also spelled `visibility`, so `controls=["opacity"]` on the
+    # web tier — the exact mistake its docstring promises to name — heard "needs 'visibility'" instead of
+    # "this tier cannot build opacity" (review R2-L13). What the caller has to change is the name this tier
+    # has no widget for; the missing toggle is what is left once every name is buildable.
     unbuildable = [name for name in named if name not in tuple(offered)]
     if unbuildable:
         raise ValueError(
             f"{caller} cannot build the controls {unbuildable}: this tier offers {list(offered)}. Drop "
             "them, or build the same map on a tier that has them."
+        )
+    if REQUIRED_CONTROL not in named:
+        raise ValueError(
+            f"{caller} needs {REQUIRED_CONTROL!r} among its controls: a layer control without a per-layer "
+            f"toggle has nothing to switch. Got controls={list(named)}"
         )
     return named

@@ -128,6 +128,32 @@ class TestWhatATierWillBuild:
             )
         assert "['visibility']" in str(refused.value), refused.value
 
+    def test_a_control_the_tier_cannot_build_is_named_before_the_missing_toggle(self):
+        """The refusal a caller can act on is "this tier has no such widget", so it comes first.
+
+        Test scenario:
+            The required-control check ran first, so a web-tier caller writing `controls=["opacity"]` — the
+            exact mistake the web tier's own docstring says it should hear about, "a caller moving a call here
+            should hear that this tier cannot" — was told it needed `visibility` instead. The unbuildable
+            message, which `base/controls.py` calls "the case worth refusing loudly", was unreachable for any
+            tier whose `offered` omits a control unless the caller *also* spelled `visibility` (review R2-L13).
+        """
+        with pytest.raises(ValueError) as refused:
+            resolved_controls(["opacity"], offered=("visibility",), caller=CALLER)
+        assert "cannot build the controls ['opacity']" in str(refused.value), refused.value
+
+    def test_the_missing_toggle_is_still_refused_when_every_name_is_buildable(self):
+        """Reordering must not swallow the other refusal, so the tier that builds all three still hears it."""
+        with pytest.raises(ValueError) as refused:
+            resolved_controls(["opacity"], offered=LAYER_CONTROLS, caller=CALLER)
+        assert REQUIRED_CONTROL in str(refused.value), refused.value
+
+    def test_a_name_no_tier_has_is_still_refused_before_either(self):
+        """A typo is neither unbuildable nor a missing toggle, and stays the first thing checked."""
+        with pytest.raises(ValueError) as refused:
+            resolved_controls(["opacty"], offered=("visibility",), caller=CALLER)
+        assert "which name no control" in str(refused.value), refused.value
+
     def test_every_refusal_says_where_the_call_was(self):
         """Three messages, one rule: each quotes the builder the keywords were written on."""
         with pytest.raises(ValueError) as refused:
