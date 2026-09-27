@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Self
 from loguru import logger
 from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.ask import UNSET, Unset
 from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD as _SHARED_BIG_DATA_THRESHOLD,
 )
@@ -74,10 +75,10 @@ from digitalearth.web.capabilities import CAPABILITIES
 #: point, so a page, a PNG snapshot and an animation frame are titled alike.
 DEFAULT_TITLE = "Digital-Earth map"
 
-#: The constructor's zoom when the caller expresses no preference, and the sentinel that says so. A value
-#: comparison cannot distinguish an explicit ``zoom=2`` from the default, and passing it is a choice.
+#: The constructor's zoom when the caller expresses no preference. A value comparison cannot distinguish an
+#: explicit ``zoom=2`` from the default, and passing it is a choice — which is why the signature's default is
+#: :data:`~digitalearth.base.ask.UNSET`, the same "not passed" the style keywords carry (#334).
 _DEFAULT_ZOOM = 2
-_UNSET = object()
 
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -660,7 +661,7 @@ class WebMapBase:
         self,
         *,
         center: Optional[Any] = None,
-        zoom: Any = _UNSET,
+        zoom: Any = UNSET,
         style: Any = "dark",
         crs: Any = DISPLAY_CRS,
         height: Optional[int] = 500,
@@ -676,6 +677,8 @@ class WebMapBase:
         installed. It is also why the view is tracked as *whether* one was asked for rather than
         by its value alone: an explicit ``zoom=2`` equals the default, and only the sentinel
         tells the two apart when :meth:`_map_view` decides whether to frame on the data instead.
+        That is the same question every style keyword on this tier now asks, so it is the same
+        sentinel — :data:`~digitalearth.base.ask.UNSET` — rather than a second one spelled here.
 
         Raises:
             ValueError: when ``crs`` is not EPSG:4326 — see :meth:`_validate_display_crs` for
@@ -684,8 +687,8 @@ class WebMapBase:
         self.center = center
         #: Whether the caller named a view of their own. Tracked from the sentinel rather than the value,
         #: because an explicit ``zoom=2`` is a choice and equals the default.
-        self._view_chosen = center is not None or zoom is not _UNSET
-        self.zoom = _DEFAULT_ZOOM if zoom is _UNSET else zoom
+        self._view_chosen = center is not None or not isinstance(zoom, Unset)
+        self.zoom = _DEFAULT_ZOOM if isinstance(zoom, Unset) else zoom
         self.style = style
         self.crs = self._validate_display_crs(crs)
         self.height = height
