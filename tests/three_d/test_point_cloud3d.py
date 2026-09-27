@@ -162,7 +162,7 @@ class TestKeywordsTheDrawerWouldOverwrite:
             scene.close()
         assert drawn == asked, f"the cloud must draw at size={asked}, got {drawn}"
 
-    @pytest.mark.parametrize("keyword", ["clim", "n_colors", "nan_color", "scalars"])
+    @pytest.mark.parametrize("keyword", ["clim", "n_colors", "scalars"])
     def test_a_colour_keyword_the_classification_owns_is_named(self, keyword):
         """A pinned colour keyword on a coloured cloud is refused by name, not silently replaced.
 
@@ -177,7 +177,6 @@ class TestKeywordsTheDrawerWouldOverwrite:
         values = {
             "clim": (0.0, 100.0),
             "n_colors": 3,
-            "nan_color": "#000000",
             "scalars": "elevation",
         }[keyword]
         pts = self._table()
@@ -193,6 +192,63 @@ class TestKeywordsTheDrawerWouldOverwrite:
         assert f"{keyword}=" in message, (
             f"the refusal must name the keyword {keyword}=, got {message}"
         )
+
+    def test_the_missing_data_colour_is_the_callers_to_choose(self):
+        """`nan_color` is a choice, not a consequence, so a coloured cloud takes the caller's own.
+
+        Test scenario:
+            It was refused with `clim` and `n_colors`, which is the wrong company: those are the class-index
+            range and the class count, and overriding either re-colours the wrong classes, while `nan_color`
+            is filled from the shared missing-data colour as a *default*. `point_cloud` has no `nan_color`
+            parameter, so refusing it meant "give up the colouring" for anyone who wanted a different one
+            (review R2-L2). Read off the actor's lookup table, which is what VTK actually paints with.
+        """
+        pts = self._table()
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.point_cloud(
+                pts, values=pts[:, 0], scheme="quantiles", k=3, nan_color="red"
+            )
+            painted = tuple(actor.mapper.lookup_table.nan_color)
+        finally:
+            scene.close()
+        assert painted == (1.0, 0.0, 0.0, 1.0), (
+            f"the cloud paints missing data {painted} rather than the red that was asked for"
+        )
+
+    def test_the_default_missing_data_colour_is_the_shared_one(self):
+        """Built the other way round: without a `nan_color` the shared neutral grey is what is painted.
+
+        Test scenario:
+            Without this the test above would pass for a cloud that happened to be red anyway, and the
+            default is the thing the classifier is responsible for.
+        """
+        pts = self._table()
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.point_cloud(pts, values=pts[:, 0], scheme="quantiles", k=3)
+            painted = tuple(actor.mapper.lookup_table.nan_color)
+        finally:
+            scene.close()
+        assert painted != (1.0, 0.0, 0.0, 1.0), (
+            f"the default missing-data colour is {painted}, which is the red the other test asks for"
+        )
+
+    def test_the_refusal_does_not_call_a_continuous_ramp_a_scheme(self):
+        """On the continuous path there is no classification, so "scheme=None" named nothing.
+
+        Test scenario:
+            The message read "together with the values it colours by (scheme=None)", which reads as a scheme
+            actually called None; the values reach the engine unchanged there and the ramp owns the range.
+        """
+        pts = self._table()
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(TypeError) as excinfo:
+                scene.point_cloud(pts, values=pts[:, 0], scalars="elevation")
+        finally:
+            scene.close()
+        assert "scheme=None" not in str(excinfo.value), excinfo.value
 
     def test_the_same_keyword_is_fine_on_an_uncoloured_cloud(self):
         """An uncoloured cloud derives no colour style, so a pinned `clim` is the caller's to set."""
