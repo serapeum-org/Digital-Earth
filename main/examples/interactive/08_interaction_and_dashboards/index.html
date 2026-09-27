@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -666,7 +666,7 @@
   <span class="md-ellipsis">
     
   
-    5 · Choropleth, shapes &amp; map decoration
+    5 · Choropleth, polygons &amp; map decoration
   
 
     
@@ -3252,14 +3252,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/static_map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Maps (matplotlib)
   
 
     
@@ -3400,34 +3400,6 @@
     
   
     Composite stretch
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/static/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    StaticGlyph
   
 
     
@@ -4609,9 +4581,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="6f35d56f-ab68-4e9a-be61-bf0706510894" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="67a3e3a2-ea8b-423d-bec8-bf84b1a8d22f" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('6f35d56f-ab68-4e9a-be61-bf0706510894');
+var element = document.getElementById('67a3e3a2-ea8b-423d-bec8-bf84b1a8d22f');
 (function(root) {
   function now() {
     return new Date();
@@ -4868,9 +4840,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="0799b259-d6e4-4c01-8627-7471e2b6f5b4" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="2c575872-4bca-46ed-98d5-3cc204bec55a" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('0799b259-d6e4-4c01-8627-7471e2b6f5b4');
+var element = document.getElementById('2c575872-4bca-46ed-98d5-3cc204bec55a');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5500,12 +5472,12 @@ show(m)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"hover the gauges"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">hover</span><span class="p">(</span><span class="n">tooltips</span><span class="o">=</span><span class="p">[(</span><span class="s2">"name"</span><span class="p">,</span> <span class="s2">"@name"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="s2">"@discharge"</span><span class="p">)])</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">m = InteractiveMap(crs=3857, title="hover the gauges")
-m.points(gauges, value_column="discharge", size=10, cmap="plasma")
+m.points(gauges, column="discharge", size=10, cmap="plasma")
 m.hover(tooltips=[("name", "@name"), ("discharge", "@discharge")])
 show(m)</div>
 </div>
@@ -5628,11 +5600,11 @@ show(m)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"draw a box to crop"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span><span class="o">.</span><span class="n">draw</span><span class="p">(</span><span class="s2">"box"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span><span class="o">.</span><span class="n">draw</span><span class="p">(</span><span class="s2">"box"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">m = InteractiveMap(crs=dem.epsg, title="draw a box to crop")
-m.image(dem, cmap="terrain").draw("box")
+m.field(dem, cmap="terrain").draw("box")
 show(m)</div>
 </div>
 </div>
@@ -5737,7 +5709,7 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="layer_control-a-layer-panel"><code>layer_control</code> — a layer panel<a class="anchor-link" href="#layer_control-a-layer-panel">¶</a></h3><p><code>layer_control</code> wraps the map in a Panel app with opacity sliders and a basemap switch (live only); the static image shows the composed map.</p>
+<h3 id="layer_control-a-layer-panel"><code>layer_control</code> — a layer panel<a class="anchor-link" href="#layer_control-a-layer-panel">¶</a></h3><p><code>layer_control</code> builds a Panel app with per-layer toggles, an opacity slider and a basemap switch, keeps it on the map, and returns the map so the call chains; read the app back from <code>layer_control_panel</code> (live only). The static image shows the composed map.</p>
 </div>
 </div>
 </div>
@@ -5761,13 +5733,13 @@ show(m)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"layer control"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">tiles</span><span class="p">(</span><span class="s2">"CartoLight"</span><span class="p">)</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">9</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
-<span class="n">app</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">layer_control</span><span class="p">()</span>         <span class="c1"># a Panel app (live only)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">tiles</span><span class="p">(</span><span class="s2">"CartoLight"</span><span class="p">)</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">9</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">layer_control</span><span class="p">()</span><span class="o">.</span><span class="n">layer_control_panel</span>   <span class="c1"># the Panel app it built (live only)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">m = InteractiveMap(crs=3857, title="layer control")
-m.tiles("CartoLight").points(gauges, value_column="discharge", size=9, cmap="plasma")
-app = m.layer_control()         # a Panel app (live only)
+m.tiles("CartoLight").points(gauges, column="discharge", size=9, cmap="plasma")
+app = m.layer_control().layer_control_panel   # the Panel app it built (live only)
 show(m)</div>
 </div>
 </div>
@@ -5889,12 +5861,12 @@ show(m)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">points</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">"discharge"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"plasma"</span><span class="p">)</span>
 <span class="n">table</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">attribute_table</span><span class="p">(</span><span class="n">gauges</span><span class="p">)</span>   <span class="c1"># a Panel table (live only)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-6">m = InteractiveMap(crs=3857)
-m.points(gauges, value_column="discharge", size=8, cmap="plasma")
+m.points(gauges, column="discharge", size=8, cmap="plasma")
 table = m.attribute_table(gauges)   # a Panel table (live only)
 show(m)</div>
 </div>
@@ -5928,9 +5900,9 @@ show(m)</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="eea998d5-9b72-4fd9-a219-c364b8254cbd" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="2abdbeb4-2a66-4644-afeb-7222f9e2d699" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('eea998d5-9b72-4fd9-a219-c364b8254cbd');
+var element = document.getElementById('2abdbeb4-2a66-4644-afeb-7222f9e2d699');
 (function(root) {
   function now() {
     return new Date();
@@ -6205,9 +6177,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="079b95d8-1c49-4b1d-a9de-61b20d55a3c9" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="78d3710b-6b21-4c4c-a5e1-b120588de704" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('079b95d8-1c49-4b1d-a9de-61b20d55a3c9');
+var element = document.getElementById('78d3710b-6b21-4c4c-a5e1-b120588de704');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}

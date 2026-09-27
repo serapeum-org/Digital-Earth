@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -666,7 +666,7 @@
   <span class="md-ellipsis">
     
   
-    5 · Choropleth, shapes &amp; map decoration
+    5 · Choropleth, polygons &amp; map decoration
   
 
     
@@ -1302,7 +1302,7 @@
   <a href="#iso-lines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        / — iso-lines
+        — iso-lines
       
     </span>
   </a>
@@ -3252,14 +3252,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/static_map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Maps (matplotlib)
   
 
     
@@ -3400,34 +3400,6 @@
     
   
     Composite stretch
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/static/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    StaticGlyph
   
 
     
@@ -3669,7 +3641,7 @@
   <a href="#iso-lines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        / — iso-lines
+        — iso-lines
       
     </span>
   </a>
@@ -4458,8 +4430,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="1-raster-fields">1 · Raster fields<a class="anchor-link" href="#1-raster-fields">¶</a></h1><p>The raster builders turn a pyramids <code>Dataset</code> into an interactive field: <code>image</code> (regular grid),
-<code>quadmesh</code> (irregular/curvilinear cells), <code>contours</code> / <code>filled_contours</code> (iso-lines), <code>rgb</code>
+<h1 id="1-raster-fields">1 · Raster fields<a class="anchor-link" href="#1-raster-fields">¶</a></h1><p>The raster builders turn a pyramids <code>Dataset</code> into an interactive field: <code>field</code> (regular grid),
+<code>quadmesh</code> (irregular/curvilinear cells), <code>contours</code> (iso-lines, filled or not), <code>rgb</code>
 (three-band composite) and <code>spaghetti</code> (one contour set per ensemble member). NoData is rendered
 transparent automatically.</p>
 </div>
@@ -4603,9 +4575,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="ca779f05-dcff-4f2a-99ed-cbb0e7420a48" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="cb41b011-9bf8-405a-bd6a-439dddb0c364" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('ca779f05-dcff-4f2a-99ed-cbb0e7420a48');
+var element = document.getElementById('cb41b011-9bf8-405a-bd6a-439dddb0c364');
 (function(root) {
   function now() {
     return new Date();
@@ -4862,9 +4834,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="9f313015-0f6c-45ce-bbe8-c8daa53a4ce6" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="522659d3-ff63-47ea-93f8-27d40e6d9a17" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('9f313015-0f6c-45ce-bbe8-c8daa53a4ce6');
+var element = document.getElementById('522659d3-ff63-47ea-93f8-27d40e6d9a17');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5342,7 +5314,7 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="image-a-pixel-field"><code>image</code> — a pixel field<a class="anchor-link" href="#image-a-pixel-field">¶</a></h3><p><code>image</code> draws the raster as a regular pixel grid. <code>cmap=None</code> (the default) picks a colormap from the variable via auto-style; here we ask for <code>terrain</code>.</p>
+<h3 id="field-a-pixel-field"><code>field</code> — a pixel field<a class="anchor-link" href="#field-a-pixel-field">¶</a></h3><p><code>field</code> draws the raster as a regular pixel grid. <code>cmap=None</code> (the default) picks a colormap from the variable via auto-style; here we ask for <code>terrain</code>.</p>
 </div>
 </div>
 </div>
@@ -5366,11 +5338,11 @@ U9k9N2vl5+cH0en0TRiGWX18fC65vnh+LxqNBq2oqFhgMpmi7XY7arVaj+zdu/fxn/l/4bSZl5fH
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"image"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"terrain"</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">m = InteractiveMap(crs=dem.epsg, title="image")
-m.image(dem, cmap="terrain")
+m.field(dem, cmap="terrain")
 show(m)</div>
 </div>
 </div>
@@ -5468,7 +5440,7 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="quadmesh-irregular-cells"><code>quadmesh</code> — irregular cells<a class="anchor-link" href="#quadmesh-irregular-cells">¶</a></h3><p><code>quadmesh</code> draws every cell from its coordinate arrays, so non-uniform or curvilinear grids render without resampling. On a regular grid it matches <code>image</code>.</p>
+<h3 id="quadmesh-irregular-cells"><code>quadmesh</code> — irregular cells<a class="anchor-link" href="#quadmesh-irregular-cells">¶</a></h3><p><code>quadmesh</code> draws every cell from its coordinate arrays, so non-uniform or curvilinear grids render without resampling. On a regular grid it matches <code>field</code>.</p>
 </div>
 </div>
 </div>
@@ -5594,7 +5566,8 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="contours-filled_contours-iso-lines"><code>contours</code> / <code>filled_contours</code> — iso-lines<a class="anchor-link" href="#contours-filled_contours-iso-lines">¶</a></h3><p><code>contours</code> draws line iso-contours; <code>filled_contours</code> fills the bands between them. Both take a <code>levels</code> count.</p>
+<h3 id="contours-iso-lines"><code>contours</code> — iso-lines<a class="anchor-link" href="#contours-iso-lines">¶</a></h3><p><code>contours</code> draws line iso-contours, and <code>filled=True</code> fills the bands between them instead. Either takes a
+<code>levels</code> count or an <code>interval</code> spacing.</p>
 </div>
 </div>
 </div>
@@ -5617,12 +5590,12 @@ show(m)</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"filled_contours"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">filled_contours</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"contours (filled)"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">m = InteractiveMap(crs=dem.epsg, title="filled_contours")
-m.filled_contours(dem, levels=10)
+<div class="clipboard-copy-txt" id="cell-4">m = InteractiveMap(crs=dem.epsg, title="contours (filled)")
+m.contours(dem, levels=10, filled=True)
 show(m)</div>
 </div>
 </div>

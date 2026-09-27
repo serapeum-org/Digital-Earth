@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -666,7 +666,7 @@
   <span class="md-ellipsis">
     
   
-    5 · Choropleth, shapes &amp; map decoration
+    5 · Choropleth, polygons &amp; map decoration
   
 
     
@@ -3241,14 +3241,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+      <a href="../../../reference/static_map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Renamed keywords
+    Maps (matplotlib)
   
 
     
@@ -3389,34 +3389,6 @@
     
   
     Composite stretch
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/static/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    StaticGlyph
   
 
     
@@ -4594,9 +4566,9 @@ cube = DatasetCollection.from_files(months) if _tavg.exists() else None</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="04b14f58-e753-4e74-a13f-e14d0d138d21" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="aa6864dd-16df-430d-88f8-75a2a0c3a315" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('04b14f58-e753-4e74-a13f-e14d0d138d21');
+var element = document.getElementById('aa6864dd-16df-430d-88f8-75a2a0c3a315');
 (function(root) {
   function now() {
     return new Date();
@@ -4853,9 +4825,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="75218ec8-93d0-41b7-b0b9-7e9af01bb59c" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="df72b61f-6041-4370-bd80-03b589f7ab35" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('75218ec8-93d0-41b7-b0b9-7e9af01bb59c');
+var element = document.getElementById('df72b61f-6041-4370-bd80-03b589f7ab35');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5702,7 +5674,7 @@ else:
     <span class="p">)</span>
 
     <span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"July mean temperature + graticule"</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">temp</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"inferno"</span><span class="p">)</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="s2">"Robinson"</span><span class="p">)</span><span class="o">.</span><span class="n">graticule</span><span class="p">()</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">temp</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"inferno"</span><span class="p">)</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="s2">"Robinson"</span><span class="p">)</span><span class="o">.</span><span class="n">graticule</span><span class="p">()</span>
     <span class="n">display</span><span class="p">(</span><span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">))</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">"skipped — the WorldClim sample (examples/data/global/) is not bundled with the repo"</span><span class="p">)</span>
@@ -5720,7 +5692,7 @@ if _tavg7.exists():
     )
 
     m = InteractiveMap(crs=4326, title="July mean temperature + graticule")
-    m.image(temp, cmap="inferno").projection("Robinson").graticule()
+    m.field(temp, cmap="inferno").projection("Robinson").graticule()
     display(show(m))
 else:
     print("skipped — the WorldClim sample (examples/data/global/) is not bundled with the repo")</div>
