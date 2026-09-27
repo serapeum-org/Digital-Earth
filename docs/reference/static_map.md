@@ -31,7 +31,8 @@ extra, and the one the other three are measured against — `digitalearth.intera
 A builder returns the artist it drew and records a layer beside it, addressed by the `name=` you gave it (or a
 generated id). `layer_ids` lists them in draw order, and `move_layer`, `remove_layer`, `replace_layer` and
 `set_visible` work on that list afterwards, so a figure can be rearranged without being rebuilt. Layers sit in
-bands — basemap, reference, data, overlay — and a later call cannot slip under an earlier band.
+bands — `underlay`, `reference`, `data`, `overlay` — and a later call cannot slip under an earlier band, so a
+basemap stays under the data and a label stays over it however the calls were ordered.
 
 `figure_spec` is the whole figure as a value: its panels, their layers, the view each is drawn in and the
 furniture anchored to them. That description is what the other tiers read back, and it is the reason a layer
