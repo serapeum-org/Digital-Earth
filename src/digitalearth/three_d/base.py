@@ -27,7 +27,6 @@ from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
 from digitalearth.base.registry import (
     forget_namespace,
-    forget_object,
     kind_info,
     object_namespace,
 )
@@ -1250,18 +1249,19 @@ class Scene3DBase:
         sources = {
             key: ref for key, ref in self._figure.sources.items() if key != dropped
         }
-        held = self._figure.sources.get(dropped) if dropped is not None else None
         self._change(
             self._figure_with(
                 layers=self._figure.layers.remove(layer_id), sources=sources
             )
         )
         self._custom.pop(layer_id, None)
-        # Let the object go with the layer, as the web tier does. The registry holds strong references, and
-        # this tier registered into it and never forgot — so every layer of every scene left one behind for
-        # the life of the process (review M1).
-        if held is not None:
-            forget_object(held.uri)
+        # The reference goes out of *this* scene's figure and the object stays registered — the policy the
+        # other three tiers settled in round 1 and state at their own `remove_layer`: a `FigureSpec` captured
+        # before the removal still names the source, so forgetting here made every such figure undrawable
+        # (`KeyError: no object is registered as ...`). This tier forgot and cited the web tier for it, which
+        # says the opposite in so many words (review R2-M12). The leak that forgetting was added for is
+        # answered by :meth:`close`, which calls `forget_namespace` on this scene's own namespace — the caller
+        # saying they are finished with every figure it produced.
         return self
 
     def set_visible(self, layer_id: str, visible: bool = True) -> Self:

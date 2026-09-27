@@ -670,24 +670,50 @@ class TestTheRemainingArms:
             float(np.nanmax(high.z.values)),
         ], drawn
 
-    def test_a_removed_layer_lets_its_object_go(self, scene):
-        """The web tier forgets a removed layer's object; this tier registered and never did.
+    def test_a_removed_layer_keeps_its_object_registered(self, scene):
+        """A figure captured before the removal still names the object, so the removal may not forget it.
 
         Args:
             scene: The scene under test.
 
         Test scenario:
-            `forget_object` was added as the counterpart to `register_object` and wired into the web tier
-            only — here it was imported and unused, so every layer of every scene left a strong reference
-            behind for the life of the process (review M1).
+            The other three tiers settled this in round 1 and say so at their own `remove_layer`: the
+            reference leaves *this* scene's figure and the object stays in the registry, because a
+            `FigureSpec` captured earlier still names it and forgetting made every such figure dangle. This
+            tier forgot, citing the web tier as its precedent while the web tier's comment says the opposite
+            (review R2-M12). Redrawing the captured figure is what tells the two policies apart.
+        """
+        scene.terrain(get_source(_dem()))
+        captured = scene.figure_spec
+        scene.remove_layer(scene.layer_ids[0])
+        again = Scene3D.from_figure(captured, off_screen=True)
+        drawn = again.layer_ids
+        again.close()
+        assert drawn == ["terrain-1"], (
+            f"a figure captured before the removal redrew {drawn}, so the object was forgotten with the layer"
+        )
+
+    def test_closing_the_scene_is_what_lets_the_object_go(self, scene):
+        """The leak the forgetting was added for is answered by `close`, which is the caller saying they are done.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Keeping the object on removal is only defensible because something else lets it go: `close()`
+            calls `forget_namespace` on the scene's own namespace, so a session that builds scenes does not
+            hold every dataset they drew for the life of the process. Read off the registry, not off the
+            scene, since a process-global table is what the leak was about.
         """
         from digitalearth.base.registry import _OBJECTS
 
         before = len(_OBJECTS)
         scene.terrain(get_source(_dem()))
         scene.remove_layer(scene.layer_ids[0])
-        assert len(_OBJECTS) == before, (
-            f"the removed layer left {len(_OBJECTS) - before} entries behind"
+        held = len(_OBJECTS) - before
+        scene.close()
+        assert (held, len(_OBJECTS) - before) == (1, 0), (
+            f"the removal held {held} entries and closing left {len(_OBJECTS) - before}"
         )
 
     def test_a_second_scene_leaves_the_first_scene_s_sources_alone(self, scene):
