@@ -139,8 +139,9 @@ class TestAnIntervalTooFineToDrawIsRefused:
         """
         from digitalearth.base.levels import MAX_LEVELS
 
+        raster = _raster()
         with pytest.raises(ValueError) as refused:
-            drawn.contours(_raster(), interval=1e-5)
+            drawn.contours(raster, interval=1e-5)
         message = str(refused.value)
         assert str(MAX_LEVELS) in message, (
             f"the refusal should name the ceiling {MAX_LEVELS}; got {message}"

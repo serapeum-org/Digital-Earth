@@ -7,15 +7,18 @@ have swept this tree for it — ``cb7c171f`` (base), ``c9d421d7`` (interactive),
 earlier sweep had already cleaned. A sweep cannot hold a rule; this can.
 
 **ruff's ``PT012`` does not catch this shape**, measured rather than assumed: ``ruff check --select PT012 src
-tests`` reports "All checks passed!" over this tree while the sites in :data:`KNOWN` are still present. PT012
-flags a block of several *statements*; S5778 counts the *calls* inside it, and every site here is one
+tests`` reports "All checks passed!" over this tree while the sites this guard reports are still present. PT012
+flags a block of several *statements*; S5778 counts the *calls* inside it, and every site found here was one
 statement with a call nested in the arguments of another. So the rule the finding suggested would not have
 held, and an AST check is what is left.
 
-It is written as a **ratchet**: the violators must be a subset of :data:`KNOWN`. A new site fails here, and
-clearing a listed one needs no edit to this file — which is what keeps this guard from turning someone else's
-fix red. The price of that is a cleared entry lingering as permission nothing needs; what is refused instead is
-an entry naming a module that is no longer there, which is how a list of exceptions rots unnoticed.
+It started as a **ratchet** — the violators had to be a subset of a `KNOWN` list — because its two outstanding
+sites belonged to findings other branches owned, and a guard that went red the moment one of them was cleared
+would have made their fix require an edit to this file. Both are cleared now
+(``tests/static/test_static_contours.py``, the site ``f9bf8a8c`` added, and ``tests/web/test_web_raster.py``),
+so the exception list is **gone** rather than left empty: an empty list is permission nothing needs, and the
+check that policed the list could no longer fail. What is left is the stronger statement — *no* refusal block
+in the tree holds two calls that can raise — which is what the sweeps were trying to say.
 """
 
 import ast
@@ -32,15 +35,6 @@ REFUSAL_MANAGERS = ("raises", "warns")
 
 #: This module, which quotes the pattern in prose and must not be scanned for it.
 GUARD_MODULE = Path(__file__).resolve()
-
-#: The sites still carrying two throwing calls, each with the finding that owns it. Both are outside the trees
-#: this guard was added with, and both are named in round 2: `tests/static/test_static_contours.py` is R2-L1's
-#: third site, and `tests/web/test_web_raster.py` is the same shape found by this check. Listed so the guard
-#: can be green today and still refuse a *new* one.
-KNOWN = {
-    "static/test_static_contours.py",
-    "web/test_web_raster.py",
-}
 
 
 def _blocks_with_two_throwing_calls(path: Path) -> list:
@@ -112,45 +106,29 @@ def offenders() -> dict:
 
 
 class TestOneThrowingCallPerRefusalBlock:
-    """The ratchet: no new site, and the listed ones may be cleared without touching this file."""
+    """No refusal block anywhere in the tree holds two calls that can raise, with nothing exempted."""
 
-    def test_no_module_outside_the_known_list_holds_two_throwing_calls(self, offenders):
+    def test_no_module_holds_a_block_with_two_throwing_calls(self, offenders):
         """A block with two calls that can raise passes when its fixture fails, which is the whole defect.
 
         Args:
             offenders: The audit of the tree.
-        """
-        unlisted = {
-            module: sites for module, sites in offenders.items() if module not in KNOWN
-        }
-        assert unlisted == {}, (
-            "these refusal blocks hold more than one call that can raise, so a failing fixture would pass "
-            f"the test: {unlisted}. Hoist everything but the refused call above the `with`"
-        )
-
-    def test_every_known_entry_names_a_module_that_is_still_there(self):
-        """Permission granted to a file that has been renamed away is permission nobody can see the end of.
 
         Test scenario:
-            Deliberately *not* "the entry still offends". Both listed sites belong to findings other branches
-            own, and a check that went red the moment one of them was cleared would make their fix require an
-            edit to this file — the cross-branch collision this guard exists to avoid. Clearing an entry
-            therefore keeps the subset check green, and the entry may be dropped whenever someone is next in
-            here. What is refused is an entry naming nothing, which is how a list of exceptions rots.
+            An equality rather than a subset: the two sites this guard was written alongside are fixed, so
+            there is no exception list left to be a subset of. A new site anywhere under ``tests/`` fails
+            here, and the message names the module, the line and what to hoist.
         """
-        missing = sorted(
-            module for module in KNOWN if not (TESTS_ROOT / module).is_file()
-        )
-        assert missing == [], (
-            f"{missing} are listed as known offenders and no longer exist, so the entries grant permission "
-            "to nothing — drop them"
+        assert offenders == {}, (
+            "these refusal blocks hold more than one call that can raise, so a failing fixture would pass "
+            f"the test: {offenders}. Hoist everything but the refused call above the `with`"
         )
 
     def test_the_audit_reaches_every_tier_s_tests(self):
         """A guard scoped to one tier is how three sweeps each missed the next tier's copy.
 
         Test scenario:
-            Measured on the audit's own walk rather than on a second one: a subset check is only worth what
+            Measured on the audit's own walk rather than on a second one: the check above is only worth what
             it opened, and `TestNoMessageNamesAMethodTheTierLost` globbing `three_d/` alone is the finding
             (R2-M6) that says so.
         """
