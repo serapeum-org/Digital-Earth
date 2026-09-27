@@ -9,7 +9,6 @@ import pathlib
 
 import numpy as np
 import pytest
-
 from pyramids.feature import FeatureCollection
 
 from digitalearth.interactive import InteractiveMap
