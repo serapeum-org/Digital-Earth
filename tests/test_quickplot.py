@@ -617,6 +617,67 @@ class TestTheRefusalNamesWhatTheCallerWrote:
             f"the message must not name the injected keyword: {message}"
         )
 
+    def test_a_kind_and_the_keyword_it_implies_cannot_both_be_given(self, dataset):
+        """``kind="contourf"`` *is* ``filled=True``, so naming both is a contradiction, not a style option.
+
+        Args:
+            dataset: The raster to draw.
+
+        Test scenario:
+            Both kind tables inject `filled=`, and the two drawers splatted the injection beside the caller's
+            keywords — so the collision was Python's, naming `RasterMixin.contours()`, a private mixin the
+            caller never wrote, and never saying that the kind already meant it (R2-L4). The refusal names the
+            kind, what it draws with, and the kind that means what was asked for instead.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            qp.quickmap(dataset, crs=dataset.epsg, kind="contourf", filled=False)
+        message = str(excinfo.value)
+        assert "kind='contourf' is itself filled=True" in message, message
+        assert "RasterMixin" not in message, (
+            f"the refusal must not name a private mixin: {message}"
+        )
+        assert "kind='contour'" in message, (
+            f"the refusal should name the kind that draws filled=False: {message}"
+        )
+
+    @pytest.mark.parametrize(
+        "table", [qp._STATIC_RASTER_KINDS, qp._INTERACTIVE_RASTER_KINDS]
+    )
+    def test_both_kind_tables_refuse_the_contradiction_the_same_way(self, table):
+        """The two tiers that take a ``kind`` answer one contradiction with one sentence.
+
+        Args:
+            table: The tier's kind table.
+
+        Test scenario:
+            Asked of the resolver rather than through a map, because the interactive tier's engine is in
+            another environment and this refusal happens before anything is drawn — which is the point of
+            resolving the kind in one shared place instead of once per drawer.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            qp._renderer_for(table, "contourf", {"filled": False}, "quickmap")
+        assert "is itself filled=True" in str(excinfo.value), excinfo.value
+
+    def test_a_kind_that_implies_nothing_still_takes_the_keyword(self, dataset):
+        """The positive control: only a keyword the kind *settles* is a contradiction.
+
+        Args:
+            dataset: The raster to draw.
+
+        Test scenario:
+            `imshow` carries no keywords in either table, so `filled=` written beside it is a style option
+            for the renderer to answer for — and a guard that refused any keyword named in any table would
+            have taken this call away too. The refusal here comes from cleopatra, naming `filled`, which is
+            the tier's own answer rather than this module's.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            qp.quickmap(dataset, crs=dataset.epsg, kind="imshow", filled=False)
+        message = str(excinfo.value)
+        assert "contradicts it" not in message, (
+            f"imshow implies no filled=, so this must not be refused as a contradiction: {message}"
+        )
+        assert "filled" in message, message
+
     def test_a_column_on_point_input_is_refused_by_name(self):
         """``quickmap(points, column=...)`` names the keyword instead of leaking cleopatra's error.
 

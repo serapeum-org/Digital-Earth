@@ -376,6 +376,55 @@ _STATIC_RASTER_KINDS = {
 }
 
 
+def _renderer_for(table: dict, kind: str, kwargs: dict, caller: str) -> tuple:
+    """Resolve a raster ``kind`` to its method and keywords, refusing one the caller contradicted.
+
+    A ``kind`` in either table can carry keywords, so a caller who names both the kind and one of its
+    keywords has said one thing twice and disagreed with themselves. Splatting both reached Python's own
+    collision — ``RasterMixin.contours() got multiple values for keyword argument 'filled'`` — which names a
+    private mixin the caller never wrote and never says that ``kind="contourf"`` *is* ``filled=True``
+    (review R2-L4). Shared by the two tiers that take a ``kind``, because both tables carry keywords now and
+    a refusal written on one of them would have left the other leaking the mixin.
+
+    Args:
+        table: The tier's ``{kind: (method, keywords)}`` table.
+        kind: The renderer the caller named.
+        kwargs: The caller's remaining keywords, read but not consumed.
+        caller: The public function to blame, e.g. ``"quickmap"``.
+
+    Returns:
+        ``(method, keywords)`` — the method to call and the keywords the kind implies, exactly as the table
+        holds them. A kind the table does not list is the method's own name with no keywords.
+
+    Raises:
+        ValueError: when the caller passed a keyword the kind already settles. The message names the kind, what
+            it draws with and what was asked instead, and — where the table holds a kind that means what they
+            asked for — that kind, since the contradiction is usually a caller who wanted the other render.
+    """
+    method, picked = table.get(kind, (kind, {}))
+    clashing = sorted(set(picked) & set(kwargs))
+    if not clashing:
+        return method, picked
+    instead = sorted(
+        spelling
+        for spelling, (spelled, keywords) in table.items()
+        if spelled == method
+        and all(keywords.get(name) == kwargs[name] for name in clashing)
+    )
+    asked = ", ".join(f"{name}={kwargs[name]!r}" for name in clashing)
+    implied = ", ".join(f"{name}={picked[name]!r}" for name in clashing)
+    dropped = ", ".join(f"{name}=" for name in clashing)
+    remedy = (
+        f"ask for kind={instead[0]!r}"
+        if instead
+        else f"name the kind that draws {asked}"
+    )
+    raise ValueError(
+        f"{caller} got kind={kind!r} with {asked}, which contradicts it: kind={kind!r} is itself "
+        f"{implied}. Drop {dropped} and let the kind say it, or {remedy}"
+    )
+
+
 def _vector_kind(data: FeatureCollection, caller: str) -> str:
     """Classify a vector input as the family of renderer it needs, refusing an empty collection.
 
@@ -415,9 +464,10 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
         **kwargs: Forwarded to the chosen ``Map`` draw method (e.g. ``column``, ``cmap``, ``levels``).
 
     Raises:
-        ValueError: if ``data`` is an empty ``FeatureCollection`` (nothing to draw), or if ``column`` was
+        ValueError: if ``data`` is an empty ``FeatureCollection`` (nothing to draw); if ``column`` was
             given for point input — it names a polygon fill and ``Map.points`` has no such parameter, so
-            forwarding it produced an opaque cleopatra error instead of naming the keyword (review M19).
+            forwarding it produced an opaque cleopatra error instead of naming the keyword (review M19); or,
+            from :func:`_renderer_for`, if a keyword contradicts the ``kind`` that already settles it.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
     if isinstance(data, FeatureCollection):
@@ -439,7 +489,7 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
         scene.points(data, **kwargs)
         return
     if isinstance(data, Dataset):
-        method, picked = _STATIC_RASTER_KINDS.get(kind, (kind, {}))
+        method, picked = _renderer_for(_STATIC_RASTER_KINDS, kind, kwargs, "quickmap")
         getattr(scene, method)(data, **picked, **kwargs)
         return
     raise TypeError(f"quickmap cannot draw a {type(data).__name__}")
@@ -526,9 +576,11 @@ def quickmap(
         CapabilityError: for a ``crs``/``domain``/``basemap``/``coastlines``/``kind`` the chosen backend
             cannot honour — the message names both the parameter and the backend, and adds the reason that
             tier's own declaration gave. It subclasses ``ValueError``, so existing handlers still catch it.
-        ValueError: for an unknown ``backend``, for ``column`` on point input, and for an empty
-            ``FeatureCollection``, which would otherwise draw nothing in silence. ``colorbar`` is never
-            refused, since every backend honours it.
+        ValueError: for an unknown ``backend``, for ``column`` on point input, for an empty
+            ``FeatureCollection``, which would otherwise draw nothing in silence, and for a keyword that
+            contradicts the ``kind`` it was written beside — ``kind="contourf"`` *is* ``filled=True``, so
+            naming both says one thing twice and disagrees. ``colorbar`` is never refused, since every
+            backend honours it.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
             ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
 
@@ -710,7 +762,8 @@ def quickplot(data: PlottableData, **kwargs) -> Any:
 
     Raises:
         CapabilityError: as :func:`quickmap` raises it, for an argument the chosen backend cannot honour.
-        ValueError: as :func:`quickmap` raises it, for an unknown ``backend`` or an empty collection.
+        ValueError: as :func:`quickmap` raises it, for an unknown ``backend``, an empty collection, or a
+            keyword that contradicts the ``kind`` it was written beside.
         TypeError: as :func:`quickmap` raises it, for input that is neither a ``Dataset`` nor a
             ``FeatureCollection``.
     """
@@ -773,14 +826,15 @@ def _draw_interactive_raster(
     Raises:
         ValueError: if `kind` names a renderer this tier does not have. It used to fall back to the
             tier's own default raster builder — `field` — and draw something the caller never asked
-            for; the matplotlib backend has always refused it (review M7).
+            for; the matplotlib backend has always refused it (review M7). And, from
+            :func:`_renderer_for`, if a keyword contradicts the ``kind`` that already settles it.
     """
     if kind not in _INTERACTIVE_RASTER_KINDS:
         renderers = ", ".join(repr(name) for name in sorted(_INTERACTIVE_RASTER_KINDS))
         raise ValueError(
             f"kind={kind!r} is not a renderer of backend='interactive'; use one of {renderers}"
         )
-    method, picked = _INTERACTIVE_RASTER_KINDS[kind]
+    method, picked = _renderer_for(_INTERACTIVE_RASTER_KINDS, kind, kwargs, "quickmap")
     getattr(scene, method)(data, **picked, **kwargs)
 
 
