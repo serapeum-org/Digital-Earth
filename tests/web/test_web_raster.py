@@ -13,6 +13,7 @@ import pytest
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import get_source
 from digitalearth.web import WebMap
+from digitalearth.web.raster import _lonlat_bounds
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -1333,3 +1334,57 @@ class TestTheWindowedTileReads:
         stack = _tile_stack(reader, 0, 0, 0, bands=(1, 1, 1))
         assert np.isfinite(stack).all(), stack
         assert stack[0, 0, 0] == -9999.0, stack[0, 0, 0]
+
+
+class TestASouthUpRasterHasAValidExtent:
+    """A positive y pixel size must not produce a rectangle `Bounds` refuses (#347)."""
+
+    @staticmethod
+    def _south_up():
+        """Return a small raster whose geotransform counts rows upward.
+
+        Returns:
+            A pyramids `Dataset` on an increasing-y EPSG:4326 grid — `gt[5]` is `+1.0`, not the usual `-1.0`.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        return Dataset.from_array(
+            arr=np.arange(48, dtype="float32").reshape(6, 8),
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 0.0, 0.0, 1.0), epsg=4326),
+        )
+
+    def test_the_extent_is_normalised_rather_than_inverted(self):
+        """The tiled route's extent helper answers a rectangle, not a refusal.
+
+        Test scenario:
+            pyramids derived this box by hand before 0.65.0, assuming a north-up grid: `y_min = y_max + rows *
+            gt[5]` puts `y_min` *above* `y_max` when `gt[5]` is positive, and `Bounds` refuses that — so a
+            south-up raster died with a message about `Bounds` rather than about the raster. Asserted as
+            `ymin < ymax` rather than against literal edges, because what is being pinned is the ordering, and
+            the exact numbers belong to pyramids' corner transform.
+        """
+        bounds = _lonlat_bounds(self._south_up())
+        assert bounds.ymin < bounds.ymax, (
+            f"a south-up raster produced an inverted extent: {bounds.as_bbox()}"
+        )
+
+    def test_it_covers_the_same_ground_as_a_north_up_twin(self):
+        """Normalising the order must not move the rectangle.
+
+        Test scenario:
+            The same six rows over the same eight columns, written north-up (`gt[3]` at the top, `gt[5]`
+            negative) and south-up. Both name the ground from y 0 to y 6, so their extents must agree — which
+            is what distinguishes a normalised box from one that merely happens to be the right way up.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        north_up = Dataset.from_array(
+            arr=np.arange(48, dtype="float32").reshape(6, 8),
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 6.0, 0.0, -1.0), epsg=4326),
+        )
+        assert _lonlat_bounds(self._south_up()).as_bbox() == pytest.approx(
+            _lonlat_bounds(north_up).as_bbox(), rel=1e-9
+        ), (
+            f"south-up {_lonlat_bounds(self._south_up()).as_bbox()} does not cover the same ground as "
+            f"north-up {_lonlat_bounds(north_up).as_bbox()}"
+        )
