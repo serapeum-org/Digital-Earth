@@ -964,7 +964,7 @@ class VectorMixin(_MixinBase):
         size_column: Optional[str] = None,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts,
+        **opts: Any,
     ) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, sized by a column (``ScatterGlyph``).
 
@@ -1014,7 +1014,7 @@ class VectorMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts,
+        **opts: Any,
     ) -> Any:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
 
@@ -1093,7 +1093,7 @@ class VectorMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts,
+        **opts: Any,
     ) -> Any:
         """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
 
@@ -1219,7 +1219,7 @@ class VectorMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
 
@@ -1299,7 +1299,7 @@ class VectorMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
 
@@ -1629,7 +1629,7 @@ class VectorMixin(_MixinBase):
         opacity: Optional[float] = None,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts,
+        **opts: Any,
     ) -> Any:
         """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
 
@@ -1743,7 +1743,7 @@ class VectorMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts,
+        **opts: Any,
     ) -> Any:
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
 

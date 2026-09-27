@@ -894,7 +894,7 @@ class ProjectionMixin(_MixinBase):
         """Apply the projection frame if this is a globe map (idempotent). Call before showing/saving."""
         self._apply_frame()
 
-    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs) -> Path:
+    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs: Any) -> Path:
         """Apply the projection frame (for a globe map) then save the figure.
 
         Args:

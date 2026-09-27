@@ -652,7 +652,7 @@ class RasterMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
@@ -688,7 +688,7 @@ class RasterMixin(_MixinBase):
         filled: bool = False,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Trace iso-value lines through a raster band, or fill between them.
 
@@ -749,7 +749,7 @@ class RasterMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
 
@@ -783,7 +783,7 @@ class RasterMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.
 
@@ -860,7 +860,7 @@ class RasterMixin(_MixinBase):
         limits: Optional[ChannelLimits] = None,
         name: Optional[str] = None,
         visible: bool = True,
-        **opts,
+        **opts: Any,
     ) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 

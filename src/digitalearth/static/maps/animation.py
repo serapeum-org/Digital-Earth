@@ -772,7 +772,7 @@ class AnimationMixin(_MixinBase):
         coastlines: bool = False,
         colorbar: bool = False,
         cbar_label: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> FuncAnimation:
         """Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.
 

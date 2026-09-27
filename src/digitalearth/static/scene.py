@@ -1269,7 +1269,9 @@ class Scene(WatermarkMixin):
             self.ax.set_xlim(xlim)
             self.ax.set_ylim(ylim)
 
-    def colorbar(self, layer: int = -1, label: Optional[str] = None, **kwargs) -> Any:
+    def colorbar(
+        self, layer: int = -1, label: Optional[str] = None, **kwargs: Any
+    ) -> Any:
         """Draw one colorbar for a registered layer (delegates to ``cleopatra.styling.styles.colorbar_legend``).
 
         Args:
@@ -1310,7 +1312,7 @@ class Scene(WatermarkMixin):
         """
         return [self.colorbar(layer=i, **kwargs) for i in range(len(self.layers))]
 
-    def legend(self, colors: Sequence, labels: Sequence[str], **kwargs) -> Any:
+    def legend(self, colors: Sequence, labels: Sequence[str], **kwargs: Any) -> Any:
         """Attach a categorical (disjoint) swatch legend (delegates to ``cleopatra.styling.styles.disjoint_legend``).
 
         Args:

@@ -1115,7 +1115,7 @@ class DecorationMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
 
