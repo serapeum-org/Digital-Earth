@@ -28,6 +28,13 @@ from digitalearth.static.maps.animation import _ANIMATION_KINDS, _KIND_METHODS
 #: drawer table is keyed by that, so it has to keep reading back into the same drawer.
 VIA = {"field": "imshow", "points": "scatter", "polygons": "shapes"}
 
+#: The spelling each Core name replaced, which the check that it is gone reads from. Two tables rather than one
+#: although they hold the same three words today: a ``via`` token is a **render** name that a saved figure is
+#: keyed by and that is never renamed, while these are **method** names that were, and reusing :data:`VIA` for
+#: both made one name mean two things and would have turned a renamed token into a claim about a deleted
+#: method (review R2-N4). The interactive twin has kept them apart from the start.
+REPLACED = {"field": "imshow", "points": "scatter", "polygons": "shapes"}
+
 #: The raster ``kind=`` tokens `quickmap` accepts — ``"auto"`` plus matplotlib's own four render names, which
 #: is the vocabulary the module-level wrappers in `api` inject. Written here because `api` exposes the
 #: wrappers and not the vocabulary, and the check below is about every token being resolvable rather than
@@ -126,7 +133,7 @@ class TestTheTierAnswersToItsCoreSpelling:
             f"Map.{core}() recorded via={via!r} and left {on_axes} artists on the axes"
         )
 
-    @pytest.mark.parametrize("core", sorted(VIA))
+    @pytest.mark.parametrize("core", sorted(REPLACED))
     def test_the_spelling_the_core_name_replaced_is_gone(self, core):
         """The old spelling is deleted, not kept as a second name.
 
@@ -135,11 +142,12 @@ class TestTheTierAnswersToItsCoreSpelling:
 
         Test scenario:
             A method left behind under both names would pass every other check here and go on teaching the
-            vocabulary the contract exists to end. The predecessor is read out of :data:`VIA`, which records
-            it as the recipe key, so the two cannot drift apart.
+            vocabulary the contract exists to end. The predecessor is read out of :data:`REPLACED`, which is
+            about *methods*; the identical-looking :data:`VIA` is about render tokens, and reading the absence
+            check out of that one would have asserted that a live token is a dead method.
         """
-        assert not hasattr(Map, VIA[core]), (
-            f"Map still answers to {VIA[core]!r}, the spelling Map.{core}() replaced"
+        assert not hasattr(Map, REPLACED[core]), (
+            f"Map still answers to {REPLACED[core]!r}, the spelling Map.{core}() replaced"
         )
 
 
