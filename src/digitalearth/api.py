@@ -723,11 +723,12 @@ def quickplot(data: PlottableData, **kwargs) -> Any:
 #:
 #: The same shape as :data:`_STATIC_RASTER_KINDS`, and for the reason that table gives: a ``kind`` names a
 #: **renderer**, and telling ``contour`` from ``contourf`` is an *argument* to one method rather than a
-#: second method's name. Naming a method alone was not enough to say it, so ``contourf`` reached this tier's
-#: legacy second spelling ``filled_contours``, which takes no ``interval=`` — and ``interval=`` then fell
-#: through ``**opts`` to HoloViews, which refused it as an unknown style option (review H3). The tables stay
-#: separate because the tiers really do spell their methods differently; what they now share is the ability
-#: to carry the keyword that picks the render.
+#: second method's name. Naming a method alone was not enough to say it, so ``contourf`` reached a second
+#: spelling this tier used to carry, which took no ``interval=`` — and ``interval=`` then fell through
+#: ``**opts`` to HoloViews, which refused it as an unknown style option (review H3). That second spelling has
+#: since been deleted, so there is one ``contours`` here as well. The tables stay separate because the tiers
+#: really do spell their methods differently; what they now share is the ability to carry the keyword that
+#: picks the render.
 _INTERACTIVE_RASTER_KINDS = {
     "auto": ("field", {}),
     "imshow": ("field", {}),
