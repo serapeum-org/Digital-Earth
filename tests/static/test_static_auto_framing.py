@@ -23,7 +23,7 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point
 
 from digitalearth.base.spec import Bounds
-from digitalearth.static import Map
+from digitalearth.static import Map, projections
 
 #: Two point layers in EPSG:4326, built so that neither one's rectangle contains the other and the union takes
 #: a different corner from each. Degrees, and a map drawn in degrees, so every expected number below is the
@@ -359,16 +359,26 @@ class TestTheViewReportsTheFrame:
             scene.close()
 
     def test_set_global_reports_the_whole_projection(self):
-        """The widest frame this tier can set is still a frame.
+        """The widest frame this tier can set is reported as the projection's own rectangle.
 
         Test scenario:
             ``set_global`` goes through ``set_bounds`` with the projection's own limits, so the region it
-            reports is the projection domain rather than ``None``.
+            reports is that rectangle. Asserted as the four edges rather than as "not ``None``": a transposed
+            argument order yields `Bounds(-180, 90, -90, 180)` — latitudes of 90 and 180, a nonsense
+            rectangle — which is not ``None`` either, and that is how this probe read green through the
+            re-order it was meant to guard (review H4).
         """
         scene = Map(crs=4326)
         try:
             scene.set_global()
-            assert scene.viewport.bounds is not None, scene.viewport
+            _, xlim, ylim = projections.projection_frame(scene.crs)
+            reported = scene.viewport.bounds
+            assert reported is not None, scene.viewport
+            assert reported.as_bbox() == pytest.approx(
+                (xlim[0], ylim[0], xlim[1], ylim[1]), rel=1e-6
+            ), (
+                f"reported {reported.as_bbox()} for a projection spanning x {xlim} y {ylim}"
+            )
         finally:
             scene.close()
 

@@ -47,12 +47,22 @@ def test_graticule_drawn_in_frame(dataset):
 
 
 def test_set_global_sets_full_domain():
-    """set_global sets the axes extent to the projection's full domain."""
+    """set_global sets the axes extent to the projection's full domain.
+
+    Both pairs are asserted whole. Reading one end of each passes under a transposed argument order — the x
+    pair becomes ``(-a, -b)`` so ``[0]`` is still ``-a``, and the y pair trips the ``north < south`` flip so
+    ``[1]`` is still ``b`` — which is how the re-order that `set_global` exists to satisfy went unguarded on
+    its only production caller (review H4).
+    """
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     m.set_global()
     _, xlim, ylim = projections.projection_frame(m.crs)
-    assert m.ax.get_xlim()[0] == pytest.approx(xlim[0], rel=1e-6)
-    assert m.ax.get_ylim()[1] == pytest.approx(ylim[1], rel=1e-6)
+    assert m.ax.get_xlim() == pytest.approx(xlim, rel=1e-6), (
+        f"x limits {m.ax.get_xlim()} are not the projection's {xlim}"
+    )
+    assert m.ax.get_ylim() == pytest.approx(ylim, rel=1e-6), (
+        f"y limits {m.ax.get_ylim()} are not the projection's {ylim}"
+    )
 
 
 def test_polar_stereographic_reprojects(dataset):
