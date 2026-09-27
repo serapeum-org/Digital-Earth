@@ -244,9 +244,13 @@ class PanelSpec:
         Raises:
             TypeError: if `extents` is not a mapping, or if one of its values is neither a `Bounds` nor
                 ``None`` — named with the layer id, because a figure has many layers and only one is wrong.
-            ValueError: from `Bounds` — for two extents that cannot be made to meet (a view with no CRS
-                cannot convert, so rectangles in two CRSs are refused rather than reinterpreted), or for a
-                `padding` below ``-0.5``, which would turn the frame inside out.
+            ValueError: from `Bounds`, for two extents that cannot be made to meet — a view with no CRS
+                cannot convert, so rectangles in two CRSs are refused rather than reinterpreted. And from
+                :func:`~digitalearth.base.spec.bounds.check_padding`, for a `padding` below
+                :data:`~digitalearth.base.spec.bounds.MIN_PADDING`, which would turn the frame inside out:
+                that one is raised **before** any `Bounds` exists, which is the point of checking it here —
+                behind the union it was checked only on the branch where some layer had an extent, so the same
+                bad call was a hard error on a figure with data and a silent ``None`` on one without.
 
         Examples:
             - Two layers, framed on the rectangle that holds both:
