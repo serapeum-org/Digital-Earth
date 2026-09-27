@@ -8,7 +8,7 @@ These cover the type that replaces all three.
 import pytest
 
 from digitalearth.base.spec import Bounds
-from digitalearth.base.spec.bounds import same_crs
+from digitalearth.base.spec.bounds import MIN_PADDING, same_crs
 
 #: A projected CRS with no authority code of its own — the kind a `.prj` file gives a `GeoDataFrame`. PROJ's
 #: identification guesses EPSG:23031 (ED50 / UTM 31N) for it at 70% confidence, which is a different datum.
@@ -227,6 +227,44 @@ class TestOperations:
         bounds = Bounds(0.0, 0.0, 10.0, 10.0, crs=4326)
         with pytest.raises(ValueError, match=r"padded\(-0.75\) would invert"):
             bounds.padded(-0.75)
+
+    def test_a_degenerate_rectangle_refuses_the_same_padding_as_any_other(self):
+        """The fraction is judged on itself, so a point rectangle answers like a rectangle with a span.
+
+        Test scenario:
+            The old check was span-based — `dx * 2 < -(xmax - xmin)` — which a zero-span rectangle could
+            never trip, so `Bounds(5, 5, 5, 5).padded(-0.75)` returned the point while the same call on any
+            real rectangle raised. `check_padding` judges the fraction alone, which changed that, and nothing
+            pinned either side of the change (review R2-L9). One rule, one answer, whatever it is applied to.
+        """
+        point = Bounds(5.0, 5.0, 5.0, 5.0, crs=4326)
+        with pytest.raises(ValueError, match=r"padded\(-0.75\) would invert"):
+            point.padded(-0.75)
+
+    def test_a_degenerate_rectangle_still_takes_a_legal_fraction(self):
+        """The other side of that change: a fraction above the floor is not refused for being useless.
+
+        Test scenario:
+            A point has no span to grow, so every legal fraction leaves it where it was — including the floor
+            itself. Refusing it would make the new rule stricter than the rule it replaced rather than
+            simply consistent.
+        """
+        point = Bounds(5.0, 5.0, 5.0, 5.0, crs=4326)
+        assert point.padded(MIN_PADDING).as_bbox() == [5.0, 5.0, 5.0, 5.0], (
+            f"a point rectangle padded by {MIN_PADDING} moved to {point.padded(MIN_PADDING).as_bbox()}"
+        )
+
+    def test_the_floor_is_the_last_fraction_a_rectangle_survives(self):
+        """`MIN_PADDING` is inclusive, so the two tests above meet at it rather than leaving a gap.
+
+        Test scenario:
+            At exactly the floor the two sides of a rectangle meet at its centre, which is still a rectangle;
+            below it they cross. An off-by-one here silently refuses a legal frame or accepts an inverted one.
+        """
+        square = Bounds(0.0, 0.0, 10.0, 10.0, crs=4326)
+        assert square.padded(MIN_PADDING).as_bbox() == [5.0, 5.0, 5.0, 5.0], (
+            f"padding by {MIN_PADDING} gave {square.padded(MIN_PADDING).as_bbox()} rather than the centre"
+        )
 
     def test_two_spellings_of_one_crs_are_the_same_crs(self):
         """`4326` and `"EPSG:4326"` name the same system, so a union across them works.
