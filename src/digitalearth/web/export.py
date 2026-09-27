@@ -20,8 +20,7 @@ import math
 import pathlib
 import re
 import tempfile
-import warnings
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.web.base import DEFAULT_TITLE

@@ -136,7 +136,6 @@ class TestTheGridOnTheMap:
             instead would draw it over the data. So the assertion is the order of the emitted addLayer
             calls: basemap, then graticule, then data.
         """
-        import json
         import re
 
         import geopandas as gpd
