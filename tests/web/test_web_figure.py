@@ -153,6 +153,48 @@ class TestTheFurniture:
         ]
         assert item.options["layers"] == ("obs",), item.to_dict()
 
+    def test_the_switcher_says_which_controls_it_exposes(self, points):
+        """What the shared resolver answered is what the figure records.
+
+        Args:
+            points: The features drawn.
+
+        Test scenario:
+            `layer_control` called `resolved_controls` for its refusals and threw the answer away, so the one
+            function that knows what this tier can build had no say in what the panel describes (review
+            R2-L13). Asked with `visibility` twice — a duplicate the resolver collapses and nothing else here
+            would — so a recorded single entry can only have come through it.
+        """
+        m = (
+            WebMap()
+            .points(points, name="obs")
+            .layer_control(controls=["visibility", "visibility"])
+        )
+        (item,) = [
+            entry
+            for entry in m.figure_spec.panels[0].furniture
+            if entry.kind == "layer_switcher"
+        ]
+        assert item.options["controls"] == ("visibility",), item.to_dict()
+
+    def test_the_switcher_records_the_controls_it_offers_by_default(self, points):
+        """The default is resolved rather than re-spelled at the call site.
+
+        Args:
+            points: The features drawn.
+
+        Test scenario:
+            `controls=None` means "everything this tier can build", which here is visibility alone. Recording
+            it through the same resolver is what keeps the description and the refusal reading one list.
+        """
+        m = WebMap().points(points, name="obs").layer_control()
+        (item,) = [
+            entry
+            for entry in m.figure_spec.panels[0].furniture
+            if entry.kind == "layer_switcher"
+        ]
+        assert item.options["controls"] == ("visibility",), item.to_dict()
+
     def test_a_title_is_the_panel_s(self):
         """A heading belongs to the panel, not to a floating HTML box beside it."""
         assert (

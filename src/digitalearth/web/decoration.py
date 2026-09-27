@@ -817,7 +817,9 @@ class DecorationMixin(_MixinBase):
                 this tier can build, which is ``("visibility",)``: a py-maplibregl switcher is visibility
                 rows and nothing else. Naming ``"opacity"`` or ``"basemap"`` is therefore **refused** rather
                 than accepted and dropped — the interactive tier builds both, and a caller moving a call
-                here should hear that this tier cannot.
+                here should hear that this tier cannot. What the shared resolver answers is recorded on the
+                switcher's furniture, so the panel says which controls it draws rather than leaving a reader
+                to know that this tier draws one.
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
                 keyword: it styles the switcher rather than choosing what the switcher contains.
 
@@ -855,12 +857,15 @@ class DecorationMixin(_MixinBase):
         """
         _require_maplibre()
         _check_position(position)
-        if controls is not None:
-            resolved_controls(
-                controls,
-                offered=_OFFERED_CONTROLS,
-                caller="WebMap.layer_control()",
-            )
+        # The answer is kept, not only the refusal: `resolved_controls` is the one place that knows what this
+        # tier can build, and it de-duplicates and orders the names. Recording what it returned is what makes
+        # the panel's description and the refusal read one list (review R2-L13). The default goes through it
+        # too, so "everything this tier can build" is resolved rather than re-spelled here.
+        exposed = resolved_controls(
+            _OFFERED_CONTROLS if controls is None else controls,
+            offered=_OFFERED_CONTROLS,
+            caller="WebMap.layer_control()",
+        )
         if theme not in _SWITCHER_THEMES:
             raise ValueError(
                 f"layer_control(theme={theme!r}) must be one of {sorted(_SWITCHER_THEMES)}"
@@ -896,7 +901,11 @@ class DecorationMixin(_MixinBase):
             "position": position,
         }
         self._record_furniture(
-            "layer_switcher", anchor=position, layers=tuple(wanted), theme=theme
+            "layer_switcher",
+            anchor=position,
+            layers=tuple(wanted),
+            theme=theme,
+            controls=exposed,
         )
         return self
 
