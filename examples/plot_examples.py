@@ -32,14 +32,16 @@ if not os.environ.get("MPLBACKEND"):
     matplotlib.use("TkAgg")
 
 saveto = "examples/data/results"
+#: The label both the title and the colorbar use for the accumulation raster.
+ACC_LABEL = "Flow Accumulation"
 # %% small map
 acc = Dataset.read_file("examples/data/acc4000.tif")
 rhine_acc = Dataset.read_file("examples/data/DEM5km_Rhine_burned_acc.tif")
 cmap = "terrain"
 # %%
 acc_map = Map(crs=acc.epsg)
-acc_map.field(acc, title="Flow Accumulation")
-acc_map.colorbar(label="Flow Accumulation")
+acc_map.field(acc, title=ACC_LABEL)
+acc_map.colorbar(label=ACC_LABEL)
 # %% an elevation raster
 # The `DEM5km_Rhine_burned_fill.tif` this cell used to read was never committed to the repository, so it
 # reads the elevation raster that is here instead.
@@ -56,22 +58,22 @@ bounds = [-600, 0, 100, 300, 500, 700, 900, 1100, 2000, 2500, 3000, 3500]
 bounded_map = Map(crs=rhine_acc.epsg)
 bounded_map.field(
     rhine_acc,
-    title="Flow Accumulation",
+    title=ACC_LABEL,
     ticks_spacing=500,
     color_scale="boundary",
     bounds=bounds,
 )
-bounded_map.colorbar(label="Flow Accumulation")
+bounded_map.colorbar(label=ACC_LABEL)
 # %% manual normalization — a diverging scale centred on a value you choose
 midpoint_map = Map(crs=rhine_acc.epsg)
 midpoint_map.field(
     rhine_acc,
-    title="Flow Accumulation",
+    title=ACC_LABEL,
     ticks_spacing=500,
     color_scale="midpoint",
     midpoint=20,
 )
-midpoint_map.colorbar(label="Flow Accumulation")
+midpoint_map.colorbar(label=ACC_LABEL)
 # %% gauges over the raster
 # The cell-value annotations this example used to switch on (`display_cell_value` / `num_size` /
 # `background_color_threshold`) are left out on purpose. The keywords are still accepted, but the labels
@@ -88,8 +90,8 @@ id_color = "yellow"
 id_size = 20
 
 gauge_map = Map(crs=acc.epsg)
-gauge_map.field(acc, ticks_spacing=500, title="Flow Accumulation")
-gauge_map.colorbar(layer=0, label="Flow Accumulation")
+gauge_map.field(acc, ticks_spacing=500, title=ACC_LABEL)
+gauge_map.colorbar(layer=0, label=ACC_LABEL)
 markers = gauge_map.points(point_fc, size=point_size)
 # `Map.points` colors the markers by the collection's own value column (here `id`). One flat color is a
 # property of the artist it returned, not a keyword of the layer.
