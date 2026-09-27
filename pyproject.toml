@@ -40,7 +40,7 @@ dependencies = [
     # WatermarkMixin and took the free stamp_mark() function private, so static/scene.py and
     # static/textured_globe.py cannot import the old name. An uncapped >=0.37 let CI resolve
     # 0.39 against code that still called the function, which is how it broke.
-    "cleopatra[tiles] >=0.39.0",
+    "cleopatra[tiles] >=0.40.0",
     # static/maps/decoration.py constructs the TileProvider a keyed basemap is handed to cleopatra as,
     # so it is imported directly here and declared for the same reason matplotlib is above: it currently
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
