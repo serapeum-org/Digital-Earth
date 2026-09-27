@@ -16,9 +16,9 @@ alone — a row in :data:`FRAME_READERS`. The probes never mention a tier: they 
 frozen into.
 
 **The two framing probes read the engine, not the figure.** `set_bounds` leaves no layer behind, so there is
-nothing in `figure_spec` to read — and every tier *records* the rectangle it was asked for (`_frame_bounds`
-on the two 2-D tiers, `_fit` on the web one), so a probe reading that record back would agree with the
-caller whether or not the frame ever reached the engine. That is how two `move_layer` probes on this branch
+nothing in `figure_spec` to read — and every tier keeps a *record* of the framing call (`_frame_bounds` on
+the two 2-D tiers, `_fit` on the web one), so a probe reading that record back would agree with the caller
+whether or not the frame ever reached the engine. That is how two `move_layer` probes on this branch
 passed over a feature that does not reach the picture (review H5/H6), and it is why :data:`FRAME_READERS`
 goes to matplotlib's axes limits, to the plot options of the *rendered* HoloViews object, and to the
 ``fitBounds`` call in the page a browser is handed. It is a table row rather than a method on the subclass so
@@ -601,7 +601,7 @@ def _web_frame(drawn) -> tuple:
 #: How to read the frame each tier was left holding, by backend.
 #:
 #: **The read has to reach the engine, and that is why this is per tier rather than one probe.** Every tier
-#: also *records* what `set_bounds` was asked for — `_frame_bounds` on the two 2-D tiers, `_fit` on the web
+#: also keeps a *record* of the framing call — `_frame_bounds` on the two 2-D tiers, `_fit` on the web
 #: one — and reading that record back is the trap two of this branch's other findings fell into: a probe that
 #: asserts on a request passes while the engine ignores it (review H5/H6, both `move_layer`). So each reader
 #: goes to where the frame lands: matplotlib's axes limits, the plot options of the *rendered* HoloViews
@@ -1216,7 +1216,7 @@ class MapConformanceBase:
             method's *keyword set* and nothing about the first positional parameter, so no name test could
             see it, and this module made no framing call at all.
 
-            Read out of the engine rather than off the map's own record of the request: `_frame_bounds` and
+            Read out of the engine rather than off the map's own record of the call: `_frame_bounds` and
             `_fit` would have agreed with the caller on every tier while the figure disagreed, which is the
             way two `move_layer` probes on this branch passed over a broken feature (review H5/H6).
         """

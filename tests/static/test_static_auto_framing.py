@@ -321,6 +321,29 @@ class TestTheViewReportsTheFrame:
         flat.set_bounds(None)
         assert flat.viewport.bounds.as_bbox() == [0.0, -20.0, 30.0, 10.0]
 
+    def test_a_zero_span_frame_is_reported_as_the_rectangle_the_axes_was_left_holding(
+        self, flat
+    ):
+        """A frame matplotlib cannot hold is reported as the one it expanded to instead.
+
+        Args:
+            flat: A map in degrees.
+
+        Test scenario:
+            ``padding=-0.5`` is the bottom of the legal range (:data:`MIN_PADDING`, which `check_padding`
+            passes silently) and collapses any rectangle onto its own centre. matplotlib refuses a singular
+            limit and expands it, so the figure draws a rectangle around the centre while the record said the
+            centre itself — a reported region nothing was showing. Compared against the axes rather than
+            against a literal, so what is pinned is the agreement and not matplotlib's expansion factor.
+        """
+        with pytest.warns(UserWarning, match="identical low and high xlims"):
+            flat.set_bounds([0.0, 0.0, 10.0, 10.0], padding=-0.5)
+        (xmin, xmax), (ymin, ymax) = _limits(flat)
+        reported = flat.viewport.bounds
+        assert reported.as_bbox() == [xmin, ymin, xmax, ymax], (
+            f"the view reports {reported.as_bbox()} for an axes holding x {(xmin, xmax)} y {(ymin, ymax)}"
+        )
+
     def test_an_unframed_map_still_reports_no_region(self, flat):
         """``None`` has to keep meaning "nobody has framed this", or it says nothing.
 

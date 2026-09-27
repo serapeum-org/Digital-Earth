@@ -363,13 +363,17 @@ class ProjectionMixin(_MixinBase):
         digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
-    #: The region the last framing call asked for, in the display CRS, or ``None`` while nothing has framed
-    #: the axes. Declared on the class rather than set in a constructor, because this mixin is composed into
-    #: :class:`~digitalearth.static.map.Map` and owns no ``__init__`` of its own — the class attribute is the
-    #: default every instance reads until :meth:`set_bounds` writes one of its own.
+    #: The region the last framing call left the axes holding, in the display CRS, or ``None`` while nothing
+    #: has framed the axes. Declared on the class rather than set in a constructor, because this mixin is
+    #: composed into :class:`~digitalearth.static.map.Map` and owns no ``__init__`` of its own — the class
+    #: attribute is the default every instance reads until :meth:`set_bounds` writes one of its own.
     #:
-    #: It is what :attr:`viewport` reports, and it is deliberately *not* the axes limits: those are whatever
-    #: the last autoscale left behind, which on an empty figure is matplotlib's unit square.
+    #: It is what :attr:`viewport` reports, and it is written by :meth:`set_bounds` from the limits it has
+    #: just set (:meth:`_frame_held`) rather than from the rectangle it was handed, because matplotlib expands
+    #: a singular limit and a zero-span frame was otherwise reported as a rectangle nothing was showing
+    #: (review R2-M10). It is *not* the axes limits read on demand: those are whatever the last autoscale left
+    #: behind, which on an unframed figure is matplotlib's unit square, and ``None`` there is the honest
+    #: answer rather than that square.
     _frame_bounds: Optional[Bounds] = None
 
     @property
@@ -455,6 +459,13 @@ class ProjectionMixin(_MixinBase):
             rectangles across the 2-D tiers; the matplotlib ordering is reachable from `Bounds` alone now,
             through :meth:`~digitalearth.base.spec.bounds.Bounds.as_mpl`.
 
+            What :attr:`viewport` reports is read **back off the axes** once the limits are set, so it is the
+            rectangle the figure is holding rather than the one that was asked for. The two differ for a frame
+            of zero span — a fit onto a single point, or ``padding=-0.5``, the bottom of the legal range:
+            matplotlib refuses a singular limit and expands it (by 5% of the value, warning as it goes), and
+            the region reported is that expanded one. It is read at framing time and not re-read, so a later
+            builder that autoscales the axes moves the picture without moving what this reports.
+
         Examples:
             - A rectangle in another CRS is converted, so the frame lands where the data is:
                 ```python
@@ -498,8 +509,27 @@ class ProjectionMixin(_MixinBase):
         xmin, xmax, ymin, ymax = frame.limits()
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
-        self._frame_bounds = frame.box
+        # Read back, not `frame.box`: matplotlib will not hold a singular limit and expands one as it is set,
+        # so a zero-span frame — a fit onto one point, or `padding=-0.5` — was recorded as a rectangle the
+        # axes was not holding and the figure never showed (review R2-M10).
+        self._frame_bounds = self._frame_held(frame.box.crs)
         return self
+
+    def _frame_held(self, crs: Any) -> Bounds:
+        """Return the rectangle the axes is holding, as a region in `crs`.
+
+        Args:
+            crs: The display CRS the limits are measured in, taken from the frame they were set from.
+
+        Returns:
+            The limits as a `Bounds`, corners in order: which way each axis runs is a property of the axes
+            rather than of the region, so an inverted pair is read back as the same rectangle it frames.
+        """
+        left, right = (float(value) for value in self.ax.get_xlim())
+        bottom, top = (float(value) for value in self.ax.get_ylim())
+        return Bounds(
+            min(left, right), min(bottom, top), max(left, right), max(bottom, top), crs
+        )
 
     def _frame_asked(
         self,
