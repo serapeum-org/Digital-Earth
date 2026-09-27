@@ -1090,14 +1090,35 @@ class Scene3DBase:
         Raises:
             KeyError: if no layer has that id.
         """
-        if layer_id not in self._figure.layers:
-            raise KeyError(
-                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
-            )
+        self._require_layer(layer_id)
         drawn = self._renderer.drawn.get(layer_id)
         if drawn is None:
             return None
         return drawn[0] if part == "mesh" else drawn[1]
+
+    def _require_layer(self, layer_id: str) -> None:
+        """Refuse an id this scene has no layer for, in the scene's own words.
+
+        The one place this tier spells that refusal. It was written out at each of the five call sites, and
+        `move_layer` had none — it left the question to `LayerTree.move`, whose message names *the tree*, so
+        one mistake got two answers depending on which structure noticed it first (review R2-N6). The static
+        and interactive tiers settled the same third of this the same way.
+
+        Six callers: `_drawn_pair` (behind `mesh_of`/`actor_of`), `get_layer`, `replace_layer`, `remove_layer`,
+        `set_visible` and `move_layer`. The first five each spelled this raise out and produced exactly this
+        message, so routing them through one function changes nothing they answer; `move_layer` is the one
+        whose answer changes.
+
+        Args:
+            layer_id: The id the caller named.
+
+        Raises:
+            KeyError: naming the id and the ids this scene does have.
+        """
+        if layer_id not in self._figure.layers:
+            raise KeyError(
+                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
+            )
 
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
@@ -1125,10 +1146,7 @@ class Scene3DBase:
 
                 ```
         """
-        if layer_id not in self._figure.layers:
-            raise KeyError(
-                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
-            )
+        self._require_layer(layer_id)
         return self._figure.layers.get(layer_id)
 
     def replace_layer(self, layer: LayerSpec) -> Self:
@@ -1169,10 +1187,7 @@ class Scene3DBase:
 
                 ```
         """
-        if layer.id not in self._figure.layers:
-            raise KeyError(
-                f"no layer {layer.id!r} in this scene; its layers are {self.layer_ids}"
-            )
+        self._require_layer(layer.id)
         # The fourth production caller of `Capabilities.require` (D-10), joining the other three tiers. A
         # replacement is the one layer-management call that can name a **new kind**, so it is the one that can
         # ask this tier for something it does not have — and refusing here, off the declaration, refuses
@@ -1241,10 +1256,7 @@ class Scene3DBase:
 
                 ```
         """
-        if layer_id not in self._figure.layers:
-            raise KeyError(
-                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
-            )
+        self._require_layer(layer_id)
         dropped = self._figure.layers.get(layer_id).source_id
         sources = {
             key: ref for key, ref in self._figure.sources.items() if key != dropped
@@ -1297,10 +1309,7 @@ class Scene3DBase:
 
                 ```
         """
-        if layer_id not in self._figure.layers:
-            raise KeyError(
-                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
-            )
+        self._require_layer(layer_id)
         self._change(
             self._figure_with(layers=self._figure.layers.set_visible(layer_id, visible))
         )
@@ -1340,6 +1349,9 @@ class Scene3DBase:
 
                 ```
         """
+        # Asked here rather than left to `LayerTree.move`, so an unknown id is refused in the same words as
+        # every other layer-management call on this tier: the tree names itself, the facade names the scene.
+        self._require_layer(layer_id)
         self._change(
             self._figure_with(layers=self._figure.layers.move(layer_id, index))
         )

@@ -219,6 +219,46 @@ class TestAddressingLayers:
         with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
             scene.remove_layer("nope")
 
+    def test_move_layer_refuses_an_unknown_id_the_way_get_layer_does(self, scene):
+        """Every layer-management call on this tier names the scene, not whichever structure noticed.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `move_layer` left the question to `LayerTree.move`, whose refusal names *the tree* — "no layer
+            'nope' in this tree; layers are [...]" — while `get_layer`, `set_visible`, `remove_layer` and
+            `replace_layer` all name *the scene*. Two spellings of one refusal, decided by which structure
+            happened to notice first; the static and interactive tiers settled the same third of this
+            (review R2-N6). The two messages come from different calls on different code paths, so comparing
+            them is a real assertion rather than a tautology — and it would still hold if the wording changed.
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(KeyError) as from_get:
+            scene.get_layer("nope")
+        with pytest.raises(KeyError) as from_move:
+            scene.move_layer("nope", 0)
+        assert str(from_move.value) == str(from_get.value), (
+            f"move_layer said {from_move.value} where get_layer said {from_get.value}"
+        )
+
+    def test_the_unknown_id_refusal_names_the_scene_rather_than_the_tree(self, scene):
+        """Built the other way round: the shared wording has to be the facade's, not `LayerTree`'s.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Comparing the two messages alone would also pass if both came from the tree. This pins which of
+            the two voices they agree in.
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(KeyError) as refused:
+            scene.move_layer("nope", 0)
+        assert "in this scene" in str(refused.value), (
+            f"move_layer refused in the tree's words: {refused.value}"
+        )
+
     def test_a_layer_is_hidden_and_shown_by_id(self, scene):
         """Visibility is recorded on the layer and applied to its actor."""
         scene.terrain(get_source(_dem()))
