@@ -17,9 +17,16 @@ Two cross-cutting rules every builder follows:
   passes the CRS it warped to as ``crs=`` and it is stored verbatim; otherwise the input's own EPSG code is
   used, falling back to its projection definition when it has no authority code. ``None`` is reserved for a
   genuinely unknown CRS (a raw numpy array).
+
+:func:`require_drawable` is the other side of that dispatch: what ``extract`` *cannot* read, refused where the
+caller can see it. A builder declares which of :data:`DRAWABLE_FAMILIES` it draws and gets a `TypeError`
+naming the call, the type and what it takes — rather than the attribute error whichever internal reached the
+wrong type first.
 """
 
-from typing import Any, Mapping, Optional
+import os
+from types import MappingProxyType
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 import numpy as np
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
@@ -30,8 +37,147 @@ from digitalearth.base.crs import declared_crs, source_epsg
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
-from digitalearth.base.spec import DEFAULT_BAND, Selection
+from digitalearth.base.spec import DEFAULT_BAND, DataRef, Selection
 from digitalearth.base.types import PlottableData, RasterLike
+
+#: The families of data a builder may declare it draws, each with the phrase a refusal uses to say so. They
+#: are the branches :func:`extract` dispatches on, named — a builder takes some of them and not others, and
+#: until :func:`require_drawable` that was something a caller found out from whichever attribute error the
+#: wrong type happened to trip first (`Map.field(ndarray)` leaked ``'numpy.ndarray' object has no attribute
+#: 'to_crs'`` from inside a warp, #343).
+DRAWABLE_FAMILIES: Mapping[str, str] = MappingProxyType(
+    {
+        "raster": "a pyramids Dataset (a NetCDF or a DatasetCollection counts as one)",
+        "array": "a 2-D numpy array",
+        "vector": "a pyramids FeatureCollection",
+    }
+)
+
+
+def _is_raster(data: Any) -> bool:
+    """Whether `data` is a pyramids raster :func:`extract` can read a band out of.
+
+    Args:
+        data: The candidate.
+
+    Returns:
+        `True` for a `Dataset` (a `NetCDF` is one) or a `DatasetCollection`. Matched by type rather than
+        duck-typed, because that is how :func:`extract` itself chooses the branch.
+    """
+    from pyramids.dataset.collection import DatasetCollection
+
+    return isinstance(data, (Dataset, DatasetCollection))
+
+
+def _is_array(data: Any) -> bool:
+    """Whether `data` is a bare numpy array.
+
+    Args:
+        data: The candidate.
+
+    Returns:
+        `True` for any `numpy.ndarray`, a masked array included. Whether it is 2-D is
+        :func:`_from_numpy`'s question, so that refusal keeps naming the number of dimensions.
+    """
+    return isinstance(data, np.ndarray)
+
+
+def _is_vector(data: Any) -> bool:
+    """Whether `data` is a vector layer a builder can reproject and read geometry from.
+
+    Args:
+        data: The candidate.
+
+    Returns:
+        `True` for anything exposing the two members a vector render needs — the geometry column and the
+        reprojection. Duck-typed rather than matched against `FeatureCollection` because a plain geopandas
+        frame is what pyramids' own ``to_geodataframe()`` hands back, and because this module does not import
+        geopandas: pyramids is the only GIS dependency.
+    """
+    return hasattr(data, "geometry") and hasattr(data, "to_crs")
+
+
+#: How each family is recognised. Keyed by the same names as :data:`DRAWABLE_FAMILIES`, so a family with a
+#: phrase and no test — or the reverse — is a `KeyError` here rather than a silent "no".
+_RECOGNISERS: Mapping[str, Callable[[Any], bool]] = MappingProxyType(
+    {"raster": _is_raster, "array": _is_array, "vector": _is_vector}
+)
+
+
+def require_drawable(
+    data: Any, *, caller: str, accepts: Sequence[str] = ("raster",)
+) -> None:
+    """Refuse a builder's data argument by name, instead of leaking an attribute error from inside a warp.
+
+    A public method handed the wrong type should say so, and say what it takes. Until this, a tier's builders
+    found out by calling: `Map.field({})` reached ``GeoLayerBase._reproject``, which called ``.to_crs`` on
+    whatever it was given, and the caller read ``AttributeError: 'dict' object has no attribute 'to_crs'`` —
+    a method they never called, about an attribute they never heard of (#343). ``quickmap`` already refused in
+    the right register (``TypeError: quickmap cannot draw a ndarray``); this is that register, for a builder.
+
+    A **reference** always passes: a path, a URL or a :class:`~digitalearth.base.spec.dataref.DataRef` names
+    data that is opened when the layer is drawn, so there is nothing here to inspect. What it opens to is the
+    resolver's business, and an unreadable file raises in its own words.
+
+    Args:
+        data: What the caller handed the builder.
+        caller: The public call, spelled as a caller writes it — ``"Map.field()"``.
+        accepts: The families this builder draws, as :data:`DRAWABLE_FAMILIES` keys them. A raster field
+            takes ``("raster", "array")``; a builder needing pyramids' cell geometry takes ``("raster",)``,
+            because a bare array carries no geo-transform to read one from.
+
+    Raises:
+        TypeError: naming the caller, the type it was handed and what it takes — the three things a caller
+            needs to fix the call.
+        ValueError: for an `accepts` naming a family nobody declared, which is a defect in the builder rather
+            than in the call, and so is refused in different words.
+
+    Examples:
+        - A raster field takes a grid, whether pyramids' or numpy's, and names the type it was handed:
+            ```python
+            >>> from digitalearth.base.sources import require_drawable
+            >>> require_drawable({}, caller="Map.field()", accepts=("raster", "array"))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            TypeError: Map.field() cannot draw a dict; it takes a pyramids Dataset ...
+
+            ```
+        - An array is a grid and not a set of features, so one builder takes the value and another refuses it:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import require_drawable
+            >>> grid = np.zeros((2, 2))
+            >>> print(require_drawable(grid, caller="Map.field()", accepts=("raster", "array")))
+            None
+            >>> require_drawable(grid, caller="Map.points()", accepts=("vector",))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            TypeError: Map.points() cannot draw a ndarray; it takes a pyramids FeatureCollection, ...
+
+            ```
+        - A path is not inspected here: it names data the layer opens when it is drawn:
+            ```python
+            >>> from digitalearth.base.sources import require_drawable
+            >>> print(require_drawable("examples/data/acc4000.tif", caller="Map.field()"))
+            None
+
+            ```
+    """
+    unknown = sorted(set(accepts).difference(DRAWABLE_FAMILIES))
+    if unknown or not accepts:
+        raise ValueError(
+            f"require_drawable(accepts=) must name families from {sorted(DRAWABLE_FAMILIES)}; "
+            f"got {list(accepts)!r}"
+        )
+    # A reference is data by name; it is opened at the draw, and only then can anything be said about it.
+    if isinstance(data, (str, os.PathLike, DataRef)):
+        return
+    if any(_RECOGNISERS[family](data) for family in accepts):
+        return
+    takes = ", ".join(DRAWABLE_FAMILIES[family] for family in accepts)
+    raise TypeError(
+        f"{caller} cannot draw a {type(data).__name__}; it takes {takes}, or a path or URL to one"
+    )
 
 
 def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
@@ -458,8 +604,32 @@ def _from_numpy(
 
     A bare array carries no CRS, so ``crs`` stays ``None`` unless the caller names one — this is the case the
     contract's ``None`` is reserved for.
+
+    **A masked array's mask is honoured**, as the module's first cross-cutting rule requires of every other
+    input: the masked cells come back as ``NaN``, which is the nodata spelling the renderers already read.
+    ``np.asarray`` alone hands back the *data* buffer and drops the mask, so ``np.ma.masked_equal(grid,
+    -9999)`` extracted with its ``-9999`` sentinels intact and was drawn as if they were values — the very
+    defect :func:`~digitalearth.base.arrays.read_masked_band` exists to stop for a pyramids raster (#343).
+    A masked array is how a bare array says "nodata": there is no sidecar to carry a ``no_data_value``.
+
+    Args:
+        arr: The 2-D grid of values, plain or masked.
+        x: Optional x coordinates; ``None`` takes the column indices.
+        y: Optional y coordinates; ``None`` takes the row indices.
+        metadata: Extra metadata merged over the derived keys (the caller wins).
+        crs: The CRS the coordinates are already in, stored verbatim; ``None`` says it is unknown.
+
+    Returns:
+        Source: the raster source.
+
+    Raises:
+        ValueError: when `arr` is not 2-D.
     """
-    a = np.asarray(arr, dtype="float64")
+    a = (
+        np.ma.filled(arr.astype("float64"), np.nan)
+        if np.ma.isMaskedArray(arr)
+        else np.asarray(arr, dtype="float64")
+    )
     if a.ndim != 2:
         raise ValueError(f"numpy Source expects a 2-D array, got {a.ndim}-D")
     rows, cols = a.shape

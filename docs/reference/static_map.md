@@ -39,6 +39,15 @@ basemap stays under the data and a label stays over it however the calls were or
 furniture anchored to them. That description is what the other tiers read back, and it is the reason a layer
 records its recipe (`via`) rather than the method that drew it.
 
+## What `field` accepts
+
+A pyramids `Dataset`, a path or URL to a raster — and a **bare 2-D NumPy array**, for the "just show me this
+grid" case. Such a layer is not georeferenced: it is placed at its own indices, nothing is reprojected, and no
+georeferenced layer may share the figure with it (a basemap, a coastline and a reprojected raster are all in
+the display CRS, so mixing them is refused rather than drawn with one of them as an invisible speck). Nodata in
+a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
+by name, saying what the call takes.
+
 ::: digitalearth.static.map.Map
     options:
       inherited_members: true

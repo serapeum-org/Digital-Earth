@@ -24,7 +24,7 @@ from shapely.affinity import scale as affine_scale
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.sources import get_source
+from digitalearth.base.sources import get_source, require_drawable
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Symbology
 from digitalearth.base.symbology import (
     MISSING_COLOR,
@@ -873,8 +873,14 @@ class VectorMixin(_MixinBase):
                 through the drawer and `Scene._draw`, which drops the layer from the description; the
                 public builder is wrapped with :func:`_skips_off_limb`, so the caller sees a skipped layer
                 (or, under ``strict``, the error).
+            TypeError: when `features` is not a vector layer — refused by name here rather than leaking
+                ``AttributeError: ... has no attribute 'to_crs'`` out of the warp below, which is the same
+                defect ``Map.field`` had for a raster (#343). This runs in the drawer rather than in the
+                builder, which is where every vector kind meets, so `name` is what makes the message name
+                the public call the caller wrote.
             ValueError: if the collection is empty, or a geometry is not one of ``geom_types``.
         """
+        require_drawable(features, caller=f"Map.{name}()", accepts=("vector",))
         gdf = reproject(features, self.crs)
         if len(gdf) == 0:
             raise ValueError(f"{name} got an empty FeatureCollection (nothing to draw)")
@@ -1049,7 +1055,13 @@ class VectorMixin(_MixinBase):
                 1
 
                 ```
+
+        Raises:
+            TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
+                here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell
+                centres come from pyramids' ``to_xyz``, which reads a geo-transform an array does not carry.
         """
+        require_drawable(dataset, caller="Map.grid_points()", accepts=("raster",))
         record = LayerRecord(
             "points",
             source=dataset,
@@ -1118,6 +1130,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
+            TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
+                here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell
+                polygons come from pyramids' ``get_cell_polygons``, which reads a geo-transform an array does
+                not carry.
             ValueError: from ``PolygonGlyph`` for a keyword in ``**opts`` it does not accept, naming the
                 ones it does. The layer is dropped from the description again before it propagates.
 
@@ -1136,6 +1152,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        require_drawable(dataset, caller="Map.grid_cells()", accepts=("raster",))
         record = LayerRecord(
             # A raster's cells always carry their band's values, so this layer is always a choropleth —
             # `_polygon_kind` is named here for the same reason the outline builders name it: what makes a
@@ -1188,6 +1205,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
+            TypeError: when either component is not a raster or a reference to one. A bare numpy array is
+                refused here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the
+                two components are read band-by-band through the display-CRS choke point, which places them
+                against each other by their geo-transforms.
             ValueError: from ``VectorGlyph`` for a keyword in ``**opts`` it does not accept, naming the
                 ones it does. The layer is dropped from the description again before it propagates.
             FileNotFoundError: when a component's path names nothing, or KeyError when no resolver is
@@ -1195,6 +1216,8 @@ class VectorMixin(_MixinBase):
                 :func:`_opened_component`, which runs **before** the layer is described, so there is
                 nothing to drop.
         """
+        for component in (u_dataset, v_dataset):
+            require_drawable(component, caller=f"Map.{kind}()", accepts=("raster",))
         record = LayerRecord(
             _VECTOR_KINDS[kind],
             # The pair is the source: a field is not drawable from either component alone. It is opened

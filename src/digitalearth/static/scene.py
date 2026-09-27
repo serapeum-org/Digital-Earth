@@ -44,12 +44,13 @@ from typing import (
 )
 
 import matplotlib.pyplot as plt
+import numpy as np
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
 from cleopatra.styling.watermark import WatermarkMixin
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from digitalearth.base.custom import custom_kind
+from digitalearth.base.custom import custom_kind, is_custom
 from digitalearth.base.registry import (
     KIND_BANDS,
     forget_namespace,
@@ -91,6 +92,56 @@ ENGINE: str = "matplotlib"
 #: The property a layer's plain engine keywords are described under. Nested rather than merged flat into
 #: ``props``, so a caller's ``zorder=`` can never overwrite the one a builder recorded about the layer itself.
 DRAWING_OPTS_KEY: str = "opts"
+
+#: Where a layer's cells sit on the axes, in the words :meth:`Scene._require_one_placement` refuses with.
+#:
+#: Nearly every layer this tier draws is placed **in the display CRS**: data is warped into it, a graticule and
+#: a Natural-Earth overlay are computed from it, a text label is reprojected into it. A layer drawn from a bare
+#: numpy array cannot be: an array carries no CRS and no geo-transform, so its only coordinates are its own
+#: **indices** (#343). Both are perfectly drawable; what is not drawable is the two of them on one axes, where
+#: whichever is smaller becomes an invisible speck beside the other and the figure reads as if it had lost a
+#: layer. So a figure holds one placement or the other, and says so at the call that would mix them.
+AT_INDICES: str = "at array indices"
+IN_DISPLAY_CRS: str = "in the display CRS"
+
+
+def placement_of(record: "LayerRecord") -> Optional[str]:
+    """Return where the layer a record describes is placed, or ``None`` when it is not this figure's business.
+
+    Args:
+        record: What the builder is about to draw.
+
+    Returns:
+        :data:`AT_INDICES` for a layer drawn from a bare numpy array, and :data:`IN_DISPLAY_CRS` for every
+        other layer — including one drawn from no source at all, since a graticule, a coastline and a text
+        label are all computed *from* the display CRS.
+
+        ``None`` for a ``custom:<engine>`` layer: the caller drew that artist themselves, in whatever data
+        coordinates they were working in, and this tier is not in a position to say which. A custom layer is
+        therefore neither refused by the check nor counted by it.
+
+    Examples:
+        - An array is placed at its indices; a raster read from a file is placed in the display CRS:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.scene import LayerRecord, placement_of
+            >>> placement_of(LayerRecord("raster", source=np.zeros((2, 2))))
+            'at array indices'
+            >>> placement_of(LayerRecord("raster", source="dem.tif"))
+            'in the display CRS'
+
+            ```
+        - A caller's own artist is in the caller's own coordinates, so the figure makes no claim about it:
+            ```python
+            >>> from digitalearth.static.scene import LayerRecord, placement_of
+            >>> print(placement_of(LayerRecord("custom:matplotlib", held=(None, None, None))))
+            None
+
+            ```
+    """
+    if is_custom(record.kind):
+        return None
+    return AT_INDICES if isinstance(record.source, np.ndarray) else IN_DISPLAY_CRS
 
 
 def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -364,6 +415,10 @@ class Scene(WatermarkMixin):
         self._layer_opts: Dict[str, Dict[str, Any]] = {}
         # The caller's own objects, for the custom layers they handed in (see `LayerRecord.held`).
         self._held_objects: Dict[str, Any] = {}
+        # Where each layer's coordinates are placed — `IN_DISPLAY_CRS` or `AT_INDICES` — keyed by layer id,
+        # so `_require_one_placement` can refuse the figure that would hold both. A `custom:matplotlib`
+        # layer has no entry: the caller's own artist is in the caller's own coordinates.
+        self._layer_placements: Dict[str, str] = {}
         # Whether this scene has already drawn a glyph onto `ax` (#313). A cleopatra glyph clears every
         # glyph's artists off its axes unless it is told to compose, so from the *second* layer onwards a
         # render has to compose or it takes the layer below it off again. Only from the second: the first
@@ -512,6 +567,8 @@ class Scene(WatermarkMixin):
                 back here rather than in :meth:`_draw` covers the builders that describe without drawing —
                 ``graticule`` is one — which a ``try`` in :meth:`_draw` would not reach.
         """
+        # Before the mint, because a refused layer must leave no id reserved behind it.
+        self._require_one_placement(record)
         # A generated id counts the kind, so `custom:matplotlib` numbers `custom-1`: a colon cannot appear in
         # the middle of an id, and the engine name is not what a reader is counting anyway.
         layer_id = self._layer_id(record.kind.split(":")[0], record.name)
@@ -520,7 +577,49 @@ class Scene(WatermarkMixin):
         except BaseException:
             self._forget_layer(layer_id)
             raise
+        placement = placement_of(record)
+        if placement is not None:
+            self._layer_placements[layer_id] = placement
         return layer_id
+
+    def _require_one_placement(self, record: LayerRecord) -> None:
+        """Refuse a layer whose coordinates are not placed the way this figure's already are.
+
+        One axes has one pair of data coordinates, and this tier has two ways of filling them: a layer is
+        placed :data:`IN_DISPLAY_CRS`, or — for a bare numpy array, which carries no CRS and no geo-transform
+        — :data:`AT_INDICES`. Mixed on one figure, matplotlib autoscales to hold both: a ``3 x 4`` array beside
+        a coastline becomes a speck a millimetre wide off the coast of Africa, and the figure reads as if it
+        had drawn the coastline and lost the array. Neither layer raised, so nothing said which had gone
+        wrong (#343).
+
+        A ``custom:matplotlib`` layer is neither refused nor counted: the caller drew it in their own
+        coordinates, and only they know which those are (see :func:`placement_of`).
+
+        Args:
+            record: The layer about to be described.
+
+        Raises:
+            ValueError: naming the layers already on the figure and what to do instead. The alternative is
+                real rather than rhetorical: an array wrapped in a pyramids ``Dataset`` carries a
+                geo-transform, and then it is placed like everything else.
+        """
+        placement = placement_of(record)
+        if placement is None:
+            return
+        clashing = sorted(
+            layer_id
+            for layer_id, held in self._layer_placements.items()
+            if held != placement
+        )
+        if not clashing:
+            return
+        other = IN_DISPLAY_CRS if placement == AT_INDICES else AT_INDICES
+        raise ValueError(
+            f"a {record.kind!r} layer placed {placement} cannot join a figure whose layers are placed "
+            f"{other} ({', '.join(clashing)}): one axes has one pair of data coordinates, and a bare numpy "
+            "array has no CRS and no geo-transform to be placed by. Draw the array on a Map of its own, or "
+            "wrap it in a pyramids Dataset to give it a place"
+        )
 
     def _record_layer(self, layer_id: str, record: LayerRecord) -> None:
         """File one layer's description, data, key and keywords under an id already minted for it.
@@ -648,6 +747,9 @@ class Scene(WatermarkMixin):
         self._layer_keys.pop(layer_id, None)
         self._layer_opts.pop(layer_id, None)
         self._held_objects.pop(layer_id, None)
+        # With the layer goes its claim on the figure's coordinates: taking the one array layer off frees the
+        # figure to hold georeferenced ones again, and a layer whose drawer declined it never held the claim.
+        self._layer_placements.pop(layer_id, None)
 
     @property
     def layer_ids(self) -> List[str]:
@@ -869,6 +971,9 @@ class Scene(WatermarkMixin):
         self._layer_opts.pop(layer_id, None)
         self._held_objects.pop(layer_id, None)
         self._issued_ids.discard(layer_id)
+        # The claim on the figure's coordinates goes with the layer that made it, so taking the one
+        # index-placed layer off lets a georeferenced one take the axes (see `_require_one_placement`).
+        self._layer_placements.pop(layer_id, None)
         return self
 
     def set_visible(self, layer_id: str, visible: bool = True) -> Self:
@@ -1163,6 +1268,7 @@ class Scene(WatermarkMixin):
         self._layer_keys = {}
         self._layer_opts = {}
         self._held_objects = {}
+        self._layer_placements = {}
         self._id_counters = {}
         self._issued_ids = set()
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather

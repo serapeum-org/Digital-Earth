@@ -2,9 +2,10 @@
 
 Public surface::
 
-    from digitalearth.base.sources import Source, DimensionInfo, get_source
+    from digitalearth.base.sources import Source, DimensionInfo, get_source, require_drawable
     src = get_source(dataset)          # pyramids Dataset/NetCDF/DatasetCollection/FeatureCollection or numpy
     src.z.values, src.x.values, src.crs
+    require_drawable(data, caller="Map.field()", accepts=("raster", "array"))   # refuse the rest by name
 
 This package is a thin, pyramids-only extraction layer (no ``xarray``/``rasterio``). ``Source`` lives in its
 own leaf module (:mod:`digitalearth.base.sources.source`) so importing it here and from :mod:`.extractors` does
@@ -16,12 +17,24 @@ from typing import Any, Optional
 import numpy as np
 
 from digitalearth.base.sources.dimension import DimensionInfo
-from digitalearth.base.sources.extractors import extract, get_stack
+from digitalearth.base.sources.extractors import (
+    DRAWABLE_FAMILIES,
+    extract,
+    get_stack,
+    require_drawable,
+)
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.types import PlottableData
 
-__all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
+__all__ = [
+    "DRAWABLE_FAMILIES",
+    "DimensionInfo",
+    "Source",
+    "get_source",
+    "get_stack",
+    "require_drawable",
+]
 
 
 def get_source(
