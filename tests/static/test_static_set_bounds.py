@@ -172,6 +172,23 @@ class TestTheArgumentIsSpelledLikeTheRestOfThePackage:
         drawn.set_bounds([0.0, 10.0, 20.0, 30.0])
         assert _limits(drawn) == ((0.0, 20.0), (10.0, 30.0)), _limits(drawn)
 
+    def test_a_flipped_literal_is_read_in_bbox_order_too(self, drawn):
+        """A backwards pair does not make the four numbers order-agnostic.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The flipped-axis contract was preserved across the re-order, and the two literals that prove it
+            (``[10, 0, 0, 10]`` and ``[0, 10, 10, 0]``, in `test_static_auto_framing.py`) hold **equal values**
+            in positions 2 and 3 — the two the re-order swaps — so they read the same either way and say
+            nothing about the ordering (review R2-L6). ``[10, 0, 5, 10]`` is the flipped literal whose middle
+            pair differs: bbox order frames x 10→5 / y 0→10, the retired matplotlib order framed x 10→0 /
+            y 5→10. Read off the axes, because the inversion is the axes' and not the region's.
+        """
+        drawn.set_bounds([10.0, 0.0, 5.0, 10.0])
+        assert _limits(drawn) == ((10.0, 5.0), (0.0, 10.0)), _limits(drawn)
+
     def test_the_keyword_is_bounds(self, drawn):
         """A keyword call written against any tier reaches this one.
 

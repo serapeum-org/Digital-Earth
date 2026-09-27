@@ -554,6 +554,25 @@ class ProjectionMixin(_MixinBase):
         Raises:
             ValueError: for a sequence that is not four values, for ``None`` with nothing to frame on, or
                 from `Bounds` for a non-finite edge or a padding that would invert the rectangle.
+
+        Notes:
+            The sequence branch is where the ordering changed, and the flipped-axis contract was preserved
+            through that change **for the two literals the suite frames with** rather than by construction.
+            Going from the matplotlib reading this tier used to carry to this one swaps positions 2 and 3, and
+            in ``[10, 0, 0, 10]`` and ``[0, 10, 10, 0]`` those two positions hold equal values — so the swap
+            is a no-op on them before any normalisation runs, and both readings frame the same rectangle. A
+            flipped literal whose middle pair differs frames two different rectangles. Executed over the four:
+
+            | literal | this reading | the matplotlib reading | same |
+            |---|---|---|---|
+            | ``[10, 0, 0, 10]`` | x 10→0, y 0→10 | x 10→0, y 0→10 | yes |
+            | ``[0, 10, 10, 0]`` | x 0→10, y 10→0 | x 0→10, y 10→0 | yes |
+            | ``[10, 0, 5, 10]`` | x 10→5, y 0→10 | x 10→0, y 5→10 | no |
+            | ``[0, 10, 20, 30]`` | x 0→20, y 10→30 | x 0→10, y 20→30 | no |
+
+            So a flip is not order-agnostic, and the two palindromic literals are evidence that the *contract*
+            survived rather than that the orderings agree. Both of the differing literals are pinned in
+            ``tests/static/test_static_set_bounds.py``, so neither reading can be reintroduced quietly.
         """
         if bounds is None:
             return _Frame(self._fitted_box(padding))
