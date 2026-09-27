@@ -15,12 +15,17 @@ not (#324). :class:`TestTheKeywordsAreThePromiseToo` was scoped to the two tiers
 `CORE` alone, and stepped over any member that was not `callable`; what a tier is still short of now lives in
 :data:`KEYWORD_SHORTFALLS`, one row per gap, each naming the issue or roadmap order that settles it and each
 guarded so it cannot outlive the gap.
+
+The **call shape** is held beside them (#344). A keyword set says nothing about the first positional
+parameter's spelling, nor about the order a sequence argument is read in, and `set_bounds` diverged in both
+while every check here passed. :class:`TestTheCallShapeIsThePromiseToo` holds each tier to what `CORE`
+declares about them.
 """
 
 import inspect
 import re
 from types import MappingProxyType
-from typing import Mapping, Tuple
+from typing import Mapping, Optional, Tuple
 
 import pytest
 
@@ -155,6 +160,11 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
 #: that names none of them is a shrug rather than a plan.
 OWNER_PATTERN = re.compile(r"#\d+|order \d+|unscheduled")
 
+#: How a stated ordering separates its components. Named once because
+#: :func:`_orderings_stated_in` both matches on it and splits on it, and a pattern that matched one spacing
+#: and split on another would read a run it found as a single component.
+COMPONENT_SEPARATOR = re.compile(r"\s*,\s*")
+
 
 def _every_user_facing_reason() -> Tuple[str, ...]:
     """Return every reason the suite shows a *user*, from both tables that carry one.
@@ -265,6 +275,36 @@ def _declared_methods():
     return CORE + TIER2
 
 
+def _answered_by(facade, backend: str, method):
+    """Return the function one tier answers a declared name with, or `None` where nothing is held to it.
+
+    One reading of that question, because there are now two checks over a signature — the keyword set and the
+    call shape (#344) — and a second copy of these four skips is a second place for them to drift.
+
+    Args:
+        facade: The tier's facade class.
+        backend: The tier, for its pending list.
+        method: The declared :class:`~digitalearth.base.contract.Method`.
+
+    Returns:
+        The function, or `None` for a name the tier does not have — Tier 2 is "agree wherever it appears",
+        and a Core name it lacks is either pending, which the name checks cover, or already failing them —
+        for a name the tier lists as pending, and for a name answered by a **property**, which is held to
+        the stricter rule in
+        :meth:`TestTheKeywordsAreThePromiseToo.test_a_name_answered_by_a_property_declares_no_keywords`
+        instead. A property was silently dropped by a `not callable(...)` guard before, which is why the
+        skip is stated rather than implied: `layer_ids` is a property on all three 2-D tiers, and the day
+        the contract declares a keyword against it nothing would have said so (#324).
+    """
+    held = inspect.getattr_static(facade, method.name, None)
+    if held is None or method.name in pending_for(backend):
+        return None
+    if isinstance(held, property):
+        return None
+    bound = getattr(facade, method.name)
+    return bound if callable(bound) else None
+
+
 def _keyword_shortfall(facade, backend: str, method) -> Tuple[str, ...]:
     """Return the keywords one tier's method does not take but the contract declares.
 
@@ -274,25 +314,62 @@ def _keyword_shortfall(facade, backend: str, method) -> Tuple[str, ...]:
         method: The declared :class:`~digitalearth.base.contract.Method`.
 
     Returns:
-        The missing keywords, sorted, or `()` when there are none. `()` also for a name the tier does not
-        have — Tier 2 is "agree wherever it appears", and a Core name it lacks is either pending, which the
-        name checks cover, or already failing them — and for a name answered by a **property**, which is
-        held to the stricter rule in
-        :meth:`TestTheKeywordsAreThePromiseToo.test_a_name_answered_by_a_property_declares_no_keywords`
-        instead. A property was silently dropped by a `not callable(...)` guard before, which is why the
-        skip is now stated rather than implied: `layer_ids` is a property on all three 2-D tiers, and the
-        day the contract declares a keyword against it nothing would have said so (#324).
+        The missing keywords, sorted, or `()` when there are none — including for every name
+        :func:`_answered_by` hands back nothing for.
     """
-    held = inspect.getattr_static(facade, method.name, None)
-    if held is None or method.name in pending_for(backend):
-        return ()
-    if isinstance(held, property):
-        return ()
-    bound = getattr(facade, method.name)
-    if not callable(bound):
+    bound = _answered_by(facade, backend, method)
+    if bound is None:
         return ()
     taken = set(inspect.signature(bound).parameters)
     return tuple(sorted(method.keywords - taken))
+
+
+def _first_argument(bound) -> Optional[str]:
+    """Return the name of a function's first positional parameter.
+
+    Args:
+        bound: The function the tier answers a declared name with.
+
+    Returns:
+        The parameter's name, or `None` for a function that takes nothing positionally — `render()`,
+        `show()`, and `graticule()` on the web tier, which takes its two steps by keyword only. A call that
+        can only be written with keywords has no argument order to get wrong, so there is nothing for the
+        declared shape to hold it to.
+    """
+    for name, parameter in inspect.signature(bound).parameters.items():
+        if name == "self":
+            continue
+        if parameter.kind in (
+            parameter.POSITIONAL_ONLY,
+            parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            return name
+    return None
+
+
+def _orderings_stated_in(
+    text: str, components: Tuple[str, ...]
+) -> Tuple[Tuple[str, ...], ...]:
+    """Return every ordering of these components the text states, in the order it states them.
+
+    An ordering is not in a signature: four bare numbers have the same signature whichever rectangle they
+    mean, which is exactly why the `set_bounds` divergence was invisible to a name check (#344). The one
+    place a tier does state it without being run is its own text — the parameter's documentation and the
+    unpacking in its body — so that is what the declared order is held against.
+
+    Args:
+        text: The source of the tier's method, docstring and body together.
+        components: The declared components, in the declared order.
+
+    Returns:
+        One tuple per comma-separated run of exactly these component names, each in the order that run wrote
+        them. Empty for text that states no such run at all, which is the tier documenting some other
+        ordering — matplotlib's `[xmin, xmax, ymin, ymax]`, in the case this guard was written for.
+    """
+    component = "(?:" + "|".join(re.escape(part) for part in components) + ")"
+    joined = component + (r"\s*,\s*" + component) * (len(components) - 1)
+    run = re.compile(r"(?<![\w-])" + joined + r"(?![\w-])")
+    return tuple(tuple(COMPONENT_SEPARATOR.split(found)) for found in run.findall(text))
 
 
 def _measured(backend: str) -> dict:
@@ -328,6 +405,53 @@ def _listed(backend: str) -> dict:
         for (tier, method), (missing, _) in KEYWORD_SHORTFALLS.items()
         if tier == backend
     }
+
+
+def _misspelled_first_arguments(backend: str) -> dict:
+    """Return where one tier spells a declared first argument differently.
+
+    Args:
+        backend: The tier to measure.
+
+    Returns:
+        `{method: (declared, measured)}` for the names that disagree, empty for a tier that spells every
+        declared one the way the contract does. A method the contract leaves undeclared is not measured, and
+        neither is one the tier takes by keyword only — see :func:`_first_argument`.
+    """
+    facade = _facade(backend)
+    found = {}
+    for method in _declared_methods():
+        bound = _answered_by(facade, backend, method)
+        if method.first_argument is None or bound is None:
+            continue
+        measured = _first_argument(bound)
+        if measured is not None and measured != method.first_argument:
+            found[method.name] = (method.first_argument, measured)
+    return found
+
+
+def _unstated_sequence_orders(backend: str) -> dict:
+    """Return where one tier does not state a declared sequence ordering, or states another.
+
+    Args:
+        backend: The tier to measure.
+
+    Returns:
+        `{method: the orderings the tier states}` for the names whose text does not state the declared
+        ordering and nothing else. Empty for a tier that states it wherever the contract declares one. A
+        tier that does not have the name at all is not measured: the ordering is a promise about a call it
+        does not accept.
+    """
+    facade = _facade(backend)
+    found = {}
+    for method in _declared_methods():
+        bound = _answered_by(facade, backend, method)
+        if method.sequence_order is None or bound is None:
+            continue
+        stated = _orderings_stated_in(inspect.getsource(bound), method.sequence_order)
+        if set(stated) != {method.sequence_order}:
+            found[method.name] = stated
+    return found
 
 
 class TestTheKeywordsAreThePromiseToo:
@@ -496,6 +620,73 @@ class TestTheKeywordsAreThePromiseToo:
         assert impossible == {}, (
             f"{backend} answers {sorted(impossible)} with a property, which can take no keywords, while "
             f"the contract declares {impossible}"
+        )
+
+
+class TestTheCallShapeIsThePromiseToo:
+    """#344 — a keyword set is not a call shape, and the difference let a breaking bug reach the default tier.
+
+    `set_bounds` read a bare four-number sequence in **two** orders: matplotlib's `[xmin, xmax, ymin, ymax]`
+    on the static tier, bbox `(west, south, east, north)` on the interactive and web ones. So
+    `set_bounds([0, 10, 0, 50])` framed x 0→10 / y 0→50 on one tier and a degenerate x 0→0 frame on the next,
+    in silence. The first positional parameter was named `bbox` on static and `bounds` elsewhere, so a keyword
+    call ported in neither direction. Every check in this file passed throughout, because `CORE` declared that
+    both tiers accept `padding=` and both did.
+
+    The behaviour is fixed and pinned by two probes in `tests/base/test_map_conformance.py`, which read the
+    engine. What was still missing is the half this class adds: the **declaration** carries the shape, so a
+    fourth tier is held to it without anybody remembering that the probes exist. Two fields do it —
+    `first_argument` and `sequence_order` — and the checks below are the keyword check's shape applied to
+    each: measured off the tier, per tier, over both tiers of the contract.
+
+    **What each of the two can see.** A first argument's spelling is in the signature, so it is measured
+    exactly. An ordering is not in any signature — four bare numbers look identical whichever rectangle they
+    mean — so it is measured against the one place a tier states it without being run, its own text. That is
+    weaker than running the call, deliberately: the running is the conformance suite's job, and it is the only
+    job that can do it, because three of the four tiers need an engine this file never imports.
+    """
+
+    @pytest.mark.parametrize("backend", EVERY_TIER)
+    def test_the_first_argument_is_spelled_as_the_contract_declares(self, backend):
+        """A name whose first argument is spelled per tier cannot be called the same way twice.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The half of the `set_bounds` divergence a signature can see. The static tier's parameter was
+            `bbox` and the other two tiers' was `bounds`, so `set_bounds(bounds=...)` raised `TypeError` on
+            one tier and `set_bounds(bbox=...)` on the others — and nothing here looked, because `CORE` had
+            no field for it. Measured over `CORE + TIER2` on every tier, the same scope as the keyword check
+            beside it: a Tier 2 name is allowed to be absent, and is held wherever it is present.
+        """
+        wrong = _misspelled_first_arguments(backend)
+        assert wrong == {}, (
+            f"{backend} spells a declared first argument differently — {{method: (declared, measured)}}: "
+            f"{wrong}; rename the parameter, or correct Method.first_argument if the contract is the one "
+            "that is wrong"
+        )
+
+    @pytest.mark.parametrize("backend", EVERY_TIER)
+    def test_a_declared_sequence_order_is_the_one_the_tier_states(self, backend):
+        """A sequence read in two orders is two methods sharing a name.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The half no signature can show. `set_bounds` declares `("west", "south", "east", "north")`, and
+            a tier reading matplotlib's `[xmin, xmax, ymin, ymax]` instead documents and unpacks that
+            ordering rather than this one — so its text states no run of the declared components at all, and
+            it is reported here. A tier that states some other permutation of the same four is reported the
+            same way. Held over the method's source rather than its docstring alone so the unpacking in the
+            body counts as a statement of the order too.
+        """
+        unstated = _unstated_sequence_orders(backend)
+        assert unstated == {}, (
+            f"{backend} does not state the declared ordering of a sequence argument — "
+            f"{{method: the orderings it states}}: {unstated}; read the sequence in the declared order and "
+            "say so where the argument is documented, or correct Method.sequence_order"
         )
 
 

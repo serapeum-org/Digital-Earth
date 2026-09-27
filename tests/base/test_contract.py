@@ -1,7 +1,8 @@
 """The contract as data (U-3, #299).
 
 `base/contract.py` is what a tier is held against. These cover it in the environment that owns it — no engine,
-no facade, just the vocabulary.
+no facade, just the vocabulary — and, since #344, the **call shape** the vocabulary now declares beside each
+name: which argument comes first, and the order a sequence handed to it is read in.
 """
 
 import re
@@ -50,13 +51,111 @@ class TestReadingTheContract:
         assert "cmap" in core_method("field").keywords, core_method("field")
 
     def test_a_method_can_be_built_with_defaults(self):
-        """A declaration is a value: the optional halves have defaults a reader can rely on."""
+        """A declaration is a value: the optional halves have defaults a reader can rely on.
+
+        Test scenario:
+            Widened when the call shape joined the declaration (#344). Both new halves default to `None`,
+            and that is load bearing rather than tidy: every construction site in `contract.py` and every
+            one in the suite passes the first two arguments and nothing else, so a **required** field would
+            have stopped the module importing — and `None` is also the only honest value for a shape the
+            four tiers do not agree on yet.
+        """
         built = Method("demo", "a demonstration method")
-        assert (built.returns, built.keywords, built.builds_in) == (
-            "self",
-            frozenset(),
-            None,
-        ), built
+        assert (
+            built.returns,
+            built.keywords,
+            built.builds_in,
+            built.first_argument,
+            built.sequence_order,
+        ) == ("self", frozenset(), None, None, None), built
+
+
+def _malformed_orderings():
+    """Return every declared sequence ordering that could not be an ordering, with what is wrong with it.
+
+    Returns:
+        `[(name, ordering, fault)]`, empty for a contract whose declared orderings are all well formed.
+    """
+    found = []
+    for method in CORE + TIER2:
+        order = method.sequence_order
+        if order is None:
+            continue
+        if len(order) < 2:
+            found.append((method.name, order, "fewer than two components"))
+        elif len(set(order)) != len(order):
+            found.append((method.name, order, "a component named twice"))
+    return found
+
+
+class TestTheContractDeclaresHowAMethodIsCalled:
+    """The call shape as data (#344), and the well-formedness a declaration of it has to have.
+
+    `Method` recorded a keyword set and nothing about how a name is *called*, so `set_bounds` read four bare
+    numbers as two different rectangles across the 2-D tiers while every contract test stayed green. The
+    facades are held to the two new fields in `tests/test_contract_names.py`, which is where the facades are;
+    what is checked here is the declaration itself, in the environment that owns it — no engine, no facade.
+    """
+
+    def test_a_declared_sequence_order_names_the_argument_it_orders(self):
+        """An ordering with no argument to belong to orders nothing.
+
+        Test scenario:
+            The two fields are one statement in two halves: `sequence_order` says how the argument
+            `first_argument` names is read when it is handed a bare sequence. A declaration carrying the
+            second and not the first would read as a promise about a call while naming nothing to hold it
+            against — and the guard over the facades measures the argument by name, so it would skip such a
+            row in silence.
+        """
+        orphaned = [
+            method.name
+            for method in CORE + TIER2
+            if method.sequence_order is not None and method.first_argument is None
+        ]
+        assert orphaned == [], (
+            f"{orphaned} declare the order of a sequence argument without naming the argument; declare "
+            "first_argument beside it, or drop the ordering"
+        )
+
+    def test_a_declared_sequence_order_names_at_least_two_distinct_components(self):
+        """One component, or the same one twice, is not an order anything can be read in.
+
+        Test scenario:
+            The field carries the component names precisely so that a reader needs no second lookup, which
+            makes a malformed tuple a misleading one rather than a harmless one: `("west", "west", "east",
+            "north")` would tell a fourth tier to put two edges in one slot, and the facade guard would hold
+            every tier to that reading.
+        """
+        malformed = _malformed_orderings()
+        assert malformed == [], (
+            f"a declared sequence ordering cannot be read as one — [(name, ordering, fault)]: {malformed}"
+        )
+
+    def test_the_framing_orders_components_are_the_ones_bounds_reads(self):
+        """The declared ordering is the one the value type implements, not a third opinion beside it.
+
+        Test scenario:
+            `set_bounds` is the divergence the field was added for, and what it declares has to be the
+            ordering the rest of the package reads a bare four-sequence in — `Bounds.from_bbox`, which
+            `Bounds.as_bbox` writes back. Measured by handing `from_bbox` the four numbers in the
+            **declared** order and asking where each edge landed: declare matplotlib's ordering instead and
+            the eastern edge arrives in the southern slot, which is the bug itself (#344).
+        """
+        from digitalearth.base.spec.bounds import Bounds
+
+        declared = core_method("set_bounds").sequence_order
+        edges = {"west": 3.0, "south": 50.0, "east": 7.0, "north": 54.0}
+        unknown = [component for component in declared if component not in edges]
+        assert unknown == [], (
+            f"the declared framing order names {unknown}, which are not edges of a rectangle"
+        )
+        box = Bounds.from_bbox([edges[component] for component in declared], crs=4326)
+        assert (box.xmin, box.ymin, box.xmax, box.ymax) == (
+            edges["west"],
+            edges["south"],
+            edges["east"],
+            edges["north"],
+        ), f"the declared order {declared}, handed to Bounds.from_bbox, framed {box}"
 
 
 def _issues_named_in_reasons():
