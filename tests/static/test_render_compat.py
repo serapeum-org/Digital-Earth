@@ -116,6 +116,38 @@ def test_prepare_plot_kwargs_rejects_points_overlay_on_unsupported_glyph():
         prepare_plot_kwargs(glyph, {"points": zeros})
 
 
+def test_prepare_plot_kwargs_does_not_call_a_marker_option_a_raster_option():
+    """``point_size=`` is a point overlay's key, never a raster/mesh one (review N3).
+
+    Test scenario:
+        Both refusals shared one sentence — "they apply to raster/mesh layers, not this layer type" — which
+        for a point-overlay key is the wrong diagnosis twice over: the keys *do* belong to a raster or mesh
+        layer, as the overlay it draws over itself, and what the caller wanted is the same styling without
+        the prefix. A caller migrating a script written against the deleted ``point_size=`` was sent looking
+        for a raster they never asked for.
+    """
+    glyph = ScatterGlyph(
+        np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2])
+    )
+    with pytest.raises(ValueError) as refusal:
+        prepare_plot_kwargs(glyph, {"point_size": 200})
+    assert "apply to raster/mesh layers" not in str(refusal.value), (
+        f"a marker option was diagnosed as a raster one: {refusal.value}"
+    )
+
+
+def test_prepare_plot_kwargs_re_spells_a_deleted_marker_keyword():
+    """The refusal a migrating caller reads has to name the live spelling, not only the dead one."""
+    glyph = ScatterGlyph(
+        np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2])
+    )
+    with pytest.raises(ValueError) as refusal:
+        prepare_plot_kwargs(glyph, {"point_size": 200})
+    assert "point_size= is size=" in str(refusal.value), (
+        f"the refusal does not say what to write instead: {refusal.value}"
+    )
+
+
 def test_group_render_kwargs_keeps_flat_member_when_group_object_present():
     """A flat member passed alongside a built group object of the same group is left in place, not dropped.
 
@@ -157,8 +189,8 @@ def test_flat_style_keys_covers_group_members_and_params():
         assert key in FLAT_STYLE_KEYS
 
 
-def test_scatter_alpha_applies_to_the_rendered_artist():
-    """Map().scatter(fc, alpha=) reaches the artist (regression: it used to raise TypeError on vector glyphs)."""
+def test_points_alpha_applies_to_the_rendered_artist():
+    """Map().points(fc, alpha=) reaches the artist (regression: it used to raise TypeError on vector glyphs)."""
     import geopandas as gpd
     from pyramids.feature import FeatureCollection
     from shapely.geometry import Point
@@ -172,7 +204,7 @@ def test_scatter_alpha_applies_to_the_rendered_artist():
             crs="EPSG:4326",
         )
     )
-    artist = Map(crs=4326).scatter(fc, alpha=0.5)
+    artist = Map(crs=4326).points(fc, alpha=0.5)
     assert artist.get_alpha() == 0.5
 
 

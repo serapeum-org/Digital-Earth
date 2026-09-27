@@ -28,7 +28,7 @@ __all__ = ["ISSUE_REFERENCE", "KNOWN_OPEN_ISSUES", "issues_named_in"]
 ISSUE_REFERENCE = re.compile(r"#(\d+)")
 
 #: The issues a user-facing reason may name, with the title each carried when it was last checked against
-#: the tracker **by hand, on 2026-09-23**. Checked with ``gh issue view <n> --json state,title``; every one
+#: the tracker **by hand, on 2026-09-25**. Checked with ``gh issue view <n> --json state,title``; every one
 #: below answered ``OPEN``.
 KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
     {
@@ -37,16 +37,19 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
         261: (
             "fix(api): legend() now has three incompatible shapes, and web still has no colorbar()"
         ),
-        262: "fix(api): contours() renders on interactive and raises on web from the same call",
-        264: (
-            "fix(api): layer_control() shares zero parameters between the two tiers that have it"
-        ),
         265: (
             "fix(web): title(), fit_bounds() and labels() introduce third names for existing concepts"
         ),
         268: (
             "refactor(api): tiles() takes a name on one tier and a URL on another, through one "
             "overloaded provider="
+        ),
+        331: (
+            "feat(interactive): polygons() cannot classify — no scheme= or k=, unlike the web tier"
+        ),
+        332: (
+            "refactor(api): static and interactive builders spell opacity and column differently from "
+            "the Core contract"
         ),
     }
 )

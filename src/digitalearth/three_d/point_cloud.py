@@ -10,11 +10,10 @@ module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competit
 all CRS work upstream.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Mapping
 
 import numpy as np
 
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.three_d.base import classified_scalars
 
@@ -105,13 +104,12 @@ class PointCloudMixin(_MixinBase):
         name: Any = None,
         values: np.ndarray | None = None,
         value_column: str | None = None,
-        size: float | None = None,
+        size: float = 5.0,
         scheme: Any | None = None,
         k: int = 5,
         render_points_as_spheres: bool = True,
         eye_dome_lighting: bool = True,
         cmap: str = "viridis",
-        point_size: float | None = None,
         **kwargs: Any,
     ) -> Any:
         """Render a point cloud (LiDAR / observations / raster cells) and register it as a layer.
@@ -135,18 +133,16 @@ class PointCloudMixin(_MixinBase):
             render_points_as_spheres: Draw points as shaded spheres (cleaner than flat dots).
             eye_dome_lighting: Enable depth-cueing eye-dome lighting (recommended for dense clouds).
             cmap: Colormap used when the cloud is coloured by a scalar.
-            point_size: **Deprecated** alias of ``size``; passing it warns that ``point_size=`` will be
-                removed in a future release and forwards the value unchanged. Passing both is a
-                ``TypeError``.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`. A coloured cloud derives ``scalars``,
+                ``clim`` and ``n_colors``, so pinning one of those beside ``values=``/``value_column=`` is a
+                ``TypeError`` naming the keyword. ``nan_color`` is honoured instead of refused: the colour
+                missing data is drawn in is a choice the colouring only fills a default for.
 
         Returns:
             The registered :class:`pyvista.Actor` for the point cloud, or ``None`` when the cloud held no
             points (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
 
         Raises:
-            TypeError: if both ``size`` and the deprecated ``point_size`` are given — they name one
-                parameter, so neither can be silently preferred.
             ValueError: if ``values`` does not have one entry per point, if ``scheme`` cannot classify
                 the values, or if `data` declares a CRS other than the scene's and cannot be reprojected (a
                 `PointArrays`). Also — only when the scene was built with ``strict=True`` —
@@ -190,14 +186,6 @@ class PointCloudMixin(_MixinBase):
 
                 ```
         """
-        size = renamed_parameter(
-            new="size",
-            value=size,
-            old="point_size",
-            alias=point_size,
-            caller="Scene3D.point_cloud()",
-            default=5.0,
-        )
         return self._add_described_layer(
             kind="point_cloud",
             data=data,
@@ -212,6 +200,72 @@ class PointCloudMixin(_MixinBase):
             cmap=cmap,
             **kwargs,
         )
+
+
+def _refuse_folded_marker_size(props: Dict[str, Any]) -> None:
+    """Refuse ``point_size=``, the deleted spelling this drawer folds ``size=`` onto.
+
+    ``point_size`` is a real :meth:`pyvista.Plotter.add_points` keyword, so PyVista's own unknown-keyword
+    guard never sees it: it arrived through the builder's ``**kwargs``, and the size fold on the next line
+    then overwrote it. ``point_cloud(point_size=40)`` therefore drew at the ``size`` default of 5.0 — it
+    neither worked nor refused, while every other tier refuses the spelling outright because the parameter is
+    gone from the signature (review H4).
+
+    Args:
+        props: The layer's drawing properties, before the ``size`` → ``point_size`` fold.
+
+    Raises:
+        TypeError: when ``point_size`` is among them.
+    """
+    if "point_size" in props:
+        raise TypeError(
+            "point_cloud() got point_size=, which is the deleted spelling of size=: the marker size is "
+            "size= on every tier, and point_size= is the PyVista keyword size= is folded onto here, so "
+            "passing it is overwritten — pass size= instead"
+        )
+
+
+def _refuse_derived_colours(
+    props: Mapping[str, Any], style: Mapping[str, Any], *, scheme: Any
+) -> None:
+    """Refuse a colour keyword the cloud's own colouring derives, naming it.
+
+    The style :func:`~digitalearth.three_d.base.classified_scalars` builds is splatted over ``props``, so a
+    caller pinning ``clim=`` on a coloured cloud silently lost it to the class-index range — the same clash
+    :func:`~digitalearth.three_d.vector._classify_or_refuse` already refuses for an extruded polygon, which
+    this drawer did not (review H4). ``scalars`` is in the same position: the cloud binds its own array name.
+
+    What is refused is a *consequence* of the classification, not a choice inside it. ``clim`` and ``n_colors``
+    are the class-index range and the class count, and overriding either re-colours the wrong classes;
+    ``scalars`` is the array name the cloud binds. ``nan_color`` is neither — it is the colour missing data is
+    drawn in, which the classifier fills from
+    :data:`~digitalearth.base.symbology.MISSING_COLOR` as a **default** — so it is honoured where the caller
+    gave one, the way ``cmap`` already is. Refusing it left no way to choose a missing-data colour on a coloured
+    cloud at all, since the advice "drop it, or drop values=" means giving up the colouring (review R2-L2).
+
+    Args:
+        props: The caller's remaining keywords, with any ``nan_color`` already taken out by the drawer.
+        style: The colour keywords the classification derived, ``scalars`` already taken out.
+        scheme: How the values were classified, named in the message so the caller can drop one side.
+
+    Raises:
+        TypeError: when a keyword the colouring derives was also passed by the caller.
+    """
+    clashing = sorted((set(style) | {"scalars"}) & set(props))
+    if not clashing:
+        return
+    names = ", ".join(f"{name}=" for name in clashing)
+    # "(scheme=None)" read as a scheme named None on the continuous path, where there is no classification to
+    # speak of — the values reach the engine as they are and the ramp is what owns the range (review R2-L2).
+    colouring = (
+        "the continuous ramp it colours the values by"
+        if scheme is None
+        else f"the values it colours by (scheme={scheme!r})"
+    )
+    raise TypeError(
+        f"point_cloud() got {names} together with {colouring}, which sets {names} itself; drop it, or drop "
+        "values=/value_column="
+    )
 
 
 def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
@@ -236,6 +290,7 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
     k = props.pop("k", 5)
     cmap = props.pop("cmap", "viridis")
     eye_dome_lighting = props.pop("eye_dome_lighting", True)
+    _refuse_folded_marker_size(props)
     props["point_size"] = props.pop("size", None)
     placed = scene._place(data, layer="point_cloud")
     if hasattr(placed, "geometry"):
@@ -263,6 +318,13 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
             )
         style = classified_scalars(scalar, scheme=scheme, k=k, cmap=cmap)
         cloud[SCALAR] = style.pop("scalars")
+        # Taken out before the clash check, as `cmap` is above: the classifier fills `nan_color` from the
+        # shared missing-data colour as a default, so a caller who named one is choosing, not colliding
+        # (review R2-L2).
+        chosen_nan_color = props.pop("nan_color", None)
+        _refuse_derived_colours(props, style, scheme=scheme)
+        if chosen_nan_color is not None:
+            style["nan_color"] = chosen_nan_color
         props.update(scalars=SCALAR, **style)
 
     actor = scene.plotter.add_points(cloud, **props)

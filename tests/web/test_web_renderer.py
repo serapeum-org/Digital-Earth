@@ -12,6 +12,7 @@ import pytest
 
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.renderer import (
+    DECK_ROUTE,
     DRAWN_KINDS,
     PAINT_CHANNELS,
     Renderer,
@@ -87,9 +88,15 @@ class TestAKindThisTierDoesNotDraw:
     """A figure written for another backend should say so."""
 
     def test_it_is_refused_by_name_and_told_what_is_drawn(self):
-        """The message lists the kinds, so the caller can see what they meant."""
-        with pytest.raises(KeyError, match="does not draw 'point_cloud'"):
-            drawer_for("point_cloud")
+        """The message lists the kinds, so the caller can see what they meant.
+
+        Test scenario:
+            It asked about `point_cloud` until this tier started drawing point clouds from a description.
+            `volume` is a registered kind no 2-D tier draws, so it is what a figure written for the 3-D
+            tier would carry here.
+        """
+        with pytest.raises(KeyError, match="does not draw 'volume'"):
+            drawer_for("volume")
 
     def test_the_drawer_table_is_held_against_the_declared_kinds(self, monkeypatch):
         """Drift either way is a defect in this module, not in the caller.
@@ -249,33 +256,62 @@ class TestReconcilingTwoFigures:
         )
 
 
-class TestApplyIsRecordOnly:
-    """Review M1: on this tier, for this wave, `apply` moves the renderer's record and nothing a viewer sees."""
+class TestApplyReachesTheQueue:
+    """Review M1, answered: `apply` moves the record **and** the queue the page is built from."""
 
-    def test_a_successful_apply_moves_the_record_and_not_the_map(self, drawn_map):
-        """What `apply` does here, stated as it is rather than as the module once promised.
+    @staticmethod
+    def _emptied(drawn_map):
+        """Return the map's figure with its one layer taken out.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Returns:
+            The figure, and the panel emptied with it so `FigureSpec` accepts it.
+        """
+        figure = drawn_map.figure_spec
+        panel = with_fields(figure.panels[0], layers=())
+        return with_fields(figure, layers=figure.layers.remove("obs"), panels=(panel,))
+
+    def test_a_successful_apply_takes_the_layer_out_of_the_queue(self, drawn_map):
+        """A removed layer has to leave the page, not only the record beside it.
 
         Args:
             drawn_map: A map with one drawn layer.
 
         Test scenario:
-            The module said "the next build draws it". It does not: the widget is built from the map's queue
-            and `figure_spec` from its tree, and `apply` touches neither. This pins that, so wiring `apply`
-            into the map (Wave 7) has to change this test on purpose rather than slip past it.
+            The module once said "the next build draws it", and it did not: the widget is built from the
+            map's queue, which `apply` never touched, so a layer it removed stayed on the page and one it
+            added never arrived. This is the same call, asked of the queue.
         """
-        figure = drawn_map.figure_spec
-        queued = list(drawn_map._queued)
-        panel = with_fields(figure.panels[0], layers=())
-        emptied = with_fields(
-            figure, layers=figure.layers.remove("obs"), panels=(panel,)
-        )
-        drawn_map._renderer.apply(figure, emptied)
-        reached = {
-            "record": sorted(drawn_map._renderer.drawn),
-            "figure_spec": list(drawn_map.figure_spec.layers.ids),
-            "queue": drawn_map._queued == queued,
-        }
-        assert reached == {"record": [], "figure_spec": ["obs"], "queue": True}, reached
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert drawn_map._queued == [], drawn_map._queued
+
+    def test_a_successful_apply_moves_the_record_too(self, drawn_map):
+        """So the check above is not passing because `apply` emptied the queue and nothing else.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+        """
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert sorted(drawn_map._renderer.drawn) == [], drawn_map._renderer.drawn
+
+    def test_a_successful_apply_leaves_the_figure_the_map_reports_alone(
+        self, drawn_map
+    ):
+        """The description is the map's own, installed by `_change` once `apply` has returned.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The split matters: `apply` called directly — by a caller composing a figure of their own, or by
+            the conformance adapter — must not leave the map describing something nobody asked it to. That is
+            what makes "a figure this refuses is never one the map reports" true of the public methods, which
+            install the description themselves.
+        """
+        drawn_map._renderer.apply(drawn_map.figure_spec, self._emptied(drawn_map))
+        assert list(drawn_map.figure_spec.layers.ids) == ["obs"], drawn_map.layer_ids
 
 
 def _visibilities(drawn) -> list:
@@ -287,8 +323,12 @@ def _visibilities(drawn) -> list:
     Returns:
         One entry per layer — the drawing's own, then its extra layers — reading `None` where the layout
         says nothing, which MapLibre draws as visible. A caller's own layer may be a plain dict spec, so
-        that shape is read too.
+        that shape is read too. A deck.gl drawing has no MapLibre layout at all: deck reads its own
+        ``visible`` property, so that is translated into the same two words rather than read as absent —
+        which is what "visible" would have meant for a hidden point cloud.
     """
+    if drawn.route == DECK_ROUTE:
+        return ["visible" if drawn.layer.get("visible", True) else "none"]
     visibilities = []
     for layer in (drawn.layer, *drawn.extra_layers):
         layout = layer.get("layout") if isinstance(layer, dict) else layer.layout
@@ -534,8 +574,8 @@ class TestWhatTheRendererReports:
     def test_the_declared_kinds_are_the_ones_drawn_from_a_description(self):
         """The tuple is the tier's answer to "what do you draw?"."""
         assert "points" in DRAWN_KINDS
-        assert "terrain" not in DRAWN_KINDS, (
-            "terrain is a deck.gl path, still queued, and must not claim to be described"
+        assert "volume" not in DRAWN_KINDS, (
+            "a volume has no MapLibre rendering, so claiming to draw it would be a capability lie"
         )
 
     def test_band_for_prefers_the_layer_s_own_band(self, drawn_map):

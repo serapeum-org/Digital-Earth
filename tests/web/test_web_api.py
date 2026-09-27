@@ -1,6 +1,6 @@
 """DX.1 (web half) — ``quickplot(backend="web")`` dispatches to a :class:`WebMap`.
 
-A raster becomes ``add_raster``, a point ``FeatureCollection`` ``points``, a polygon one a ``choropleth``
+A raster becomes ``field``, a point ``FeatureCollection`` ``points``, a polygon one a ``choropleth``
 (with a ``column``) or outline ``polygons``. Dispatch/validation tests need no engine; the drawing tests
 ``importorskip`` maplibre.
 """

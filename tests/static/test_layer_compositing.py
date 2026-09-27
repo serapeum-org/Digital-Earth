@@ -118,8 +118,8 @@ def two_fields(dataset):
         Map: the map, whose layers are ``raster-1`` and ``raster-2``.
     """
     canvas = Map(crs=dataset.epsg)
-    canvas.imshow(dataset, cmap="viridis")
-    canvas.imshow(dataset, cmap="cividis")
+    canvas.field(dataset, cmap="viridis")
+    canvas.field(dataset, cmap="cividis")
     yield canvas
     canvas.close()
 
@@ -134,7 +134,7 @@ class TestLayersCompose:
             two_fields: A map with two raster layers on one axes.
 
         Test scenario:
-            The reported symptom: two ``imshow`` calls, two described layers, one image on the axes.
+            The reported symptom: two ``field`` calls, two described layers, one image on the axes.
         """
         assert len(two_fields.ax.images) == 2, (
             f"expected both fields on the axes, got {len(two_fields.ax.images)}"
@@ -159,12 +159,12 @@ class TestLayersCompose:
             dataset: The raster fixture.
 
         Test scenario:
-            ``contour`` goes through the same glyph as ``imshow`` but leaves a collection rather than an
+            ``contours`` goes through the same glyph as ``field`` but leaves a collection rather than an
             image, so this is the case where the wipe was invisible to any per-artist-type count.
         """
         with Map(crs=dataset.epsg) as canvas:
-            canvas.imshow(dataset, cmap="viridis")
-            canvas.contour(dataset, cmap="plasma")
+            canvas.field(dataset, cmap="viridis")
+            canvas.contours(dataset, cmap="plasma")
             images, contours = len(canvas.ax.images), len(canvas.ax.collections)
             described = attached_per_layer(canvas)
         assert (images, contours) == (1, 1), f"{images} images, {contours} collections"
@@ -182,7 +182,7 @@ class TestLayersCompose:
         """
         backdrop, u_dataset, v_dataset = flat_grid
         with Map(crs=4326) as canvas:
-            canvas.imshow(backdrop, cmap="viridis")
+            canvas.field(backdrop, cmap="viridis")
             canvas.quiver(u_dataset, v_dataset)
             images = len(canvas.ax.images)
             described = attached_per_layer(canvas)
@@ -192,7 +192,7 @@ class TestLayersCompose:
     def test_a_point_layer_over_a_raster_keeps_the_image_below(
         self, dataset, point_features
     ):
-        """A scatter layer composes over a field, and is not handed a keyword its glyph cannot take.
+        """A point layer composes over a field, and is not handed a keyword its glyph cannot take.
 
         Args:
             dataset: The raster fixture drawn underneath.
@@ -204,8 +204,8 @@ class TestLayersCompose:
             refused. Drawing it over a raster exercises both halves.
         """
         with Map(crs=dataset.epsg) as canvas:
-            canvas.imshow(dataset, cmap="viridis")
-            canvas.scatter(point_features)
+            canvas.field(dataset, cmap="viridis")
+            canvas.points(point_features)
             images = len(canvas.ax.images)
             described = attached_per_layer(canvas)
         assert images == 1, f"the field was taken off the axes ({images} images)"
@@ -223,7 +223,7 @@ class TestLayersCompose:
         """
         with Map(crs=dataset.epsg) as canvas:
             before = canvas._drew_on_axes
-            canvas.imshow(dataset)
+            canvas.field(dataset)
             after = canvas._drew_on_axes
         assert before is False, "a scene has drawn nothing before its first layer"
         assert after is True, "one render is enough to have something to compose over"
@@ -248,7 +248,7 @@ class TestLayersCompose:
         )
         stale = len(ax.images)
         canvas = Map(crs=dataset.epsg, ax=ax, fig=fig)
-        canvas.imshow(dataset)
+        canvas.field(dataset)
         replaced = len(ax.images)
         plt.close(fig)
         assert stale == 1, "the borrowed axes should start with the caller's own image"

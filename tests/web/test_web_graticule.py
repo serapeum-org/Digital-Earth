@@ -108,7 +108,7 @@ class TestTheGridOnTheMap:
 
         m = WebMap().basemap().graticule(spacing=30.0)
         payload = _payload(m.to_html())
-        assert m.layer_ids == ["Graticule"], m.layer_ids
+        assert m.layer_ids == ["tiles-1", "Graticule"], m.layer_ids
         assert "Graticule" in payload, "the grid must reach the page it is saved into"
         assert '"type": "geojson"' in payload, (
             "embedded as GeoJSON, so an offline page keeps it"
@@ -136,7 +136,6 @@ class TestTheGridOnTheMap:
             instead would draw it over the data. So the assertion is the order of the emitted addLayer
             calls: basemap, then graticule, then data.
         """
-        import json
         import re
 
         import geopandas as gpd
@@ -178,7 +177,7 @@ class TestTheGridOnTheMap:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().graticule()
-        assert m.layer_ids == ["Graticule"], m.layer_ids
+        assert m.layer_ids == ["tiles-1", "Graticule"], m.layer_ids
         payload = _payload(m.layer_control().to_html())
         assert '"layerIds": ["Graticule"]' in payload, payload[-300:]
 

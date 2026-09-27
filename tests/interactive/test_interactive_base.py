@@ -151,11 +151,11 @@ class TestRegistryAndRender:
     def _need_engine(self):
         pytest.importorskip("geoviews")
 
-    def test_add_element_chains(self):
+    def test_add_layer_chains_twice(self):
         import holoviews as hv
 
         m = InteractiveMap()
-        out = m.add_element(hv.Points([])).add_element(hv.Points([]))
+        out = m.add_layer(hv.Points([])).add_layer(hv.Points([]))
         assert out is m
         assert len(m.layers) == 2
 
@@ -171,13 +171,13 @@ class TestRegistryAndRender:
         import holoviews as hv
 
         el = hv.Points([(0, 0)])
-        assert InteractiveMap().add_element(el).render() is el
+        assert InteractiveMap().add_layer(el).render() is el
 
     def test_layers_overlay_in_add_order(self):
         import holoviews as hv
 
         first, second = hv.Points([(0, 0)]), hv.Points([(1, 1)])
-        obj = InteractiveMap().add_element(first).add_element(second).render()
+        obj = InteractiveMap().add_layer(first).add_layer(second).render()
         assert isinstance(obj, hv.Overlay)
         assert list(obj) == [first, second]
 
@@ -185,7 +185,7 @@ class TestRegistryAndRender:
         import holoviews as hv
 
         out = tmp_path / "m.html"
-        m = InteractiveMap().add_element(hv.Points([(0.0, 0.0), (1.0, 1.0)]))
+        m = InteractiveMap().add_layer(hv.Points([(0.0, 0.0), (1.0, 1.0)]))
         assert m.save(str(out)) == out
         assert out.stat().st_size > 1_000
 
@@ -193,7 +193,7 @@ class TestRegistryAndRender:
         import holoviews as hv
 
         out = tmp_path / "m.png"
-        InteractiveMap().add_element(hv.Points([(0.0, 0.0), (1.0, 1.0)])).save(str(out))
+        InteractiveMap().add_layer(hv.Points([(0.0, 0.0), (1.0, 1.0)])).save(str(out))
         assert out.exists() and out.stat().st_size > 0
 
 
@@ -238,7 +238,7 @@ class TestStyleReadBack:
 
     def test_style_of_returns_the_applied_options(self, dataset):
         """A builder's style is readable off the map, keyed by layer index or element."""
-        m = InteractiveMap().image(dataset, cmap="magma", alpha=0.5)
+        m = InteractiveMap().field(dataset, cmap="magma", alpha=0.5)
         by_index = m.style_of(0)
         assert by_index["common"]["cmap"] == "magma", (
             f"cmap not recorded: {by_index['common']}"
@@ -255,7 +255,7 @@ class TestStyleReadBack:
         """The recorded style matches what HoloViews resolved for the same element."""
         import holoviews as hv
 
-        m = InteractiveMap(title="discharge").image(
+        m = InteractiveMap(title="discharge").field(
             dataset, cmap="magma", alpha=0.5, clim=(0.0, 10.0)
         )
         element = m.layers[0]
@@ -278,8 +278,8 @@ class TestStyleReadBack:
 
     def test_layer_styles_covers_every_layer_in_add_order(self, dataset):
         """``layer_styles`` has one entry per layer; an unstyled layer reads back empty."""
-        m = InteractiveMap().image(dataset, cmap="magma")
-        m.add_element("raw-layer")
+        m = InteractiveMap().field(dataset, cmap="magma")
+        m.add_layer("raw-layer")
         styles = m.layer_styles
         assert len(styles) == len(m.layers), "one style entry per registered layer"
         assert styles[0]["common"]["cmap"] == "magma"
@@ -323,7 +323,7 @@ class TestShowAndRepr:
 
         monkeypatch.setattr(IPython.display, "display", shown.append)
         el = hv.Points([(0, 0)])
-        out = InteractiveMap().add_element(el).show()
+        out = InteractiveMap().add_layer(el).show()
         assert out is el, "show() must return the rendered object"
         assert shown == [el], (
             f"display() should receive the rendered object once, got {shown}"
@@ -341,7 +341,7 @@ class TestShowAndRepr:
         monkeypatch.setitem(sys.modules, "IPython.display", None)
         monkeypatch.setitem(sys.modules, "IPython", None)
         el = hv.Points([(0, 0)])
-        assert InteractiveMap().add_element(el).show() is el
+        assert InteractiveMap().add_layer(el).show() is el
 
     def test_repr_mimebundle_delegates_to_element_hook(self):
         """The map's mimebundle is the rendered element's mimebundle.
@@ -355,7 +355,7 @@ class TestShowAndRepr:
             def _repr_mimebundle_(self, include=None, exclude=None):
                 return {"text/plain": "fake"}
 
-        bundle = InteractiveMap().add_element(_FakeElement())._repr_mimebundle_()
+        bundle = InteractiveMap().add_layer(_FakeElement())._repr_mimebundle_()
         assert bundle == {"text/plain": "fake"}, (
             f"hook result not passed through: {bundle}"
         )
@@ -367,7 +367,7 @@ class TestShowAndRepr:
             ``render()`` returning an object with no ``_repr_mimebundle_`` attribute must
             yield ``{}`` rather than raising.
         """
-        bundle = InteractiveMap().add_element(object())._repr_mimebundle_()
+        bundle = InteractiveMap().add_layer(object())._repr_mimebundle_()
         assert bundle == {}, f"expected empty bundle for hookless element, got {bundle}"
 
 
@@ -461,13 +461,13 @@ def test_reimport_is_stable():
 
 
 class TestForgettingALayerTheTreeNeverHeld:
-    """`_forget_layer` is called however far `add_element` got, so it cannot assume an entry exists."""
+    """`_forget_layer` is called however far `add_layer` got, so it cannot assume an entry exists."""
 
     def test_the_layers_that_are_there_are_left_alone(self):
         """A description that was never finished still has an id and a source to let go of.
 
         Test scenario:
-            `add_element` forgets the layer when its drawer declines or raises — and the drawer can raise
+            `add_layer` forgets the layer when its drawer declines or raises — and the drawer can raise
             before the tree entry is made. Removing unconditionally turns that into a `KeyError` from the
             cleanup path, which replaces the drawer's own refusal with one about the cleanup.
         """

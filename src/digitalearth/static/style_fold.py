@@ -16,7 +16,7 @@ So the colour group is built by the builder, with three rules that are this tier
   ``_`` to ``-``). :func:`coerce_color_scale` canonicalises first; the builder validates what is left.
 - **No colour keyword means no colour group.** ``from_options({})`` returns ``ColorScaling()`` — a *linear*
   scale — and ``ColorScaling.to_options`` resets ``"norm"`` to ``None``, so passing that default group on
-  every call would quietly turn ``Map.imshow(ds, norm=LogNorm())`` into a plain ``Normalize``. A default is
+  every call would quietly turn ``Map.field(ds, norm=LogNorm())`` into a plain ``Normalize``. A default is
   not harmless here; it is a silent override of the caller's own norm.
 - **A built group and a flat key is an error.** Passing ``color=ColorScaling.power()`` beside ``gamma=0.3``
   used to forward both, and cleopatra answered with *"pass color=ColorScaling.power(gamma=...)"* — which is

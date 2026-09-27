@@ -78,7 +78,7 @@ CAPABILITIES = Capabilities(
         "navigation": "the render window pans, zooms and rotates with the mouse rather than with buttons",
         "fullscreen": "the render window is resized by the window manager, not by a control in the scene",
         "layer_switcher": "layers are switched by id through the scene's own API rather than from a panel",
-        "time_slider": "frames over time are rendered by animate() rather than scrubbed in the window",
+        "time_slider": "frames over time are rendered by record() rather than scrubbed in the window",
         "measure": "PyVista's own measurement widget is the tier's answer, and is not part of a figure",
     },
 )

@@ -70,13 +70,16 @@ renderer and so has no drawer to ask, which it declares in :data:`UNDRAWN_KINDS`
 it to. C7's other half, a kind the tier does not draw at all, *is* asked of all four, in
 ``tests/base/test_custom_layers.py::TestWhatC7DoesNotCover``.
 
-**Not every tier's `apply` reaches what the tier draws.** On the web and interactive tiers `Renderer.apply`
-updates the renderer's own record and nothing the tier renders from — the widget is built from the queue,
-the overlay from `layers` — and on none of the 2-D tiers does it move the figure the tier reports. That is
-deliberate for now; wiring it through is later work (review M1). A check that reads what `apply` never
-touches passes whatever `apply` did, so each adapter declares what its `apply` reaches, and the checks that
-read the engine or the description run only where it does. The rollback and the redraw guard are also held
-to the one thing every tier's `apply` does change, the renderer's own record, so no tier goes unchecked.
+**Every tier's `apply` reaches what the tier draws, and every adapter goes through its tier's change
+path.** It was not so for a wave: on the web and interactive tiers `Renderer.apply` updated the renderer's
+own record and nothing the tier renders from — the widget is built from the queue, the overlay from `layers`
+— and on none of the 2-D tiers did it move the figure the tier reports (review M1). So each adapter declared
+what its `apply` reached, and the checks that read the engine or the description ran only where it did: three
+tiers of four skipped the description check and two skipped the engine checks, which is exactly the shape of a
+check that passes whatever the code did. Order 23 wired all three: the queue and the overlay follow `apply`,
+and every `apply_figure` goes through the tier's own `_change`, so `apply_reaches_engine` and
+`apply_reaches_description` are now true on all four. The two flags stay, because the next tier to sign has
+to say the same thing before a check may rely on it.
 """
 
 import importlib.util
@@ -145,9 +148,6 @@ def _identities(record) -> dict:
     return {layer_id: id(value) for layer_id, value in record.items()}
 
 
-#: The reason a declared kind is drawn but not from a description: its builder queues the drawing itself.
-_QUEUED = "still drawn through the queue"
-
 #: The kinds each tier declares but has no drawer for, each with the reason that is allowed.
 #:
 #: The drift guard lets `declared - drawn` through only by these names, and only while they are true: an
@@ -156,22 +156,23 @@ _QUEUED = "still drawn through the queue"
 #: live here rather than on each adapter so the web adapter, which sits beside the web tier's own tests, is
 #: held to the same list.
 #:
-#: **The web tier's four kinds are named in a second place**, as `DRAWN_BUT_NOT_DESCRIBED` in
-#: `tests/web/test_web_capabilities.py`, which holds a builder call per kind where this holds the reason —
-#: two payloads over one set, because neither job collects the other's module (review M6). They cannot drift
-#: silently: a kind that starts recording a layer fails the guard below until it is taken off here, and fails
-#: the capability test there until it is taken off that list, so the two are corrected together or not at all.
-#: A reader changing either has to know both exist, which is what this note is for (review N6).
+#: **A kind named here is named in a second place too**, in the tier's own capability test, which holds a
+#: builder call per kind where this holds the reason — two payloads over one set, because neither job collects
+#: the other's module (review M6). They cannot drift silently: a kind that starts recording a layer fails the
+#: guard below until it is taken off here, and fails the capability test there until it is taken off that
+#: list, so the two are corrected together or not at all. A reader changing either has to know both exist,
+#: which is what this note is for (review N6).
+#:
+#: The web tier's four — `basemap`, `terrain`, `point_cloud` and `model`, each of which queued a closure and
+#: recorded no layer, which is what left them unaddressable by the layer management of order 23 — came off
+#: this list when they started recording one, and `tests/web/test_web_capabilities.py`'s
+#: `DRAWN_BUT_NOT_DESCRIBED` went with them in the same change. So the second place is the interactive tier's
+#: alone today; the rule stands for whichever tier defers a kind next.
 THREE_D_UNDRAWN_KINDS: dict[str, str] = {}
-WEB_UNDRAWN_KINDS: dict[str, str] = {
-    "basemap": f"{_QUEUED}: `tiles` queues an underlay and records no layer to draw it from",
-    "terrain": f"{_QUEUED}: `terrain_tiles` queues `set_terrain` and records no layer",
-    "point_cloud": f"{_QUEUED}: a deck.gl layer, added in one queued `add_deck_layers` call, records no layer",
-    "model": f"{_QUEUED}: `gltf` adds a deck.gl layer the way `point_cloud` does, and records no layer",
-}
+WEB_UNDRAWN_KINDS: dict[str, str] = {}
 INTERACTIVE_UNDRAWN_KINDS: dict[str, str] = {
     "custom:holoviews": (
-        "a caller's own element, drawn by being kept: `add_element` holds no description to rebuild it from"
+        "a caller's own element, drawn by being kept: `add_layer` holds no description to rebuild it from"
     ),
 }
 STATIC_UNDRAWN_KINDS: dict[str, str] = {}
@@ -977,19 +978,19 @@ class TestThreeDRendererConformance(RendererConformance):
 class InteractiveContract(RendererContract):
     """The interactive tier's adapter for the shared contract (#300).
 
-    **`apply` does not reach this tier's engine.** What the tier renders is the overlay `render()` composes
-    from `InteractiveMap.layers`, and only the builders write that list. `Renderer.apply` builds elements
-    into its own record and stops there, so after a remove and an add, `render()` still overlays what the
-    builders put down (review M1). That stays so for this wave; wiring `apply` into the overlay is later
-    work. Until then `apply_reaches_engine` is `False`, and the engine checks skip here, because they would
-    pass whatever `apply` did. The rollback and the redraw guard are held to the renderer's record instead,
-    the one thing `apply` does change here, and those checks run on this tier as on every other.
+    **`apply` reaches this tier's engine, since order 23.** What the tier renders is the overlay `render()`
+    composes from `InteractiveMap.layers`, and only the builders used to write that list: `Renderer.apply`
+    built elements into its own record and stopped there, so after a remove and an add `render()` still
+    overlaid what the builders had put down (review M1). It re-arranges the list now, and rolls it back with
+    the record when a change is refused — so the engine checks run here rather than skipping.
 
-    `apply_reaches_description` stays `False` too: `apply_figure` calls the renderer, and the renderer never
-    touches the map's `figure_spec`.
+    `apply_figure` goes through `InteractiveMapBase._change`, the path every public layer-management call
+    takes, which installs the description once the overlay has moved. So both halves are checked.
     """
 
     backend = "interactive"
+    apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an empty map.
@@ -1050,21 +1051,21 @@ class InteractiveContract(RendererContract):
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:
-        """Move the map to `figure` through the renderer.
+        """Move the map to `figure` through the path every change goes through.
 
         Args:
             tier: The map.
             figure: The figure.
         """
-        tier._renderer.apply(tier.figure_spec, figure)
+        tier._change(figure)
 
     def engine_holds(self, tier):
         """Return the elements `render()` overlays, bottom first.
 
-        No check reads this while `apply_reaches_engine` is `False` — `apply` never changes this list, which
-        is the point of the class docstring. It is still the honest answer to "what does the engine hold",
-        and it is what the engine checks will read once `apply` is wired into the overlay and the flag is
-        turned on. HoloViews elements compare by identity, so a redraw reads as a change.
+        The list the overlay is composed from, not the renderer's record of what it built: a rollback that
+        restored the record and left an element overlaid reads clean from the record, which is the 3-D
+        tier's first defect in this tier's terms. HoloViews elements compare by identity, so a redraw reads
+        as a change.
 
         Args:
             tier: The map.
@@ -1162,13 +1163,18 @@ class StaticContract(RendererContract):
 
     The last tier to sign it, and the one closest in shape to the 3-D reference: matplotlib hands out live
     artists on a live axes, and `Renderer.apply` draws onto and takes off that axes, so the engine follows
-    `apply` and `engine_holds` reads the axes themselves. The figure the map reports does not follow it:
-    `apply_figure` calls the renderer, which never touches the scene's `figure_spec` (review M1), so
-    `apply_reaches_description` stays `False`.
+    `apply` and `engine_holds` reads the axes themselves.
+
+    **The figure the map reports follows it too, since order 23.** `apply_figure` goes through
+    `Scene._change`, the path every public layer-management call on this tier takes, so both halves move
+    together and both are checked. It called the renderer directly while `apply` had no production caller at
+    all (review M1), which left `test_a_refused_figure_is_not_the_one_the_tier_reports` skipping on three
+    tiers of four.
     """
 
     backend = "matplotlib"
     apply_reaches_engine = True
+    apply_reaches_description = True
 
     def make(self):
         """Return an empty map in Web Mercator.
@@ -1205,7 +1211,7 @@ class StaticContract(RendererContract):
                 geo=(400000.0, 30000.0, 0.0, 5020000.0, 0.0, -20000.0), epsg=3857
             ),
         )
-        tier.imshow(dataset)
+        tier.field(dataset)
         return tier.layer_ids[-1]
 
     def refused_figure(self, tier):
@@ -1242,13 +1248,13 @@ class StaticContract(RendererContract):
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:
-        """Move the map to `figure` through the renderer.
+        """Move the map to `figure` through the path every change goes through.
 
         Args:
             tier: The map.
             figure: The figure.
         """
-        tier._renderer.apply(tier.figure_spec, figure)
+        tier._change(figure)
 
     def engine_holds(self, tier):
         """Return every artist on every axes of the map's figure, in the order matplotlib holds them.
@@ -1394,8 +1400,8 @@ class TestTheTiersAgreeOnWhatARefusalIs:
         Test scenario:
             Static caught `BaseException`, web and interactive `Exception`. So a `KeyboardInterrupt` part-way
             through a change left the static record consistent and the other two holding layers no figure
-            owned — three tiers signing one contract with two answers to what a refusal is. Cosmetic while
-            `apply` is record-only, and not once it is wired into what a viewer sees.
+            owned — three tiers signing one contract with two answers to what a refusal is. It was cosmetic
+            while `apply` was record-only; since order 23 each of these three rolls back what a viewer sees.
         """
         import importlib
 

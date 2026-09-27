@@ -66,20 +66,25 @@ class TestTheAnimationRateIsTheSharedOne:
 
         assert export.DEFAULT_FPS is DEFAULT_FPS
 
-    def test_animate_falls_back_to_the_shared_rate(self):
-        """``animate`` with no ``fps`` encodes at the shared rate.
+    def test_save_animation_defaults_to_the_shared_rate(self):
+        """``save_animation`` with no ``fps`` encodes at the shared rate.
 
         Test scenario:
-            ``fps`` is ``None`` in the signature — the "not passed" sentinel the deprecated ``duration=`` is
-            resolved against — so the number a caller actually gets is the ``default=`` handed to
-            ``renamed_parameter``, which is what has to be the shared one.
+            The signature default is the number a caller actually gets, so it has to be the shared object
+            rather than a literal that matches it today.
         """
         import inspect
 
         from digitalearth.web import export
 
-        source = inspect.getsource(export.ExportMixin.save_animation)
-        assert "default=DEFAULT_FPS," in source
+        default = (
+            inspect.signature(export.ExportMixin.save_animation)
+            .parameters["fps"]
+            .default
+        )
+        assert default is DEFAULT_FPS, (
+            f"save_animation() falls back to {default!r}, not the shared rate"
+        )
 
 
 class TestTheBigDataCutoffIsTheSharedOne:

@@ -10,7 +10,7 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
 - :class:`~digitalearth.three_d.vector.VectorMixin` → :meth:`vectors` / :meth:`extruded_polygons`.
 - :class:`~digitalearth.three_d.globe.GlobeMixin` → :meth:`globe` (global field on a textured sphere, via the
   optional, lazily-imported geovista).
-- :class:`~digitalearth.three_d.animation.AnimationMixin` → :meth:`orbit` / :meth:`animate` / :meth:`jupyter`.
+- :class:`~digitalearth.three_d.animation.AnimationMixin` → :meth:`orbit` / :meth:`record` / :meth:`jupyter`.
 
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
 by ``tests/test_no_competitor_imports.py``); all CRS/reproject work stays in pyramids.
@@ -41,7 +41,7 @@ class Scene3D(
     Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.base.Scene3DBase` and the
     plot methods from the capability mixins (:meth:`terrain`, :meth:`point_cloud`, :meth:`volume`,
     :meth:`isosurface`, :meth:`vectors`, :meth:`extruded_polygons`, :meth:`globe`, :meth:`orbit`,
-    :meth:`animate`). See those classes for the full surface.
+    :meth:`record`). See those classes for the full surface.
 
     Examples:
         - Create a headless scene, render a DEM as 3-D relief, screenshot it:

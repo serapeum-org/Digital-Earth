@@ -274,7 +274,7 @@ class TestNothingInterpolatedIsMarkup:
         """`title()` shares the sink, so it shares the rule."""
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap().title("<b>Head</b>", subtitle="<i>Sub</i>")
+        m = WebMap().basemap().set_title("<b>Head</b>", subtitle="<i>Sub</i>")
         contents = self._control_contents(m.to_html())
         assert "&lt;b&gt;" in contents[0], f"the heading was not escaped: {contents[0]}"
         assert "&lt;i&gt;" in contents[0], (

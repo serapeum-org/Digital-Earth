@@ -192,7 +192,7 @@ class TemporalMixin(_MixinBase):
                 integer index; must match the member count.
             band: 1-based band rendered in every frame.
             cmap: Colormap name; ``None`` (default) resolves it from the variable through
-                ``autostyle.auto_style`` (#249), exactly as ``image`` does.
+                ``autostyle.auto_style`` (#249), exactly as ``field`` does.
             clim: Frozen ``(vmin, vmax)`` colour limits; ``None`` computes one range for the whole series
                 once, from at most :data:`~digitalearth.base.clim.DEFAULT_CLIM_SCAN_CAP` members sampled
                 evenly across it.
@@ -253,7 +253,7 @@ class TemporalMixin(_MixinBase):
         kept = None if labels is None else list(labels)
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -270,7 +270,7 @@ class TemporalMixin(_MixinBase):
                     "labels": describe(held, "labels", kept, _iso_labels(kept)),
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
-                    # Normalised to the spelling a figure can be written with, as `image` records it:
+                    # Normalised to the spelling a figure can be written with, as `field` records it:
                     # the documented `(low, high)` is a tuple, and a tuple is exactly what
                     # `travels_in_a_figure` refuses — so the documented form was held beside the layer and
                     # dropped from every saved figure while the undocumented list form travelled

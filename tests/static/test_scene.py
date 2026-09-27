@@ -93,6 +93,30 @@ def test_set_title():
     assert scene.ax.get_title() == "my map"
 
 
+def test_set_title_chains():
+    """`set_title` hands the scene back, so figure decoration reads as one expression (order 27a, #265).
+
+    Test scenario:
+        The Core names this method and the web tier already returns `Self` from it; this tier returned
+        `None`, so `Map(crs=3857).set_title("x").coastlines()` raised `AttributeError` on the default tier
+        while the same line worked on web. Asserted as identity: a method returning any object at all would
+        satisfy "not None" and could still break the next call in the chain.
+    """
+    scene = Scene()
+    assert scene.set_title("my map") is scene
+
+
+def test_set_title_still_draws_when_its_result_is_chained():
+    """Returning `self` must not come at the cost of the title actually being set.
+
+    Test scenario:
+        The failure a return-type change invites: a body rewritten to `return self` that drops the call it
+        was doing the work for. Read off the axes, which is where the title has to end up.
+    """
+    scene = Scene()
+    assert scene.set_title("chained", loc="left").ax.get_title(loc="left") == "chained"
+
+
 def test_show_invokes_pyplot(mocker):
     """Scene.show delegates to matplotlib.pyplot.show without raising under Agg."""
     spy = mocker.patch("matplotlib.pyplot.show")

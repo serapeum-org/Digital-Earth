@@ -282,7 +282,7 @@ class TestWhatTheFrameShows:
         m = InteractiveMap(crs=dataset.epsg)
         m.large_image(dataset, cmap="magma")
         m.layers[0][()]  # draw a frame, as a renderer would
-        m.image(dataset, cmap="Blues")
+        m.field(dataset, cmap="Blues")
         assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
         assert m.style_of(1)["common"]["cmap"] == "Blues", m.style_of(1)
 

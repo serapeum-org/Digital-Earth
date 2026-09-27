@@ -1,4 +1,4 @@
-"""Tests for T7.2 — Map choropleth/shapes from a pyramids FeatureCollection of polygons."""
+"""Tests for T7.2 — Map choropleth/polygons from a pyramids FeatureCollection of polygons."""
 
 import pytest
 
@@ -27,10 +27,10 @@ def test_choropleth(polygons):
     assert m.ax.collections
 
 
-def test_shapes_outline(polygons):
-    """shapes draws polygon outlines without a value mapping."""
+def test_polygons_outline(polygons):
+    """polygons draws outlines without a value mapping."""
     m = Map(crs=polygons.epsg)
-    m.shapes(polygons)
+    m.polygons(polygons)
     assert len(m.layers) == 1
     assert m.ax.collections
 

@@ -44,7 +44,7 @@ def test_orbit_writes_a_gif(tmp_path):
 def test_orbit_writes_an_mp4(tmp_path):
     """A video suffix routes orbit() through open_movie and writes a non-empty MP4."""
     scene = _terrain_scene()
-    scene.orbit(str(tmp_path / "spin.mp4"), n_frames=6, framerate=10)
+    scene.orbit(str(tmp_path / "spin.mp4"), n_frames=6, fps=10)
     assert (tmp_path / "spin.mp4").stat().st_size > 0
     scene.close()
 

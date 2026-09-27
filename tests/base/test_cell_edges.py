@@ -3,7 +3,7 @@
 An extent taken from the smallest and largest cell centre stops half a cell short on every side — the image is
 one cell narrower and one shorter than the data, and each pixel is drawn at `(n - 1) / n` of its size. On
 `examples/data/acc4000.tif`, 14 by 13 cells of 4,000 m, that was 2,000 m missing from each edge, in the static
-`imshow` extent and in the web tier's image corners.
+`field` extent and in the web tier's image corners.
 
 These cover the rule that replaces it, and the agreement between the tiers that read it.
 """
@@ -185,7 +185,7 @@ class TestTheTiersAgree:
         from digitalearth.interactive import InteractiveMap
 
         m = InteractiveMap(crs=grid.epsg)
-        m.image(grid)
+        m.field(grid)
         west, south, east, north = m.layers[0].bounds.lbrt()
         assert (west, south, east, north) == (0.0, 0.0, 30000.0, 30000.0), m.layers[
             0

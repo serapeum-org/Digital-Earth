@@ -174,7 +174,7 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
             ],
         )
 
-    @pytest.mark.parametrize("keyword", ["clim", "n_colors", "nan_color"])
+    @pytest.mark.parametrize("keyword", ["clim", "n_colors"])
     def test_a_colour_keyword_the_scheme_owns_is_named(self, squares, keyword):
         """L1 — ``scheme=`` plus ``clim=`` was a "got multiple values" ``TypeError`` about internals.
 
@@ -188,7 +188,7 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
             error naming no cause. The classification owns those keywords — the scalars are class indices —
             so the answer is a refusal that says which keyword and why.
         """
-        values = {"clim": (0, 1), "n_colors": 3, "nan_color": "#000000"}[keyword]
+        values = {"clim": (0, 1), "n_colors": 3}[keyword]
         scene = Scene3D(off_screen=True)
         try:
             with pytest.raises(TypeError) as excinfo:
@@ -203,6 +203,49 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
         )
         assert "scheme='quantiles'" in message, (
             f"the refusal must name the scheme that owns it, got {message}"
+        )
+
+    def test_the_missing_data_colour_is_the_callers_to_choose(self, squares):
+        """One rule for the tier: `nan_color` is honoured here as it is on a coloured point cloud.
+
+        Args:
+            squares: Two polygons with a numeric column.
+
+        Test scenario:
+            It was refused beside `clim` and `n_colors`, which are the class-index range and the class count —
+            consequences of the classification. `nan_color` is the colour missing data is drawn in, filled
+            from the shared default, so a caller who names one is choosing rather than colliding. Refusing it
+            on one builder while its neighbour honours it is the asymmetry (review R2-L2). Read off the
+            actor's lookup table, which is what VTK paints with.
+        """
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.extruded_polygons(
+                squares, column="pop", scheme="quantiles", k=2, nan_color="red"
+            )
+            painted = tuple(actor.mapper.lookup_table.nan_color)
+        finally:
+            scene.close()
+        assert painted == (1.0, 0.0, 0.0, 1.0), (
+            f"the prisms paint missing data {painted} rather than the red that was asked for"
+        )
+
+    def test_the_default_missing_data_colour_is_the_shared_one(self, squares):
+        """Built the other way round, so the test above is not passing on a coincidence.
+
+        Args:
+            squares: Two polygons with a numeric column.
+        """
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.extruded_polygons(
+                squares, column="pop", scheme="quantiles", k=2
+            )
+            painted = tuple(actor.mapper.lookup_table.nan_color)
+        finally:
+            scene.close()
+        assert painted != (1.0, 0.0, 0.0, 1.0), (
+            f"the default missing-data colour is {painted}, which is the red the other test asks for"
         )
 
     def test_the_same_keyword_is_fine_without_a_scheme(self, squares):

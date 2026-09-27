@@ -27,23 +27,26 @@ place; HoloViews elements are immutable values composed into an overlay on every
 and the observable contract it signs is the one the shared renderer conformance suite states, which is why
 all four tiers can sign it.
 
-**On this tier, for this wave, `apply` is record-only** — with one exception a caller can see. It does not
-change *which* elements `render()` overlays, which is the map's `layers`, and it does not change what
-`figure_spec` reports, which is the map's own layer tree. The exception is visibility: a layer `diff`
-reports as shown or hidden is toggled on the very element the map registered, because `.opts()` writes into
-HoloViews' global `Store` against that object. So a figure applied with a hidden layer draws it hidden
-while `figure_spec` still describes it visible.
-Nothing in the tier calls it: every builder draws through :meth:`Renderer.draw_layer`, one layer at a time.
-Wiring `apply` into the map's public state is Wave 7 (order 23); until then a caller who applies a figure
-has moved the record and nothing a viewer sees.
+**`apply` reaches what the map draws.** It was record-only for a wave: it changed neither *which*
+elements `render()` overlays — the map's `layers` — nor what `figure_spec` reports, so a caller who applied
+a figure had moved a record and nothing a viewer sees. Two halves close that. :meth:`Renderer._arrange`
+re-lays `InteractiveMap.layers` from the applied figure's draw order, so a removed layer leaves the overlay,
+an added one enters it and a moved one changes what is on top; and
+:meth:`~digitalearth.interactive.base.InteractiveMapBase._change` — the path `get_layer`, `remove_layer`,
+`set_visible`, `move_layer` and `replace_layer` take — installs the description once this has returned, so a
+figure `apply` refuses is never one the map describes. Visibility was the one thing that always reached the
+element, because `.opts()` writes into HoloViews' global `Store` against the object the map holds.
 """
 
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Tuple
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from digitalearth.base.capabilities import CapabilityError
+from digitalearth.base.custom import custom_kind
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec import FigureDiff, FigureSpec, LayerSpec
 from digitalearth.interactive.capabilities import CAPABILITIES
 
 
@@ -90,7 +93,7 @@ class DrawnLayer:
 #:
 #: Every kind this tier declares in :data:`~digitalearth.interactive.capabilities.CAPABILITIES` is here, so
 #: a kind is built by its drawer and never by its builder. The one kind outside it is `custom:holoviews` —
-#: an element a caller built and handed to `add_element`, which has no description to rebuild it from and
+#: an element a caller built and handed to `add_layer`, which has no description to rebuild it from and
 #: so is drawn by being kept.
 DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",
@@ -117,6 +120,22 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "borders",
     "rivers",
     "lakes",
+)
+
+
+#: The kinds this tier **declares and keeps** rather than draws, each with the reason — the other half of
+#: :data:`DRAWN_KINDS`, and the same pair `INTERACTIVE_UNDRAWN_KINDS` in the shared renderer conformance
+#: suite holds. `Capabilities.require` cannot answer for these: the tier does support the kind, which is how
+#: `add_layer` accepts one, and what it cannot do is build a second element from a description that never
+#: described the first. So a change that would need one built is refused against this table, before a drawer
+#: is asked (review H7); `CAPABILITIES.absent` stays for the kinds the tier does not support at all.
+KEPT_KINDS: Mapping[str, str] = MappingProxyType(
+    {
+        custom_kind("holoviews"): (
+            "a caller's own element, drawn by being kept: add_layer() holds no description to rebuild it "
+            "from"
+        ),
+    }
 )
 
 
@@ -169,17 +188,21 @@ def _show(element: Any, layer_id: str, visible: bool) -> None:
         visible: Whether it is drawn.
 
     Warns:
-        UserWarning: when the element has no keyword to say it with — a `Tiles`/`WMTS` basemap, or a
+        UserWarning: when the element has no keyword to say it with — a `Tiles`/`WMTS` basemap, a
             `DynamicMap` that has not produced a frame, which is what every `dynamic=True` layer is at
-            build time (see :func:`_visibility_keywords`). Saying nothing would leave a figure that
-            describes a hidden layer drawing it — the silence review M4 reports on this tier. The warning
-            is worded for the hide direction because that is the case it costs something; it is emitted
-            before `visible` is read, so `set_visible(id, True)` on such an element warns too.
+            build time (see :func:`_visibility_keywords`), or an object a caller handed `add_layer` that
+            HoloViews has no option tree for at all. Saying nothing would leave a figure that describes a
+            hidden layer drawing it — the silence review M4 reports on this tier, and review H8 on the
+            custom-layer half of it. The warning is worded for the hide direction because that is the case
+            it costs something; it is emitted before `visible` is read, so `set_visible(id, True)` on such
+            an element warns too.
     """
     keywords = _visibility_keywords(element)
     if not keywords:
+        # "its element is a …" rather than "the tier draws it as a …": this path is reached for a caller's
+        # own object too, which the tier keeps rather than draws (review H8).
         warnings.warn(
-            f"layer {layer_id!r} is described hidden, but the interactive tier draws it as a "
+            f"layer {layer_id!r} is described hidden, but its element is a "
             f"{type(element).__name__}, which Bokeh gives no way to hide; it stays drawn",
             UserWarning,
             stacklevel=3,
@@ -483,14 +506,17 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring the renderer's record of what is drawn from one figure to another.
+        """Bring what the map overlays from one figure to another, or leave it as it was.
 
-        **Record-only on this tier, for this wave** — with one exception. It reconciles :attr:`drawn`
-        and nothing else: *which* elements the map's `render()` overlays, and the figure its `figure_spec`
-        reports, are the map's own and neither follows. The exception is visibility: a layer `diff` reports
-        as shown or hidden is toggled on the very element the map holds, so applying a figure that hides a
-        layer draws it hidden while `figure_spec` still describes it visible. Nothing in the tier calls
-        this yet; wiring it into the map is Wave 7 (order 23).
+        **It reaches what the tier draws.** `render()` composes `InteractiveMap.layers`, and until order 23
+        only the builders wrote that list: `apply` reconciled :attr:`drawn` and nothing a viewer would see,
+        so after a remove and an add the overlay still showed what the builders had put down (review M1).
+        Now :meth:`_arrange` re-arranges the list from `after`'s draw order — which is what makes a removed
+        layer leave the picture, an added one enter it, and a moved one change what is on top.
+
+        The figure the map *reports* is still the map's own:
+        :meth:`~digitalearth.interactive.base.InteractiveMapBase._change` installs that once this has
+        returned, so a figure this refuses is never one the map describes.
 
         **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
         difference between two figures is read off their descriptions, and a keyword that does not travel in
@@ -507,23 +533,142 @@ class Renderer:
             after: The figure it should hold.
 
         Raises:
-            KeyError: when a layer names a kind this tier does not draw. The record is rolled back to what it
-                held before the call, so a refusal part-way through leaves no layer drawn that no figure owns.
+            CapabilityError: when the change would have to build a layer of a kind this tier **keeps**
+                rather than draws — a caller's own element, which has no description to rebuild it from
+                (:data:`KEPT_KINDS`). Refused before the first layer is drawn, so nothing is rolled back.
+            KeyError: when a layer names a kind this tier does not draw at all. The record **and** the
+                overlay are rolled back to what they held before the call, so a refusal part-way through
+                leaves no layer drawn that no figure owns.
         """
+        change = before.diff(after)
+        asked = self._would_draw(before, after, change)
+        # Before the first draw, not from the drawer table part-way through one: the gate on
+        # `replace_layer` passes for `custom:holoviews`, because the tier *declares* that kind, and the
+        # refusal then came out of `drawer_for` as a bare `KeyError` naming a kind the declaration lists
+        # (review H7). Asked of the same list `_reconcile` draws from, so the two cannot disagree about
+        # which layers a drawer is asked for.
+        self._refuse_what_it_cannot_rebuild(after, asked)
         # `apply` is not atomic: it draws layer by layer, so a refusal on the third has already drawn the
         # first two. Rolling back only the caller's description would leave this record holding layers no
         # figure owns — the defect the shared conformance contract states, and which the other tiers hit too.
         held = dict(self._drawn)
+        overlay = list(self._map.layers)
         try:
-            self._reconcile(before, after)
+            self._reconcile(after, change, asked)
+            # Inside the `try`, as the web tier's is, so the restore below is a live path rather than a
+            # comment about one (review L4). The arrangement is where the record and the overlay are brought
+            # back into agreement, so a failure in it leaves the record describing `after` while the overlay
+            # still holds `before` — and `_change` installs no figure for a call that raised, so that record
+            # is one no figure owns.
+            self._arrange(before, after, held, overlay)
         except BaseException:
             # `BaseException`, the same class the static tier catches: what the record must survive is a
             # change stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
             # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._drawn = held
+            self._map.layers[:] = overlay
             raise
 
-    def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
+    def _arrange(
+        self,
+        before: FigureSpec,
+        after: FigureSpec,
+        held: Mapping[str, DrawnLayer],
+        overlay: List[Any],
+    ) -> None:
+        """Re-arrange what the map overlays so it is `after`'s layers, in `after`'s draw order.
+
+        In place, because `colorbar`, `legend` and `add_tool` assign into
+        :attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` by index and a caller may hold the
+        list: replacing the object would leave those writing into a list nothing composes.
+
+        Which element each layer contributes is the part worth reading. A layer this reconcile **drew** — one
+        added, rebuilt or restyled — contributes the element it has just built. A layer it did not touch
+        contributes the object the map already holds, rather than an equal element built again: `.opts()`
+        writes into HoloViews' option store against the object it is called on, so the colorbar and legend a
+        caller switched are on *that* element and nowhere else. A layer neither has — a caller's own element
+        the map let go of — contributes nothing, so nothing is overlaid for it.
+
+        Args:
+            before: The figure the map drew, which is the order `overlay` stood in: `add_layer` inserts each
+                element at its layer's index in the tree, so the tree's order **is** the overlay's order —
+                custom layers, which this record never holds, included.
+            after: The figure the map now draws, whose layer order is the overlay order.
+            held: What this renderer had drawn before the reconcile, by layer id.
+            overlay: The elements the map overlaid before it, in that order.
+        """
+        was = dict(zip(before.layers.ids, overlay))
+        arranged = []
+        for layer_id in after.layers.ids:
+            now = self._drawn.get(layer_id)
+            if now is not None and now is not held.get(layer_id):
+                arranged.append(now.element)
+            elif layer_id in was:
+                arranged.append(was[layer_id])
+            elif (
+                now is not None
+            ):  # pragma: no cover - a drawn layer the map never overlaid
+                arranged.append(now.element)
+        self._map.layers[:] = arranged
+
+    def _would_draw(
+        self, before: FigureSpec, after: FigureSpec, change: FigureDiff
+    ) -> Tuple[str, ...]:
+        """Return the layers a reconcile of this difference asks a drawer for, in the order it asks.
+
+        Read once and handed to both :meth:`_refuse_what_it_cannot_rebuild` and :meth:`_reconcile`, so the
+        refusal cannot be asked of a different set of layers than the one that would be drawn.
+
+        Args:
+            before: The figure the map currently draws.
+            after: The figure it should draw.
+            change: The difference between them.
+
+        Returns:
+            The ids, rebuilt first, then the restyles that reach HoloViews, then the added layers.
+        """
+        # A rebuilt layer is one whose *data* changed — its kind, source or slice — and every one of those
+        # means a new element. Only a restyle is worth asking about, because `diff` groups a change of
+        # `label` with a change of colour and one of those never reaches HoloViews.
+        return (
+            *change.rebuilt,
+            *(
+                layer_id
+                for layer_id in change.restyled
+                if self._reaches_holoviews(before, after, layer_id)
+            ),
+            *change.added,
+        )
+
+    def _refuse_what_it_cannot_rebuild(
+        self, after: FigureSpec, asked: Tuple[str, ...]
+    ) -> None:
+        """Refuse a change that would have to build a layer of a kind this tier only keeps.
+
+        Args:
+            after: The figure the map should draw, which holds the kinds being asked for.
+            asked: The layers a drawer would be asked for — :meth:`_would_draw`'s answer.
+
+        Raises:
+            CapabilityError: for the first such layer, naming it, its kind and why the tier has nothing to
+                rebuild it from. A `ValueError`, which is the class the tier refuses every other
+                "this backend cannot do that" with.
+        """
+        for layer_id in asked:
+            kind = after.layers.get(layer_id).kind
+            reason = KEPT_KINDS.get(kind)
+            if reason is None:
+                continue
+            raise CapabilityError(
+                f"the interactive tier keeps {kind!r} layers rather than drawing them, so layer "
+                f"{layer_id!r} cannot be built again from a description — {reason}. Re-describe only what "
+                f"the figure says about it (its label, its band, whether it is drawn), or remove it and "
+                f"hand the new object to add_layer()"
+            )
+
+    def _reconcile(
+        self, after: FigureSpec, change: FigureDiff, asked: Tuple[str, ...]
+    ) -> None:
         """Draw the difference between two figures, layer by layer.
 
         Removed, rebuilt, restyled and added layers pass through this renderer's record; shown and hidden
@@ -531,8 +676,10 @@ class Renderer:
         `apply` is not record-only (see :meth:`apply`).
 
         Args:
-            before: The figure the map currently draws.
-            after: The figure it should draw.
+            after: The figure the map should draw.
+            change: The difference between the figure it draws and that one.
+            asked: The layers to draw again — :meth:`_would_draw`'s answer, read before the first draw so
+                the refusal above and this loop agree on which layers a drawer is asked for.
 
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
@@ -541,21 +688,12 @@ class Renderer:
             UserWarning: for a shown or hidden layer whose element has no way to say it — see
                 :func:`_show`.
         """
-        change = before.diff(after)
         for layer_id in change.removed:
             self.remove(layer_id)
-        # A rebuilt layer is one whose *data* changed — its kind, source or slice — and every one of those
-        # means a new element. Only a restyle is worth asking about, because `diff` groups a change of
-        # `label` with a change of colour and one of those never reaches HoloViews.
-        for layer_id in change.rebuilt:
+        for layer_id in asked:
+            # `remove` before the draw for an added layer too: nothing is recorded under its id, so the
+            # pop is a no-op there and the two cases need no branch between them.
             self.remove(layer_id)
-            self.draw_layer(after, layer_id)
-        for layer_id in change.restyled:
-            if not self._reaches_holoviews(before, after, layer_id):
-                continue
-            self.remove(layer_id)
-            self.draw_layer(after, layer_id)
-        for layer_id in change.added:
             self.draw_layer(after, layer_id)
         for layer_id in change.shown:
             self.set_visible(layer_id, True)
@@ -598,20 +736,28 @@ class Renderer:
         self._drawn.pop(layer_id, None)
 
     def set_visible(self, layer_id: str, visible: bool) -> None:
-        """Draw or stop drawing the element recorded for a layer.
+        """Draw or stop drawing the element a layer contributes to the overlay.
 
         The element is changed in place — ``.opts()`` writes into HoloViews' option `Store` against the
         object it is called on and hands that same object back — so what `InteractiveMap.layers` holds, and
         the style filed against it, are the ones this changes.
 
+        **A layer of the caller's own is reached through the map**, because this record never holds one: the
+        object is in :attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` and nowhere else, and
+        it is the same `.opts()` call that hides it. Before, an id with nothing recorded was ignored, so
+        `set_visible` on a custom layer changed the description, reached no engine, and did not emit the
+        warning its own contract promises for a layer it leaves drawn — review H8. `is_visible` still
+        refuses such an id: it reports on what a *drawer* produced, and no drawer produced this.
+
         Args:
-            layer_id: The layer to toggle. An id nothing was drawn for is ignored, which is how the other
-                three tiers answer one too.
+            layer_id: The layer to toggle. An id this map has no element for at all is ignored, which is how
+                the other three tiers answer one too.
             visible: Whether it is drawn.
 
         Warns:
             UserWarning: when the element has no keyword to say it with, in either direction — see
-                :func:`_show`, which this delegates to.
+                :func:`_show`, which this delegates to. A caller's own object reaches it whenever HoloViews
+                has no option tree for what was handed in.
 
         Examples:
             - Hiding a layer and reading it back, off the element rather than off the description:
@@ -630,8 +776,11 @@ class Renderer:
                 ```
         """
         drawn = self._drawn.get(layer_id)
-        if drawn is not None:
-            _show(drawn.element, layer_id, visible)
+        element = (
+            drawn.element if drawn is not None else self._map._kept_element(layer_id)
+        )
+        if element is not None:
+            _show(element, layer_id, visible)
 
     def is_visible(self, layer_id: str) -> bool:
         """Whether HoloViews would currently draw the element recorded for a layer.

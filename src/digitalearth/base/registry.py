@@ -845,7 +845,7 @@ def temporary_kind(info: KindInfo) -> Iterator[None]:
             ...     kind_info("points").doc
             'a stand-in description'
             >>> kind_info("points").doc
-            'point features — static scatter/grid_points, interactive/web points'
+            'point features — static points/grid_points, interactive/web points'
 
             ```
     """
@@ -1121,7 +1121,7 @@ _BUILT_IN_KINDS = (
     (
         "raster",
         "raster",
-        "a band drawn as an image — static imshow, interactive image/large_image, web field",
+        "a band drawn as an image — static/web field, interactive field/large_image",
         "data",
     ),
     (
@@ -1181,7 +1181,7 @@ _BUILT_IN_KINDS = (
     (
         "points",
         "points",
-        "point features — static scatter/grid_points, interactive/web points",
+        "point features — static points/grid_points, interactive/web points",
         "data",
     ),
     (
@@ -1223,7 +1223,7 @@ _BUILT_IN_KINDS = (
     (
         "polygons",
         "polygons",
-        "polygon features, outlined or flat-filled — static shapes, interactive/web polygons",
+        "polygon features, outlined or flat-filled — static/interactive/web polygons",
         "data",
     ),
     (
@@ -1319,7 +1319,7 @@ _BUILT_IN_KINDS = (
     (
         "custom:holoviews",
         "none",
-        "an element the caller built with HoloViews/GeoViews and handed to the map — add_element",
+        "an element the caller built with HoloViews/GeoViews and handed to the map — add_layer",
         "data",
     ),
     (

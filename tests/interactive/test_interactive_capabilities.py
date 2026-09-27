@@ -128,7 +128,7 @@ class TestEveryDeclaredKindIsDrawnOrKept:
         """One kind is declared and deliberately not drawn from a description; nothing else may be.
 
         Test scenario:
-            A `custom:holoviews` layer is an element the caller built and handed to `add_element`, so there
+            A `custom:holoviews` layer is an element the caller built and handed to `add_layer`, so there
             is no description to rebuild it from — it is drawn by being kept. Asserting the residue is
             *exactly* that one name is what makes this catch a kind added to the declaration with no drawer
             and no builder: the seam test's "everything drawn is declared" passes happily for such a kind.
@@ -139,10 +139,10 @@ class TestEveryDeclaredKindIsDrawnOrKept:
         assert residue == ["custom:holoviews"], residue
 
     def test_the_kind_that_is_kept_rather_than_drawn_is_recorded_by_its_builder(self):
-        """`add_element` records the caller's element under the kind the declaration claims."""
+        """`add_layer` records the caller's element under the kind the declaration claims."""
         import holoviews as hv
 
-        built = InteractiveMap().add_element(hv.Points([(0.0, 0.0)]), name="own")
+        built = InteractiveMap().add_layer(hv.Points([(0.0, 0.0)]), name="own")
         recorded = [layer.kind for layer in built.figure_spec.layers]
         assert recorded == ["custom:holoviews"], recorded
 
@@ -307,24 +307,24 @@ class TestEachLayerKeepsItsOwnStyle:
             element *type*, which is the only way `.opts()` can be applied to an overlay.
         """
         m = InteractiveMap()
-        m.image(_dem(), cmap="magma", clim=(0.0, 10.0))
-        m.image(_dem(), cmap="Blues", clim=(0.0, 80.0))
+        m.field(_dem(), cmap="magma", clim=(0.0, 10.0))
+        m.field(_dem(), cmap="Blues", clim=(0.0, 80.0))
         styles = self._styles(m._render_with_overrides({"alpha": 0.5}))
         assert [style.get("cmap") for style in styles] == ["magma", "Blues"], styles
 
     def test_the_widget_value_reaches_every_layer(self):
         """Each layer takes the override; what it does not take is its own recorded style."""
         m = InteractiveMap()
-        m.image(_dem(), cmap="magma")
-        m.image(_dem(), cmap="Blues")
+        m.field(_dem(), cmap="magma")
+        m.field(_dem(), cmap="Blues")
         styles = self._styles(m._render_with_overrides({"alpha": 0.25}))
         assert [style.get("alpha") for style in styles] == [0.25, 0.25], styles
 
     def test_a_colormap_widget_overrides_every_raster(self):
         """A widget that names a colormap means that colormap, on each layer it claims."""
         m = InteractiveMap()
-        m.image(_dem(), cmap="magma")
-        m.image(_dem(), cmap="Blues")
+        m.field(_dem(), cmap="magma")
+        m.field(_dem(), cmap="Blues")
         styles = self._styles(m._render_with_overrides({"cmap": "viridis"}))
         assert [style.get("cmap") for style in styles] == ["viridis", "viridis"], styles
 
@@ -337,8 +337,8 @@ class TestEachLayerKeepsItsOwnStyle:
             colour-mapped layer's style into one dict and applied it per element type.
         """
         m = InteractiveMap()
-        m.image(_dem(), cmap="magma", clim=(0.0, 10.0))
-        m.image(_dem(), cmap="Blues", clim=(0.0, 80.0))
+        m.field(_dem(), cmap="magma", clim=(0.0, 10.0))
+        m.field(_dem(), cmap="Blues", clim=(0.0, 80.0))
         styles = self._styles(
             m._compose_visible_layers(["0: Image", "1: Image"], op=0.5)
         )
@@ -347,8 +347,8 @@ class TestEachLayerKeepsItsOwnStyle:
     def test_the_layer_switcher_s_slider_still_reaches_every_layer(self):
         """The opacity the slider names is applied to each of them, over its own style."""
         m = InteractiveMap()
-        m.image(_dem(), cmap="magma")
-        m.image(_dem(), cmap="Blues")
+        m.field(_dem(), cmap="magma")
+        m.field(_dem(), cmap="Blues")
         styles = self._styles(
             m._compose_visible_layers(["0: Image", "1: Image"], op=0.25)
         )
@@ -357,7 +357,7 @@ class TestEachLayerKeepsItsOwnStyle:
     def test_a_map_with_no_overrides_renders_as_it_was_built(self):
         """No widget moved, so nothing is restyled and the figure is the rendered one."""
         m = InteractiveMap()
-        m.image(_dem(), cmap="magma")
+        m.field(_dem(), cmap="magma")
         styles = self._styles(m._render_with_overrides({}))
         assert styles[0].get("cmap") == "magma", styles
 

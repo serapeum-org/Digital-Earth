@@ -106,13 +106,17 @@ def _classify_or_refuse(
         indices — both empty/`None` when `colours` is `None`.
 
     Raises:
-        TypeError: when a keyword the scheme sets (`clim` / `n_colors` / `nan_color`) was also passed by the
-            caller.
+        TypeError: when a keyword the scheme *derives* (`clim` / `n_colors`) was also passed by the caller.
+            `nan_color` is not one of them: it is the colour missing data is drawn in, which the classifier
+            fills from a shared default rather than computing from the classes, so a caller's own is honoured
+            — the same rule :func:`~digitalearth.three_d.point_cloud._refuse_derived_colours` follows, and one
+            builder refusing what its neighbour honours is the asymmetry (review R2-L2).
     """
     if colours is None:
         return {}, None
     style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
     scalars = np.asarray(style.pop("scalars"), dtype=float)
+    chosen_nan_color = pinned.pop("nan_color", None)
     clashing = sorted(set(style) & set(pinned))
     if clashing:
         # `**style, **kwargs` into one call is a "got multiple values" TypeError about Python's internals;
@@ -124,6 +128,8 @@ def _classify_or_refuse(
             f"extruded_polygons() got {names} together with scheme={scheme!r}, which sets "
             f"{names} from the classes it cut; drop it, or drop scheme="
         )
+    if chosen_nan_color is not None:
+        style["nan_color"] = chosen_nan_color
     return style, scalars
 
 
@@ -261,10 +267,11 @@ class VectorMixin(_MixinBase):
                 compute them, so one ``scheme``/``k`` pair means one set of classes on every tier.
             k: Number of classes for a graduated ``scheme``; ignored otherwise.
             cmap: Colormap used when colouring by ``column``.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`. A classified layer sets ``clim``,
-                ``n_colors`` and ``nan_color`` from the classes it cut, so passing one of those *and* a
-                ``scheme`` is a ``TypeError`` naming the keyword rather than a "multiple values" error
-                out of Python's call machinery.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`. A classified layer derives ``clim`` and
+                ``n_colors`` from the classes it cut, so passing one of those *and* a ``scheme`` is a
+                ``TypeError`` naming the keyword rather than a "multiple values" error out of Python's call
+                machinery. ``nan_color`` is the exception and is honoured: the colour missing data is drawn in
+                is a choice the classifier only fills a default for, so a caller's own wins, as ``cmap`` does.
 
         Returns:
             The registered :class:`pyvista.Actor` for the merged prism mesh, or ``None`` when there was

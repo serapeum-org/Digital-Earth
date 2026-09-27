@@ -7,9 +7,13 @@ claims a kind nothing draws, or a channel nothing carries, is worse than no row 
 
 These are the three questions that keep this tier's row honest:
 
-* **every declared kind is drawn** — by the renderer from its description, or by a builder that draws it
-  straight onto the widget. The two buckets below are exhaustive and disjoint, so a kind added to the
-  declaration with nothing behind it lands outside both of them and fails here.
+* **every declared kind is drawn from its description** — `DESCRIBED_AND_DRAWN` below names the builder call
+  that produces each one, so a kind added to the declaration with nothing behind it fails here. There used to
+  be a second bucket, `DRAWN_BUT_NOT_DESCRIBED`, for the four kinds a builder drew straight onto the widget
+  without recording a layer — a basemap, terrain, a point cloud and a glTF model. Recording no layer is what
+  left them unaddressable by `set_visible`/`move_layer`/`replace_layer`, so they record one now and the bucket
+  is gone; `WEB_UNDRAWN_KINDS` in `tests/base/test_renderer_conformance.py`, the reason half of the same
+  bookkeeping, emptied with it.
 * **every declared channel reaches the layer** — each one is given to a builder and read back off the
   recorded symbology, and the `data_driven` ones are read back as MapLibre *expressions* over a column
   rather than as constants.
@@ -117,19 +121,15 @@ DESCRIBED_AND_DRAWN = {
     "filled_contours": lambda m: m.contours(
         _dem(), interval=CONTOUR_INTERVAL, filled=True
     ),
-    "custom:maplibre": lambda m: m.add_layer({"id": "own", "type": "background"}),
-}
-
-#: Kinds a builder draws straight onto the widget without recording a layer at all: a basemap is the map's
-#: style, and a point cloud, a terrain source and a glTF model are deck.gl/terrain objects the widget takes
-#: rather than MapLibre layers the description can rebuild. They are declared because the tier draws them,
-#: and they are separated here because "declared, drawn, not described" is a different answer from the one
-#: above — and the one a reader of the declaration is most likely to get wrong.
-DRAWN_BUT_NOT_DESCRIBED = {
+    # The four that used to be drawn straight onto the widget with no layer recorded, and so could not be
+    # addressed by id at all. They are described now, each through a drawer of its own: a basemap is a raster
+    # style layer, terrain is a DEM source plus `setTerrain`, and the two deck.gl kinds are composed into the
+    # page's one deck overlay.
     "basemap": lambda m: m.basemap("CartoDark"),
-    "point_cloud": lambda m: m.point_cloud([(4.9, 52.4, 10.0), (5.0, 52.2, 20.0)]),
     "terrain": lambda m: m.terrain_tiles(),
+    "point_cloud": lambda m: m.point_cloud([(4.9, 52.4, 10.0), (5.0, 52.2, 20.0)]),
     "model": lambda m: m.gltf("https://example.invalid/model.glb", 4.9, 52.4),
+    "custom:maplibre": lambda m: m.add_layer({"id": "own", "type": "background"}),
 }
 
 
@@ -233,43 +233,46 @@ class TestTheDeclaration:
         with pytest.raises(KeyError, match="drawn as an image rather than as cells"):
             drawer_for("mesh")
 
-    def test_a_kind_the_tier_has_simply_not_reached_carries_no_reason(self):
+    def test_a_kind_the_tier_never_decided_about_carries_no_reason(self):
         """The other half: no declared reason, no invented one.
 
         Test scenario:
-            `terrain` is declared and drawn, just not from a description yet, so `absent` says nothing
-            about it. If the refusal appended a reason anyway it would be making one up — this is what
-            stops the clause above from being unconditional text.
+            `volume` is a registered kind this tier neither draws nor argued against, so `absent` says
+            nothing about it. If the refusal appended a reason anyway it would be making one up — this is
+            what stops the clause above from being unconditional text. It read `terrain` until terrain
+            started being drawn from its description.
         """
-        assert CAPABILITIES.reason("terrain") is None, CAPABILITIES.absent
+        assert CAPABILITIES.reason("volume") is None, CAPABILITIES.absent
         with pytest.raises(KeyError) as refused:
-            drawer_for("terrain")
+            drawer_for("volume")
         assert "—" not in str(refused.value), str(refused.value)
 
 
 class TestEveryDeclaredKindIsDrawn:
     """Hold `CAPABILITIES.kinds` against what the tier actually draws and describes."""
 
-    def test_the_two_ways_a_kind_is_drawn_account_for_every_declared_one(self):
+    def test_every_declared_kind_is_drawn_from_its_description(self):
         """A declared kind with nothing behind it is the capability lie this file exists to catch.
 
         Test scenario:
-            The buckets are exhaustive: drawn from a description, or drawn onto the widget with no
-            description. Adding a kind to the declaration puts it in neither, and removing one that is drawn
-            leaves it in a bucket with nothing to declare it. There is no third bucket of kinds described but
-            replayed from the queue: contours were the last, and are drawn from their description now (L3).
+            One bucket now, and it is exhaustive: adding a kind to the declaration leaves it outside
+            `DRAWN_KINDS`, and dropping a declaration leaves a drawn kind nothing declares. There is no
+            second bucket of kinds drawn onto the widget without a description — the basemap, terrain,
+            point-cloud and model builders were the last four, and each records a layer now, which is what
+            makes them addressable by id — and none of kinds described but replayed from the queue, which
+            contours were the last of (L3).
         """
-        accounted = set(DRAWN_KINDS) | set(DRAWN_BUT_NOT_DESCRIBED)
-        difference = sorted(accounted.symmetric_difference(CAPABILITIES.kinds))
+        difference = sorted(set(DRAWN_KINDS).symmetric_difference(CAPABILITIES.kinds))
         assert difference == [], (
             f"{difference} are declared with nothing drawing them, or drawn without being declared"
         )
 
-    def test_no_kind_is_counted_two_ways(self):
-        """A kind both described and queued would be drawn twice; the buckets have to be disjoint."""
-        seen = list(DRAWN_KINDS) + list(DRAWN_BUT_NOT_DESCRIBED)
-        repeated = sorted({kind for kind in seen if seen.count(kind) > 1})
-        assert repeated == [], f"{repeated} are claimed by more than one drawing path"
+    def test_no_kind_is_listed_as_drawable_twice(self):
+        """One kind, one drawer: a kind listed twice would be a table maintained in two minds."""
+        repeated = sorted({kind for kind in DRAWN_KINDS if DRAWN_KINDS.count(kind) > 1})
+        assert repeated == [], (
+            f"{repeated} are claimed more than once by the drawer list"
+        )
 
     def test_the_described_bucket_is_the_renderer_s_own_list(self):
         """`DESCRIBED_AND_DRAWN` names a builder per drawable kind, so none can go untested."""
@@ -289,24 +292,24 @@ class TestEveryDeclaredKindIsDrawn:
         """
         assert kind in _kinds_recorded(DESCRIBED_AND_DRAWN[kind]), kind
 
-    @pytest.mark.parametrize("kind", sorted(DRAWN_BUT_NOT_DESCRIBED))
-    def test_a_widget_builder_draws_without_describing_a_layer(self, kind):
-        """The four kinds that reach the widget directly: one drawing queued, and no layer recorded.
+    @pytest.mark.parametrize("kind", sorted(DESCRIBED_AND_DRAWN))
+    def test_a_builder_queues_exactly_one_entry_for_the_layer_it_records(self, kind):
+        """One builder call, one queue entry, and it is the marker the renderer resolves.
 
         Args:
             kind: The declared kind under test.
 
         Test scenario:
-            This is the bucket a reader of the declaration gets wrong: `capabilities.supports("terrain")`
-            is `True` and `WebMap.terrain_tiles()` really does drape terrain, but no `LayerSpec` carries
-            the kind, so a saved figure does not round-trip it. Asserting *both* halves is what makes the
-            claim testable — a builder that started describing its layer would move to another bucket, and
-            one that stopped drawing anything would queue nothing.
+            The other half of the check above. `capabilities.supports("terrain")` was `True` and
+            `WebMap.terrain_tiles()` really did drape terrain, while no `LayerSpec` carried the kind — so the
+            layer was on the page and addressable by nothing. A builder that queued its own closure *and*
+            recorded a layer would draw the layer twice; one that recorded a layer and queued nothing would
+            describe a layer the page never adds. Both fail here.
         """
         web_map = WebMap()
-        DRAWN_BUT_NOT_DESCRIBED[kind](web_map)
-        assert len(web_map._queued) == 1, web_map._queued
-        assert [layer.kind for layer in web_map.figure_spec.layers] == [], kind
+        DESCRIBED_AND_DRAWN[kind](web_map)
+        queued = [type(entry).__name__ for entry in web_map._queued]
+        assert queued == ["_Described"], queued
 
 
 class TestEveryDeclaredChannelReachesTheLayer:

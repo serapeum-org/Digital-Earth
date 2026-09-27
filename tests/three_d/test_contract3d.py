@@ -11,8 +11,8 @@ C13, and each class below names its clause and adds only what is peculiar to dra
 * **C1** — the ``np.ndarray`` ``save()`` used to return did not vanish; it moved to
   :meth:`~digitalearth.three_d.base.Scene3DBase.screenshot`.
 * **C2** — both entry points are covered: :meth:`~digitalearth.three_d.animation.AnimationMixin.orbit` and
-  :meth:`~digitalearth.three_d.animation.AnimationMixin.animate`, with ``framerate=`` the alias each kept.
-* **C3** — ``point_size=`` is the alias this tier kept.
+  :meth:`~digitalearth.three_d.animation.AnimationMixin.record`, over one shared default rate.
+* **C3** — ``size=`` is what a marker's size is called here, as on every other tier.
 * **C4** — the classes are compared against the 2-D tiers' rather than merely accepted.
 * **C7** — the ways a 3-D layer ends up with nothing to draw: an off-limb raster, an empty point table, an
   empty vector table, and a custom layer whose object this process does not hold. The clause's other half —
@@ -21,9 +21,8 @@ C13, and each class below names its clause and adds only what is peculiar to dra
 * **C13** — what this tier reports: ``None`` until a layer or the constructor names a CRS, and that CRS
   afterwards (#291).
 
-Every deprecated alias is tested three ways over: that it still works, that it warns while it does,
-and that passing it alongside the new spelling is a ``TypeError`` naming both — the one answer all
-four tiers give, from :func:`~digitalearth.base.deprecation.renamed_parameter`.
+Each name is tested where it reaches the engine, not where it is accepted: a keyword the tier takes and
+drops would satisfy any signature check.
 """
 
 import logging
@@ -123,16 +122,16 @@ class TestC1SaveReturnsPath:
 
 
 class TestC2Fps:
-    """C2 on the 3-D tier — ``orbit`` and ``animate``, and the ``framerate=`` alias each one kept."""
+    """C2 on the 3-D tier — ``orbit`` and ``record``, over the one shared frame rate."""
 
     def test_the_shared_default_is_three(self):
         """Both animation entry points default to the one cross-tier frame rate.
 
         Test scenario:
-            The tier used to carry two different defaults (12 for ``orbit``, 8 for ``animate``), neither
-            matching the other backends. One constant now backs both, so "the default speed" is one number.
-            The callback loop is ``record`` since #299 — ``animate`` means three different things across the
-            tiers — and ``animate`` forwards to it.
+            The tier used to carry two different defaults (12 for ``orbit``, 8 for the callback loop),
+            neither matching the other backends. One constant now backs both, so "the default speed" is one
+            number. The callback loop is ``record`` since #299 — ``animate`` means three different things
+            across the tiers.
         """
         import inspect
 
@@ -140,8 +139,8 @@ class TestC2Fps:
         for method in ("orbit", "record"):
             signature = inspect.signature(getattr(Scene3D, method))
             assert "fps" in signature.parameters, f"{method}() must take fps"
-            assert signature.parameters["fps"].default is None, (
-                f"{method}()'s fps must default to the not-passed sentinel, "
+            assert signature.parameters["fps"].default == DEFAULT_FPS, (
+                f"{method}()'s fps must default to the shared rate, "
                 f"got {signature.parameters['fps'].default!r}"
             )
 
@@ -164,66 +163,9 @@ class TestC2Fps:
             f"the writer must be opened at the fps given, got {opened.call_args!r}"
         )
 
-    @pytest.mark.parametrize("method", ["orbit", "record"])
-    def test_framerate_still_works_and_warns(self, scene, tmp_path, mocker, method):
-        """The deprecated ``framerate=`` still sets the frame rate, and says so once.
-
-        Args:
-            scene: The scene under test.
-            tmp_path: Supplies the destination path.
-            mocker: Patches the writer and the render loop so nothing is encoded.
-            method: The animation entry point under test — both sites are aliased.
-
-        Test scenario:
-            No caller is broken in this batch: the old spelling forwards to the new one and emits a
-            DeprecationWarning naming the replacement, on both methods that took it.
-        """
-        scene.terrain(_dem())
-        opened = mocker.patch.object(scene.plotter, "open_gif")
-        mocker.patch.object(scene.plotter, "write_frame")
-        mocker.patch.object(scene.plotter, "orbit_on_path")
-        mocker.patch.object(scene.plotter, "generate_orbital_path")
-        out = str(tmp_path / f"{method}.gif")
-        call = (
-            (lambda: scene.orbit(out, n_frames=4, framerate=9.0))
-            if method == "orbit"
-            else (lambda: scene.record([1.0], out, lambda s, f: None, framerate=9.0))
-        )
-        with pytest.warns(DeprecationWarning, match="fps"):
-            call()
-        assert opened.call_args.kwargs["fps"] == 9.0, (
-            f"framerate= must forward to fps, got {opened.call_args!r}"
-        )
-
-    def test_both_spellings_at_once_is_refused(self, scene, tmp_path):
-        """Passing ``fps`` and ``framerate`` together is a ``TypeError`` naming both.
-
-        Args:
-            scene: The scene under test.
-            tmp_path: Supplies the destination path.
-
-        Test scenario:
-            The two name the same thing, so a call that sets both is a contradiction only the caller can
-            resolve. Preferring one of them would hide a real mistake. ``TypeError`` is what Python itself
-            raises for an argument given twice, and it is now the one answer all four tiers give (the tier
-            used to raise ``ValueError`` here while web silently preferred the old spelling).
-        """
-        destination = str(tmp_path / "a.gif")
-        with pytest.raises(TypeError) as excinfo:
-            scene.record(
-                [1.0],
-                destination,
-                lambda s, f: None,
-                fps=4.0,
-                framerate=9.0,
-            )
-        message = str(excinfo.value)
-        assert "both fps= and the deprecated framerate=" in message, message
-        assert "pass only fps=" in message, message
-
 
 class TestC3Size:
-    """C3 on the 3-D tier — the point builders, and the ``point_size=`` alias they kept."""
+    """C3 on the 3-D tier — the point builders, under the one word a marker's size has."""
 
     def test_size_sets_the_marker_size(self, scene):
         """``size=`` reaches PyVista as the point size.
@@ -239,40 +181,6 @@ class TestC3Size:
         assert actor.prop.point_size == pytest.approx(8.0), (
             f"size= must set the rendered point size, got {actor.prop.point_size}"
         )
-
-    def test_point_size_still_works_and_warns(self, scene):
-        """The deprecated ``point_size=`` still sizes the markers, and says so.
-
-        Args:
-            scene: The scene under test.
-
-        Test scenario:
-            The old spelling forwards to ``size`` and emits a DeprecationWarning naming the replacement, so
-            existing notebooks keep rendering while telling their author what to change.
-        """
-        points = _points()
-        with pytest.warns(DeprecationWarning, match="size"):
-            actor = scene.point_cloud(points, point_size=8.0)
-        assert actor.prop.point_size == pytest.approx(8.0), (
-            f"point_size= must forward to size, got {actor.prop.point_size}"
-        )
-
-    def test_both_spellings_at_once_is_refused(self, scene):
-        """Passing ``size`` and ``point_size`` together is a ``TypeError`` naming both.
-
-        Args:
-            scene: The scene under test.
-
-        Test scenario:
-            As with ``fps``/``framerate``: two names for one thing, set to two values, is a caller error,
-            and every tier now reports it the same way.
-        """
-        points = _points()
-        with pytest.raises(TypeError) as excinfo:
-            scene.point_cloud(points, size=4.0, point_size=8.0)
-        message = str(excinfo.value)
-        assert "both size= and the deprecated point_size=" in message, message
-        assert "pass only size=" in message, message
 
 
 class TestC4SchemeAndK:

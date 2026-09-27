@@ -110,7 +110,8 @@ class TestLabelsFromAColumn:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().points(places).labels(places, "name", name="Names")
-        assert len(m.layer_ids) == 2, m.layer_ids
+        # Three ids: the basemap, the points, and the labels over them.
+        assert len(m.layer_ids) == 3, m.layer_ids
         assert "Names" in m.layer_ids, m.layer_ids
         payload = _payload(m.layer_control().to_html())
         assert '"Names"' in payload, "the caller's name never reaches the switcher"
@@ -154,7 +155,7 @@ class TestTheMapCarriesItsTitle:
         """Otherwise the title lives only in the surrounding notebook."""
         from digitalearth.web import WebMap
 
-        payload = _payload(WebMap().basemap().title("Population, 2024").to_html())
+        payload = _payload(WebMap().basemap().set_title("Population, 2024").to_html())
         assert "InfoBoxControl" in payload
         assert "Population, 2024" in payload
 
@@ -163,7 +164,7 @@ class TestTheMapCarriesItsTitle:
         from digitalearth.web import WebMap
 
         payload = _payload(
-            WebMap().basemap().title("Population", subtitle="Source: CBS").to_html()
+            WebMap().basemap().set_title("Population", subtitle="Source: CBS").to_html()
         )
         assert "Source: CBS" in payload
 
@@ -173,4 +174,4 @@ class TestTheMapCarriesItsTitle:
 
         web_map = WebMap().basemap()
         with pytest.raises(ValueError):
-            web_map.title("x", position="middle")
+            web_map.set_title("x", position="middle")

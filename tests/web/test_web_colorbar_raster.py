@@ -2,7 +2,7 @@
 
 ``tests/web/test_web_colorbar.py`` covers the vector half, where a ``column`` classifies the layer and there
 is a key to build. The raster half takes the same new branch in ``_quickmap_web`` and behaves differently at
-the end of it — ``add_raster`` records no classification, so the tier has nothing to describe — which makes
+the end of it — ``field`` records no classification, so the tier has nothing to describe — which makes
 it the case where the ``colorbar=True`` default has to stay *inert* rather than raise.
 
 That is the regression this file guards: before the tier's recorded state was consulted first, the default

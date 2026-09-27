@@ -89,11 +89,11 @@ class TestTheDeclaration:
         # from the registry, which names the builder that draws each one. Every builder listed here is
         # called, so a kind whose builder disappears fails on the call rather than on the table.
         builders = {
-            "raster": lambda canvas: canvas.imshow(dataset),
-            "contours": lambda canvas: canvas.contour(dataset),
-            "filled_contours": lambda canvas: canvas.contourf(dataset),
+            "raster": lambda canvas: canvas.field(dataset),
+            "contours": lambda canvas: canvas.contours(dataset),
+            "filled_contours": lambda canvas: canvas.contours(dataset, filled=True),
             "mesh": lambda canvas: canvas.pcolormesh(dataset),
-            "points": lambda canvas: canvas.scatter(FeatureCollection(points)),
+            "points": lambda canvas: canvas.points(FeatureCollection(points)),
             "coastlines": lambda canvas: canvas.coastlines(),
             "text": lambda canvas: canvas.text(0.0, 0.0, "here"),
             "graticule": lambda canvas: canvas.graticule(),

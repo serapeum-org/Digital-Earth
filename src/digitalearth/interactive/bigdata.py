@@ -319,7 +319,7 @@ class BigDataMixin(_MixinBase):
         canvas = {key: opts.pop(key) for key in ("width", "height") if key in opts}
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -396,7 +396,7 @@ class BigDataMixin(_MixinBase):
         }
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -465,7 +465,7 @@ class BigDataMixin(_MixinBase):
         }
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,

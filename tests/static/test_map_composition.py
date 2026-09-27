@@ -53,13 +53,13 @@ class TestMapComposition:
         """Each representative public method is contributed by the expected mixin.
 
         Test scenario:
-            Method-resolution finds imshow on RasterMixin, scatter on VectorMixin, coastlines on
+            Method-resolution finds field on RasterMixin, points on VectorMixin, coastlines on
             DecorationMixin, set_domain on ProjectionMixin, animate on AnimationMixin.
         """
         owner = {
-            "imshow": RasterMixin,
+            "field": RasterMixin,
             "rgb_composite": RasterMixin,
-            "scatter": VectorMixin,
+            "points": VectorMixin,
             "choropleth": VectorMixin,
             "quiver": VectorMixin,
             "coastlines": DecorationMixin,
@@ -81,5 +81,5 @@ class TestMapComposition:
             A smoke check that the mixins cooperate on a real render through the composed class.
         """
         m = Map(crs=dataset.epsg)
-        m.imshow(dataset)
+        m.field(dataset)
         assert len(m.layers) == 1, f"expected one layer, got {len(m.layers)}"

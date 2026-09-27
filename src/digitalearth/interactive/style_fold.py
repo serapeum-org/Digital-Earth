@@ -321,15 +321,15 @@ TIER_BUCKET: str = "tier"
 #:
 #: A builder writes the style it derived into ``common`` and the caller's own keywords into ``opts``, and
 #: every drawer merges the second over the first — so an explicit keyword outranks a derived one, and the
-#: lift below must read them in the same order. A few builders (``image``, ``rgb``) write their flat style
-#: at the top level of ``props`` instead, which is why the mapping itself is read first.
+#: lift below must read them in the same order. ``field`` (which records ``via="image"``) and ``rgb`` write
+#: their flat style at the top level of ``props`` instead, which is why the mapping itself is read first.
 STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
 
 #: What each of this tier's builders derives when the caller styled nothing, by the builder that wrote it.
 #:
 #: **Why this table has to exist.** :data:`ASKED_BUCKET` is the caller's own, but a builder also writes its
 #: resolved parameters into :data:`DERIVED_BUCKET` and into the flat top level — ``points`` writes ``size``
-#: there whether or not ``size=`` was passed, and ``image`` writes ``alpha`` the same way. Publishing those
+#: there whether or not ``size=`` was passed, and ``field`` writes ``alpha`` the same way. Publishing those
 #: made an unstyled ``points(features)`` claim ``{'size': 6.0}`` as the caller's own style, against the web
 #: tier's ``{'color': '#3388ff', 'opacity': 0.9, 'size': 5.0}`` for the same call — two tiers publishing two
 #: sets of defaults into the one field `to_backend()` (order 33) will read as intent (review R-H2).
@@ -345,7 +345,8 @@ STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
 #: keywords at all — **twenty-seven** of them, the twenty-three data builders and the four decorations, as
 #: ``tests/interactive/test_interactive_unasked_style.py`` enumerates them — and reading back
 #: ``symbology.props``: only two derive anything that drives a declared channel — ``points`` records
-#: ``common['size'] == 6.0`` and ``image`` records a flat ``alpha == 1.0``. ``rgb`` is **not** one of them
+#: ``common['size'] == 6.0`` and ``field`` records a flat ``alpha == 1.0`` under its ``via`` token
+#: ``image``, which is the key its row is looked up by. ``rgb`` is **not** one of them
 #: (it records ``via``/``bands``/``limits``/``opts`` and no ``alpha``), ``polygons`` derives
 #: ``fill_alpha``, which drives no channel, and a classified ``color`` is a value dimension and is refused
 #: below. ``tests/interactive/test_interactive_unasked_style.py`` re-measures every builder, so a row that
@@ -378,7 +379,7 @@ def builder_of(props: Mapping[str, Any]) -> Tuple[str, str]:
 
     Note:
         **Deliberately not the layer's `kind`,** which is what the web tier's table is keyed by. A kind is
-        coarser than a builder here: ``image``, ``large_image`` and ``rasterize`` all record ``"raster"``,
+        coarser than a builder here: ``field``, ``large_image`` and ``rasterize`` all record ``"raster"``,
         ``hexbin`` and ``kde`` both record ``"heatmap"``, and ``points`` and ``datashade`` both record
         ``"points"``. Keying on it would pool those builders' defaults — the exact defect keying by kind
         *removes* on the web tier, where one kind has one builder (review R2-H2). So the two tiers look

@@ -17,6 +17,8 @@ These are the three claims, each read off what the tier does rather than off a s
 * **the schemes are the shared classifier's**, which is contract C4.
 """
 
+import re
+
 import numpy as np
 import pytest
 
@@ -349,3 +351,113 @@ class TestARefusalCarriesTheDeclaredReason:
         with pytest.raises(KeyError) as refused:
             drawer_for("choropleth")
         assert "—" not in str(refused.value), str(refused.value)
+
+
+class TestNoMessageNamesAMethodTheTierLost:
+    """M3 (the 3-D half) — a refusal or a cross-reference may only name a method that exists.
+
+    `Scene3D.animate` was one of the eighteen deprecated spellings this branch deleted; the live name is
+    `record`. The `time_slider` refusal still told a caller to use `animate()`, and four `:meth:` references
+    pointed at it as well. A message naming a method the tier no longer has is worse than no message: it
+    sends the reader to a `TypeError`.
+
+    Matched on the **receiver**, not the name: `terrain`, `globe` and `animate` were also *web*-tier aliases,
+    and `Scene3D.terrain`/`Scene3D.globe` are current methods that merely share a spelling with one.
+    """
+
+    #: A bare cross-reference — `` :meth:`orbit` `` — as opposed to a dotted one naming another package's
+    #: class, which resolves elsewhere and is not this tier's to keep true.
+    BARE_REFERENCE = re.compile(r":meth:`~?([A-Za-z_][A-Za-z0-9_]*)`")
+
+    #: A method-shaped token in a sentence: the `animate()` a refusal tells the caller to write.
+    CALLABLE_TOKEN = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\(\)")
+
+    @staticmethod
+    def _live_names() -> set:
+        """Every attribute name the tier's own classes answer to.
+
+        Returns:
+            The union over every class defined in `digitalearth.three_d`, so a reference to a renderer
+            method (`is_visible`) is as live as one to a scene method (`orbit`) — both are names a reader can
+            look up in this package.
+        """
+        import importlib
+        import inspect
+        import pkgutil
+
+        import digitalearth.three_d as tier
+
+        live: set = set()
+        for info in pkgutil.iter_modules(tier.__path__):
+            module = importlib.import_module(f"{tier.__name__}.{info.name}")
+            for _, held in inspect.getmembers(module, inspect.isclass):
+                if held.__module__.startswith(tier.__name__):
+                    live |= set(dir(held))
+        return live
+
+    @staticmethod
+    def _tier_sources():
+        """The tier's modules, as `(path, text)` pairs.
+
+        Returns:
+            Every ``.py`` file under ``src/digitalearth/three_d``, at any depth, read as text. ``rglob`` rather
+            than ``glob``: the tier is flat today, so the two read the same files, but a subpackage added to it
+            would otherwise leave this guard reading past it silently — which is the single-tree blindness
+            `tests/base/test_live_method_references.py` was added for (review R2-M6). That module is the
+            package-wide half of this check, resolving a reference on the **class** it names; this one stays,
+            because resolving a bare name against *this tier's* classes is stricter than against every class
+            in the package.
+        """
+        import pathlib
+
+        root = (
+            pathlib.Path(__file__).resolve().parents[2]
+            / "src"
+            / "digitalearth"
+            / "three_d"
+        )
+        return [
+            (path, path.read_text(encoding="utf-8"))
+            for path in sorted(root.rglob("*.py"))
+        ]
+
+    def test_no_bare_cross_reference_points_at_a_deleted_method(self):
+        """Every `` :meth:`name` `` in the tier resolves on one of the tier's own classes.
+
+        Test scenario:
+            A dangling `:meth:` renders as plain text in the built docs, so nothing fails — mkdocs is not
+            nitpicky about a target it cannot find. The reference is checked against the code instead.
+        """
+        live = self._live_names()
+        dangling = []
+        for path, text in self._tier_sources():
+            for number, line in enumerate(text.splitlines(), start=1):
+                for name in self.BARE_REFERENCE.findall(line):
+                    if name not in live:
+                        dangling.append(f"{path.name}:{number}: :meth:`{name}`")
+        assert dangling == [], (
+            f"these cross-references name a method no class in the tier has: {dangling}"
+        )
+
+    def test_no_capability_refusal_tells_the_caller_to_call_a_deleted_method(self):
+        """A reason that names `foo()` must name a method `Scene3D` really has.
+
+        Test scenario:
+            These strings are user-facing: `resolved_controls` and `CAPABILITIES.require` quote them back in
+            the exception a caller sees, so a stale name here is advice that raises when followed.
+        """
+        from digitalearth.three_d import Scene3D
+        from digitalearth.three_d.capabilities import CAPABILITIES
+
+        wrong = {}
+        for feature, reason in CAPABILITIES.absent.items():
+            named = [
+                token
+                for token in self.CALLABLE_TOKEN.findall(reason)
+                if not hasattr(Scene3D, token)
+            ]
+            if named:
+                wrong[feature] = named
+        assert wrong == {}, (
+            f"these refusals tell a caller to use a method Scene3D does not have: {wrong}"
+        )

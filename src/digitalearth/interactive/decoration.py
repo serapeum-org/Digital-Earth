@@ -462,7 +462,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).tiles("CartoLight")         # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).tiles("CartoLight")         # doctest: +SKIP
                 >>> type(m.layers[0]).__name__                                  # doctest: +SKIP
                 'WMTS'
 
@@ -505,7 +505,7 @@ class DecorationMixin(_MixinBase):
         # held beside the layer, and described by its key-free URL template.
         held: dict = {"provider": provider}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -665,7 +665,7 @@ class DecorationMixin(_MixinBase):
         self._require_web_mercator("coastlines")
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -726,7 +726,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).features(land=True, borders=True)  # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).features(land=True, borders=True)  # doctest: +SKIP
                 >>> len(m.layers)                                               # doctest: +SKIP
                 3
 
@@ -751,7 +751,7 @@ class DecorationMixin(_MixinBase):
             if requested:
                 # Each is its own kind, so a figure says which piece of reference geography it drew —
                 # and the registry, not this loop, decides where each is drawn.
-                self.add_element(
+                self.add_layer(
                     None,
                     name=name,
                     visible=visible,
@@ -845,7 +845,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).land()                     # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).land()                     # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
                 ['Land', 'Image']
 
@@ -902,7 +902,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).ocean()                    # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).ocean()                    # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
                 ['Ocean', 'Image']
 
@@ -961,7 +961,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).lakes()                    # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).lakes()                    # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
                 ['Lakes', 'Image']
 
@@ -1017,7 +1017,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).rivers(resolution="50m")   # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).rivers(resolution="50m")   # doctest: +SKIP
                 >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
                 ['Image', 'Rivers']
 
@@ -1096,7 +1096,7 @@ class DecorationMixin(_MixinBase):
         (x,), (y,) = self._to_display_xy(lon, lat, crs)
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1154,7 +1154,7 @@ class DecorationMixin(_MixinBase):
             )
         held: dict = {}
         described_opts = describe_opts(held, opts)
-        return self.add_element(
+        return self.add_layer(
             None,
             name=name,
             visible=visible,
@@ -1185,7 +1185,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().image(dem).colorbar(False)             # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).colorbar(False)             # doctest: +SKIP
                 >>> m.save("m.html").name                                      # doctest: +SKIP
                 'm.html'
 

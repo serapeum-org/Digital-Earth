@@ -43,7 +43,6 @@ from typing import Any, Dict, Mapping, Optional, Set, Tuple
 from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
 
-from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import StyleKey, StyleSchema, Symbology
 from digitalearth.static.style_fold import (
     COLOR_GROUP_MEMBERS,
@@ -136,6 +135,13 @@ FLAT_STYLE_KEYS = frozenset(
 #: channel it drives is what makes it the demonstration that a channel costs a fold rule, not a parameter on
 #: every builder.
 MARKER_SIZE_KEY = "size"
+
+#: The point-overlay keys whose live spelling **on a layer of points** is the same styling without the
+#: ``point_`` prefix, used to re-spell them in :func:`prepare_plot_kwargs`' refusal. Only the marker's size is
+#: here: ``point_color`` and the ``point_label_*``/``pid_*`` keys style the overlay's own colouring and its
+#: per-point labels, which a point layer reaches through its colour group and ``column=`` rather than through
+#: a keyword of that name, so they get the corrected diagnosis and no re-spelling.
+_MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
 
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
 #: where it drives one. That is the **27** flat members cleopatra's constructors reject, the 6 typed group
@@ -322,96 +328,23 @@ def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]
     return flat, unsupported
 
 
-def resolve_marker_size(opts: Dict[str, Any], *, caller: str, depth: int = 4) -> None:
-    """Normalise the deprecated ``point_size=`` spelling to ``size=`` in a point builder's kwargs, in place.
-
-    This runs in the **builder**, not in the drawer, and that is the whole point of it existing. The
-    deprecation warning has to land on the user's own line, and ``stacklevel`` is a hand-counted number of
-    frames: a builder that records its layer and lets a drawer build it puts four more frames between the
-    two, and a count that deep is one refactor away from blaming a line inside this package. Resolving the
-    spelling where the caller's keywords arrive keeps the count short and stable — and leaves
-    :func:`_fold_marker_size` nothing deprecated to warn about when the drawer folds the resolved ``size``
-    onto cleopatra's constructor spelling.
-
-    Args:
-        opts: The caller's styling keywords, mutated in place: ``point_size`` is removed and its value
-            becomes ``size``.
-        caller: The layer method the keywords were written on, named in the warning and the error.
-        depth: Frames between :func:`~digitalearth.base.deprecation.renamed_parameter` and the user's call
-            — ``4`` for a builder that calls this directly (helper -> here -> builder -> user); an alias
-            that delegates to another builder adds one more and passes ``5``.
-
-    Raises:
-        TypeError: if both ``size`` and ``point_size`` are passed. They name one parameter, so preferring
-            either silently would drop the other.
-
-    Warns:
-        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
-
-    Examples:
-        - The current spelling passes through untouched:
-            ```python
-            >>> from digitalearth.static.render_compat import resolve_marker_size
-            >>> opts = {"size": 12, "cmap": "viridis"}
-            >>> resolve_marker_size(opts, caller="Map.scatter()")
-            >>> sorted(opts.items())
-            [('cmap', 'viridis'), ('size', 12)]
-
-            ```
-    """
-    size = renamed_parameter(
-        new=MARKER_SIZE_KEY,
-        value=opts.pop(MARKER_SIZE_KEY, None),
-        old="point_size",
-        alias=opts.pop("point_size", None),
-        caller=caller,
-        stacklevel=depth,
-    )
-    if size is not None:
-        opts[MARKER_SIZE_KEY] = size
-
-
-def _fold_marker_size(
-    opts: Dict[str, Any], plot_style: Dict[str, Any], caller: str, depth: int
-) -> None:
+def _fold_marker_size(opts: Dict[str, Any]) -> None:
     """Fold the ``size`` channel onto the ``point_size`` a cleopatra point glyph takes (in place).
 
     ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static tier
-    accepts too; ``point_size`` is cleopatra's own name for it and keeps working for one release.
-
-    It runs *after* the relocation because ``point_size`` is one of the flat keys that moves onto ``plot()``
-    for the raster point overlay, and a point glyph takes its marker size on the **constructor** instead — so
-    the value has to be rescued from there and put back.
+    accepts too; ``point_size`` is cleopatra's own name for it, on the glyph's **constructor**. One place
+    decides that mapping, so no builder holds it.
 
     Args:
-        opts: The glyph constructor kwargs, mutated in place: the resolved size becomes ``point_size``.
-        plot_style: The relocated ``plot()`` kwargs, mutated in place: a ``point_size`` meant for this glyph
-            is taken back out of it.
-        caller: The layer method the kwargs were written on, named in the warning and the error.
-        depth: How many frames sit between :func:`relocate_flat_style` and the user's call — see its own
-            ``depth`` argument.
-
-    Raises:
-        TypeError: if both ``size`` and ``point_size`` are passed.
-
-    Warns:
-        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
+        opts: The glyph constructor kwargs, mutated in place: the ``size`` becomes ``point_size``.
     """
-    size = renamed_parameter(
-        new=MARKER_SIZE_KEY,
-        value=opts.pop(MARKER_SIZE_KEY, None),
-        old="point_size",
-        alias=plot_style.pop("point_size", None),
-        caller=caller,
-        stacklevel=depth
-        + 1,  # + this frame, which sits between the caller's and renamed_parameter's
-    )
+    size = opts.pop(MARKER_SIZE_KEY, None)
     if size is not None:
         opts["point_size"] = size
 
 
 def relocate_flat_style(
-    opts: Dict[str, Any], *, marker_size_for: Optional[str] = None, depth: int = 5
+    opts: Dict[str, Any], *, folds_marker_size: bool = False
 ) -> Dict[str, Any]:
     """Pop cleopatra-regrouped style keys out of a constructor kwargs dict, returning them.
 
@@ -423,20 +356,13 @@ def relocate_flat_style(
 
     Args:
         opts: The constructor keyword dict; mutated in place (matched keys are removed).
-        marker_size_for: Name the layer method — ``"Map.scatter()"`` — when the glyph being built is a point
-            glyph, which takes its marker size on the constructor. The ``size`` channel is then folded onto
-            the ``point_size`` it wants, and the deprecated spelling is warned about on the caller's line.
-            Leave unset for every other glyph.
-        depth: How many frames sit between this call and the user's, for that warning. The default counts
-            ``renamed_parameter`` -> the marker-size fold -> here -> the layer method -> the caller; an alias
-            that delegates to another builder adds one more, so it passes ``depth=6``. Measured rather than
-            assumed: a wrong value blames a line inside this package instead of the user's own.
+        folds_marker_size: ``True`` when the glyph being built is a point glyph, which takes its marker
+            size on the constructor: the ``size`` channel is then folded onto the ``point_size`` it wants.
+            Leave it ``False`` for every other glyph, where ``point_size`` belongs to the raster point
+            overlay and travels on to ``plot()``.
 
     Returns:
         The removed style keys as a new dict.
-
-    Raises:
-        TypeError: if `marker_size_for` is given and the caller passed both ``size`` and ``point_size``.
 
     Examples:
         - The styling keys move out, and the constructor keeps what it still accepts:
@@ -452,7 +378,7 @@ def relocate_flat_style(
             ```python
             >>> from digitalearth.static.render_compat import relocate_flat_style
             >>> opts = {"size": 12, "cmap": "viridis"}
-            >>> relocate_flat_style(opts, marker_size_for="Map.scatter()")
+            >>> relocate_flat_style(opts, folds_marker_size=True)
             {}
             >>> opts["point_size"]
             12
@@ -462,8 +388,8 @@ def relocate_flat_style(
     moved = {key: opts[key] for key in opts if key in FLAT_STYLE_KEYS}
     for key in moved:
         del opts[key]
-    if marker_size_for is not None:
-        _fold_marker_size(opts, moved, marker_size_for, depth)
+    if folds_marker_size:
+        _fold_marker_size(opts)
     return moved
 
 
@@ -474,8 +400,32 @@ _GROUP_MEMBERS = {
 }
 
 #: The point-overlay keys (the ``points`` array plus its ``point_*`` styling), rejected on a glyph with no
-#: ``points`` parameter the same way an unsupported group is.
+#: ``points`` parameter — but with a refusal of their own, not the unsupported-group one (review N3).
 _POINT_OVERLAY_KEYS = frozenset({"points", *_POINT_FIELDS})
+
+
+def _marker_respellings(overlay: Dict[str, Any]) -> str:
+    """Return the clause that re-spells a point overlay's keys as a point layer's own marker styling.
+
+    Args:
+        overlay: The point-overlay keys the caller wrote and this glyph cannot take.
+
+    Returns:
+        A sentence naming each key that has a live counterpart in :data:`_MARKER_RESPELLINGS`, or ``""``
+        when none of them does — the corrected diagnosis stands on its own, and inventing a spelling for
+        the label keys would send the caller after a keyword no builder takes.
+    """
+    renamed = [
+        f"{key}= is {_MARKER_RESPELLINGS[key]}="
+        for key in sorted(overlay)
+        if key in _MARKER_RESPELLINGS
+    ]
+    if not renamed:
+        return ""
+    return (
+        ". On a layer of points the same styling is spelled without the prefix: "
+        + "; ".join(renamed)
+    )
 
 
 def _fold_points(out: Dict[str, Any]) -> None:
@@ -637,10 +587,12 @@ def prepare_plot_kwargs(
 
     Only the groups the glyph's ``plot`` accepts are built (the vector glyphs take ``color``/``contour``/
     ``classify`` but not ``data_style``/``cells``, so folding those blindly would raise an opaque ``TypeError``).
-    A leftover flat member the glyph cannot take (including an unsupported ``points`` overlay) raises a clear
-    ``ValueError`` naming it — except ``alpha``, which every layer should honour: it is returned as
-    ``deferred_alpha`` for the caller to apply to the rendered artist, since the vector glyphs expose no
-    ``alpha`` parameter upstream.
+    A leftover flat member the glyph cannot take raises a clear ``ValueError`` naming it — except ``alpha``,
+    which every layer should honour: it is returned as ``deferred_alpha`` for the caller to apply to the
+    rendered artist, since the vector glyphs expose no ``alpha`` parameter upstream. An unsupported
+    ``points`` overlay is refused too, in a sentence of its own: those keys style the overlay a raster or
+    mesh layer draws *over* itself, so calling them raster options misnames them, and where one has a live
+    spelling on a layer of points the refusal gives it (review N3).
 
     This assumes each glyph advertises its supported groups as *explicit named* ``plot`` parameters — true for
     every cleopatra glyph today (``ArrayGlyph`` names ``color``/``contour``/``cells``/``data_style``/``points``;
@@ -667,15 +619,25 @@ def prepare_plot_kwargs(
             continue
         for key in [k for k in grouped if k in members]:
             leftover[key] = grouped.pop(key)
-    if (
-        "points" not in accepted
-    ):  # a point overlay on a glyph with no `points` parameter is unsupported too
+    # A point overlay on a glyph with no `points` parameter is unsupported too, but it is its *own* refusal:
+    # sharing the sentence below said "they apply to raster/mesh layers" of `point_size=`, which is the wrong
+    # diagnosis twice over (review N3). These keys do belong to a raster or mesh layer — as the point overlay
+    # it draws over itself — and what a caller migrating an old script wanted is the same styling without the
+    # prefix, which is what `_marker_respellings` tells them.
+    overlay = {}
+    if "points" not in accepted:
         for key in [k for k in grouped if k in _POINT_OVERLAY_KEYS]:
-            leftover[key] = grouped.pop(key)
+            overlay[key] = grouped.pop(key)
     deferred_alpha = leftover.pop("alpha", None)
     if leftover:
         raise ValueError(
             f"{type(glyph).__name__} does not support the styling option(s) {sorted(leftover)}; "
             "they apply to raster/mesh layers, not this layer type"
+        )
+    if overlay:
+        raise ValueError(
+            f"{type(glyph).__name__} does not support the styling option(s) {sorted(overlay)}; they style "
+            "the point overlay a raster or mesh layer draws over itself, and this layer type has no such "
+            f"overlay{_marker_respellings(overlay)}"
         )
     return grouped, deferred_alpha

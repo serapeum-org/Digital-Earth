@@ -7,6 +7,8 @@ frame windows the whole raster within the budget, and a ``RangeXY`` event reads 
 Runs in the ``interactive`` pixi env.
 """
 
+import re
+
 import numpy as np
 import pytest
 
@@ -114,6 +116,55 @@ class TestLargeImage:
         plain = _Plain()
         with pytest.raises(AttributeError, match="read_part"):
             m.large_image(plain)
+
+    @staticmethod
+    def _refused_without_a_windowed_read(scene):
+        """Return the message ``large_image`` refuses a dataset with no windowed read with.
+
+        Args:
+            scene: The map under test.
+
+        Returns:
+            The refusal's text.
+        """
+
+        class _Plain:
+            epsg = 3857
+
+        plain = _Plain()
+        with pytest.raises(AttributeError) as refused:
+            scene.large_image(plain)
+        return str(refused.value)
+
+    def test_the_refusal_offers_the_builder_for_a_small_raster(self, m):
+        """The way out it offers has to be callable; it named ``image()``, deleted at order 27a.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            A refusal that says "use X instead" is a user-facing instruction, and this one sent the caller
+            to a method the rename had taken away — nothing asserted its text, so nothing said so
+            (review M3).
+        """
+        message = self._refused_without_a_windowed_read(m)
+        assert "use field() for a small raster" in message, message
+
+    def test_every_method_the_refusal_names_is_one_this_tier_has(self, m):
+        """Drift guard: the next rename must not be able to leave another dead name here.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            Every ``name()`` in the message is asked of the class rather than compared with a literal, so a
+            message re-pointed at the *following* deleted spelling fails this as well as the check above.
+        """
+        offered = re.findall(r"(\w+)\(\)", self._refused_without_a_windowed_read(m))
+        missing = [name for name in offered if not hasattr(InteractiveMap, name)]
+        assert missing == [], (
+            f"the refusal offers {missing}, which this tier has no method for"
+        )
 
     def test_real_dataset_static_frame_is_non_blank(self, dataset):
         """A real pyramids Dataset renders a non-blank decimated preview (band default 1 → 0-based read).

@@ -29,7 +29,7 @@ from digitalearth.base.capabilities import Capabilities
 __all__ = ["CAPABILITIES"]
 
 #: The interactive tier's declaration. The kinds are the builders `InteractiveMap` composes — HoloViews and
-#: GeoViews elements — plus `custom:holoviews` for an element a caller builds and hands to `add_element`
+#: GeoViews elements — plus `custom:holoviews` for an element a caller builds and hands to `add_layer`
 #: (#293). The schemes are the shared classifier's, so one `scheme`/`k` pair paints the same classes here as on
 #: every other tier (contract C4).
 CAPABILITIES = Capabilities(
@@ -92,8 +92,8 @@ CAPABILITIES = Capabilities(
     ),
     absent={
         "domain": (
-            "the map pans and zooms, so it is framed by what the viewer does rather than by a region set "
-            "before it is drawn"
+            "no domain= on the constructor: a region is asked for with set_bounds(), which frames the map "
+            "on a rectangle or on its own data, and the viewer pans on from there"
         ),
         "height": (
             "HoloViews has no z-height option: an extrusion is a 3-D or web layer (measured in #298)"

@@ -334,10 +334,6 @@ module = "digitalearth.interactive.temporal"  # 2 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.glyph"  # 2 errors at baseline
-disable_error_code = ["arg-type", "union-attr"]
-
-[[tool.mypy.overrides]]
 module = "digitalearth.static.maps.raster"  # 2 errors at baseline
 disable_error_code = ["dict-item", "union-attr"]
 

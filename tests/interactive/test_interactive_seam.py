@@ -183,7 +183,7 @@ class TestAFigureNamesEveryLayerItDrew:
             composed twice (review L7).
         """
         interactive_map = (
-            new_map().tiles("CartoLight").graticule().points(point_fc).image(dataset)
+            new_map().tiles("CartoLight").graticule().points(point_fc).field(dataset)
         )
         described = list(interactive_map.figure_spec.layers.ids)
         assert len(described) == 4, described
@@ -209,7 +209,7 @@ class TestAFigureNamesEveryLayerItDrew:
             dataset: A small raster.
         """
         interactive_map = (
-            new_map().tiles("CartoLight").graticule().points(point_fc).image(dataset)
+            new_map().tiles("CartoLight").graticule().points(point_fc).field(dataset)
         )
         assert len(interactive_map.layers) == len(interactive_map.layer_ids), (
             f"{len(interactive_map.layers)} elements for {len(interactive_map.layer_ids)} layers"
@@ -273,13 +273,13 @@ class TestIdsFollowTheLayer:
     """An id is how a caller addresses a layer again, so it has to come from the layer."""
 
     def test_a_callers_name_becomes_the_id(self, new_map):
-        """`add_element(name=...)` is the tier's one naming surface, and it is taken literally.
+        """`add_layer(name=...)` is the tier's one naming surface, and it is taken literally.
 
         Args:
             new_map: The map factory.
         """
         interactive_map = new_map()
-        interactive_map.add_element("an element", name="obs")
+        interactive_map.add_layer("an element", name="obs")
         assert interactive_map.layer_ids == ["obs"], interactive_map.layer_ids
 
     def test_a_second_layer_asking_for_the_same_name_is_suffixed(self, new_map):
@@ -296,8 +296,8 @@ class TestIdsFollowTheLayer:
             first, which made the id a caller wrote down depend on what else was on the map.
         """
         interactive_map = new_map()
-        interactive_map.add_element("first", name="obs")
-        interactive_map.add_element("second", name="obs")
+        interactive_map.add_layer("first", name="obs")
+        interactive_map.add_layer("second", name="obs")
         assert interactive_map.layer_ids == ["obs", "obs-2"], interactive_map.layer_ids
 
     def test_an_unnamed_layer_is_counted_under_its_kind(self, new_map):
@@ -324,7 +324,7 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
             monkeypatch: Used to make the drawer decline.
 
         Test scenario:
-            `add_element` records the layer and its source, then asks the renderer to draw it. A drawer
+            `add_layer` records the layer and its source, then asks the renderer to draw it. A drawer
             that declines leaves `figure_spec` naming a layer the map cannot draw, and — worse — leaves
             the caller's data in the process-global object registry under that layer's id.
         """
@@ -356,11 +356,11 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
 
         interactive_map = new_map()
         monkeypatch.setattr(projection, "draw_graticule", lambda *args, **kwargs: None)
-        interactive_map.add_element(
+        interactive_map.add_layer(
             None, kind="graticule", name="grid", symbology=_GRATICULE
         )
         monkeypatch.undo()
-        interactive_map.add_element(
+        interactive_map.add_layer(
             None, kind="graticule", name="grid", symbology=_GRATICULE
         )
         assert interactive_map.layer_ids == ["grid"], interactive_map.layer_ids
@@ -426,7 +426,7 @@ class TestADrawerThatRaisesLeavesNothingBehind:
 
         Test scenario:
             `hexbin` reads its value column only in the drawer, so a name that matches nothing raises
-            there — after `add_element` had described the layer and registered its source. The layer
+            there — after `add_layer` had described the layer and registered its source. The layer
             stayed in `layer_ids` with no element drawn for it, and its data stayed registered (review H4).
         """
         interactive_map = new_map()
@@ -453,7 +453,7 @@ class TestADrawerThatRaisesLeavesNothingBehind:
         monkeypatch.setattr(raster, "draw_image", _off_limb)
         interactive_map = new_map(strict=True)
         with pytest.raises(OffLimbError):
-            interactive_map.image(dataset)
+            interactive_map.field(dataset)
         assert interactive_map.layer_ids == [], interactive_map.layer_ids
 
     def test_a_skipped_layer_does_not_move_the_layers_after_it(
@@ -475,7 +475,7 @@ class TestADrawerThatRaisesLeavesNothingBehind:
         from digitalearth.interactive import raster
 
         monkeypatch.setattr(raster, "draw_image", _off_limb)
-        interactive_map = new_map().image(dataset).coastlines().points(point_fc)
+        interactive_map = new_map().field(dataset).coastlines().points(point_fc)
         assert _composed_kinds(interactive_map) == ["points", "coastlines"], (
             _composed_kinds(interactive_map)
         )
@@ -496,7 +496,7 @@ class TestTheDrawingUsesTheRecordedValues:
             would pass every round-trip check — the props would be written and read back correctly and
             the picture would still be wrong. So the record is changed *after* the builder ran.
         """
-        interactive_map = new_map().image(dataset, cmap="magma")
+        interactive_map = new_map().field(dataset, cmap="magma")
         layer_id = interactive_map.layer_ids[0]
         figure = interactive_map.figure_spec
         layer = figure.layers.get(layer_id)
@@ -589,7 +589,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
             new_map: The map factory.
             dataset: A small raster.
         """
-        interactive_map = new_map().image(dataset).tiles("CartoLight")
+        interactive_map = new_map().field(dataset).tiles("CartoLight")
         figure = interactive_map.figure_spec
         basemap = next(
             figure.layers.get(layer_id)
@@ -611,7 +611,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
         import geoviews as gv
         import holoviews as hv
 
-        interactive_map = new_map().image(dataset).tiles("CartoLight")
+        interactive_map = new_map().field(dataset).tiles("CartoLight")
         types = [type(element) for element in interactive_map.layers]
         assert types.index(gv.element.WMTS) < types.index(hv.Image), types
 
@@ -627,7 +627,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
             `LayerTree` sorts by band by construction, so it passed with the elements appended in call order
             and the tiles drawn over the raster (review M13). It reads the drawing now.
         """
-        interactive_map = new_map().image(dataset).tiles("CartoLight")
+        interactive_map = new_map().field(dataset).tiles("CartoLight")
         assert _composed_kinds(interactive_map) == ["basemap", "raster"], (
             _composed_kinds(interactive_map)
         )
@@ -660,7 +660,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
         """
         import holoviews as hv
 
-        interactive_map = new_map().image(dataset)
+        interactive_map = new_map().field(dataset)
         interactive_map.features(land=True, ocean=True)
         types = [type(element) for element in interactive_map.layers]
         assert types.index(hv.Image) == len(types) - 1, types
@@ -680,7 +680,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
             over the raster, and inserting every underlay at the front — what the tier did before the tree —
             draws ocean beneath land, the reverse of the order the figure reports (review M13).
         """
-        interactive_map = new_map().image(dataset)
+        interactive_map = new_map().field(dataset)
         interactive_map.features(land=True, ocean=True)
         assert _composed_kinds(interactive_map) == ["land", "ocean", "raster"], (
             _composed_kinds(interactive_map)

@@ -802,7 +802,7 @@ class TestFreeLayerId:
         Test scenario:
             The mint kept the padding, so the two spellings were two ids — and the padded one was then
             registered as an object key that `DataRef` stripped straight back off, which is what made
-            `Map.scatter(features, name="roads ")` a `KeyError`. Comparing after the strip is what makes
+            `Map.points(features, name="roads ")` a `KeyError`. Comparing after the strip is what makes
             the two spellings collide instead.
         """
         assert free_layer_id("roads ", {"roads"}.__contains__) == "roads-2"

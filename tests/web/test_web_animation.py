@@ -311,7 +311,7 @@ class TestTheAnimationOrchestration:
         monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
         out = tmp_path / "series.gif"
         m = WebMap().basemap().timeslider(raster_stack)
-        m.animate(str(out))
+        m.save_animation(str(out))
 
         assert len(seen) == 3, f"expected one frame per step, rendered {len(seen)}"
         with Image.open(out) as animation:
@@ -334,7 +334,7 @@ class TestTheAnimationOrchestration:
         monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
         m = WebMap().basemap().timeslider(raster_stack)
         steps = list(m._temporal["layer_ids"])
-        m.animate(str(tmp_path / "series.gif"))
+        m.save_animation(str(tmp_path / "series.gif"))
 
         for index, record in enumerate(seen):
             visible = [layer for layer, shown in record["visibility"].items() if shown]
@@ -364,7 +364,7 @@ class TestTheAnimationOrchestration:
         out = tmp_path / "series.gif"
         m = WebMap().basemap().timeslider(raster_stack)
 
-        assert m.animate(str(out)) == pathlib.Path(out), (
+        assert m.save_animation(str(out)) == pathlib.Path(out), (
             "save/animate return the pathlib.Path written (C1)"
         )
         assert out.exists()
@@ -389,7 +389,7 @@ class TestTheAnimationOrchestration:
         seen = []
         monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
         m = WebMap().basemap().timeslider(raster_stack)
-        m.animate(str(tmp_path / "series.gif"), title="Rainfall")
+        m.save_animation(str(tmp_path / "series.gif"), title="Rainfall")
 
         assert {record["title"] for record in seen} == {"Rainfall"}, seen
 

@@ -1,15 +1,15 @@
-"""Tests for T2.2 — Map point/cell methods (scatter/grid_points/point_cloud/grid_cells)."""
+"""Tests for T2.2 — Map point/cell methods (points/grid_points/point_cloud/grid_cells)."""
 
 from digitalearth.static import Map
 
 
-def test_scatter_features(dataset):
-    """A FeatureCollection of points renders as a coloured scatter layer."""
+def test_point_features(dataset):
+    """A FeatureCollection of points renders as a coloured marker layer."""
     from pyramids.feature import FeatureCollection
 
     fc = FeatureCollection.read_file("tests/data/points.geojson")
     m = Map(crs=fc.epsg)
-    m.scatter(fc)
+    m.points(fc)
     assert len(m.layers) == 1
     assert len(m.ax.collections) >= 1
 

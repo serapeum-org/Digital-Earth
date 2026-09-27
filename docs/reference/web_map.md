@@ -12,7 +12,7 @@ from digitalearth.web import WebMap
     .choropleth(gdf, column="pop", name="Population")
     .legend(title="People per km²")
     .layer_control()
-    .title("Population, 2024", subtitle="Source: CBS")
+    .set_title("Population, 2024", subtitle="Source: CBS")
     .save("map.html")
 )
 ```
@@ -73,29 +73,29 @@ group; the layer switcher toggles only that main layer, because that is what py-
 step picker instead — the steps are labelled with the times you passed, because those labels become the layer
 ids. `save("out.gif")` writes the steps as an animation, which needs a headless browser (Playwright or
 Selenium); that is deliberately not part of `digitalearth[web]`. The method behind that suffix is
-`animate(path, fps=...)`; `to_gif` is a deprecated alias of it, kept for one release.
+`save_animation(path, fps=...)`.
 
-## Keywords that were renamed
+## How this tier spells a few things
 
-The web tier's marker size is `size=` (was `radius=` on `points`/`deck_scatter`, `point_size=` on
-`point_cloud`), its font size is `text_size=` (was `size=` on `labels`/`text`), and its frame rate is
-`fps=` (was `duration=`, which held a frame for that many *seconds* — the reciprocal). Every old
-spelling still works for one release and warns at your call; see
-[Renamed keywords](renamed-keywords.md) for the table across all four backends.
+Three keywords are worth naming, because the word alone does not say which of two sizes it means: a marker's
+visual size is `size=`, a label's font size is `text_size=`, and a frame rate is `fps=` — frames per second,
+not seconds per frame. `padding` on `set_bounds` is a number of **screen pixels** here, where the two 2-D
+tiers pad by a fraction of the frame's own span; a page is framed in pixels, so that is the only padding that
+means anything on it.
 
 ::: digitalearth.web.map.WebMap
     options:
       inherited_members: true
       members:
-        - fit_bounds
+        - set_bounds
         - layer_ids
         - layer_control
         - remove_layer
         - legend
-        - title
+        - set_title
         - text
         - labels
         - graticule
         - contours
         - rgb_composite
-        - animate
+        - save_animation

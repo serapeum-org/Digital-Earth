@@ -16,7 +16,7 @@ gv = pytest.importorskip("geoviews")
 @pytest.fixture
 def m(dataset) -> InteractiveMap:
     """A map carrying one raster layer (a tap/hover source)."""
-    return InteractiveMap().image(dataset)
+    return InteractiveMap().field(dataset)
 
 
 class TestHoverAndTap:
@@ -30,7 +30,7 @@ class TestHoverAndTap:
         )
 
     def test_hover_acts_on_the_layer_just_added(self, dataset):
-        """`coastlines().image(dem).hover()` configures the raster, which is drawn beneath the coastlines.
+        """`coastlines().field(dem).hover()` configures the raster, which is drawn beneath the coastlines.
 
         Args:
             dataset: A small raster.
@@ -39,7 +39,7 @@ class TestHoverAndTap:
             `hover()` read `self.layers[-1]`, and `layers` follows band order, so the tooltip went to the
             coastline overlay and the raster the caller had just added kept the default readout (review H5).
         """
-        interactive_map = InteractiveMap().coastlines().image(dataset)
+        interactive_map = InteractiveMap().coastlines().field(dataset)
         try:
             interactive_map.hover(tooltips=[("value", "@value")])
             image = next(e for e in interactive_map.layers if isinstance(e, hv.Image))
@@ -57,7 +57,7 @@ class TestHoverAndTap:
         """
         from holoviews import streams
 
-        interactive_map = InteractiveMap().coastlines().image(dataset)
+        interactive_map = InteractiveMap().coastlines().field(dataset)
         try:
             dmap = interactive_map.on_tap(lambda x, y: hv.Points([(x, y)]))
             tap = next(s for s in dmap.streams if isinstance(s, streams.Tap))

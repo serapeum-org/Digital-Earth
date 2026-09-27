@@ -219,6 +219,46 @@ class TestAddressingLayers:
         with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
             scene.remove_layer("nope")
 
+    def test_move_layer_refuses_an_unknown_id_the_way_get_layer_does(self, scene):
+        """Every layer-management call on this tier names the scene, not whichever structure noticed.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `move_layer` left the question to `LayerTree.move`, whose refusal names *the tree* — "no layer
+            'nope' in this tree; layers are [...]" — while `get_layer`, `set_visible`, `remove_layer` and
+            `replace_layer` all name *the scene*. Two spellings of one refusal, decided by which structure
+            happened to notice first; the static and interactive tiers settled the same third of this
+            (review R2-N6). The two messages come from different calls on different code paths, so comparing
+            them is a real assertion rather than a tautology — and it would still hold if the wording changed.
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(KeyError) as from_get:
+            scene.get_layer("nope")
+        with pytest.raises(KeyError) as from_move:
+            scene.move_layer("nope", 0)
+        assert str(from_move.value) == str(from_get.value), (
+            f"move_layer said {from_move.value} where get_layer said {from_get.value}"
+        )
+
+    def test_the_unknown_id_refusal_names_the_scene_rather_than_the_tree(self, scene):
+        """Built the other way round: the shared wording has to be the facade's, not `LayerTree`'s.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Comparing the two messages alone would also pass if both came from the tree. This pins which of
+            the two voices they agree in.
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(KeyError) as refused:
+            scene.move_layer("nope", 0)
+        assert "in this scene" in str(refused.value), (
+            f"move_layer refused in the tree's words: {refused.value}"
+        )
+
     def test_a_layer_is_hidden_and_shown_by_id(self, scene):
         """Visibility is recorded on the layer and applied to its actor."""
         scene.terrain(get_source(_dem()))
@@ -670,24 +710,50 @@ class TestTheRemainingArms:
             float(np.nanmax(high.z.values)),
         ], drawn
 
-    def test_a_removed_layer_lets_its_object_go(self, scene):
-        """The web tier forgets a removed layer's object; this tier registered and never did.
+    def test_a_removed_layer_keeps_its_object_registered(self, scene):
+        """A figure captured before the removal still names the object, so the removal may not forget it.
 
         Args:
             scene: The scene under test.
 
         Test scenario:
-            `forget_object` was added as the counterpart to `register_object` and wired into the web tier
-            only — here it was imported and unused, so every layer of every scene left a strong reference
-            behind for the life of the process (review M1).
+            The other three tiers settled this in round 1 and say so at their own `remove_layer`: the
+            reference leaves *this* scene's figure and the object stays in the registry, because a
+            `FigureSpec` captured earlier still names it and forgetting made every such figure dangle. This
+            tier forgot, citing the web tier as its precedent while the web tier's comment says the opposite
+            (review R2-M12). Redrawing the captured figure is what tells the two policies apart.
+        """
+        scene.terrain(get_source(_dem()))
+        captured = scene.figure_spec
+        scene.remove_layer(scene.layer_ids[0])
+        again = Scene3D.from_figure(captured, off_screen=True)
+        drawn = again.layer_ids
+        again.close()
+        assert drawn == ["terrain-1"], (
+            f"a figure captured before the removal redrew {drawn}, so the object was forgotten with the layer"
+        )
+
+    def test_closing_the_scene_is_what_lets_the_object_go(self, scene):
+        """The leak the forgetting was added for is answered by `close`, which is the caller saying they are done.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Keeping the object on removal is only defensible because something else lets it go: `close()`
+            calls `forget_namespace` on the scene's own namespace, so a session that builds scenes does not
+            hold every dataset they drew for the life of the process. Read off the registry, not off the
+            scene, since a process-global table is what the leak was about.
         """
         from digitalearth.base.registry import _OBJECTS
 
         before = len(_OBJECTS)
         scene.terrain(get_source(_dem()))
         scene.remove_layer(scene.layer_ids[0])
-        assert len(_OBJECTS) == before, (
-            f"the removed layer left {len(_OBJECTS) - before} entries behind"
+        held = len(_OBJECTS) - before
+        scene.close()
+        assert (held, len(_OBJECTS) - before) == (1, 0), (
+            f"the removal held {held} entries and closing left {len(_OBJECTS) - before}"
         )
 
     def test_a_second_scene_leaves_the_first_scene_s_sources_alone(self, scene):
@@ -1089,6 +1155,100 @@ class TestTheContractNames:
         with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
             scene.replace_layer(absent)
 
+    @pytest.mark.parametrize(
+        ("given", "described"),
+        [("terrain-1", "str"), (None, "NoneType"), (object(), "object")],
+        ids=["the-id-by-mistake", "none", "a-plain-object"],
+    )
+    def test_a_replacement_that_is_not_a_layer_spec_is_refused_by_type(
+        self, scene, given, described
+    ):
+        """Four tiers gave four exception classes for one bad argument; this is the fourth.
+
+        Args:
+            scene: The scene under test.
+            given: The argument standing in for a description.
+            described: The type name the refusal has to quote back.
+
+        Test scenario:
+            `layer.id` was read straight off the argument, so anything that is not a description died as
+            `AttributeError: 'str' object has no attribute 'id'` — Python's words about this tier's
+            internals, naming neither the method nor what was expected. The static and web tiers settled the
+            shape; this matches it (review R2-M9).
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(ValueError) as refused:
+            scene.replace_layer(given)
+        message = str(refused.value)
+        assert described in message, (
+            f"the refusal must name the type it was handed, got: {message}"
+        )
+
+    def test_the_replacement_refusal_names_the_method_and_what_it_wanted(self, scene):
+        """A caller who passed the id where the description belongs has to be told which is which.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        with pytest.raises(ValueError) as refused:
+            scene.replace_layer("terrain-1")
+        message = str(refused.value)
+        missing = [
+            wanted
+            for wanted in ("Scene3D.replace_layer", "LayerSpec")
+            if wanted not in message
+        ]
+        assert missing == [], f"the refusal left out {missing}: {message}"
+
+    def test_an_object_that_merely_looks_like_a_layer_is_refused_too(self, scene):
+        """The shape a duck-typed check lets through: `.id` and `.kind` and nothing else.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            An object carrying only those two got past the id lookup *and* the capability gate and died at
+            `layer.source_id` — `AttributeError: 'DuckLayer' object has no attribute 'source_id'`, three
+            checks deep, having already been accepted twice. Checking the type refuses it at the door. The
+            web tier found this fifth shape, which the review's four did not cover.
+        """
+
+        class DuckLayer:
+            """Carries the two attributes the old checks read, and nothing else."""
+
+            id = "terrain-1"
+            kind = "terrain"
+
+        scene.terrain(get_source(_dem()))
+        # Built above the block, so `replace_layer` is the only call inside it that can raise (S5778).
+        duck = DuckLayer()
+        with pytest.raises(ValueError) as refused:
+            scene.replace_layer(duck)
+        assert "DuckLayer" in str(refused.value), (
+            f"the refusal must name the type it was handed, got: {refused.value}"
+        )
+
+    def test_a_real_layer_spec_is_still_accepted(self, scene):
+        """The type check may not refuse the argument the method exists for.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Without this the three refusals above would all pass for a method that refused everything.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Symbology
+
+        scene.terrain(get_source(_dem()))
+        held = scene.get_layer("terrain-1")
+        scene.replace_layer(replace(held, symbology=Symbology(props={"cmap": "magma"})))
+        assert scene.get_layer("terrain-1").symbology.props["cmap"] == "magma", (
+            "a real LayerSpec must still replace the layer it names"
+        )
+
     def test_render_hands_back_the_plotter(self, scene):
         """Every tier's `render` returns its own engine object; here that is the plotter.
 
@@ -1099,19 +1259,20 @@ class TestTheContractNames:
         assert scene.render() is scene.plotter, "render must hand back the plotter"
 
     def test_the_callback_loop_is_recorded_under_its_own_name(self, scene, tmp_path):
-        """`record` writes the frames; `animate` still forwards, warning once (#299).
+        """`record` writes the frames, and is the only name the loop answers to (#299).
 
         Args:
             scene: The scene under test.
             tmp_path: Where the GIF is written.
-        """
-        import warnings
 
+        Test scenario:
+            `animate` means a matplotlib ``FuncAnimation`` on the static tier and a written file on web, so
+            this tier's callback loop took a name of its own. What the tier must not do is answer to both.
+        """
         scene.terrain(get_source(_dem()))
         out = tmp_path / "grow.gif"
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            scene.animate([1.0], str(out), lambda s, frame: None)
-        messages = [str(record.message) for record in caught]
-        assert any("use Scene3D.record()" in message for message in messages), messages
-        assert out.stat().st_size > 0, "the alias must still write the file"
+        scene.record([1.0], str(out), lambda s, frame: None)
+        assert out.stat().st_size > 0, "record() must write the file"
+        assert not hasattr(scene, "animate"), (
+            "the loop must answer to record() alone, not to a second spelling"
+        )
