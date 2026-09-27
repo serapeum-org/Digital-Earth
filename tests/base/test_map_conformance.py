@@ -1212,9 +1212,12 @@ class MapConformanceBase:
             The probe that was missing while the name was declared (review H2). The static tier read the
             sequence as matplotlib's ``[xmin, xmax, ymin, ymax]`` and the other two as bbox
             ``(west, south, east, north)``, so `set_bounds([0, 10, 0, 50])` framed x 0→10 / y 0→50 on one
-            tier and x 0→0 — a degenerate frame, accepted in silence — on the next. `CORE` declares the
+            tier and x 0→0 — a degenerate frame, accepted in silence — on the next. `CORE` declared the
             method's *keyword set* and nothing about the first positional parameter, so no name test could
-            see it, and this module made no framing call at all.
+            see it, and this module made no framing call at all. It declares the call shape now
+            (`Method.first_argument` and `Method.sequence_order`, #344), so the spelling and the ordering are
+            held by the declaration; these probes stay because they read what the **engine** framed, which a
+            name test cannot.
 
             Read out of the engine rather than off the map's own record of the call: `_frame_bounds` and
             `_fit` would have agreed with the caller on every tier while the figure disagreed, which is the
