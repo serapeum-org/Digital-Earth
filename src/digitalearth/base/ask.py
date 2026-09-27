@@ -28,7 +28,17 @@ Nothing here knows a renderer, and nothing here is a style vocabulary — the ch
 tier's own mapping, and the vocabulary is :mod:`digitalearth.base.spec.style`.
 """
 
-from typing import Any, FrozenSet, List, Mapping, TypeAlias, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Mapping,
+    TypeAlias,
+    TypeVar,
+    Union,
+)
 
 __all__ = [
     "ASKED_PROP",
@@ -36,6 +46,7 @@ __all__ = [
     "Ask",
     "Maybe",
     "Unset",
+    "asked_record",
     "asked_style",
 ]
 
@@ -198,6 +209,64 @@ class Ask:
                 ```
         """
         return sorted(set(self._named))
+
+    @property
+    def record(self) -> Dict[str, List[str]]:
+        """The `Symbology.props` entry this call contributes.
+
+        Returns:
+            What :func:`asked_record` returns for :attr:`named` — a one-key mapping, or an empty one when
+            the caller styled nothing. Spread into the props a builder writes (``**ask.record``) so the
+            record is one token at every call site rather than a conditional each builder spells its own
+            way.
+
+        Examples:
+            - A styled call carries the record; an unstyled one carries no key at all:
+                ```python
+                >>> from digitalearth.base.ask import Ask, UNSET
+                >>> styled = Ask()
+                >>> _ = styled("opacity", 0.5, 1.0)
+                >>> styled.record
+                {'asked': ['opacity']}
+                >>> bare = Ask()
+                >>> _ = bare("opacity", UNSET, 1.0)
+                >>> bare.record
+                {}
+
+                ```
+        """
+        return asked_record(self._named)
+
+
+def asked_record(asked: Iterable[str]) -> Dict[str, List[str]]:
+    """Return the `Symbology.props` entry that records these asks, or nothing when there are none.
+
+    The write side of :data:`ASKED_PROP`, so a builder that resolves its style somewhere other than where it
+    describes it — a paint dict built in one method and recorded by another — records it the same way as one
+    that does both in a line.
+
+    Args:
+        asked: The keys the caller named, in the tier's own spelling. Sorted and deduplicated here, so the
+            record does not depend on the order a builder happened to resolve its keywords in.
+
+    Returns:
+        ``{ASKED_PROP: [...]}`` when anything was asked for, else ``{}`` — **not** an empty list. A layer
+        nobody styled therefore records no key at all, which keeps an unstyled description exactly what it
+        was before the record existed.
+
+    Examples:
+        - Nothing asked for records nothing, so an unstyled layer's description is unchanged:
+            ```python
+            >>> from digitalearth.base.ask import asked_record
+            >>> asked_record(())
+            {}
+            >>> asked_record(["line-width", "line-color", "line-width"])
+            {'asked': ['line-color', 'line-width']}
+
+            ```
+    """
+    named = sorted(set(asked))
+    return {ASKED_PROP: named} if named else {}
 
 
 def asked_style(props: Mapping[str, Any]) -> FrozenSet[str]:

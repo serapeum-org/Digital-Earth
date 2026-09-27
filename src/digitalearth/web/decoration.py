@@ -19,6 +19,7 @@ import html
 import re
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
+from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.basemaps import (
     DEFAULT_BASEMAP_PROVIDER,
     KEYED_BASEMAP_NAMES,
@@ -196,6 +197,11 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
 #: Degrees between graticule lines when a caller names neither step — the interactive tier's own default, so
 #: one `graticule()` call draws the same grid on both (#263).
 _DEFAULT_GRID_STEP: float = 30.0
+
+#: What an unstyled basemap and an unstyled graticule are drawn at. The values left the signatures with #334;
+#: these are where they live now, cited by name from the docstrings that used to show them.
+BASEMAP_OPACITY = 1.0
+GRATICULE_OPACITY = 0.6
 
 
 def _graticule_features(lon_step: float, lat_step: float) -> dict:
@@ -504,7 +510,7 @@ class DecorationMixin(_MixinBase):
         *,
         attribution: str = "",
         tile_size: int = 256,
-        opacity: float = 1.0,
+        opacity: Maybe[float] = UNSET,
         max_zoom: Optional[int] = None,
         bounds: Optional[Any] = None,
         name: Optional[str] = None,
@@ -515,7 +521,7 @@ class DecorationMixin(_MixinBase):
             url: An XYZ tile URL template containing ``{z}/{x}/{y}`` (already Web-Mercator tiles).
             attribution: Attribution text shown in the map's attribution control.
             tile_size: Tile edge length in pixels (256 for standard XYZ; 512 for some retina services).
-            opacity: Raster opacity in ``[0, 1]``.
+            opacity: Raster opacity in ``[0, 1]``; not passed leaves :data:`BASEMAP_OPACITY`.
             max_zoom: The deepest zoom the service serves. Past it MapLibre over-zooms the last real
                 tiles instead of requesting levels that do not exist; ``None`` leaves the source
                 unbounded.
@@ -583,6 +589,7 @@ class DecorationMixin(_MixinBase):
                 bottom of the stack.
         """
         _require_layer_api()
+        ask = Ask()
         source: dict = {
             "type": "raster",
             "tiles": [url],
@@ -608,7 +615,13 @@ class DecorationMixin(_MixinBase):
             layer_id,
             name,
             kind="basemap",
-            symbology=Symbology(props={"source": source, "opacity": float(opacity)}),
+            symbology=Symbology(
+                props={
+                    "source": source,
+                    "opacity": float(ask("opacity", opacity, BASEMAP_OPACITY)),
+                    **ask.record,
+                }
+            ),
         )
         return self
 
@@ -616,7 +629,7 @@ class DecorationMixin(_MixinBase):
         self,
         provider: str = DEFAULT_BASEMAP_PROVIDER,
         *,
-        opacity: float = 1.0,
+        opacity: Maybe[float] = UNSET,
         api_key: Optional[str] = None,
         preset: Optional[dict] = None,
         name: Optional[str] = None,
@@ -637,7 +650,8 @@ class DecorationMixin(_MixinBase):
                 :mod:`digitalearth.base.basemaps`), whose credential is read from the environment.
                 Defaults to ``digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER``, the one constant the
                 interactive tier reads too, so an unqualified basemap looks the same on both.
-            opacity: Basemap opacity in ``[0, 1]``.
+            opacity: Basemap opacity in ``[0, 1]``; not passed leaves :data:`BASEMAP_OPACITY`, and is
+                forwarded to :meth:`tiles` as the sentinel so the ask is recorded once, there.
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
                 ``mosaic``). A dict rather than loose keywords so that all three tiers take a preset the
@@ -1044,7 +1058,7 @@ class DecorationMixin(_MixinBase):
         spacing: Optional[float] = None,
         color: str = "#888888",
         width: float = 0.5,
-        opacity: float = 0.6,
+        opacity: Maybe[float] = UNSET,
         labels: bool = True,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1107,7 +1121,8 @@ class DecorationMixin(_MixinBase):
         lon_step = as_finite(lon_step, "lon_step", call)
         lat_step = as_finite(lat_step, "lat_step", call)
         width = as_finite(width, "width", call)
-        opacity = as_finite(opacity, "opacity", call)
+        ask = Ask()
+        opacity = as_finite(ask("opacity", opacity, GRATICULE_OPACITY), "opacity", call)
         for name_of, step in (("lon_step", lon_step), ("lat_step", lat_step)):
             if step <= 0 or step > 180:
                 # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,
@@ -1138,6 +1153,7 @@ class DecorationMixin(_MixinBase):
                     "width": float(width),
                     "opacity": float(opacity),
                     "labels": bool(labels),
+                    **ask.record,
                 }
             ),
         )

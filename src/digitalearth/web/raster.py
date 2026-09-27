@@ -48,6 +48,7 @@ from typing import (
     Tuple,
 )
 
+from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.spec import DEFAULT_BAND, Bounds, LayerSpec, Scale, Symbology
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
 from digitalearth.web.base import _require_layer_api, as_finite
@@ -75,6 +76,11 @@ _MERCATOR_LIMIT = 85.05112878
 #: coloured on the *same* limits or neighbours disagree across their shared edge. They are measured from a
 #: decimated read — reading the band whole to measure it is the cost the route exists to avoid.
 _LIMIT_SCAN_BUDGET = 250_000
+
+#: What an unstyled raster layer is drawn at. The value left the signatures with #334 — a style keyword's
+#: default is now :data:`~digitalearth.base.ask.UNSET`, so a builder can tell an ask from its own default —
+#: and this is where it lives instead, cited by name from the docstrings that used to show it.
+RASTER_OPACITY = 1.0
 
 #: How the single-band builder names itself in a refusal. The colour-limit check, the opacity check, the
 #: route check and the tiled writer all speak for the same public call, so they share the one spelling —
@@ -1241,7 +1247,7 @@ class RasterMixin(_MixinBase):
         band: int = DEFAULT_BAND,
         cmap: Any = None,
         units: Optional[str] = None,
-        opacity: float = 1.0,
+        opacity: Maybe[float] = UNSET,
         limits: Optional[Sequence[float]] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
@@ -1367,7 +1373,10 @@ class RasterMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
         """
         vmin, vmax = _colour_limits(limits, vmin, vmax, caller=_FIELD_CALLER)
-        opacity = as_finite(opacity, "opacity", _FIELD_CALLER)
+        ask = Ask()
+        opacity = as_finite(
+            ask("opacity", opacity, RASTER_OPACITY), "opacity", _FIELD_CALLER
+        )
         route = _tile_route(tiles, _FIELD_CALLER)
         _require_layer_api()
         if route is not None:
@@ -1378,6 +1387,7 @@ class RasterMixin(_MixinBase):
                 cmap=cmap,
                 units=units,
                 opacity=opacity,
+                asked=ask.named,
                 vmin=vmin,
                 vmax=vmax,
                 visible=visible,
@@ -1417,6 +1427,7 @@ class RasterMixin(_MixinBase):
                     "vmax": vmax,
                     "opacity": float(opacity),
                     "band": band,
+                    **ask.record,
                 }
             ),
         ):
@@ -1438,6 +1449,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str],
         tiles_path: Any,
         zooms: Any,
+        asked: Sequence[str] = (),
     ) -> Self:
         """Write one band's pixels beside the page and describe the layer that reads them (#189).
 
@@ -1459,6 +1471,9 @@ class RasterMixin(_MixinBase):
             name: The caller's name for the layer, or ``None`` to generate one.
             tiles_path: Where to write.
             zooms: The pyramid's zoom range, or ``None`` to derive it.
+            asked: The style keys the public builder recorded the caller as having named. Threaded rather
+                than derived, because the sentinel is seen at that call and this route is reached with the
+                keyword already resolved.
 
         Returns:
             The map, so builder calls chain.
@@ -1500,6 +1515,7 @@ class RasterMixin(_MixinBase):
             "vmax": high,
             "opacity": float(opacity),
             "band": band,
+            **asked_record(asked),
         }
         props.update(
             _tiled_reference(
@@ -1538,7 +1554,7 @@ class RasterMixin(_MixinBase):
         *,
         mask_nodata: bool = True,
         limits: Optional[Any] = None,
-        opacity: float = 1.0,
+        opacity: Maybe[float] = UNSET,
         visible: bool = True,
         name: Optional[str] = None,
         tiles: Optional[str] = None,
@@ -1626,7 +1642,7 @@ class RasterMixin(_MixinBase):
         *,
         mask_nodata: bool = True,
         limits: Optional[Any] = None,
-        opacity: float = 1.0,
+        opacity: Maybe[float] = UNSET,
         visible: bool = True,
         name: Optional[str] = None,
         tiles: Optional[str] = None,
@@ -1721,7 +1737,7 @@ class RasterMixin(_MixinBase):
         *,
         mask_nodata: bool,
         limits: Optional[Any],
-        opacity: float,
+        opacity: Maybe[float],
         visible: bool,
         name: Optional[str],
         tiles: Optional[str] = None,
@@ -1743,7 +1759,9 @@ class RasterMixin(_MixinBase):
             bands: The three 1-based band numbers, in the order the recipe reads them.
             mask_nodata: Whether NoData becomes NaN (and so transparent).
             limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
-            opacity: Raster layer opacity in ``[0, 1]``.
+            opacity: Raster layer opacity in ``[0, 1]``, or :data:`~digitalearth.base.ask.UNSET` for
+                :data:`RASTER_OPACITY`. Both composites hand their keyword straight over, so the ask is
+                resolved and recorded once here rather than twice above.
             visible: Whether the layer starts visible.
             name: The caller's name for the layer; ``None`` generates one under the recipe's own prefix.
             tiles: The route the pixels reach the page by — see :meth:`field`. Both composites answer to it,
@@ -1754,7 +1772,10 @@ class RasterMixin(_MixinBase):
         Returns:
             The map, so builder calls chain.
         """
-        opacity = as_finite(opacity, "opacity", f"WebMap.{via}()")
+        ask = Ask()
+        opacity = as_finite(
+            ask("opacity", opacity, RASTER_OPACITY), "opacity", f"WebMap.{via}()"
+        )
         route = _tile_route(tiles, f"WebMap.{via}()")
         _require_layer_api()
         require_three_bands(via, bands)
@@ -1767,6 +1788,7 @@ class RasterMixin(_MixinBase):
                 mask_nodata=mask_nodata,
                 limits=limits,
                 opacity=opacity,
+                asked=ask.named,
                 visible=visible,
                 name=name,
                 tiles_path=tiles_path,
@@ -1802,6 +1824,7 @@ class RasterMixin(_MixinBase):
                     "limits": _recorded_limits(limits),
                     "opacity": float(opacity),
                     "mask_nodata": bool(mask_nodata),
+                    **ask.record,
                 }
             ),
         ):
@@ -1822,6 +1845,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str],
         tiles_path: Any,
         zooms: Any,
+        asked: Sequence[str] = (),
     ) -> Self:
         """Write a composite's pixels beside the page and describe the layer that reads them (#189).
 
@@ -1844,6 +1868,9 @@ class RasterMixin(_MixinBase):
             name: The caller's name for the layer, or ``None`` to generate one.
             tiles_path: Where to write.
             zooms: The pyramid's zoom range, or ``None`` to derive it.
+            asked: The style keys the public builder recorded the caller as having named. Threaded rather
+                than derived, because the sentinel is seen at that call and this route is reached with the
+                keyword already resolved.
 
         Returns:
             The map, so builder calls chain.
@@ -1883,6 +1910,7 @@ class RasterMixin(_MixinBase):
             "limits": _recorded_limits(frozen),
             "opacity": float(opacity),
             "mask_nodata": bool(mask_nodata),
+            **asked_record(asked),
         }
         props.update(
             _tiled_reference(

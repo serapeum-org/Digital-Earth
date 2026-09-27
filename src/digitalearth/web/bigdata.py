@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from loguru import logger
 
+from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.spec import LayerSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
@@ -33,6 +34,10 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: deck.gl's JSON layer protocol names the layer class under this key. The ``@@`` prefix is the
 #: converter's marker for "interpret this value, do not pass it through", so it is protocol rather
 #: than a label — worth naming once so a typo cannot silently produce a layer deck.gl ignores.
+#: What an unstyled heatmap is drawn at. The value left the signature with #334; this is where it lives
+#: now, cited by name from the docstring that used to show it.
+HEATMAP_OPACITY = 0.8
+
 DECK_TYPE_KEY = "@@type"
 
 
@@ -188,7 +193,7 @@ class BigDataMixin(_MixinBase):
         weight: Optional[str] = None,
         radius: float = 30.0,
         intensity: float = 1.0,
-        opacity: float = 0.8,
+        opacity: Maybe[float] = UNSET,
     ) -> Self:
         """Render a point ``FeatureCollection`` as a MapLibre heatmap (recipe W4).
 
@@ -221,10 +226,13 @@ class BigDataMixin(_MixinBase):
         import numpy as np
 
         _require_layer_api()
+        ask = Ask()
         paint: dict = {
             "heatmap-radius": as_finite(radius, "radius", call),
             "heatmap-intensity": as_finite(intensity, "intensity", call),
-            "heatmap-opacity": as_finite(opacity, "opacity", call),
+            "heatmap-opacity": as_finite(
+                ask("heatmap-opacity", opacity, HEATMAP_OPACITY), "opacity", call
+            ),
         }
         gdf = self._display_gdf(features, method="heatmap")
         self._require_points(gdf, "heatmap")
@@ -252,7 +260,7 @@ class BigDataMixin(_MixinBase):
             # handed to the first draw so nothing is warped twice (review H1).
             source=features,
             placed=gdf,
-            symbology=Symbology(props={"paint": dict(paint)}),
+            symbology=Symbology(props={"paint": dict(paint), **ask.record}),
         )
         self._last_layer_id = layer_id
         return self

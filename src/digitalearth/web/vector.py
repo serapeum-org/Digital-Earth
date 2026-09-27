@@ -15,10 +15,11 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Union
 
 from loguru import logger
 
+from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, LegendSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
@@ -143,9 +144,26 @@ def _as_interval(
 
 
 #: Flat colour a vector layer falls back on when the caller pins neither `color=` nor a value column.
-#: The builders repeat it as a parameter default so it shows in a rendered signature; this is the name
-#: the internals use when they have to supply it themselves.
-CONTOUR_COLOR = "#3388ff"
+#: It used to be repeated as a parameter default as well, so that it showed in a rendered signature; a style
+#: keyword's default is now :data:`~digitalearth.base.ask.UNSET`, so the builder can tell an ask from its own
+#: default (#334), and this is the one place the value itself lives.
+VECTOR_COLOR = "#3388ff"
+
+#: What an unstyled layer is drawn at, one name per builder and channel.
+#:
+#: These are the values that used to sit in the signatures. They moved here rather than disappearing, because
+#: a signature reading ``size: Maybe[float] = UNSET`` no longer shows the number and the number is still this
+#: tier's answer: each builder's docstring cites the constant by name, and a default and the value something
+#: else claims for it can no longer drift, because there is no second copy left to drift from.
+POINT_SIZE = 5.0
+POINT_OPACITY = 0.9
+LINE_WIDTH = 2.0
+LINE_OPACITY = 1.0
+CONTOUR_WIDTH = 1.5
+CONTOUR_OPACITY = 1.0
+FILL_OPACITY = 0.6
+CHOROPLETH_OPACITY = 0.85
+LABEL_COLOR = "#ffffff"
 
 #: Outline of a filled contour band — `polygons()`'s own default outline, which is what filled contours were
 #: drawn with while they were drawn through it.
@@ -457,7 +475,7 @@ class VectorMixin(_MixinBase):
         column: str,
         *,
         text_size: float = 12.0,
-        color: str = "#ffffff",
+        color: Maybe[str] = UNSET,
         halo_color: str = "#000000",
         halo_width: float = 1.0,
         offset: Optional[Any] = None,
@@ -481,7 +499,7 @@ class VectorMixin(_MixinBase):
             column: The property to read the text from.
             text_size: Text size in pixels. Named for the text rather than ``size``, which means the
                 visual size of a marker everywhere else.
-            color: Text colour.
+            color: Text colour; not passed leaves :data:`LABEL_COLOR`.
             halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
                 over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
@@ -517,6 +535,7 @@ class VectorMixin(_MixinBase):
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.labels()"
         _, layer_types = _require_layer_api()
+        ask = Ask()
         text_size = as_finite(text_size, "text_size", call)
         halo_width = as_finite(halo_width, "halo_width", call)
         gdf = self._display_gdf(features, method="labels")
@@ -533,7 +552,7 @@ class VectorMixin(_MixinBase):
         if offset is not None:
             layout["text-offset"] = [float(value) for value in offset]
         paint = {
-            "text-color": color,
+            "text-color": ask("text-color", color, LABEL_COLOR),
             "text-halo-color": halo_color,
             "text-halo-width": float(halo_width),
         }
@@ -547,6 +566,7 @@ class VectorMixin(_MixinBase):
             visible=visible,
             layout=layout,
             source=features,
+            asked=ask.named,
         )
 
     def _contour_levels(
@@ -594,6 +614,7 @@ class VectorMixin(_MixinBase):
         opacity: float,
         name: Optional[str],
         visible: bool,
+        asked: Sequence[str] = (),
     ) -> None:
         """Describe the traced features as one contour layer: the levels as lines, or the bands between as fills.
 
@@ -614,6 +635,9 @@ class VectorMixin(_MixinBase):
             opacity: Layer opacity in `[0, 1]`.
             name: What a layer switcher calls the layer.
             visible: Whether the layer starts visible.
+            asked: The paint keys :meth:`contours` recorded the caller as having named, in MapLibre's own
+                spelling. Threaded rather than derived here, because `contours` is where the keyword was
+                seen and only the caller's own call can say whether it was passed.
 
         Raises:
             KeyError: naming ``column`` when the traced features carry no such attribute (see
@@ -627,7 +651,7 @@ class VectorMixin(_MixinBase):
         # The level colours each contour along a continuous ramp, as `lines`/`polygons` do with no scheme;
         # a caller's `color=` pins every contour to one colour instead.
         colour = (
-            color or CONTOUR_COLOR
+            color or VECTOR_COLOR
             if column is None
             else self._ramp_color_expr(self._require_column(gdf, column), column, cmap)
         )
@@ -638,7 +662,14 @@ class VectorMixin(_MixinBase):
             paint = self._line_paint(width, opacity, colour)
             prefix, layer_type, kind = "line", layer_types.LINE, "contours"
         self._vector_layer(
-            gdf, prefix, layer_type, paint, kind=kind, name=name, visible=visible
+            gdf,
+            prefix,
+            layer_type,
+            paint,
+            kind=kind,
+            name=name,
+            visible=visible,
+            asked=asked,
         )
 
     @staticmethod
@@ -688,8 +719,8 @@ class VectorMixin(_MixinBase):
         cmap: Optional[str] = None,
         units: Optional[str] = None,
         color: Optional[str] = None,
-        width: float = 1.5,
-        opacity: float = 1.0,
+        width: Maybe[float] = UNSET,
+        opacity: Maybe[float] = UNSET,
         labels: bool = False,
         name: Optional[str] = None,
         visible: bool = True,
@@ -764,8 +795,23 @@ class VectorMixin(_MixinBase):
             digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
         spacing = _as_interval(interval)
-        width = as_finite(width, "width", "WebMap.contours()")
-        opacity = as_finite(opacity, "opacity", "WebMap.contours()")
+        ask = Ask()
+        # Which key the opacity lands on is what `filled` decides, so the record is built here rather than
+        # in the sub-builder. `width=` is recorded under the line key either way: a filled band has no line,
+        # so a `width=` passed to one is an ask this layer cannot express, and the lift drops a recorded key
+        # the paint holds no value under rather than inventing one for it.
+        width = as_finite(
+            ask("line-width", width, CONTOUR_WIDTH), "width", "WebMap.contours()"
+        )
+        opacity = as_finite(
+            ask("fill-opacity" if filled else "line-opacity", opacity, CONTOUR_OPACITY),
+            "opacity",
+            "WebMap.contours()",
+        )
+        if color is not None:
+            # `color=None` already spells "not passed" on this builder, so a colour here is the caller's
+            # whichever it is — an unstyled trace is coloured by level, as an expression.
+            ask.always("fill-color" if filled else "line-color")
         data = self._display_raster_or_skip(dataset, layer="contours")
         if data is None:
             return self
@@ -807,6 +853,7 @@ class VectorMixin(_MixinBase):
             opacity=opacity,
             name=name,
             visible=visible,
+            asked=ask.named,
         )
         # The units describe *this* layer's values, so they are written on *this* layer's key — looked up
         # by the id the sub-builder just drew under, not on `last_legend`. `last_legend` answers "the most
@@ -836,6 +883,7 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         layout: Optional[dict] = None,
         source: Any = None,
+        asked: Sequence[str] = (),
     ) -> Self:
         """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
 
@@ -860,6 +908,10 @@ class VectorMixin(_MixinBase):
                 the only reference that survives leaving the process. `features` is what the first draw is
                 handed, so nothing is warped twice; `None` records `features` itself, which a builder that
                 derived its geometry (`contours` traces its own) has nothing better than (review H1).
+            asked: The paint keys this layer's caller actually named, in MapLibre's own spelling. Recorded
+                on the symbology so the lift can publish the caller's ask instead of reconstructing it from
+                the resolved paint, which cannot tell an ask from a default (#334). Empty — the default —
+                records no key at all, so an unstyled layer's description is exactly what it was.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -887,6 +939,7 @@ class VectorMixin(_MixinBase):
                     "maplibre_type": getattr(layer_type, "value", layer_type),
                     "paint": dict(paint),
                     "layout": dict(layout) if layout else {},
+                    **asked_record(asked),
                 }
             ),
         )
@@ -920,9 +973,9 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        size: float = 5.0,
-        color: str = "#3388ff",
-        opacity: float = 0.9,
+        size: Maybe[float] = UNSET,
+        color: Maybe[str] = UNSET,
+        opacity: Maybe[float] = UNSET,
         big: Optional[bool] = None,
         big_data_threshold: Optional[int] = None,
         name: Optional[str] = None,
@@ -943,9 +996,11 @@ class VectorMixin(_MixinBase):
                 ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
-            size: Circle radius in pixels. The same ``size`` that means marker size on every tier.
-            color: Fixed circle colour used when ``column`` is ``None``.
-            opacity: Circle fill opacity in ``[0, 1]``.
+            size: Circle radius in pixels. The same ``size`` that means marker size on every tier; not
+                passed leaves :data:`POINT_SIZE`.
+            color: Fixed circle colour used when ``column`` is ``None``; not passed leaves
+                :data:`VECTOR_COLOR`.
+            opacity: Circle fill opacity in ``[0, 1]``; not passed leaves :data:`POINT_OPACITY`.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
             big_data_threshold: Feature count above which this one call auto-routes to deck.gl. ``None``
@@ -1017,8 +1072,11 @@ class VectorMixin(_MixinBase):
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.points()"
         _, layer_types = _require_layer_api()
-        size = as_finite(size, "size", call)
-        opacity = as_finite(opacity, "opacity", call)
+        ask = Ask()
+        size = as_finite(ask("circle-radius", size, POINT_SIZE), "size", call)
+        opacity = as_finite(
+            ask("circle-opacity", opacity, POINT_OPACITY), "opacity", call
+        )
         gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).
@@ -1050,7 +1108,7 @@ class VectorMixin(_MixinBase):
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
         else:
-            paint["circle-color"] = color
+            paint["circle-color"] = ask("circle-color", color, VECTOR_COLOR)
         return self._vector_layer(
             gdf,
             "circle",
@@ -1060,6 +1118,7 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
             source=features,
+            asked=ask.named,
         )
 
     def lines(
@@ -1070,9 +1129,9 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        width: float = 2.0,
-        color: str = "#3388ff",
-        opacity: float = 1.0,
+        width: Maybe[float] = UNSET,
+        color: Maybe[str] = UNSET,
+        opacity: Maybe[float] = UNSET,
         name: Optional[str] = None,
         visible: bool = True,
     ) -> Self:
@@ -1144,11 +1203,16 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
         """
         _, layer_types = _require_layer_api()
-        width = as_finite(width, "width", "WebMap.lines()")
-        opacity = as_finite(opacity, "opacity", "WebMap.lines()")
+        ask = Ask()
+        width = as_finite(
+            ask("line-width", width, LINE_WIDTH), "width", "WebMap.lines()"
+        )
+        opacity = as_finite(
+            ask("line-opacity", opacity, LINE_OPACITY), "opacity", "WebMap.lines()"
+        )
         gdf = self._display_gdf(features, method="lines")
         colour = (
-            color
+            ask("line-color", color, VECTOR_COLOR)
             if column is None
             else self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -1163,6 +1227,7 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
             source=features,
+            asked=ask.named,
         )
 
     def polygons(
@@ -1173,8 +1238,8 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        color: str = "#3388ff",
-        opacity: float = 0.6,
+        color: Maybe[str] = UNSET,
+        opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
         big: Optional[bool] = None,
         big_data_threshold: Optional[int] = None,
@@ -1267,7 +1332,10 @@ class VectorMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
         _, layer_types = _require_layer_api()
-        opacity = as_finite(opacity, "opacity", "WebMap.polygons()")
+        ask = Ask()
+        opacity = as_finite(
+            ask("fill-opacity", opacity, FILL_OPACITY), "opacity", "WebMap.polygons()"
+        )
         gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
@@ -1294,7 +1362,7 @@ class VectorMixin(_MixinBase):
                 )
             return self.deck_polygons(gdf)
         colour = (
-            color
+            ask("fill-color", color, VECTOR_COLOR)
             if column is None
             else self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -1309,6 +1377,7 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
             source=features,
+            asked=ask.named,
         )
 
     def choropleth(
@@ -1319,7 +1388,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        opacity: float = 0.85,
+        opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
         name: Optional[str] = None,
         visible: bool = True,
@@ -1414,7 +1483,12 @@ class VectorMixin(_MixinBase):
                 classification.
         """
         _, layer_types = _require_layer_api()
-        opacity = as_finite(opacity, "opacity", "WebMap.choropleth()")
+        ask = Ask()
+        opacity = as_finite(
+            ask("fill-opacity", opacity, CHOROPLETH_OPACITY),
+            "opacity",
+            "WebMap.choropleth()",
+        )
         gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
         paint = {
@@ -1431,4 +1505,5 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
             source=features,
+            asked=ask.named,
         )
