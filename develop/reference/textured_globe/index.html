@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3128,6 +3128,34 @@
     
   
     Figure vocabulary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static_map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maps (matplotlib)
   
 
     
@@ -6942,7 +6970,7 @@ direction that shades a day/night terminator), <code>ambient</code>, <code>fig</
 <a id="__codelineno-0-2152" name="__codelineno-0-2152"></a>
 <a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="sd">        When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and</span>
 <a id="__codelineno-0-2154" name="__codelineno-0-2154"></a><span class="sd">        :attr:`ax` are known without reaching into the animation&#39;s internals — which is what lets</span>
-<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">        :meth:`save_gif` and :meth:`stamp` work on an animated globe.</span>
+<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">        :meth:`save_animation` and :meth:`stamp` work on an animated globe.</span>
 <a id="__codelineno-0-2156" name="__codelineno-0-2156"></a>
 <a id="__codelineno-0-2157" name="__codelineno-0-2157"></a><span class="sd">        Overlays turn with the sphere. Anything added with :meth:`points`, :meth:`coastlines`,</span>
 <a id="__codelineno-0-2158" name="__codelineno-0-2158"></a><span class="sd">        :meth:`borders` or :meth:`land` is turned to each frame&#39;s spin, so markers and coastlines stay</span>
@@ -7697,7 +7725,7 @@ is out of contract (a zero-length <code>sun</code>, an <code>ambient</code> outs
         <p>Animate a full rotation, returning a matplotlib <code>FuncAnimation</code>.</p>
 <p>When no <code>ax</code> is given the 3-D axes is created here rather than inside the glyph, so :attr:<code>fig</code> and
 :attr:<code>ax</code> are known without reaching into the animation's internals — which is what lets
-:meth:<code>save_gif</code> and :meth:<code>stamp</code> work on an animated globe.</p>
+:meth:<code>save_animation</code> and :meth:<code>stamp</code> work on an animated globe.</p>
 <p>Overlays turn with the sphere. Anything added with :meth:<code>points</code>, :meth:<code>coastlines</code>,
 :meth:<code>borders</code> or :meth:<code>land</code> is turned to each frame's spin, so markers and coastlines stay
 attached to the ground; pass <code>spin=</code> to one of those to pin it in place instead. Called without
@@ -7966,7 +7994,7 @@ or a render option or lighting argument is out of contract.</p>
 <a id="__codelineno-0-2152" name="__codelineno-0-2152"></a>
 <a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="sd">    When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and</span>
 <a id="__codelineno-0-2154" name="__codelineno-0-2154"></a><span class="sd">    :attr:`ax` are known without reaching into the animation&#39;s internals — which is what lets</span>
-<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">    :meth:`save_gif` and :meth:`stamp` work on an animated globe.</span>
+<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">    :meth:`save_animation` and :meth:`stamp` work on an animated globe.</span>
 <a id="__codelineno-0-2156" name="__codelineno-0-2156"></a>
 <a id="__codelineno-0-2157" name="__codelineno-0-2157"></a><span class="sd">    Overlays turn with the sphere. Anything added with :meth:`points`, :meth:`coastlines`,</span>
 <a id="__codelineno-0-2158" name="__codelineno-0-2158"></a><span class="sd">    :meth:`borders` or :meth:`land` is turned to each frame&#39;s spin, so markers and coastlines stay</span>
