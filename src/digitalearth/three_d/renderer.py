@@ -44,6 +44,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "extrusion",
     "raster",
     "coastlines",
+    "text",
     "custom:pyvista",
 )
 
@@ -98,7 +99,14 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the scene, so a module-level
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
-    from digitalearth.three_d import globe, point_cloud, terrain, vector, volume
+    from digitalearth.three_d import (
+        decoration,
+        globe,
+        point_cloud,
+        terrain,
+        vector,
+        volume,
+    )
 
     drawers = {
         "terrain": terrain.draw_terrain,
@@ -109,6 +117,7 @@ def drawer_for(kind: str) -> Any:
         "extrusion": vector.draw_extruded_polygons,
         "raster": globe.draw_globe,
         "coastlines": globe.draw_coastlines,
+        "text": decoration.draw_text,
         "custom:pyvista": draw_custom,
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not

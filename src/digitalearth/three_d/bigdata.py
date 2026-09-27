@@ -122,6 +122,10 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "a coastline is lines rather than a surface, and geovista already takes the resolution to load "
             "them at"
         ),
+        "text": (
+            "a label is one anchor point and one string, so there is never anything to reduce; a scene with "
+            "too many labels to read is a composition the caller chose rather than data to thin"
+        ),
         "custom:pyvista": (
             "the caller built the object and chose what it is made of, so reducing it here would overrule "
             "that silently; reduce it before handing it over"

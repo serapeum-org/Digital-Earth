@@ -7,8 +7,9 @@ decides which backend to build.
 
 Read it as a list of decisions rather than a list of methods. `absent` is the interesting half: a 3-D scene has
 no extent to frame and no tile basemap, and that is a property of drawing in a camera's view rather than a gap
-somebody has yet to fill. What is simply not built yet — a title, text at a coordinate (#203) — is in neither
-half, because "we decided not to" and "not yet" are different answers and only the tier can tell them apart.
+somebody has yet to fill. What is simply not built yet is in neither half, because "we decided not to" and "not
+yet" are different answers and only the tier can tell them apart. Text at a coordinate was in neither half and
+is now a declared kind (#203); a scalar bar and a keyed list still are, under `contract.PENDING`'s order 24.
 """
 
 from digitalearth.base.capabilities import Capabilities
@@ -33,6 +34,9 @@ CAPABILITIES = Capabilities(
             # A globe draws its own shoreline onto the sphere — `globe(data)` records one by default — so the
             # tier draws this kind even though it has no standalone coastline builder (review M6).
             "coastlines",
+            # A string placed at a coordinate (#203). It is a layer rather than furniture for the same reason
+            # it is one on the interactive and web tiers: it is drawn where the data is, not in a corner.
+            "text",
             "custom:pyvista",
         }
     ),

@@ -321,6 +321,7 @@ class TestComposedClassMro:
                     "VolumeMixin",
                     "VectorMixin",
                     "GlobeMixin",
+                    "DecorationMixin",
                     "AnimationMixin",
                     "Scene3DBase",
                     "object",

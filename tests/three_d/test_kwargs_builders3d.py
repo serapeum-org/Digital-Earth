@@ -48,6 +48,7 @@ DRAWS_WITH_KWARGS = {
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
     "isosurface": "`add_mesh(mesh, scalars=FIELD, **props)` — Python's duplicate-keyword TypeError",
     "globe": "geovista's own `add_mesh` call, reached with `scalars` already pinned",
+    "text": "`add_point_labels(anchor, [label], **style, **props)` — it takes no array, so PyVista refuses one",
     "add_mesh": "the caller's own object and the caller's own array name; VTK refuses a missing array",
     "add_volume": "the caller's own grid and array name; VTK refuses a missing array",
 }
@@ -146,6 +147,7 @@ def _draw(scene, builder: str, extra: dict):
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),
+        "text": lambda: scene.text(0.0, 0.0, "here", **extra),
         "add_mesh": lambda: scene.add_mesh(pv.Sphere(), **extra),
         "add_volume": lambda: scene.add_volume(_grid(), **extra),
     }

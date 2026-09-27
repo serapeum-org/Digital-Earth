@@ -109,6 +109,7 @@ BUILDERS = {
     "extrusion": lambda scene: scene.extruded_polygons(_polygons(), height=10.0),
     "raster": lambda scene: scene.globe(_dem()),
     "coastlines": lambda scene: scene.globe(_dem()),
+    "text": lambda scene: scene.text(0.0, 0.0, "here"),
     "custom:pyvista": lambda scene: scene.add_mesh(pv.Sphere()),
 }
 

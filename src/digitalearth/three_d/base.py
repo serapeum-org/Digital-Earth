@@ -551,6 +551,12 @@ class Scene3DBase:
         #: The vertical view scale, kept here so it survives a plotter that has not been built yet and so it
         #: can be written onto the figure's camera.
         self._vertical: float = 1.0
+        #: How the scene's figure furniture is drawn (#203), keyed by the method that asked for it — the
+        #: title's size, colour and subtitle. Kept here, beside the view scale and the camera, for the same
+        #: reason: it belongs to the scene rather than to whichever plotter happens to exist, so
+        #: `_dress_plotter` puts it onto a window the scene has just been given. The heading itself is on the
+        #: figure instead, as the panel's own `title`, since `PanelSpec` carries one.
+        self._decoration: dict[str, Any] = {}
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
         self.strict: bool = strict
         #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
@@ -617,12 +623,18 @@ class Scene3DBase:
         self._dress_plotter()
 
     def _dress_plotter(self) -> None:
-        """Put the scene's own view state onto the plotter it is about to draw on.
+        """Put the scene's own view state and figure furniture onto the plotter it is about to draw on.
 
         A view scale or a camera set before anything was drawn belongs to the scene, not to whichever plotter
         happens to exist, so both are applied to a window the scene has just been given — whether it built it
         or a caller handed it over. Only the lazy build did this, so swapping a plotter in silently reverted
         the scene to true scale and PyVista's default viewpoint, permanently (review M7).
+
+        The scene's decoration is the same kind of state and is applied here for the same reason (#203):
+        `set_title()` on a described scene must not force a render window open, and a heading drawn only at
+        the call would be missing from the window that is finally built — and from the next one the scene is
+        handed. :func:`~digitalearth.three_d.decoration.redraw_decoration` reads the heading off the figure
+        and its styling off :attr:`_decoration`.
 
         The scale is applied unconditionally: `set_scale(zscale=1.0)` leaves a fresh plotter at
         `[1.0, 1.0, 1.0]`, so skipping it for the identity bought nothing and asked a float to be exactly 1.0
@@ -634,6 +646,11 @@ class Scene3DBase:
         if hasattr(plotter, "set_scale"):
             plotter.set_scale(zscale=self._vertical, render=False)
         self._apply_camera()
+        # Imported here rather than at module level: `decoration` is one of the builder modules, and every one
+        # of them declares this class as its typing base, so a module-level import would close a cycle.
+        from digitalearth.three_d.decoration import redraw_decoration
+
+        redraw_decoration(self)
 
     def _place(self, data: Any, *, layer: str) -> Any:
         """Return `data` in the scene's display CRS, adopting the data's CRS when the scene has none yet.
@@ -1386,6 +1403,11 @@ class Scene3DBase:
         if isinstance(view, Camera):
             self.camera = view
         self._change(figure)
+        # The panel's own `title` is part of the figure (#203), and nothing in the layer diff re-reads it, so
+        # a heading drawn only at `set_title()` would be lost on exactly the round trip the seam exists for.
+        from digitalearth.three_d.decoration import redraw_decoration
+
+        redraw_decoration(self)
         return self
 
     @classmethod
