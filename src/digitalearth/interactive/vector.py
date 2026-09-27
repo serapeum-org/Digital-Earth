@@ -583,15 +583,13 @@ class VectorMixin(_MixinBase):
                 classified polygon one.
 
         Note:
-            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
-            for a path that is the length of the string — so a layer named by the 25-character path
-            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
-            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
-            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
-            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
-            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
-            it yourself. The routing log line always names the number the decision used, so a wrong one is
-            visible rather than silent.
+            ``rasterize="auto"`` counts the **rows**, whether ``features`` is a loaded collection or a path.
+            A path used to be measured as a string — a layer named by a 25-character path was reported as
+            *25* features when the file held 10, so a ten-row layer routed through Datashader on the strength
+            of its filename (#316). pyramids now answers the count without reading the geometry
+            (``FeatureCollection.feature_count``, serapeum-org/pyramids#1200, shipped in 0.65.0), so naming a
+            file still costs no open and the two spellings of one input agree. The routing log line names the
+            number the decision used, so a surprising one is visible rather than silent.
 
         Examples:
             - Colour gauging stations by an attribute column:
@@ -613,7 +611,10 @@ class VectorMixin(_MixinBase):
                 column cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit
                 colour list shorter than the class count).
         """
-        from digitalearth.interactive.bigdata import _route_through_rasterize
+        from digitalearth.interactive.bigdata import (
+            _feature_count,
+            _route_through_rasterize,
+        )
 
         apply_opacity(opacity, opts)
         if scheme is not None and not column:
@@ -630,13 +631,12 @@ class VectorMixin(_MixinBase):
         # row count and a column's values — is the same before a warp as after it. Warping here as well did
         # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
         # still refused, by the drawer, and `_skips_off_limb` answers it as before.
-        # The count is `len(features)`, and `features` may be a path: a path's length is its character
-        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
-        # than worked around here — pyramids has no cheap count-from-path to ask
-        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
+        # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
+        # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
+        # the count without the geometry, so naming a file still costs no open.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("points", len(features), threshold)
+            and _route_through_rasterize("points", _feature_count(features), threshold)
         ):
             aggregator = "mean" if column else "count"
             return self.rasterize(
@@ -774,15 +774,13 @@ class VectorMixin(_MixinBase):
             **opts: Extra HoloViews style options applied to the element.
 
         Note:
-            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
-            for a path that is the length of the string — so a layer named by the 25-character path
-            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
-            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
-            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
-            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
-            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
-            it yourself. The routing log line always names the number the decision used, so a wrong one is
-            visible rather than silent.
+            ``rasterize="auto"`` counts the **rows**, whether ``features`` is a loaded collection or a path.
+            A path used to be measured as a string — a layer named by a 25-character path was reported as
+            *25* features when the file held 10, so a ten-row layer routed through Datashader on the strength
+            of its filename (#316). pyramids now answers the count without reading the geometry
+            (``FeatureCollection.feature_count``, serapeum-org/pyramids#1200, shipped in 0.65.0), so naming a
+            file still costs no open and the two spellings of one input agree. The routing log line names the
+            number the decision used, so a surprising one is visible rather than silent.
 
         Examples:
             - Outline catchment polygons over a basemap:
@@ -863,17 +861,19 @@ class VectorMixin(_MixinBase):
         Raises:
             ImportError: when the layer routes through Datashader and ``spatialpandas`` is not installed.
         """
-        from digitalearth.interactive.bigdata import _route_through_rasterize
+        from digitalearth.interactive.bigdata import (
+            _feature_count,
+            _route_through_rasterize,
+        )
 
         # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
         # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
-        # The count is `len(features)`, and `features` may be a path: a path's length is its character
-        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
-        # than worked around here — pyramids has no cheap count-from-path to ask
-        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
+        # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
+        # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
+        # the count without the geometry, so naming a file still costs no open.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize(kind, len(features), threshold)
+            and _route_through_rasterize(kind, _feature_count(features), threshold)
         ):
             from importlib.util import find_spec
 

@@ -5,8 +5,12 @@ the rasterized arrays are static and assertable — ``dynamic=True`` (the intera
 live server and is asserted type-level only. Seeded numpy randomness; no browser, no network.
 """
 
+import pathlib
+
 import numpy as np
 import pytest
+
+from pyramids.feature import FeatureCollection
 
 from digitalearth.interactive import InteractiveMap
 
@@ -231,46 +235,6 @@ class TestAutoRouting:
             assert isinstance(m.layers[0], hv.DynamicMap)
 
 
-class TestAPathIsMeasuredAsAString:
-    """#316 — the documented limit: ``rasterize="auto"`` counts whatever ``features`` is.
-
-    ``points`` and ``polygons`` take a path or URL as well as a loaded collection, and the auto-routing
-    decision is ``len(features)`` — which, for a path, is its character count. The builders say so in a
-    ``Note``, because the alternative is worse: opening the file to count it defeats naming one, and pyramids
-    has no cheap count-from-path to ask instead (serapeum-org/pyramids#1200). What is asserted here is that
-    the note stays true — a docstring nothing executes is the next thing to rot.
-    """
-
-    #: A 10-feature file whose path is 25 characters long, so the two numbers cannot be confused for each
-    #: other and the threshold below sits between them.
-    PATH = "tests/data/points.geojson"
-
-    def test_the_path_length_is_what_crosses_the_threshold(self, m):
-        """Ten rows named by a 25-character path route as if there were 25 of them.
-
-        Args:
-            m: A fresh Web-Mercator map.
-        """
-        m.points(self.PATH, big_data_threshold=10)
-        assert isinstance(m.layers[0], hv.DynamicMap), (
-            "the documented limit is that the path's length decides; a glyph layer means it was fixed — "
-            "update the Note on points()/polygons() and close #316"
-        )
-
-    def test_the_loaded_collection_is_counted_as_rows(self, m):
-        """The workaround the note names: hand it the collection and the count is the row count.
-
-        Args:
-            m: A fresh Web-Mercator map.
-        """
-        from pyramids.feature import FeatureCollection
-
-        m.points(FeatureCollection.read_file(self.PATH), big_data_threshold=10)
-        assert isinstance(m.layers[0], gv.Points), (
-            "ten rows are not above a threshold of ten, so the layer must stay raw glyphs"
-        )
-
-
 class TestTrajectory:
     """``trajectory`` — NaN-separated track datashading (DI.2b)."""
 
@@ -375,4 +339,77 @@ class TestAFigureThatCarriesNoReduction:
         resolved = _resolve_aggregator(None, None)
         assert isinstance(resolved, type(ds.count())), (
             f"a description carrying no reduction must default to count(); got {resolved!r}"
+        )
+
+
+class TestTheThresholdCountsRowsNotCharacters:
+    """A path is a first-class input here, and `len()` of one is its character count (#316)."""
+
+    @staticmethod
+    def _recorded_kind(scene, features, threshold):
+        """Draw and return the kind the layer recorded, which says which route was taken.
+
+        Args:
+            scene: The map to draw on.
+            features: The builder's input — here always a path.
+            threshold: The per-call `big_data_threshold`.
+
+        Returns:
+            The recorded kind: `"raster"` when the layer was routed through Datashader, else `"points"`.
+        """
+        scene.points(features, rasterize="auto", big_data_threshold=threshold)
+        return scene.get_layer(scene.layer_ids[-1]).kind
+
+    def test_a_path_longer_than_the_threshold_does_not_rasterize_a_small_file(self, m):
+        """The discriminating case: more characters than the threshold, fewer rows than it.
+
+        Args:
+            m: A fresh interactive map.
+
+        Test scenario:
+            `tests/data/points.geojson` holds 10 features and its absolute path is far longer than 10
+            characters, so a threshold set between the two tells the readings apart. Counting the path
+            rasterised a 10-row file and logged "85 features exceed big_data_threshold=50"; counting the rows
+            leaves it as glyphs. A threshold below the row count cannot catch this — both readings exceed it —
+            which is why the positive control below is a separate case.
+        """
+        path = str(pathlib.Path("tests/data/points.geojson").resolve())
+        rows = FeatureCollection.feature_count(path)
+        assert len(path) > 50 > rows, (
+            f"the premise needs the threshold between {rows} rows and {len(path)} characters"
+        )
+        assert self._recorded_kind(m, path, 50) == "points", (
+            "a 10-row file was routed through Datashader against a threshold of 50"
+        )
+
+    def test_a_row_count_over_the_threshold_still_rasterizes(self, m):
+        """The positive control: the routing itself still happens when the rows warrant it.
+
+        Args:
+            m: A fresh interactive map.
+
+        Test scenario:
+            The same file against a threshold of 5. Without this, a count that always answered zero would
+            satisfy the case above.
+        """
+        path = str(pathlib.Path("tests/data/points.geojson").resolve())
+        assert self._recorded_kind(m, path, 5) == "raster", (
+            "a 10-row file was not routed through Datashader against a threshold of 5"
+        )
+
+    def test_an_opened_collection_counts_the_same_way(self, m):
+        """Opening the file first must not change the decision it drives.
+
+        Args:
+            m: A fresh interactive map.
+
+        Test scenario:
+            The path and the opened collection are two different inputs naming the same 10 rows, so the
+            threshold that leaves one as glyphs must leave the other as glyphs too. Before the fix they
+            disagreed, which is what made the bug invisible to anyone testing with an opened collection.
+        """
+        path = str(pathlib.Path("tests/data/points.geojson").resolve())
+        opened = FeatureCollection.read_file(path)
+        assert self._recorded_kind(m, opened, 50) == "points", (
+            "an opened 10-row collection was routed through Datashader against a threshold of 50"
         )

@@ -46,7 +46,7 @@ dependencies = [
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
-    "pyramids-gis >=0.62.0",
+    "pyramids-gis >=0.65.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
