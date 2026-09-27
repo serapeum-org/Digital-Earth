@@ -246,8 +246,9 @@ class PanelSpec:
                 ``None`` — named with the layer id, because a figure has many layers and only one is wrong.
             ValueError: from `Bounds`, for two extents that cannot be made to meet — a view with no CRS
                 cannot convert, so rectangles in two CRSs are refused rather than reinterpreted. And from
-                :func:`~digitalearth.base.spec.bounds.check_padding`, for a `padding` below
-                :data:`~digitalearth.base.spec.bounds.MIN_PADDING`, which would turn the frame inside out:
+                :func:`~digitalearth.base.spec.bounds.check_padding`, for a `padding` that is not finite or
+                is below :data:`~digitalearth.base.spec.bounds.MIN_PADDING`, which would turn the frame inside
+                out:
                 that one is raised **before** any `Bounds` exists, which is the point of checking it here —
                 behind the union it was checked only on the branch where some layer had an extent, so the same
                 bad call was a hard error on a figure with data and a silent ``None`` on one without.

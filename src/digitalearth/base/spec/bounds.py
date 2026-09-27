@@ -101,9 +101,10 @@ def check_padding(fraction: float) -> None:
         fraction: How much to grow the rectangle by, as a proportion of its own span.
 
     Raises:
-        ValueError: when `fraction` is below :data:`MIN_PADDING`. The message names the fraction and the rule,
-            because letting the `Bounds` constructor catch it reported only the numbers that came out —
-            leaving a caller who wrote ``-0.75`` to work out where a 7.5 and a 2.5 came from.
+        ValueError: when `fraction` is not finite, or is below :data:`MIN_PADDING`. The message names the
+            fraction and the rule, because letting the `Bounds` constructor catch it reported only the numbers
+            that came out — leaving a caller who wrote ``-0.75`` to work out where a 7.5 and a 2.5 came from,
+            and a caller who wrote ``nan`` to be told about an ``xmin`` they never wrote.
 
     Examples:
         - A legal fraction passes through silently:
@@ -121,7 +122,24 @@ def check_padding(fraction: float) -> None:
             ValueError: padded(-0.75) would invert this rectangle: ...
 
             ```
+        - And a fraction that is no number at all is refused as a fraction:
+            ```python
+            >>> from digitalearth.base.spec.bounds import check_padding
+            >>> check_padding(float("nan"))                       # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: padded(nan) is not a finite fraction: ...
+
+            ```
     """
+    # Before the floor comparison, not after it: `nan` is below nothing and above nothing, so it slipped
+    # through to the constructor, which reported an edge the caller never wrote (review R2-M10). `-inf` is
+    # caught here too — it is not a fraction below the floor, it is not a fraction.
+    if not isfinite(fraction):
+        raise ValueError(
+            f"padded({fraction}) is not a finite fraction: a padding is a proportion of the rectangle's own "
+            "span, so there is no rectangle it could name. Use a real number"
+        )
     if fraction < MIN_PADDING:
         raise ValueError(
             f"padded({fraction}) would invert this rectangle: a fraction below {MIN_PADDING} removes more "
@@ -603,7 +621,8 @@ class Bounds:
             The padded rectangle.
 
         Raises:
-            ValueError: if the padding would invert the rectangle.
+            ValueError: from :func:`check_padding`, if the fraction is not finite or would invert the
+                rectangle.
 
         Examples:
             - A 10% margin around the data:

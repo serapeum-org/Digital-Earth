@@ -8,7 +8,7 @@ These cover the type that replaces all three.
 import pytest
 
 from digitalearth.base.spec import Bounds
-from digitalearth.base.spec.bounds import MIN_PADDING, same_crs
+from digitalearth.base.spec.bounds import MIN_PADDING, check_padding, same_crs
 
 #: A projected CRS with no authority code of its own — the kind a `.prj` file gives a `GeoDataFrame`. PROJ's
 #: identification guesses EPSG:23031 (ED50 / UTM 31N) for it at 70% confidence, which is a different datum.
@@ -253,6 +253,25 @@ class TestOperations:
         assert point.padded(MIN_PADDING).as_bbox() == [5.0, 5.0, 5.0, 5.0], (
             f"a point rectangle padded by {MIN_PADDING} moved to {point.padded(MIN_PADDING).as_bbox()}"
         )
+
+    @pytest.mark.parametrize("fraction", [float("nan"), float("inf"), float("-inf")])
+    def test_a_non_finite_fraction_is_refused_by_the_rule_that_judges_fractions(
+        self, fraction
+    ):
+        """A padding that is not a number is named as a padding, not as an edge nobody wrote.
+
+        Args:
+            fraction: The non-finite fraction under test.
+
+        Test scenario:
+            `check_padding` exists so a caller who writes `-0.75` hears about `-0.75` rather than about the
+            7.5 and 2.5 that fell out of it. A non-finite fraction slipped past it and was caught one level
+            down by the constructor, which reported `Bounds needs finite edges; got xmin=nan` — an edge the
+            caller never wrote, from a rectangle that was fine when they passed it (review R2-M10). All three
+            answer the same way, including `-inf`: it is not a fraction below the floor, it is not a fraction.
+        """
+        with pytest.raises(ValueError, match="is not a finite fraction"):
+            check_padding(fraction)
 
     def test_the_floor_is_the_last_fraction_a_rectangle_survives(self):
         """`MIN_PADDING` is inclusive, so the two tests above meet at it rather than leaving a gap.
