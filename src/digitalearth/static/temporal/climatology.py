@@ -6,6 +6,7 @@ import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.static import series
 from digitalearth.static.temporal.timeseries import TimeSeries
 
@@ -42,7 +43,11 @@ class Climatology:
     """
 
     def __init__(
-        self, collection: Any, labels: Sequence, band: int = 1, reducer: str = "mean"
+        self,
+        collection: Any,
+        labels: Sequence,
+        band: int = DEFAULT_BAND,
+        reducer: str = "mean",
     ):
         self._series = TimeSeries(collection, band=band, reducer=reducer)
         self.labels = list(labels)

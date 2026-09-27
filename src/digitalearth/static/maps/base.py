@@ -15,7 +15,7 @@ from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.display import needs_reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
-from digitalearth.base.spec import Viewport
+from digitalearth.base.spec import DEFAULT_BAND, Viewport
 from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ class GeoLayerBase(Scene):
                 self.crs,
             )
 
-    def _prepare(self, dataset: Any, band: int = 1) -> Source:
+    def _prepare(self, dataset: Any, band: int = DEFAULT_BAND) -> Source:
         """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
 
         Args:

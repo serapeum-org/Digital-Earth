@@ -124,7 +124,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-from digitalearth.base.spec import LayerSpec, Selection
+from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Selection
 from digitalearth.three_d.layer import drawing_props
 
 
@@ -146,7 +146,7 @@ class GlobeMixin(_MixinBase):
         digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
     """
 
-    def _to_geographic_source(self, data: Any, *, band: int = 1) -> Source:
+    def _to_geographic_source(self, data: Any, *, band: int = DEFAULT_BAND) -> Source:
         """Reproject ``data`` to EPSG:4326 through pyramids and extract it as a lon/lat :class:`Source`.
 
         The globe's display-CRS choke point, mirroring the interactive tier's ``_to_display_source``: anything
@@ -196,7 +196,7 @@ class GlobeMixin(_MixinBase):
         data: Any,
         *,
         name: Any = None,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         cmap: str | None = None,
         coastlines: bool = True,
         coastline_resolution: str = "110m",

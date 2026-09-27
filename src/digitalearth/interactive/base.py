@@ -44,6 +44,7 @@ from digitalearth.base.registry import (
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import (
+    DEFAULT_BAND,
     DataRef,
     FigureSpec,
     LayerSpec,
@@ -1396,7 +1397,7 @@ class InteractiveMapBase:
         """
         return needs_reproject(data, self.crs)
 
-    def _to_display_source(self, data: Any, *, band: int = 1) -> Source:
+    def _to_display_source(self, data: Any, *, band: int = DEFAULT_BAND) -> Source:
         """Reproject ``data`` to the display CRS through pyramids and wrap it as a :class:`Source`.
 
         The single display-CRS choke point every raster/vector builder calls (settling the tier's

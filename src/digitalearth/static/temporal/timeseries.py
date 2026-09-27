@@ -7,6 +7,7 @@ from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
+from digitalearth.base.spec import DEFAULT_BAND
 
 
 class TimeSeries:
@@ -51,7 +52,9 @@ class TimeSeries:
 
     _REDUCERS = {name: NAN_REDUCERS[name] for name in ("mean", "sum", "min", "max")}
 
-    def __init__(self, collection: Any, band: int = 1, reducer: str = "mean"):
+    def __init__(
+        self, collection: Any, band: int = DEFAULT_BAND, reducer: str = "mean"
+    ):
         if reducer not in self._REDUCERS:
             raise ValueError(
                 f"unknown reducer {reducer!r}; choose from {sorted(self._REDUCERS)}"

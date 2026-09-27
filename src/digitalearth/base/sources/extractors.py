@@ -30,7 +30,7 @@ from digitalearth.base.crs import declared_crs, source_epsg
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
-from digitalearth.base.spec import Selection
+from digitalearth.base.spec import DEFAULT_BAND, Selection
 from digitalearth.base.types import PlottableData, RasterLike
 
 
@@ -69,7 +69,7 @@ def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
 def extract(
     data: PlottableData,
     *,
-    band: int = 1,
+    band: int = DEFAULT_BAND,
     variable: Optional[str] = None,
     x: Optional[np.ndarray] = None,
     y: Optional[np.ndarray] = None,

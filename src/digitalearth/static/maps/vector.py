@@ -25,7 +25,7 @@ from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
-from digitalearth.base.spec import DataRef, LayerSpec, Symbology
+from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Symbology
 from digitalearth.base.symbology import (
     MISSING_COLOR,
     nulls_to_none,
@@ -1089,7 +1089,7 @@ class VectorMixin(_MixinBase):
     def grid_cells(
         self,
         dataset: Any,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         *,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1159,7 +1159,7 @@ class VectorMixin(_MixinBase):
         v_dataset: Any,
         *,
         kind: str,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         name: Optional[str] = None,
         visible: bool = True,
         **opts,

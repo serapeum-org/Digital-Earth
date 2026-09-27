@@ -24,6 +24,7 @@ from digitalearth.base.clim import (
     stack_clim,
 )
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.web.base import _require_layer_api
 
 #: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
@@ -105,7 +106,7 @@ class TemporalMixin(_MixinBase):
         *,
         kdim: str = "time",
         labels: Optional[Sequence] = None,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         column: Optional[str] = None,
         scheme: Optional[Any] = None,
         k: int = 5,

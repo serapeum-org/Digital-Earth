@@ -18,6 +18,7 @@ import numpy as np
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.extractors import extract, get_stack
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.types import PlottableData
 
 __all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
@@ -26,7 +27,7 @@ __all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
 def get_source(
     data: PlottableData,
     *,
-    band: int = 1,
+    band: int = DEFAULT_BAND,
     variable: Optional[str] = None,
     x: Optional[np.ndarray] = None,
     y: Optional[np.ndarray] = None,

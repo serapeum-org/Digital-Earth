@@ -1,7 +1,7 @@
 """Which slice of a dataset a layer draws — one value instead of a scalar plus per-tier extras.
 
-Every builder takes ``band: int = 1``. That one integer is being asked to answer several different questions,
-and where a tier needs more it adds a parameter beside it rather than extending the answer:
+Every builder takes ``band: int = DEFAULT_BAND``. That one integer is being asked to answer several different
+questions, and where a tier needs more it adds a parameter beside it rather than extending the answer:
 
 * a **composite** needs three bands at once, so `rgb_composite` takes a separate ``bands`` sequence
 * the **3-D** tier needs a vertical level

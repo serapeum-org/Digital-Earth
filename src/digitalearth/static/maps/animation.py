@@ -22,6 +22,7 @@ from digitalearth.base.clim import (
     sample_evenly,
 )
 from digitalearth.base.sources import get_source, get_stack
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -301,7 +302,7 @@ class AnimationMixin(_MixinBase):
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
     def _stack_clim(
-        self, datasets: Sequence[Any], band: int = 1
+        self, datasets: Sequence[Any], band: int = DEFAULT_BAND
     ) -> Tuple[float, float]:
         """Return the ``(min, max)`` of ``band`` across ``datasets``, ignoring nodata/non-finite.
 
@@ -324,7 +325,7 @@ class AnimationMixin(_MixinBase):
         return measured if measured is not None else (0.0, 1.0)
 
     def _measured_clim(
-        self, datasets: Sequence[Any], band: int = 1
+        self, datasets: Sequence[Any], band: int = DEFAULT_BAND
     ) -> Optional[Tuple[float, float]]:
         """Return the ``(min, max)`` actually measured across ``datasets``, or ``None`` if nothing was.
 
@@ -343,7 +344,9 @@ class AnimationMixin(_MixinBase):
         """
         return measure_clim(self._frame_values(datasets, band=band))
 
-    def _frame_values(self, datasets: Sequence[Any], band: int = 1) -> Iterator[Any]:
+    def _frame_values(
+        self, datasets: Sequence[Any], band: int = DEFAULT_BAND
+    ) -> Iterator[Any]:
         """Yield the display-CRS values of ``band`` for each frame that can be warped onto the view.
 
         The engine-specific half of the stack scan: warping and band reading are this tier's business, while
@@ -372,7 +375,7 @@ class AnimationMixin(_MixinBase):
             yield read_masked_band(warped, band=band)
 
     def _clim_across_views(
-        self, dataset: Any, views: Sequence[Any], band: int = 1
+        self, dataset: Any, views: Sequence[Any], band: int = DEFAULT_BAND
     ) -> Tuple[float, float]:
         """Return the ``(min, max)`` of one dataset measured under each sampled display CRS.
 

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 from loguru import logger
 
-from digitalearth.base.spec import LayerSpec, LegendSpec, Scale, Symbology
+from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, LegendSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
 
@@ -683,7 +683,7 @@ class VectorMixin(_MixinBase):
         *,
         interval: Union[float, ContourInterval, None] = None,
         levels: Optional[Any] = None,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         filled: bool = False,
         cmap: Optional[str] = None,
         units: Optional[str] = None,

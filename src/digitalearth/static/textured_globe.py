@@ -52,7 +52,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band, ring_runs
 from digitalearth.base.crs import source_epsg
-from digitalearth.base.spec import Scale
+from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.static.animation import save_animation
 
 #: Default shape of the global equirectangular canvas built by :meth:`TexturedGlobe.from_dataset`,
@@ -1104,7 +1104,7 @@ class TexturedGlobe(WatermarkMixin):
         cls,
         dataset: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         cmap: Any = "viridis",
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,

@@ -31,7 +31,6 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from digitalearth.base.arrays import finite
 from digitalearth.base.registry import get_classifier
 from digitalearth.base.spec._serial import (
     as_list,
@@ -384,6 +383,11 @@ class Scale:
         Returns:
             A ``(lo, hi)`` pair with ``hi > lo`` guaranteed.
         """
+        # Imported here, not at module scope: `base/arrays.py` reads this subpackage's DEFAULT_BAND, so a
+        # module-level edge back to it makes `import digitalearth.base.arrays` circular. `base/spec/` holds
+        # the value types and is the lower layer of the two, so the deferral belongs on this side.
+        from digitalearth.base.arrays import finite
+
         measured = finite(values)
         return Scale._apply_limits(measured, vmin, vmax)
 

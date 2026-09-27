@@ -13,7 +13,7 @@ materialise a frame (``dmap[0]``) to assert on it.
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.clim import sample_evenly, stack_clim
-from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
@@ -171,7 +171,7 @@ class TemporalMixin(_MixinBase):
         *,
         kdim: str = "time",
         labels: Optional[Sequence] = None,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
         colorbar: bool = True,

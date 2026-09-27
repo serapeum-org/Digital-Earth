@@ -20,7 +20,7 @@ import numpy as np
 
 from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
-from digitalearth.base.spec import LayerSpec, Selection
+from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Selection
 from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET, reduce_surface
 from digitalearth.three_d.layer import drawing_props
 
@@ -119,7 +119,7 @@ class TerrainMixin(_MixinBase):
         data: Any,
         *,
         name: Any = None,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         z_exaggeration: float | None = None,
         cmap: str | None = None,
         scalars: str | None = ELEVATION,

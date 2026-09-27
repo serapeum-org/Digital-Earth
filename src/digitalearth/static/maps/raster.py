@@ -25,7 +25,13 @@ from digitalearth.base.display import auto_cmap
 from digitalearth.base.levels import levels_every
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import Source, get_stack
-from digitalearth.base.spec import Bounds, LayerSpec, RenderTarget, Symbology
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    Bounds,
+    LayerSpec,
+    RenderTarget,
+    Symbology,
+)
 from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
@@ -551,7 +557,7 @@ class RasterMixin(_MixinBase):
         dataset: Any,
         *,
         kind: str,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         cmap: Optional[str] = None,
         levels: Any = None,
         interval: Optional[float] = None,
@@ -1080,7 +1086,7 @@ class RasterMixin(_MixinBase):
     def spaghetti(
         self,
         collection: Any,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         *,
         name: Optional[str] = None,
         visible: bool = True,

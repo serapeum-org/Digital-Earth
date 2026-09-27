@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
+from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Scale, Symbology
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -1318,7 +1318,7 @@ class VectorMixin(_MixinBase):
         u: Any,
         v: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         density: float = 1.0,
         color_by: Optional[str] = "magnitude",
         cmap: str = "viridis",
@@ -1378,7 +1378,7 @@ class VectorMixin(_MixinBase):
         u: Any,
         v: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         density: float = 1.0,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1441,7 +1441,7 @@ class VectorMixin(_MixinBase):
         u: Any,
         v: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         density: float = 1.0,
         name: Optional[str] = None,
         visible: bool = True,
