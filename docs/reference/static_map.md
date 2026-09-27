@@ -64,6 +64,7 @@ by name, saying what the call takes.
         - choropleth
         - quiver
         - streamplot
+        - labels
         - set_bounds
         - set_domain
         - graticule

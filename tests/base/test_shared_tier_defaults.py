@@ -454,3 +454,80 @@ class TestL11TheColormapSamplerIsShared:
             would paint a single-class layer in a near-black that reads as missing data.
         """
         assert sample_cmap("viridis", 1) == [sample_cmap("viridis", 3)[1]]
+
+
+class TestALabelsDefaultsAreDeclaredOnce:
+    """#345 — the four values ``labels(features, column)`` draws with, given one home before they split.
+
+    The static builder landed after ``WebMap.labels``, with the same four defaults, and the shape of M9 was
+    about to repeat itself: an agreed number written out in each tier's signature is agreed until somebody
+    edits one copy. ``base/symbology.py`` is the home; what is checked here is that the static signature reads
+    it rather than restating the numbers, and that the web tier's own literals still agree with it — that
+    tier's file was out of scope for the change, so the agreement is held by a test until its signature reads
+    the constants too.
+    """
+
+    #: The keyword each shared constant is the default of, on both tiers' ``labels``.
+    LABEL_DEFAULTS = {
+        "text_size": "DEFAULT_LABEL_TEXT_SIZE",
+        "color": "DEFAULT_LABEL_COLOR",
+        "halo_color": "DEFAULT_LABEL_HALO_COLOR",
+        "halo_width": "DEFAULT_LABEL_HALO_WIDTH",
+    }
+
+    @staticmethod
+    def _labels_defaults(relative: str) -> dict:
+        """Return a tier's ``labels`` keyword-only defaults, parsed rather than imported.
+
+        Args:
+            relative: Path of the tier module under ``src/digitalearth``, ``/``-separated.
+
+        Returns:
+            ``{keyword: default}``, where a literal default is that literal and a name is the name as written
+            — which is the difference this class is about.
+        """
+        for node in ast.walk(_tree(relative)):
+            if isinstance(node, ast.FunctionDef) and node.name == "labels":
+                written = []
+                for value in node.args.kw_defaults:
+                    if isinstance(value, ast.Constant):
+                        written.append(value.value)
+                    elif isinstance(value, ast.Name):
+                        written.append(value.id)
+                    else:
+                        written.append(None)
+                return dict(zip([arg.arg for arg in node.args.kwonlyargs], written))
+        raise AssertionError(f"no labels() in {relative}")
+
+    @pytest.mark.parametrize("keyword", sorted(LABEL_DEFAULTS))
+    def test_the_static_signature_reads_the_shared_constant(self, keyword):
+        """The default is the constant's *name*, not a copy of its value.
+
+        Args:
+            keyword: The label keyword under test.
+        """
+        written = self._labels_defaults("static/maps/vector.py")[keyword]
+        assert written == self.LABEL_DEFAULTS[keyword], (
+            f"labels({keyword}=) should default to {self.LABEL_DEFAULTS[keyword]}; it is written {written!r}"
+        )
+
+    @pytest.mark.parametrize("keyword", sorted(LABEL_DEFAULTS))
+    def test_the_web_signatures_literal_still_agrees_with_it(self, keyword):
+        """The half that keeps the claim true while one tier still writes the numbers out.
+
+        Args:
+            keyword: The label keyword under test.
+
+        Test scenario:
+            ``WebMap.labels`` writes ``text_size: float = 12.0`` and the rest as literals. Read from the
+            source so the check needs no MapLibre, and compared against the shared constant's value — so an
+            edit to either side fails here rather than in two different pictures for one call.
+        """
+        from digitalearth.base import symbology
+
+        shared = getattr(symbology, self.LABEL_DEFAULTS[keyword])
+        written = self._labels_defaults("web/vector.py")[keyword]
+        assert written == shared, (
+            f"WebMap.labels({keyword}=) is {written!r} and the shared default is {shared!r}; one call must "
+            "give one picture on both tiers"
+        )

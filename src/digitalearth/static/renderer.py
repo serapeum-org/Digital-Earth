@@ -182,6 +182,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "heatmap",
     "flow",
     "text",
+    "labels",
     "graticule",
     "basemap",
     "coastlines",
@@ -258,6 +259,9 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "text": decoration.draw_text,
             "annotate": decoration.draw_annotate,
         },
+        # One string at one coordinate is `text`; one string per feature, read from a column, is its own kind
+        # — and its own drawer, in the vector module, because the coordinates come from the geometry.
+        "labels": {"labels": vector.draw_labels},
         "graticule": {"graticule": projection.draw_graticule},
         # The recipe is cleopatra's own dataset name, which is the singular `coastline` for the plural kind.
         "coastlines": {"coastline": decoration.draw_natural_earth},

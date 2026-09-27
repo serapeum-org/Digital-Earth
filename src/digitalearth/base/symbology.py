@@ -37,6 +37,10 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
+    "DEFAULT_LABEL_COLOR",
+    "DEFAULT_LABEL_HALO_COLOR",
+    "DEFAULT_LABEL_HALO_WIDTH",
+    "DEFAULT_LABEL_TEXT_SIZE",
     "MISSING_COLOR",
     "categorical_colors",
     "is_null",
@@ -62,6 +66,25 @@ MISSING_COLOR = "#cccccc"
 #: The continuous-colour default ``choropleth`` carries in its signature (right for graduated/continuous,
 #: a poor fit for categorical). The categorical path swaps it for ``_DEFAULT_CATEGORICAL_CMAP``.
 _CONTINUOUS_DEFAULT_CMAP = "viridis"
+
+#: How a per-feature text label looks when the caller styles nothing — the four values ``labels(features,
+#: column)`` draws with on every tier that has the builder.
+#:
+#: **White glyphs inside a black outline**, because a label layer is nearly always drawn over something: a
+#: raster field, a basemap, a filled choropleth. Plain black text disappears into the dark end of a colormap
+#: and plain white text into the light end; a halo is what survives both, and is why MapLibre's symbol layer
+#: offers one at all. The size is in the units each engine measures text in — pixels on a page, points on a
+#: figure — which are the same number for the same apparent size at the default resolution.
+#:
+#: They live here for the reason `MISSING_COLOR` does, and the one
+#: ``tests/base/test_shared_tier_defaults.py`` was written for: an agreed number copied into each tier is an
+#: agreed number until somebody edits one copy. ``WebMap.labels`` still writes them out as literals in its own
+#: signature — that tier's file was not in scope when the static builder landed — so the agreement is held by
+#: ``TestALabelsDefaultsAreDeclaredOnce`` in that module until the web signature reads these instead.
+DEFAULT_LABEL_TEXT_SIZE: float = 12.0
+DEFAULT_LABEL_COLOR: str = "#ffffff"
+DEFAULT_LABEL_HALO_COLOR: str = "#000000"
+DEFAULT_LABEL_HALO_WIDTH: float = 1.0
 
 
 def resolve_categorical_cmap(cmap: Any = None) -> Any:

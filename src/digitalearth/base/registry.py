@@ -1205,7 +1205,7 @@ _BUILT_IN_KINDS = (
     (
         "labels",
         "points",
-        "text taken from a feature column — interactive/web labels",
+        "text taken from a feature column — static/interactive/web labels",
         "overlay",
     ),
     (
