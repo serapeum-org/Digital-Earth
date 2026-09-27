@@ -1,15 +1,16 @@
-"""What this tier publishes as the caller's own style, builder by builder (review R2-H2/H3/M4/M5).
+"""What this tier publishes as the caller's own style, builder by builder (review R2-H2/H3/M4/M5, #334).
 
 `Symbology.encodings` is the one style reading another tier — and `to_backend()` at order 33 — can act on,
 so what lands there has to be what a caller *asked for* rather than what this tier's builder resolved.
-`tests/interactive/test_interactive_style_fold.py` checks the lift against hand-written props; these check
-it against the **builders**, which is where the defaults actually come from and where the round-1 fix's two
-defects were found: a table keyed by style keyword rather than by builder, and a builder laundering a
-derived colour through the bucket the lift trusts unfiltered (review R2-M5 — nothing tested either table).
+`tests/interactive/test_interactive_style_fold.py` checks the lift against hand-written props and
+`test_interactive_asked_style.py` checks what the builders *record*; these check what a real draw
+**publishes**, which is the end of that chain and the only part another tier sees.
 
-Every case here draws a real layer and reads `figure_spec`, so a row of
-:data:`~digitalearth.interactive.style_fold.UNASKED_STYLE` that stops matching its builder fails here rather
-than rotting quietly.
+Both directions are asked. An unstyled layer publishes nothing, and an ask is published — including an ask
+whose value is exactly this tier's own default, which is what #334 changed. The lift used to read the
+resolved options against a table of measured defaults (``UNASKED_STYLE``), so `points(size=6.0)` was
+indistinguishable from `points(features)` and published no size at all; the table is gone, the builders
+record the ask, and what used to be this module's documented loss is now one of its checks.
 """
 
 from dataclasses import dataclass
@@ -29,8 +30,6 @@ from digitalearth.interactive import InteractiveMap  # noqa: E402
 from digitalearth.interactive.style_fold import (  # noqa: E402
     ASKED_BUCKET,
     TIER_BUCKET,
-    UNASKED_STYLE,
-    builder_of,
     portable_encodings,
 )
 
@@ -165,15 +164,6 @@ UNSTYLED: Dict[str, Callable[[Any], Any]] = {
     "coastlines": lambda m: m.coastlines(),
     "graticule": lambda m: m.graticule(),
     "text": lambda m: m.text(5.0, 52.0, "Amsterdam"),
-}
-
-#: Which builder each row of :data:`~digitalearth.interactive.style_fold.UNASKED_STYLE` describes.
-#:
-#: Written the other way round from the table so the two have to agree: the checks below walk the **table**
-#: and look its key up here, so a row added without a probe fails rather than going unmeasured.
-ROW_PROBES: Dict[Tuple[str, str], str] = {
-    ("geometry", "Points"): "points",
-    ("image", ""): "field",
 }
 
 
@@ -312,53 +302,8 @@ class TestAnUnstyledLayerPublishesNothing:
         )
 
 
-class TestEveryRowStillDescribesItsBuilder:
-    """The question that catches a row that has rotted — the builder it names, and the value."""
-
-    @pytest.mark.parametrize("key", sorted(UNASKED_STYLE))
-    def test_a_rows_builder_is_the_builder_that_records_that_key(self, key):
-        """A row is looked up by what the builder records under `via`/`hv_type`, so that has to match.
-
-        Args:
-            key: The row's `(via, hv_type)` key.
-
-        Test scenario:
-            The lookup is the whole improvement over a keyword-keyed table, so a row whose key no builder
-            answers to subtracts nothing at all — and the builder goes straight back to publishing its
-            default as an ask.
-        """
-        recorded = [
-            builder_of(symbology.props)
-            for symbology in _symbologies(_drawn(UNSTYLED[ROW_PROBES[key]]))
-        ]
-        assert recorded == [key], (
-            f"{ROW_PROBES[key]} records {recorded} and its row is keyed {key}, so the row matches nothing"
-        )
-
-    @pytest.mark.parametrize("key", sorted(UNASKED_STYLE))
-    def test_every_default_a_row_lists_is_what_its_builder_writes(self, key):
-        """The values, measured rather than remembered.
-
-        Args:
-            key: The row's `(via, hv_type)` key.
-
-        Test scenario:
-            A row listing a value the builder no longer writes stops subtracting, silently. Reading the
-            resolved style back off a real call is the only way that cannot drift.
-        """
-        symbology = _symbologies(_drawn(UNSTYLED[ROW_PROBES[key]]))[0]
-        flat: Mapping[str, Any] = {
-            **dict(symbology.props),
-            **dict(symbology.props.get("common") or {}),
-        }
-        listed = {name: flat.get(name) for name in UNASKED_STYLE[key]}
-        assert listed == dict(UNASKED_STYLE[key]), (
-            f"{ROW_PROBES[key]} writes {listed} where its row says {dict(UNASKED_STYLE[key])}"
-        )
-
-
 class TestAnExplicitAskIsStillPublished:
-    """The question that catches a row that is too large (review R2-H2)."""
+    """The other direction: an ask has to reach `encodings`, whatever value it carries."""
 
     @pytest.mark.parametrize("case", sorted(BORROWED))
     def test_a_value_another_builder_defaults_to_is_still_this_callers_ask(self, case):
@@ -368,10 +313,11 @@ class TestAnExplicitAskIsStillPublished:
             case: The borrowed-default case under test.
 
         Test scenario:
-            A table keyed by style keyword pools every builder's defaults under one name, so an explicit
-            ask that happens to equal a *sibling's* default is dropped. Keyed by builder — which this tier
-            can do, because every builder records `via` — the same number asked for elsewhere is the
-            caller's and is published.
+            A table keyed by style keyword pooled every builder's defaults under one name, so an explicit
+            ask that happened to equal a *sibling's* default was dropped; keying it by builder answered that,
+            and left the last case, which the record answered. Kept exactly as the table had to answer them,
+            because "somebody else's default is still my ask" is a property of the answer and not of how it
+            is reached.
         """
         borrowed = BORROWED[case]
         published = _published(_drawn(borrowed.draw))[0]
@@ -483,38 +429,68 @@ class TestTheDerivedColourIsNotTheCallersOwn:
         )
 
 
-class TestTheSpellingOfANumberDoesNotDecideWhatIsPublished:
-    """`type(value) is type(default)` made `size=6` publish and `size=6.0` not (review R2-M4)."""
+class TestTheTiersOwnDefaultIsPublishedWhenItWasAskedFor:
+    """The loss the subtractive table took, and the check that replaced it (#334)."""
 
-    @pytest.mark.parametrize("spelling", [6, 6.0])
-    def test_the_tiers_own_default_is_read_as_a_default_however_it_is_spelled(
-        self, spelling
-    ):
-        """An `int` and a `float` of the same value are one ask, not two.
-
-        Args:
-            spelling: `6` or `6.0` — this tier's own default marker size.
+    def test_a_caller_asking_for_their_own_builders_default_publishes_it(self):
+        """`points(size=6.0)` publishes 6.0, where the table published nothing.
 
         Test scenario:
-            The comparison was type-strict and this tier records what it was handed rather than coercing
-            it, so `points(size=6)` published `{'size': 6}` and `points(size=6.0)` published nothing — two
-            portable figures from one intent, in the field `to_backend()` will read.
+            The exact case this module used to pin as an accepted cost: the figure recorded the resolved
+            value and never the fact that a keyword was passed, so an ask for the tier's own default was
+            read as no ask, the channel published nothing, and a figure carried to another tier was drawn at
+            *that* tier's default instead. Executed before the change, this published `{}`.
         """
-        published = _published(_drawn(lambda m: m.points(_points(), size=spelling)))[0]
-        assert published == {}, (
-            f"points(size={spelling!r}) published {published}; 6 and 6.0 are one ask"
+        published = _published(_drawn(lambda m: m.points(_points(), size=6.0)))[0]
+        assert published == {"size": 6.0}, (
+            f"points(size=6.0) published {published}; the value a caller names is theirs even when the "
+            "builder would have used it anyway"
         )
 
-    @pytest.mark.parametrize("spelling", [7, 7.0])
-    def test_a_value_the_tier_does_not_default_is_published_however_it_is_spelled(
-        self, spelling
+    def test_the_raster_builders_own_alpha_default_is_published_when_it_was_asked_for(
+        self,
     ):
-        """The other direction, so the check above cannot pass by publishing nothing ever.
+        """The same, for the other builder that resolves a channel parameter of its own.
+
+        Test scenario:
+            `field`'s `alpha` is the second and last row the deleted table held, and the two rows were the
+            whole of this tier's exposure — so both are asked, rather than one being taken as evidence for
+            the other.
+        """
+        published = _published(_drawn(lambda m: m.field(_dem(), alpha=1.0)))[0]
+        assert published == {"opacity": 1.0}, (
+            f"field(alpha=1.0) published {published}; 1.0 is what an unstyled field draws at, and asking "
+            "for it is still asking"
+        )
+
+    @pytest.mark.parametrize("spelling", [6, 6.0])
+    def test_the_value_published_is_the_value_written(self, spelling):
+        """An `int` and a `float` of one number are one ask, and both are published (review R2-M4).
 
         Args:
-            spelling: `7` or `7.0` — a size no builder on this tier defaults.
+            spelling: `6` or `6.0` — this tier's own default marker size, written both ways.
+
+        Test scenario:
+            The comparison that used to decide this was type-strict, and this tier records what it was
+            handed rather than coercing it, so `points(size=6)` published `{'size': 6}` while
+            `points(size=6.0)` published nothing — two portable figures from one intent. Nothing is compared
+            any more: what the caller wrote is what is published, in the spelling they wrote it.
         """
         published = _published(_drawn(lambda m: m.points(_points(), size=spelling)))[0]
-        assert published.get("size") == 7, (
+        assert published == {"size": spelling}, (
             f"points(size={spelling!r}) published {published}"
+        )
+
+    def test_a_description_that_records_no_ask_publishes_nothing_it_holds(self):
+        """The record is what decides, asked of the lift directly rather than through a builder.
+
+        Test scenario:
+            A `Symbology` written by hand — or read out of a figure saved before the record existed — holds
+            resolved style and no record. It must publish nothing rather than publish whatever it holds,
+            which is the fail-closed half of the change: the missing rows of the deleted table failed the
+            other way and published a tier default as caller intent.
+        """
+        held = Symbology(props={"via": "geometry", "common": {"size": 9.0}})
+        assert portable_encodings(held) == {}, (
+            "a description that records no ask published something it merely holds"
         )

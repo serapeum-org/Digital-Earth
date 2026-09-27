@@ -461,10 +461,16 @@ class TestALabelsDefaultsAreDeclaredOnce:
 
     The static builder landed after ``WebMap.labels``, with the same four defaults, and the shape of M9 was
     about to repeat itself: an agreed number written out in each tier's signature is agreed until somebody
-    edits one copy. ``base/symbology.py`` is the home; what is checked here is that the static signature reads
-    it rather than restating the numbers, and that the web tier's own literals still agree with it — that
-    tier's file was out of scope for the change, so the agreement is held by a test until its signature reads
-    the constants too.
+    edits one copy. ``base/symbology.py`` is the home, and **both** tiers now read it by name — the web tier
+    kept literals for one release because its file was out of scope then, and #334 put it in scope, so the
+    weaker "the literals still agree" check it was held by has been replaced by the same check the static
+    tier gets.
+
+    The one wrinkle #334 leaves is where a default is *written*. ``color`` is a declared style channel, so its
+    signature default is :data:`~digitalearth.base.ask.UNSET` — the builder has to be able to tell a caller's
+    ``color="#ffffff"`` from its own default — and the constant it resolves against is one line further down,
+    in the ``ask`` call. :meth:`_web_declared` reads whichever of the two places holds it, so the claim is
+    about the name the tier reads and not about where the tier happens to write it.
     """
 
     #: The keyword each shared constant is the default of, on both tiers' ``labels``.
@@ -511,23 +517,61 @@ class TestALabelsDefaultsAreDeclaredOnce:
             f"labels({keyword}=) should default to {self.LABEL_DEFAULTS[keyword]}; it is written {written!r}"
         )
 
+    @classmethod
+    def _web_declared(cls, keyword: str) -> str:
+        """Return the name ``WebMap.labels`` defaults `keyword` to, from wherever it is written.
+
+        Args:
+            keyword: The label keyword.
+
+        Returns:
+            The name as written — in the signature for a plain keyword, and in the ``ask`` call for one whose
+            signature default is the not-passed sentinel.
+
+        Raises:
+            AssertionError: when the keyword carries the sentinel and no ``ask`` call resolves it, which
+                would be a style channel the builder never resolves at all.
+        """
+        node = next(
+            found
+            for found in ast.walk(_tree("web/vector.py"))
+            if isinstance(found, ast.FunctionDef) and found.name == "labels"
+        )
+        written = dict(
+            zip([arg.arg for arg in node.args.kwonlyargs], node.args.kw_defaults)
+        )
+        default = written[keyword]
+        if not (isinstance(default, ast.Name) and default.id == "UNSET"):
+            return ast.unparse(default) if default is not None else "<no default>"
+        for call in ast.walk(node):
+            resolves = (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "ask"
+                and len(call.args) == 3
+                and isinstance(call.args[1], ast.Name)
+                and call.args[1].id == keyword
+            )
+            if resolves:
+                return ast.unparse(call.args[2])
+        raise AssertionError(
+            f"labels({keyword}=) carries the sentinel and nothing resolves it"
+        )
+
     @pytest.mark.parametrize("keyword", sorted(LABEL_DEFAULTS))
-    def test_the_web_signatures_literal_still_agrees_with_it(self, keyword):
-        """The half that keeps the claim true while one tier still writes the numbers out.
+    def test_the_web_signature_reads_the_shared_constant_too(self, keyword):
+        """The other tier, held to the same claim rather than to a weaker one.
 
         Args:
             keyword: The label keyword under test.
 
         Test scenario:
-            ``WebMap.labels`` writes ``text_size: float = 12.0`` and the rest as literals. Read from the
-            source so the check needs no MapLibre, and compared against the shared constant's value — so an
-            edit to either side fails here rather than in two different pictures for one call.
+            ``WebMap.labels`` used to write ``text_size: float = 12.0`` and the rest as literals, agreed with
+            the shared constants only by a test comparing the two values. Reading the constant is what makes
+            an edit to it reach both tiers, which is the whole of #345. Read from the source, so the check
+            needs no MapLibre.
         """
-        from digitalearth.base import symbology
-
-        shared = getattr(symbology, self.LABEL_DEFAULTS[keyword])
-        written = self._labels_defaults("web/vector.py")[keyword]
-        assert written == shared, (
-            f"WebMap.labels({keyword}=) is {written!r} and the shared default is {shared!r}; one call must "
-            "give one picture on both tiers"
+        assert self._web_declared(keyword) == self.LABEL_DEFAULTS[keyword], (
+            f"WebMap.labels({keyword}=) reads {self._web_declared(keyword)} where the shared default is "
+            f"{self.LABEL_DEFAULTS[keyword]}; one call must give one picture on both tiers"
         )

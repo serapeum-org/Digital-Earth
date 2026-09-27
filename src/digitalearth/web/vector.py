@@ -21,6 +21,12 @@ from loguru import logger
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, LegendSpec, Scale, Symbology
+from digitalearth.base.symbology import (
+    DEFAULT_LABEL_COLOR,
+    DEFAULT_LABEL_HALO_COLOR,
+    DEFAULT_LABEL_HALO_WIDTH,
+    DEFAULT_LABEL_TEXT_SIZE,
+)
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 
 
@@ -163,7 +169,6 @@ CONTOUR_WIDTH = 1.5
 CONTOUR_OPACITY = 1.0
 FILL_OPACITY = 0.6
 CHOROPLETH_OPACITY = 0.85
-LABEL_COLOR = "#ffffff"
 
 #: Outline of a filled contour band — `polygons()`'s own default outline, which is what filled contours were
 #: drawn with while they were drawn through it.
@@ -474,10 +479,10 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        text_size: float = 12.0,
+        text_size: float = DEFAULT_LABEL_TEXT_SIZE,
         color: Maybe[str] = UNSET,
-        halo_color: str = "#000000",
-        halo_width: float = 1.0,
+        halo_color: str = DEFAULT_LABEL_HALO_COLOR,
+        halo_width: float = DEFAULT_LABEL_HALO_WIDTH,
         offset: Optional[Any] = None,
         allow_overlap: bool = False,
         name: Optional[str] = None,
@@ -499,7 +504,9 @@ class VectorMixin(_MixinBase):
             column: The property to read the text from.
             text_size: Text size in pixels. Named for the text rather than ``size``, which means the
                 visual size of a marker everywhere else.
-            color: Text colour; not passed leaves :data:`LABEL_COLOR`.
+            color: Text colour; not passed leaves
+                :data:`~digitalearth.base.symbology.DEFAULT_LABEL_COLOR`, the same constant the static
+                tier's ``labels`` reads (#345).
             halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
                 over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
@@ -552,7 +559,7 @@ class VectorMixin(_MixinBase):
         if offset is not None:
             layout["text-offset"] = [float(value) for value in offset]
         paint = {
-            "text-color": ask("text-color", color, LABEL_COLOR),
+            "text-color": ask("text-color", color, DEFAULT_LABEL_COLOR),
             "text-halo-color": halo_color,
             "text-halo-width": float(halo_width),
         }

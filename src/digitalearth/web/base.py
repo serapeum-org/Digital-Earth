@@ -1734,13 +1734,11 @@ class WebMapBase:
         # beside it so another tier can read the layer's style at all (#328). Laid *over* the derived half,
         # so an encoding a builder wrote itself — `popup()`'s `tooltip` — outranks anything lifted here.
         #
-        # `kind` is what tells the lift which builder's defaults to subtract. Without it the tables could
-        # only be keyed by the resolved style itself, and three builders write the same three fill keys —
-        # so each was charged with the others' defaults and `polygons(opacity=0.85)`, an explicit
-        # non-default ask, published nothing (review R2-H2). This is the one place every builder passes
-        # its own kind, which is why the argument is threaded from here rather than guessed at there.
+        # The lift needs nothing from here beyond the description: which values were *asked* for is
+        # recorded by the builder that wrote them (#334), so the `kind` this method used to thread through
+        # — the key the tables of measured defaults were looked up by — is no longer part of the question.
         recorded = recorded.merged_over(
-            Symbology(encodings=portable_encodings(recorded, kind))
+            Symbology(encodings=portable_encodings(recorded))
         )
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,

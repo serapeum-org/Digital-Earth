@@ -27,7 +27,7 @@ backend's job, and in the static tier there is exactly one place it happens.
 
 from dataclasses import dataclass, field
 from difflib import get_close_matches
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Container, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -521,92 +521,57 @@ def portable_constants(
     return lifted
 
 
-def is_a_tier_default(value: Any, defaults: Tuple[Any, ...]) -> bool:
-    """Say whether a resolved style value is one a tier's builders write when nobody asked.
-
-    The one comparison both 2-D tiers subtract their defaults with. It lived twice, spelled
-    ``type(value) is type(default) and value == default``, which made the published style depend on how a
-    caller *spelled* a number: on the interactive tier, which records what it was handed rather than
-    coercing it, ``points(size=6)`` published ``{'size': 6}`` and ``points(size=6.0)`` published nothing
-    (review R2-M4).
-
-    Args:
-        value: What the tier resolved the style to.
-        defaults: The values that tier's builders write for this key unasked. Empty for a key no builder
-            defaults, which is always the caller's.
-
-    Returns:
-        `True` when `value` is one of `defaults`, comparing numerically. `bool` is the one type held
-        apart, in both directions: `True == 1.0` and `False == 0` in Python, so without the guard a flag a
-        caller really did set would be read as a numeric default and dropped.
-
-    Examples:
-        - The two spellings of one number answer alike, and a key nobody defaults is always an ask:
-            ```python
-            >>> from digitalearth.base.spec.style import is_a_tier_default
-            >>> is_a_tier_default(6, (6.0,)), is_a_tier_default(6.0, (6.0,))
-            (True, True)
-            >>> is_a_tier_default(7.0, (6.0,)), is_a_tier_default(7.0, ())
-            (False, False)
-
-            ```
-        - A boolean is never read as the number it equals:
-            ```python
-            >>> from digitalearth.base.spec.style import is_a_tier_default
-            >>> is_a_tier_default(True, (1.0,)), is_a_tier_default(0, (False,))
-            (False, False)
-
-            ```
-    """
-    return any(
-        isinstance(value, bool) == isinstance(default, bool) and value == default
-        for default in defaults
-    )
-
-
 def asked_constants(
     flat: Mapping[str, Any],
     channels: Mapping[str, str],
-    unasked: Mapping[str, Tuple[Any, ...]],
+    asked: Container[str],
 ) -> Dict[str, Encoding]:
-    """Lift a tier's flat style onto its channels, minus the values its builders wrote unasked.
+    """Lift onto their channels only the style keys a caller actually named.
 
-    :func:`portable_constants` with the one subtraction both 2-D tiers need. A builder resolves its
-    defaults before it records anything, so the recorded style cannot tell an ask from a default;
-    publishing it wholesale made an unstyled layer claim one tier's defaults as the caller's own intent and
-    repaint itself when the figure was carried elsewhere (review R-H2). Which defaults are chargeable to
-    *this* layer is the tier's question — it is the tier that knows which builder wrote the values — so it
-    is passed in rather than decided here.
+    :func:`portable_constants` with the one filter both 2-D tiers need. A builder resolves its defaults before
+    it records anything, so the recorded style cannot tell an ask from a default on its own; publishing it
+    wholesale made an unstyled layer claim one tier's defaults as the caller's own intent and repaint itself
+    when the figure was carried elsewhere (review R-H2).
+
+    What was asked for is **recorded at the builder** — :class:`~digitalearth.base.ask.Ask`, read back with
+    :func:`~digitalearth.base.ask.asked_style` — rather than reconstructed here by subtracting tables of
+    measured defaults. Those tables could not tell a caller who asked for exactly their tier's default from
+    one who asked for nothing, and no row was tied to the default it mirrored; the record can, and a builder
+    that records nothing publishes nothing, which under-describes a layer rather than mis-describing it
+    (#334).
 
     Args:
         flat: The tier's own style values, keyed the way that engine spells them.
         channels: Which declared channel each of those keys drives.
-        unasked: The defaults chargeable to this layer, per key, as the tier resolved them.
+        asked: The keys this layer's caller named, in that same spelling.
 
     Returns:
-        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that
-        name a channel, carry a portable value, and are not one of `unasked`.
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that were
+        asked for, name a channel, and carry a value a channel can portably hold.
 
     Examples:
-        - A default is passed over and an explicit value is published, for the same key:
+        - One value, one builder, and the only thing that decides whether it publishes:
             ```python
             >>> from digitalearth.base.spec.style import asked_constants
             >>> channels = {"circle-radius": "size"}
-            >>> unasked = {"circle-radius": (5.0,)}
-            >>> sorted(asked_constants({"circle-radius": 5.0}, channels, unasked))
-            []
-            >>> asked_constants({"circle-radius": 12.0}, channels, unasked)["size"].resolve()
-            12.0
+            >>> asked_constants({"circle-radius": 5.0}, channels, frozenset())
+            {}
+            >>> asked_constants({"circle-radius": 5.0}, channels, {"circle-radius"})["size"].resolve()
+            5.0
+
+            ```
+        - A key nobody named is passed over even though the tier recorded a value under it:
+            ```python
+            >>> from digitalearth.base.spec.style import asked_constants
+            >>> paint = {"line-width": 2.0, "line-color": "#ff0000"}
+            >>> channels = {"line-width": "width", "line-color": "color"}
+            >>> sorted(asked_constants(paint, channels, {"line-color"}))
+            ['color']
 
             ```
     """
     return portable_constants(
-        {
-            key: value
-            for key, value in flat.items()
-            if not is_a_tier_default(value, unasked.get(key, ()))
-        },
-        channels,
+        {key: value for key, value in flat.items() if key in asked}, channels
     )
 
 
