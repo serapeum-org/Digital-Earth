@@ -8,7 +8,7 @@ The GeoLibre 3-D surface without VTK, all on the GPU:
 * ``terrain_tiles`` — draped 3-D terrain from a ``raster-dem`` tile source: **a pyramids DEM, which is encoded
   here** (:meth:`~pyramids.dataset.Dataset.to_terrain_rgb`), a tile-URL template for a pyramid already served,
   or nothing at all for the public AWS *terrarium* tiles (DE-28);
-* ``globe`` — switch the map to the spherical (globe) projection.
+* ``projection`` — switch the map to the spherical (globe) projection, and back to Web Mercator.
 
 extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; deck builders reuse the
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.

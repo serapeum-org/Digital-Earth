@@ -738,7 +738,7 @@ class WebMapBase:
         self._data_bounds: Optional[List[float]] = None
         #: An explicit :meth:`set_bounds` request, which always wins over the accumulated extent.
         self._fit: Optional[dict] = None
-        #: The projection MapLibre draws in, as `globe()` sets it; recorded so the view can say so.
+        #: The projection MapLibre draws in, as `projection()` sets it; recorded so the view can say so.
         self._projection: str = "mercator"
         #: Where each layer's data came from, keyed by layer id — the figure's sources (#296).
         self._sources: Dict[str, DataRef] = {}
@@ -747,7 +747,7 @@ class WebMapBase:
         self._objects_ns: str = object_namespace()
         #: The controls the map draws, as furniture on its panel (#292).
         self._furniture: List[Furniture] = []
-        #: The panel's title, as `title()` set it.
+        #: The panel's title, as `set_title()` set it.
         self._title: Optional[str] = None
         #: How many layers sit in the basemap band, so :meth:`add_reference` can insert just above them.
         self._underlay_count = 0
