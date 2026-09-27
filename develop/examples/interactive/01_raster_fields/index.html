@@ -1302,7 +1302,7 @@
   <a href="#iso-lines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        / — iso-lines
+        — iso-lines
       
     </span>
   </a>
@@ -3613,7 +3613,7 @@
   <a href="#iso-lines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        / — iso-lines
+        — iso-lines
       
     </span>
   </a>
@@ -4403,7 +4403,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="1-raster-fields">1 · Raster fields<a class="anchor-link" href="#1-raster-fields">¶</a></h1><p>The raster builders turn a pyramids <code>Dataset</code> into an interactive field: <code>field</code> (regular grid),
-<code>quadmesh</code> (irregular/curvilinear cells), <code>contours</code> / <code>filled_contours</code> (iso-lines), <code>rgb</code>
+<code>quadmesh</code> (irregular/curvilinear cells), <code>contours</code> (iso-lines, filled or not), <code>rgb</code>
 (three-band composite) and <code>spaghetti</code> (one contour set per ensemble member). NoData is rendered
 transparent automatically.</p>
 </div>
@@ -4547,9 +4547,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="082aadf8-541d-42b0-a61c-b6e02df88f87" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="22574134-35b5-4d31-a5da-97a566d0e66d" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('082aadf8-541d-42b0-a61c-b6e02df88f87');
+var element = document.getElementById('22574134-35b5-4d31-a5da-97a566d0e66d');
 (function(root) {
   function now() {
     return new Date();
@@ -4806,9 +4806,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="4574476d-a10e-440f-9a1e-82e7a4a04626" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="477777e0-f2b4-4c71-b219-1d1cc5d10f22" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('4574476d-a10e-440f-9a1e-82e7a4a04626');
+var element = document.getElementById('477777e0-f2b4-4c71-b219-1d1cc5d10f22');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5538,7 +5538,8 @@ show(m)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="contours-filled_contours-iso-lines"><code>contours</code> / <code>filled_contours</code> — iso-lines<a class="anchor-link" href="#contours-filled_contours-iso-lines">¶</a></h3><p><code>contours</code> draws line iso-contours; <code>filled_contours</code> fills the bands between them. Both take a <code>levels</code> count.</p>
+<h3 id="contours-iso-lines"><code>contours</code> — iso-lines<a class="anchor-link" href="#contours-iso-lines">¶</a></h3><p><code>contours</code> draws line iso-contours, and <code>filled=True</code> fills the bands between them instead. Either takes a
+<code>levels</code> count or an <code>interval</code> spacing.</p>
 </div>
 </div>
 </div>
@@ -5561,12 +5562,12 @@ show(m)</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"filled_contours"</span><span class="p">)</span>
-<span class="n">m</span><span class="o">.</span><span class="n">filled_contours</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">dem</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"contours (filled)"</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">m = InteractiveMap(crs=dem.epsg, title="filled_contours")
-m.filled_contours(dem, levels=10)
+<div class="clipboard-copy-txt" id="cell-4">m = InteractiveMap(crs=dem.epsg, title="contours (filled)")
+m.contours(dem, levels=10, filled=True)
 show(m)</div>
 </div>
 </div>
