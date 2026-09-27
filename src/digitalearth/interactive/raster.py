@@ -19,6 +19,7 @@ feature-parity matrix.
 
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
 
+from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.crs import reproject
 from digitalearth.base.levels import levels_every
 from digitalearth.base.sources.view import SourceView
@@ -48,6 +49,10 @@ from digitalearth.interactive.base import (
     held_props,
 )
 from digitalearth.interactive.style_fold import TIER_BUCKET
+
+#: What an unstyled colour-mapped raster is drawn at on this tier. The value left `field`'s signature with
+#: #334, for the reason `POINT_SIZE` gives on the vector side, and this is where it lives instead.
+FIELD_ALPHA = 1.0
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -336,7 +341,7 @@ class RasterMixin(_MixinBase):
         band: int = DEFAULT_BAND,
         cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
-        alpha: float = 1.0,
+        alpha: Maybe[float] = UNSET,
         colorbar: bool = True,
         clabel: Optional[str] = None,
         name: Optional[str] = None,
@@ -355,7 +360,9 @@ class RasterMixin(_MixinBase):
                 and is the spelling the figure records — a tuple is what the travel rule refuses, so the
                 documented pair used to be dropped from every saved figure (review R2-M13). The drawer
                 hands HoloViews the tuple its own option is declared with either way.
-            alpha: Layer opacity in ``[0, 1]``.
+            alpha: Layer opacity in ``[0, 1]``; not passed leaves :data:`FIELD_ALPHA`. The keyword is
+                recorded when it is passed, so a caller asking for exactly that value publishes it like any
+                other (#334).
             colorbar: Whether to draw a colorbar.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
                 ``autostyle.auto_style`` (#230) and leaves the colorbar unlabelled when it knows none.
@@ -387,6 +394,7 @@ class RasterMixin(_MixinBase):
         # the layer, because a figure is saved as JSON.
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
+        ask = Ask()
         return self.add_layer(
             None,
             name=name,
@@ -400,10 +408,11 @@ class RasterMixin(_MixinBase):
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "clim": describe(held, "clim", _travelling_pair(clim)),
-                    "alpha": alpha,
+                    "alpha": ask("alpha", alpha, FIELD_ALPHA),
                     "colorbar": colorbar,
                     "clabel": clabel,
                     "opts": described_opts,
+                    **ask.record,
                 }
             ),
         )

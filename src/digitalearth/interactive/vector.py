@@ -18,6 +18,7 @@ producing an empty Bokeh layer.
 import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
+from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Scale, Symbology
@@ -92,6 +93,11 @@ def _as_labels(gdf: Any, column: str, missing: str) -> Any:
 #: How a point layer names itself in a refusal. The big-data threshold's resolution and the refusal of an
 #: unclassifiable `scheme=` speak for the same public call, so they share the one spelling — as
 #: `Map.points()` does on the static tier.
+#: What an unstyled marker is drawn at on this tier. The value left `points`' signature with #334 — a style
+#: keyword's default is now :data:`~digitalearth.base.ask.UNSET`, so the builder can tell an ask from its own
+#: default — and this is where it lives instead, cited by name from the docstring that used to show it.
+POINT_SIZE = 6.0
+
 _POINTS_CALLER = "InteractiveMap.points()"
 
 
@@ -117,6 +123,7 @@ def _vector_symbology(
     common: dict,
     labels: Optional[dict] = None,
     opts: Optional[dict] = None,
+    asked: Tuple[str, ...] = (),
 ) -> Symbology:
     """Return the description a vector layer is drawn from.
 
@@ -131,6 +138,11 @@ def _vector_symbology(
             it is.
         opts: The caller's own keywords, already through :func:`describe_opts` — the half a figure can
             carry. The drawer merges these over `common`, which is the precedence the builder applied.
+        asked: The style keywords this layer's caller actually named among the builder's *own* parameters,
+            in this tier's spelling. A keyword the caller wrote in `**opts` needs no record — that bucket is
+            the caller's by construction — but a parameter resolves its default before anything is recorded,
+            so the ask has to be recorded to survive (#334). Empty records no key at all, so an unstyled
+            layer's description is exactly what it was.
 
     Returns:
         The symbology. Written by a helper rather than inline at five call sites, so the five kinds cannot
@@ -144,6 +156,7 @@ def _vector_symbology(
             "common": dict(common),
             "labels": dict(labels) if labels else None,
             "opts": dict(opts or {}),
+            **asked_record(asked),
         }
     )
 
@@ -530,7 +543,7 @@ class VectorMixin(_MixinBase):
         column: Optional[str] = None,
         scheme: Optional[Any] = None,
         k: int = 5,
-        size: float = 6.0,
+        size: Maybe[float] = UNSET,
         cmap: str = "viridis",
         opacity: Optional[float] = None,
         rasterize: Any = "auto",
@@ -665,7 +678,10 @@ class VectorMixin(_MixinBase):
         # classification derived, so one scheme cannot mean two things (review M4).
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        common: dict = {"size": size, **styling}
+        # Resolved here rather than at the top of the method, so the aggregating route above — which forwards
+        # `**opts` to `rasterize` and never draws a marker — is reached with the keyword untouched.
+        ask = Ask()
+        common: dict = {"size": ask("size", size, POINT_SIZE), **styling}
         return self.add_layer(
             None,
             name=name,
@@ -679,6 +695,7 @@ class VectorMixin(_MixinBase):
                 describe_style(held, common),
                 labels,
                 described_opts,
+                tuple(ask.named),
             ),
         )
 
