@@ -16,7 +16,13 @@ __all__ = ["DEFAULT_FPS"]
 
 #: Frames per second every tier's animation entry point defaults to, so one ``fps`` means one speed whichever
 #: backend rendered the clip: ``Map.animate``/``Map.rotate`` (static), ``InteractiveMap.play``/
-#: ``save_animation`` (interactive), ``Scene3D.orbit``/``animate`` (3-D) and ``WebMap.animate`` (web).
+#: ``InteractiveMap.save_animation`` (interactive), ``Scene3D.orbit``/``Scene3D.record`` (3-D) and
+#: ``WebMap.save_animation`` (web).
+#:
+#: Every name here carries its receiver, because ``animate`` is a spelling more than one tier once had: the
+#: 3-D and web tiers each lost theirs with the other second spellings, while ``Map.animate`` is current. A bare
+#: ``animate`` therefore sent the reader of this block — which six modules cross-reference for each tier's
+#: animation entry point — to an ``AttributeError`` on two tiers out of four (review R2-M5).
 #:
 #: Three frames a second is slow enough to read a scientific field frame by frame — the tiers previously
 #: disagreed here (the 3-D tier alone defaulted to 12 for ``orbit`` and 8 for ``animate``), so the same stack

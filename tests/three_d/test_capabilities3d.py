@@ -400,7 +400,13 @@ class TestNoMessageNamesAMethodTheTierLost:
         """The tier's modules, as `(path, text)` pairs.
 
         Returns:
-            Every ``.py`` file under ``src/digitalearth/three_d``, read as text.
+            Every ``.py`` file under ``src/digitalearth/three_d``, at any depth, read as text. ``rglob`` rather
+            than ``glob``: the tier is flat today, so the two read the same files, but a subpackage added to it
+            would otherwise leave this guard reading past it silently — which is the single-tree blindness
+            `tests/base/test_live_method_references.py` was added for (review R2-M6). That module is the
+            package-wide half of this check, resolving a reference on the **class** it names; this one stays,
+            because resolving a bare name against *this tier's* classes is stricter than against every class
+            in the package.
         """
         import pathlib
 
@@ -412,7 +418,7 @@ class TestNoMessageNamesAMethodTheTierLost:
         )
         return [
             (path, path.read_text(encoding="utf-8"))
-            for path in sorted(root.glob("*.py"))
+            for path in sorted(root.rglob("*.py"))
         ]
 
     def test_no_bare_cross_reference_points_at_a_deleted_method(self):
