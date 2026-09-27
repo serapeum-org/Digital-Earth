@@ -12,6 +12,12 @@ per tier reads this and compares; nothing here imports a renderer, so the compar
 
 **A spelling never means two things.** Where a tier called a contract method something else, that spelling was
 deleted rather than kept working: nothing here is released, so there is no caller to keep a promise to.
+
+**Nor does a call shape.** A name and its keyword set are not enough to call it: `set_bounds` accepted
+`padding=` on every tier, satisfied every contract test, and still read the same four bare numbers as two
+different rectangles — matplotlib's `[xmin, xmax, ymin, ymax]` on one tier and bbox `(west, south, east,
+north)` on the next — under a first parameter named `bbox` on one and `bounds` on the rest (#344). So
+:class:`Method` declares the shape as well: `first_argument` and `sequence_order`.
 """
 
 import re
@@ -36,6 +42,21 @@ __all__ = [
 class Method:
     """One method of the contract: its name, what it takes, and what it hands back.
 
+    **A keyword set is not a call shape**, and the difference cost a breaking bug (#344). This class recorded
+    the keywords a name accepts and nothing else about how it is called — not the spelling of its first
+    positional parameter, not the order it reads a sequence in. So `set_bounds` read four bare numbers as
+    matplotlib's `[xmin, xmax, ymin, ymax]` on the static tier and as bbox `(west, south, east, north)` on the
+    other two, under a parameter named `bbox` on one and `bounds` on the rest: one call framed two different
+    rectangles, a keyword call ported in neither direction, and every contract test passed, because both tiers
+    accepted `padding=` and that was all the declaration said. :attr:`first_argument` and
+    :attr:`sequence_order` are what say the rest.
+
+    Both are optional, and that is deliberate rather than convenient: a required field would have to be given
+    at every construction site in this module before the file imported at all, and the contract cannot honestly
+    fix a spelling its tiers do not agree on yet. `None` therefore means *undeclared* — see the note above
+    :data:`CORE` for the names in that position and what settles them — and a declaration is added when the
+    tiers agree, not by choosing a winner here and failing the losers.
+
     Attributes:
         name: The canonical spelling, the same on every tier.
         doc: One line saying what it does — the text a support matrix shows beside it.
@@ -45,6 +66,16 @@ class Method:
             object, `"path"` for a written file, `"value"` for a description.
         builds_in: The roadmap order that builds it, for a name the contract declares before any tier has it.
             `None` for a name that is already drawn somewhere.
+        first_argument: The canonical spelling of the **first positional parameter** — the data a builder
+            draws, the id a layer method acts on, the region a framing call frames. A tier may name later
+            parameters as it likes; it may not spell this one differently, or the same positional call means
+            two things and the same keyword call means neither. `None` where the contract does not fix it: a
+            name that takes nothing positionally, or one whose tiers still disagree.
+        sequence_order: Where that argument may be a bare sequence, the components it holds **in the order
+            they are read** — `("west", "south", "east", "north")` for a framing rectangle. The tuple of names
+            rather than a flag, because it is the ordering *and* its documentation: a reader needs no second
+            lookup, and a fourth tier is told what to implement. `None` for an argument that is not a
+            sequence, or a sequence whose ordering the contract has not fixed.
 
     Examples:
         - The contract says what a name means before any tier is consulted:
@@ -53,6 +84,14 @@ class Method:
             >>> field = core_method("field")
             >>> field.returns, "cmap" in field.keywords
             ('self', True)
+
+            ```
+        - And how it is called, not only what it accepts:
+            ```python
+            >>> from digitalearth.base.contract import core_method
+            >>> framing = core_method("set_bounds")
+            >>> framing.first_argument, framing.sequence_order
+            ('bounds', ('west', 'south', 'east', 'north'))
 
             ```
         - Nothing is waiting: every Core name is drawn on at least one tier, so no `builds_in` is set. It
@@ -70,6 +109,8 @@ class Method:
     keywords: FrozenSet[str] = field(default_factory=frozenset)
     returns: str = "self"
     builds_in: Optional[str] = None
+    first_argument: Optional[str] = None
+    sequence_order: Optional[Tuple[str, ...]] = None
 
 
 # `_LAYER_MANAGEMENT_ORDER`, and the three reasons interpolated into it — `_PENDING_LAYERS`,
@@ -132,6 +173,18 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
 )
 
 
+# **Where `first_argument` is left undeclared, and why it is not simply chosen here.** Measured across the
+# four facades, eight declared names take a differently-spelled first positional parameter depending on which
+# one you hold: `field` (`data` on web and interactive, `dataset` on static), `add_layer` (`layer`, `element`,
+# `artist`), `colorbar` (`layer_id`, `show`, `layer`), `legend` (nothing positional, `show`, `colors`),
+# `contours` (`dataset`, `data`, `dataset`), `set_title` (`heading`, `title`), `tiles` (`url`, `provider`) and
+# `basemap` (`provider`, `source`). Declaring one side of each would fail the others for a divergence this
+# module did not cause and cannot fix — the rename belongs to order 27a, which is named for exactly this
+# remainder, and the last four already have a `KEYWORD_SHORTFALLS` row tracking the keyword half of the same
+# gap. So the shape is declared where the tiers already agree, which is what a guard can hold them to today,
+# and the divergences are recorded here rather than settled by fiat. A name gains its declaration in the
+# change that makes the tiers agree.
+
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
 #: a 3-D scene has no extent to frame — declares that in its `Capabilities` (#294) rather than growing a method
 #: that raises.
@@ -147,6 +200,7 @@ CORE: Tuple[Method, ...] = (
         frozenset(
             {"column", "scheme", "k", "cmap", "size", "opacity", "name", "visible"}
         ),
+        first_argument="features",
     ),
     Method(
         "lines",
@@ -154,16 +208,19 @@ CORE: Tuple[Method, ...] = (
         frozenset(
             {"column", "scheme", "k", "cmap", "width", "opacity", "name", "visible"}
         ),
+        first_argument="features",
     ),
     Method(
         "polygons",
         "Draw polygon features.",
         frozenset({"column", "scheme", "k", "cmap", "opacity", "name", "visible"}),
+        first_argument="features",
     ),
     Method(
         "choropleth",
         "Draw polygons coloured by a column.",
         frozenset({"column", "scheme", "k", "cmap", "opacity", "name", "visible"}),
+        first_argument="features",
     ),
     Method(
         "colorbar",
@@ -185,17 +242,24 @@ CORE: Tuple[Method, ...] = (
         "Return the description of one layer, by id.",
         frozenset(),
         returns="value",
+        first_argument="layer_id",
     ),
-    Method("remove_layer", "Take a layer off the figure, by id."),
+    Method(
+        "remove_layer",
+        "Take a layer off the figure, by id.",
+        first_argument="layer_id",
+    ),
     Method(
         "set_visible",
         "Show or hide a layer, by id.",
         frozenset({"visible"}),
+        first_argument="layer_id",
     ),
     Method(
         "move_layer",
         "Move a layer in draw order, by id.",
         frozenset({"index"}),
+        first_argument="layer_id",
     ),
     Method(
         "replace_layer",
@@ -205,6 +269,7 @@ CORE: Tuple[Method, ...] = (
             "belongs to, as adding it there would."
         ),
         frozenset(),
+        first_argument="layer",
     ),
     Method(
         "layer_ids",
@@ -219,6 +284,13 @@ CORE: Tuple[Method, ...] = (
             "CRS; None fits the data."
         ),
         frozenset({"padding"}),
+        first_argument="bounds",
+        # The one sequence argument the contract declares, and the reason the field exists (#344): these four
+        # numbers were read in two orders across the 2-D tiers, so one call framed two rectangles. It is the
+        # order `Bounds` itself holds — `Bounds.as_bbox` writes it and `from_bbox` reads it — which is what
+        # `tests/base/test_contract.py` holds the declaration to. matplotlib's `[xmin, xmax, ymin, ymax]` is
+        # reachable through `Bounds.as_mpl`/`from_mpl` and nowhere else.
+        sequence_order=("west", "south", "east", "north"),
     ),
     Method(
         "render",
@@ -226,7 +298,13 @@ CORE: Tuple[Method, ...] = (
         frozenset(),
         returns="engine",
     ),
-    Method("save", "Write the figure to a file.", frozenset(), returns="path"),
+    Method(
+        "save",
+        "Write the figure to a file.",
+        frozenset(),
+        returns="path",
+        first_argument="path",
+    ),
     Method("show", "Display the figure.", frozenset(), returns="engine"),
 )
 
@@ -234,16 +312,23 @@ CORE: Tuple[Method, ...] = (
 #: Each was a live collision until this contract: `tiles` took a URL on one tier and a provider name on
 #: another, `contours` filled on one and not on another, `text` took a CRS on two tiers and not on the third.
 TIER2: Tuple[Method, ...] = (
-    Method("text", "Place a string at a coordinate.", frozenset({"s", "crs", "name"})),
+    Method(
+        "text",
+        "Place a string at a coordinate.",
+        frozenset({"s", "crs", "name"}),
+        first_argument="lon",
+    ),
     Method(
         "labels",
         "Label features from a column.",
         frozenset({"column", "crs", "name"}),
+        first_argument="features",
     ),
     Method(
         "graticule",
         "Draw meridians and parallels.",
         frozenset({"lon_step", "lat_step", "spacing"}),
+        first_argument="lon_step",
     ),
     Method("tiles", "Draw raster tiles from a URL template.", frozenset({"url"})),
     Method(
@@ -265,8 +350,14 @@ TIER2: Tuple[Method, ...] = (
         "Write a sequence of frames to a file.",
         frozenset({"fps"}),
         returns="path",
+        first_argument="path",
     ),
-    Method("projection", "Draw in another projection, by name.", frozenset()),
+    Method(
+        "projection",
+        "Draw in another projection, by name.",
+        frozenset(),
+        first_argument="name",
+    ),
 )
 
 #: What a tier has not built yet, as `{backend: {name: why}}`. This is the honest half of the contract: a name
@@ -340,7 +431,9 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # `[xmin, xmax, ymin, ymax]` under the name `bbox` while the other two read
                 # `bounds=(west, south, east, north)`, so one call framed two rectangles. That is fixed
                 # rather than tracked — a Core name meaning two things is a broken contract, and there is no
-                # order to wait for.
+                # order to wait for. What the declaration could not say at the time, it now says:
+                # `set_bounds` declares `first_argument` and `sequence_order`, so the next tier is held to
+                # both without a probe having to remember (#344).
             }
         ),
     }
