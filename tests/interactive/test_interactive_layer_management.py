@@ -395,3 +395,26 @@ class TestHidingACallersOwnElement:
             False,
             ["lower-element", "upper-element"],
         ), held.layers
+
+
+class TestAnUnknownIdIsRefusedInOneVoice:
+    """Every layer-management call on this tier names the map, not whichever structure noticed."""
+
+    def test_move_layer_refuses_an_unknown_id_the_way_get_layer_does(self):
+        """`move_layer` asks the facade first, so its refusal reads like its siblings'.
+
+        Test scenario:
+            `move_layer` left the question to `LayerTree.move`, whose refusal names *the tree* — "no layer
+            'nope' in this tree; layers are [...]" — while `get_layer`, `remove_layer`, `set_visible` and
+            `replace_layer` all go through `_require_layer` and name *the map*. Two spellings of one refusal,
+            decided by which structure happened to notice. Compared against each other rather than against a
+            literal, so this is an assertion on two differently-produced strings and not a tautology.
+        """
+        built = InteractiveMap()
+        with pytest.raises(KeyError) as from_get:
+            built.get_layer("nope")
+        with pytest.raises(KeyError) as from_move:
+            built.move_layer("nope", 0)
+        assert str(from_move.value) == str(from_get.value), (
+            f"move_layer said {from_move.value} where get_layer said {from_get.value}"
+        )

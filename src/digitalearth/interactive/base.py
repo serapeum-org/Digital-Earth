@@ -999,6 +999,9 @@ class InteractiveMapBase:
 
                 ```
         """
+        # Asked here rather than left to `LayerTree.move`, so an unknown id is refused in the same words as
+        # every other layer-management call on this tier: the tree names itself, the facade names the map.
+        self._require_layer(layer_id)
         self._change(self._figure_with(self._layer_tree.move(layer_id, index)))
         return self
 
