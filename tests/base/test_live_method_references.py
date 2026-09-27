@@ -22,6 +22,12 @@ the lean ``dev`` environment — the engines are reached inside the functions th
 answer for all four tiers from the one environment that runs the whole matrix. A **class name spelled by more
 than one tier** (``DecorationMixin``, ``Renderer``, ``RasterMixin``, …) is ambiguous and is skipped, with
 :class:`TestTheResolverSeesWhatItClaimsTo` holding that the skipping stays narrow rather than quietly total.
+
+**Nothing is exempted.** This module was added with a two-entry exception list, because the sites it found
+outside its own tree — ``static/textured_globe.py``'s bare ``save_gif`` and ``static/maps/raster.py``'s
+``Scene._reproject``/``Scene._prepare`` — belonged to work another branch owned, and a guard that went red the
+moment one was fixed would have made that fix require an edit here. Both are fixed, so the list is gone rather
+than left empty: the checks below are the whole package, with no module standing outside them.
 """
 
 import importlib
@@ -46,21 +52,6 @@ DOTTED_REFERENCE = re.compile(r"`~?([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*
 #: A bare cross-reference, as opposed to a dotted one, which the pattern above takes.
 BARE_REFERENCE = re.compile(r":meth:`~?([A-Za-z_][A-Za-z0-9_]*)`")
 
-#: The two modules still holding a reference that points nowhere, so this guard can be green today and still
-#: refuse a **new** one. Measured with this set emptied, these are the whole of what the widened scan finds:
-#:
-#: * ``static/textured_globe.py:2155`` — a bare method reference to ``save_gif``, which resolved against the
-#:   web tier's ``save_gif`` until this branch deleted it, and is round 2's M5 site that was left over;
-#: * ``static/maps/raster.py:155,180,251`` — ``Scene._reproject`` and ``Scene._prepare``, two private helpers
-#:   the class no longer has.
-#:
-#: Both are in the static tier, which this module was added from outside, so they are reported rather than
-#: edited. Clearing one needs no edit here — the check is a subset, deliberately, because a guard added
-#: mid-flight must not make another branch's fix require a change to this file.
-KNOWN_DANGLING = {
-    "static/textured_globe.py",
-    "static/maps/raster.py",
-}
 
 #: Attribute names set on an instance rather than declared on the class, collected from the package's own
 #: ``self.x = ...`` statements. `hasattr` cannot see one on the class, and ``Scene.ax`` is a perfectly good
@@ -130,19 +121,6 @@ def _members_of(held: type) -> set:
     return names
 
 
-def _outside_the_known_list(reported: list) -> list:
-    """Drop the sites :data:`KNOWN_DANGLING` already accounts for.
-
-    Args:
-        reported: ``"<module>:<line>: <reference>"`` strings, as the checks build them.
-
-    Returns:
-        The ones in modules nobody has claimed — a subset check rather than an equality one, so clearing a
-        listed site keeps this green and needs no edit here.
-    """
-    return [site for site in reported if site.split(":", 1)[0] not in KNOWN_DANGLING]
-
-
 def _sources() -> list:
     """Return every source file in the package, as `(path, text)` pairs.
 
@@ -206,7 +184,6 @@ class TestNoProseNamesAMethodItsReceiverLost:
                             f"{path.relative_to(PACKAGE_ROOT).as_posix()}:{number}: "
                             f"{class_name}.{member}"
                         )
-        dangling = _outside_the_known_list(dangling)
         assert dangling == [], (
             f"these references name a member their own class does not have: {dangling}"
         )
@@ -226,7 +203,6 @@ class TestNoProseNamesAMethodItsReceiverLost:
                         dangling.append(
                             f"{path.relative_to(PACKAGE_ROOT).as_posix()}:{number}: {name}"
                         )
-        dangling = _outside_the_known_list(dangling)
         assert dangling == [], (
             f"these cross-references name a method no class in the package has: {dangling}"
         )
@@ -269,21 +245,6 @@ class TestTheResolverSeesWhatItClaimsTo:
         }
         assert tier in scanned, (
             f"the scan never reaches {tier}/; it read {sorted(scanned)}"
-        )
-
-    def test_every_known_entry_names_a_module_that_is_still_there(self):
-        """Permission granted to a file that has been renamed away is permission nobody sees the end of.
-
-        Test scenario:
-            Deliberately *not* "the entry still dangles", for the reason :data:`KNOWN_DANGLING` gives. What is
-            refused is an entry naming nothing, which is how a list of exceptions rots.
-        """
-        missing = sorted(
-            module for module in KNOWN_DANGLING if not (PACKAGE_ROOT / module).is_file()
-        )
-        assert missing == [], (
-            f"{missing} are listed as known dangling sites and no longer exist, so the entries grant "
-            "permission to nothing — drop them"
         )
 
     def test_the_scan_reaches_a_nested_module(self):

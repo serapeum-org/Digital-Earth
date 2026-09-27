@@ -152,8 +152,8 @@ def _windowable(scene: Any, data: Any) -> Any:
     Raises:
         Exception: whatever pyramids raises for a warp it cannot set up — a raster wholly behind a clipped
             projection's limb reports ``RuntimeError: Too many points ... failed to transform``. It is raised
-            rather than answered, because only ``Scene._reproject`` knows that report means "nothing to draw
-            here" and turns it into an :class:`~digitalearth.base.crs.OffLimbError`; see
+            rather than answered, because only ``GeoLayerBase._reproject`` knows that report means "nothing to
+            draw here" and turns it into an :class:`~digitalearth.base.crs.OffLimbError`; see
             :func:`_windowed_field`, which hands the decision back to it.
     """
     if not scene._needs_reproject(data):
@@ -177,9 +177,9 @@ def _windowed_field(scene: Any, data: Any, band: int, target: RenderTarget) -> A
 
         ``None`` rather than an exception, because the full read is not merely a fallback: it is the path that
         *owns* the off-limb decision. A raster wholly behind a clipped projection's limb makes the lazy warp
-        report a failed transform, which only ``Scene._prepare`` reads as "nothing to draw" — so a read that
-        cannot be done here is handed back to it rather than reinterpreted here. Nothing is hidden: whatever
-        is really wrong surfaces from that read, in the tier's own words.
+        report a failed transform, which only ``GeoLayerBase._prepare`` reads as "nothing to draw" — so a read
+        that cannot be done here is handed back to it rather than reinterpreted here. Nothing is hidden:
+        whatever is really wrong surfaces from that read, in the tier's own words.
     """
     try:
         windowable = _windowable(scene, data)
@@ -248,8 +248,8 @@ def _field_source(scene: Any, data: Any, band: int) -> Tuple[Any, Any]:
         bare array (see :func:`_band_identity`).
 
     Raises:
-        OffLimbError: when the data lies outside what the display CRS can show, from ``Scene._prepare`` on the
-            full-read path.
+        OffLimbError: when the data lies outside what the display CRS can show, from
+            ``GeoLayerBase._prepare`` on the full-read path.
     """
     target = RenderTarget("image", *_canvas_pixels(scene))
     # Measured on the raster the caller gave, before anything is warped: a raster near the canvas must not pay

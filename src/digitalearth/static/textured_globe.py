@@ -2152,7 +2152,7 @@ class TexturedGlobe(WatermarkMixin):
 
         When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and
         :attr:`ax` are known without reaching into the animation's internals — which is what lets
-        :meth:`save_gif` and :meth:`stamp` work on an animated globe.
+        :meth:`save_animation` and :meth:`stamp` work on an animated globe.
 
         Overlays turn with the sphere. Anything added with :meth:`points`, :meth:`coastlines`,
         :meth:`borders` or :meth:`land` is turned to each frame's spin, so markers and coastlines stay
