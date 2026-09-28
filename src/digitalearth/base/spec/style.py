@@ -26,6 +26,7 @@ backend's job, and in the static tier there is exactly one place it happens.
 """
 
 from dataclasses import dataclass, field
+from dataclasses import replace as with_fields
 from difflib import get_close_matches
 from typing import Any, Container, Dict, Mapping, Optional, Tuple
 
@@ -42,7 +43,7 @@ from digitalearth.base.spec._serial import (
     to_json_value,
     travels_in_a_figure,
 )
-from digitalearth.base.spec.encoding import CHANNELS, Encoding
+from digitalearth.base.spec.encoding import CHANNELS, Encoding, Guide
 
 __all__ = [
     "PORTABLE_VALUES",
@@ -287,6 +288,45 @@ class Symbology:
         """
         return self.encodings.get(channel)
 
+    def guide(self, channel: str = "color") -> Optional[Guide]:
+        """Return what explains one channel to the reader — the legend or colorbar asked for on it.
+
+        The read side of :meth:`with_guide`, and the reason a guide lives on the encoding rather than beside
+        it: a renderer asking "does this layer want a colour key, and what is it called?" asks the layer, so
+        the answer moves, hides and disappears with it (DE-48, order 24).
+
+        Args:
+            channel: The channel whose guide is wanted. Defaults to ``"color"``, which is the channel a
+                colorbar and a keyed legend both explain — the other channels have guides too, and none of
+                them has a default worth guessing.
+
+        Returns:
+            The :class:`~digitalearth.base.spec.encoding.Guide` on that channel's encoding, or ``None`` —
+            both when nothing drives the channel and when something does and nobody asked for a guide.
+            The two are one answer on purpose: a renderer's question is whether to draw a key, and there is
+            nothing to draw in either case.
+
+        Examples:
+            - A guide asked for on a channel is read back from it:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "dem")})
+                >>> sym.with_guide(Guide(title="Elevation (m)")).guide().title
+                'Elevation (m)'
+
+                ```
+            - A channel nobody asked a guide of, and a channel nothing drives, both answer ``None``:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "dem")})
+                >>> sym.guide() is None, sym.guide("size") is None
+                (True, True)
+
+                ```
+        """
+        encoding = self.encodings.get(channel)
+        return None if encoding is None else encoding.guide
+
     def merged_over(self, defaults: "Symbology") -> "Symbology":
         """Return this symbology laid over `defaults`, channel by channel and property by property.
 
@@ -343,6 +383,69 @@ class Symbology:
         merged = dict(self.props)
         merged.update(props)
         return Symbology(encodings=dict(self.encodings), props=merged)
+
+    def with_guide(
+        self, guide: Optional[Guide], *, channel: str = "color"
+    ) -> "Symbology":
+        """Return a copy whose `channel` encoding carries `guide`.
+
+        **A guide explains an encoding**, so it is attached to one rather than held beside it. That is the
+        whole of what order 24 changes: a colour key used to be figure decoration a tier drew when asked and
+        then forgot — keyed by position on the static tier, a `show=` toggle on the most recent layer on the
+        interactive one — so it could not move with its layer, could not go away with it, and could not be
+        written into a figure and read back. Attached here it does all three for free, because the layer's
+        `Symbology` is already what travels.
+
+        Args:
+            guide: What to say about the channel, or ``None`` to attach nothing — which is how a guide is
+                taken off again, and why this does not raise for it.
+            channel: The channel being explained. Defaults to ``"color"``.
+
+        Returns:
+            A new symbology; this one is unchanged, as every `Symbology` writer here is.
+
+        Raises:
+            ValueError: when nothing drives `channel`. A key over a colour nothing varies would have no
+                values to label and no scale to sample, so the tiers raise rather than draw an empty box —
+                the message names the channels that *are* driven, since the usual cause is asking for a key
+                on a layer whose colour is one flat constant.
+
+        Examples:
+            - Attached to the colour a field drives, and read back off the layer:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+                >>> sym.with_guide(Guide(title="People", anchor="bottom-right")).guide().anchor
+                'bottom-right'
+
+                ```
+            - ``None`` takes it off again, so a caller does not have to rebuild the encoding to drop a key:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+                >>> sym.with_guide(Guide(title="People")).with_guide(None).guide() is None
+                True
+
+                ```
+            - A channel nothing drives is refused, and the message says what the layer does drive:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> Symbology.of(size=6).with_guide(Guide())  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: nothing drives the 'color' channel ...; the channels it does drive are ['size']
+
+                ```
+        """
+        encoding = self.encodings.get(channel)
+        if encoding is None:
+            raise ValueError(
+                f"nothing drives the {channel!r} channel of this layer, so there is no encoding for a "
+                f"guide to explain; the channels it does drive are {sorted(self.encodings)}"
+            )
+        encodings = dict(self.encodings)
+        encodings[channel] = with_fields(encoding, guide=guide)
+        return Symbology(encodings=encodings, props=dict(self.props))
 
     # ------------------------------------------------------------------ serialisation
 
