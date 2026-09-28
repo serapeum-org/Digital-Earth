@@ -13,7 +13,6 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
-from dataclasses import replace as with_fields
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
@@ -436,7 +435,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         drawn.artist.set_zorder(zorder)
     # The band's own name, which only the drawer can answer: the builder records a band *number* and never
     # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
-    return with_fields(drawn, color_field=source_field(identity, props["band"]))
+    return drawn.colored_by(source_field(identity, props["band"]))
 
 
 def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:

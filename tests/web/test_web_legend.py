@@ -468,7 +468,8 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
         assert _whose_key(web_map) == "A"
         web_map.colorbar("A", visible=False)
         guide = web_map.get_layer("A").symbology.guide()
-        assert guide is not None and guide.show is False, guide
+        assert guide is not None, "visible=False recorded no guide on the layer"
+        assert guide.show is False, f"the recorded guide does not say so: {guide}"
         assert _whose_key(web_map) is None, (
             "a guide that says show=False must leave no key on screen"
         )

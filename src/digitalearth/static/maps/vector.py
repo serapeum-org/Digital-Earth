@@ -6,7 +6,6 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 """
 
 import os
-from dataclasses import replace as with_fields
 from functools import wraps
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
@@ -295,7 +294,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
     # The numeric column `get_source` read the values from, when it found one. A collection with none draws
     # uniform markers, and the glyph then carries no value array, so no colour encoding is published for it.
-    return with_fields(drawn, color_field=source_field(src))
+    return drawn.colored_by(source_field(src))
 
 
 def _labelled_features(features: Any, crs: Any) -> Any:
@@ -512,7 +511,7 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
     # `to_xyz` reads the first band, so that is the band the points are coloured by.
-    return with_fields(drawn, color_field=source_field(data))
+    return drawn.colored_by(source_field(data))
 
 
 def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -544,9 +543,7 @@ def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # drop far-side cells on a globe
     polygons, values = scene._finite_polygons(polygons, values)
     drawn = scene._polygon_layer(polygons, values, **opts)
-    return with_fields(
-        drawn, color_field=source_field(data, layer.symbology.props["band"])
-    )
+    return drawn.colored_by(source_field(data, layer.symbology.props["band"]))
 
 
 def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -585,7 +582,7 @@ def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     drawn = scene._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
     scene._last_vector = (drawn.glyph, drawn.artist, kind)  # remembered for quiverkey()
     # A u/v field has no column: the arrows are coloured by the vector's magnitude, computed from the pair.
-    return with_fields(drawn, color_field=MAGNITUDE_FIELD)
+    return drawn.colored_by(MAGNITUDE_FIELD)
 
 
 def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -644,7 +641,7 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
             colorbar=False,
             **opts,
         )
-    return with_fields(drawn, color_field=field)
+    return drawn.colored_by(field)
 
 
 def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -828,7 +825,7 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     drawn = scene._polygon_layer(polygons, values_arr, **drawing_style(scene, layer))
     # Without a column the reducer counts the points in each cell, whatever `agg` names, so the cells are
     # coloured by a count rather than by any attribute (see :func:`_quadtree_reducer`).
-    return with_fields(drawn, color_field=column or COUNT_FIELD)
+    return drawn.colored_by(column or COUNT_FIELD)
 
 
 def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -868,7 +865,7 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
     # A KDE has no column either: the bands are the estimated density of the points themselves.
-    return with_fields(drawn, color_field=DENSITY_FIELD)
+    return drawn.colored_by(DENSITY_FIELD)
 
 
 def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:

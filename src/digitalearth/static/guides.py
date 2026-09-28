@@ -370,7 +370,7 @@ def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
 
 def draw_guide(
     scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any
-) -> Tuple[Any, ...]:
+) -> Optional[Any]:
     """Draw the colour key one layer's recorded guide asks for, and return what was drawn.
 
     Args:
@@ -383,8 +383,13 @@ def draw_guide(
             trade :attr:`~digitalearth.static.scene.LayerRecord.opts` makes for a value no figure can carry.
 
     Returns:
-        The artists the key is made of — one ``Colorbar`` or one ``Legend`` — or an empty tuple when the
-        guide is switched off, when the layer carries no colour encoding, and when nothing was drawn for it.
+        The one artist the key is — a ``Colorbar`` or a ``Legend`` — or ``None`` when the guide is switched
+        off, when the layer carries no colour encoding, and when nothing was drawn for it.
+
+        One artist rather than a one-long tuple: a key *is* the single object matplotlib hands back, and
+        :meth:`~digitalearth.static.renderer.Renderer.draw_guide` — the only caller — already answers its
+        own callers that way. :attr:`~digitalearth.static.renderer.DrawnLayer.guides` stays a tuple, since
+        that is the layer's *record* of what has to come off with it rather than one call's result.
 
     Raises:
         ValueError: when a colorbar is asked for over a **categorical** scale, naming the swatch legend
@@ -395,7 +400,7 @@ def draw_guide(
     guide = layer.symbology.guide()
     encoding = layer.symbology.encoding("color")
     if guide is None or not guide.show or encoding is None or drawn.artist is None:
-        return ()
+        return None
     scale = encoding.scale
     if guide_kind(layer) == "legend":
         if scale is None:
@@ -406,14 +411,12 @@ def draw_guide(
         spec = _legend_spec(scale, drawn.artist, guide.title)
         if guide.anchor is not None:
             kwargs.setdefault("loc", _LEGEND_LOCATIONS[guide.anchor])
-        return (
-            disjoint_legend(
-                scene.ax,
-                [entry.color for entry in spec.entries],
-                _rows(layer, spec),
-                title=guide.title,
-                **kwargs,
-            ),
+        return disjoint_legend(
+            scene.ax,
+            [entry.color for entry in spec.entries],
+            _rows(layer, spec),
+            title=guide.title,
+            **kwargs,
         )
     refusal = bar_refusal(layer)
     if refusal is not None:
@@ -423,4 +426,4 @@ def draw_guide(
     bar = colorbar_legend(drawn.artist, ax=scene.ax, **kwargs)
     if guide.title is not None:
         bar.set_label(guide.title)
-    return (bar,)
+    return bar

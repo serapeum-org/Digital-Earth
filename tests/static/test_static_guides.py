@@ -25,7 +25,7 @@ from digitalearth.static.guides import color_encoding, source_field
 from digitalearth.static.renderer import DrawnLayer
 
 
-@pytest.fixture()
+@pytest.fixture
 def keyed(dataset):
     """A map with one raster field on it, `acc`, and a text label added **after** it.
 
@@ -366,7 +366,7 @@ class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
 class TestACategoricalFillIsKeyedBySwatches:
     """A bar over the class codes cleopatra assigned reads ``0, 1, 2 …`` where the labels belong."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def zoned(self, polygons):
         """A map with one categorical fill on it, `zone`.
 
@@ -483,7 +483,10 @@ class TestDerivedValuesAreNamedByWhatTheyAre:
             kwargs = {"nmax": 1} if builder == "quadtree" else {}
             getattr(canvas, builder)(points_fc, name="cells", **kwargs)
             encoding = canvas.get_layer("cells").symbology.encoding("color")
-            assert encoding is not None and encoding.field == expected
+            assert encoding is not None, f"{builder}() published no colour encoding"
+            assert encoding.field == expected, (
+                f"{builder}() publishes {encoding.field!r}, not {expected!r}"
+            )
 
     def test_a_uv_field_is_coloured_by_magnitude(self, dataset):
         """Arrows carry no column either: they are coloured by the vector's magnitude.
@@ -497,10 +500,13 @@ class TestDerivedValuesAreNamedByWhatTheyAre:
         with Map(crs=dataset.epsg) as canvas:
             canvas.quiver(dataset, dataset, name="wind")
             encoding = canvas.get_layer("wind").symbology.encoding("color")
-            assert encoding is not None and encoding.field == "magnitude"
+            assert encoding is not None, "quiver() published no colour encoding"
+            assert encoding.field == "magnitude", (
+                f"the arrows are coloured by {encoding.field!r}, not by their magnitude"
+            )
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygons(dataset):
     """Buffered point features in the raster's CRS, with a numeric ``fid`` column.
 
@@ -517,7 +523,7 @@ def polygons(dataset):
     return collection
 
 
-@pytest.fixture()
+@pytest.fixture
 def points_fc():
     """The committed point collection, unbuffered.
 
@@ -544,5 +550,8 @@ def test_a_key_is_not_in_the_layer_s_artists(keyed):
     keyed.colorbar()
     drawn = keyed._renderer.drawn["acc"]
     assert drawn.artists == (drawn.artist,), drawn.artists
-    assert drawn.guides != () and drawn.guides[0] not in drawn.artists
+    assert drawn.guides != (), "the drawn key was not held beside the layer"
+    assert drawn.guides[0] not in drawn.artists, (
+        f"the key is among the layer's artists: {drawn.artists}"
+    )
     assert np.isclose(drawn.artist.get_zorder(), keyed.ax.images[0].get_zorder())

@@ -173,6 +173,42 @@ class DrawnLayer:
     color_field: Optional[str] = None
     guides: Tuple[Any, ...] = field(default=())
 
+    def colored_by(self, color_field: Optional[str]) -> "DrawnLayer":
+        """Return this drawing again, carrying the data field its colour varies with.
+
+        The one thing a drawer knows that its builder does not, and therefore the one field every drawer
+        fills in on its way out (see :attr:`color_field`). It is a method rather than a
+        ``dataclasses.replace`` at each of those return statements because that is the whole of what they
+        do with it, and because ``replace`` is typed as "some dataclass" rather than as this one — a
+        drawer declaring ``-> DrawnLayer`` then hands back a value nothing can check against the
+        declaration.
+
+        Args:
+            color_field: The field name, or ``None`` for a layer that colours by no field at all.
+
+        Returns:
+            A new ``DrawnLayer`` with everything else as it was; this one is frozen and unchanged.
+
+        Examples:
+            - The drawing is untouched apart from the field name:
+                ```python
+                >>> from digitalearth.static.renderer import DrawnLayer
+                >>> drawn = DrawnLayer(artist="im", glyph="g", artists=("im",), guides=("bar",))
+                >>> drawn.colored_by("elev")
+                DrawnLayer(artist='im', glyph='g', artists=('im',), color_field='elev', guides=('bar',))
+                >>> drawn.color_field is None
+                True
+
+                ```
+        """
+        return DrawnLayer(
+            artist=self.artist,
+            glyph=self.glyph,
+            artists=self.artists,
+            color_field=color_field,
+            guides=self.guides,
+        )
+
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
 #: by a caller, and by the tier's own capability test — without importing every builder module behind them.
@@ -907,8 +943,10 @@ class Renderer:
         for held in drawn.guides:
             _detach(held, self._scene.ax)
         made = draw_guide(self._scene, layer, drawn, **kwargs)
-        self._drawn[layer.id] = with_fields(drawn, guides=tuple(made))
-        return made[-1] if made else None
+        # The layer records what has to come off with it, which is nothing when no key was drawn.
+        guides = () if made is None else (made,)
+        self._drawn[layer.id] = with_fields(drawn, guides=guides)
+        return made
 
     @staticmethod
     def _source_object(figure: FigureSpec, layer: LayerSpec) -> Any:

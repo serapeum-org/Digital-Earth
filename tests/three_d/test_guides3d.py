@@ -767,7 +767,10 @@ class TestTheDeclarationSaysBothAreBuilt:
         from digitalearth.base.contract import pending_for
 
         pending = pending_for("3d")
-        assert "colorbar" not in pending and "legend" not in pending, sorted(pending)
+        assert "colorbar" not in pending, (
+            f"colorbar is still pending: {sorted(pending)}"
+        )
+        assert "legend" not in pending, f"legend is still pending: {sorted(pending)}"
 
     def test_both_are_declared_features_of_the_tier(self):
         """`colorbar` was declared on the strength of PyVista's bar; `legend` joins it now the box is drawn."""
@@ -801,7 +804,8 @@ class TestTheDispatcherRoutesThroughTheMethod:
         finally:
             built.close()
         assert drawn == ["elevation"], drawn
-        assert guide is not None and guide.show, guide
+        assert guide is not None, "colorbar=True recorded no guide on the layer"
+        assert guide.show, f"the recorded guide says the bar is off: {guide}"
 
     def test_false_takes_the_bar_off(self):
         """`colorbar=False` used to reach past the tier with `show_scalar_bar=False`; now it records a guide."""
@@ -814,7 +818,8 @@ class TestTheDispatcherRoutesThroughTheMethod:
         finally:
             built.close()
         assert drawn == [], drawn
-        assert guide is not None and not guide.show, guide
+        assert guide is not None, "colorbar=False recorded no guide on the layer"
+        assert not guide.show, f"the recorded guide says the bar is on: {guide}"
 
     def test_a_scalars_none_terrain_can_still_be_switched_off(self):
         """The case a "flat means no encoding" reading broke: the bar is really there, so it comes off."""

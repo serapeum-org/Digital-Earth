@@ -438,7 +438,10 @@ class TestTheColouredBuildersPublishWhatColoursThem:
         )
         symbology = figure.layers.get(figure.layers.ids[-1]).symbology
         scale = symbology.encoding("color").scale
-        assert scale is not None and tuple(scale.breaks) == (1.0, 5.0, 9.0), scale
+        assert scale is not None, "a classified fill published no colour scale"
+        assert tuple(scale.breaks) == (1.0, 5.0, 9.0), (
+            f"the published edges are {scale.breaks}, not the ones the fill was cut with"
+        )
         derived = LegendSpec.from_scale(scale, colors=["#440154", "#fde725"])
         assert [entry.value for entry in derived.entries] == [(1.0, 5.0), (5.0, 9.0)], (
             derived.entries
@@ -460,7 +463,8 @@ class TestTheColouredBuildersPublishWhatColoursThem:
         )
         symbology = figure.layers.get(figure.layers.ids[-1]).symbology
         scale = symbology.encoding("color").scale
-        assert scale is not None and scale.is_categorical, scale
+        assert scale is not None, "a categorical fill published no colour scale"
+        assert scale.is_categorical, f"the published scale is not categorical: {scale}"
         rows = LegendSpec.from_scale(scale)
         assert [entry.label for entry in rows.entries] == ["forest", "water"], rows
         assert all(entry.color for entry in rows.entries), rows.entries

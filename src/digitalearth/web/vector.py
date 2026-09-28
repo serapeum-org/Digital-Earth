@@ -156,6 +156,71 @@ def _as_interval(
     return ContourInterval(interval)
 
 
+@dataclass(frozen=True)
+class _ContourLevels:
+    """The iso-values one `contours()` call traces, held with the spelling its caller asked in.
+
+    `interval=` and `levels=` are two spellings of a single ask, and the pair used to travel the whole
+    length of :meth:`~digitalearth.web.vector.VectorMixin.contours` as loose locals: normalised, handed
+    to pyramids as three separate keywords, and — when the trace comes back empty — quoted back to the
+    caller in whichever spelling they wrote. Every one of those readings was another conditional on the
+    same two variables, in a method that is about drawing contours rather than about pyramids' argument
+    protocol. Here they are one value that already knows which arm it is, and the two readings that are
+    only ever taken together with it are its own.
+
+    Attributes:
+        spacing: The regular interval the levels are cut at, or `None` when they are named explicitly.
+        fixed: The settled explicit levels, or `None` when `spacing` decides them instead. Exactly one of
+            the two is set: :meth:`~digitalearth.web.vector.VectorMixin._contour_levels` refuses the pair,
+            and falls back on evenly spaced levels rather than settling on neither.
+        asked: The caller's own `interval=` argument, kept as they passed it — a message quotes
+            `interval=100` as it was written, not as the :class:`ContourInterval` it normalises to.
+    """
+
+    spacing: Optional[ContourInterval]
+    fixed: Optional[Any]
+    asked: Union[float, ContourInterval, None] = None
+
+    @property
+    def asked_as(self) -> str:
+        """Return this ask in the caller's own words, for a message that names what they wrote.
+
+        Returns:
+            `interval=<the argument they passed>`, or `levels=<the levels settled on>` — the settled ones
+            rather than the argument, because the argument is `None` for every auto-resolved trace and the
+            reader needs to see which levels were actually looked for.
+        """
+        if self.spacing is None:
+            return f"levels={self.fixed!r}"
+        return f"interval={self.asked!r}"
+
+    def trace(self, dataset: Any, *, band: int, polygonize: bool) -> Any:
+        """Trace these levels out of one band of `dataset` (pyramids' `Dataset.contour`).
+
+        Args:
+            dataset: The pyramids `Dataset` to contour.
+            band: 1-based band to contour, as this tier counts bands.
+            polygonize: Trace the bands between successive levels as polygons rather than the levels as
+                lines.
+
+        Returns:
+            The `FeatureCollection` pyramids traced — carrying `level` for lines, and
+            `level_min`/`level_max` for bands. Empty when no level falls inside the band's range.
+        """
+        if self.spacing is None:
+            every, base = None, 0.0
+        else:
+            every, base = self.spacing.spacing, self.spacing.base
+        return dataset.contour(
+            interval=every,
+            fixed_levels=None if self.fixed is None else list(self.fixed),
+            base=base,
+            band=int(band) - 1,  # pyramids counts bands from 0; this tier counts from 1
+            attribute="level",
+            polygonize=polygonize,
+        )
+
+
 #: Flat colour a vector layer falls back on when the caller pins neither `color=` nor a value column.
 #: It used to be repeated as a parameter default as well, so that it showed in a rendered signature; a style
 #: keyword's default is now :data:`~digitalearth.base.ask.UNSET`, so the builder can tell an ask from its own
@@ -858,17 +923,14 @@ class VectorMixin(_MixinBase):
             return self
         source = self._to_display_source(data, band=band)
         cmap = self._auto_cmap(source, cmap)
-        levels = self._contour_levels(source, interval=spacing, levels=levels)
+        asked_for = _ContourLevels(
+            spacing,
+            self._contour_levels(source, interval=spacing, levels=levels),
+            asked=interval,
+        )
         # Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.
         self.last_units = self._auto_units(source, units)
-        features = data.contour(
-            interval=spacing.spacing if spacing is not None else None,
-            fixed_levels=list(levels) if levels is not None else None,
-            base=spacing.base if spacing is not None else 0.0,
-            band=int(band) - 1,  # pyramids counts bands from 0; this tier counts from 1
-            attribute="level",
-            polygonize=filled,
-        )
+        features = asked_for.trace(data, band=band, polygonize=filled)
         if len(features) == 0:
             # No level fell inside the band's range. Passing this on raises "column 'level' not found",
             # because pyramids only writes the attribute when it writes a feature — which points at the
@@ -876,8 +938,7 @@ class VectorMixin(_MixinBase):
             self._skipped(
                 "contours",
                 "no level lies within the data, so nothing was traced — check that "
-                f"{'levels=' + repr(levels) if spacing is None else 'interval=' + repr(interval)} "
-                f"suits band {band}'s range",
+                f"{asked_for.asked_as} suits band {band}'s range",
             )
             return self
         # Lines carry `level`; filled bands carry `level_min`/`level_max` for the band's two edges, so

@@ -14,7 +14,7 @@ def _render(scene, arr, kind="imshow"):
     return scene._add_layer(glyph, glyph.im)
 
 
-@pytest.fixture()
+@pytest.fixture
 def grid_map():
     """A map carrying one field whose colour a key can explain, drawn from a bare array.
 
