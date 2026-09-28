@@ -22,7 +22,7 @@ the tier accepts, and that must not cost a backend import.
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, FrozenSet, Mapping, Tuple
+from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
 
 from digitalearth.base.ask import asked_style
 from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
@@ -39,6 +39,7 @@ __all__ = [
     "ChannelOption",
     "allowed_options",
     "fold_symbology",
+    "limits_scale",
     "portable_encodings",
     "route_flat_style",
 ]
@@ -357,8 +358,10 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
 
         A `color` that names one of the layer's value dimensions is **not** one of them. HoloViews reads a
         colour naming a dimension as "colour by that column", so recording it as a constant would say the
-        layer is painted the literal string `"pop"`; the classification behind it is published portably as
-        ``last_breaks`` instead.
+        layer is painted the literal string `"pop"`. What the layer is really coloured by is published by the
+        **builder**, as an :meth:`~digitalearth.base.spec.encoding.Encoding.by_field` binding carrying the
+        `Scale` that was classified (order 24) — and because `_index_layer` lays the builder's own symbology
+        *over* what this lifts, that binding outranks anything derived here.
 
     Examples:
         - A marker size the caller asked for and an opacity they wrote in ``**opts`` both read back:
@@ -425,6 +428,58 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
     if coloured is not None and coloured.value in dimensions:
         del lifted["color"]
     return lifted
+
+
+def limits_scale(limits: Any) -> Optional[Scale]:
+    """Return the :class:`~digitalearth.base.spec.scale.Scale` a recorded ``(low, high)`` pair states.
+
+    The domain half of what a colour key needs, and the only half this tier ever holds when a layer is
+    described: ``field(clim=…)`` and ``choropleth(clim=…)`` are the two places a caller names colour limits,
+    and every other layer is auto-scaled by HoloViews from the data it draws, at render time. So a layer
+    whose caller named no limits publishes a colour encoding with **no** scale — which is the honest answer,
+    where a domain measured here would label the key with numbers the layer never draws (the disagreement
+    :mod:`digitalearth.base.spec.legend` exists to remove).
+
+    Args:
+        limits: The recorded ``clim``, in the spelling a figure carries it in — a two-item sequence — or
+            anything else, including `None`, for a caller who named none.
+
+    Returns:
+        The scale, or `None` when there is nothing to build one from: no pair, a pair that is not two
+        numbers, or a pair no scale can hold (a `NaN` limit). A refusal rather than a raise, because the
+        pair has already reached the engine by the time this is asked and a layer that draws must not be
+        turned into a builder error by the *description* of its colours.
+
+    Examples:
+        - A caller's limits become the domain the key is labelled with:
+            ```python
+            >>> from digitalearth.interactive.style_fold import limits_scale
+            >>> limits_scale([0.0, 60.0]).as_limits()
+            (0.0, 60.0)
+
+            ```
+        - No limits is no scale, which is how a layer says its domain is the engine's to measure:
+            ```python
+            >>> from digitalearth.interactive.style_fold import limits_scale
+            >>> limits_scale(None) is None, limits_scale([1.0]) is None
+            (True, True)
+
+            ```
+        - And a pair no scale can hold is refused the same way rather than raised:
+            ```python
+            >>> from digitalearth.interactive.style_fold import limits_scale
+            >>> limits_scale([float("nan"), 1.0]) is None
+            True
+
+            ```
+    """
+    if not isinstance(limits, (tuple, list)) or len(limits) != 2:
+        return None
+    low, high = limits
+    try:
+        return Scale.from_limits(float(low), float(high))
+    except (TypeError, ValueError):
+        return None
 
 
 def allowed_options(

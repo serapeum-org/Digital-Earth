@@ -58,7 +58,9 @@ class InteractionMixin(_MixinBase):
                 ``None`` (the default) configures the layer the caller added last, which is not
                 ``layers[-1]`` whenever that layer is drawn beneath an overlay such as coastlines; an
                 underlay added after data does not take it over (see
-                :meth:`~digitalearth.interactive.decoration.DecorationMixin.colorbar`).
+                :meth:`~digitalearth.interactive.base.InteractiveMapBase._last_layer_index`, which is that
+                rule. The colour keys read it too, but tighten it: a layer whose colour varies with nothing
+                cannot take a key over, and a hover has no such condition — any layer can be hovered).
 
         Returns:
             The same map instance, so builder calls chain.

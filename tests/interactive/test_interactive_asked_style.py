@@ -184,9 +184,13 @@ def _drawn(probe: Probe, style: Mapping[str, Any]):
         symbology = figure.layers.get(figure.layers.ids[-1]).symbology
     finally:
         drawn.close()
+    # Constants only. A style keyword lifts to a constant, which is all this module is about; a **field**
+    # binding is what the layer is coloured *by* — `field(dem)` publishes one whether or not anybody styled it
+    # (order 24) — and `Encoding.resolve()` needs that field's values, which no probe here has.
     published = {
         channel: symbology.encoding(channel).resolve()
         for channel in sorted(symbology.encodings)
+        if symbology.encoding(channel).is_constant
     }
     return dict(symbology.props), published
 

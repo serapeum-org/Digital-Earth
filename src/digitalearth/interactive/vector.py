@@ -21,7 +21,14 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Scale, Symbology
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    DataRef,
+    Encoding,
+    LayerSpec,
+    Scale,
+    Symbology,
+)
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -34,6 +41,7 @@ from digitalearth.interactive.base import (
     held_props,
     style_value,
 )
+from digitalearth.interactive.style_fold import limits_scale
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -117,6 +125,60 @@ def apply_opacity(opacity: Optional[float], opts: dict) -> None:
         opts["alpha"] = opacity
 
 
+def _categorical_scale(styling: dict, categories: list, labels: dict) -> Scale:
+    """Return the categorical :class:`~digitalearth.base.spec.scale.Scale` a distinct-value fill was drawn with.
+
+    Built from the very options the element is styled with rather than from a second pass over the column, so
+    a swatch cannot disagree with the polygon beside it — which is the guarantee
+    :mod:`digitalearth.base.spec.legend` exists for and the one ``last_breaks`` could only maintain by hand.
+
+    The categories are the **string** form of the caller's values, because that is what this tier colours by:
+    :meth:`VectorMixin._categorical_style` relabels the column to `str(value)` and hands HoloViews a
+    ``{label: colour}`` map, so the strings are the categories the picture actually has. It is also what lets
+    the scale be written into a figure at all — a value with no JSON form (a timestamp, a tuple) would make
+    `Symbology.to_dict` refuse a layer that draws perfectly well. ``last_breaks`` keeps the caller's own
+    values, which is the one thing it still says that the scale does not.
+
+    Args:
+        styling: What :meth:`VectorMixin._categorical_style` returned as the element's options; its ``cmap``
+            is the ``{label: colour}`` map.
+        categories: The caller's distinct values, in classifier order.
+        labels: The relabelling that method returned, whose ``missing`` is the sentinel label the neutral
+            fallback colour is filed under.
+
+    Returns:
+        The scale, one colour per category, carrying the missing colour when the column had gaps.
+    """
+    palette = dict(styling["cmap"])
+    return Scale.categorical(
+        [str(category) for category in categories],
+        [palette[str(category)] for category in categories],
+        missing=palette.get(labels["missing"]),
+    )
+
+
+def _graduated_scale(classified: dict, scheme: Any) -> Scale:
+    """Return the classified :class:`~digitalearth.base.spec.scale.Scale` a graduated fill was drawn with.
+
+    The same derivation as :func:`_categorical_scale`, for the other classified shape: the class edges the
+    element's ``color_levels`` carry *are* the scale's breaks, so the key and the fill cut at one set of
+    numbers rather than two that agree while nobody edits either.
+
+    Args:
+        classified: What :meth:`VectorMixin._graduated_style` returned, whose ``color_levels`` are the edges.
+        scheme: The scheme the caller asked for — a name, or an explicit sequence of edges. Taken as an
+            argument because the options dict does not carry it and the call site does.
+
+    Returns:
+        The scale: the edges' own ends as the domain, the scheme, and the edges as its breaks.
+    """
+    edges = [float(edge) for edge in classified["color_levels"]]
+    # Through `from_limits`, so the one degenerate case a classifier can still hand over — every edge equal —
+    # is widened by the shared rule rather than raising out of a builder that has already styled its element.
+    domain = Scale.from_limits(edges[0], edges[-1])
+    return Scale(domain.vmin, domain.vmax, scheme=scheme, breaks=tuple(edges))
+
+
 def _vector_symbology(
     hv_type: str,
     vdims: Any,
@@ -124,6 +186,7 @@ def _vector_symbology(
     labels: Optional[dict] = None,
     opts: Optional[dict] = None,
     asked: Tuple[str, ...] = (),
+    color: Optional[Encoding] = None,
 ) -> Symbology:
     """Return the description a vector layer is drawn from.
 
@@ -143,12 +206,19 @@ def _vector_symbology(
             the caller's by construction — but a parameter resolves its default before anything is recorded,
             so the ask has to be recorded to survive (#334). Empty records no key at all, so an unstyled
             layer's description is exactly what it was.
+        color: What the layer's colour varies with, as an
+            :class:`~digitalearth.base.spec.encoding.Encoding` bound to the column — with the `Scale` it was
+            classified through, where there was one. `None` for a layer drawn in one flat colour, which
+            publishes no colour encoding at all and so refuses a colour key rather than drawing an empty box
+            (order 24). This is a *binding*, not style the builder resolved: it says what the layer **is**,
+            which is why an unstyled classified layer still carries it while publishing no constant.
 
     Returns:
         The symbology. Written by a helper rather than inline at five call sites, so the five kinds cannot
         drift in what they record.
     """
     return Symbology(
+        encodings={} if color is None else {"color": color},
         props={
             "via": "geometry",
             "hv_type": hv_type,
@@ -157,7 +227,7 @@ def _vector_symbology(
             "labels": dict(labels) if labels else None,
             "opts": dict(opts or {}),
             **asked_record(asked),
-        }
+        },
     )
 
 
@@ -657,6 +727,11 @@ class VectorMixin(_MixinBase):
             )
         styling: dict = {}
         labels: Optional[dict] = None
+        # What the layer's colour varies with, published beside the engine's own spelling of it so a colour
+        # key can hang on the layer rather than on the tier's most recent classification (order 24). `None`
+        # while no `column` was given: those points are one flat colour, and a key over them would label
+        # nothing.
+        colour: Optional[Encoding] = None
         if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
@@ -665,13 +740,24 @@ class VectorMixin(_MixinBase):
                 features, column, cmap=cmap
             )
             self.last_breaks = categories
+            colour = Encoding.by_field(
+                "color", column, scale=_categorical_scale(styling, categories, labels)
+            )
         elif column and scheme is not None:
             styling = self._graduated_style(
                 features, column, scheme=scheme, k=k, cmap=cmap
             )
             self.last_breaks = list(styling["color_levels"])
+            colour = Encoding.by_field(
+                "color", column, scale=_graduated_scale(styling, scheme)
+            )
         elif column:
             styling = {"color": column, "cmap": cmap, "colorbar": True}
+            # A continuous ramp over the column, with no limits the builder holds: HoloViews measures them
+            # from the data at render time unless the caller wrote a `clim` of their own.
+            colour = Encoding.by_field(
+                "color", column, scale=limits_scale(opts.get("clim"))
+            )
         # The caller's `**opts` are split per value: `describe_opts` writes the JSON-safe half into the
         # description and puts the rest in `held` (review M3). Either way the drawer merges them over
         # this, which keeps the precedence: an explicit style the caller wrote outranks the one
@@ -696,6 +782,7 @@ class VectorMixin(_MixinBase):
                 labels,
                 described_opts,
                 tuple(ask.named),
+                colour,
             ),
         )
 
@@ -938,7 +1025,20 @@ class VectorMixin(_MixinBase):
             source=features,
             held=held,
             symbology=_vector_symbology(
-                "Polygons", [column] if column else None, common, None, described_opts
+                "Polygons",
+                [column] if column else None,
+                common,
+                None,
+                described_opts,
+                (),
+                # Filled by the column when there is one, and drawn as outlines when there is not — which is
+                # why the key is refused on an unfilled `polygons()` layer. The limits are the caller's
+                # `clim`, which `choropleth` forwards through `**opts`; without one the engine measures them.
+                None
+                if not column
+                else Encoding.by_field(
+                    "color", column, scale=limits_scale(opts.get("clim"))
+                ),
             ),
         )
 
@@ -960,13 +1060,18 @@ class VectorMixin(_MixinBase):
         column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
         what guarantees one discrete colour per distinct value (no continuous colorbar). Missing values
         (``NaN``/``None``) are drawn with a neutral ``"#cccccc"`` fallback, matching the web tier's default.
-        The categories (original values, in classifier order) are recorded on ``last_breaks`` for legend parity
-        with the web tier.
+        The categories (original values, in classifier order) are recorded on ``last_breaks``, which stays the
+        raw-values accessor the web tier publishes too.
 
         Because the fill is keyed on the **string** form of each value, this assumes a single-dtype attribute
         column: two categories that stringify identically (e.g. the integer ``1`` and the string ``"1"``, or
         ``1`` and ``1.0``) collapse to one colour. Realistic categorical columns are single-dtype; the web tier
         keeps such mixed values distinct via its native ``match``.
+
+        The layer also publishes a **categorical** :class:`~digitalearth.base.spec.scale.Scale` on its colour
+        encoding, carrying the very colours the fill was drawn with, so a key derived from it
+        (:meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale`) cannot disagree with the polygons —
+        which is what order 24 puts in place of the hand-maintained ``last_breaks`` parallel.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
@@ -1002,6 +1107,12 @@ class VectorMixin(_MixinBase):
                 describe_style(held, styling),
                 labels,
                 described_opts,
+                (),
+                Encoding.by_field(
+                    "color",
+                    column,
+                    scale=_categorical_scale(styling, categories, labels),
+                ),
             ),
         )
 
@@ -1179,6 +1290,10 @@ class VectorMixin(_MixinBase):
                 describe_style(held, classified),
                 None,
                 described_opts,
+                (),
+                Encoding.by_field(
+                    "color", column, scale=_graduated_scale(classified, scheme)
+                ),
             ),
         )
 
@@ -1203,7 +1318,11 @@ class VectorMixin(_MixinBase):
         ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
         ramp (DC.8), or a **graduated** scheme (``"quantiles"``/``"equal_interval"``/``"fisher_jenks"``/…)
         to classify a numeric column into ``k`` flat classes. Either way the categories or class edges are
-        recorded on ``last_breaks`` for legend parity with the web tier.
+        published on the layer's own colour encoding, as the :class:`~digitalearth.base.spec.scale.Scale` it
+        was classified through — which is what :meth:`colorbar` and :meth:`legend` hang their key on (order
+        24) and what :meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale` derives a swatch list from.
+        They are recorded on ``last_breaks`` as well, which keeps the caller's own category values (the scale
+        colours by their string form) and stays the raw-numbers accessor the web tier also publishes.
 
         Graduated classification goes through :class:`~digitalearth.base.spec.scale.Scale` — the one place
         every tier reaches the classifier — so the same ``column``/``scheme``/``k`` yields the same breaks on

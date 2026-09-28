@@ -258,18 +258,20 @@ class TestACallersOwnElement:
         ), (held.layer_ids, held.layers)
 
     def test_the_removed_layer_stops_being_the_one_the_toggles_act_on(self, held):
-        """`colorbar()` and `legend()` act on the layer added last; a removed one is not it.
+        """`hover()`, `on_tap()` and the colour keys act on the layer added last; a removed one is not it.
 
         Args:
             held: The map under test.
 
         Test scenario:
             The pointer is resolved by looking the id up in the tree, so leaving it on a removed layer made
-            the next `colorbar()` answer `ValueError: tuple.index(x): x not in tuple` — review N8, found on
-            the `_forget_layer` path and reachable the same way from here.
+            the next call answer `ValueError: tuple.index(x): x not in tuple` — review N8, found on the
+            `_forget_layer` path and reachable the same way from here. `hover` is the caller named because it
+            is the one that still resolves the pointer through this method; since order 24 the colour keys
+            ask a further question of the layer it names.
         """
         held.remove_layer(TOP)
-        assert held._last_layer_index("colorbar") == 0, held._last_layer_id
+        assert held._last_layer_index("hover") == 0, held._last_layer_id
 
 
 class TestWhatReplaceLayerRefusesAndSaysItRefuses:

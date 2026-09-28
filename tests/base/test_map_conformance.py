@@ -81,12 +81,14 @@ styled probe passes an explicit value rather than comparing two silences — and
 rule in `encodings`, which briefly published each tier's defaults as though a caller had asked for them
 (review R-H2).
 
-The classification is the other thing the two tiers are held to, and it is **not** a symbology value:
-`choropleth(..., scheme=, k=)` goes through :class:`~digitalearth.base.spec.scale.Scale` on every tier and
-both publish the result as `last_breaks`, an attribute of the live map that no `FigureSpec` carries.
-:data:`EXPECTED_BREAKS` pins it as live-map parity between two engines — not as part of the `to_backend()`
-precondition, which it was framed as while reading something a figure does not carry (review R-M6). What
-the figure does carry is asked separately and guarded by :data:`NO_PORTABLE_CLASSIFICATION`.
+The classification is the other thing the two tiers are held to, and it is asked in **two** places, because
+the two answers differ. `choropleth(..., scheme=, k=)` goes through
+:class:`~digitalearth.base.spec.scale.Scale` on every tier and both publish the result as `last_breaks`, an
+attribute of the live map that no `FigureSpec` carries; :data:`EXPECTED_BREAKS` pins that as live-map parity
+between two engines — not as part of the `to_backend()` precondition, which it was framed as while reading
+something a figure does not carry (review R-M6). What the **figure** carries is the `Scale` on the layer's
+colour encoding, guarded by :data:`NO_PORTABLE_CLASSIFICATION`: the interactive tier publishes it since order
+24 and is held to it live, the web tier does not and is still named there.
 
 **The collection trap this module is built not to fall into.** The shared renderer contract collected nothing
 useful in the 3-D and interactive jobs for its whole life: its classes are gated on optional engines, and the
@@ -304,10 +306,11 @@ TIER_ENGINES: dict[str, str] = {
 #: The tiers whose **figure** carries no class edges, each with what carries them instead.
 #:
 #: `choropleth(..., scheme=, k=)` classifies through :class:`~digitalearth.base.spec.scale.Scale` on every
-#: tier, and both tiers publish the result on the live map as `last_breaks`. A `FigureSpec` carries neither:
-#: measured, the breaks appear in no layer's `symbology.props` and in no `encodings`, on either tier, and the
-#: probe that read `last_breaks` was framed as the `to_backend()` precondition while reading something a
-#: figure does not carry (review R-M6).
+#: tier, and every tier publishes the result on the live map as `last_breaks`. A `FigureSpec` carries that
+#: attribute on no tier — the breaks appear in no layer's `symbology.props` anywhere — and the probe that read
+#: it was framed as the `to_backend()` precondition while reading something a figure does not carry
+#: (review R-M6). Where a tier carries the edges in its **figure** it is as the `Scale` on the layer's colour
+#: encoding, which is what this table is about and what only the interactive tier publishes today.
 #:
 #: Guarded in both directions by
 #: :meth:`MapConformanceBase.test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such`, so the entry
@@ -324,11 +327,26 @@ NO_PORTABLE_CLASSIFICATION: dict[str, str] = {
         "stop (5.0) and neither end; the expression is refused as a colour, so the layer publishes no "
         "colour encoding to hang a Scale on"
     ),
-    "interactive": (
-        "the edges become props['common']['color_levels'] beside a color naming the value dimension, and a "
-        "colour that names a column is refused, so the layer publishes no colour encoding either"
-    ),
+    # `interactive` was listed here — "the edges become props['common']['color_levels'] beside a color naming
+    # the value dimension, and a colour that names a column is refused, so the layer publishes no colour
+    # encoding either". Order 24 is what retired it, exactly as this table's docstring says it would: the
+    # tier's classified builders now publish `Encoding.by_field("color", column, scale=…)` carrying the very
+    # `Scale` they cut, because that is what a `Guide` has to hang on for a colour key to follow its layer
+    # (#261). `_class_edges` reads that scale's breaks, so the probe below is now a live check on this tier
+    # rather than an excused one, and the tier is named in `PUBLISHES_CLASSIFICATION` instead.
 }
+
+#: The tiers whose **figure** does carry its class edges, as the `Scale` on the layer's colour encoding.
+#:
+#: The positive counterpart of the two excuse tables, and the reason
+#: :meth:`TestAnExcuseComesFromATableAndNotFromItsAbsence.test_every_tier_the_package_ships_is_excused_by_a_named_table`
+#: is a both-directions guard rather than "every shipped tier is excused". While that was true, nothing but a
+#: make-believe tier name could exercise `_classification_excuse`'s unexcused branch; order 24 made it live
+#: for the first real tier, so the set is written down and held rather than asserted empty.
+#:
+#: A tier joins this tuple in the change that publishes its classification, and leaves the excuse table in the
+#: same breath — the two cannot both name it, which is what the guard checks.
+PUBLISHES_CLASSIFICATION: tuple[str, ...] = ("interactive",)
 
 
 def _shipped_tiers() -> tuple[str, ...]:
@@ -1047,12 +1065,13 @@ class MapConformanceBase:
             tier that classified locally would draw a legend that disagreed with its own fill.
 
             `last_breaks` is an attribute of the map object and **no `FigureSpec` carries it** (measured:
-            it appears in no layer's `symbology.props` and in no `encodings` on either tier). So this is
-            live-map parity between two engines, not a statement about what survives a write to JSON, and
-            it is not part of the `to_backend()` precondition the probes above are — a probe cannot be the
-            precondition for carrying a figure across while reading something the figure does not carry
-            (review R-M6). What the figure carries is asked separately, by
-            :meth:`test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such`.
+            it appears in no layer's `symbology.props` on either tier). So this is live-map parity between two
+            engines, not a statement about what survives a write to JSON, and it is not part of the
+            `to_backend()` precondition the probes above are — a probe cannot be the precondition for carrying
+            a figure across while reading something the figure does not carry (review R-M6). What the figure
+            carries is the `Scale` on the layer's colour encoding, asked separately by
+            :meth:`test_a_tier_whose_figure_carries_no_class_edges_is_named_as_such`, which the interactive
+            tier now answers and the web tier does not.
         """
         drawn.choropleth(_polygons(), COLUMN, scheme=SCHEME, k=CLASSES)
         assert tuple(drawn.last_breaks) == EXPECTED_BREAKS, (
@@ -1889,14 +1908,19 @@ class TestAnExcuseComesFromATableAndNotFromItsAbsence:
         """And the complement: each shipped tier's excuse, or lack of one, is traceable to a table.
 
         Test scenario:
-            The reason the check above needs a tier name the package does not ship. Every tier it *does*
-            ship is named in one of the two tables today, so none of them exercises the unexcused branch —
-            stating that here is what stops a reader concluding the branch is dead code.
+            The reason the check above needs a tier name the package does not ship: while **no** shipped tier
+            published its classification, nothing but a make-believe name could exercise the unexcused
+            branch, and saying so was what stopped a reader concluding the branch was dead code. Order 24
+            made the branch live for the interactive tier, so what is asked now is that the set of unexcused
+            tiers is exactly :data:`PUBLISHES_CLASSIFICATION` — read in both directions, so a tier that
+            starts publishing its `Scale` and a tier that stops both fail here rather than sliding between
+            the two tables unnoticed.
         """
         unexcused = sorted(
             backend for backend in ALL_TIERS if _classification_excuse(backend) is None
         )
-        assert unexcused == [], (
-            f"{unexcused} are held to EXPECTED_BREAKS on their figure now; that branch is live, so the "
-            "make-believe tier above is no longer the only thing exercising it"
+        assert unexcused == sorted(PUBLISHES_CLASSIFICATION), (
+            f"{unexcused} are held to EXPECTED_BREAKS on their figure, and "
+            f"PUBLISHES_CLASSIFICATION names {sorted(PUBLISHES_CLASSIFICATION)}; a tier that has gained or "
+            "lost the Scale on its colour encoding belongs in that tuple or in one of the two excuse tables"
         )

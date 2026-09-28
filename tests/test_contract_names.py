@@ -107,14 +107,11 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 "column, scheme and k classify nothing; opacity is spelled alpha, and a bare width= is "
                 "HoloViews' own plot width rather than the line's — #332, order 27a",
             ),
-            ("matplotlib", "colorbar"): (
-                ("layer_id", "visible"),
-                "keyed by position (layer=-1) and drawn when called rather than toggled — #261, order 24",
-            ),
-            ("matplotlib", "legend"): (
-                ("layer_id", "title", "visible"),
-                "takes the colours and labels themselves rather than a layer id — #261, order 24",
-            ),
+            # `("matplotlib", "colorbar")` was listed here against `("layer_id", "visible")` and
+            # `("matplotlib", "legend")` against `("layer_id", "title", "visible")`. Both closed at order 24:
+            # the colour key is a `Guide` on the layer's colour encoding now, so `colorbar` takes the layer by
+            # id and `legend` derives its rows from that layer's scale instead of being handed the colours and
+            # labels themselves.
             ("matplotlib", "basemap"): (
                 ("provider",),
                 "the provider is spelled source= here — #268",
@@ -135,14 +132,11 @@ KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
                 # `opacity` half came off when order 27a took the keyword (#332).
                 "classification is choropleth() on this tier, so polygons() takes no scheme/k at all — #331",
             ),
-            ("interactive", "colorbar"): (
-                ("label", "layer_id", "visible"),
-                "a show= toggle on the layer added last, not a builder keyed by id — #261, order 24",
-            ),
-            ("interactive", "legend"): (
-                ("labels", "layer_id", "title", "visible"),
-                "the same show= toggle as its colorbar — #261, order 24",
-            ),
+            # `("interactive", "colorbar")` and `("interactive", "legend")` were listed here — "a show=
+            # toggle on the layer added last, not a builder keyed by id" and "the same show= toggle as its
+            # colorbar". Order 24 built both: each takes `layer_id` and the Core's own `label`/`title`,
+            # `labels` and `visible`, and records the answer as a `Guide` on the layer's colour encoding
+            # rather than writing an option onto whichever element was added last (#261).
             ("interactive", "tiles"): (
                 ("url",),
                 "a name and a URL both arrive through one overloaded provider= — #268",

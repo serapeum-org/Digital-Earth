@@ -27,6 +27,7 @@ from digitalearth.base.spec import (
     DEFAULT_BAND,
     Bounds,
     DataRef,
+    Encoding,
     LayerSpec,
     RenderTarget,
     Selection,
@@ -48,11 +49,19 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
-from digitalearth.interactive.style_fold import TIER_BUCKET
+from digitalearth.interactive.style_fold import TIER_BUCKET, limits_scale
 
 #: What an unstyled colour-mapped raster is drawn at on this tier. The value left `field`'s signature with
 #: #334, for the reason `POINT_SIZE` gives on the vector side, and this is where it lives instead.
 FIELD_ALPHA = 1.0
+
+#: What a raster layer's colour is said to vary with when the raster names neither a band nor a variable.
+#:
+#: The same fallback :meth:`~digitalearth.interactive.base.InteractiveMapBase._vdim_name` lands on — a
+#: `Source` built from a bare array records ``variable: ""`` and its value axis is named ``z`` — so the name
+#: the description publishes is the name the drawn element's value dimension carries. Written once because
+#: the two would otherwise be two spellings of one thing.
+UNNAMED_VALUE = "z"
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -79,6 +88,43 @@ def _travelling_pair(pair: Any) -> Any:
     if isinstance(pair, (tuple, list)) and len(pair) == 2:
         return list(pair)
     return pair
+
+
+def coloured_by(data: Any, band: int = DEFAULT_BAND) -> str:
+    """Return the name of the value a raster layer's colour varies with, **without warping the raster**.
+
+    Order 24 hangs a colour key on the layer's own colour encoding, and an encoding bound to a field needs
+    that field's name at the moment the layer is *described* — which is before any drawer has run. The drawer
+    reads the name off the reprojected :class:`~digitalearth.base.sources.source.Source`
+    (:meth:`~digitalearth.interactive.base.InteractiveMapBase._vdim_name`), and reprojecting here to ask the
+    same question would do the drawer's work a second time and throw the result away — the duplication review
+    M8 took out of the vector builders. So the name is read off the raster's own metadata instead, the way
+    :meth:`~digitalearth.interactive.base.InteractiveMapBase._auto_cmap_for_band` already reads a band name to
+    resolve a colormap without touching the band.
+
+    The two agree by construction for every input this tier draws: the extractor records a `Dataset`'s
+    ``band_names[band - 1]`` as the source's ``variable`` and a `NetCDF`'s first variable name likewise, and
+    those are exactly what is read here. Measured on ``examples/data/acc4000.tif``: this answers ``'Band_1'``
+    and the drawn ``hv.Image``'s value dimension is ``'Band_1'``.
+
+    Args:
+        data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF`` / ``Source``, a path, or a bare
+            array. Read with `getattr`, so an input declaring neither list simply falls back.
+        band: The 1-based band the layer colours by.
+
+    Returns:
+        The band's name, the first variable's name, or :data:`UNNAMED_VALUE` — never an empty string, which is
+        what an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
+    """
+    names = list(getattr(data, "band_names", None) or [])
+    if 1 <= band <= len(names) and names[band - 1]:
+        return str(names[band - 1])
+    # A `NetCDF` has variables rather than bands, and `to_display_source` extracts the **first** of them —
+    # it forwards only `band`, never a variable — so that is the one a colour key would explain.
+    variables = list(getattr(data, "variable_names", None) or [])
+    if variables and variables[0]:
+        return str(variables[0])
+    return UNNAMED_VALUE
 
 
 def _one_spacing_only(caller: str, levels: Any, interval: Optional[float]) -> None:
@@ -403,6 +449,15 @@ class RasterMixin(_MixinBase):
             source=data,
             held=held,
             symbology=Symbology(
+                # The layer's colour varies with the band it draws, so that is published as a binding rather
+                # than left for a reader to infer from `cmap`. It is what a colorbar hangs on (order 24): a
+                # `Guide` explains an encoding, so a layer with no colour encoding has no key, and a layer
+                # with this one has a key that moves, hides and disappears with it.
+                encodings={
+                    "color": Encoding.by_field(
+                        "color", coloured_by(data, band), scale=limits_scale(clim)
+                    )
+                },
                 props={
                     "via": "image",
                     "band": band,
@@ -413,7 +468,7 @@ class RasterMixin(_MixinBase):
                     "clabel": clabel,
                     "opts": described_opts,
                     **ask.record,
-                }
+                },
             ),
         )
 
@@ -544,13 +599,18 @@ class RasterMixin(_MixinBase):
             source=data,
             held=held,
             symbology=Symbology(
+                # Coloured by its band, exactly as `field` is; it takes no `clim=`, so the domain is the
+                # engine's to measure and the encoding carries no scale rather than a guessed one.
+                encodings={
+                    "color": Encoding.by_field("color", coloured_by(data, band))
+                },
                 props={
                     "via": "quadmesh",
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "clabel": clabel,
                     "opts": described_opts,
-                }
+                },
             ),
         )
 
@@ -655,6 +715,7 @@ class RasterMixin(_MixinBase):
         visible: bool = True,
         derived: Optional[Mapping[str, Any]] = None,
         opts: Optional[Mapping[str, Any]] = None,
+        coloured_by_value: bool = True,
     ) -> Self:
         """Record the shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
 
@@ -686,6 +747,12 @@ class RasterMixin(_MixinBase):
                 through ``**opts`` was published as the caller's own style (review R2-H3).
             opts: The caller's own HoloViews style options, taken as a mapping rather than ``**opts``
                 so a keyword named like one of this method's own parameters cannot collide with it.
+            coloured_by_value: Whether the traced levels are coloured **by the value they trace**, which is
+                what decides whether the layer publishes a colour encoding for a key to hang on (order 24).
+                `True` for :meth:`contours`, whose levels are coloured along the band's own range. `False` is
+                :meth:`spaghetti` cycling one flat colour per ensemble member: a member's strands all draw in
+                that one colour, so there is nothing a colour key could label — and a `Guide` on it is
+                refused rather than drawn as an empty box.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -710,6 +777,15 @@ class RasterMixin(_MixinBase):
             source=data,
             held=held,
             symbology=Symbology(
+                # The traced levels are coloured along the band's range, so the layer's colour varies with the
+                # band — the binding a legend or a colorbar is hung on. No scale: the levels are resolved when
+                # the layer is drawn (a caller's `interval=` is a property of the band, not of this call), so
+                # the domain is the engine's to measure.
+                encodings=(
+                    {"color": Encoding.by_field("color", coloured_by(data, band))}
+                    if coloured_by_value
+                    else {}
+                ),
                 props={
                     "via": "contours",
                     "band": band,
@@ -718,7 +794,7 @@ class RasterMixin(_MixinBase):
                     "filled": filled,
                     TIER_BUCKET: described_tier,
                     "opts": described_opts,
-                }
+                },
             ),
         )
 
@@ -798,6 +874,10 @@ class RasterMixin(_MixinBase):
                 name=name,
                 visible=visible,
                 derived=derived,
+                # A member's strands are one flat colour — the cycle's, or the caller's own `color=` — so the
+                # layer publishes no colour encoding and takes no colour key. A `cmap=` is the one keyword
+                # that makes the strands vary with the value they trace, and only then is there a key to draw.
+                coloured_by_value="cmap" in opts,
                 opts=opts,
             )
         return self
@@ -911,6 +991,12 @@ class RasterMixin(_MixinBase):
             source=dataset,
             held=held,
             symbology=Symbology(
+                # Coloured by its band like `field`, and named the same warp-free way — which matters more
+                # here than anywhere else, since the whole point of this builder is never to read the raster
+                # whole. No scale: each frame is stretched to the window it read.
+                encodings={
+                    "color": Encoding.by_field("color", coloured_by(dataset, band))
+                },
                 props={
                     "via": "large_image",
                     "band": band,
@@ -918,7 +1004,7 @@ class RasterMixin(_MixinBase):
                     "dynamic": dynamic,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "opts": described_opts,
-                }
+                },
             ),
         )
 

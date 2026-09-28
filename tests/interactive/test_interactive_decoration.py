@@ -171,10 +171,10 @@ class TestCoastlinesAndFeatures:
 
 
 class TestTogglesAndCompose:
-    """``legend`` / ``colorbar`` toggles and the DI.1 acceptance overlay."""
+    """``legend`` / ``colorbar`` colour keys and the DI.1 acceptance overlay."""
 
     def test_colorbar_toggle_rewrites_last_layer(self, m, dataset):
-        m.field(dataset).colorbar(False)
+        m.field(dataset).colorbar(visible=False)
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
         assert plot["colorbar"] is False
 
@@ -191,7 +191,7 @@ class TestTogglesAndCompose:
             `colorbar()` read `self.layers[-1]`, and `layers` follows band order, so the toggle reached the
             label instead and HoloViews refused it: `Unexpected option 'colorbar' for Text type` (review H5).
         """
-        m.text(4.0, 52.0, "label").field(dataset).colorbar(False)
+        m.text(4.0, 52.0, "label").field(dataset).colorbar(visible=False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -205,10 +205,11 @@ class TestTogglesAndCompose:
             dataset: A small raster.
 
         Test scenario:
-            `coastlines().field(dem).colorbar(False)` applied the option to the coastlines and left the
+            `coastlines().field(dem).colorbar(visible=False)` applied the option to the coastlines and left
+            the
             raster's colorbar on — the call the caller made did nothing they could see.
         """
-        m.coastlines().field(dataset).colorbar(False)
+        m.coastlines().field(dataset).colorbar(visible=False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -226,7 +227,7 @@ class TestTogglesAndCompose:
             toggles acted on; the web tier's `_last_layer_id` likewise counts data layers only. Tracking
             "the last layer added" without that exception would send this call to the tiles.
         """
-        m.field(dataset).tiles("CartoLight").colorbar(False)
+        m.field(dataset).tiles("CartoLight").colorbar(visible=False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -237,21 +238,37 @@ class TestTogglesAndCompose:
             m: The map.
             dataset: A small raster to contour.
         """
-        m.coastlines().contours(dataset, levels=4).legend(False)
+        m.coastlines().contours(dataset, levels=4).legend(visible=False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Contours), "plot")
         assert plot.kwargs["show_legend"] is False, plot.kwargs
 
     def test_colorbar_without_layers_raises(self, m):
-        with pytest.raises(ValueError, match="at least one layer"):
+        """A map with nothing coloured has no key to show, and says which builders make one.
+
+        Args:
+            m: The map.
+
+        Test scenario:
+            The refusal used to be "needs at least one layer", because the key was a toggle on whichever
+            layer was added last. It is a guide on a colour encoding now, so the question is not whether
+            there is a layer but whether any layer's colour varies with its data — and an empty map answers
+            no to both.
+        """
+        with pytest.raises(ValueError, match="needs a layer whose colour varies"):
             m.colorbar()
 
     def test_legend_toggle(self, m, dataset):
-        m.contours(dataset, levels=4).legend(False)
+        m.contours(dataset, levels=4).legend(visible=False)
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
         assert plot["show_legend"] is False
 
     def test_legend_without_layers_raises(self, m):
-        with pytest.raises(ValueError, match="at least one layer"):
+        """The same refusal from the other key, in the same words.
+
+        Args:
+            m: The map.
+        """
+        with pytest.raises(ValueError, match="needs a layer whose colour varies"):
             m.legend()
 
     def test_tiles_style_opts_forwarded(self, m):
