@@ -493,6 +493,97 @@ class TestAnimate:
         )
         assert Map(crs=4326)._stack_clim([ds]) == (0.0, 1.0)
 
+    def test_a_constant_stack_gets_a_range_with_width(self):
+        """Frames that all hold one value yield a span, not a zero-width pair (DE-40).
+
+        Test scenario:
+            ``_stack_clim`` handed its measurement straight through, so a stack of identical frames resolved
+            to ``vmin == vmax`` — the one thing every other domain in the package is guaranteed not to be.
+            matplotlib clamps a zero-width ``Normalize`` to the bottom of the ramp and its colorbar collapses
+            to a single tick, and any tier that divides by the span divides by zero. Routing the measurement
+            through :class:`~digitalearth.base.spec.scale.Scale` applies the widening rule the other six
+            derivation sites already used.
+        """
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(
+            read_array=lambda band=0, masked=False: np.full((2, 2), 7.0),
+            no_data_value=[None],
+            epsg=4326,
+        )
+        low, high = Map(crs=4326)._stack_clim([ds, ds, ds])
+        assert high > low, f"a constant stack must have a span, got ({low}, {high})"
+        assert (low, high) == (7.0, 8.0), (
+            f"the shared widening rule is +1, got ({low}, {high})"
+        )
+
+    def test_a_constant_stack_resolves_to_a_drawable_animation_clim(self):
+        """The widened range is what reaches ``opts``, so the renderer and colorbar share a real span.
+
+        Test scenario:
+            ``_stack_clim`` is internal; what the frames are actually drawn with is ``opts["vmin"]`` /
+            ``opts["vmax"]``. This pins that the widening survives the resolve step rather than being
+            re-flattened there.
+        """
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(
+            read_array=lambda band=0, masked=False: np.full((2, 2), -3.5),
+            no_data_value=[None],
+            epsg=4326,
+        )
+        opts = {"band": 1}
+        Map(crs=4326)._resolve_animation_clim([ds, ds], opts)
+        assert opts["vmax"] - opts["vmin"] > 0.0, (
+            f"the animation's shared range must have width, got {opts['vmin']}..{opts['vmax']}"
+        )
+
+    def test_a_caller_bound_is_still_kept_verbatim_beside_the_widened_scan(self):
+        """Widening applies to the scan, never to a limit the caller wrote down.
+
+        Test scenario:
+            The consequence worth pinning: with one bound supplied the resolve mixes it with the scan's, so
+            the caller's ``vmin`` must come through untouched even though the scan widened its own upper
+            bound. A widening that reached the caller's number would silently move a limit they chose.
+        """
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(
+            read_array=lambda band=0, masked=False: np.full((2, 2), 7.0),
+            no_data_value=[None],
+            epsg=4326,
+        )
+        opts = {"band": 1, "vmin": 0.0}
+        Map(crs=4326)._resolve_animation_clim([ds, ds], opts)
+        assert opts["vmin"] == 0.0, (
+            f"the caller's floor must survive, got {opts['vmin']}"
+        )
+        assert opts["vmax"] == 8.0, (
+            f"the scan's widened bound is what fills the missing one, got {opts['vmax']}"
+        )
+
+    def test_a_constant_stack_too_large_to_widen_by_one_still_resolves(self):
+        """A constant band above ``2**53`` scales rather than raising.
+
+        Test scenario:
+            The regression routing through ``Scale`` would have introduced: ``Scale``'s widening was
+            ``lo + 1.0``, which does not move at that magnitude, so the constructor refused the domain and a
+            stack that animated fine before would have raised ``ValueError``. Measured on real values, not
+            reasoned: a constant float band of 1e20 is what a large sentinel or an epoch-nanosecond field
+            looks like.
+        """
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(
+            read_array=lambda band=0, masked=False: np.full((2, 2), 1e20),
+            no_data_value=[None],
+            epsg=4326,
+        )
+        low, high = Map(crs=4326)._stack_clim([ds, ds])
+        assert high > low, (
+            f"a constant 1e20 stack must still widen, got ({low!r}, {high!r})"
+        )
+
     def test_frame_style_skips_a_frame_it_cannot_read(self, stack):
         """An unreadable frame moves the style lookup on to the next one instead of failing the bar.
 
@@ -697,14 +788,17 @@ class TestAnimateBand:
         Test scenario:
             rotate() turns one dataset under a sweep of projections, so it takes the
             ``_clim_across_views`` path and measures only the first frame. That frame's band 2 is a
-            constant 500 and its band 1 a constant 1, so the reported bound says which band was read.
+            constant 500 and its band 1 a constant 1, so the reported bound says which band was read. The
+            band is constant, so the upper bound is 501 rather than 500: the union goes through
+            :class:`~digitalearth.base.spec.scale.Scale`, which widens a domain with no width (DE-40) —
+            ``vmin`` alone is what identifies the band.
         """
         opts = {"band": 2}
         views = [projections.orthographic(lon, 30.0) for lon in (4.0, 5.0)]
         Map(crs=views[0], globe=True)._resolve_animation_clim(
             two_band_stack, opts, views=views
         )
-        assert (opts["vmin"], opts["vmax"]) == (500.0, 500.0), (
+        assert (opts["vmin"], opts["vmax"]) == (500.0, 501.0), (
             f"rotate's scan should read band 2 of the first frame, got "
             f"{opts['vmin']}..{opts['vmax']}"
         )

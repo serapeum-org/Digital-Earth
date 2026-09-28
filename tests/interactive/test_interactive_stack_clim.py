@@ -130,3 +130,27 @@ class TestTheStackScanSpansTheSeries:
         assert scene._global_clim(_Stack(3), 1) == (0.0, 1.0), (
             f"an unmeasurable stack must fall back, got {scene._global_clim(_Stack(3), 1)}"
         )
+
+    def test_a_constant_cube_reports_a_domain_with_width(self, monkeypatch):
+        """Every member holding one value yields a span rather than a zero-width ``clim``.
+
+        Args:
+            monkeypatch: Makes every member contribute the same single value.
+
+        Test scenario:
+            DE-40's behaviour change on this tier. The frozen range travels to the ``DynamicMap`` as
+            ``clim=(vmin, vmax)`` and reaches bokeh's colour mapper, whose ``low``/``high`` a zero-width pair
+            collapses — every cell lands on one end of the ramp and the colorbar carries a single tick.
+            Routing the scan through ``Scale`` applies the widening the rest of the package already used.
+        """
+        scene = InteractiveMap()
+        monkeypatch.setattr(
+            scene,
+            "_to_display_source",
+            lambda member, band=1: _Source(np.array([7.0, 7.0])),
+        )
+        low, high = scene._global_clim(_Stack(3), 1)
+        assert high > low, f"a constant cube must report a span, got ({low}, {high})"
+        assert (low, high) == (7.0, 8.0), (
+            f"the shared widening rule is +1, got ({low}, {high})"
+        )

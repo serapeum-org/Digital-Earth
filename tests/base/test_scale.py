@@ -5,6 +5,7 @@ classifier with their own error handling. These cover the type that absorbed bot
 """
 
 import json
+import sys
 
 import numpy as np
 import pytest
@@ -98,6 +99,82 @@ class TestTheDomain:
         assert Scale.from_limits(4.0, 4.0).as_limits() == (4.0, 5.0), (
             "from_limits must widen a degenerate pair"
         )
+
+    @pytest.mark.parametrize(
+        "value",
+        [2.0**53, 1e16, 1e20, 3.4e38, 1e300, -1e300],
+        ids=["two_pow_53", "1e16", "1e20", "float32_max", "1e300", "minus_1e300"],
+    )
+    def test_a_huge_constant_domain_still_widens(self, value):
+        """A constant domain too large for ``+ 1`` to move widens by one representable step instead.
+
+        Args:
+            value: The constant the whole band holds.
+
+        Test scenario:
+            ``+ 1.0`` stops widening at ``2**53``, where the gap between neighbouring doubles first exceeds
+            one: ``1e20 + 1.0 == 1e20``, so ``vmax <= vmin`` survived the rule and the constructor refused
+            the scale. Every builder shared that defect, so a constant float32 band holding anything above
+            ~9e15 — a large sentinel, an epoch-nanosecond field — could not be scaled at all. The widening
+            has to move the limit whatever the magnitude.
+        """
+        low, high = Scale.from_limits(value, value).as_limits()
+        assert high > low, (
+            f"a constant domain at {value!r} did not widen: got ({low!r}, {high!r})"
+        )
+        assert low == value, (
+            f"widening must keep the measured limit, got vmin={low!r} for {value!r}"
+        )
+
+    @pytest.mark.parametrize("builder", ["from_values", "from_finite"])
+    def test_the_measuring_builders_widen_a_huge_constant_too(self, builder):
+        """The rule lives in one place, so measuring a huge constant band works as well.
+
+        Args:
+            builder: Which measuring builder to exercise.
+
+        Test scenario:
+            ``from_values`` and ``from_finite`` reach the widening through ``_apply_limits`` rather than
+            through ``from_limits``, and the five existing call sites (the globe texture, the web raster,
+            bigdata and vector paths) go through those two. Fixing only ``from_limits`` would leave them
+            raising on the same data.
+        """
+        low, high = getattr(Scale, builder)(np.array([1e20, 1e20])).as_limits()
+        assert (low, high) == (1e20, np.nextafter(1e20, np.inf)), (
+            f"{builder} must widen a constant 1e20 band, got ({low!r}, {high!r})"
+        )
+
+    def test_the_largest_constant_domain_widens_downwards(self):
+        """At the top of the float range there is nothing above to widen into, so the floor moves.
+
+        Test scenario:
+            ``nextafter(float_max, inf)`` is infinity, which the constructor refuses as a non-finite domain.
+            The only representable neighbour is below, so the domain becomes ``(prev, float_max)`` — still a
+            usable span, and still holding the value.
+        """
+        biggest = sys.float_info.max
+        low, high = Scale.from_limits(biggest, biggest).as_limits()
+        assert high == biggest, (
+            f"the measured value must stay in the domain, got {high!r}"
+        )
+        assert low < biggest, f"the floor must move below it, got vmin={low!r}"
+
+    def test_an_ordinary_constant_domain_is_untouched_by_the_huge_case(self):
+        """The ``+ 1`` rule still governs every magnitude it can actually move.
+
+        Test scenario:
+            The fallback for a huge constant must not become the general rule: a one-ULP span at ordinary
+            magnitudes would be invisible to a colour ramp, and five call sites were consolidated onto
+            ``+ 1`` precisely so the widening is a whole unit.
+        """
+        assert [
+            Scale.from_limits(v, v).as_limits() for v in (0.0, 1.0, -3.5, 1e10)
+        ] == [
+            (0.0, 1.0),
+            (1.0, 2.0),
+            (-3.5, -2.5),
+            (1e10, 1e10 + 1.0),
+        ], "an ordinary constant domain must still widen by a whole unit"
 
     def test_a_non_finite_domain_cannot_be_constructed(self):
         """NaN or infinity for a limit is refused at construction.

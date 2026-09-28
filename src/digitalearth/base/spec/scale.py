@@ -17,6 +17,12 @@ What it absorbs:
 | `classify(values, scheme, k)` plus its own `try`/`except` | `interactive/vector.py`, `three_d/base.py`, `web/vector.py` |
 | the stack colour range | :mod:`digitalearth.base.clim` — one way to *construct* frozen limits, not a parallel mechanism |
 
+The stack range was the last holdout: until DE-40 the three temporal paths reduced their frames to a bare
+`(lo, hi)` and handed it straight to a normaliser, so a stack of identical frames produced a zero-width domain
+this type refuses everywhere else. They now go through `Scale` as well, via
+:func:`digitalearth.base.clim.stack_scale`, which is also what gave :meth:`Scale.freeze` its first production
+caller.
+
 Engine-neutral, and the classifier is the part that took thought. The arithmetic lives in cleopatra, which
 `base/` may not import **at all** — not even lazily, since `tests/test_base_is_engine_neutral.py` reads the
 source rather than the imports. So this module declares a seam,
@@ -26,7 +32,7 @@ into classes — and only the arithmetic is injected.
 """
 
 from dataclasses import dataclass, field
-from math import isfinite
+from math import inf, isfinite, nextafter
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -310,12 +316,20 @@ class Scale:
                 (4.0, 5.0)
 
                 ```
+            - A constant too large for ``+ 1`` to move widens by one representable step instead:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> low, high = Scale.from_limits(1e20, 1e20).as_limits()
+                >>> low == 1e20, high > low
+                (True, True)
+
+                ```
         """
         lo, hi = float(vmin), float(vmax)
         if not (isfinite(lo) and isfinite(hi)):
             raise ValueError(f"Scale needs finite limits; got ({vmin!r}, {vmax!r})")
         if hi <= lo:
-            hi = lo + 1.0
+            lo, hi = Scale._widen(lo)
         return cls(lo, hi, missing=missing)
 
     @classmethod
@@ -439,8 +453,37 @@ class Scale:
             )
         if hi <= lo:
             # The rule all five copies chose: a constant domain is widened by one rather than divided by.
-            hi = lo + 1.0
+            lo, hi = Scale._widen(lo)
         return lo, hi
+
+    @staticmethod
+    def _widen(value: float) -> Tuple[float, float]:
+        """Return a domain of non-zero width around a constant ``value``.
+
+        Args:
+            value: The single value the whole band holds.
+
+        Returns:
+            A ``(lo, hi)`` pair with ``hi > lo``, both finite, and `value` inside it.
+
+        Note:
+            ``+ 1.0`` is the rule the five consolidated copies chose and it stays the rule wherever it
+            works, because a whole unit is a span a colour ramp can show. It stops working at ``2**53``,
+            where the gap between neighbouring doubles first exceeds one: ``1e20 + 1.0 == 1e20``, so the
+            widened ``hi`` came back equal to ``lo`` and the constructor refused the scale. A constant band
+            holding a large sentinel or an epoch-nanosecond count therefore could not be scaled at all.
+            Above that magnitude the smallest span that exists is one representable step, so that is what
+            is used. At the very top of the float range there is no step above — ``nextafter`` returns
+            infinity, which the constructor refuses — so the floor moves down instead and `value` stays the
+            upper limit.
+        """
+        widened = value + 1.0
+        if widened > value:
+            return value, widened
+        stepped = nextafter(value, inf)
+        if isfinite(stepped):
+            return value, stepped
+        return nextafter(value, -inf), value
 
     @staticmethod
     def _breaks(values: Any, scheme: str, k: int) -> Tuple[float, ...]:

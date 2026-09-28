@@ -1,8 +1,18 @@
-"""The one colour-range rule for a raster time stack, shared by every rendering backend.
+"""Which frames of a raster time stack are read, and what they measure — for every rendering backend.
 
-A stack rendered frame by frame has to freeze one ``(vmin, vmax)`` across the whole series, or the scale jumps
-between frames and the animation reads as data that is not there. Deriving that range is pure arithmetic over
-arrays — no renderer needed — so it lives here rather than three times over.
+A stack rendered frame by frame has to freeze one domain across the whole series, or the scale jumps between
+frames and the animation reads as data that is not there. Deriving that range is pure arithmetic over arrays —
+no renderer needed — so it lives here rather than three times over.
+
+**What is this module's and what is `Scale`'s.** This module answers two questions no
+:class:`~digitalearth.base.spec.scale.Scale` builder can: *which* frames to open (:func:`sample_evenly`, a
+cost decision, taken before anything is read) and *what a sequence of frames measures* (:func:`measure_clim`,
+which unions per-frame extremes, fills a nodata mask before reducing, and can answer "nothing at all"). Every
+`Scale` builder takes a single array, drops a mask through ``np.asarray``, and must return a scale rather than
+nothing. What the measurement then *means as a domain* — the fallback for an unmeasurable stack, and the
+widening of a constant one — is `Scale`'s, and :func:`stack_scale` is where the two meet. Until DE-40 this
+module decided that too, in a ``stack_clim`` that fell back to ``(0.0, 1.0)`` and did **not** widen, so the
+stack paths were the one family of call sites running a second, weaker copy of the domain rule.
 
 Before this, each tier had its own copy and the three had drifted on the two things that decide the answer:
 
@@ -23,6 +33,7 @@ last frames.
 
 See Also:
     digitalearth.base.arrays.finite: drops the non-finite values this reduction must ignore.
+    digitalearth.base.spec.scale.Scale: owns what a pair of limits means as a colour domain.
 """
 
 from typing import Any, Iterable, List, Optional, Sequence, Tuple
@@ -30,8 +41,15 @@ from typing import Any, Iterable, List, Optional, Sequence, Tuple
 import numpy as np
 
 from digitalearth.base.arrays import finite
+from digitalearth.base.spec import Scale
 
-__all__ = ["DEFAULT_CLIM_SCAN_CAP", "measure_clim", "sample_evenly", "stack_clim"]
+__all__ = [
+    "DEFAULT_CLIM_SCAN_CAP",
+    "frozen_scale",
+    "measure_clim",
+    "sample_evenly",
+    "stack_scale",
+]
 
 #: How many stack frames are read to derive a shared colour range, unless a caller overrides it. Reading every
 #: frame of a long series costs one warp each and buys very little: the range of ~24 frames spread across the
@@ -194,37 +212,81 @@ def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
     return (min(lows), max(highs)) if lows else None
 
 
-def stack_clim(arrays: Iterable[Any]) -> Tuple[float, float]:
-    """Return the ``(min, max)`` across ``arrays``, falling back to ``(0.0, 1.0)``.
+def frozen_scale(measured: Optional[Tuple[float, float]]) -> Scale:
+    """Turn a stack's measured range — or nothing measurable — into the domain every frame shares.
 
-    The form every tier's public path wants: a range it can hand to a colormap without a ``None`` check. Use
-    :func:`measure_clim` instead when "nothing was measurable" has to stay distinguishable from "the data
-    happens to span 0 to 1".
+    The seam between this module and :class:`~digitalearth.base.spec.scale.Scale`: the measurement is this
+    module's, and everything that happens to it afterwards is `Scale`'s. Take this form when the frames have
+    already been reduced by something other than :func:`measure_clim` — the static tier unions one
+    measurement per swept projection — and :func:`stack_scale` when they have not.
+
+    Args:
+        measured: The ``(min, max)`` the frames yielded, or ``None`` when none of them held a finite value.
+
+    Returns:
+        A frozen scale. Its domain is the measurement, widened if it has no width; ``None`` becomes the unit
+        range, because a builder still needs limits to hand a colormap and a stack whose every frame lies
+        off the view has no range to report.
+
+    Examples:
+        - A measured range becomes that domain:
+            ```python
+            >>> from digitalearth.base.clim import frozen_scale
+            >>> frozen_scale((2.0, 9.0)).as_limits()
+            (2.0, 9.0)
+
+            ```
+        - Nothing measurable falls back rather than raising:
+            ```python
+            >>> from digitalearth.base.clim import frozen_scale
+            >>> frozen_scale(None).as_limits()
+            (0.0, 1.0)
+
+            ```
+        - A stack of identical frames is widened, so the domain has a width a ramp can show:
+            ```python
+            >>> from digitalearth.base.clim import frozen_scale
+            >>> frozen_scale((7.0, 7.0)).as_limits()
+            (7.0, 8.0)
+
+            ```
+    """
+    lo, hi = (0.0, 1.0) if measured is None else measured
+    # `freeze()` is what this call site is *for*: the point of a stack range is that it is derived once and
+    # every frame is drawn against that one value, so nothing later re-derives it per frame. `Scale` is an
+    # immutable dataclass, so the guarantee is already structural -- `freeze()` returns self, and a frame
+    # that tried to adjust the range would raise rather than quietly put the later frames on another scale.
+    return Scale.from_limits(lo, hi).freeze()
+
+
+def stack_scale(arrays: Iterable[Any]) -> Scale:
+    """Measure ``arrays`` and return the frozen domain every frame of the stack is drawn against.
+
+    The form every tier's public path wants: a domain it can hand to a colormap without a ``None`` check.
+    Use :func:`measure_clim` instead when "nothing was measurable" has to stay distinguishable from "the data
+    happens to span 0 to 1" — a caller unioning several measurements needs that difference.
 
     Args:
         arrays: The per-frame value arrays, as for :func:`measure_clim`.
 
     Returns:
-        The measured ``(min, max)``, or ``(0.0, 1.0)`` when no array held a finite value — which includes a
-        stack whose every frame lies off the view, since a frame that cannot be warped draws nothing and so
-        contributes no colour range.
+        The frozen scale over the measured range, by :func:`frozen_scale`'s rules.
 
     Examples:
         - A measurable stack reduces to its range:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.base.clim import stack_clim
-            >>> stack_clim([np.array([2.0, 9.0])])
+            >>> from digitalearth.base.clim import stack_scale
+            >>> stack_scale([np.array([2.0, 9.0])]).as_limits()
             (2.0, 9.0)
 
             ```
         - An empty stack falls back rather than raising:
             ```python
-            >>> from digitalearth.base.clim import stack_clim
-            >>> stack_clim([])
+            >>> from digitalearth.base.clim import stack_scale
+            >>> stack_scale([]).as_limits()
             (0.0, 1.0)
 
             ```
     """
-    measured = measure_clim(arrays)
-    return measured if measured is not None else (0.0, 1.0)
+    return frozen_scale(measure_clim(arrays))

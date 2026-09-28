@@ -12,7 +12,7 @@ materialise a frame (``dmap[0]``) to assert on it.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
-from digitalearth.base.clim import sample_evenly, stack_clim
+from digitalearth.base.clim import sample_evenly, stack_scale
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -157,12 +157,14 @@ class TemporalMixin(_MixinBase):
 
         Returns:
             ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
-            holds a finite value.
+            holds a finite value. The pair comes from the frozen
+            :class:`~digitalearth.base.spec.scale.Scale` the measurement builds, so a cube whose members all
+            hold one value reports a domain with width rather than the zero-width pair bokeh would clamp.
         """
-        return stack_clim(
+        return stack_scale(
             _masked_to_nan(self._to_display_source(member, band=band).z.values)
             for member in sample_evenly(collection.datasets)
-        )
+        ).as_limits()
 
     @_skips_off_limb
     def timecube(

@@ -45,8 +45,10 @@ What lives here:
   override, so a vector layer changes rendering strategy at the same size — and refuses the same nonsense
   cutoff — on every tier that has a big-data path.
 * :mod:`~digitalearth.base.clim` — ``DEFAULT_CLIM_SCAN_CAP`` and the stack colour-range rule: which
-  members of a time stack are read, and how their arrays reduce to one ``(vmin, vmax)``, so a series
-  is sampled the same way whichever tier animates it.
+  members of a time stack are read, and how their arrays reduce to one measurement, so a series
+  is sampled the same way whichever tier animates it. What that measurement means as a domain — the
+  fallback for an unmeasurable stack, the widening of a constant one — is
+  :class:`~digitalearth.base.spec.scale.Scale`'s, which the stack paths reach through ``stack_scale``.
 * :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
 * :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend
   shares, so a true-colour render is identical across tiers and a sequence of frames can be frozen on
