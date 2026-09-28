@@ -30,7 +30,7 @@ from digitalearth import Map
 
 m = Map(crs=dataset.epsg)
 m.field(dataset)
-m.colorbar(layer=0)
+m.colorbar()
 m.set_title("Flow Accumulation")
 ```
 

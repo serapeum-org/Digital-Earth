@@ -2,8 +2,10 @@
 
 A ``Scene`` owns one ``fig``/``ax``. Each plot method (added by subclasses / mixins in later tasks) builds a
 cleopatra glyph with ``ax=self.ax``/``fig=self.fig``, calls its ``plot(...)``, and registers the returned
-mappable via :meth:`_add_layer`. The Scene then owns figure-level decoration: one aggregated colorbar
-(:meth:`colorbar`) or a categorical legend (:meth:`legend`), delegating to cleopatra's builders.
+mappable via :meth:`_add_layer`. A **colour key** — :meth:`colorbar` or :meth:`legend` — is not figure
+decoration but part of the layer it explains: both record a
+:class:`~digitalearth.base.spec.encoding.Guide` on that layer's colour encoding and then draw from the
+record, so the key moves, hides and disappears with the layer (:mod:`digitalearth.static.guides`).
 
 Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can suppress its own colorbar
 (``add_colorbar=False`` on ``ArrayGlyph``), the Scene can stack any number of layers on one axes and draw a
@@ -45,7 +47,6 @@ from typing import (
 
 import matplotlib.pyplot as plt
 import numpy as np
-from cleopatra.styling.styles import colorbar_legend, disjoint_legend
 from cleopatra.styling.watermark import WatermarkMixin
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -61,6 +62,7 @@ from digitalearth.base.registry import (
 from digitalearth.base.spec import (
     DataRef,
     FigureSpec,
+    Guide,
     LayerSpec,
     LayerTree,
     PanelSpec,
@@ -71,12 +73,19 @@ from digitalearth.base.spec import (
 from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.layer import layer_name
 from digitalearth.static.capabilities import CAPABILITIES
+from digitalearth.static.guides import (
+    GUIDE_KIND_KEY,
+    GUIDE_LABELS_KEY,
+    bar_refusal,
+    color_encoding,
+)
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import (
     DrawnLayer,
     Renderer,
     drawing_opts,
 )
+from digitalearth.static.renderer import _detach as detach_artist
 from digitalearth.static.renderer import _is_visible as artist_is_visible
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
@@ -328,7 +337,9 @@ class Scene(WatermarkMixin):
     Attributes:
         fig: The matplotlib figure.
         ax: The matplotlib axes all layers render onto.
-        layers: Registered ``(glyph, mappable)`` pairs, in draw order, used for legends/colorbars.
+        layers: Registered ``(glyph, mappable)`` pairs, in draw order. A colour key is addressed by layer
+            **id** rather than by position here (order 24); what this list is still read for is the default
+            title filed beside each pair — see :meth:`_registered_index`.
         strict: Whether a layer that draws nothing raises instead of being skipped.
 
     Examples:
@@ -680,7 +691,46 @@ class Scene(WatermarkMixin):
             self._forget_layer(layer_id)
             return None
         self._record_class_edges(drawn)
+        self._publish_color(layer_id, drawn)
         return drawn.artist
+
+    def _publish_color(self, layer_id: str, drawn: DrawnLayer) -> None:
+        """Record what varies a drawn layer's colour, so a key can be asked for on it.
+
+        The description's half of what :meth:`_record_class_edges` publishes on :attr:`last_breaks`, and read
+        the same way — off the artist that was drawn (see
+        :func:`~digitalearth.static.guides.color_encoding`). Without it no layer on this tier published a
+        colour :class:`~digitalearth.base.spec.encoding.Encoding` at all, and a
+        :class:`~digitalearth.base.spec.encoding.Guide` has nothing to hang on: `Encoding.__post_init__`
+        takes exactly one of a constant or a field, so an unbound colour is no binding at all (#261, order
+        24).
+
+        Done here rather than in the builder because the builder never opens the source: it records a band
+        **number**, and the band's name — and the limits the render settled on — exist only once the glyph
+        has drawn. Done here rather than in the renderer because
+        :meth:`~digitalearth.static.renderer.Renderer.apply` deliberately does not touch the description, so
+        a layer drawn again keeps the encoding it published the first time.
+
+        Args:
+            layer_id: The layer that has just been drawn.
+            drawn: What its drawer produced.
+        """
+        layer = self._layer_tree.get(layer_id)
+        # The drawer answers for a raster, whose band name it alone resolved; every other layer's colour
+        # field is the `column` its own description already names. A layer with neither — points sized by a
+        # column, an outline-only fill, a graticule — names nothing and publishes nothing.
+        column = layer.symbology.props.get("column")
+        field = drawn.color_field or (column if isinstance(column, str) else None)
+        encoding = color_encoding(field, drawn)
+        if encoding is None:
+            return
+        symbology = with_fields(
+            layer.symbology,
+            encodings={**dict(layer.symbology.encodings), "color": encoding},
+        )
+        self._layer_tree = self._layer_tree.replace(
+            with_fields(layer, symbology=symbology)
+        )
 
     def _record_class_edges(self, drawn: Any) -> None:
         """Publish the class edges of a layer that colours by value, on :attr:`last_breaks`.
@@ -1190,15 +1240,33 @@ class Scene(WatermarkMixin):
             drawn: What the renderer recorded for the layer being removed. One that registered no mappable
                 — a graticule, a basemap, a text label — is not in :attr:`layers` and is left alone.
         """
-        if drawn.artist is None:
-            # A layer that produced no artist registered none, and matching on a pair of `None`s would
-            # unregister whichever layer happened to be first.
-            return
+        index = self._registered_index(drawn)
+        if index is not None:
+            del self.layers[index]
+            del self._layer_labels[index]
+
+    def _registered_index(self, drawn: Optional[DrawnLayer]) -> Optional[int]:
+        """Return where one drawn layer's ``(glyph, mappable)`` pair sits in :attr:`layers`.
+
+        Matched by identity rather than by position: :attr:`layers` holds only the layers that registered a
+        mappable, so a layer's index there is not its index in the description and cannot be derived from
+        one. Written once because two readers ask it — :meth:`_unregister_artist`, which deletes the entry,
+        and :meth:`_default_label`, which reads the units filed beside it.
+
+        Args:
+            drawn: What the renderer recorded for the layer, or ``None`` for one nothing was drawn for.
+
+        Returns:
+            The index, or ``None`` for a layer that registered no mappable — a graticule, a basemap, a text
+            label. A pair of ``None``\\ s is never matched: it would find whichever layer happened to be
+            first.
+        """
+        if drawn is None or drawn.artist is None:
+            return None
         for index, (glyph, mappable) in enumerate(self.layers):
             if glyph is drawn.glyph and mappable is drawn.artist:
-                del self.layers[index]
-                del self._layer_labels[index]
-                return
+                return index
+        return None
 
     def _add_layer(
         self,
@@ -1271,6 +1339,12 @@ class Scene(WatermarkMixin):
         self._layer_placements = {}
         self._id_counters = {}
         self._issued_ids = set()
+        # A colour key is the exception, and is taken off rather than dropped: a colorbar lives on an axes of
+        # its own, which clearing the data axes does not touch, so a dropped one would stay on the figure with
+        # no layer left to explain — fifty frames of an animation, fifty bars.
+        for drawn in self._renderer.drawn.values():
+            for guide in drawn.guides:
+                detach_artist(guide, self.ax)
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
         # than removable: it is dropped, not removed.
         self._renderer = Renderer(self)
@@ -1278,21 +1352,21 @@ class Scene(WatermarkMixin):
         # rather than composes — which is what keeps a frame from composing over the frame before it.
         self._drew_on_axes = False
 
-    def _default_label(self, layer: int) -> Optional[str]:
-        """Return the default colorbar label recorded for ``layer``, or ``None`` when there is none.
+    def _default_label(self, layer_id: str) -> Optional[str]:
+        """Return the default colour-key title recorded for one layer, or ``None`` when there is none.
 
         Args:
-            layer: Index into :attr:`layers` (negative indices count from the most recent layer).
+            layer_id: The layer to ask about, by id — not by position. It was an index into :attr:`layers`
+                until order 24, which is what let a coastline added after a raster answer for the raster's
+                key.
 
         Returns:
-            The label recorded by :meth:`_add_layer`, or ``None`` — also when the index is out of range,
-            so an unlabelled colorbar is never turned into an ``IndexError``.
+            The label :meth:`_register_artist` filed with the layer — a raster field's resolved ``units``
+            (:func:`~digitalearth.base.autostyle.auto_style`) — or ``None`` for a layer that registered
+            none and for one that registered no mappable at all.
         """
-        # pragma-guarded: the labels track the layers one-for-one, so the index is always in range.
-        try:
-            return self._layer_labels[layer]
-        except IndexError:  # pragma: no cover - defensive
-            return None
+        index = self._registered_index(self._renderer.drawn.get(layer_id))
+        return None if index is None else self._layer_labels[index]
 
     def _render_glyph(
         self,
@@ -1375,61 +1449,288 @@ class Scene(WatermarkMixin):
             self.ax.set_xlim(xlim)
             self.ax.set_ylim(ylim)
 
-    def colorbar(
-        self, layer: int = -1, label: Optional[str] = None, **kwargs: Any
-    ) -> Any:
-        """Draw one colorbar for a registered layer (delegates to ``cleopatra.styling.styles.colorbar_legend``).
-
-        Args:
-            layer: Index into :attr:`layers` (default ``-1``, the most recent layer). Only *drawn* layers
-                are registered — a layer whose data lies outside the display CRS draws nothing and takes
-                no slot — so count positions from what was actually rendered, not from the calls made.
-                That applies to the ``-1`` default too: if the most recent draw was skipped, ``-1`` is the
-                one before it, so check the return value rather than assuming the last call registered.
-            label: Optional text label drawn alongside the colorbar. When ``None`` the layer's own label is
-                used if it has one — a raster field records the ``units``
-                :func:`~digitalearth.base.autostyle.auto_style` resolved for its variable — and the bar is
-                left unlabelled otherwise. A caller-supplied label always wins; pass ``""`` for none.
-            **kwargs: Forwarded to ``colorbar_legend`` / ``matplotlib`` colorbar.
+    def _color_keyed(self) -> List[str]:
+        """Return the ids of the layers that publish a colour a key could explain, bottom first.
 
         Returns:
-            The created ``matplotlib.colorbar.Colorbar``.
+            One id per layer whose :class:`~digitalearth.base.spec.Symbology` carries a colour
+            :class:`~digitalearth.base.spec.encoding.Encoding` (see :meth:`_publish_color`). A flat-coloured
+            layer, an outline-only fill, a graticule, a basemap and a caller's own artist are all absent,
+            which is what makes a key on them a refusal rather than an empty box.
+        """
+        return [
+            layer_id
+            for layer_id in self._layer_tree.ids
+            if self._layer_tree.get(layer_id).symbology.encoding("color") is not None
+        ]
+
+    def _keyed_layer(self, layer_id: Optional[str], caller: str) -> LayerSpec:
+        """Return the layer a key was asked for, resolving ``None`` and refusing one with no colour to key.
+
+        Args:
+            layer_id: The caller's id, or ``None`` for the default.
+            caller: The method asking, for the refusal.
+
+        Returns:
+            The layer's description.
 
         Raises:
-            ValueError: if no layers have been registered.
+            KeyError: when `layer_id` names no layer on this figure, naming the ids that do.
+            ValueError: when the named layer publishes no colour encoding, or — for ``None`` — when no layer
+                on the figure does, naming the layers that were drawn with one.
         """
-        if not self.layers:
-            raise ValueError("no layers to draw a colorbar for; add a glyph first")
-        cbar = colorbar_legend(self.layers[layer][1], ax=self.ax, **kwargs)
-        if label is None:
-            label = self._default_label(layer)  # the layer's auto-styled units, if any
-        if label is not None:
-            cbar.set_label(label)
-        return cbar
+        if layer_id is not None:
+            self._require_layer(layer_id)
+            if self._layer_tree.get(layer_id).symbology.encoding("color") is None:
+                raise ValueError(
+                    f"layer {layer_id!r} was not drawn with a colour that varies, so it has no colour key "
+                    f"to show; the layers that were are {self._color_keyed()}"
+                )
+            return self._layer_tree.get(layer_id)
+        keyed = self._color_keyed()
+        if not keyed:
+            raise ValueError(
+                f"{caller}() has nothing to describe: no layer on this figure is coloured by a value. Draw "
+                "a field, or a fill given column=..., first — a flat colour, an outline and a basemap have "
+                "no key to show"
+            )
+        return self._layer_tree.get(keyed[-1])
 
-    def colorbars(self, **kwargs) -> List[Any]:
-        """Draw one colorbar per registered layer (aggregation across all layers).
+    def _title_for(self, layer_id: str, asked: Optional[str]) -> Optional[str]:
+        """Return the title a key is recorded with: the caller's, or the layer's own units.
+
+        Resolved at the **record** rather than at the draw, so the title travels with the figure instead of
+        having to be looked up again wherever it is read — and so ``""`` keeps meaning "no title at all",
+        which a :class:`~digitalearth.base.spec.encoding.Guide` has no other spelling for (it refuses a
+        blank one).
 
         Args:
-            **kwargs: Forwarded to :meth:`colorbar` for every layer.
+            layer_id: The layer being keyed.
+            asked: What the caller passed as ``label=``/``title=``.
 
         Returns:
-            The list of created colorbars, one per layer (empty when there are no layers).
+            The caller's text; the layer's recorded units when they passed ``None``; and ``None`` when they
+            passed ``""`` or the layer has no units.
         """
-        return [self.colorbar(layer=i, **kwargs) for i in range(len(self.layers))]
+        if asked is None:
+            return self._default_label(layer_id)
+        return asked or None
 
-    def legend(self, colors: Sequence, labels: Sequence[str], **kwargs: Any) -> Any:
-        """Attach a categorical (disjoint) swatch legend (delegates to ``cleopatra.styling.styles.disjoint_legend``).
+    def _record_key(
+        self,
+        layer: LayerSpec,
+        kind: str,
+        *,
+        title: Optional[str],
+        visible: bool,
+        labels: Optional[Sequence[str]],
+        **kwargs: Any,
+    ) -> None:
+        """Record the guide on the layer's colour encoding, then draw the key from what was recorded.
+
+        The order is the whole of order 24: the guide is part of the layer's description, so the key moves
+        with the layer, hides with it, goes away with it, and survives ``to_dict()`` → ``from_dict()``. The
+        drawing is then :meth:`~digitalearth.static.renderer.Renderer.draw_guide`'s, which is the one place
+        a key is put on this figure.
+
+        The tree is written **directly** rather than through :meth:`_change`: a guide is a change to the
+        layer's symbology, and a reconcile would read that as a restyle and redraw the whole layer — a fresh
+        source read and a fresh glyph to add a colorbar to the picture that is already there.
 
         Args:
-            colors: One color per category.
-            labels: One label per category (same length/order as ``colors``).
-            **kwargs: Forwarded to ``disjoint_legend`` / ``ax.legend``.
+            layer: The layer being keyed.
+            kind: ``"colorbar"`` or ``"legend"`` — which furniture the guide asks for
+                (:data:`~digitalearth.static.guides.GUIDE_KINDS`).
+            title: What the key is called, already resolved (see :meth:`_title_for`).
+            visible: Whether the key is drawn. Recorded either way, so switching it back on needs no second
+                description.
+            labels: The caller's own row labels, or ``None`` to derive them from the layer's scale. ``None``
+                also *clears* labels recorded by an earlier call, so one call's override does not outlive it.
+            **kwargs: Styling forwarded to the matplotlib colorbar or legend.
+
+        Raises:
+            ValueError: from :func:`~digitalearth.static.guides.draw_guide`, for a key this layer's scale
+                cannot be drawn as — after the description has been put back, so a refused call leaves the
+                figure describing the key it had rather than one it could not draw.
+        """
+        props = dict(layer.symbology.props)
+        props[GUIDE_KIND_KEY] = kind
+        if labels is None:
+            props.pop(GUIDE_LABELS_KEY, None)
+        else:
+            props[GUIDE_LABELS_KEY] = tuple(str(label) for label in labels)
+        symbology = with_fields(layer.symbology, props=props).with_guide(
+            Guide(show=bool(visible), title=title)
+        )
+        held = self._layer_tree
+        self._layer_tree = self._layer_tree.replace(
+            with_fields(layer, symbology=symbology)
+        )
+        try:
+            self._renderer.draw_guide(self._layer_tree.get(layer.id), **kwargs)
+        except BaseException:
+            self._layer_tree = held
+            raise
+
+    def colorbar(
+        self,
+        layer_id: Optional[str] = None,
+        *,
+        label: Optional[str] = None,
+        visible: bool = True,
+        **kwargs: Any,
+    ) -> Self:
+        """Show the continuous colour key of a layer.
+
+        The Core contract's name for a colour key (#299, #261), and the Core's shape for it — the same call
+        keys a map on any tier. It was ``colorbar(layer=-1)`` here until order 24: keyed **by position** into
+        :attr:`layers`, so a coastline or a text label added after a raster took the key over, and drawn when
+        called rather than recorded, so a removed layer left its bar behind and a figure written down carried
+        no note that a key had been asked for. The guide is now recorded on the layer's own colour encoding
+        and the bar is drawn from that record.
+
+        Args:
+            layer_id: Which layer's key to show. ``None`` (the default) takes **the most recent layer that
+                carries a colour encoding** — not simply the last layer: a coastline, a basemap, a graticule
+                or a text label drawn after a raster is coloured by nothing and cannot take the key over.
+                A layer whose data lay outside the display CRS drew nothing and publishes nothing, so it is
+                skipped too.
+            label: What the bar is called. ``None`` (the default) takes the layer's own recorded units — a
+                raster field records the ``units``
+                :func:`~digitalearth.base.autostyle.auto_style` resolved for its variable — and leaves the
+                bar unlabelled when it has none. A caller's text always wins; pass ``""`` for no label at all.
+            visible: ``False`` records the guide and draws no bar, so a caller passing a flag through does
+                not have to branch — and takes an already-drawn bar off again. The layer is resolved and
+                checked **before** the flag is read, so one spelling of a call is not valid only half the
+                time.
+            **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` and on to
+                ``Figure.colorbar`` (``orientation``, ``shrink``, ``ticks``, ``extend``, …). Styling for
+                *this* call: it is not part of the record, so a bar redrawn from the description — after a
+                restyle, a rollback, or a figure read back — comes back with matplotlib's defaults in its
+                place.
 
         Returns:
-            The created ``matplotlib.legend.Legend``.
+            This scene, so figure decoration reads as one expression. The Core declares ``returns="self"``
+            for this name and the web and interactive tiers already answer that way; returning the
+            ``Colorbar`` meant ``m.field(ds).colorbar().legend(...)`` chained on two tiers and raised on this
+            one. The drawn bar is still reachable, as
+            ``scene._renderer.drawn[layer_id].guides``.
+
+        Raises:
+            KeyError: when `layer_id` names no layer on this figure, naming the ids that do.
+            ValueError: when that layer is coloured by nothing, when no layer on the figure is, or when the
+                layer is coloured **by category** — a categorical fill's norm bins the class codes cleopatra
+                assigned, so a bar over them reads ``0, 1, 2 …`` where the labels belong, and :meth:`legend`
+                is the key that fits it.
+
+        Note:
+            **This tier draws as many bars as there are guided layers.** matplotlib takes any number of
+            colorbars — which is why :meth:`colorbars` exists — so three keyed layers are three bars, each
+            stealing width from the axes. The web tier shows exactly one key and a second replaces the first,
+            so a figure ported between the two changes its count; asking for one bar here means keying one
+            layer. Asking twice for the *same* layer replaces its bar rather than stacking a second.
         """
-        return disjoint_legend(self.ax, colors, labels, **kwargs)
+        layer = self._keyed_layer(layer_id, "colorbar")
+        # Before the guide is recorded, not from inside the draw: a call this tier cannot answer must leave
+        # the layer exactly as it found it, key and all.
+        refusal = bar_refusal(layer)
+        if refusal is not None:
+            raise ValueError(refusal)
+        self._record_key(
+            layer,
+            "colorbar",
+            title=self._title_for(layer.id, label),
+            visible=visible,
+            labels=None,
+            **kwargs,
+        )
+        return self
+
+    def colorbars(self, **kwargs: Any) -> Self:
+        """Draw one colorbar for every layer that is coloured by a value.
+
+        This tier's own name rather than a Core one: matplotlib takes any number of bars, so "key everything
+        on the figure" is a call it can answer and the other tiers cannot. Each bar is recorded on its own
+        layer exactly as :meth:`colorbar` records one, so each follows the layer it explains.
+
+        Args:
+            **kwargs: Forwarded to :meth:`colorbar` for every layer keyed.
+
+        Returns:
+            This scene (chainable). It returned the list of colorbars it had created until order 24; the
+            bars are reachable per layer as ``scene._renderer.drawn[layer_id].guides``, and a method that
+            keys several layers has no one bar to hand back.
+
+        Note:
+            A layer coloured by nothing is **skipped**, not refused — which is the point of the plural: a
+            figure of one raster, a coastline and a graticule keys the raster and says nothing about the
+            other two. A layer coloured by **category** is skipped as well, because its key is a swatch
+            legend rather than a bar (:meth:`legend`).
+        """
+        for layer_id in self._color_keyed():
+            if bar_refusal(self._layer_tree.get(layer_id)) is not None:
+                continue
+            self.colorbar(layer_id, **kwargs)
+        return self
+
+    def legend(
+        self,
+        layer_id: Optional[str] = None,
+        *,
+        title: Optional[str] = None,
+        labels: Optional[Sequence[str]] = None,
+        visible: bool = True,
+        **kwargs: Any,
+    ) -> Self:
+        """Show the keyed colour list of a layer, as one labelled swatch per class.
+
+        The Core contract's name for a keyed colour list, in the Core's shape. It took the **content**
+        itself here until order 24 — ``legend(colors, labels)`` — so a caller had to read the drawn swatches
+        off ``layer.category_legend`` and hand them back, and the key agreed with the picture only while they
+        did it right. The rows are now derived from the very
+        :class:`~digitalearth.base.spec.scale.Scale` the layer publishes, through
+        :meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale`, so a swatch equals the colour that was
+        drawn by construction (#185).
+
+        Args:
+            layer_id: Which layer's classes to describe. ``None`` (the default) takes the most recent layer
+                that carries a colour encoding, read exactly as :meth:`colorbar` reads it.
+            title: The heading above the swatches. ``None`` (the default) takes the layer's recorded units,
+                and ``""`` draws no heading.
+            labels: Explicit row labels, replacing the derived ones — for units, or for renaming categories.
+                One per row. ``None`` (the default) derives them, and clears labels an earlier call recorded.
+            visible: ``False`` records the guide and draws nothing, and takes an already-drawn key off again.
+                The layer is resolved and checked before the flag is read.
+            **kwargs: Forwarded to ``cleopatra.styling.styles.disjoint_legend`` and on to ``Axes.legend``
+                (``loc``, ``ncol``, ``fontsize``, …). Styling for this call, not part of the record.
+
+        Returns:
+            This scene (chainable) — the Core declares ``returns="self"`` for this name. The drawn
+            ``Legend`` is reachable as ``scene._renderer.drawn[layer_id].guides``.
+
+        Raises:
+            KeyError: when `layer_id` names no layer on this figure.
+            ValueError: when that layer is coloured by nothing, when no layer on the figure is, when the
+                layer publishes no scale for rows to be derived from, or when `labels` does not number the
+                rows — a short list leaves swatches unlabelled and a long one labels swatches nobody drew.
+
+        Note:
+            **One legend per axes.** matplotlib holds a single legend on an axes, so keying a second layer
+            this way replaces the first layer's swatches rather than adding a box beside them — unlike
+            :meth:`colorbar`, where each layer gets its own strip. A categorical fill already draws its own
+            swatch legend through cleopatra; asking here records it on the layer, which is what lets it be
+            titled, relabelled, hidden and removed with the layer.
+        """
+        layer = self._keyed_layer(layer_id, "legend")
+        self._record_key(
+            layer,
+            "legend",
+            title=self._title_for(layer.id, title),
+            visible=visible,
+            labels=labels,
+            **kwargs,
+        )
+        return self
 
     def set_title(self, title: str, **kwargs) -> Self:
         """Set the axes title.

@@ -52,6 +52,7 @@ second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from dataclasses import replace as with_fields
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
 from matplotlib.artist import Artist
@@ -60,6 +61,7 @@ from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
 from digitalearth.static.capabilities import CAPABILITIES
+from digitalearth.static.guides import draw_guide
 
 __all__ = [
     "DRAWN_KINDS",
@@ -134,6 +136,17 @@ class DrawnLayer:
             returns the axes, so :func:`artists_added` watches the axes and collects whatever appeared while
             it ran. Empty only for a layer with nothing on the axes yet — a graticule, whose lines are
             computed when it is drawn and put on the axes afterwards, by the globe frame.
+        color_field: The data field this layer's colour varies with, when only its drawer can say — the band
+            variable a raster render resolved through
+            :func:`~digitalearth.base.autostyle.auto_style`, which is not in the description because the
+            builder never opened the source. ``None`` for every other layer, whose colour field is the
+            ``column`` its own description already names, and for one that colours by no field at all.
+        guides: The colour key drawn for this layer — one ``Colorbar`` or one ``Legend``, or nothing. Held
+            **beside** `artists` rather than in it, deliberately: `artists` is the layer's drawing, which
+            :meth:`Renderer._repaint` arranges in draw order and :func:`_rank_zorders` gives z-orders to,
+            and a colorbar lives on its own axes where neither applies. What the two share is the layer's
+            *lifetime* — :meth:`Renderer.remove` takes the key off with the drawing and
+            :meth:`Renderer.set_visible` hides it with it (#261, order 24).
 
     Examples:
         - A text label owns the one ``Text`` it drew, and was drawn straight onto the axes rather than
@@ -157,6 +170,8 @@ class DrawnLayer:
     artist: Any = None
     glyph: Any = None
     artists: Tuple[Any, ...] = field(default=())
+    color_field: Optional[str] = None
+    guides: Tuple[Any, ...] = field(default=())
 
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
@@ -439,6 +454,20 @@ def _set_visible(artist: Any, visible: bool) -> None:
         artist.set_visible(bool(visible))
     except AttributeError:  # pragma: no cover - every matplotlib artist has it
         logger.debug("%r cannot be shown or hidden; leaving it as it is", artist)
+
+
+def _guide_artist(guide: Any) -> Any:
+    """Return the artist that carries a colour key's visibility flag.
+
+    Args:
+        guide: A drawn key — a ``matplotlib.colorbar.Colorbar`` or a ``matplotlib.legend.Legend``.
+
+    Returns:
+        The key itself for a ``Legend``, which is an artist; the **axes** for a ``Colorbar``, which is not
+        one and has no ``set_visible`` of its own — hiding a bar means hiding the axes it was drawn on.
+        Asked by attribute rather than by type so a key this tier does not yet draw still answers.
+    """
+    return getattr(guide, "ax", guide)
 
 
 def _is_visible(artist: Any) -> bool:
@@ -744,7 +773,8 @@ class _Held:
     Attributes:
         drawn: Layer id -> what was drawn for it, in draw order.
         registered: The scene's ``(glyph, mappable)`` pairs with their default colorbar labels, in the order
-            ``colorbar(layer=...)`` indexes them.
+            they were drawn — which is the order :meth:`~digitalearth.static.scene.Scene._registered_index`
+            matches a layer against to find the units its key is titled with.
         painted: The axes' artists in the order they were added (see :func:`_painted`).
     """
 
@@ -840,9 +870,45 @@ class Renderer:
         # correct it.
         self._asked.pop(layer_id, None)
         self._drawn[layer_id] = drawn
+        # The colour key comes back with the layer. A guide is recorded on the layer's own encoding, so a
+        # rebuild, a restyle, a rollback and a figure read back onto another scene each draw the key the
+        # description asks for — there is no second writer of it, which is what keeps one recorded guide from
+        # becoming two bars.
+        self.draw_guide(layer)
         if not figure.layers.is_visible(layer_id):
             self.set_visible(layer_id, False)
         return drawn
+
+    def draw_guide(self, layer: LayerSpec, **kwargs: Any) -> Optional[Any]:
+        """Draw the colour key one layer's guide asks for, replacing whatever it already had.
+
+        The one call that puts a key on the figure, whoever asked: :meth:`draw_layer` for a layer whose
+        description already carries a guide, and :meth:`~digitalearth.static.scene.Scene.colorbar` /
+        :meth:`~digitalearth.static.scene.Scene.legend` for a caller who has just recorded one. Its first act
+        is to take the layer's previous key off, which is what makes a second call **replace** rather than
+        stack a second bar in the same figure — the same answer the web tier gives for its one legend panel.
+
+        Args:
+            layer: The layer's description, which carries the guide (see
+                :func:`~digitalearth.static.guides.draw_guide`).
+            **kwargs: Styling forwarded to the matplotlib colorbar or legend.
+
+        Returns:
+            The artist drawn, or ``None`` when the guide asks for nothing — switched off, absent, or on a
+            layer this renderer has drawn nothing for.
+
+        Raises:
+            ValueError: from :func:`~digitalearth.static.guides.draw_guide`, for a key the layer's scale
+                cannot be drawn as.
+        """
+        drawn = self._drawn.get(layer.id)
+        if drawn is None:
+            return None
+        for held in drawn.guides:
+            _detach(held, self._scene.ax)
+        made = draw_guide(self._scene, layer, drawn, **kwargs)
+        self._drawn[layer.id] = with_fields(drawn, guides=tuple(made))
+        return made[-1] if made else None
 
     @staticmethod
     def _source_object(figure: FigureSpec, layer: LayerSpec) -> Any:
@@ -1100,10 +1166,12 @@ class Renderer:
     def _restore_registry(self, held: _Held) -> None:
         """Put the scene's colorbar registry back in the order it had, with restored layers in place.
 
-        ``Scene.layers`` is what ``colorbar(layer=-1)`` indexes, so a restored layer re-registered last would
-        silently re-key the default colorbar. The registry is rebuilt from what it held, each restored
-        layer's old pair swapped for the one its re-draw registered, and a layer that could not be restored
-        dropped.
+        ``Scene.layers`` is where each layer's default key title is filed, matched by the identity of its
+        ``(glyph, mappable)`` pair, so a restored layer whose pair is not put back where it was loses the
+        units its colorbar labels itself with. (Until order 24 it was worse: the registry was what
+        ``colorbar(layer=-1)`` indexed, so a re-registration silently re-keyed the default colorbar.) The
+        registry is rebuilt from what it held, each restored layer's old pair swapped for the one its
+        re-draw registered, and a layer that could not be restored dropped.
 
         Args:
             held: What the scene had registered before the refused change.
@@ -1181,6 +1249,10 @@ class Renderer:
         if drawn is None:
             return
         self._scene._unregister_artist(drawn)
+        # The key goes with the layer it explains. It is taken off first, because a colorbar holds a
+        # reference to the mappable it was built from and `Colorbar.remove` is the call that lets it go.
+        for guide in drawn.guides:
+            _detach(guide, self._scene.ax)
         for artist in drawn.artists:
             _detach(artist, self._scene.ax)
 
@@ -1200,6 +1272,11 @@ class Renderer:
         drawn = self._drawn.get(layer_id)
         if drawn is None:
             return
+        # The key is hidden with the layer, before the early return below: a hidden layer whose colorbar
+        # stayed on the figure is a bar labelling something the reader cannot see. `_guide_artist` is what
+        # knows a `Colorbar` carries the flag on its axes rather than on itself.
+        for guide in drawn.guides:
+            _set_visible(_guide_artist(guide), visible)
         if not drawn.artists:
             # Nothing on the axes carries the flag, so the renderer carries it instead. Without this a
             # layer asked to hide answered `True` when asked back, because `all(())` is `True` — and

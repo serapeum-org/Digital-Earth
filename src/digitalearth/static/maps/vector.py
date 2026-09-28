@@ -6,6 +6,7 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 """
 
 import os
+from dataclasses import replace as with_fields
 from functools import wraps
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
@@ -41,6 +42,12 @@ from digitalearth.base.symbology import (
     resolve_categorical_cmap,
 )
 from digitalearth.static.capabilities import CAPABILITIES
+from digitalearth.static.guides import (
+    COUNT_FIELD,
+    DENSITY_FIELD,
+    MAGNITUDE_FIELD,
+    source_field,
+)
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
@@ -285,7 +292,10 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         fig=scene.fig,
         **opts,
     )
-    return scene._render_glyph(glyph, artist="plot", **plot_style)
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    # The numeric column `get_source` read the values from, when it found one. A collection with none draws
+    # uniform markers, and the glyph then carries no value array, so no colour encoding is published for it.
+    return with_fields(drawn, color_field=source_field(src))
 
 
 def _labelled_features(features: Any, crs: Any) -> Any:
@@ -500,7 +510,9 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         fig=scene.fig,
         **opts,
     )
-    return scene._render_glyph(glyph, artist="plot", **plot_style)
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    # `to_xyz` reads the first band, so that is the band the points are coloured by.
+    return with_fields(drawn, color_field=source_field(data))
 
 
 def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -531,7 +543,10 @@ def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     values = read_masked_band(ds, layer.symbology.props["band"]).ravel()
     # drop far-side cells on a globe
     polygons, values = scene._finite_polygons(polygons, values)
-    return scene._polygon_layer(polygons, values, **opts)
+    drawn = scene._polygon_layer(polygons, values, **opts)
+    return with_fields(
+        drawn, color_field=source_field(data, layer.symbology.props["band"])
+    )
 
 
 def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -569,7 +584,8 @@ def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     glyph = VectorGlyph(x_grid, y_grid, u, v, ax=scene.ax, fig=scene.fig, **opts)
     drawn = scene._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
     scene._last_vector = (drawn.glyph, drawn.artist, kind)  # remembered for quiverkey()
-    return drawn
+    # A u/v field has no column: the arrows are coloured by the vector's magnitude, computed from the pair.
+    return with_fields(drawn, color_field=MAGNITUDE_FIELD)
 
 
 def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -595,7 +611,7 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
     kind = layer.symbology.props["via"]
     opts = drawing_style(scene, layer)
-    x, y, z = scene._scattered(data)
+    x, y, z, field = scene._scattered(data)
     # drop far-side points on a globe (Triangulation needs finite)
     finite = np.isfinite(x) & np.isfinite(y)
     supplied = np.asarray(x).size
@@ -616,17 +632,19 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
     if kind == "tripcolor":
         face_values = z[tri.triangles].mean(axis=1)
-        return scene._render_glyph(
+        drawn = scene._render_glyph(
             glyph, face_values, location="face", colorbar=False, **opts
         )
-    return scene._render_glyph(
-        glyph,
-        z,
-        location="node",
-        filled=(kind == "tricontourf"),
-        colorbar=False,
-        **opts,
-    )
+    else:
+        drawn = scene._render_glyph(
+            glyph,
+            z,
+            location="node",
+            filled=(kind == "tricontourf"),
+            colorbar=False,
+            **opts,
+        )
+    return with_fields(drawn, color_field=field)
 
 
 def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -807,7 +825,10 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     polygons, values = _clipped_cell_boxes(cells, scene._clip_geometry(clip))
     values_arr = np.asarray(values, dtype=float)
     polygons, values_arr = scene._finite_polygons(polygons, values_arr)
-    return scene._polygon_layer(polygons, values_arr, **drawing_style(scene, layer))
+    drawn = scene._polygon_layer(polygons, values_arr, **drawing_style(scene, layer))
+    # Without a column the reducer counts the points in each cell, whatever `agg` names, so the cells are
+    # coloured by a count rather than by any attribute (see :func:`_quadtree_reducer`).
+    return with_fields(drawn, color_field=column or COUNT_FIELD)
 
 
 def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -845,7 +866,9 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         fig=scene.fig,
         **opts,
     )
-    return scene._render_glyph(glyph, artist="plot", **plot_style)
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    # A KDE has no column either: the bands are the estimated density of the points themselves.
+    return with_fields(drawn, color_field=DENSITY_FIELD)
 
 
 def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -1202,8 +1225,9 @@ class VectorMixin(_MixinBase):
         categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
         ``0, 1, 2 …`` instead of the category labels. Passing ``add_colorbar=False`` suppresses that swatch
         legend — for a caller keying the map some other way, e.g. drawing one shared legend across several
-        layers via :meth:`~digitalearth.static.scene.Scene.legend` (which takes explicit ``colors``/``labels``;
-        read the drawn legend's swatches/texts off ``layer.category_legend`` to feed it).
+        layers via :meth:`~digitalearth.static.scene.Scene.legend`, which derives its rows from the layer's
+        own :class:`~digitalearth.base.spec.scale.Scale` — the swatches this glyph drew, read back off it by
+        :func:`~digitalearth.static.guides.color_encoding` — rather than being handed colours and labels.
 
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
@@ -1845,15 +1869,18 @@ class VectorMixin(_MixinBase):
         return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
 
     def _scattered(self, data: Any) -> tuple:
-        """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection).
+        """Return ``(x, y, z, field)`` for unstructured/point input (Dataset cells or a FeatureCollection).
 
         Args:
             data: A pyramids ``Dataset``, whose cells become points through ``to_xyz``, or a
                 ``FeatureCollection`` of points. Either is reprojected to the display CRS first.
 
         Returns:
-            Three parallel 1-D arrays — the x coordinates, the y coordinates and the value at each point —
-            in the display CRS.
+            Three parallel 1-D arrays — the x coordinates, the y coordinates and the value at each point — in
+            the display CRS, and the **name** those values are known by: the raster's band or the
+            collection's numeric column, as :func:`~digitalearth.static.guides.source_field` spells it. The
+            name is returned here rather than resolved again by the drawer because this is where the source is
+            opened, and it is what the layer publishes its colour encoding with (#261, order 24).
 
         Raises:
             ValueError: when a ``FeatureCollection`` carries no numeric column to take the value from,
@@ -1865,11 +1892,12 @@ class VectorMixin(_MixinBase):
                 xyz.iloc[:, 0].to_numpy(),
                 xyz.iloc[:, 1].to_numpy(),
                 xyz.iloc[:, 2].to_numpy(),
+                source_field(data),
             )
         src = get_source(reproject(data, self.crs))
         if src.z is None:
             raise ValueError("FeatureCollection has no numeric value column to contour")
-        return src.x.values, src.y.values, src.z.values
+        return src.x.values, src.y.values, src.z.values, source_field(src)
 
     def _tri(
         self,

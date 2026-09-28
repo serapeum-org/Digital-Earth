@@ -14,6 +14,11 @@ m.colorbar()
 m.save("map.png")
 ```
 
+`colorbar()` with no argument keys **the most recent layer that is coloured by a value** — a coastline, a
+basemap or a text label added after the data cannot take the key. Name a layer (`colorbar("obs")`) to key that
+one instead, and `colorbars()` keys every layer that has a key to show. The request is recorded on the layer,
+so the bar moves, hides and disappears with it.
+
 Every input is reprojected to the display CRS through **pyramids** and drawn on a plain axes — there is no
 Cartopy, because the projection is applied to the *data* rather than to the axes. The rendering itself is
 **cleopatra**'s: each builder assembles a glyph and hands the styling keywords straight to it, which is why

@@ -604,7 +604,10 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             drawn["raster-1"].artist,
             drawn["mesh-1"].artist,
         ], layered_map.layers
-        assert layered_map.colorbar().mappable is drawn["mesh-1"].artist
+        layered_map.colorbar()
+        assert layered_map._renderer.drawn["mesh-1"].guides[0].mappable is (
+            layered_map._renderer.drawn["mesh-1"].artist
+        ), "the default colour key was drawn for the wrong layer"
 
     def test_a_restored_layer_is_drawn_where_it_was(self, dataset):
         """Between artists of one z-order, matplotlib draws in insertion order, so that is restored too.
@@ -1327,7 +1330,7 @@ class TestTheGuardsARollbackLeansOn:
     def test_a_layer_whose_re_draw_declines_is_dropped_from_the_colorbar_registry(
         self, drawn_map, monkeypatch
     ):
-        """`Scene.layers` is what ``colorbar(layer=-1)`` indexes, so a hole in it is a wrong colorbar.
+        """`Scene.layers` is where each layer's default key title is filed, so a hole in it mislabels one.
 
         Args:
             drawn_map: A map with one drawn layer.

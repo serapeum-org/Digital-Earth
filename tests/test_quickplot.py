@@ -4,6 +4,7 @@ import pytest
 
 import digitalearth
 from digitalearth import api as qp
+from digitalearth.base.spec import Encoding, LayerSpec, Scale, Symbology
 from digitalearth.static import Map
 
 
@@ -88,13 +89,6 @@ def test_quickmap_graduated_still_gets_its_colorbar():
     fc = _zoned_polygons()
     m = qp.quickmap(fc, crs=fc.epsg, column="fid", scheme="quantiles", k=3)
     assert len(m.fig.axes) == 2, "a graduated numeric fill still carries a colorbar"
-
-
-def test_last_layer_is_categorical_on_empty_scene():
-    """The categorical predicate is False on a scene with no layers (self-safe when called directly)."""
-    assert qp._last_layer_is_categorical(Map(crs=4326)) is False, (
-        "an empty scene has no categorical layer"
-    )
 
 
 def test_quickmap_rejects_unsupported_type():
@@ -266,12 +260,53 @@ def test_module_grid_cells_warns_on_colorbar_failure(dataset, mocker):
 
 
 class _FakeScene:
-    """Minimal scene stand-in for _finish: a .layers list and a recording/optionally-raising .colorbar()."""
+    """Minimal scene stand-in for _finish: the layers it keys, and a recording/raising ``colorbar()``.
 
-    def __init__(self, layers, raises=False):
-        self.layers = list(layers)
+    ``_has_a_key_to_draw`` reads the **description** since order 24 — which layers publish a colour encoding
+    — rather than the last registered artist, so the stand-in answers that question instead of holding a
+    ``layers`` list alone.
+    """
+
+    def __init__(self, keyed=(), raises=False, categorical=False):
+        """Build the stand-in.
+
+        Args:
+            keyed: The ids of the layers that publish a colour encoding.
+            raises: Whether ``colorbar()`` raises, to mimic an unmappable layer.
+            categorical: Whether those layers are coloured by category, which is the case a bar is skipped
+                for.
+        """
+        self._keyed = list(keyed)
+        self.layers = [f"artist-{held}" for held in self._keyed]
         self._raises = raises
+        self._categorical = categorical
         self.colorbar_calls = 0
+
+    def _color_keyed(self):
+        """Return the ids of the layers a key could explain."""
+        return list(self._keyed)
+
+    def get_layer(self, layer_id):
+        """Return a description carrying the colour encoding this stand-in claims for ``layer_id``.
+
+        Args:
+            layer_id: The layer to describe.
+
+        Returns:
+            A `LayerSpec` whose colour is driven by a field, through a categorical or a continuous scale.
+        """
+        scale = (
+            Scale.categorical(["a", "b"], ["#f00", "#00f"])
+            if self._categorical
+            else Scale.from_limits(0.0, 1.0)
+        )
+        return LayerSpec(
+            layer_id,
+            "raster",
+            symbology=Symbology(
+                encodings={"color": Encoding.by_field("color", "v", scale=scale)}
+            ),
+        )
 
     def colorbar(self):
         """Record the call (and optionally raise to mimic an outline-only/unmappable layer)."""
@@ -289,7 +324,7 @@ class TestFinish:
         Test scenario:
             A scene with one layer and colorbar=True gets exactly one colorbar() call.
         """
-        scene = _FakeScene(layers=["layer"])
+        scene = _FakeScene(keyed=["layer"])
         out = qp._finish(scene, colorbar=True)
         assert scene.colorbar_calls == 1, (
             f"expected one colorbar call, got {scene.colorbar_calls}"
@@ -302,21 +337,30 @@ class TestFinish:
         Test scenario:
             Even with layers present, colorbar=False suppresses the colorbar() call.
         """
-        scene = _FakeScene(layers=["layer"])
+        scene = _FakeScene(keyed=["layer"])
         out = qp._finish(scene, colorbar=False)
         assert scene.colorbar_calls == 0, "colorbar must not be drawn when disabled"
         assert out is scene, "the same scene must be returned"
 
-    def test_skips_colorbar_when_no_layers(self):
-        """_finish skips the colorbar when there are no layers, even if requested.
+    def test_skips_colorbar_when_nothing_is_coloured_by_a_value(self):
+        """_finish skips the colorbar when no layer publishes a colour a bar could describe.
 
         Test scenario:
-            An empty scene with colorbar=True draws nothing (no layer to map).
+            An empty scene with colorbar=True draws nothing, and so does one whose only keyed layer is
+            coloured **by category** — a bar over the class codes cleopatra assigned would read ``0, 1, 2 …``
+            beside the swatch legend the glyph already drew.
         """
-        scene = _FakeScene(layers=[])
+        scene = _FakeScene(keyed=[])
         out = qp._finish(scene, colorbar=True)
-        assert scene.colorbar_calls == 0, "colorbar must not be drawn without layers"
+        assert scene.colorbar_calls == 0, (
+            "colorbar must not be drawn without a keyed layer"
+        )
         assert out is scene, "the same scene must be returned"
+        categorical = _FakeScene(keyed=["zone"], categorical=True)
+        qp._finish(categorical, colorbar=True)
+        assert categorical.colorbar_calls == 0, (
+            "a categorical fill is keyed by its swatch legend, not by a bar"
+        )
 
     def test_swallows_colorbar_exception(self):
         """_finish swallows an exception from colorbar() (outline-only/unmappable layer).
@@ -324,7 +368,7 @@ class TestFinish:
         Test scenario:
             colorbar() raising must not propagate; the scene is still returned.
         """
-        scene = _FakeScene(layers=["layer"], raises=True)
+        scene = _FakeScene(keyed=["layer"], raises=True)
         out = qp._finish(scene, colorbar=True)
         assert scene.colorbar_calls == 1, "colorbar() should have been attempted once"
         assert out is scene, "the scene must be returned despite the swallowed error"

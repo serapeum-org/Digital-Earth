@@ -107,6 +107,22 @@ def _styled(monkeypatch, **style):
     monkeypatch.setattr(raster_module, "auto_style", lambda source: dict(style))
 
 
+def _bar(scene, layer_id):
+    """Return the colorbar drawn for one layer, which is where the key lives since order 24.
+
+    ``Map.colorbar`` returns the map itself now (the Core declares ``returns="self"``), so the drawn bar is
+    read off the layer it explains rather than off the call.
+
+    Args:
+        scene: The map the key was asked of.
+        layer_id: The layer whose key is wanted.
+
+    Returns:
+        Its ``matplotlib.colorbar.Colorbar``.
+    """
+    return scene._renderer.drawn[layer_id].guides[0]
+
+
 class TestSaveReturnsPath:
     """C1 on the static tier — the ``Scene``, ``Map`` and globe saves, which take three different paths."""
 
@@ -466,7 +482,8 @@ class TestAutoStyleLevelsAndUnits:
         _styled(monkeypatch, cmap="viridis", units="m3/s")
         m = Map(crs=dataset.epsg)
         m.field(dataset)
-        assert m.colorbar().ax.get_ylabel() == "m3/s", (
+        m.colorbar()
+        assert _bar(m, "raster-1").ax.get_ylabel() == "m3/s", (
             "the resolved units did not label the bar"
         )
 
@@ -483,7 +500,8 @@ class TestAutoStyleLevelsAndUnits:
         _styled(monkeypatch, cmap="viridis", units="m3/s")
         m = Map(crs=dataset.epsg)
         m.field(dataset)
-        assert m.colorbar(label="discharge").ax.get_ylabel() == "discharge", (
+        m.colorbar(label="discharge")
+        assert _bar(m, "raster-1").ax.get_ylabel() == "discharge", (
             "the units overrode an explicit label"
         )
 
@@ -500,7 +518,10 @@ class TestAutoStyleLevelsAndUnits:
         _styled(monkeypatch, cmap="viridis")
         m = Map(crs=dataset.epsg)
         m.field(dataset)
-        assert m.colorbar().ax.get_ylabel() == "", "an unlabelled bar was given a label"
+        m.colorbar()
+        assert _bar(m, "raster-1").ax.get_ylabel() == "", (
+            "an unlabelled bar was given a label"
+        )
 
     def test_animation_colorbar_follows_the_same_style(self, global_field, monkeypatch):
         """The animation's one persistent colorbar is keyed to the frames' colormap and units.

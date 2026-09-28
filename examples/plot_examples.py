@@ -91,7 +91,7 @@ id_size = 20
 
 gauge_map = Map(crs=acc.epsg)
 gauge_map.field(acc, ticks_spacing=500, title=ACC_LABEL)
-gauge_map.colorbar(layer=0, label=ACC_LABEL)
+gauge_map.colorbar("raster-1", label=ACC_LABEL)
 markers = gauge_map.points(point_fc, size=point_size)
 # `Map.points` colors the markers by the collection's own value column (here `id`). One flat color is a
 # property of the artist it returned, not a keyword of the layer.

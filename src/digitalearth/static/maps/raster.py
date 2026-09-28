@@ -13,6 +13,7 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
+from dataclasses import replace as with_fields
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
@@ -39,6 +40,7 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
+from digitalearth.static.guides import source_field
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
@@ -432,7 +434,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # Recorded rather than set by the builder afterwards: a backdrop drawn again from its
         # description has to land behind the data again, and the builder is not there the second time.
         drawn.artist.set_zorder(zorder)
-    return drawn
+    # The band's own name, which only the drawer can answer: the builder records a band *number* and never
+    # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
+    return with_fields(drawn, color_field=source_field(identity, props["band"]))
 
 
 def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
