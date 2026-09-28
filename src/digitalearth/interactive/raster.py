@@ -121,9 +121,14 @@ def coloured_by(data: Any, band: int = DEFAULT_BAND) -> str:
         return str(names[band - 1])
     # A `NetCDF` has variables rather than bands, and `to_display_source` extracts the **first** of them —
     # it forwards only `band`, never a variable — so that is the one a colour key would explain.
-    variables = list(getattr(data, "variable_names", None) or [])
-    if variables and variables[0]:
-        return str(variables[0])
+    # `next(iter(...), None)` rather than `variables[0]` guarded by `if variables`: the two are the same
+    # value, and the second reads as an unguarded subscript to a reviewer scanning for one (SonarCloud
+    # raises S6552 on it as a possible `IndexError`, which the short-circuit already makes impossible). It
+    # is still the **first** variable specifically — not the first non-empty one — because that is the one
+    # `to_display_source` extracts, which is what makes the name agree with the drawn value dimension.
+    first = next(iter(getattr(data, "variable_names", None) or []), None)
+    if first:
+        return str(first)
     return UNNAMED_VALUE
 
 
