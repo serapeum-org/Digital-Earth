@@ -35,7 +35,13 @@ from typing import Any, List, Optional, Tuple
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
 from matplotlib.colors import to_hex
 
-from digitalearth.base.spec import Encoding, LayerSpec, LegendSpec, Scale
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    Encoding,
+    LayerSpec,
+    LegendSpec,
+    Scale,
+)
 
 __all__ = [
     "COUNT_FIELD",
@@ -104,7 +110,7 @@ DENSITY_FIELD: str = "density"
 MAGNITUDE_FIELD: str = "magnitude"
 
 
-def source_field(source: Any, band: int = 1) -> str:
+def source_field(source: Any, band: int = DEFAULT_BAND) -> str:
     """Return the name a source's values are known by, as the tier already spells it.
 
     The builders record a band **number** and never open their source, so the name the colour varies with is
