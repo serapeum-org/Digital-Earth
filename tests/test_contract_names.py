@@ -532,7 +532,10 @@ class TestTheKeywordsAreThePromiseToo:
             The rows above were held to a *shape* — an issue, an order, or the word "unscheduled" — and a
             row naming a closed issue satisfies that shape perfectly (review R-L2). It is the defect #319
             fixed for `PENDING`, left unfixed one table over: a reader follows `#261` expecting to find out
-            when `colorbar` gains `layer_id`, and a closed issue answers "it already did". The allowlist is
+            when `colorbar` gains `layer_id`, and a closed issue answers "it already did". That example is
+            now history rather than a hypothetical — order 24 gave `colorbar` its `layer_id` on all four
+            tiers, so the four rows naming `#261` came off and the issue came off the allowlist with them,
+            which is the lifecycle working. The allowlist is
             shared with `PENDING`'s check rather than copied, so the two tables cannot vouch for different
             sets of issues.
         """
@@ -688,7 +691,7 @@ class TestWhatARoadmapOrderPromises:
     """An order reference is a pointer into a plan the repository does not hold, so the number has to resolve.
 
     :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they say
-    "order 24" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
+    "order 27a" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
     above ask whether a cited order is *in* the table; nothing asked what following one gives back, so a
     lookup that returned the key, or that let a bare `KeyError` out with no message, would still leave both
     guards green while the pointer answered nothing.
@@ -698,12 +701,16 @@ class TestWhatARoadmapOrderPromises:
         """Following a pointer gives the line that tells a waiting caller what they are waiting for.
 
         Test scenario:
-            `order 24` is what a keyed `colorbar` is pending on, across three tiers. A lookup answering
+            `order 27a` is what the keyword shortfalls on both 2-D tiers are waiting on. A lookup answering
             the key back, or the short handle, would read as a plan while saying nothing a reader can
             act on.
+
+            The example was `order 24` until that order landed and its entry came off the table with the
+            rows that cited it — which is the whole lifecycle this class guards, and the reason the assertion
+            reads the *description* rather than the key.
         """
-        built = roadmap_order("order 24")
-        assert built.startswith("a legend and a colorbar"), built
+        built = roadmap_order("order 27a")
+        assert built.startswith("the Core contract's remainder"), built
 
     def test_an_order_nobody_wrote_down_is_refused_with_the_ones_there_are(self):
         """A number that is not a step of the plan fails loudly rather than reading as one (review R-L3).
@@ -718,7 +725,7 @@ class TestWhatARoadmapOrderPromises:
             roadmap_order("order 99")
         message = refused.value.args[0]
         assert "'order 99' is not a roadmap order" in message, message
-        assert "order 24" in message, message
+        assert "order 27a" in message, message
 
 
 class TestTheUnseamedTiersDeclareTheirGap:
