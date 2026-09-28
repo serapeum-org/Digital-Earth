@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
-from digitalearth.base.spec import LayerSpec
+from digitalearth.base.spec import Encoding, LayerSpec
 from digitalearth.three_d.base import classified_scalars
 from digitalearth.three_d.layer import drawing_props
 
@@ -330,6 +330,11 @@ class VectorMixin(_MixinBase):
             kind="extrusion",
             data=gdf,
             name=name,
+            # The prisms' colour comes from `column`, so a key over this layer explains that column and is
+            # titled after it (order 24). No column is a flat fill, which publishes nothing: there is nothing
+            # for a key to label. The scale carries the classes the drawer cuts, from the same classifier, so
+            # a legend derived from it cannot disagree with the fill.
+            encodings=_color_encoding(gdf, column, scheme, k, cmap),
             height=height,
             column=column,
             scheme=scheme,
@@ -337,6 +342,41 @@ class VectorMixin(_MixinBase):
             cmap=cmap,
             **kwargs,
         )
+
+
+def _color_encoding(
+    gdf: Any, column: Optional[str], scheme: Any, k: int, cmap: Any
+) -> Optional[dict[str, Encoding]]:
+    """Return the colour encoding an extrusion publishes, or `None` for a flat-filled one.
+
+    Args:
+        gdf: The polygons, read for `column` when one was named.
+        column: The attribute column the fill is coloured by, or `None`.
+        scheme: How the values are classified, or `None` for a continuous ramp.
+        k: How many classes a graduated scheme cuts.
+        cmap: The colormap the classes come from.
+
+    Returns:
+        `{"color": Encoding}` naming `column`, with the scale its values are cut into, or `None` when the
+        layer colours by nothing. The scale is `None` where the column cannot be reached or classified: the
+        drawer reads the same column moments later and raises the tier's own message for it (see
+        :func:`~digitalearth.three_d.guides.color_scale`).
+    """
+    from digitalearth.three_d.guides import color_scale
+
+    if not column:
+        return None
+    try:
+        values = np.asarray(gdf[column])
+    # A column these polygons do not carry, or an input that cannot be subscripted. The drawer reads the same
+    # column through the placed features and raises there.
+    except Exception:  # noqa: BLE001
+        return None
+    return {
+        "color": Encoding.by_field(
+            "color", column, scale=color_scale(values, scheme=scheme, k=k, cmap=cmap)
+        )
+    }
 
 
 def draw_vectors(scene: Any, data: Any, layer: LayerSpec) -> Any:

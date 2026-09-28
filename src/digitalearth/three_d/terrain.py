@@ -14,13 +14,13 @@ non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in *
 (``ravel(order="F")``) to line up with the structured point ordering — C-order silently mirrors the terrain.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import numpy as np
 
 from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
-from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Selection
+from digitalearth.base.spec import DEFAULT_BAND, Encoding, LayerSpec, Selection
 from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET, reduce_surface
 from digitalearth.three_d.layer import drawing_props
 
@@ -86,6 +86,33 @@ def _terrain_mesh(
     # VTK structured points are Fortran-ordered: ravel(order="F") keeps the terrain right-side up (see module docs).
     grid.point_data[ELEVATION] = z.ravel(order="F")
     return grid
+
+
+def _color_encoding(
+    scalars: Any, kwargs: Dict[str, Any]
+) -> Optional[Dict[str, Encoding]]:
+    """Return the colour encoding a terrain publishes, or `None` for a genuinely flat surface.
+
+    Args:
+        scalars: The `scalars` the builder was given.
+        kwargs: The builder's remaining keywords, read for the one that turns scalar mapping off.
+
+    Returns:
+        `{"color": Encoding}` naming the array the surface is coloured by, or `None` when it is coloured
+        flat — in which case a key over it is refused rather than drawn over nothing.
+
+        **`scalars=None` is not a flat surface on its own.** :meth:`pyvista.Plotter.add_mesh` falls back to
+        the mesh's active scalars, which is always the elevation :func:`_terrain_mesh` binds, and draws its own
+        bar titled `elevation` for it — measured on PyVista 0.48.4. The surface is flat only when `color=` is
+        given as well, which is the keyword that switches scalar mapping off; `color=` on its own is ignored
+        while scalars are active. A `scalars` that is neither a name nor `None` publishes nothing either:
+        there is no name for a key to be titled after.
+    """
+    if isinstance(scalars, str) and scalars:
+        return {"color": Encoding.by_field("color", scalars)}
+    if scalars is not None or "color" in kwargs:
+        return None
+    return {"color": Encoding.by_field("color", ELEVATION)}
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -228,6 +255,10 @@ class TerrainMixin(_MixinBase):
             data=data,
             name=name,
             selection=Selection(band=(band,)),
+            # The array the surface's colour comes from, so a key over this layer explains that array and is
+            # titled after it (order 24). No scale: VTK holds the mapping from the array's own range through
+            # its lookup table, which is what `scale=None` means.
+            encodings=_color_encoding(scalars, kwargs),
             cmap=cmap,
             scalars=scalars,
             big_data_threshold=self._resolve_big_data_threshold(

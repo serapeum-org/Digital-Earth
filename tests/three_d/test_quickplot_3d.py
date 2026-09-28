@@ -121,7 +121,16 @@ class TestQuickplot3DBackend:
         out.close()
 
     def test_colorbar_false_on_points_builds(self):
-        """colorbar=False forwards show_scalar_bar=False into the point-cloud (add_points) path too."""
+        """colorbar=False builds a cloud with no colour key, and no error where there is none to take off.
+
+        Test scenario:
+            This used to read "forwards show_scalar_bar=False into the point-cloud (add_points) path" — the
+            flag reached PyVista as a keyword on the builder. It now routes through the tier's own
+            `colorbar`/`legend` (order 24), and this cloud is given no ``column``, so nothing on it is
+            coloured by data: the flag must leave the scene unkeyed rather than raise, exactly as
+            ``colorbar=True`` would. `tests/three_d/test_guides3d.py` holds what the flag does when there
+            *is* a key.
+        """
         from digitalearth.api import quickplot
         from digitalearth.three_d import Scene3D
 

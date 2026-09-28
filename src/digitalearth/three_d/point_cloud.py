@@ -10,7 +10,7 @@ module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competit
 all CRS work upstream.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Mapping
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional
 
 import numpy as np
 
@@ -75,7 +75,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-from digitalearth.base.spec import LayerSpec
+from digitalearth.base.spec import Encoding, LayerSpec
 from digitalearth.three_d.layer import drawing_props
 
 
@@ -190,6 +190,7 @@ class PointCloudMixin(_MixinBase):
             kind="point_cloud",
             data=data,
             name=name,
+            encodings=_color_encoding(data, values, value_column, scheme, k, cmap),
             values=values,
             value_column=value_column,
             size=size,
@@ -200,6 +201,59 @@ class PointCloudMixin(_MixinBase):
             cmap=cmap,
             **kwargs,
         )
+
+
+def _color_encoding(
+    data: Any,
+    values: Any,
+    value_column: Any,
+    scheme: Any,
+    k: int,
+    cmap: Any,
+) -> Optional[Dict[str, Encoding]]:
+    """Return the colour encoding a coloured cloud publishes, or `None` for an uncoloured one.
+
+    The cloud's colour comes from a value per point, so a key over it explains that column — which is what
+    order 24 needs recorded on the layer rather than rebuilt from whatever was drawn last.
+
+    Args:
+        data: The builder's input, read for `value_column` when one was named.
+        values: The explicit per-point value array, or `None`.
+        value_column: The attribute column to colour by, or `None`.
+        scheme: How the values are classified, or `None` for a continuous ramp.
+        k: How many classes a graduated scheme cuts.
+        cmap: The colormap the classes come from.
+
+    Returns:
+        `{"color": Encoding}` naming :data:`SCALAR` — the array the drawer binds on the cloud — with the scale
+        the values are cut into, or `None` when the cloud colours by nothing at all. The **field** is the
+        column's name when one was given, since that is what a reader wants a key titled after; the array
+        name is what PyVista titles its own bar with, and the two agree for the unnamed case.
+
+        The scale is `None` when the values cannot be reached or cannot be classified: the drawer classifies
+        the same column moments later and raises the tier's own message for it (see
+        :func:`~digitalearth.three_d.guides.color_scale`).
+    """
+    from digitalearth.three_d.guides import color_scale
+
+    column = np.asarray(values) if values is not None else None
+    if column is None and value_column:
+        try:
+            column = np.asarray(data[value_column])
+        # A column this input does not carry, or an input that cannot be subscripted at all. The drawer
+        # reaches the same column through the placed data and raises there; publishing no encoding leaves
+        # the layer under-described rather than moving a caller's error to another call.
+        except Exception:  # noqa: BLE001
+            return None
+    if column is None:
+        return None
+    return {
+        "color": Encoding.by_field(
+            "color",
+            value_column or SCALAR,
+            scale=color_scale(column, scheme=scheme, k=k, cmap=cmap),
+        )
+    }
 
 
 def _refuse_folded_marker_size(props: Dict[str, Any]) -> None:

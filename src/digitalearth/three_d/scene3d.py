@@ -12,6 +12,8 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
   optional, lazily-imported geovista).
 - :class:`~digitalearth.three_d.decoration.DecorationMixin` → :meth:`set_title` / :meth:`text` / :meth:`axes` /
   :meth:`orientation_axes` (what the scene says about itself, rather than what it draws).
+- :class:`~digitalearth.three_d.guides.GuideMixin` → :meth:`colorbar` / :meth:`legend` (the colour key, as a
+  guide on the layer's own encoding rather than figure decoration a tier draws and forgets).
 - :class:`~digitalearth.three_d.animation.AnimationMixin` → :meth:`orbit` / :meth:`record` / :meth:`jupyter`.
 
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
@@ -22,6 +24,7 @@ from digitalearth.three_d.animation import AnimationMixin
 from digitalearth.three_d.base import Scene3DBase, house_theme
 from digitalearth.three_d.decoration import DecorationMixin
 from digitalearth.three_d.globe import GlobeMixin
+from digitalearth.three_d.guides import GuideMixin
 from digitalearth.three_d.point_cloud import PointCloudMixin
 from digitalearth.three_d.terrain import TerrainMixin
 from digitalearth.three_d.vector import VectorMixin
@@ -37,6 +40,7 @@ class Scene3D(
     VectorMixin,
     GlobeMixin,
     DecorationMixin,
+    GuideMixin,
     AnimationMixin,
     Scene3DBase,
 ):
@@ -45,8 +49,8 @@ class Scene3D(
     Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.base.Scene3DBase` and the
     plot methods from the capability mixins (:meth:`terrain`, :meth:`point_cloud`, :meth:`volume`,
     :meth:`isosurface`, :meth:`vectors`, :meth:`extruded_polygons`, :meth:`globe`, :meth:`set_title`,
-    :meth:`text`, :meth:`axes`, :meth:`orientation_axes`, :meth:`orbit`, :meth:`record`). See those classes
-    for the full surface.
+    :meth:`text`, :meth:`axes`, :meth:`orientation_axes`, :meth:`colorbar`, :meth:`legend`, :meth:`orbit`,
+    :meth:`record`). See those classes for the full surface.
 
     Examples:
         - Create a headless scene, render a DEM as 3-D relief, screenshot it:

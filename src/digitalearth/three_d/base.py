@@ -17,7 +17,7 @@ import sys
 from contextlib import suppress
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Self, Union
 
 import numpy as np
 
@@ -34,6 +34,7 @@ from digitalearth.base.sources import Source
 from digitalearth.base.spec import (
     Camera,
     DataRef,
+    Encoding,
     FigureSpec,
     LayerSpec,
     PanelSpec,
@@ -557,6 +558,13 @@ class Scene3DBase:
         #: `_dress_plotter` puts it onto a window the scene has just been given. The heading itself is on the
         #: figure instead, as the panel's own `title`, since `PanelSpec` carries one.
         self._decoration: dict[str, Any] = {}
+        #: How each layer's colour key is *drawn*, keyed by layer id (order 24) — the title the scalar bar is
+        #: currently on the plotter under, whether the layer is in the keyed list, and the row labels a caller
+        #: overrode. The same split as `_decoration`: what the key **is** travels on the layer's encoding as a
+        #: `Guide`, and this is the drawing state that cannot, because a bar's title is a slot on one plotter
+        #: rather than a property of the figure. :func:`~digitalearth.three_d.guides.redraw_guides` owns it
+        #: and prunes an entry when its layer goes.
+        self._guides: dict[str, dict[str, Any]] = {}
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
         self.strict: bool = strict
         #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
@@ -1546,6 +1554,7 @@ class Scene3DBase:
         band: Any = None,
         selection: Any = None,
         label: Any = None,
+        encodings: Optional[Mapping[str, Encoding]] = None,
         **props: Any,
     ) -> Any:
         """Describe a layer, add it to the scene's figure, and draw it.
@@ -1563,6 +1572,10 @@ class Scene3DBase:
             band: Where it is drawn relative to the data (#292); `None` takes the kind's own band.
             selection: Which slice of the source it draws.
             label: What a layer switcher would call it.
+            encodings: The visual channels this layer's data drives, by channel name — today the `color`
+                encoding a builder publishes when its colour comes from a band, a variable or a column
+                (order 24). `None` for a layer whose look is engine keywords alone, which is what publishing
+                nothing means: a key over it is refused rather than drawn over nothing.
             **props: The engine keywords, stored on the layer's symbology. An array among them is stored as a
                 reference rather than copied (:mod:`digitalearth.three_d.layer`).
 
@@ -1590,7 +1603,9 @@ class Scene3DBase:
             band=band,
             label=label,
             selection=selection if selection is not None else Selection(),
-            symbology=Symbology(props=stored_props(**props)),
+            symbology=Symbology(
+                encodings=dict(encodings or {}), props=stored_props(**props)
+            ),
         )
         candidate = self._figure_with(
             layers=self._figure.layers.add(spec), sources=sources

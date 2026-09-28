@@ -31,13 +31,13 @@ made** — with the names `axes_box` and `orientation_axes`. Until then the two 
 for figure-level decoration (`Scene.set_title`, `Scene.colorbar`, `Scene.legend` are drawn and not described):
 the scene keeps them, the figure does not carry them, and removing a layer never takes them with it.
 
-**What this module deliberately does not build.** A scalar bar and a legend. Both are Core names, and
-`contract.PENDING["3d"]` schedules both against order 24 — "the scalar bar is PyVista's, and becomes a guide on
-the encoding", "a keyed list beside a scene" — so `colorbar()` and `legend()` are that order's work, under those
-spellings, keyed to a layer's `Encoding`. Adding a differently shaped `scalar_bar()` here would put two
-spellings on one concept, which is the single thing the Core contract exists to prevent. A north arrow is not
-built either: the tier declares it absent, with its reason (a scene can be looked at from any direction, so
-there is no fixed north on screen).
+**What this module deliberately does not build.** A scalar bar and a legend — and not because they are
+missing. Both are Core names keyed to a layer's `Encoding`, so they are **guides** rather than decoration: they
+explain something the layer publishes, where a title, a label and a coordinate frame explain nothing. They live
+in :mod:`digitalearth.three_d.guides` as `colorbar()` and `legend()` (order 24), under those spellings and no
+others — a differently shaped `scalar_bar()` here would put two spellings on one concept, which is the single
+thing the Core contract exists to prevent. A north arrow is not built at all: the tier declares it absent, with
+its reason (a scene can be looked at from any direction, so there is no fixed north on screen).
 """
 
 import math

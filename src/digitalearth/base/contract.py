@@ -126,9 +126,13 @@ class Method:
 #: adopting.
 _RENAME_ORDER = "order 27a"
 
-#: Where a colour key stops being the most recent classification and becomes a guide on its own layer's
-#: encoding. Named here so the two 3-D rows that cite it are held to the same table as every other citation.
-_GUIDES_ORDER = "order 24"
+#: `_GUIDES_ORDER = "order 24"` stood here — where a colour key stops being the most recent classification
+#: and becomes a guide on its own layer's encoding. That order has built it on all four tiers: `colorbar` and
+#: `legend` record a `Guide` through `Symbology.with_guide` onto the layer's colour encoding, so the key moves
+#: with its layer, goes away with it, and travels in the figure. The two 3-D `PENDING` rows and the four
+#: `KEYWORD_SHORTFALLS` rows that cited it are all off, so the constant and its `ROADMAP_ORDERS` entry go with
+#: them — `TestAPendingReasonPointsAtLiveWork` refuses a declared order no reason points at, which is what
+#: makes finishing an order include deleting its citation rather than leaving a pointer nobody follows.
 
 #: How a reason points at the roadmap. The letter is part of the number — order 27a is a step of its own that
 #: sits after 27, not a variant of it — so a pattern that stopped at the digits would read two orders as one.
@@ -142,7 +146,7 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: Every roadmap order a user-facing reason may name, with one line saying what it builds.
 #:
 #: **The roadmap is not in this repository** — it is the maintainer's planning document, and a reason naming
-#: `order 24` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
+#: `order 27a` is a pointer into it. Nothing checked that the order on the other end existed: a reason reading
 #: "order 99" satisfied every guard, because the guards only ever asked whether the *form* was an order rather
 #: than a wave (review R-L3). Measured before this table: a `PENDING` row rewritten to name order 99 passed all
 #: three checks in `TestAPendingReasonPointsAtLiveWork`.
@@ -161,10 +165,6 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: The keys are the constants above rather than repeated strings, so a citation and its entry cannot disagree.
 ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
     {
-        _GUIDES_ORDER: (
-            "a legend and a colorbar that follow their own layer, as guides on its encoding rather than on "
-            "the most recent classification"
-        ),
         _RENAME_ORDER: (
             "the Core contract's remainder — the renames each tier agreed to and had not adopted, plus the "
             "divergences the frozen contract did not settle"
@@ -394,8 +394,12 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "lines": "line features in three dimensions — #201",
                 "polygons": "polygons are drawn extruded here; a flat fill is unscheduled",
                 "choropleth": "a classified fill follows polygons, and is unscheduled with them",
-                "colorbar": "the scalar bar is PyVista's, and becomes a guide on the encoding — order 24",
-                "legend": "a keyed list beside a scene — order 24",
+                # `colorbar` ("the scalar bar is PyVista's, and becomes a guide on the encoding") and
+                # `legend` ("a keyed list beside a scene") were listed here against order 24, which has now
+                # built both: `digitalearth.three_d.guides` records a `Guide` on the layer's own colour
+                # encoding and draws from it — PyVista's scalar bar for a ramp, its keyed legend for classes,
+                # derived from the layer's `Scale` — so the key follows the layer it explains. Both are
+                # declared features of the tier as well (`three_d/capabilities.py`).
                 "set_bounds": "a scene is framed by its camera, not by an extent (see Capabilities.absent)",
             }
         ),
@@ -514,10 +518,14 @@ def orders_named_in(reason: str) -> Tuple[str, ...]:
         which is allowed: an open issue and the word "unscheduled" are the other two honest answers.
 
     Examples:
-        - A reason that names one:
+        - A reason that names one. Written out rather than read off a live `PENDING` row, and deliberately
+          naming an order that is **gone**: this parses a string and does not ask whether the order is still
+          declared, which is what lets a reason be read before the table is consulted. An example pinned to
+          whichever row happens to cite a live order breaks every time one lands — order 24 built the two 3-D
+          rows that used to be quoted here, and took its own entry off `ROADMAP_ORDERS` with them:
             ```python
-            >>> from digitalearth.base.contract import orders_named_in, pending_for
-            >>> orders_named_in(pending_for("3d")["colorbar"])
+            >>> from digitalearth.base.contract import orders_named_in
+            >>> orders_named_in("a keyed list beside a scene — order 24")
             ('order 24',)
 
             ```
@@ -625,11 +633,11 @@ def roadmap_order(order: str) -> str:
             reading as a plan (review R-L3).
 
     Examples:
-        - What a caller waiting on a keyed `colorbar` is waiting for:
+        - What a caller waiting on a tier's adoption of a Core spelling is waiting for:
             ```python
             >>> from digitalearth.base.contract import roadmap_order
-            >>> roadmap_order("order 24").split(",")[0]
-            'a legend and a colorbar that follow their own layer'
+            >>> roadmap_order("order 27a").split("—")[0].strip()
+            "the Core contract's remainder"
 
             ```
         - An order nobody wrote down is refused with the ones there are:
@@ -639,7 +647,7 @@ def roadmap_order(order: str) -> str:
             ...     roadmap_order("order 99")
             ... except KeyError as error:
             ...     print(error.args[0])
-            'order 99' is not a roadmap order this contract names; it names order 24, order 27a
+            'order 99' is not a roadmap order this contract names; it names order 27a
 
             ```
     """

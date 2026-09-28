@@ -293,19 +293,18 @@ class TestTheTwoDeclarationsDoNotContradict:
             f"{backend} lists {both} as deliberately absent and as not yet built; pick one"
         )
 
-    def test_a_capability_may_outlive_a_core_method_that_is_pending(self):
-        """The one overlap that is not a contradiction, pinned so it is read as deliberate.
-
-        Test scenario:
-            The 3-D tier *has* a colour key — PyVista draws a scalar bar, and `quickmap(colorbar=...)` is
-            honoured on the strength of that — while the Core *method* `colorbar()` is not built. A feature
-            and a method of the same name are different claims, which is why only `absent` is checked above.
-        """
-        from digitalearth.base.contract import pending_for
-        from digitalearth.three_d.capabilities import CAPABILITIES
-
-        assert "colorbar" in CAPABILITIES.features, sorted(CAPABILITIES.features)
-        assert "colorbar" in pending_for("3d"), sorted(pending_for("3d"))
+    # `test_a_capability_may_outlive_a_core_method_that_is_pending` stood here. It pinned the one overlap
+    # that was not a contradiction: the 3-D tier declared `colorbar` as a *feature*, on the strength of the
+    # scalar bar PyVista draws for a scalar layer, while the Core *method* `colorbar()` was in
+    # `contract.PENDING["3d"]` against order 24. Order 24 has built the method, so both rows came off that
+    # list and the overlap is gone — the test asserted `"colorbar" in pending_for("3d")`, which is now false.
+    # It is deleted rather than weakened: measured across all four tiers after the change, no
+    # feature-and-pending pair of that shape is left anywhere (`matplotlib` is pending only `lines`, which is
+    # a Core method and a layer kind and not a feature; `web` and `interactive` are pending nothing), so
+    # there is nothing to re-point it at. The rule it guarded — that `test_nothing_is_both_declined_and_pending`
+    # checks `absent` and not `features`, because a feature and a method of one name are different claims —
+    # is stated in that test and in `three_d/capabilities.py` beside the reason `colorbar` was never
+    # in `absent`.
 
 
 class TestADeclarationIsAValue:
