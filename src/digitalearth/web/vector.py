@@ -15,12 +15,19 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple, Union
 
 from loguru import logger
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
-from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, LegendSpec, Scale, Symbology
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    Encoding,
+    LayerSpec,
+    LegendSpec,
+    Scale,
+    Symbology,
+)
 from digitalearth.base.symbology import (
     DEFAULT_LABEL_COLOR,
     DEFAULT_LABEL_HALO_COLOR,
@@ -277,7 +284,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any],
         k: int,
         cmap: str,
-    ) -> list:
+    ) -> Tuple[list, Encoding]:
         """Compile a MapLibre data-driven colour expression for ``column`` and record the breaks.
 
         Args:
@@ -291,10 +298,21 @@ class VectorMixin(_MixinBase):
                 ``"tab10"`` is used for ``scheme="categorical"`` when ``cmap`` is left at the default).
 
         Returns:
-            A MapLibre expression list (``["step", …]``, ``["match", …]`` or ``["interpolate", …]``). Also
-            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops,
-            and ``self.last_legend`` to those values *plus the colours they were drawn with*, which is what
-            :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
+            ``(expression, encoding)``. The expression is MapLibre's own (``["step", …]``, ``["match", …]``
+            or ``["interpolate", …]``) and is what the drawer paints with. The encoding is the same colour
+            said portably —
+            :meth:`~digitalearth.base.spec.encoding.Encoding.by_field` on the ``color`` channel, carrying
+            the very :class:`~digitalearth.base.spec.scale.Scale` the arm classified with — and is what a
+            :class:`~digitalearth.base.spec.encoding.Guide` is later hung on, so a colour key belongs to
+            its layer instead of to the map (DE-48, order 24).
+
+            Both are **returned** rather than one of them left on ``self``: a caller that never reaches
+            `_vector_layer` would otherwise leave an encoding behind for the next layer to pick up, which
+            is the class of bug the ``_filed_legend`` identity dance exists to work around.
+
+            Also sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp
+            stops, and ``self.last_legend`` to those values *plus the colours they were drawn with*, which
+            is what :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
 
         Raises:
             ValueError: from :class:`~digitalearth.base.spec.scale.Scale` when the scheme cannot classify
@@ -307,7 +325,9 @@ class VectorMixin(_MixinBase):
             return self._graduated_color_expr(values, column, scheme, k, cmap)
         return self._ramp_color_expr(values, column, cmap)
 
-    def _categorical_color_expr(self, values: Any, column: str, cmap: str) -> list:
+    def _categorical_color_expr(
+        self, values: Any, column: str, cmap: str
+    ) -> Tuple[list, Encoding]:
         """Compile a MapLibre ``match`` expression over the column's distinct values (DC.8).
 
         Args:
@@ -316,7 +336,9 @@ class VectorMixin(_MixinBase):
             cmap: The colormap sampled for the class colours; a qualitative map is resolved for it.
 
         Returns:
-            The ``["match", …]`` expression, with `last_breaks` and `last_legend` recorded.
+            ``(expression, encoding)`` — the ``["match", …]`` expression, and the colour channel bound to
+            ``column`` through the same categorical `Scale` the swatches come from — with `last_breaks` and
+            `last_legend` recorded.
 
         Raises:
             ValueError: for a non-integral float category, which cannot key a ``match``; or from the
@@ -360,17 +382,18 @@ class VectorMixin(_MixinBase):
         )  # fallback for values outside the known categories (shared by all tiers)
         # Derived from the scale that produced the colours, not assembled a second time beside it:
         # that is what makes the swatches equal what was drawn (#185, DE-19).
-        legend = LegendSpec.from_scale(
-            Scale.categorical([_native(c) for c in categories], list(colors)),
-            title=column,
-        )
+        scale = Scale.categorical([_native(c) for c in categories], list(colors))
+        legend = LegendSpec.from_scale(scale, title=column)
         self.last_breaks = [_native(c) for c in categories]
         self.last_legend = self._legend_dict(legend, column)
-        return expr
+        # The same scale a third time would be a third chance to disagree, so the portable encoding is
+        # bound to the object the swatches and the `match` arms were both built from. No `output_range`:
+        # `Encoding` refuses one on a categorical scale, and a fill's colour has no numeric range anyway.
+        return expr, Encoding.by_field("color", column, scale=scale)
 
     def _graduated_color_expr(
         self, values: Any, column: str, scheme: Any, k: int, cmap: str
-    ) -> list:
+    ) -> Tuple[list, Encoding]:
         """Compile a MapLibre ``step`` expression over class edges.
 
         Args:
@@ -381,8 +404,9 @@ class VectorMixin(_MixinBase):
             cmap: The colormap sampled for the class colours.
 
         Returns:
-            The guarded ``["case", …, ["step", …], MISSING_COLOR]`` expression, with `last_breaks`
-            and `last_legend` recorded.
+            ``(expression, encoding)`` — the guarded ``["case", …, ["step", …], MISSING_COLOR]`` expression,
+            and the colour channel bound to ``column`` through the same `Scale` the class ranges come from —
+            with `last_breaks` and `last_legend` recorded.
 
         Raises:
             ValueError: when the scheme cannot classify the column, naming the column as well as the
@@ -416,23 +440,24 @@ class VectorMixin(_MixinBase):
         # assembly this wave set out to remove, routed through an extra type for no new guarantee — and
         # it re-spelled the range label a fourth time. Going through the Scale exercises class_ranges()'s
         # k-classes-from-k+1-edges arithmetic in production rather than only in its own test.
+        scale = Scale(
+            self.last_breaks[0],
+            self.last_breaks[-1],
+            scheme=scheme,
+            breaks=tuple(self.last_breaks),
+        )
         self.last_legend = self._legend_dict(
-            LegendSpec.from_scale(
-                Scale(
-                    self.last_breaks[0],
-                    self.last_breaks[-1],
-                    scheme=scheme,
-                    breaks=tuple(self.last_breaks),
-                ),
-                colors=list(colors),
-                title=column,
-            ),
+            LegendSpec.from_scale(scale, colors=list(colors), title=column),
             column,
             values=self.last_breaks,
         )
-        return expr
+        # The portable reading of the same fill: the class edges the `step` arms were built from, carried on
+        # the channel they drive rather than only in `last_breaks`.
+        return expr, Encoding.by_field("color", column, scale=scale)
 
-    def _ramp_color_expr(self, values: Any, column: str, cmap: str) -> list:
+    def _ramp_color_expr(
+        self, values: Any, column: str, cmap: str
+    ) -> Tuple[list, Encoding]:
         """Compile a MapLibre ``interpolate`` expression over a continuous ramp.
 
         Args:
@@ -441,7 +466,9 @@ class VectorMixin(_MixinBase):
             cmap: The colormap sampled for the ramp stops.
 
         Returns:
-            The ``["interpolate", …]`` expression, with `last_breaks` and `last_legend` recorded.
+            ``(expression, encoding)`` — the ``["interpolate", …]`` expression, and the colour channel bound
+            to ``column`` over the same limits the ramp was sampled across — with `last_breaks` and
+            `last_legend` recorded.
 
         Raises:
             ValueError: when the column holds no finite values to colour.
@@ -463,16 +490,20 @@ class VectorMixin(_MixinBase):
         # element to `hi` exactly and the arithmetic in `from_scale` does not, so for lo=-3.7, hi=12.9 the
         # top swatch was labelled 12.900000000000002 while the ramp drew 12.9. The legend must be the stops
         # that were drawn, not a second computation that usually agrees with them.
+        scale = Scale.from_limits(lo, hi)
         self.last_legend = self._legend_dict(
             LegendSpec.from_scale(
-                Scale.from_limits(lo, hi),
+                scale,
                 colors=list(colors),
                 title=column,
                 values=self.last_breaks,
             ),
             column,
         )
-        return expr
+        # The limits, not the five sampled stops: the stops are this tier's own sampling of the ramp — the
+        # gradient bar is drawn from them — while the encoding says what the colour varies *with*, which
+        # another engine ramps at whatever resolution it likes.
+        return expr, Encoding.by_field("color", column, scale=scale)
 
     def labels(
         self,
@@ -656,12 +687,14 @@ class VectorMixin(_MixinBase):
         _, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="contours")
         # The level colours each contour along a continuous ramp, as `lines`/`polygons` do with no scheme;
-        # a caller's `color=` pins every contour to one colour instead.
-        colour = (
-            color or VECTOR_COLOR
-            if column is None
-            else self._ramp_color_expr(self._require_column(gdf, column), column, cmap)
-        )
+        # a caller's `color=` pins every contour to one colour instead — and a flat colour drives nothing, so
+        # there is no field-driven encoding to publish and no colour key to be asked for on it.
+        colour: Any = color or VECTOR_COLOR
+        color_encoding: Optional[Encoding] = None
+        if column is not None:
+            colour, color_encoding = self._ramp_color_expr(
+                self._require_column(gdf, column), column, cmap
+            )
         if filled:
             paint = self._fill_paint(opacity, CONTOUR_OUTLINE_COLOR, colour)
             prefix, layer_type, kind = "fill", layer_types.FILL, "filled_contours"
@@ -677,6 +710,7 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
             asked=asked,
+            color_encoding=color_encoding,
         )
 
     @staticmethod
@@ -891,6 +925,7 @@ class VectorMixin(_MixinBase):
         layout: Optional[dict] = None,
         source: Any = None,
         asked: Sequence[str] = (),
+        color_encoding: Optional[Encoding] = None,
     ) -> Self:
         """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
 
@@ -919,6 +954,13 @@ class VectorMixin(_MixinBase):
                 on the symbology so the lift can publish the caller's ask instead of reconstructing it from
                 the resolved paint, which cannot tell an ask from a default (#334). Empty — the default —
                 records no key at all, so an unstyled layer's description is exactly what it was.
+            color_encoding: What drives the layer's colour when a `column` does, as
+                :meth:`~digitalearth.base.spec.encoding.Encoding.by_field` built it in `_color_expr`. Filed
+                on the symbology's ``color`` channel, which is where
+                :meth:`~digitalearth.web.decoration.DecorationMixin.legend` hangs its
+                :class:`~digitalearth.base.spec.encoding.Guide` — so the colour key belongs to the layer and
+                moves, hides and disappears with it. `None` — a flat colour, or no colour at all — files
+                nothing, which is what makes a key on an unclassified layer refusable.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -939,6 +981,12 @@ class VectorMixin(_MixinBase):
             source=features if source is None else source,
             placed=features,
             symbology=Symbology(
+                # Built in rather than lifted in `portable_encodings`: the lift sees only the finished
+                # description, and a `Scale` is not a value `props` can carry — `Symbology.to_dict` writes
+                # properties as JSON, so the scale would have to be flattened here and rebuilt there, two
+                # spellings of one thing. `Encoding` carries a `Scale` natively, so the honest reading of a
+                # data-driven fill is recorded once, where the scale is still in hand.
+                encodings={} if color_encoding is None else {"color": color_encoding},
                 props={
                     # The enum's value, not the member: a description holds plain values, so a figure
                     # written to disk carries a string MapLibre reads back. The spec refuses the member,
@@ -947,7 +995,7 @@ class VectorMixin(_MixinBase):
                     "paint": dict(paint),
                     "layout": dict(layout) if layout else {},
                     **asked_record(asked),
-                }
+                },
             ),
         )
         self._last_layer_id = layer_id
@@ -1110,8 +1158,9 @@ class VectorMixin(_MixinBase):
                 )
             return self.deck_scatter(gdf, size=size)
         paint: dict = {"circle-radius": float(size), "circle-opacity": float(opacity)}
+        color_encoding: Optional[Encoding] = None
         if column is not None:
-            paint["circle-color"] = self._color_expr(
+            paint["circle-color"], color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
         else:
@@ -1126,6 +1175,7 @@ class VectorMixin(_MixinBase):
             visible=visible,
             source=features,
             asked=ask.named,
+            color_encoding=color_encoding,
         )
 
     def lines(
@@ -1218,13 +1268,16 @@ class VectorMixin(_MixinBase):
             ask("line-opacity", opacity, LINE_OPACITY), "opacity", "WebMap.lines()"
         )
         gdf = self._display_gdf(features, method="lines")
-        colour = (
-            ask("line-color", color, VECTOR_COLOR)
-            if column is None
-            else self._color_expr(
+        colour: Any
+        color_encoding: Optional[Encoding] = None
+        if column is None:
+            # Only on this arm, as before: `ask` *records* the key as named, so reaching it on the
+            # classified arm too would add `line-color` to what the caller is said to have asked for.
+            colour = ask("line-color", color, VECTOR_COLOR)
+        else:
+            colour, color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
-        )
         return self._vector_layer(
             gdf,
             "line",
@@ -1235,6 +1288,7 @@ class VectorMixin(_MixinBase):
             visible=visible,
             source=features,
             asked=ask.named,
+            color_encoding=color_encoding,
         )
 
     def polygons(
@@ -1368,13 +1422,16 @@ class VectorMixin(_MixinBase):
                     "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
             return self.deck_polygons(gdf)
-        colour = (
-            ask("fill-color", color, VECTOR_COLOR)
-            if column is None
-            else self._color_expr(
+        colour: Any
+        color_encoding: Optional[Encoding] = None
+        if column is None:
+            # Only on this arm, as before: `ask` *records* the key as named, so reaching it on the
+            # classified arm too would add `fill-color` to what the caller is said to have asked for.
+            colour = ask("fill-color", color, VECTOR_COLOR)
+        else:
+            colour, color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
-        )
         return self._vector_layer(
             gdf,
             "fill",
@@ -1385,6 +1442,7 @@ class VectorMixin(_MixinBase):
             visible=visible,
             source=features,
             asked=ask.named,
+            color_encoding=color_encoding,
         )
 
     def choropleth(
@@ -1498,8 +1556,9 @@ class VectorMixin(_MixinBase):
         )
         gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
+        fill, color_encoding = self._color_expr(values, column, scheme, k, cmap)
         paint = {
-            "fill-color": self._color_expr(values, column, scheme, k, cmap),
+            "fill-color": fill,
             "fill-opacity": float(opacity),
             "fill-outline-color": outline_color,
         }
@@ -1513,4 +1572,5 @@ class VectorMixin(_MixinBase):
             visible=visible,
             source=features,
             asked=ask.named,
+            color_encoding=color_encoding,
         )

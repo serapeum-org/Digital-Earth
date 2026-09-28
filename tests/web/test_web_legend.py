@@ -359,3 +359,236 @@ class TestTheThemeIsValidated:
             .layer_control(theme=theme)
         )
         assert f'"theme": "{theme}"' in _payload(m.to_html())
+
+
+#: Two squares apart, the shape every layer in the guide tests below is drawn from.
+_SQUARES = [
+    Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+    Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+]
+
+
+def _layer(column, values):
+    """Return a two-polygon frame carrying one numeric column.
+
+    Args:
+        column: The attribute name to classify by.
+        values: Its two values, chosen so one layer's range cannot be mistaken for another's.
+
+    Returns:
+        A GeoDataFrame in EPSG:4326.
+    """
+    return gpd.GeoDataFrame({column: values}, geometry=_SQUARES, crs=4326)
+
+
+def _whose_key(web_map):
+    """Say which layer's classification the map's key is showing.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        ``"A"`` for the ``pop`` layer's range, ``"B"`` for the ``rain`` layer's, ``None`` when no key is
+        drawn. Read off the panel's markup rather than off the guide, so the assertion is about what a viewer
+        sees rather than about the state the fix writes.
+    """
+    panel = web_map._panels.get("legend")
+    if panel is None:
+        return None
+    drawn = panel[0]
+    if ">1<" in drawn or ">100<" in drawn:
+        return "A"
+    if ">500<" in drawn or ">900<" in drawn:
+        return "B"
+    return "?"
+
+
+def _two_classified():
+    """Return a map with two classified layers, ``A`` below ``B``.
+
+    Returns:
+        The map. ``A`` is coloured by ``pop`` over 1..100, ``B`` by ``rain`` over 500..900, so the two keys
+        are told apart by the numbers in the panel.
+    """
+    from digitalearth.web import WebMap
+
+    web_map = WebMap().choropleth(_layer("pop", [1, 100]), column="pop", name="A")
+    return web_map.choropleth(_layer("rain", [500, 900]), column="rain", name="B")
+
+
+class TestTheKeyIsRecordedOnTheLayerItDescribes:
+    """Order 24: a colour key is a `Guide` on the layer's `color` encoding, not figure decoration."""
+
+    def test_asking_for_a_key_records_a_guide_on_that_layer(self):
+        """`colorbar()` writes the guide the other three tiers write, on the same channel.
+
+        Test scenario:
+            The tier drew a panel and recorded nothing, so a figure written out said nothing about the key
+            and the map's own description could not be asked which layer was explained. The guide is what
+            four tiers now share, so it has to be *on* the layer.
+        """
+        web_map = _two_classified().colorbar("A", label="People")
+        guide = web_map.get_layer("A").symbology.guide()
+        assert guide is not None, "asking for a key must record one on the layer"
+        assert (guide.show, guide.title, guide.anchor) == (
+            True,
+            "People",
+            "bottom-right",
+        ), guide
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            "a layer nobody keyed must carry no guide"
+        )
+
+    def test_position_is_recorded_as_the_guides_anchor(self):
+        """`position` and `Guide.anchor` are the same four spellings, so neither is translated.
+
+        Test scenario:
+            `FURNITURE_ANCHORS` and `CONTROL_POSITIONS` hold the same tuple. A translation table between
+            them would be a second place for the two vocabularies to drift apart.
+        """
+        from digitalearth.base.registry import FURNITURE_ANCHORS
+
+        web_map = _two_classified()
+        for corner in FURNITURE_ANCHORS:
+            web_map.legend(layer_id="A", position=corner)
+            assert web_map.get_layer("A").symbology.guide().anchor == corner
+            assert web_map._panels["legend"][1] == corner, (
+                f"the panel must sit where the guide says: {web_map._panels['legend'][1]!r}"
+            )
+
+    def test_visible_false_records_a_guide_that_says_so(self):
+        """`visible=False` is a statement about the layer, not a silent no-op.
+
+        Test scenario:
+            The flag used to return before anything was recorded, so `legend(visible=False)` left a key
+            asked for earlier still on screen. Recording `show=False` says outright that this layer's colour
+            is explained by nothing, and the derived panel honours it.
+        """
+        web_map = _two_classified().colorbar("A", label="People")
+        assert _whose_key(web_map) == "A"
+        web_map.colorbar("A", visible=False)
+        guide = web_map.get_layer("A").symbology.guide()
+        assert guide is not None and guide.show is False, guide
+        assert _whose_key(web_map) is None, (
+            "a guide that says show=False must leave no key on screen"
+        )
+
+
+class TestTheKeyFollowsItsLayer:
+    """The deliverable: the panel is derived from the live layers' guides, so it cannot describe a ghost."""
+
+    def test_removing_the_keyed_layer_takes_its_key_with_it(self):
+        """The measured defect: the panel went on showing the removed layer's classes.
+
+        Test scenario:
+            `remove_layer`'s own `Note:` admitted it — the classification a legend described was cleared only
+            when the last layer went, so after removing one layer of several the key still described the
+            removed one. A viewer read a ramp for data that is not on the map.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B"
+        web_map.remove_layer("B")
+        assert web_map.layer_ids == ["A"], web_map.layer_ids
+        assert _whose_key(web_map) is None, (
+            "the removed layer's key must not stay on screen; A was never keyed"
+        )
+
+    def test_a_surviving_keyed_layer_shows_its_own_key(self):
+        """Both keyed, one removed: what is left on screen is the survivor's, not the removed one's.
+
+        Test scenario:
+            The other half of the same defect. Clearing the panel would satisfy "not the removed one's"
+            without satisfying "the survivor's", so the two are separate assertions on separate maps.
+        """
+        web_map = _two_classified()
+        web_map.colorbar("A", label="People").colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B", "the topmost guided layer is drawn"
+        web_map.remove_layer("B")
+        assert _whose_key(web_map) == "A", (
+            "A carries its own guide and is now topmost, so A's key is drawn"
+        )
+
+    def test_hiding_the_keyed_layer_takes_its_key_off_screen(self):
+        """A key for a layer that is not drawn labels nothing.
+
+        Test scenario:
+            `set_visible(False)` leaves the layer described so a viewer can switch it back on, and used to
+            leave its key drawn as well — a panel of classes with no pixels under them.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        web_map.set_visible("B", False)
+        assert _whose_key(web_map) is None, "a hidden layer's key must come off"
+
+    def test_showing_it_again_brings_the_key_back(self):
+        """The guide stayed on the layer, so nothing has to be asked for twice.
+
+        Test scenario:
+            This is what separates "derived" from "cleared": a panel that was merely deleted could not come
+            back, and the caller would have to call `legend()` again after every toggle.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        web_map.set_visible("B", False)
+        web_map.set_visible("B", True)
+        assert _whose_key(web_map) == "B", (
+            "showing the layer must bring its own key back"
+        )
+
+    def test_explicit_labels_survive_a_rebuild(self):
+        """The rows a caller named are recorded on the layer, not only in the panel that was built.
+
+        Test scenario:
+            The panel is rebuilt whenever the layers change, so anything it is drawn from has to live on the
+            layer. Labels held only in the built markup were lost the first time an unrelated layer was
+            removed, and the key silently reverted to the derived numbers.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().choropleth(
+            _layer("pop", [1, 100]), column="pop", name="A", scheme="quantiles", k=2
+        )
+        web_map.choropleth(_layer("rain", [500, 900]), column="rain", name="B")
+        web_map.legend(layer_id="A", labels=["few", "many"])
+        assert ">few<" in web_map._panels["legend"][0]
+        web_map.remove_layer("B")
+        assert ">few<" in web_map._panels["legend"][0], (
+            f"the caller's labels must survive: {web_map._panels['legend'][0][:160]}"
+        )
+
+
+class TestANamedLayerIsCheckedWhateverTheFlagSays:
+    """Review L7's rule, applied to the layer as well as to the corner."""
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_an_id_nobody_drew_is_refused(self, visible):
+        """`legend(layer_id="nope", visible=False)` used to be accepted.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            The corner was checked before the flag was read precisely so one spelling of it was not valid
+            half the time. The layer is a caller argument on the same terms, and it was checked half the
+            time: a typo'd id under `visible=False` was silently accepted.
+        """
+        web_map = _two_classified()
+        with pytest.raises(KeyError, match="no layer 'nope'"):
+            web_map.legend(layer_id="nope", visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_a_layer_with_a_flat_colour_is_refused(self, visible):
+        """A key over a colour nothing varies has no values to label.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            The same asymmetry one step in: naming an unclassified layer raised under the default and was
+            accepted under `visible=False`. And this refusal is what the field-driven encoding buys — a flat
+            colour publishes no `color` binding, so there is nothing for a guide to explain.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().choropleth(_layer("pop", [1, 100]), column="pop", name="A")
+        web_map.polygons(_layer("pop", [1, 100]), name="plain")
+        with pytest.raises(ValueError, match="was not drawn with a classification"):
+            web_map.legend(layer_id="plain", visible=visible)

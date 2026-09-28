@@ -721,6 +721,12 @@ class WebMapBase:
         #: The classification each layer was drawn with, keyed by layer id, so a colour key asked for by id
         #: describes *that* layer. `last_legend` alone answers only "the most recent one", which made
         #: `colorbar("A")` draw layer B's ramp under A's label (review H4).
+        #:
+        #: This is the key's **content** — the swatches and the colours they were drawn with — which is the
+        #: half a :class:`~digitalearth.base.spec.encoding.Guide` deliberately does not hold (see its class
+        #: docstring: "nothing here holds entries or colours"). Whether a key is drawn at all, what it is
+        #: called and which corner it sits in moved onto the layer's ``color`` encoding with order 24; the
+        #: rows stay here, computed from the data by the builder that drew them.
         self._legends: Dict[str, dict] = {}
         #: The legend dict most recently filed above. A classifying builder always writes a *fresh* dict, so
         #: identity is what tells a new classification from the one still sitting in `last_legend` when an
@@ -1262,6 +1268,13 @@ class WebMapBase:
         # what :meth:`remove_layer` already does for the same reason (review M6).
         kept = set(candidate.layers.ids)
         self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+        # A colour key is derived from the guides the live layers carry, so every change to those layers can
+        # change it: `set_visible` hides the layer a key describes, `move_layer` changes which guided layer is
+        # topmost, and `replace_layer` can take a guide off or put one on. Rebuilt here rather than in each of
+        # the three, because this is the one path all of them go through.
+        from digitalearth.web.decoration import refresh_legend_panel
+
+        refresh_legend_panel(self)
 
     def _require_layer(self, layer_id: Any) -> None:
         """Refuse an id this map does not draw, naming the ids it does.
@@ -1829,6 +1842,15 @@ class WebMapBase:
             or none. `_filed_legend` follows it: it is how `_index_layer` tells a fresh classification from
             the one already filed, and left pointing at the dropped key, the next *unclassified* layer was
             filed under the survivor's key and drew a colour key it was never classified with.
+
+            Both are still load-bearing after order 24, for narrower jobs than before. The promotion no
+            longer decides what is **drawn** — :func:`~digitalearth.web.decoration.refresh_legend_panel`
+            derives that from the guides the live layers carry — but :attr:`last_legend` is a public
+            accessor, and one left describing a removed layer is the wrong answer to a question a caller is
+            invited to ask. And `_filed_legend` still guards the filing itself: a description handed in
+            through :meth:`add_layer` may carry a field-driven ``color`` encoding of its own without any
+            fresh classification behind it, and without the marker whatever `last_legend` happened to hold
+            would be filed under it (pinned by `tests/web/test_web_seam.py`).
         """
         dropped = self._legends.pop(layer_id, None)
         if dropped is None or dropped is not self.last_legend:
@@ -1881,14 +1903,16 @@ class WebMapBase:
         """Show the continuous colour key of a layer.
 
         The contract's name for a colour key (#299, #261). On this tier the key is drawn by :meth:`legend`,
-        which builds a panel from what a layer's classification recorded; a continuous ramp is that panel with
-        the ramp's ends labelled, which is why this is a thin call onto it rather than a second mechanism.
+        which records a :class:`~digitalearth.base.spec.encoding.Guide` on the layer's ``color`` encoding and
+        derives the panel from it; a continuous ramp is that panel with the ramp's ends labelled, which is why
+        this is a thin call onto it rather than a second mechanism. So a colorbar here is the same
+        guide-on-an-encoding the other three tiers record — one mechanism, four backends (order 24).
 
         Args:
             layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
-                takes the most recently classified layer, which is what the tier recorded before layers had
-                ids.
-            label: What to call the key — the variable and its units, usually.
+                takes the topmost classified layer, which is what the tier recorded before layers had ids.
+            label: What to call the key — the variable and its units, usually. Recorded as the guide's
+                ``title``.
             visible: `False` draws no key, so a caller passing a flag through does not have to branch.
 
         Returns:
@@ -1964,13 +1988,23 @@ class WebMapBase:
             The same map instance, so builder calls chain.
 
         Note:
-            The running data extent, and the classification a legend describes, are only cleared when the
-            last layer goes. They are "most recent" accessors rather than a model of what is on the map,
-            so after removing one layer of several they still describe the removed one; call
-            :meth:`set_bounds` or rebuild the legend if that matters.
+            **The colour key goes with the layer.** A key is asked for by hanging a
+            :class:`~digitalearth.base.spec.encoding.Guide` on the layer's own ``color`` encoding
+            (:meth:`~digitalearth.web.decoration.DecorationMixin.legend`), so removing the layer removes the
+            guide, and the panel — derived from the guides the live layers carry — is rebuilt without it. A
+            surviving layer that carries its own guide then shows its own key. Nothing has to be rebuilt by
+            hand, and no key describes a layer that is gone.
 
-            The **id** is not one of those: it goes back to the pool, so a name removed and asked for again
-            is handed back unsuffixed. That is the lifetime all four tiers share —
+            The **running data extent** is not like that, and is not cleared until the last layer goes. It is
+            a "most recent" accessor rather than a model of what is on the map, so after removing one layer
+            of several it still spans the removed one; call :meth:`set_bounds` if that matters.
+            :attr:`last_legend` and :attr:`last_breaks` are "most recent" accessors too — that is what they
+            are for — but they no longer decide what is drawn: `last_legend` is handed to the most recent
+            *surviving* classification here so it never describes a removed layer, and the key is drawn from
+            the guides regardless.
+
+            The **id** is not one of those either: it goes back to the pool, so a name removed and asked for
+            again is handed back unsuffixed. That is the lifetime all four tiers share —
             :func:`~digitalearth.base.spec.layer.free_layer_id` states it.
 
         Raises:
@@ -2071,6 +2105,12 @@ class WebMapBase:
             self._data_bounds = None
             self.last_breaks = None
             self.last_legend = None
+        # The guide went with the layer's description, so the key is rebuilt from what is left. This is the
+        # one layer-management method that does not go through `_change` — the tree is written above, in a
+        # sequence that also frees ids and unqueues closures — so it asks for the rebuild itself.
+        from digitalearth.web.decoration import refresh_legend_panel
+
+        refresh_legend_panel(self)
         return self
 
     def _forget_temporal_step(self, layer_id: str) -> None:

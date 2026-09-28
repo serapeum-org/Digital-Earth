@@ -282,19 +282,40 @@ def _last(drawn) -> Any:
 
 
 def _published(drawn) -> Dict[str, Any]:
-    """Return what the last layer publishes as the caller's own style.
+    """Return the **constant** channels the last layer publishes as the caller's own style.
+
+    Constants only, which is the question this module asks: whether a value the builder resolved for itself
+    crossed as the caller's intent (#334). A field-driven encoding is not a value at all — it names the
+    column the channel varies with, which a classified builder publishes because the caller passed
+    `column=`, not because a default leaked. Those are asserted separately, in
+    :class:`TestAClassifiedLayerPublishesTheFieldItsColourVariesWith`.
 
     Args:
         drawn: The map.
 
     Returns:
-        `{channel: value}`, resolved.
+        `{channel: value}`, resolved, for the channels bound to a constant.
     """
     symbology = _last(drawn)
     return {
         channel: symbology.encoding(channel).resolve()
         for channel in sorted(symbology.encodings)
+        if symbology.encoding(channel).is_constant
     }
+
+
+def _color_field(drawn) -> Any:
+    """Return the column the last layer's colour varies with, or `None` for a flat colour.
+
+    Args:
+        drawn: The map.
+
+    Returns:
+        The field name of a field-driven `color` encoding, else `None` — which covers both a constant colour
+        and no colour encoding at all, since neither names a column.
+    """
+    encoding = _last(drawn).encoding("color")
+    return None if encoding is None or encoding.is_constant else encoding.field
 
 
 def _resolved(drawn, where: str) -> Mapping[str, Any]:
@@ -309,6 +330,104 @@ def _resolved(drawn, where: str) -> Mapping[str, Any]:
     """
     props = dict(_last(drawn).props)
     return dict(props["paint"]) if where == "paint" else props
+
+
+#: Which builders bind their colour to a column, and which column, from the probe's own bare call.
+#:
+#: The classifying builders are the ones order 24 gives a portable colour to: each already built a `Scale` to
+#: compile its MapLibre expression from, and each now publishes `Encoding.by_field("color", column, scale=…)`
+#: from it. `contours` is in here with no `column=` in its probe because it colours the traced level along a
+#: ramp unless a flat `color=` is passed — the attribute it traces is the field. The rest bind a constant
+#: colour or none, and must stay that way: a flat colour has nothing to vary with, which is what makes a
+#: colour key on those layers refusable.
+COLOUR_BY_FIELD: Tuple[Tuple[str, Any], ...] = (
+    ("choropleth", "pop"),
+    ("contours", "level"),
+    # The bands between levels carry `level_min`, not `level` — the lower bound of the band a fill covers.
+    ("filled_contours", "level_min"),
+    ("points", None),
+    ("lines", None),
+    ("polygons", None),
+    ("labels", None),
+    ("heatmap", None),
+    ("extrusion", None),
+    ("raster", None),
+    ("rgb", None),
+    ("graticule", None),
+    ("basemap", None),
+)
+
+
+class TestAClassifiedLayerPublishesTheFieldItsColourVariesWith:
+    """The gap order 24 closed: a data-driven fill described the layer not at all (DE-48)."""
+
+    @pytest.mark.parametrize(
+        ("kind", "field"),
+        COLOUR_BY_FIELD,
+        ids=[name for name, _ in COLOUR_BY_FIELD],
+    )
+    def test_the_colour_channel_names_its_column_or_nothing(self, kind, field):
+        """A classified layer says what its colour varies with; a flat one says nothing.
+
+        Args:
+            kind: The kind under test.
+            field: The column the colour must be bound to, or `None` when it must not be bound to one.
+
+        Test scenario:
+            `portable_encodings` reads the resolved paint dict, and a classified `fill-color` there is a
+            MapLibre expression — a list — so it published no colour channel at all and the layer crossed to
+            another tier with its whole thematic meaning missing. The fix is not to invent a constant from
+            the expression (that would describe the layer wrongly) but to publish the binding the builder
+            already holds. Asserted over **every** builder, both directions, because "the classified ones
+            publish it" is only worth anything if the flat ones still do not — that is what keeps a colour
+            key refusable on an unclassified layer.
+        """
+        drawn = WebMap()
+        try:
+            PROBES[kind].unstyled(drawn)
+            published = _color_field(drawn)
+        finally:
+            drawn.close()
+        assert published == field, (
+            f"{PROBES[kind].builder} bound its colour to {published!r}, expected {field!r}"
+        )
+
+    @pytest.mark.parametrize("scheme", [None, "quantiles", "categorical"])
+    def test_every_classification_shape_carries_the_scale_it_drew_with(self, scheme):
+        """The scale on the encoding is the one the swatches and the expression came from.
+
+        Args:
+            scheme: The classification shape under test — continuous, graduated, categorical.
+
+        Test scenario:
+            The three arms of `_color_expr` each build a `Scale` for their own reasons, and each hands *that*
+            object back rather than a second one built from `last_breaks`. A recomputation is how the top
+            swatch once read `12.900000000000002` for a ramp drawn to `12.9`. Checked against
+            `last_breaks`, which is the independently recorded record of what was drawn, so the two sides of
+            the comparison are not one expression twice.
+        """
+        drawn = WebMap()
+        try:
+            drawn.choropleth(_polygons(), "pop", scheme=scheme, k=2)
+            scale = _last(drawn).encoding("color").scale
+            breaks = list(drawn.last_breaks)
+        finally:
+            drawn.close()
+        assert scale is not None, (
+            "a classified colour must carry the scale it was drawn with"
+        )
+        if scheme == "categorical":
+            assert list(scale.categories) == breaks, (
+                f"the scale's categories {list(scale.categories)} must be the drawn ones {breaks}"
+            )
+        elif scheme is None:
+            assert [scale.vmin, scale.vmax] == [breaks[0], breaks[-1]], (
+                f"the ramp's limits {(scale.vmin, scale.vmax)} must span the drawn stops {breaks}"
+            )
+        else:
+            assert list(scale.breaks) == breaks, (
+                f"the scale's edges {list(scale.breaks)} must be the drawn ones {breaks}"
+            )
 
 
 class TestAnUnstyledLayerPublishesNothing:

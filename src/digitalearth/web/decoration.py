@@ -17,6 +17,7 @@ part).
 
 import html
 import re
+from dataclasses import replace as _with_fields
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
@@ -27,7 +28,7 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.controls import check_control_position, resolved_controls
-from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec import Guide, LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
 # Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
@@ -192,6 +193,112 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
         f'<div style="white-space:nowrap">{_swatch(color)}{_text(label)}</div>'
         for color, label in zip(colors, text)
     )
+
+
+#: Where a colour key sits when its :class:`~digitalearth.base.spec.encoding.Guide` names no corner. A guide
+#: written by :meth:`DecorationMixin.legend` always names one — ``position`` defaults to it — so this is for a
+#: guide that arrived in a figure read back from disk, where the anchor is optional by design.
+_DEFAULT_LEGEND_ANCHOR = "bottom-right"
+
+#: The symbology property a caller's explicit legend row labels are recorded under, on the layer whose key
+#: they label. Held on the layer for the same reason the guide is: the panel is **derived** from the live
+#: layers every time one is added, removed, hidden or restyled, so anything the key is drawn from has to
+#: survive on the layer rather than in the panel that was built once.
+LEGEND_LABELS = "legend_labels"
+
+
+def keyable_layer_ids(web_map: Any) -> List[str]:
+    """Return the live layers a colour key could describe, bottom-first.
+
+    A layer qualifies when two things hold: its ``color`` channel is driven by a **field** rather than by a
+    constant — a flat colour has no values to label, which is what makes a key on an unclassified layer
+    refusable — and the builder filed the classification it drew with, which is where the swatches and their
+    colours come from.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        The qualifying ids in draw order, bottom first, so the caller reads the topmost off the end.
+    """
+    keyed: List[str] = []
+    for layer_id in web_map.layer_ids:
+        encoding = web_map._layer_tree.get(layer_id).symbology.encoding("color")
+        if encoding is None or encoding.is_constant:
+            continue
+        if layer_id in web_map._legends:
+            keyed.append(layer_id)
+    return keyed
+
+
+def _legend_panel(spec: dict, guide: Guide, labels: Optional[Any]) -> tuple:
+    """Build one colour key as a floating panel.
+
+    Args:
+        spec: The classification the layer was drawn with — its ``kind``, ``column``, ``values`` and the
+            ``colors`` actually rendered.
+        guide: What the layer says about explaining that channel: the heading, and the corner.
+        labels: Explicit row labels replacing the derived ones, or ``None``.
+
+    Returns:
+        The ``(content, position)`` pair :attr:`~digitalearth.web.base.WebMapBase._panels` holds.
+
+    Raises:
+        ValueError: when `labels` has a different number of entries from the classification, as
+            :func:`_legend_rows` refuses it.
+    """
+    if guide.title is not None:
+        heading = guide.title
+    else:
+        heading = spec.get("column") or ""
+        units = spec.get("units")
+        if heading and units:
+            heading = f"{heading} ({units})"
+    head = (
+        f'<div style="font-weight:600;margin-bottom:4px">{_text(heading)}</div>'
+        if heading
+        else ""
+    )
+    rows = _legend_rows(
+        spec["kind"],
+        list(spec["values"]),
+        list(spec["colors"]),
+        None if labels is None else list(labels),
+    )
+    return (f"<div>{head}{rows}</div>", guide.anchor or _DEFAULT_LEGEND_ANCHOR)
+
+
+def refresh_legend_panel(web_map: Any) -> None:
+    """Rebuild the map's colour-key panel from the guides its live layers carry.
+
+    The whole of what order 24 buys this tier. The panel used to be written once, by the `legend()` call that
+    asked for it, and then maintained by nothing: removing the keyed layer left its key on screen, and hiding
+    it did too — a wrong map that looks right. Now the key is **derived**, every time the layers change, from
+    the :class:`~digitalearth.base.spec.encoding.Guide` each layer carries on its ``color`` encoding. A guide
+    that goes with its layer takes the key with it for free.
+
+    This tier draws **one** key, so when several layers carry a guide the topmost visible one wins; see
+    :meth:`DecorationMixin.legend` for what that means to a caller.
+
+    Args:
+        web_map: The map whose panel to rebuild. Its ``_panels["legend"]`` is written, replaced, or removed;
+            no other panel is touched.
+    """
+    for layer_id in reversed(keyable_layer_ids(web_map)):
+        layer = web_map._layer_tree.get(layer_id)
+        guide = layer.symbology.guide()
+        # `is_visible` rather than `layer.visible`, so a layer hidden with its group counts as hidden.
+        if guide is None or not guide.show:
+            continue
+        if not web_map._layer_tree.is_visible(layer_id):
+            continue
+        web_map._panels["legend"] = _legend_panel(
+            web_map._legends[layer_id], guide, layer.symbology.props.get(LEGEND_LABELS)
+        )
+        return
+    # Nothing on the map asks to be explained any more, so neither does the panel. Popped rather than left
+    # empty: `_panels` is what the widget builds its `InfoBoxControl`s from, and an entry here is a box.
+    web_map._panels.pop("legend", None)
 
 
 #: Degrees between graticule lines when a caller names neither step — the interactive tier's own default, so
@@ -720,7 +827,7 @@ class DecorationMixin(_MixinBase):
         labels: Optional[list] = None,
         visible: bool = True,
     ) -> Self:
-        """Add a key for the most recent classified layer (recipe W2).
+        """Add a key for a classified layer (recipe W2).
 
         A thematic map is unreadable without one, and until this the tier drew the classes and left the
         caller to build a key out of band from ``last_breaks``. The classification records what it actually
@@ -731,27 +838,54 @@ class DecorationMixin(_MixinBase):
         category, a **graduated** one a swatch per class with its range, and a **continuous** ramp a
         gradient bar with its end values.
 
+        **The key belongs to the layer, not to the map** (DE-48, order 24). What this call records is a
+        :class:`~digitalearth.base.spec.encoding.Guide` on the layer's ``color``
+        :class:`~digitalearth.base.spec.encoding.Encoding` — ``show``, the heading, and the corner — and the
+        panel is **derived** from the guides the live layers carry, every time the layers change. So the key
+        moves, hides and disappears with the layer it describes: remove the layer and the key goes, hide it
+        and the key goes, show it again and the key comes back. It also travels: a guide survives
+        ``FigureSpec`` being written and read back, which a panel built once never did.
+
         Args:
-            layer_id: Which layer's classes to describe. `None` takes the most recently classified layer,
-                which is what the tier recorded before layers had ids.
+            layer_id: Which layer's classes to describe. `None` takes the topmost classified layer — the
+                most recent one, which is what the tier recorded before layers had ids.
             title: Heading above the key. ``None`` uses the classified column's name, followed by the
                 units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them
                 for the raster the classification came from. A title given here always wins, and a unit
                 is never guessed: without one the heading is the bare column name, as it always was.
-            position: One of the four MapLibre corners.
+            position: One of the four MapLibre corners. Recorded as the guide's ``anchor``, which takes the
+                same four spellings (:data:`~digitalearth.base.registry.FURNITURE_ANCHORS` and
+                :data:`~digitalearth.base.controls.CONTROL_POSITIONS` are the same tuple), so nothing is
+                translated between them.
             labels: Explicit row labels, replacing the derived ones — for units, or for renaming
-                categories. Ignored for a continuous ramp, which has no rows.
-            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
-                The corner is still checked, so one spelling of it is not valid only half the time.
+                categories. Ignored for a continuous ramp, which has no rows. Recorded on the layer beside
+                its guide, so a key rebuilt after another layer is removed still carries them.
+            visible: `False` records the guide with ``show=False`` — the layer says outright that its colour
+                is explained by nothing — and draws no key, so a caller passing a flag through does not have
+                to branch. The corner and the layer are still checked, so neither is valid only half the time.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`
-                names a layer that carries no classification, or when no classified layer has been added at
-                all — there is nothing to build a key from, and an empty box would be worse than an error.
+                names a layer that carries no classification, when no classified layer has been added at
+                all — there is nothing to build a key from, and an empty box would be worse than an error —
+                or when `labels` has a different number of entries from the classification.
             KeyError: when `layer_id` names no layer on this map.
+
+        Note:
+            **This tier draws one key, and the four tiers differ here.** ``_panels`` holds one entry per
+            kind, so a second legend replaces the first rather than stacking an identical box in the same
+            corner. Layers may each carry a guide all the same, and when several do **the topmost visible
+            one wins** — draw order decides, not call order. So keying a lower layer after a higher one
+            leaves the higher one's key drawn; take the higher one's off with
+            ``legend(layer_id=<higher>, visible=False)`` first. The static tier has no such limit
+            (matplotlib takes any number of colorbars) and neither does the interactive tier (its guides are
+            per-layer options); the 3-D tier has one scalar-bar slot per title.
+
+            A guide on a **hidden** layer is recorded and draws nothing until the layer is shown, which is
+            the same rule stated from the other side: the key is drawn while the layer is.
 
         Examples:
             - A choropleth and its key:
@@ -765,39 +899,106 @@ class DecorationMixin(_MixinBase):
 
         See Also:
             digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
+            digitalearth.web.decoration.refresh_legend_panel: derives the panel from the recorded guides.
         """
         # Validated before the flag is read: `legend(position="middle", visible=False)` was accepted while
         # `legend(position="middle")` raised, so a caller passing a flag through was checked half the time
-        # (review L7).
+        # (review L7). The layer the caller named is now checked on the same terms — see `_guide_target`.
         _check_position(position)
-        if not visible:
+        target = self._guide_target(layer_id, required=bool(visible))
+        if target is None:
             return self
         _require_maplibre()
-        spec = self.last_legend if layer_id is None else self._legend_of(layer_id)
-        if not spec:
+        guide = Guide(show=bool(visible), title=title, anchor=position)
+        if visible:
+            # Built and thrown away. A `labels` list that does not match the classification is refused
+            # *before* anything is recorded, so a refusal leaves the map exactly as it was — rather than
+            # leaving behind a guide whose key every later rebuild would fail to draw.
+            _legend_panel(self._legend_of(target), guide, labels)
+        self._attach_guide(target, guide, labels)
+        # Derived, not written: the rule for which of several guides is drawn lives in one place, so this
+        # call and a later removal cannot disagree about whose key is on screen.
+        refresh_legend_panel(self)
+        return self
+
+    def _guide_target(
+        self, layer_id: Optional[str], *, required: bool
+    ) -> Optional[str]:
+        """Return the layer a colour key should describe.
+
+        Args:
+            layer_id: The caller's choice, or `None` for the topmost classified layer.
+            required: Whether a map with nothing to describe is an error. `False` — a caller who passed
+                ``visible=False`` — answers `None` instead, which is what keeps
+                ``WebMap().colorbar(visible=False)`` from being a crash on an empty map.
+
+        Returns:
+            The layer id, or `None` when nothing qualifies and nothing was required.
+
+        Raises:
+            KeyError: when `layer_id` names no layer on this map.
+            ValueError: when `layer_id` names a layer that was not drawn with a classification, or when
+                `required` and no layer on the map was.
+
+        Note:
+            A named layer is refused **whatever ``visible`` says**, which is review L7's rule applied to the
+            layer as well as to the corner: `legend(layer_id="nope", visible=False)` used to be accepted
+            while `legend(layer_id="nope")` raised, so a caller threading a flag through was checked half
+            the time. The "nothing on this map is classified" question is not a caller argument, so it stays
+            a ``visible=True``-only refusal — the documented point of the flag is that it can be passed
+            through without branching.
+
+            Visibility is not consulted. A hidden layer can be keyed; the key is simply not drawn until it
+            is shown (see :func:`refresh_legend_panel`). One rule, stated once.
+        """
+        if layer_id is not None:
+            self._legend_of(
+                layer_id
+            )  # KeyError by name, then ValueError for no classification
+            return layer_id
+        keyed = keyable_layer_ids(self)
+        if keyed:
+            return keyed[-1]
+        if required:
             raise ValueError(
                 "legend() has nothing to describe: no classified layer has been added yet. Add a "
                 "choropleth (or any builder given column=...) first."
             )
-        if title is not None:
-            heading = title
-        else:
-            heading = spec.get("column") or ""
-            units = spec.get("units")
-            if heading and units:
-                heading = f"{heading} ({units})"
-        head = (
-            f'<div style="font-weight:600;margin-bottom:4px">{_text(heading)}</div>'
-            if heading
-            else ""
+        return None
+
+    def _attach_guide(
+        self, layer_id: str, guide: Guide, labels: Optional[list]
+    ) -> None:
+        """Record on one layer that its colour is explained, and how.
+
+        Args:
+            layer_id: The layer to write on. It carries a field-driven ``color`` encoding — `_guide_target`
+                has already established that — which is what a guide can be attached to.
+            guide: What to say about the channel.
+            labels: Explicit row labels, or `None` to draw the derived ones. `None` **removes** a previous
+                override rather than keeping it, so two `legend()` calls do not silently compound.
+
+        Note:
+            The tree is written directly rather than through :meth:`~digitalearth.web.base.WebMapBase._change`.
+            A guide changes no paint, so there is nothing for the renderer to draw again; routing it through
+            the reconcile would rebuild the MapLibre layer of every classified layer a caller keys.
+            :meth:`~digitalearth.web.base.WebMapBase._index_layer` writes the tree the same way, and
+            :meth:`~digitalearth.web.base.WebMapBase._figure_with` derives the figure from it, so the guide
+            reaches `figure_spec` with no further step.
+        """
+        layer = self._layer_tree.get(layer_id)
+        symbology = layer.symbology.with_guide(guide)
+        props = {
+            key: value for key, value in symbology.props.items() if key != LEGEND_LABELS
+        }
+        if labels is not None:
+            props[LEGEND_LABELS] = tuple(labels)
+        self._layer_tree = self._layer_tree.replace(
+            _with_fields(
+                layer,
+                symbology=Symbology(encodings=dict(symbology.encodings), props=props),
+            )
         )
-        rows = _legend_rows(
-            spec["kind"], list(spec["values"]), list(spec["colors"]), labels
-        )
-        # One panel per kind: a second legend replaces the first rather than stacking an identical box
-        # in the same corner, and it is built into the widget rather than appended as a layer.
-        self._panels["legend"] = (f"<div>{head}{rows}</div>", position)
-        return self
 
     def layer_control(
         self,

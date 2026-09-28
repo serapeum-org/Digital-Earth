@@ -345,11 +345,24 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             of which keys the caller named.
 
     Returns:
-        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`. A paint property
-        MapLibre compiled into a data-driven expression — a choropleth's ``fill-color``, a cluster's stepped
-        ``circle-radius`` — carries a list rather than a value and so contributes nothing: the class edges
-        that expression encodes are published portably as ``last_breaks`` instead, and inventing a constant
-        from it would describe the layer wrongly.
+        Channel name -> a **constant** :class:`~digitalearth.base.spec.encoding.Encoding`. A paint property
+        MapLibre compiled into a data-driven expression carries a list rather than a value, so nothing is
+        lifted from it here: inventing a constant from an expression would describe the layer wrongly.
+
+        For a **colour** that is what the builder already published, which is what changed with order 24. A
+        classified fill does not go unclaimed any more: `_color_expr` hands its
+        :class:`~digitalearth.base.spec.scale.Scale` back to the builder, and the builder records
+        ``Encoding.by_field("color", column, scale=scale)`` on the layer's symbology itself — the honest
+        portable reading of a data-driven fill, and what a
+        :class:`~digitalearth.base.spec.encoding.Guide` is hung on so a colour key belongs to its layer
+        (DE-48). Recorded rather than lifted because a `Scale` is not something ``props`` can carry, and
+        because :meth:`~digitalearth.base.spec.style.Symbology.merged_over` lays the recorded style *over*
+        this one — so the two never compete for the channel.
+
+        **A cluster's stepped ``circle-radius`` is still left alone, and the old reasoning is why.** It steps
+        on ``point_count``, which MapLibre computes on the source and which is in no column of the caller's
+        data, so there is no field an ``Encoding`` could name and no `Scale` the builder holds. The ``size``
+        channel of a clustered layer is therefore genuinely unpublished, not merely unlifted.
 
     Examples:
         - A point layer publishes the channels its caller asked for, and only those:
@@ -396,8 +409,8 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             0.5
 
             ```
-        - A classified fill is an expression, so the colour channel is left unclaimed even when the caller
-          did name it:
+        - A classified fill is an expression, so *this* function claims nothing from it — the builder
+          recorded the channel itself, and what it recorded is not a constant:
             ```python
             >>> from digitalearth.base.spec import Symbology
             >>> from digitalearth.web.renderer import portable_encodings
@@ -405,6 +418,21 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
             >>> painted = Symbology(props={"paint": {"fill-color": expression}, "asked": ["fill-color"]})
             >>> sorted(portable_encodings(painted))
             []
+
+            ```
+        - And what the builder recorded survives the merge, because the recorded style is laid over the
+          lifted one — so the layer's colour is the field it varies with, not a colour invented from the
+          expression:
+            ```python
+            >>> from digitalearth.base.spec import Encoding, Scale, Symbology
+            >>> from digitalearth.web.renderer import portable_encodings
+            >>> recorded = Symbology(
+            ...     encodings={"color": Encoding.by_field("color", "pop", scale=Scale.from_limits(1, 9))},
+            ...     props={"paint": {"fill-color": ("step", ("get", "pop"))}, "asked": ["fill-color"]},
+            ... )
+            >>> merged = recorded.merged_over(Symbology(encodings=portable_encodings(recorded)))
+            >>> merged.encoding("color").field, merged.encoding("color").is_constant
+            ('pop', False)
 
             ```
     """

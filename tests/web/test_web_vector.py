@@ -53,7 +53,7 @@ class TestColorExpr:
         from cleopatra.styling.styles import classify
 
         values = np.arange(100.0)
-        expr = WebMap()._color_expr(values, "pop", "quantiles", 4, "viridis")
+        expr, _ = WebMap()._color_expr(values, "pop", "quantiles", 4, "viridis")
         edges, _ = classify(values, "quantiles", 4)
 
         # The step is wrapped in a `case` that sends a non-numeric (missing) value to MISSING_COLOR, because
@@ -90,7 +90,9 @@ class TestColorExpr:
             into the first bucket — rendering as "smallest", which on a choropleth reads as data rather than
             as absence. Every other tier draws it neutral grey; this pins that the web tier now does too.
         """
-        expr = WebMap()._color_expr(np.arange(20.0), "pop", "quantiles", 4, "viridis")
+        expr, _ = WebMap()._color_expr(
+            np.arange(20.0), "pop", "quantiles", 4, "viridis"
+        )
         first_class = expr[2][2]
         assert expr[3] == MISSING_COLOR != first_class, (
             f"missing must differ from the lowest class: missing={expr[3]!r} lowest={first_class!r}"
@@ -109,7 +111,7 @@ class TestColorExpr:
     def test_continuous_interpolate_expression(self):
         """``scheme=None`` compiles a linear ``interpolate`` ramp over the value range."""
         m = WebMap()
-        expr = m._color_expr(np.array([0.0, 10.0]), "v", None, 5, "viridis")
+        expr, _ = m._color_expr(np.array([0.0, 10.0]), "v", None, 5, "viridis")
         assert expr[:3] == ["interpolate", ["linear"], ["get", "v"]]
         stops = [expr[i] for i in range(3, len(expr), 2)]
         assert stops[0] == 0.0, f"ramp should span the data: {stops}"
@@ -145,7 +147,7 @@ class TestColorExpr:
             hold.
         """
         m = WebMap()
-        expr = m._color_expr(np.array([lo, hi]), "v", None, 5, "viridis")
+        expr, _ = m._color_expr(np.array([lo, hi]), "v", None, 5, "viridis")
         drawn = [expr[i] for i in range(3, len(expr), 2)]
         assert m.last_legend["values"] == m.last_breaks, (
             f"legend {m.last_legend['values']} must be the recorded breaks {m.last_breaks}"
@@ -156,14 +158,14 @@ class TestColorExpr:
 
     def test_constant_values_do_not_crash_continuous(self):
         """A constant column widens the range instead of producing a zero-width ramp."""
-        expr = WebMap()._color_expr(np.full(5, 3.0), "v", None, 5, "viridis")
+        expr, _ = WebMap()._color_expr(np.full(5, 3.0), "v", None, 5, "viridis")
         stops = [expr[i] for i in range(3, len(expr), 2)]
         assert stops[0] < stops[-1], "constant data must still yield an increasing ramp"
 
     def test_categorical_match_expression(self):
         """scheme='categorical' compiles a MapLibre `match` over the distinct values (DC.8)."""
         m = WebMap()
-        expr = m._color_expr(
+        expr, _ = m._color_expr(
             np.array(["a", "b", "a", "c"], dtype=object),
             "kind",
             "categorical",
@@ -189,7 +191,9 @@ class TestColorExpr:
     def test_categorical_numeric_literals_are_json_native(self):
         """Numeric categories are coerced to native int for the MapLibre literal."""
         m = WebMap()
-        expr = m._color_expr(np.array([1, 2, 1, 3]), "code", "categorical", 5, "tab10")
+        expr, _ = m._color_expr(
+            np.array([1, 2, 1, 3]), "code", "categorical", 5, "tab10"
+        )
         literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
         assert literals == [1, 2, 3]
         assert all(type(v) is int for v in literals)
@@ -197,7 +201,7 @@ class TestColorExpr:
     def test_categorical_whole_float_labels_narrow_to_int(self):
         """Whole-valued float categories become int labels — MapLibre rejects non-integer match labels (M1)."""
         m = WebMap()
-        expr = m._color_expr(
+        expr, _ = m._color_expr(
             np.array([1.0, 2.0, 1.0, 3.0]), "zone", "categorical", 5, "tab10"
         )
         literals = [expr[i] for i in range(2, len(expr) - 1, 2)]

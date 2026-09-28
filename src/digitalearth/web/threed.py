@@ -22,7 +22,7 @@ goes and the promise that the page decodes with the scheme it was written with.
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
-from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.spec import Encoding, LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
 
@@ -284,8 +284,9 @@ class ThreeDMixin(_MixinBase):
             else as_finite(height, "height", "WebMap.extrusion()"),
         }
         gdf = self._display_gdf(features, method="extrusion")
+        color_encoding: Optional[Encoding] = None
         if column is not None:
-            paint["fill-extrusion-color"] = self._color_expr(
+            paint["fill-extrusion-color"], color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
         else:
@@ -302,7 +303,13 @@ class ThreeDMixin(_MixinBase):
             # handed to the first draw so nothing is warped twice (review H1).
             source=features,
             placed=gdf,
-            symbology=Symbology(props={"paint": dict(paint), **ask.record}),
+            symbology=Symbology(
+                # An extruded fill coloured by a column drives the same `color` channel a choropleth does,
+                # so it publishes the same encoding and can be given the same colour key — the extrusion
+                # builder does not go through `_vector_layer`, so it files it here itself.
+                encodings={} if color_encoding is None else {"color": color_encoding},
+                props={"paint": dict(paint), **ask.record},
+            ),
         )
         self._last_layer_id = layer_id
         return self
