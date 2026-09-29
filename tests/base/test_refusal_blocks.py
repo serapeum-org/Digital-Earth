@@ -72,7 +72,6 @@ PACKAGE_ROOT = Path(digitalearth.__file__).resolve().parent
 KNOWN_PROPERTY_READS = {
     "interactive/test_interactive_autostyle.py": {"dataset.epsg"},
     "test_quickplot.py": {"dataset.epsg", "fc.epsg"},
-    "three_d/test_seam3d.py": {"scene.figure_spec"},
 }
 
 
