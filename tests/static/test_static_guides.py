@@ -758,6 +758,67 @@ class TestACategoricalFillIsKeyedBySwatches:
         assert zoned.get_layer("acc").symbology.guide() is not None
 
 
+class TestAGraduatedFillIsKeyedByItsClasses:
+    """The classified case the tiers were found saying two things about (review M2).
+
+    The rule is "a scale with classes is explained by its classes"; what differs is the furniture each
+    engine has for saying so. This tier draws a **banded bar** whose ticks are the class edges, which is
+    that list in matplotlib's own idiom — and the assertions below are on the edges, not on the word
+    "colorbar", because the word alone would be satisfied by a continuous ramp over the same limits, which
+    is the misreading the rule exists to forbid.
+    """
+
+    @pytest.fixture
+    def graduated(self, polygons):
+        """A map with one quantile-cut fill on it, `grad`, in three classes.
+
+        Args:
+            polygons: Buffered point features with a numeric ``fid`` column.
+
+        Yields:
+            The map. Closed afterwards.
+        """
+        canvas = Map(crs=polygons.epsg)
+        canvas.choropleth(polygons, column="fid", scheme="quantiles", k=3, name="grad")
+        yield canvas
+        canvas.close()
+
+    def test_the_bar_it_draws_is_banded_on_the_class_edges(self, graduated):
+        """A classified scale is keyed by a bar here, and the bar reads its classes.
+
+        Args:
+            graduated: A map with a three-class quantile fill.
+
+        Test scenario:
+            `api.py` documented this case twice and differently — `_add_static_key` as "a *categorical*
+            fill gets the swatch list" and `_add_3d_key` as "a *classified* fill gets the swatch list" —
+            while this tier and the interactive one give a bar and the web and 3-D ones give a keyed list.
+            The rule is now stated once and this pins the half it applies to here.
+
+            What makes the bar an honest key for a classified scale is that matplotlib paints the layer
+            through a `BoundaryNorm`, so the strip is banded and its ticks are exactly the edges the scale
+            published — the same numbers the web tier's keyed list of ranges shows. A tier that painted
+            classes by *index* could not say that, which is why the 3-D tier answers with the list instead:
+            its scalar bar would read `0, 1, 2` over the class indices.
+        """
+        from digitalearth.static.guides import guide_kind
+
+        layer = graduated.get_layer("grad")
+        scale = layer.symbology.encoding("color").scale
+        assert scale.is_classified and not scale.is_categorical, scale
+        assert guide_kind(layer) == "colorbar", (
+            "a classified fill is keyed by a bar on this tier; if that changes, the rule stated at "
+            "`static.guides.guide_kind` and in `api._add_static_key` has to change with it"
+        )
+        graduated.colorbar("grad", label="fid")
+        bar = graduated._renderer.drawn["grad"].guides[0]
+        edges = [low for low, _ in scale.class_ranges()] + [scale.class_ranges()[-1][1]]
+        assert list(bar.get_ticks()) == pytest.approx(edges), (
+            f"the bar must be banded on the class edges {edges}, not a ramp over the limits; it reads "
+            f"{list(bar.get_ticks())}"
+        )
+
+
 class TestARefusedKeyTakesTheRebuildWithIt:
     """`Renderer.draw_layer` is all-or-nothing, and the key it draws is part of the "all".
 

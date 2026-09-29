@@ -304,6 +304,35 @@ def bar_refusal(layer: LayerSpec) -> Optional[str]:
 def guide_kind(layer: LayerSpec) -> str:
     """Return which kind of key one layer's guide asks for.
 
+    **The package's rule, stated once, because two docstrings stated two of them** (review M2): *a scale is
+    explained by what it is made of* — a categorical one by its categories, a classified one by its
+    classes, a continuous one by its range. What differs between the four tiers is the **furniture** each
+    engine has for saying that, not which of the three a layer gets:
+
+    ===============  ==========================  =============================================
+    scale            this tier / interactive     web / 3-D
+    ===============  ==========================  =============================================
+    categorical      swatch list                 swatch list
+    classified       banded bar, ticks on the    keyed list of class ranges
+                     class edges
+    continuous       ramp bar                    gradient bar (web); scalar bar (3-D)
+    ===============  ==========================  =============================================
+
+    The classified row is the one that reads as a divergence and is not. matplotlib paints a classified
+    fill through a ``BoundaryNorm``, so the strip is **banded** and its ticks are exactly the edges the
+    scale published — measured on a three-class quantile cut over 0–5: ``bar.get_ticks()`` is
+    ``[0.0, 1.667, 3.333, 5.0]``, the same numbers the web tier's keyed list of ranges shows. It is the
+    class list, drawn as a strip. A tier that paints classes by **index** cannot say that — PyVista's
+    scalar bar would read ``0, 1, 2`` over the indices ``classified_scalars`` assigns — which is why the
+    3-D tier answers with the list, and the web tier builds its one panel from the classification it
+    recorded. Pinned by
+    ``tests/static/test_static_guides.py::TestAGraduatedFillIsKeyedByItsClasses``, on the edges rather than
+    on the word "colorbar", since the word alone is satisfied by a ramp over the same limits.
+
+    A **categorical** scale is the one case where no tier can use a bar: matplotlib's would read the class
+    codes cleopatra assigned and Bokeh draws no ``ColorBar`` from a ``CategoricalColorMapper`` at all
+    (:func:`~digitalearth.interactive.style_fold.guide_kind`).
+
     Args:
         layer: The layer's description.
 

@@ -346,12 +346,19 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
     """Ask the matplotlib tier for a layer's colour key, tolerating only a layer that cannot carry one.
 
     **Which key is a property of the layer, not of the flag** — the branch :func:`_add_3d_key` already had.
-    A continuous ramp is explained by a bar and a categorical fill by a keyed list of swatches, and
-    ``Map.colorbar`` refuses the second outright, because a bar over it would read the class codes cleopatra
-    assigned rather than the class names. Calling only ``colorbar()`` and swallowing that refusal is what
-    left the default backend recording no key at all for a fill the web and 3-D paths both keyed (review
-    M6); the choice is asked of :func:`~digitalearth.static.guides.guide_kind`, which is where this tier
-    already answers it.
+    The rule is stated in full at :func:`~digitalearth.static.guides.guide_kind` and is the same on all four
+    backends: a scale is explained by what it is made of. Here that means a **categorical** fill is keyed by
+    a swatch list and every other scale by a bar — a classified one banded on its class edges, a continuous
+    one as a ramp. ``Map.colorbar`` refuses the categorical case outright, because a bar over it would read
+    the class codes cleopatra assigned rather than the class names. Calling only ``colorbar()`` and
+    swallowing that refusal is what left the default backend recording no key at all for a fill the web and
+    3-D paths both keyed (review M6); the choice is asked of
+    :func:`~digitalearth.static.guides.guide_kind`, which is where this tier already answers it.
+
+    This docstring said "a continuous ramp is explained by a bar and a *categorical* fill by a keyed list"
+    while :func:`_add_3d_key`'s said a *classified* fill gets the list, so the two stated different rules
+    for the same layer a few hundred lines apart (review M2). Neither tier's behaviour changed: what
+    differs is the furniture, and the table at ``guide_kind`` is the one place that says so.
 
     **Whether it is drawn is the caller's, and it is carried through rather than read as "skip the call".**
     This tier's builders draw a swatch legend of their own for ``scheme="categorical"``, so a path that only
@@ -1178,9 +1185,14 @@ def _add_3d_key(scene: Any, *, visible: bool) -> Any:
 
     The 3-D counterpart of :func:`_add_web_legend`, and the reason this path no longer reaches past the tier
     into a PyVista keyword: `Scene3D` has the methods now (order 24), and a `quickmap` flag routes through
-    them. Which of the two is a property of the layer rather than of the flag — a classified fill is explained
-    by a keyed list and a ramp by a scalar bar — so the scale decides, exactly as `WebMap.legend` branches on
-    what its classification recorded.
+    them. Which of the two is a property of the layer rather than of the flag, under the rule stated in full
+    at :func:`~digitalearth.static.guides.guide_kind`: a scale is explained by what it is made of, and a
+    **classified** scale means its classes. Here that is the keyed list, because this tier paints a
+    classified fill by class **index** — `classified_scalars` assigns `0, 1, 2 …` — so a scalar bar over it
+    would read those indices where the class ranges belong. The matplotlib and interactive tiers answer the
+    same case with a bar, and it is the same list: matplotlib's `BoundaryNorm` bands the strip and ticks it
+    on the very edges this tier's list spells out (review M2, which found the two docstrings stating two
+    different rules). A **continuous** scale gets PyVista's scalar bar, which reads the values themselves.
 
     Args:
         scene: The `Scene3D` whose most recent colour-driven layer should get a key.
