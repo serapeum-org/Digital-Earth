@@ -713,13 +713,17 @@ class WebMapBase:
         #: viewer. Controls and basemaps are not in here — they are not things a viewer turns on and off.
         self._layer_tree: LayerTree = LayerTree()
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
-        #: The same classification :attr:`last_legend` holds, read as raw numbers — they are written together
-        #: and promoted together (:meth:`_forget_legend`), so the two never answer for different layers.
+        #: The same classification :attr:`last_legend` holds, stripped of the key's furniture: exactly
+        #: ``last_legend["values"]``, which is measurably so for all three shapes — a graduated layer's
+        #: edges (`[0.0, 1.67, 3.33, 5.0]`), a continuous layer's ramp stops (`[0.0, 1.25, 2.5, 3.75, 5.0]`)
+        #: and, despite the ``List[float]`` annotation, a **categorical** layer's category values as they
+        #: come (`['a', 'b', 'c', 'd']` — strings, not numbers). The two are written together and promoted
+        #: together (:meth:`_forget_legend`), so they never answer for different layers.
         self.last_breaks: Optional[List[float]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
-        #: :attr:`last_breaks`, which stays the raw-numbers accessor it has always been.
+        #: :attr:`last_breaks`, which stays the bare-``values`` accessor it has always been.
         self.last_legend: Optional[dict] = None
         #: The classification each layer was drawn with, keyed by layer id, so a colour key asked for by id
         #: describes *that* layer. `last_legend` alone answers only "the most recent one", which made
@@ -1862,7 +1866,7 @@ class WebMapBase:
             the one already filed, and left pointing at the dropped key, the next *unclassified* layer was
             filed under the survivor's key and drew a colour key it was never classified with.
             :attr:`last_breaks` follows it too, for the plainer reason that it is the same classification
-            read as raw numbers.
+            without the key's furniture — ``last_legend["values"]`` and nothing else.
 
             Both are still load-bearing after order 24, for narrower jobs than before. The promotion no
             longer decides what is **drawn** — :func:`~digitalearth.web.decoration.refresh_legend_panel`
@@ -1887,7 +1891,7 @@ class WebMapBase:
         # `last_breaks` is promoted with it, rather than cleared only when the map goes empty. The two are
         # one classification read two ways — every classifying builder sets them in the same breath, and
         # `last_breaks == last_legend["values"]` for all three shapes — so promoting one and leaving the
-        # other made the pair describe two different layers, and the documented raw-numbers accessor went
+        # other made the pair describe two different layers, and the documented class-breaks accessor went
         # on reporting a layer that had been removed (review L7).
         self.last_breaks = (
             None if self.last_legend is None else list(self.last_legend["values"])
