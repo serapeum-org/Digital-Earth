@@ -543,6 +543,96 @@ class TestTheKeyIsDrawnAgainWhenItsLayerIs:
         assert options.get("legend_opts") == {"title": "People"}, options
         assert options.get("legend_labels") == {"pop": "People per km²"}, options
 
+    def test_a_key_the_element_cannot_draw_leaves_the_redrawn_element_alone(
+        self, m, dataset
+    ):
+        """A redraw applies the options the element takes, and where it takes none, applies nothing.
+
+        Args:
+            m: The map.
+            dataset: A small raster, composited to itself so the element is an `hv.RGB`.
+
+        Test scenario:
+            The other end of the same read: a description can ask for a key this element has no option to
+            draw. An `hv.RGB` is coloured by three bands rather than by a scalar, and Bokeh gives it no
+            `colorbar`/`clabel` at all — so a figure built elsewhere, carrying a colorbar guide on such a
+            layer, hands the redraw a guide with nothing to apply. Applying it anyway is what HoloViews
+            refuses by name, which would turn a rebuild of somebody else's figure into a crash; the redraw
+            hands back the element the drawer built instead, and says nothing a second time about a key the
+            recording call already warned of.
+        """
+        from digitalearth.base.spec import Encoding, Scale
+
+        m.rgb(dataset, bands=(1, 1, 1), name="true")
+        described = m.get_layer("true")
+        symbology = with_fields(
+            described.symbology,
+            encodings={
+                **described.symbology.encodings,
+                "color": Encoding.by_field(
+                    "color", "reflectance", scale=Scale.from_limits(0.0, 1.0)
+                ),
+            },
+        ).with_guide(Guide(show=True, title="Reflectance"))
+        m.replace_layer(with_fields(described, symbology=symbology))
+        before = _element_of(m, hv.RGB)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _restyle(m, "true", alpha=0.7)
+        after = _element_of(m, hv.RGB)
+        assert after is not before, (
+            "the restyle drew no new element, so this proves nothing"
+        )
+        options = _plot_options(after)
+        assert "colorbar" not in options and "clabel" not in options, (
+            f"the redraw applied a key this element has no option to draw: {options}"
+        )
+        assert [str(raised.message) for raised in caught] == [], (
+            f"the redraw warned again about a key the recording call already refused: {caught}"
+        )
+
+    def test_the_recording_call_warns_and_records_when_it_can_apply_nothing(
+        self, m, dataset
+    ):
+        """The other side of the same element: the key is recorded, announced, and applied nowhere.
+
+        Args:
+            m: The map.
+            dataset: A small raster, composited to itself so the element is an `hv.RGB`.
+
+        Test scenario:
+            `_apply_guide_options` splits the folded guide into what the element takes and what it does not
+            and warns about the second half. Both of an `hv.RGB`'s bar options are in that half, so this is
+            the case where the "rest" is empty and the `opts()` call is skipped altogether — the arm that
+            makes a total refusal a warning rather than a HoloViews `ValueError`. The guide is still
+            recorded, because whether the engine can draw it is not the caller's mistake and a later
+            restyle or export still carries what they asked for.
+        """
+        from digitalearth.base.spec import Encoding, Scale
+
+        m.rgb(dataset, bands=(1, 1, 1), name="true")
+        described = m.get_layer("true")
+        symbology = with_fields(
+            described.symbology,
+            encodings={
+                **described.symbology.encodings,
+                "color": Encoding.by_field(
+                    "color", "reflectance", scale=Scale.from_limits(0.0, 1.0)
+                ),
+            },
+        )
+        m.replace_layer(with_fields(described, symbology=symbology))
+        with pytest.warns(UserWarning, match="Bokeh gives no clabel, colorbar to draw"):
+            m.colorbar("true", label="Reflectance")
+        options = _plot_options(_element_of(m, hv.RGB))
+        assert "colorbar" not in options and "clabel" not in options, (
+            f"a key the element takes none of was applied to it anyway: {options}"
+        )
+        recorded = m.get_layer("true").symbology.guide()
+        assert (recorded.show, recorded.title) == (True, "Reflectance"), (
+            f"the warning cost the caller their recorded key: {recorded}"
+        )
+
 
 class TestWhatTheEngineDrawsWhenSeveralLayersCarryAGuide:
     """Bokeh's own limits, stated because the opts suggest otherwise (one guide per layer, one key per plot)."""
