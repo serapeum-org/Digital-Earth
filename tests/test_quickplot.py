@@ -4,7 +4,7 @@ import pytest
 
 import digitalearth
 from digitalearth import api as qp
-from digitalearth.base.spec import Encoding, LayerSpec, Scale, Symbology
+from digitalearth.base.spec import Encoding, Guide, LayerSpec, Scale, Symbology
 from digitalearth.static import Map
 
 
@@ -107,6 +107,88 @@ def test_quickmap_records_the_categorical_key_on_the_layer():
         "rural",
         "park",
     }, [text.get_text() for text in drawn.get_texts()]
+
+
+def _legend_artists(canvas):
+    """Return the matplotlib `Legend` artists on a map's axes.
+
+    Args:
+        canvas: The :class:`~digitalearth.static.Map`.
+
+    Returns:
+        Every `Legend` child of the axes — asked of the children rather than of ``get_legend()``, so a second
+        one stacked beside the first would show up here instead of hiding behind the one it replaced.
+    """
+    return [
+        child for child in canvas.ax.get_children() if type(child).__name__ == "Legend"
+    ]
+
+
+def test_quickmap_colorbar_false_takes_the_categorical_key_off():
+    """`colorbar=False` asks for a map with no colour key, and must get one on this backend too.
+
+    Test scenario:
+        The other half of the M6 disagreement, one flag-value over. The glyph draws a swatch legend for
+        `scheme="categorical"` whatever the flag says, and the matplotlib path only ever *added* a key — so
+        `quickmap(colorbar=False)` returned a map with a legend on it and nothing in the description to say
+        the caller had asked against it, while the interactive and 3-D paths both recorded
+        `Guide(show=False)` and drew nothing.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(
+        fc, crs=fc.epsg, column="zone", scheme="categorical", colorbar=False
+    )
+    assert m.ax.get_legend() is None, "colorbar=False left a key on the picture"
+    assert _legend_artists(m) == [], "colorbar=False left a legend artist behind"
+    assert m.get_layer(m.layer_ids[-1]).symbology.guide() == Guide(show=False), (
+        m.get_layer(m.layer_ids[-1]).symbology.guide()
+    )
+    assert len(m.fig.axes) == 1, "switching a key off must not add an axes"
+
+
+def test_a_key_quickmap_switched_off_can_be_switched_back_on():
+    """Taking the key off is a recorded decision, not a one-way removal.
+
+    Test scenario:
+        `Guide(show=False)` is how the shared vocabulary spells "there is a key here and it is not drawn",
+        which is exactly what lets a switcher offer it back. A removal that could not be undone would be a
+        new defect in place of the one it fixed.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(
+        fc, crs=fc.epsg, column="zone", scheme="categorical", colorbar=False
+    )
+    assert _legend_artists(m) == [], "the key should start off"
+    m.legend(title="Zones")
+    guide = m.get_layer(m.layer_ids[-1]).symbology.guide()
+    assert guide == Guide(show=True, title="Zones"), guide
+    back = m.ax.get_legend()
+    assert back is not None, "the key did not come back"
+    assert {text.get_text() for text in back.get_texts()} == {
+        "urban",
+        "rural",
+        "park",
+    }, [text.get_text() for text in back.get_texts()]
+    assert len(_legend_artists(m)) == 1, "the key came back twice"
+    assert len(m.fig.axes) == 1, "bringing the key back must not add an axes"
+
+
+def test_quickmap_colorbar_false_records_the_bar_switched_off_too():
+    """A continuous layer's key is recorded switched off as well, so the two kinds agree.
+
+    Test scenario:
+        The picture was already right here — this tier's raster builder draws no bar of its own, so
+        `colorbar=False` simply never added one. What was missing is the *record*: the description said
+        nothing about a key at all, where the 3-D path recorded `Guide(show=False)` for the same call.
+    """
+    from pyramids.dataset import Dataset
+
+    dem = Dataset.read_file("examples/data/acc4000.tif")
+    m = qp.quickmap(dem, crs=dem.epsg, colorbar=False)
+    assert m.get_layer(m.layer_ids[-1]).symbology.guide() == Guide(show=False), (
+        m.get_layer(m.layer_ids[-1]).symbology.guide()
+    )
+    assert len(m.fig.axes) == 1, "colorbar=False must still add no colorbar axes"
 
 
 def test_quickmap_graduated_still_gets_its_colorbar():
@@ -307,6 +389,9 @@ class _FakeScene:
         self._categorical = categorical
         self.colorbar_calls = 0
         self.legend_calls = 0
+        #: Every key call this scene was given, as ``(method, visible)`` in order — so a test can say what
+        #: the sequence was, not only how many calls it held.
+        self.asked = []
 
     def _color_keyed(self):
         """Return the ids of the layers a key could explain."""
@@ -334,17 +419,70 @@ class _FakeScene:
             ),
         )
 
-    def colorbar(self):
-        """Record the call (and optionally raise to mimic an outline-only/unmappable layer)."""
+    def colorbar(self, *, visible=True):
+        """Record the call and its flag (and optionally raise to mimic an unmappable layer).
+
+        Args:
+            visible: Whether the key is drawn, which `quickmap` passes through from its own ``colorbar=``.
+        """
         self.colorbar_calls += 1
+        self.asked.append(("colorbar", visible))
         if self._raises:
             raise ValueError("nothing mappable to colorbar")
 
-    def legend(self):
-        """Record the call — the key a categorical fill is explained by on every tier."""
+    def legend(self, *, visible=True):
+        """Record the call and its flag — the key a categorical fill is explained by on every tier.
+
+        Args:
+            visible: Whether the key is drawn.
+        """
         self.legend_calls += 1
+        self.asked.append(("legend", visible))
         if self._raises:
             raise ValueError("nothing mappable to legend")
+
+
+class TestTheKeyIsAskedForEitherWay:
+    """`_add_static_key` carries the caller's flag through, as `_add_3d_key` does.
+
+    The flag decides whether the key is *drawn*, never whether the layer is resolved or the decision is
+    recorded — the "validate before honouring visible=False" rule the four tiers share. Reading it as "skip
+    the call entirely" is what left this backend's categorical fill keyed against the caller's wish.
+
+    Switching a key off is two calls rather than one, and that is the point of asserting the sequence
+    instead of a count. `Renderer.draw_guide` takes off the key **it** drew; the swatch legend a categorical
+    glyph draws for itself is not one of those, so the key is taken over first and switched off second.
+    """
+
+    def test_the_bar_is_asked_for_with_the_flag_it_was_given(self):
+        """A continuous layer's key goes through `colorbar()`, ending on the caller's flag.
+
+        Test scenario:
+            Both values, because a helper that only ever passed `True` would look correct against a test
+            that checked the `True` case alone.
+        """
+        shown = _FakeScene(keyed=["layer"])
+        qp._add_static_key(shown, visible=True)
+        assert shown.asked == [("colorbar", True)], shown.asked
+
+        hidden = _FakeScene(keyed=["layer"])
+        qp._add_static_key(hidden, visible=False)
+        assert hidden.asked == [("colorbar", True), ("colorbar", False)], hidden.asked
+
+    def test_the_swatch_legend_is_asked_for_the_same_way(self):
+        """And a categorical layer's goes through `legend()`, by the same two steps.
+
+        Test scenario:
+            The branch and the flag are independent: which key it is, is the layer's property; whether it is
+            drawn is the caller's. A fix to one arm must not leave the other spelling `visible=True`.
+        """
+        shown = _FakeScene(keyed=["zone"], categorical=True)
+        qp._add_static_key(shown, visible=True)
+        assert shown.asked == [("legend", True)], shown.asked
+
+        hidden = _FakeScene(keyed=["zone"], categorical=True)
+        qp._add_static_key(hidden, visible=False)
+        assert hidden.asked == [("legend", True), ("legend", False)], hidden.asked
 
 
 class TestFinish:
