@@ -805,7 +805,12 @@ class TestAGraduatedFillIsKeyedByItsClasses:
 
         layer = graduated.get_layer("grad")
         scale = layer.symbology.encoding("color").scale
-        assert scale.is_classified and not scale.is_categorical, scale
+        assert scale.is_classified, (
+            f"the fill must be classified for this to key by a bar: {scale}"
+        )
+        assert not scale.is_categorical, (
+            f"a graduated (banded) scale must not be categorical: {scale}"
+        )
         assert guide_kind(layer) == "colorbar", (
             "a classified fill is keyed by a bar on this tier; if that changes, the rule stated at "
             "`static.guides.guide_kind` and in `api._add_static_key` has to change with it"
