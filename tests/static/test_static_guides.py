@@ -335,6 +335,12 @@ class TestTheKeyFollowsItsLayer:
             `move_layer` replaced by `pass`. The z-order half of `_repaint` is deliberately not asserted
             here: `_rank_zorders` deals back out the values the layers already held, and two rasters both
             hold matplotlib's default, so it has nothing to distinguish them with.
+
+            The closing line reads `DrawnLayer.artists`, which is the list `_repaint` arranges, rather than
+            `canvas.ax.get_children()`. It asserted the latter until review L6: a `Colorbar`'s axes is
+            created figure-level by `make_axes` and is never a child of the data axes, so that spelling
+            could only have failed for an inset axes — which nothing here produces — and dealing the key
+            into the layers' own arrangement, the defect the message names, left it green.
         """
         with Map(crs=dataset.epsg) as canvas:
             canvas.field(dataset, name="lower")
@@ -361,7 +367,7 @@ class TestTheKeyFollowsItsLayer:
             assert len(canvas.fig.axes) == 3, (
                 "one data axes and one bar per keyed layer; a reorder created or dropped one"
             )
-            assert lower_bar.ax not in canvas.ax.get_children(), (
+            assert lower_bar not in drawn["lower"].artists, (
                 "the key was dealt into the layers' own arrangement"
             )
 
