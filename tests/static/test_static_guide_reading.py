@@ -355,10 +355,15 @@ class TestAnAnchorArrivingFromAnotherFigure:
         )
         placed = _LEGEND_LOCATIONS[anchor]
         vertical, horizontal = anchor.split("-")
-        assert self._VERTICAL[vertical] in placed and horizontal in placed, (
-            f"{anchor!r} maps to {placed!r}, which names a different corner — a figure would be drawn with "
-            f"its key in the wrong place rather than not at all, which is the harder error to see. "
-            f"Expected it to name {self._VERTICAL[vertical]!r} and {horizontal!r}"
+        # Split rather than `and`-ed, so a mapping that gets one axis right and the other wrong says which.
+        # A key drawn in the wrong corner is the harder error to see — it looks deliberate.
+        assert self._VERTICAL[vertical] in placed, (
+            f"{anchor!r} maps to {placed!r}, which does not name the {self._VERTICAL[vertical]!r} half of "
+            f"its corner; a figure carrying it would be drawn with its key vertically misplaced"
+        )
+        assert horizontal in placed, (
+            f"{anchor!r} maps to {placed!r}, which does not name the {horizontal!r} half of its corner; a "
+            f"figure carrying it would be drawn with its key horizontally misplaced"
         )
 
 
