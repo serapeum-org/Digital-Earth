@@ -51,6 +51,7 @@ from typing import (
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.spec import (
     DEFAULT_BAND,
+    DEFAULT_RAMP_STOPS,
     Bounds,
     Encoding,
     LayerSpec,
@@ -68,11 +69,6 @@ _LARGE_RASTER_PIXELS = 4_000_000
 #: empty string an :class:`~digitalearth.base.spec.encoding.Encoding` refuses. The interactive tier's
 #: ``UNNAMED_VALUE``, spelled the same, so one unnamed raster reads the same on both.
 _UNNAMED_BAND = "z"
-
-#: How many stops describe a band's ramp in its colour key — the same five the vector ramp is sampled at
-#: (:meth:`~digitalearth.web.vector.VectorMixin._ramp_color_expr`), so a continuous key looks the same
-#: whether the values came from a column or from a band.
-_RAMP_STOPS = 5
 
 #: The tiled routes ``tiles=`` accepts, each mapped to the key its MapLibre ``raster`` source addresses the
 #: data under: ``xyz`` lists tile-URL templates, ``cog`` names one file a client-side protocol reads windows
@@ -1378,7 +1374,15 @@ class RasterMixin(_MixinBase):
 
         column = _band_name(data, band)
         scale = Scale.from_limits(*limits)
-        stops = [float(stop) for stop in np.linspace(limits[0], limits[1], _RAMP_STOPS)]
+        # `DEFAULT_RAMP_STOPS`, not a number of this module's own: the vector ramp
+        # (:meth:`~digitalearth.web.vector.VectorMixin._ramp_color_expr`) samples at the same count, so a
+        # continuous key reads the same whether the values came from a column or from a band — and that was
+        # a coincidence between two spellings of `5` until both read the constant `LegendSpec` itself
+        # defaults to (review N6).
+        stops = [
+            float(stop)
+            for stop in np.linspace(limits[0], limits[1], DEFAULT_RAMP_STOPS)
+        ]
         self.last_breaks = stops
         self.last_legend = self._legend_dict(
             LegendSpec.from_scale(

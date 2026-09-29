@@ -22,6 +22,7 @@ from loguru import logger
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.spec import (
     DEFAULT_BAND,
+    DEFAULT_RAMP_STOPS,
     Encoding,
     LayerSpec,
     LegendSpec,
@@ -520,7 +521,11 @@ class VectorMixin(_MixinBase):
         if finite.size == 0:
             raise ValueError(f"column {column!r} has no finite values to colour")
         lo, hi = Scale.from_finite(finite).as_limits()
-        stops = np.linspace(lo, hi, 5)
+        # The shared count, not a literal: the raster band's ramp
+        # (:meth:`~digitalearth.web.raster.RasterMixin._band_colour`) samples at the same one, so a
+        # continuous key reads the same whichever the values came from. Both used to spell `5` separately,
+        # which made the invariant a coincidence either could break in silence (review N6).
+        stops = np.linspace(lo, hi, DEFAULT_RAMP_STOPS)
         colors = self._cmap_hex(cmap, len(stops))
         expr = ["interpolate", ["linear"], ["get", column]]
         for stop, color in zip(stops, colors):

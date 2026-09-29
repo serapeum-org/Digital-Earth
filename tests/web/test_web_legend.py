@@ -971,7 +971,9 @@ class TestTheKeyFollowsItsLayer:
             f"B must be keyed before it is restyled flat; its guide is {asked}"
         )
         flat = Symbology(
-            encodings={"color": Encoding(channel="color", value="#ff0000", guide=asked)},
+            encodings={
+                "color": Encoding(channel="color", value="#ff0000", guide=asked)
+            },
             props=dict(classified.symbology.props),
         )
         web_map.replace_layer(replace(classified, symbology=flat))
@@ -1389,4 +1391,76 @@ class TestNoArgumentCanBeAddedBelowTheFlag:
         missing = set(_parameters(args)) - read
         assert missing == set(), (
             f"_check_key_arguments is handed {sorted(missing)} and never reads them"
+        )
+
+
+class TestOneStopCountServesEveryRamp:
+    """Review N6: an invariant a comment states and nothing holds is a coincidence with a docstring.
+
+    Test scenario:
+        `web/raster.py`'s `_RAMP_STOPS` said it was "the same five the vector ramp is sampled at
+        (`VectorMixin._ramp_color_expr`)", and `_ramp_color_expr` hardcoded the literal `5` — so the stated
+        invariant held by agreement between two spellings of one number, either of which a later edit could
+        move in silence. `digitalearth.base.spec.DEFAULT_RAMP_STOPS` already existed for exactly this ("Five
+        is what the web tier already used; sharing the number is what stops a sixth appearing"), and both
+        builders now read it.
+
+        Both halves are asserted, because neither is the other: the source check refuses a literal creeping
+        back in — it is the only one that could fail before the fix, since the two numbers agreed — and the
+        behavioural check refuses a constant that is named and then not honoured.
+    """
+
+    @pytest.mark.parametrize("builder", ["raster", "vector"])
+    def test_the_sampling_site_names_the_shared_constant(self, builder):
+        """Neither ramp builder spells its own stop count.
+
+        Args:
+            builder: Which of the two ramp builders to read.
+        """
+        from digitalearth.web.raster import RasterMixin
+        from digitalearth.web.vector import VectorMixin
+
+        method = (
+            RasterMixin._band_colour
+            if builder == "raster"
+            else VectorMixin._ramp_color_expr
+        )
+        _, body = _method_source(method)
+        sampled = [
+            child
+            for statement in body
+            for child in ast.walk(statement)
+            if isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Attribute)
+            and child.func.attr == "linspace"
+        ]
+        assert len(sampled) == 1, (
+            f"{builder}'s ramp builder makes {len(sampled)} linspace calls; one samples the ramp"
+        )
+        count = sampled[0].args[-1]
+        assert isinstance(count, ast.Name) and count.id == "DEFAULT_RAMP_STOPS", (
+            f"{builder}'s ramp is sampled at {ast.unparse(count)} rather than at the shared "
+            "DEFAULT_RAMP_STOPS, so the two ramps agree only by coincidence"
+        )
+
+    def test_a_column_ramp_and_a_band_ramp_hold_the_same_number_of_stops(
+        self, cells, dataset
+    ):
+        """The constant is honoured on both paths, and to the same number.
+
+        Args:
+            cells: The fixture frame, for the column ramp.
+            dataset: The DEM, for the band ramp.
+        """
+        from digitalearth.base.spec import DEFAULT_RAMP_STOPS
+        from digitalearth.web import WebMap
+
+        column = WebMap().choropleth(cells, column="pop", scheme=None).last_breaks
+        band = WebMap().field(dataset).last_breaks
+        assert len(column) == len(band), (
+            f"a column ramp holds {len(column)} stops and a band ramp {len(band)}, so a continuous key "
+            "reads differently depending on where the values came from"
+        )
+        assert len(column) == DEFAULT_RAMP_STOPS, (
+            f"both ramps hold {len(column)} stops, and the shared constant says {DEFAULT_RAMP_STOPS}"
         )
