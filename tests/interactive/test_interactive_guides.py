@@ -18,6 +18,7 @@ legend from an overlay's labelled members, both measured here.
 """
 
 import warnings
+from dataclasses import replace as with_fields
 
 import pytest
 
@@ -100,6 +101,21 @@ def _plot_options(element):
         The applied `plot` keywords.
     """
     return hv.Store.lookup_options("bokeh", element, "plot").kwargs
+
+
+def _restyle(interactive_map, layer_id, **props):
+    """Restyle one layer through `replace_layer`, so the tier rebuilds its element.
+
+    Args:
+        interactive_map: The map.
+        layer_id: The layer to restyle.
+        **props: Engine properties to add to its symbology — enough of a difference that
+            `Renderer._reaches_holoviews` answers `True` and the layer is drawn again.
+    """
+    layer = interactive_map.get_layer(layer_id)
+    interactive_map.replace_layer(
+        with_fields(layer, symbology=layer.symbology.with_props(**props))
+    )
 
 
 def _element_of(interactive_map, element_type):
@@ -447,6 +463,62 @@ class TestTheKeyIsAlsoDrawn:
         m.field(dataset, name="flow").coastlines(name="coast")
         with pytest.raises(ValueError, match="draws no colour that varies"):
             m.colorbar("coast", visible=False)
+
+
+class TestTheKeyIsDrawnAgainWhenItsLayerIs:
+    """A redraw builds a new element, and the key the record still asks for has to reach that one.
+
+    The half the record alone cannot prove. `colorbar()`/`legend()` apply their options to the element the
+    map holds *now*; a restyle hands the drawer a fresh one built from `props`, where nothing has ever been
+    applied. Until the renderer read the recorded guide back, the description said "hidden, titled Flow"
+    while the picture drew a visible untitled bar — the divergence review H2 measured, invisible to a suite
+    that checked only the record (review L11). Each test asserts the element really was rebuilt first, so it
+    cannot pass by the old element's options surviving.
+    """
+
+    def test_a_restyled_layer_draws_its_colorbar_again(self, m, dataset):
+        """The bar comes back switched off and titled, because the record says so.
+
+        Args:
+            m: The map.
+            dataset: A small raster.
+        """
+        m.field(dataset, name="flow").colorbar(label="Flow", visible=False)
+        before = _element_of(m, hv.Image)
+        _restyle(m, "flow", cmap="viridis")
+        after = _element_of(m, hv.Image)
+        assert after is not before, (
+            "the restyle drew no new element, so this proves nothing"
+        )
+        options = _plot_options(after)
+        assert (options.get("colorbar"), options.get("clabel")) == (False, "Flow"), (
+            options
+        )
+
+    def test_a_restyled_layer_draws_its_swatch_key_again(self, m):
+        """A legend is recorded as one too, so the redraw has to know which key was asked for.
+
+        Args:
+            m: The map.
+
+        Test scenario:
+            A `Guide` says whether, what it is called and where — never *which* furniture, because the tiers
+            that draw one kind need no such field. This tier draws two, so the kind is recorded beside the
+            guide in `props`, and a redraw that did not read it would put a colorbar where a legend was
+            asked for.
+        """
+        m.choropleth(_polygons(), "pop", name="pop", scheme="quantiles", k=2)
+        m.legend(title="People", labels=["People per km²"])
+        before = _element_of(m, hv.Polygons)
+        _restyle(m, "pop", line_width=2)
+        after = _element_of(m, hv.Polygons)
+        assert after is not before, (
+            "the restyle drew no new element, so this proves nothing"
+        )
+        options = _plot_options(after)
+        assert options.get("show_legend") is True, options
+        assert options.get("legend_opts") == {"title": "People"}, options
+        assert options.get("legend_labels") == {"pop": "People per km²"}, options
 
 
 class TestWhatTheEngineDrawsWhenSeveralLayersCarryAGuide:

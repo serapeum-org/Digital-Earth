@@ -40,6 +40,7 @@ element, because `.opts()` writes into HoloViews' global `Store` against the obj
 
 import warnings
 from dataclasses import dataclass
+from dataclasses import replace as with_fields
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -209,6 +210,43 @@ def _show(element: Any, layer_id: str, visible: bool) -> None:
         )
         return
     element.opts(**{keyword: bool(visible) for keyword in keywords})
+
+
+def _draw_recorded_guide(layer: LayerSpec, drawn: DrawnLayer) -> DrawnLayer:
+    """Put the colour key a layer's description asks for back onto the element just drawn for it.
+
+    **A drawer builds from `props`, and a guide is not one.** `colorbar()`/`legend()` record the guide on the
+    layer's colour encoding and then apply the options to the element the map holds *at that moment*; a
+    redraw — a restyle, a rollback, a figure read back onto another map — hands back a new element on which
+    nothing has ever been applied. Without this the description went on saying "hidden, titled Flow" while
+    the picture drew a visible untitled bar (review H2), which is the divergence the static tier avoids by
+    calling :meth:`~digitalearth.static.renderer.Renderer.draw_guide` from its own `draw_layer`.
+
+    Reapplied **here** rather than by recording through
+    :meth:`~digitalearth.interactive.base.InteractiveMapBase._change`: a guide is description and nothing
+    else, and routing the record through a reconcile would restyle the layer, redraw it and hand back a new
+    element — orphaning the styles :attr:`~digitalearth.interactive.base.InteractiveMapBase._styles` files by
+    ``id()`` and any stream a `hover()` attached. So the record still goes straight into the tree, and the
+    *draw* reads it back.
+
+    Args:
+        layer: The layer's description, which carries the guide and the kind of key it asks for.
+        drawn: What its drawer just produced.
+
+    Returns:
+        `drawn` carrying the element with the key applied, or `drawn` itself when the layer describes no key
+        — or describes one this element has no option to draw, which the recording call already warned
+        about and which a redraw would only repeat once per rebuild.
+    """
+    from digitalearth.interactive.style_fold import fold_guide, split_guide_options
+
+    opts = fold_guide(layer.symbology, layer.label)
+    if not opts:
+        return drawn
+    taken, _refused = split_guide_options(drawn.element, opts)
+    if not taken:
+        return drawn
+    return with_fields(drawn, element=drawn.element.opts(**taken, backend="bokeh"))
 
 
 def _is_shown(element: Any) -> bool:
@@ -481,6 +519,7 @@ class Renderer:
         data = self._source_object(figure, layer)
         drawn: Optional[DrawnLayer] = drawer_for(layer.kind)(self._map, data, layer)
         if drawn is not None:
+            drawn = _draw_recorded_guide(layer, drawn)
             self._drawn[layer_id] = drawn
             if not figure.layers.is_visible(layer_id):
                 # This tier read neither the layer's flag nor its group, so a figure describing a hidden

@@ -40,6 +40,12 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
+from digitalearth.interactive.style_fold import (
+    GUIDE_KIND_KEY,
+    GUIDE_LABELS_KEY,
+    fold_guide,
+    split_guide_options,
+)
 
 # Note (#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
 # `provider=` argument. Splitting that collision (a `tiles(url=...)` vs `basemap(provider=...)` rename)
@@ -1265,8 +1271,15 @@ class DecorationMixin(_MixinBase):
             if self._colour_binding(layer_id) is not None
         ]
 
-    def _record_guide(self, layer_id: str, guide: Guide) -> Guide:
-        """Attach `guide` to one layer's colour encoding, and hand back what was recorded.
+    def _record_guide(
+        self,
+        layer_id: str,
+        guide: Guide,
+        *,
+        kind: str,
+        labels: Optional[Sequence[str]] = None,
+    ) -> LayerSpec:
+        """Attach `guide` to one layer's colour encoding, and hand back the layer as it now reads.
 
         **The record is the point of order 24.** A colour key used to be a `show=` option written onto the
         element of whichever layer was added last and then forgotten: it could not move with its layer, could
@@ -1284,23 +1297,37 @@ class DecorationMixin(_MixinBase):
         `hover()` attached are both keyed on the object this would have replaced. The panel `figure_spec`
         reports is derived from the tree on every read, so it follows this write without being told.
 
+        **What is recorded beside the guide is what the redraw needs.** A `Guide` says whether, what the key
+        is called and where — never which furniture, because the tiers that draw one kind of key need no such
+        field. This tier draws two, so the kind and a caller's own row labels go into the symbology's
+        ``props`` (:data:`~digitalearth.interactive.style_fold.GUIDE_KIND_KEY`,
+        :data:`~digitalearth.interactive.style_fold.GUIDE_LABELS_KEY`), which is what lets
+        :func:`~digitalearth.interactive.style_fold.fold_guide` build the same options again when the layer
+        is drawn again — the static tier records the same two under the same names.
+
         Args:
             layer_id: The layer to explain. Already resolved and checked by :meth:`_guided_layer`.
             guide: What to say about its colour.
+            kind: Which key it asks for — ``"colorbar"`` or ``"legend"``
+                (:data:`~digitalearth.interactive.style_fold.GUIDE_KINDS`).
+            labels: The caller's own row labels, or `None` to leave the derived one. `None` also *clears*
+                labels an earlier call recorded, so one call's override does not outlive it.
 
         Returns:
-            The guide as the layer now carries it — read back off the encoding rather than returned as
-            passed, so the options applied next are applied **from the record** and cannot say something the
-            figure does not.
+            The layer as the tree now holds it, so the options applied next are folded **from the record**
+            and cannot say something the figure does not.
         """
         layer = self._layer_tree.get(layer_id)
-        described = with_fields(layer, symbology=layer.symbology.with_guide(guide))
+        props = dict(layer.symbology.props)
+        props[GUIDE_KIND_KEY] = kind
+        if labels is None:
+            props.pop(GUIDE_LABELS_KEY, None)
+        else:
+            props[GUIDE_LABELS_KEY] = tuple(str(label) for label in labels)
+        symbology = with_fields(layer.symbology, props=props).with_guide(guide)
+        described = with_fields(layer, symbology=symbology)
         self._layer_tree = self._layer_tree.replace(described)
-        recorded = described.symbology.guide()
-        # `with_guide` stores what it is given, so this is the same object; read back because the *record* is
-        # what the drawn key must agree with, and a future `with_guide` that normalised anything would
-        # otherwise leave the two saying different things.
-        return guide if recorded is None else recorded
+        return self._layer_tree.get(layer_id)
 
     def _draw_guide(self, layer_id: str, method: str, **opts: Any) -> None:
         """Apply one layer's colour-key options to the element it is drawn as.
@@ -1319,16 +1346,9 @@ class DecorationMixin(_MixinBase):
                 shape of question — a caller who asked for something the engine cannot draw hears about it
                 rather than watching it vanish.
         """
-        from digitalearth.interactive.style_fold import allowed_options
-
-        element = self.layers[self._layer_tree.ids.index(layer_id)]
-        try:
-            accepted = allowed_options(type(element).__name__)["plot"]
-        except (
-            KeyError
-        ):  # pragma: no cover - an element the Bokeh option tree does not hold
-            accepted = frozenset()
-        refused = sorted(key for key in opts if key not in accepted)
+        index = self._layer_tree.ids.index(layer_id)
+        element = self.layers[index]
+        taken, refused = split_guide_options(element, opts)
         if refused:
             warnings.warn(
                 f"{method}(): layer {layer_id!r} is drawn as a {type(element).__name__}, which Bokeh gives "
@@ -1336,11 +1356,8 @@ class DecorationMixin(_MixinBase):
                 UserWarning,
                 stacklevel=3,
             )
-        taken = {key: value for key, value in opts.items() if key in accepted}
         if taken:
-            self.layers[self._layer_tree.ids.index(layer_id)] = element.opts(
-                **taken, backend="bokeh"
-            )
+            self.layers[index] = element.opts(**taken, backend="bokeh")
 
     def colorbar(
         self,
@@ -1412,11 +1429,12 @@ class DecorationMixin(_MixinBase):
         # Bokeh backend, and `_require_holoviz` is what registers it.
         _require_holoviz()
         target = self._guided_layer("colorbar", layer_id)
-        guide = self._record_guide(target, Guide(show=bool(visible), title=label))
-        opts: dict = {"colorbar": guide.show}
-        if guide.title is not None:
-            opts["clabel"] = guide.title
-        self._draw_guide(target, "colorbar", **opts)
+        described = self._record_guide(
+            target, Guide(show=bool(visible), title=label), kind="colorbar"
+        )
+        self._draw_guide(
+            target, "colorbar", **fold_guide(described.symbology, described.label)
+        )
         return self
 
     def legend(
@@ -1497,13 +1515,10 @@ class DecorationMixin(_MixinBase):
                 f"{len(derived)} row to a Bokeh legend ({derived[0]!r}); zip would drop the difference and "
                 "leave rows out of the key"
             )
-        guide = self._record_guide(target, Guide(show=bool(visible), title=title))
-        opts: dict = {"show_legend": guide.show}
-        if guide.title is not None:
-            # Bokeh's own slot for a legend heading, reached through the option HoloViews forwards to the
-            # `Legend` model — there is no `legend_title` of its own.
-            opts["legend_opts"] = {"title": guide.title}
-        if rows is not None:
-            opts["legend_labels"] = dict(zip(derived, rows))
-        self._draw_guide(target, "legend", **opts)
+        described = self._record_guide(
+            target, Guide(show=bool(visible), title=title), kind="legend", labels=rows
+        )
+        self._draw_guide(
+            target, "legend", **fold_guide(described.symbology, described.label)
+        )
         return self

@@ -22,7 +22,7 @@ the tier accepts, and that must not cost a backend import.
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Tuple
 
 from digitalearth.base.ask import asked_style
 from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
@@ -33,15 +33,20 @@ __all__ = [
     "CHANNEL_KEYWORDS",
     "CHANNEL_OPTIONS",
     "DERIVED_BUCKET",
+    "GUIDE_KINDS",
+    "GUIDE_KIND_KEY",
+    "GUIDE_LABELS_KEY",
     "INTERACTIVE_STYLE_SCHEMA",
     "STYLE_BUCKETS",
     "TIER_BUCKET",
     "ChannelOption",
     "allowed_options",
+    "fold_guide",
     "fold_symbology",
     "limits_scale",
     "portable_encodings",
     "route_flat_style",
+    "split_guide_options",
 ]
 
 #: The flat keywords the interactive builders accept, each declared once. A keyword that drives a visual
@@ -225,6 +230,124 @@ UNEXPRESSIBLE: Mapping[str, str] = {
 #: first because that is where a colour or a width lives; `norm` holds `framewise`/`axiswise`, and `output`
 #: the renderer's own settings.
 OPTION_GROUPS: Tuple[str, ...] = ("style", "plot", "norm", "output")
+
+
+#: The property the kind of colour key a layer's guide asks for is recorded under — one of
+#: :data:`GUIDE_KINDS`.
+#:
+#: In ``props`` rather than on the :class:`~digitalearth.base.spec.encoding.Guide`, because the guide is the
+#: vocabulary all four tiers share and this is one of the two tiers that has a choice to record: Bokeh draws
+#: a continuous bar (``colorbar``) and a keyed box (``show_legend``) and they are not interchangeable, while
+#: a MapLibre panel and a PyVista scalar bar are each one piece of furniture. The static tier records the
+#: same thing under the same name (:data:`~digitalearth.static.guides.GUIDE_KIND_KEY`), for the same reason.
+GUIDE_KIND_KEY: str = "guide_kind"
+
+#: The two kinds of colour key this tier draws: a continuous bar beside the plot, or a keyed box in it.
+GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
+
+#: The property a caller's own row labels for one layer's key are recorded under.
+#:
+#: Recorded rather than left in the call, because the key is folded out of the description again every time
+#: the layer is drawn again — a restyle, a rollback, a figure read back — and labels that lived only in the
+#: call would come back as the derived ones.
+GUIDE_LABELS_KEY: str = "guide_labels"
+
+
+def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, Any]:
+    """Fold a recorded colour guide into the HoloViews options that draw it.
+
+    The one translation from :class:`~digitalearth.base.spec.encoding.Guide` to Bokeh's spelling, so the key
+    a caller's ``colorbar()``/``legend()`` applies and the key a redraw puts back are built by the same
+    code and cannot say different things. A `Guide` carries *whether*, *what it is called* and *where*, and
+    never which furniture — that is read from :data:`GUIDE_KIND_KEY` in the symbology's props, which is
+    where the recording call put it.
+
+    Args:
+        symbology: The layer's style, carrying the guide on its ``color`` encoding.
+        label: The row caption the layer contributes to a Bokeh legend — its own ``name=`` — which
+            :data:`GUIDE_LABELS_KEY` renames. Unread for a colorbar.
+
+    Returns:
+        The options to apply, or an empty dict for a symbology carrying no guide. A kind this module does
+        not know — a figure written by a later version, say — folds as a colorbar, which is the kind every
+        tier draws.
+
+    Examples:
+        - A guide switched off, with a title, is a named bar that is not drawn:
+            ```python
+            >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+            >>> from digitalearth.interactive.style_fold import fold_guide
+            >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+            >>> fold_guide(sym.with_guide(Guide(show=False, title="People")))
+            {'colorbar': False, 'clabel': 'People'}
+
+            ```
+        - The same guide recorded as a legend folds into Bokeh's keyed box instead:
+            ```python
+            >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+            >>> from digitalearth.interactive.style_fold import fold_guide, GUIDE_KIND_KEY
+            >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+            >>> sym = sym.with_props(**{GUIDE_KIND_KEY: "legend"}).with_guide(Guide(title="People"))
+            >>> fold_guide(sym)
+            {'show_legend': True, 'legend_opts': {'title': 'People'}}
+
+            ```
+        - A symbology nobody asked for a key on folds into nothing at all:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.interactive.style_fold import fold_guide
+            >>> fold_guide(Symbology.of(color="#f00"))
+            {}
+
+            ```
+    """
+    guide = symbology.guide()
+    if guide is None:
+        return {}
+    if symbology.props.get(GUIDE_KIND_KEY) == "legend":
+        opts: Dict[str, Any] = {"show_legend": guide.show}
+        if guide.title is not None:
+            # Bokeh's own slot for a legend heading, reached through the option HoloViews forwards to the
+            # `Legend` model — there is no `legend_title` of its own.
+            opts["legend_opts"] = {"title": guide.title}
+        rows = symbology.props.get(GUIDE_LABELS_KEY)
+        if rows is not None:
+            opts["legend_labels"] = dict(zip([label], rows))
+        return opts
+    opts = {"colorbar": guide.show}
+    if guide.title is not None:
+        opts["clabel"] = guide.title
+    return opts
+
+
+def split_guide_options(
+    element: Any, opts: Mapping[str, Any]
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Split a folded guide into the options one element takes and the ones it does not.
+
+    Both halves are real. An ``hv.Image`` takes ``colorbar``, ``clabel`` and ``show_legend`` but **not**
+    ``legend_opts`` or ``legend_labels`` — a Bokeh legend is built from an overlay's labelled members and a
+    raster contributes no label to name — so a caller who asked for a legend title on a raster has asked for
+    something the engine cannot draw. Which half a key falls in is read from the engine's own option table
+    rather than listed per element here, exactly as :func:`allowed_options` is used everywhere else.
+
+    Args:
+        element: The element (or `DynamicMap`) the key would be applied to.
+        opts: What :func:`fold_guide` produced.
+
+    Returns:
+        A `(taken, refused)` pair — the accepted options, and the sorted names of the rest. Everything is
+        refused for an element the Bokeh option tree does not hold, which is a `DynamicMap` that has not
+        produced a frame.
+    """
+    try:
+        accepted = allowed_options(type(element).__name__)["plot"]
+    except (
+        KeyError
+    ):  # pragma: no cover - an element the Bokeh option tree does not hold
+        accepted = frozenset()
+    taken = {key: value for key, value in opts.items() if key in accepted}
+    return taken, sorted(key for key in opts if key not in accepted)
 
 
 def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]]:
