@@ -928,7 +928,10 @@ class GuideMixin(_MixinBase):
             keyed: Whether the caller asked for the keyed list (`True`) or the scalar bar (`False`).
             labels: Row labels for the keyed list, recorded as drawn state **after** every check and before
                 the reconcile runs — recorded afterwards they would be missing from the box the reconcile
-                just drew, and recorded before the checks they would outlive a refused call.
+                just drew, and recorded before the checks they would outlive a refused call. `None`
+                **clears** labels an earlier call recorded rather than leaving them in place, so one call's
+                override does not outlive it; `colorbar()` therefore drops them too, exactly as the static
+                tier's `colorbar` does.
 
         Returns:
             The id of the layer that was keyed.
@@ -955,7 +958,14 @@ class GuideMixin(_MixinBase):
                     "show them with legend()"
                 )
             )
-        if labels is not None:
+        # Replaced on every call, not only written on the calls that name rows: `None` *clears* an override
+        # an earlier call recorded, so one call's rows do not outlive it. Written only when given, a layer
+        # whose rows had once been named could never get its derived ranges back (review M9). This is the
+        # rule the static tier documents and implements in `Scene._record_key`, and one order cannot mean
+        # two things on two tiers.
+        if labels is None:
+            self._guides.get(resolved, {}).pop("labels", None)
+        else:
             self._guides.setdefault(resolved, {})["labels"] = tuple(
                 str(label) for label in labels
             )
@@ -1081,7 +1091,9 @@ class GuideMixin(_MixinBase):
             labels: The caller's own row labels, replacing the derived ones — for units, or for renaming
                 categories. Recorded as **drawn state** on the scene rather than in the figure, exactly as
                 :meth:`~digitalearth.three_d.decoration.DecorationMixin.set_title`'s font size and subtitle
-                are: the guide is what travels, and the labels are how this tier draws it.
+                are: the guide is what travels, and the labels are how this tier draws it. `None` clears
+                labels an earlier call recorded, bringing the derived ranges or categories back, so one
+                call's override does not outlive it.
             visible: `False` draws none of this layer's rows. The layer is resolved and checked first.
 
         Returns:

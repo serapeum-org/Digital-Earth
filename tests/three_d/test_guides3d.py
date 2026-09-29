@@ -580,6 +580,36 @@ class TestTheRowsComeFromTheScaleThatWasDrawn:
         rows = [box.GetEntryString(i) for i in range(box.GetNumberOfEntries())]
         assert rows == ["low", "high"], rows
 
+    def test_labels_none_clears_an_override_an_earlier_call_recorded(self, scene):
+        """`labels=None` drops the caller's rows and derives them again, as the static tier's key does.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The rows are drawn state on the scene rather than part of the figure, and that record was only
+            ever written to, never replaced — so once one call had named the rows, no later `legend()` could
+            get the derived ranges back (review M9). The static tier documents and implements the opposite
+            (`Scene._record_key`: "``None`` also *clears* labels recorded by an earlier call"), and one
+            order cannot mean two things on two tiers.
+        """
+        points = _points()
+        scene.point_cloud(points, values=points[:, 0], scheme="quantiles", k=2)
+        scene.legend(labels=["low", "high"])
+        box = scene.plotter.legend
+        named = [box.GetEntryString(i) for i in range(box.GetNumberOfEntries())]
+        scene.legend()
+        box = scene.plotter.legend
+        derived = [box.GetEntryString(i) for i in range(box.GetNumberOfEntries())]
+        ranges = (
+            scene.get_layer("point_cloud-1")
+            .symbology.encoding("color")
+            .scale.class_ranges()
+        )
+        assert named == ["low", "high"], named
+        assert scene._guides["point_cloud-1"].get("labels") is None, dict(scene._guides)
+        assert derived[0].startswith(str(ranges[0][0])), (derived, ranges)
+
 
 class TestWhatPyvistasOwnSlotsForce:
     """One bar per title, one legend per window — measured on PyVista 0.48.4, not assumed."""
