@@ -863,15 +863,29 @@ class TestWhatPyvistasOwnSlotsForce:
             figure that swaps two titles reached the second layer with the first's **old** bar still on the
             window, and an end state that holds one bar per title was refused partway through (review L9).
             The refusal rolled the scene back, so the swap could not be described at all.
+
+            The collision is asserted before the swap, not assumed. The two `colorbar` calls are the whole
+            of the setup, and nothing downstream needs them to have worked: `_retitled` writes both guides
+            onto the spec regardless, so with `colorbar()` gutted `draw_figure(swapped)` simply adds two
+            bars to an empty window and every closing assertion still holds (review R2-N9). Its sibling
+            below snapshots the bars for exactly this reason.
         """
         scene.terrain(_dem(), name="a")
         scene.terrain(_dem(), name="b")
         scene.colorbar("a", label="A")
         scene.colorbar("b", label="B")
+        before = sorted(scene.plotter.scalar_bars.keys())
+        assert before == ["A", "B"], (
+            f"the swap has nothing to survive unless both titles are already on the window: {before}"
+        )
+        assert (scene._guides["a"]["bar"], scene._guides["b"]["bar"]) == ("A", "B"), (
+            f"each title must be held by the layer the other is about to ask for: {dict(scene._guides)}"
+        )
         swapped = _retitled(_retitled(scene.figure_spec, "a", "B"), "b", "A")
         scene.draw_figure(swapped)
-        assert sorted(scene.plotter.scalar_bars.keys()) == ["A", "B"], list(
-            scene.plotter.scalar_bars.keys()
+        assert sorted(scene.plotter.scalar_bars.keys()) == before, (
+            list(scene.plotter.scalar_bars.keys()),
+            before,
         )
         assert (scene._guides["a"]["bar"], scene._guides["b"]["bar"]) == ("B", "A"), (
             dict(scene._guides)
