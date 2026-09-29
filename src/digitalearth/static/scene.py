@@ -1468,6 +1468,23 @@ class Scene(WatermarkMixin):
     def _keyed_layer(self, layer_id: Optional[str], caller: str) -> LayerSpec:
         """Return the layer a key was asked for, resolving ``None`` and refusing one with no colour to key.
 
+        ``None`` resolves to the **topmost coloured layer in draw order** — `_color_keyed()[-1]`, since that
+        list is the tree's own order, bottom first. Draw order is what the tree keeps and the only order it
+        can be asked for; it coincides with the order the layers were added only while none of them has been
+        moved, and `move_layer` parts the two. Measured, on two rasters:
+
+        ```text
+        added in the order      : ['raster-1', 'raster-2']
+        after move_layer('raster-2', 0) the draw order is ['raster-2', 'raster-1']
+        colorbar() keys 'raster-1'  — the topmost — not the last-added 'raster-2'
+        legend()   keys 'raster-1'  — the same resolution
+        ```
+
+        The **behaviour** is the defensible one and is unchanged: a key explains the layer the reader
+        actually sees, which is the one on top. Only the sentence moved, here and on
+        :meth:`colorbar`/:meth:`legend`, and it is the same correction review M14 made on the interactive
+        tier so the two tiers describe one rule in one way.
+
         Args:
             layer_id: The caller's id, or ``None`` for the default.
             caller: The method asking, for the refusal.
@@ -1634,11 +1651,12 @@ class Scene(WatermarkMixin):
         and the bar is drawn from that record.
 
         Args:
-            layer_id: Which layer's key to show. ``None`` (the default) takes **the most recent layer that
-                carries a colour encoding** — not simply the last layer: a coastline, a basemap, a graticule
-                or a text label drawn after a raster is coloured by nothing and cannot take the key over.
-                A layer whose data lay outside the display CRS drew nothing and publishes nothing, so it is
-                skipped too.
+            layer_id: Which layer's key to show. ``None`` (the default) takes **the topmost layer in draw
+                order that carries a colour encoding** — not simply the topmost layer: a coastline, a
+                basemap, a graticule or a text label drawn over a raster is coloured by nothing and cannot
+                take the key over. A layer whose data lay outside the display CRS drew nothing and publishes
+                nothing, so it is skipped too. See :meth:`_keyed_layer` for why it is the topmost rather
+                than the last added, and for the measurement that separates the two.
             label: What the bar is called. ``None`` (the default) takes the layer's own recorded units — a
                 raster field records the ``units``
                 :func:`~digitalearth.base.autostyle.auto_style` resolved for its variable — and leaves the
@@ -1737,8 +1755,8 @@ class Scene(WatermarkMixin):
         drawn by construction (#185).
 
         Args:
-            layer_id: Which layer's classes to describe. ``None`` (the default) takes the most recent layer
-                that carries a colour encoding, read exactly as :meth:`colorbar` reads it.
+            layer_id: Which layer's classes to describe. ``None`` (the default) takes the topmost layer in
+                draw order that carries a colour encoding, read exactly as :meth:`colorbar` reads it.
             title: The heading above the swatches. ``None`` (the default) takes the layer's recorded units,
                 and ``""`` draws no heading.
             labels: Explicit row labels, replacing the derived ones — for units, or for renaming categories.
