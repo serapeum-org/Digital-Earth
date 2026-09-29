@@ -592,6 +592,29 @@ class TestACategoricalFillIsKeyedBySwatches:
         rows = [text.get_text() for text in zoned.ax.get_legend().get_texts()]
         assert rows == ["rural", "urban"]
 
+    def test_the_renderer_accepts_a_title_of_its_own(self, zoned):
+        """`Renderer.draw_guide(layer, title=...)` styles the call rather than raising.
+
+        Args:
+            zoned: A map with a categorical fill.
+
+        Test scenario:
+            `Renderer.draw_guide` is public and documents `**kwargs` as "styling forwarded to the matplotlib
+            colorbar or legend" — but the swatch arm passed `title=guide.title` *beside* those kwargs, so
+            the one keyword a legend most obviously takes was the one that could not be given: `TypeError:
+            disjoint_legend() got multiple values for keyword argument 'title'`. `Scene.legend` cannot reach
+            it, because `title` is a named parameter there, which is why it survived untested (review L4).
+        """
+        zoned.legend("zone", title="Zone")
+        made = zoned._renderer.draw_guide(zoned.get_layer("zone"), title="mine")
+        assert made.get_title().get_text() == "mine", (
+            "the caller's own title did not reach the legend"
+        )
+        zoned._renderer.draw_guide(zoned.get_layer("zone"))
+        assert zoned.ax.get_legend().get_title().get_text() == "Zone", (
+            "a call that names no title lost the recorded one"
+        )
+
     def test_a_swatch_key_on_a_hidden_fill_is_drawn_hidden(self, zoned):
         """The swatch half of the same rule: a `Legend` drawn onto a hidden layer starts off.
 

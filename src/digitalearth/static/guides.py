@@ -428,13 +428,18 @@ def draw_guide(
         rows = _rows(layer, spec)
         if not guide.show:
             return None
+        # `setdefault` rather than a keyword beside `**kwargs`: the recorded title is this call's default,
+        # not something the caller is forbidden to override. Passed positionally-by-name it made `title=`
+        # — the one keyword a legend most obviously takes — the one keyword `Renderer.draw_guide` could not
+        # be given, raising `got multiple values for keyword argument 'title'` (review L4). `spec` carries
+        # the same title, derived from the same `guide`.
+        kwargs.setdefault("title", spec.title)
         if guide.anchor is not None:
             kwargs.setdefault("loc", _LEGEND_LOCATIONS[guide.anchor])
         return disjoint_legend(
             scene.ax,
             [entry.color for entry in spec.entries],
             rows,
-            title=guide.title,
             **kwargs,
         )
     refusal = bar_refusal(layer)
