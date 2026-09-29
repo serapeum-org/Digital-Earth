@@ -524,6 +524,11 @@ class TestAnimate:
             ``_stack_clim`` is internal; what the frames are actually drawn with is ``opts["vmin"]`` /
             ``opts["vmax"]``. This pins that the widening survives the resolve step rather than being
             re-flattened there.
+
+            The pair is pinned, not merely its width (R2-N8): ``> 0.0`` also passes for a one-ULP span,
+            which is the outcome ``tests/base/test_scale.py``'s
+            ``test_an_ordinary_constant_domain_is_untouched_by_the_huge_case`` exists to forbid — measured,
+            ``Scale._widen`` cut to ``value + 1e-09`` reddens the sibling above and left this green.
         """
         from types import SimpleNamespace
 
@@ -536,6 +541,9 @@ class TestAnimate:
         Map(crs=4326)._resolve_animation_clim([ds, ds], opts)
         assert opts["vmax"] - opts["vmin"] > 0.0, (
             f"the animation's shared range must have width, got {opts['vmin']}..{opts['vmax']}"
+        )
+        assert (opts["vmin"], opts["vmax"]) == (-3.5, -2.5), (
+            f"the shared widening rule is +1, got {opts['vmin']}..{opts['vmax']}"
         )
 
     def test_a_caller_bound_is_still_kept_verbatim_beside_the_widened_scan(self):
