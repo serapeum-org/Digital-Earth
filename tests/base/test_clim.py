@@ -22,6 +22,7 @@ from digitalearth.base.clim import (
     sample_evenly,
     stack_scale,
 )
+from digitalearth.base.spec.scale import Scale
 
 
 class TestSampleEvenly:
@@ -518,17 +519,38 @@ class TestStackScale:
             f"a constant 1e20 stack must still widen, got ({low!r}, {high!r})"
         )
 
-    def test_the_scale_it_returns_is_frozen(self):
+    def test_the_scale_it_returns_is_frozen(self, monkeypatch):
         """The stack scale is a value, so no frame can move the range the others were drawn against.
+
+        Args:
+            monkeypatch: Used to watch `Scale.freeze`, which is the seam this test is about.
 
         Test scenario:
             What "one range across 50 frames" actually requires. A mutable range is the flicker bug: any
             per-frame render that re-derived or adjusted it would put the later frames on a different scale
             from the earlier ones.
+
+            The seam is watched rather than its result inspected (R2-M10): `Scale` is a frozen dataclass and
+            `Scale.freeze()` returns `self`, so ``scale.freeze() is scale`` held for any scale from anywhere
+            and deleting the ``.freeze()`` call in `frozen_scale` left all 193 tests here green. What this
+            module has to do is *take* that step at the one derivation point, which is what the spy records;
+            that the value is then immutable is `tests/base/test_scale.py`'s, stated once below because it is
+            the guarantee the derivation is for.
         """
+        frozen = []
+        unspied = Scale.freeze
+
+        def spy(self):
+            frozen.append(self)
+            return unspied(self)
+
+        monkeypatch.setattr(Scale, "freeze", spy)
         scale = stack_scale([np.array([2.0, 9.0])])
-        assert scale.freeze() is scale, (
-            "freezing a stack scale must not produce a second range"
+        assert len(frozen) == 1, (
+            f"the stack range must be frozen once, at its derivation; `freeze()` ran {len(frozen)} times"
+        )
+        assert frozen[0] is scale, (
+            "the scale that was frozen is not the one handed back, so the frozen one went nowhere"
         )
         with pytest.raises(FrozenInstanceError):
             scale.vmin = 0.0
