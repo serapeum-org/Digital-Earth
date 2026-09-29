@@ -597,6 +597,99 @@ class TestACategoricalFillIsKeyedBySwatches:
         assert zoned.get_layer("acc").symbology.guide() is not None
 
 
+class TestARefusedKeyTakesTheRebuildWithIt:
+    """`Renderer.draw_layer` is all-or-nothing, and the key it draws is part of the "all".
+
+    `draw_guide` was added to `draw_layer` *after* the guarded region and after the record was written, so a
+    key the layer's description asks for and this tier cannot draw left the drawer's artists on the axes and
+    the layer in `_drawn` while the refusal carried on — against the method's own note, which promises that
+    whatever it added is taken back before the error does (review M5).
+    """
+
+    @pytest.fixture
+    def undrawable(self, polygons):
+        """A map with one categorical fill whose recorded key asks for more rows than it has.
+
+        Args:
+            polygons: Buffered point features.
+
+        Yields:
+            The map, with the fill removed from the axes again so the next draw is a rebuild. Closed
+            afterwards.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.static.guides import GUIDE_LABELS_KEY
+
+        polygons["zone"] = ["urban", "rural"] * (len(polygons) // 2) + ["urban"] * (
+            len(polygons) % 2
+        )
+        canvas = Map(crs=polygons.epsg)
+        canvas.choropleth(polygons, column="zone", scheme="categorical", name="zone")
+        canvas.legend("zone")
+        # One label for a two-row key, written onto the description the way a figure built elsewhere
+        # carries it — the refusal `_rows` raises is the one reached from inside the draw.
+        layer = canvas.get_layer("zone")
+        props = dict(layer.symbology.props)
+        props[GUIDE_LABELS_KEY] = ("only-one",)
+        canvas._layer_tree = canvas._layer_tree.replace(
+            with_fields(layer, symbology=with_fields(layer.symbology, props=props))
+        )
+        canvas._renderer.remove("zone")
+        yield canvas
+        canvas.close()
+
+    def test_the_drawing_comes_off_and_the_record_stays_empty(self, undrawable):
+        """A refusal from the key leaves neither artists nor a record behind.
+
+        Args:
+            undrawable: A map whose fill describes a key that cannot be drawn.
+
+        Test scenario:
+            This is the shape `_reconcile` takes for a restyle and a rebuild — remove, then draw again — so
+            a half-applied draw here is artists no layer owns and a `_drawn` entry for a layer the axes is
+            not showing. The two halves have to go back together, which is the tier's own rollback contract.
+        """
+        children = len(undrawable.ax.get_children())
+        with pytest.raises(ValueError, match="needs 2 labels; got 1"):
+            undrawable._renderer.draw_layer(undrawable.figure_spec, "zone")
+        assert "zone" not in undrawable._renderer.drawn, (
+            "the refused rebuild left the layer in the renderer's record"
+        )
+        assert len(undrawable.ax.get_children()) == children, (
+            "the refused rebuild left its artists on the axes"
+        )
+
+    def test_a_second_draw_replaces_the_previous_key_rather_than_orphaning_it(
+        self, dataset
+    ):
+        """Drawing a layer again takes the bar it already had off, rather than stacking a second.
+
+        Args:
+            dataset: The committed ``acc4000`` raster.
+
+        Test scenario:
+            The record was overwritten with a fresh `DrawnLayer` — `guides=()` — *before* `draw_guide` ran,
+            so `draw_guide`'s first act, "take the layer's previous key off", iterated an empty tuple and
+            the previous key was orphaned rather than detached. A colorbar is what makes that visible: it
+            lives on its own axes, so an orphan is a second strip stealing width from the map. Latent on the
+            reconcile path, which always removes first, and reachable by anyone calling `draw_layer` on a
+            layer that is already drawn.
+        """
+        with Map(crs=dataset.epsg) as canvas:
+            canvas.field(dataset, name="acc")
+            canvas.colorbar("acc", label="flow")
+            first = canvas._renderer.drawn["acc"].guides[0]
+            axes = len(canvas.fig.axes)
+            canvas._renderer.draw_layer(canvas.figure_spec, "acc")
+            second = canvas._renderer.drawn["acc"].guides[0]
+            assert second is not first, "the layer was not keyed again"
+            assert len(canvas.fig.axes) == axes, (
+                "the previous bar was orphaned rather than taken off, so the figure carries two"
+            )
+            assert first.ax not in canvas.fig.axes
+
+
 class TestOneAxesHoldsOneSwatchLegend:
     """matplotlib keeps one legend per axes, so keying a second layer takes the first layer's key off.
 

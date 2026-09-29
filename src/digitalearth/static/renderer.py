@@ -777,12 +777,20 @@ class _PartialDraw:
         self._existing = {id(artist) for artist in _painted(scene.ax) or ()}
         self._registered = len(scene.layers)
         self._composing = scene._drew_on_axes
+        #: The axes' legend before the draw. An axes holds it in its own slot rather than among the artists
+        #: :func:`_painted` lists, so a drawer that makes one — a categorical fill's swatch legend is made
+        #: by the cleopatra glyph itself — puts something on the figure that watching that list cannot see.
+        self._legend = self._scene.ax.get_legend()
 
     def undo(self) -> None:
         """Take off everything the drawer added since, and forget what it registered.
 
         Only artists that were not there before are touched, so the layers under this one are left alone.
         The compose flag goes back too: a layer that was never drawn is not the first render on the axes.
+
+        The axes' single legend slot goes back as well, and by assignment rather than by ``remove()``:
+        matplotlib's own removal hook for a legend clears whatever is in that slot, so removing the one this
+        draw made would take the previous one with it (see :meth:`Renderer._displaced`).
         """
         axes = self._scene.ax
         added = [
@@ -792,6 +800,8 @@ class _PartialDraw:
         ]
         for artist in added:
             _detach(artist, axes)
+        if axes.get_legend() is not self._legend:
+            axes.legend_ = self._legend
         del self._scene.layers[self._registered :]
         del self._scene._layer_labels[self._registered :]
         self._scene._drew_on_axes = self._composing
@@ -883,11 +893,20 @@ class Renderer:
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
             OffLimbError: when the layer's data cannot be placed and the scene is ``strict``.
+            ValueError: from :meth:`draw_guide`, for a key the layer's description asks for and this tier
+                cannot draw — a swatch list over a layer publishing no scale, row labels that do not number
+                the rows, a bar over a categorical scale.
 
         Note:
             A drawer that raises — or declines — after it has already put something on the axes leaves
             artists no layer owns: the layer is not recorded, so nothing would ever take them off. Whatever
             it added to the axes and to the colorbar registry is taken back before the error carries on.
+
+            **The key's draw is inside that guard too.** It was added after it, and after the record was
+            written, so a refusal from the key left the drawer's artists on the axes *and* the layer in
+            :attr:`drawn` while the error carried on — the one shape this note promises cannot happen
+            (review M5). A refusal now puts the record back as it was, empty for a layer that was not drawn
+            before, and takes the new artists off with it.
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
@@ -904,13 +923,31 @@ class Renderer:
         # Before the record, so a layer drawn again does not inherit what was asked of the one that held
         # this id before it: the ask is only consulted for a layer with no artist, where nothing else could
         # correct it.
-        self._asked.pop(layer_id, None)
-        self._drawn[layer_id] = drawn
-        # The colour key comes back with the layer. A guide is recorded on the layer's own encoding, so a
-        # rebuild, a restyle, a rollback and a figure read back onto another scene each draw the key the
-        # description asks for — there is no second writer of it, which is what keeps one recorded guide from
-        # becoming two bars.
-        self.draw_guide(layer)
+        previous = self._drawn.get(layer_id)
+        asked = self._asked.pop(layer_id, None)
+        # The new drawing carries the previous one's key across, so `draw_guide`'s first act — taking the
+        # layer's previous key off — has something to take off. Overwriting with a bare `guides=()` left
+        # that loop iterating an empty tuple, so a layer drawn twice orphaned its own bar on the figure
+        # instead of replacing it (review M5).
+        self._drawn[layer_id] = (
+            drawn if previous is None else with_fields(drawn, guides=previous.guides)
+        )
+        try:
+            # The colour key comes back with the layer. A guide is recorded on the layer's own encoding, so
+            # a rebuild, a restyle, a rollback and a figure read back onto another scene each draw the key
+            # the description asks for — there is no second writer of it, which is what keeps one recorded
+            # guide from becoming two bars. Inside the guard, because it refuses a description this tier
+            # cannot draw and a refusal must not leave the layer half-drawn.
+            self.draw_guide(layer)
+        except BaseException:
+            if previous is None:
+                self._drawn.pop(layer_id, None)
+            else:
+                self._drawn[layer_id] = previous
+            if asked is not None:
+                self._asked[layer_id] = asked
+            partial.undo()
+            raise
         if not figure.layers.is_visible(layer_id):
             self.set_visible(layer_id, False)
         return drawn
