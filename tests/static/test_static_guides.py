@@ -751,10 +751,15 @@ class TestARefusedKeyTakesTheRebuildWithIt:
             This is the shape `_reconcile` takes for a restyle and a rebuild — remove, then draw again — so
             a half-applied draw here is artists no layer owns and a `_drawn` entry for a layer the axes is
             not showing. The two halves have to go back together, which is the tier's own rollback contract.
+
+            `figure_spec` is read above the block, not inside it: it is a property, so a raise from *it*
+            would satisfy the block and leave `draw_layer` unrun (R2-M12, measured — with the property made
+            to raise this very message the test passed).
         """
         children = len(undrawable.ax.get_children())
+        spec = undrawable.figure_spec
         with pytest.raises(ValueError, match="needs 2 labels; got 1"):
-            undrawable._renderer.draw_layer(undrawable.figure_spec, "zone")
+            undrawable._renderer.draw_layer(spec, "zone")
         assert "zone" not in undrawable._renderer.drawn, (
             "the refused rebuild left the layer in the renderer's record"
         )
@@ -833,8 +838,11 @@ class TestARefusedKeyTakesTheRebuildWithIt:
             canvas._layer_tree = canvas._layer_tree.replace(
                 with_fields(layer, symbology=symbology)
             )
+            # Read outside the block for the reason above: `figure_spec` is a property, so a raise from it
+            # would satisfy the refusal and the draw would never run.
+            spec = canvas.figure_spec
             with pytest.raises(ValueError, match="coloured by category"):
-                renderer.draw_layer(canvas.figure_spec, "grid")
+                renderer.draw_layer(spec, "grid")
             restored = renderer.drawn["grid"]
             assert restored is drawn_before, (
                 "the refused redraw left the layer describing the drawing it rolled back, not the one it "
