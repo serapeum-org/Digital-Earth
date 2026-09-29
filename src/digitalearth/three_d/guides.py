@@ -97,10 +97,13 @@ def guide_field(layer: Any) -> Optional[str]:
         layer: The layer's :class:`~digitalearth.base.spec.LayerSpec`.
 
     Returns:
-        The band, variable or column name the layer's `color` encoding names — which is also the name of the
-        array the drawer binds on the mesh, so it is the title PyVista's own scalar bar already carries. `None`
-        for a layer whose colour is a flat constant, or which publishes no colour encoding at all: a key over a
-        colour nothing varies would have no values to label.
+        The band, variable or column name the layer's `color` encoding names — what a reader wants the key
+        titled after. It is **not** always the name of the array the drawer binds on the mesh, and so not
+        always the title PyVista's own bar carries: a cloud given `value_column="pop"` names `pop` here and
+        binds its values under `scalar`. Where the two differ, the engine's title is read back off the drawn
+        actor by :func:`_engine_title` rather than assumed from this. `None` for a layer whose colour is a
+        flat constant, or which publishes no colour encoding at all: a key over a colour nothing varies would
+        have no values to label.
 
     Examples:
         - A colour-driven layer names the array its key would describe:
@@ -127,6 +130,27 @@ def guide_field(layer: Any) -> Optional[str]:
             >>> _ = scene.terrain(dem, scalars=None, color="red")
             >>> guide_field(scene.get_layer("terrain-1")) is None
             True
+            >>> scene.close()
+
+            ```
+        - A named column is the field, and the array the drawer binds is not — the case the engine's own
+          title has to be read back for:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.three_d import Scene3D
+            >>> from digitalearth.three_d.guides import guide_field
+            >>> features = gpd.GeoDataFrame(
+            ...     {"depth": [1.0, 5.0, 9.0]},
+            ...     geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
+            ...     crs=4326,
+            ... )
+            >>> scene = Scene3D(off_screen=True)
+            >>> _ = scene.point_cloud(features, value_column="depth")
+            >>> guide_field(scene.get_layer("point_cloud-1"))
+            'depth'
+            >>> list(scene.plotter.scalar_bars.keys())
+            ['scalar']
             >>> scene.close()
 
             ```
@@ -662,11 +686,8 @@ def _reconcile_bar(
 
     Raises:
         ValueError: when the wanted title is one the window already carries for another layer. **This is the
-            only place that refusal is made.** A second check over the guides alone was written first and
-            could never fire: a title another *guide* holds is, by the time this layer is reached, a title on
-            the window — and the guide-only check would additionally have refused a title whose layer was
-            never drawn, where there is no bar and so no clash (proved by mutation: neutralising it left the
-            test green).
+            only place that refusal is made** — see the note under :meth:`GuideMixin._record_guide` for why
+            there is no second guard over the guides before the record is written.
     """
     record = held.setdefault(plan.layer_id, {})
     wanted = plan.wanted_bar
@@ -904,11 +925,11 @@ class GuideMixin(_MixinBase):
         )
         return resolved
 
-    # `_refuse_shared_title` stood here, walking the other layers' guides before the record was written to
-    # refuse a title one of them already held. It is gone because the reconcile refuses the same thing
-    # (`_redraw_bars`' `taken` map, and `_reconcile_bar`'s check against the titles already on the window) and
-    # refuses strictly more: a figure built elsewhere and drawn with `from_figure` never goes through this
-    # method at all. Two guards for one rule is two messages for one cause and two places to keep in step —
+    # There is deliberately **no** guard here walking the other layers' guides to refuse a title one of them
+    # already holds. The reconcile refuses the same thing (`_redraw_bars`' `taken` map, and
+    # `_reconcile_bar`'s check against the titles already on the window) and refuses strictly more: a figure
+    # built elsewhere and drawn with `from_figure` never goes through this method at all. Two guards for one
+    # rule is two messages for one cause and two places to keep in step —
     # and the net effect is the same, because a refusal inside the reconcile rolls the figure *and* the
     # plotter back to what the scene was already showing (`Scene3DBase._change`).
 
