@@ -1550,9 +1550,21 @@ class Scene(WatermarkMixin):
             title, and the caller who wrote ``label=`` was answered about a ``Guide`` (review L5). A label
             that is *not* blank is passed through untrimmed, because trimming it would be a second, silent
             change to what the figure records, and `Guide` does not trim either.
+
+            **Only a string is read for blankness.** Anything else is handed on untouched, so the caller is
+            answered by name: `Guide` refuses a title that is not a non-empty string or ``None``, which is
+            the ``ValueError`` :meth:`colorbar`'s and :meth:`legend`'s ``Raises:`` sections promise and the
+            answer the other three tiers already give. Reading ``asked.strip()`` unconditionally raised
+            ``AttributeError: 'int' object has no attribute 'strip'`` instead — a type the caller never
+            mentioned, from a method they did not call, and one :data:`~digitalearth.api.UNMAPPABLE`
+            swallows as "this layer has no key to draw" (review M3). It is deliberately not answered here
+            as "no label" either: accepting ``label=123`` as unlabelled would drop the caller's argument on
+            the floor rather than telling them it cannot be a title.
         """
         if asked is None:
             return self._default_label(layer_id)
+        if not isinstance(asked, str):
+            return asked
         return asked if asked.strip() else None
 
     def _record_key(

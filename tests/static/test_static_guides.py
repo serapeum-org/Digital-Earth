@@ -443,6 +443,34 @@ class TestAKeyIsTitledByWhatTheCallerWrote:
             "the caller's label was trimmed on its way into the record"
         )
 
+    @pytest.mark.parametrize("asked", [123, 1.5, ("Flow",)])
+    def test_a_label_that_is_not_text_is_refused_by_name(self, keyed, asked):
+        """A non-string `label=`/`title=` is answered by `Guide`, not by `str.strip`.
+
+        Args:
+            keyed: A map with a raster and a text label.
+            asked: A label of a type a title cannot be.
+
+        Test scenario:
+            `_title_for` reads a blank label as "no label", and the reading is `asked.strip()` — which a
+            number has no method for, so the caller got `AttributeError: 'int' object has no attribute
+            'strip'` where every other tier answers `ValueError: Guide title must be a non-empty string or
+            None; got 123` (review M3). `Scene.colorbar` and `Scene.legend` document `KeyError` and
+            `ValueError` only, and `api.UNMAPPABLE` holds `AttributeError`, so a `quickmap` path swallowed
+            it as "this layer has no key to draw".
+
+            Parametrised over three types rather than one so the fix cannot be a check for `int`, and
+            asserted on both spellings because `label=` and `title=` resolve through the same helper — the
+            reason review L5's blank-label fix had to cover both.
+        """
+        with pytest.raises(ValueError, match="Guide title must be a non-empty string"):
+            keyed.colorbar("acc", label=asked)
+        with pytest.raises(ValueError, match="Guide title must be a non-empty string"):
+            keyed.legend("acc", title=asked)
+        assert keyed.get_layer("acc").symbology.guide() is None, (
+            "a refused label left a key described on the layer"
+        )
+
 
 class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
     """Review L7 on the web tier, one tier over: one spelling must not be valid only half the time.
