@@ -588,6 +588,12 @@ def redraw_guides(scene: Any, figure: FigureSpec) -> None:
             _remove_bar(plotter, drawn["bar"])
     _redraw_bars(scene, figure, plotter, held)
     _redraw_legend(scene, figure, plotter, held, was_keyed)
+    # After the legend rebuild, not inside the bar pass, because the sweep asks of every layer binding a
+    # shared bar whether it has a key of its own — and `keyed` is written by `_redraw_legend`. Run before
+    # it, the sweep read the *previous* round's answer and so ran one change late: two classified clouds
+    # share one `0, 1, 2` index bar, and after the second `legend()` keyed them both that bar was still
+    # beside the box until some later, unrelated change swept it (review M7).
+    _drop_orphaned_bars(scene, figure, plotter, held)
 
 
 def _redraw_bars(
@@ -611,7 +617,6 @@ def _redraw_bars(
         _reconcile_bar(scene, figure, plotter, held, plan, taken)
         if plan.wanted_bar is not None:
             taken[plan.wanted_bar] = plan.layer_id
-    _drop_orphaned_bars(scene, figure, plotter, held)
 
 
 def _reconcile_bar(
@@ -691,6 +696,10 @@ def _drop_orphaned_bars(
     The one case :func:`_reconcile_bar` cannot settle on its own. Two terrains both bind `elevation`, so
     PyVista drew **one** bar for both and neither layer may take it away; once each of them has a key of its
     own, that shared bar explains nothing and would otherwise sit in the corner of the window for good.
+
+    Called from :func:`redraw_guides` **after** :func:`_redraw_legend`, because the question it asks of each
+    binding layer — has it a key of its own — is answered by `record["keyed"]`, which the legend rebuild
+    writes.
 
     Args:
         scene: The scene whose actors name the arrays.

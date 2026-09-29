@@ -443,6 +443,40 @@ class TestTheFormIsReadOffTheDescription:
             scene.plotter.scalar_bars.keys()
         )
 
+    def test_a_shared_class_index_bar_goes_when_the_last_layer_binding_it_is_keyed(
+        self, scene
+    ):
+        """Two classified clouds bind one array, so one index bar explains both — and both replace it.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The single-layer case above is settled inside the legend rebuild, which takes the engine's bar
+            off for a layer that does not share it. Two clouds both bind `scalar`, so neither may take that
+            bar on its own and the drop is the orphan sweep's — which read the *previous* round's record of
+            which layers were keyed, and so ran one change late: after both `legend()` calls the `0, 1, 2`
+            index bar was still beside the box, and only the next unrelated change took it off (review M7).
+        """
+        points = _points()
+        scene.point_cloud(
+            points, values=points[:, 0], scheme="quantiles", k=2, name="one"
+        )
+        scene.point_cloud(
+            points, values=points[:, 1], scheme="quantiles", k=2, name="two"
+        )
+        assert list(scene.plotter.scalar_bars.keys()) == ["scalar"], (
+            "the engine draws one index bar for both clouds"
+        )
+        scene.legend("one", title="First")
+        assert list(scene.plotter.scalar_bars.keys()) == ["scalar"], (
+            "two has asked for nothing and still reads that bar, so it must stay"
+        )
+        scene.legend("two", title="Second")
+        assert list(scene.plotter.scalar_bars.keys()) == [], list(
+            scene.plotter.scalar_bars.keys()
+        )
+
 
 class TestTheRowsComeFromTheScaleThatWasDrawn:
     """DE-19's point, on this tier: a swatch is the colour the picture uses, not a second computation."""
