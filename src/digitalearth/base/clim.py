@@ -14,6 +14,22 @@ widening of a constant one — is `Scale`'s, and :func:`stack_scale` is where th
 module decided that too, in a ``stack_clim`` that fell back to ``(0.0, 1.0)`` and did **not** widen, so the
 stack paths were the one family of call sites running a second, weaker copy of the domain rule.
 
+**What DE-40 took out of this module's public surface, and what the replacement returns.**
+``stack_clim(arrays) -> (float, float)`` was in ``__all__`` here and is **gone**, with no alias behind it:
+every caller moved in the same commit — nothing in ``src/``, ``tests/`` or ``docs/`` names it any more — and
+a shim would keep a second spelling of the domain rule alive for nobody. Its work is :func:`stack_scale`, and
+the **return type is not the same**: a :class:`~digitalearth.base.spec.scale.Scale` rather than a pair, so
+what used to read ``lo, hi = stack_clim(...)`` reads ``scale.vmin``/``scale.vmax``. :func:`frozen_scale` is
+the same step taken from an already-measured pair, and :func:`measure_clim` still answers in
+``(min, max)``/``None`` as it always did. Measured:
+
+| call | answer |
+|---|---|
+| `stack_scale([np.array([2.0, 9.0])])` | `Scale(vmin=2.0, vmax=9.0, …)` |
+| `stack_scale([])` | `Scale(vmin=0.0, vmax=1.0, …)` — the old fallback, now `Scale`'s |
+| `frozen_scale(None)` | `Scale(vmin=0.0, vmax=1.0, …)` |
+| `frozen_scale((5.0, 5.0))` | `Scale(vmin=5.0, vmax=6.0, …)` — the widening `stack_clim` never did |
+
 Before this, each tier had its own copy and the three had drifted on the two things that decide the answer:
 
 | Tier | Cap | Sampling |
