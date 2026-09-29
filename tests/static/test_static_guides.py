@@ -928,6 +928,117 @@ class TestOneAxesHoldsOneSwatchLegend:
         )
         assert two_fills._renderer.drawn["b"].guides[0] is two_fills.ax.get_legend()
 
+    @staticmethod
+    def _both_keyed(canvas):
+        """Return the figure `canvas` describes, with a shown swatch guide on **both** its fills.
+
+        Args:
+            canvas: The map to read the figure off.
+
+        Returns:
+            The `FigureSpec` a figure built where the one-legend rule does not exist would arrive as.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import Guide
+        from digitalearth.static.guides import GUIDE_KIND_KEY
+
+        arriving = canvas.figure_spec
+        for layer_id in ("a", "b"):
+            layer = arriving.layers.get(layer_id)
+            props = dict(layer.symbology.props)
+            props[GUIDE_KIND_KEY] = "legend"
+            symbology = with_fields(layer.symbology, props=props).with_guide(
+                Guide(show=True, title=layer_id)
+            )
+            arriving = with_fields(
+                arriving,
+                layers=arriving.layers.replace(with_fields(layer, symbology=symbology)),
+            )
+        return arriving
+
+    @staticmethod
+    def _described_as_shown(canvas):
+        """Return the ids of the layers whose description claims a drawn swatch key, bottom first.
+
+        Args:
+            canvas: The map to read.
+
+        Returns:
+            One id per layer carrying a shown legend guide.
+        """
+        from digitalearth.static.guides import guide_kind
+
+        shown = []
+        for layer_id in canvas.layer_ids:
+            layer = canvas.get_layer(layer_id)
+            guide = layer.symbology.guide()
+            if guide is not None and guide.show and guide_kind(layer) == "legend":
+                shown.append(layer_id)
+        return shown
+
+    def test_a_figure_read_back_settles_on_one_described_key(self, two_fills):
+        """A description arriving with two shown swatch keys is installed claiming one.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            The half of the one-legend rule that `Scene.legend` cannot reach. A figure built where the rule
+            does not exist hands both layers a shown guide; `Renderer._displaced` keeps the *drawn* record
+            honest, but the descriptions both went on saying `show=True` — and the description is what
+            travels to another tier and what a reader trusts when the figure is not in front of them, so it
+            is the worse half to leave wrong.
+
+            The layer that keeps it is the **topmost in draw order**, which is the same layer `legend()`
+            with no id would key, so the rule a reader predicts from the API is the rule a rebuild applies.
+        """
+        two_fills._change(self._both_keyed(two_fills))
+        assert two_fills.layer_ids == ["a", "b"]
+        assert self._described_as_shown(two_fills) == ["b"], (
+            "the installed description claims a swatch key on a layer the axes is not showing one for"
+        )
+        assert two_fills._renderer.drawn["b"].guides[0] is two_fills.ax.get_legend(), (
+            "the layer the description keeps is not the one the axes draws"
+        )
+        assert two_fills._renderer.drawn["a"].guides == ()
+        assert two_fills.get_layer("a").symbology.guide().title == "a", (
+            "the displaced layer lost the title it arrived with, so its key cannot come back as it was"
+        )
+
+    def test_the_displaced_layer_can_still_take_the_key_back(self, two_fills):
+        """Settling a read-back figure is not one-way: `legend()` on the loser still works.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            Switching the guide *off* rather than taking it off is what makes this possible, and it has to
+            keep holding for the rebuild path as well as the API one — a figure read back that quietly made
+            one of its layers unkeyable, or that dropped what the loser's key was called, would be a worse
+            answer than the stale record it replaced.
+
+            The assertion that carries this is `b`'s *own description surviving the handover*: it is
+            switched off, keeps the title it arrived with, and is therefore a key that can come back as it
+            was rather than one that has to be described again. Clearing the loser's guide instead of
+            switching it off passes every other line here and fails that one.
+        """
+        two_fills._change(self._both_keyed(two_fills))
+        two_fills.legend("a", title="A again")
+        assert self._described_as_shown(two_fills) == ["a"], (
+            "the layer that lost the slot on the rebuild could not take it back"
+        )
+        assert two_fills._renderer.drawn["a"].guides[0] is two_fills.ax.get_legend()
+        assert two_fills._renderer.drawn["b"].guides == ()
+        handed_over = two_fills.get_layer("b").symbology.guide()
+        assert handed_over is not None, (
+            "the layer that gave the slot up lost its guide rather than having it switched off, so its "
+            "key cannot come back as it was"
+        )
+        assert (handed_over.show, handed_over.title) == (False, "b"), (
+            f"the handed-over key should be switched off and still called 'b'; it is {handed_over}"
+        )
+
 
 class TestDerivedValuesAreNamedByWhatTheyAre:
     """A layer whose kind computes its own values has no column to name, and still needs one."""

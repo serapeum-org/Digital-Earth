@@ -887,6 +887,10 @@ class Scene(WatermarkMixin):
         candidate = self._figure_with(figure.layers)
         self._renderer.apply(self.figure_spec, candidate)
         self._layer_tree = candidate.layers
+        # An axes holds one swatch legend, so a figure that arrives claiming two is installed claiming one.
+        # Here rather than in `apply`, which draws the picture and does not write descriptions — this is the
+        # rebuild reaching the same half of the rule `_record_key` reaches on the calling path (review M4).
+        self._settle_swatch_keys()
         # The reference goes out of this scene's figure; the object stays registered, because a
         # `figure_spec` captured before the change still names it and `close()` is where a scene lets its
         # data go — the policy `Renderer.apply` states and the web tier settled on too.
@@ -1601,6 +1605,65 @@ class Scene(WatermarkMixin):
             # exactly as it found it, and until the draw has happened no key has been displaced.
             self._displace_other_legends(layer.id)
 
+    @staticmethod
+    def _shown_swatch_guide(layer: LayerSpec) -> Optional[Guide]:
+        """Return the guide by which a layer claims a drawn swatch legend, or ``None``.
+
+        Args:
+            layer: The layer's description.
+
+        Returns:
+            The guide, when the layer carries a shown one whose kind is ``"legend"`` — the claim that
+            competes for the axes' single legend slot. ``None`` otherwise, which includes a colorbar guide:
+            matplotlib takes any number of bars, so those do not compete.
+        """
+        guide = layer.symbology.guide()
+        if guide is None or not guide.show or guide_kind(layer) != "legend":
+            return None
+        return guide
+
+    def _settle_swatch_keys(self) -> None:
+        """Leave one layer describing a drawn swatch key, for a figure that arrived claiming several.
+
+        :meth:`_record_key` keeps the rule on the calling path — one `legend()` displaces the last — so two
+        shown swatch guides can only reach this scene on a figure built where the rule does not exist and
+        read back onto it. :meth:`~digitalearth.static.renderer.Renderer.apply` then draws each layer in
+        turn, one legend wins the axes' single slot, and until this ran the *descriptions* both went on
+        saying ``show=True``. That is the worse half to leave wrong: a description is what travels to
+        another tier and what a reader trusts when the figure is not in front of them, and order 24 exists
+        precisely so the record and the picture cannot disagree.
+
+        **The topmost coloured layer keeps it**, which is the layer :meth:`legend` with no id would key
+        (:meth:`_keyed_layer`) — so the rule a reader predicts from the API is the rule a rebuild applies.
+        It is not "whichever the renderer happened to draw last": `_reconcile` visits removed, rebuilt,
+        restyled and added layers in that order, so the last legend drawn is not reliably the topmost. The
+        keeper's key is therefore **drawn again** rather than assumed, which both puts the axes on the
+        stated layer and — through
+        :meth:`~digitalearth.static.renderer.Renderer._displaced` — takes every other layer's orphaned
+        legend out of the drawn record.
+
+        The losers are switched **off**, not cleared, so ``legend(layer_id)`` on any of them takes the key
+        back exactly as it does on the calling path.
+
+        Called from :meth:`_change`, which is the one path a description is installed by — rather than from
+        the renderer, which draws the picture and must not write descriptions
+        (:meth:`~digitalearth.static.renderer.Renderer.apply`).
+        """
+        claimed = [
+            layer_id
+            for layer_id in self._layer_tree.ids
+            if self._shown_swatch_guide(self._layer_tree.get(layer_id)) is not None
+            and layer_id in self._renderer.drawn
+        ]
+        if len(claimed) < 2:
+            return
+        keeper = claimed[-1]
+        # Drawn before the descriptions are edited: every one of these guides already drew once during
+        # `apply`, so this cannot newly refuse — and if it ever did, the descriptions would be untouched
+        # rather than half-settled.
+        self._renderer.draw_guide(self._layer_tree.get(keeper))
+        self._displace_other_legends(keeper)
+
     def _displace_other_legends(self, keeper: str) -> None:
         """Switch off every other layer's swatch key, because the axes holds one legend.
 
@@ -1621,8 +1684,8 @@ class Scene(WatermarkMixin):
             if layer_id == keeper:
                 continue
             other = self._layer_tree.get(layer_id)
-            guide = other.symbology.guide()
-            if guide is None or not guide.show or guide_kind(other) != "legend":
+            guide = self._shown_swatch_guide(other)
+            if guide is None:
                 continue
             self._layer_tree = self._layer_tree.replace(
                 with_fields(
