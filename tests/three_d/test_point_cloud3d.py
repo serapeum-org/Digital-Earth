@@ -331,20 +331,39 @@ class TestTheColumnIsClassifiedOnce:
             scene.point_cloud(points, values=labels, scheme="categorical", cmap="tab10")
         finally:
             scene.close()
-        assert scanned == [60], (
-            f"the column must be categorised once and reused; it was scanned {scanned}"
+        assert scanned == [60, 3], (
+            "the column must be scanned once: the second call is over the three categories the first one "
+            "found — the key's length, not the data's — because the colours are always sampled from this "
+            f"call's cmap (review R2-H3). It was scanned {scanned}"
         )
 
+    @staticmethod
+    def _painted(actor):
+        """Read the class colours back off the engine's own lookup table.
+
+        Args:
+            actor: The layer's drawn actor.
+
+        Returns:
+            list[str]: one ``#rrggbb`` per class, as VTK holds them. Read off the render rather than out of
+            the style dict the drawer built, so a comparison against a computed colour list has two
+            differently-built sides instead of one expression twice.
+        """
+        from matplotlib.colors import to_hex
+
+        rows = np.asarray(actor.mapper.lookup_table.values, dtype="float64") / 255.0
+        return [to_hex(row[:3]) for row in rows]
+
     @pytest.mark.parametrize(
-        "values, scheme, k",
+        "values, scheme, k, cmap",
         [
-            (None, "quantiles", 4),
-            (None, "equal_interval", 3),
-            (["a", "b", "c", "a", "b", "c"], "categorical", 5),
+            (None, "quantiles", 4, "magma"),
+            (None, "equal_interval", 3, "cividis"),
+            (["a", "b", "c", "a", "b", "c"], "categorical", 5, "Set1"),
         ],
     )
     def test_the_reused_cut_paints_exactly_what_a_fresh_one_would(
-        self, values, scheme, k
+        self, values, scheme, k, cmap
     ):
         """Reusing the description's cut is a saving, not a second answer.
 
@@ -352,66 +371,215 @@ class TestTheColumnIsClassifiedOnce:
             values: A categorical column, or `None` for the table's own x column.
             scheme: How the values are classified.
             k: How many classes a graduated scheme cuts.
+            cmap: The colormap the classes are drawn from — a named one per case rather than the tier
+                default, so a colour that came from somewhere other than this argument shows up.
 
         Test scenario:
-            The saving is only sound if the two computations were identical to begin with, so the scalars
-            the cloud is drawn with are compared against what the classifier produces when it is handed no
-            description at all.
+            The saving is only sound if the two computations were identical to begin with, so **both**
+            halves of the picture are checked: the class indices bound on the cloud, and the colours those
+            indices are painted with.
+
+            Neither expectation goes back through `classified_scalars`. The earlier version of this test
+            called it for the comparison, which put both sides of the assertion through the one function
+            under test — every mutation inside it moved them together, and it passed with the colours
+            reversed (review R2-H3). The expectation is derived here from the shared primitives instead:
+            the edges from :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` and the class of a value
+            counted off them, the categories and their colours from
+            :func:`~digitalearth.base.symbology.categorical_colors`, the ramp's from
+            :func:`~digitalearth.base.symbology.sample_cmap`. The drawn side is read off the engine — the
+            array bound on the cloud and VTK's own lookup table.
         """
+        from digitalearth.base.spec import Scale
+        from digitalearth.base.symbology import (
+            categorical_colors,
+            resolve_categorical_cmap,
+            sample_cmap,
+        )
+
+        points = self._table(6)
+        column = points[:, 0] if values is None else np.array(values, dtype=object)
+        if scheme == "categorical":
+            names, wanted_colours = categorical_colors(
+                column, cmap=resolve_categorical_cmap(cmap)
+            )
+            wanted_codes = [float(names.index(value)) for value in column]
+        else:
+            numbers = np.asarray(column, dtype="float64")
+            edges = Scale.breaks_of(numbers, scheme, k)
+            wanted_colours = sample_cmap(cmap, len(edges) - 1)
+            # A value's class is how many interior edges it has passed — the same rule the drawer reaches
+            # through `np.digitize`, counted rather than binned so the two sides are not one call twice.
+            wanted_codes = [
+                float(sum(value >= edge for edge in edges[1:-1])) for value in numbers
+            ]
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.point_cloud(points, values=column, scheme=scheme, k=k, cmap=cmap)
+            drawn = [float(code) for code in scene.layers[0][0][SCALAR]]
+            painted = self._painted(scene.layers[0][1])
+        finally:
+            scene.close()
+        assert drawn == wanted_codes, (
+            f"the cloud was drawn with classes {drawn}, and the cut asks for {wanted_codes}"
+        )
+        assert painted == list(wanted_colours), (
+            f"the cloud was painted {painted}, and the cut asks for {list(wanted_colours)}"
+        )
+
+    @pytest.mark.parametrize(
+        "changed, values, scheme, k, cmap",
+        [
+            ({"k": 6}, None, "quantiles", 3, "viridis"),
+            # A skewed column, because the two schemes cut an evenly-spaced one into the same classes and
+            # the case would then pass with the scheme ignored.
+            (
+                {"scheme": "equal_interval"},
+                [1.0, 2.0, 3.0, 4.0, 5.0, 100.0],
+                "quantiles",
+                2,
+                "viridis",
+            ),
+            (
+                {"cmap": "Set1"},
+                ["a", "b", "c", "a", "b", "c"],
+                "categorical",
+                5,
+                "tab10",
+            ),
+        ],
+    )
+    def test_a_fresh_request_overrules_the_cut_the_description_carries(
+        self, changed, values, scheme, k, cmap
+    ):
+        """A reused cut is a saving on an unchanged request, never a veto over a changed one.
+
+        Args:
+            changed: The symbology property `replace_layer` asks for, replacing the one it was built with.
+            values: A categorical column, or `None` for the table's own x column.
+            scheme: The scheme the layer is first built with.
+            k: The class count it is first built with.
+            cmap: The colormap it is first built with.
+
+        Test scenario:
+            The two sides are built from **different** requests, which is what the previous version of the
+            reuse test could not do: the layer's description carries the cut its builder made, and
+            `replace_layer` then installs a symbology asking for another `k`, another `scheme` or another
+            `cmap` without republishing the encoding. Handing that stale cut to the drawer unconditionally
+            made it win outright — 6 classes asked for and 3 painted, `Set1` asked for and `tab10` painted
+            (review R2-H3). The picture is compared against a fresh classification of the **new** request,
+            computed with no description at all.
+        """
+        from dataclasses import replace as with_fields
+
         from digitalearth.three_d.base import classified_scalars
 
         points = self._table(6)
         column = points[:, 0] if values is None else np.array(values, dtype=object)
-        fresh = classified_scalars(column, scheme=scheme, k=k, cmap="viridis")
+        asked = {"scheme": scheme, "k": k, "cmap": cmap, **changed}
+        wanted = classified_scalars(column, **asked)
         scene = Scene3D(off_screen=True)
         try:
-            scene.point_cloud(points, values=column, scheme=scheme, k=k, cmap="viridis")
+            scene.point_cloud(points, values=column, scheme=scheme, k=k, cmap=cmap)
+            held = scene.get_layer("point_cloud-1")
+            props = {**held.symbology.props, **changed}
+            scene.replace_layer(
+                with_fields(held, symbology=with_fields(held.symbology, props=props))
+            )
             drawn = np.asarray(scene.layers[0][0][SCALAR], dtype="float64")
+            painted = self._painted(scene.layers[0][1])
         finally:
             scene.close()
         assert np.array_equal(
-            drawn, np.asarray(fresh["scalars"], dtype="float64"), equal_nan=True
-        ), (drawn, fresh["scalars"])
+            drawn, np.asarray(wanted["scalars"], dtype="float64"), equal_nan=True
+        ), (
+            f"replace_layer({changed}) painted {drawn}, not the {wanted['scalars']} it asked for"
+        )
+        assert painted == list(wanted["cmap"]), (
+            f"replace_layer({changed}) painted {painted}, not the {list(wanted['cmap'])} it asked for"
+        )
 
-    def test_a_categorical_scale_carrying_no_colours_is_classified_here_instead(self):
-        """A scale the drawer cannot paint from is ignored, and the column cut as if none were passed.
+    def test_the_reused_categories_are_painted_in_this_calls_cmap(self):
+        """A colour a description recorded cannot outvote the ``cmap`` the layer is drawn with.
 
         Test scenario:
-            The reuse is only sound for a scale that carries one **colour** per category, and `Scale`'s own
-            constructor does not guarantee that: it refuses a colour list of the wrong *length*, so
-            `Scale.categorical(["a", "b"], [])` cannot be built — but one of the right length holding
-            `None` can, and `color_for` then answers `None`. Painting from that would bind `None` where a
-            colour belongs, so the read falls back to categorising the column here.
+            The reuse saves the pass that finds the distinct values; it settles nothing about what colour
+            each of them gets. A scale carrying deliberately wrong colours is handed over with
+            `cmap="Set1"`, and Set1 is what must reach the engine (review R2-H3).
 
-            Asserted against the same call handed a scale that *does* carry colours, so the two answers are
-            built differently rather than compared with themselves: the painted one hands back the scale's
-            own colours, the colourless one a real palette of its own.
+            This is also what retires the shape the old read had to screen for —
+            `Scale.categorical(["a", "b"], [None, None])`, which `Scale`'s one-colour-per-category
+            constructor does let through and whose `color_for` answers `None`. No colour is read off a
+            scale any more, so there is no `None` to bind where a colour belongs; the second case pins
+            that it paints exactly like the first.
+
+            Both sides are built differently from the expectation: the drawer samples the palette over the
+            **categories the scale recorded**, while the expectation is taken from the categoriser over the
+            **whole column** with no description in sight.
         """
         from digitalearth.base.spec import Scale
+        from digitalearth.base.symbology import categorical_colors
         from digitalearth.three_d.base import classified_scalars
 
         column = np.array(["a", "b", "a"], dtype=object)
-        painted = classified_scalars(
+        asked = categorical_colors(column, cmap="Set1")[1]
+        wrong = classified_scalars(
             column,
             scheme="categorical",
             k=2,
-            cmap="viridis",
-            scale=Scale.categorical(["a", "b"], ["#ff0000", "#0000ff"]),
+            cmap="Set1",
+            scale=Scale.categorical(["a", "b"], ["#000000", "#000000"]),
         )
         colourless = classified_scalars(
             column,
             scheme="categorical",
             k=2,
-            cmap="viridis",
+            cmap="Set1",
             scale=Scale.categorical(["a", "b"], [None, None]),
         )
-        assert painted["cmap"] == ["#ff0000", "#0000ff"], (
-            f"a scale that carries colours must be painted from: {painted['cmap']}"
+        assert wrong["cmap"] == asked, (
+            f"the scale's own colours were painted instead of cmap='Set1': {wrong['cmap']} for {asked}"
         )
-        assert all(
-            isinstance(colour, str) and colour.startswith("#")
-            for colour in colourless["cmap"]
-        ), (
-            "a scale with no colour per category was painted from anyway, so the drawer was handed "
-            f"{colourless['cmap']}"
+        assert colourless["cmap"] == asked, (
+            f"a scale carrying no colour per category changed the picture: {colourless['cmap']}"
+        )
+
+    def test_a_recorded_category_set_from_another_column_is_not_painted_from(self):
+        """Categories that cannot place this column's values are not this column's cut.
+
+        Test scenario:
+            The saving is the pass that finds the distinct values, so a recorded set is only a saving while
+            it *is* this column's set. One from another column places nothing, and painting from it drew
+            every feature as missing data — measured `scalars [nan nan]` for a two-value column, with no
+            refusal (review R2-H3). Recognising that and categorising here is what keeps
+            `replace_layer` able to re-point a cloud at another column.
+
+            The second half pins the boundary: a value that is genuinely **missing** places nowhere either,
+            and must not be read as a stale set — it is `NaN` by design, which is the rule
+            :func:`~digitalearth.three_d.base._category_codes` exists to keep.
+        """
+        from digitalearth.base.spec import Scale
+        from digitalearth.three_d.base import classified_scalars
+
+        stale = Scale.categorical(["a", "b"], ["#ff0000", "#0000ff"])
+        drawn = classified_scalars(
+            np.array(["x", "y"], dtype=object),
+            scheme="categorical",
+            k=2,
+            cmap="tab10",
+            scale=stale,
+        )
+        assert [int(code) for code in drawn["scalars"]] == [0, 1], (
+            f"a column the recorded categories do not cover was painted from them anyway: "
+            f"{drawn['scalars']}"
+        )
+        with_missing = classified_scalars(
+            np.array(["x", None], dtype=object),
+            scheme="categorical",
+            k=2,
+            cmap="tab10",
+            scale=Scale.categorical(["x"], ["#ff0000"]),
+        )
+        assert [float(code) for code in with_missing["scalars"]][0] == 0.0
+        assert np.isnan(with_missing["scalars"][1]), (
+            f"a missing value must stay missing, not re-categorise the column: {with_missing['scalars']}"
         )

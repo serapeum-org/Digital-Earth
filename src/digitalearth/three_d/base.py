@@ -17,7 +17,7 @@ import sys
 from contextlib import suppress
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Self, Sequence, Union
 
 import numpy as np
 
@@ -78,35 +78,87 @@ SCENE_EXPORTERS: dict[str, str] = {
 }
 
 
-def _classes_of(scale: Optional[Scale]) -> Optional[tuple[list[Any], list[str]]]:
-    """Return a categorical scale's categories and the colours they were given, or ``None``.
+def _reused_categories(scale: Optional[Scale]) -> Optional[list[Any]]:
+    """Return a categorical scale's categories — the pass over the column — or ``None``.
 
     Args:
         scale: The colour encoding's scale, or ``None`` when the caller has none to offer.
 
     Returns:
-        ``(categories, colours)`` when the scale is categorical **and** every category names a colour,
-        which is the only shape the drawer can paint from. ``None`` for a non-categorical scale and for
-        ``None`` itself, so the caller categorises the column itself as it always did.
+        The categories, in the order their colours were assigned, for a categorical scale;
+        ``None`` for a non-categorical scale and for ``None`` itself, so the caller categorises the column
+        itself as it always did.
 
-        One colour *per* category is an invariant :class:`~digitalearth.base.spec.scale.Scale` enforces in
-        its constructor, so a categorical scale carrying **no** colours cannot be built to be asked about:
-        measured, `Scale.categorical(["a", "b"], [])`, `Scale(0.0, 1.0, categories=("a", "b"))` and
-        `Scale.from_dict({"vmin": 0.0, "vmax": 1.0, "categories": ["a", "b"]})` all raise
-        ``ValueError: a categorical Scale needs one colour per category``. What the per-category check below
-        catches is the shape that *does* get through it — a colour list as long as the categories whose
-        entries are `None`, as `Scale.categorical(["a", "b"], [None, None])` builds — where `color_for`
-        answers `None` and there is nothing to paint with.
+        Only the **categories** come back, never the colours the scale carries. Finding the distinct values
+        is the pass over the data this reuse exists to save; which colour each of them gets is settled by
+        the ``cmap`` this call is drawing with, and a recorded colour that outvoted it left
+        ``replace_layer(cmap=...)`` unable to repaint a cloud — ``Set1`` asked for and ``tab10`` painted
+        (review R2-H3). Reading no colour also retires the one shape they had to be screened for: a colour
+        list as long as its categories whose entries are ``None``, as
+        ``Scale.categorical(["a", "b"], [None, None])`` builds and ``color_for`` answers ``None`` for.
     """
     if scale is None or not scale.is_categorical:
         return None
-    colours: list[str] = []
-    for category in scale.categories:
-        colour = scale.color_for(category)
-        if colour is None:
-            return None
-        colours.append(colour)
-    return list(scale.categories), colours
+    return list(scale.categories)
+
+
+def _reused_edges(
+    scale: Optional[Scale], scheme: Any, k: int
+) -> Optional[tuple[float, ...]]:
+    """Return the class edges a graduated request may draw from the description, or ``None``.
+
+    Args:
+        scale: The colour encoding's scale, or ``None`` when the caller has none to offer.
+        scheme: The scheme this call is classifying with.
+        k: The class count this call is classifying with.
+
+    Returns:
+        The recorded edges when they are the edges **this** request asks for — the same scheme, cut into as
+        many classes as the request wants — so cutting the column again would hand back the same numbers.
+        ``None`` otherwise, and the column is cut here: a description cut with another ``scheme`` or another
+        ``k`` is not an answer to this request, and letting it win left ``replace_layer(k=6)`` painting the
+        three classes the layer was built with (review R2-H3).
+
+        ``k`` is only asked of a **named** scheme. An explicit sequence of edges carries its own class count
+        and :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` ignores ``k`` for it, so there the scheme
+        alone settles the question.
+    """
+    if scale is None or not scale.is_classified or scale.scheme != scheme:
+        return None
+    if isinstance(scheme, str) and len(scale.breaks) - 1 != k:
+        return None
+    return scale.breaks
+
+
+def _category_codes(values: Any, categories: Sequence[Any]) -> tuple[np.ndarray, bool]:
+    """Code every value by its position among ``categories``, saying whether they all landed.
+
+    Args:
+        values: The colour column, as the caller handed it over.
+        categories: The categories to code against, in class order.
+
+    Returns:
+        ``(codes, placed)`` — one class index per value with ``NaN`` where it has none, and whether every
+        value that **is** a value found a category. `categorical_colors` builds its categories from the
+        non-null values alone, so a value the index has no entry for is a missing one; coding it ``NaN``
+        rather than defaulting it into category 0 is what stops a feature with no value being painted in
+        the first category's colour. ``placed`` is ``False`` only for a value that is not null and still
+        found no category, which cannot happen for categories cut from this very column — it is how a
+        **reused** set from another column is recognised.
+    """
+    from digitalearth.base.symbology import is_null
+
+    index = {category: position for position, category in enumerate(categories)}
+    codes: list[float] = []
+    placed = True
+    for value in np.asarray(values, dtype=object).ravel():
+        position = index.get(value)
+        if position is None:
+            codes.append(float("nan"))
+            placed = placed and is_null(value)
+        else:
+            codes.append(float(position))
+    return np.array(codes, dtype="float64"), placed
 
 
 def classified_scalars(
@@ -155,10 +207,18 @@ def classified_scalars(
             The builder cuts the same column with the same ``scheme``/``k`` to describe the layer, so
             computing it again here is a second full pass over the data for a result that is by
             construction identical — a cost a large cloud paid even when no key was ever asked for (review
-            N4). Passed in, the edges (or the categories and their colours) are read off it and the
-            classifier is not called. ``None``, or a scale whose shape does not match ``scheme``, classifies
-            here as before: a column the builder could not cut publishes no scale, and the refusal below is
-            the one a caller should see.
+            N4).
+
+            **It is read only as far as it answers this call, never as an override of it.** A graduated
+            scheme takes the recorded edges when they are the edges this request asks for — the same
+            ``scheme``, cut into ``k`` classes (:func:`_reused_edges`); a categorical one takes the
+            recorded **categories**, which is the pass over the column, and samples their colours from
+            this call's ``cmap`` (:func:`_reused_categories`). Anything else is classified here as if no
+            scale had been passed: a description cut with another ``scheme``, ``k`` or ``cmap`` — which is
+            what :meth:`Scene3DBase.replace_layer` installs, since it does not republish the encoding —
+            would otherwise decide the picture and silently refuse the restyle (review R2-H3). ``None``
+            classifies here too: a column the builder could not cut publishes no scale, and the refusal
+            below is the one a caller should see.
 
     Returns:
         dict: keyword arguments to splat into :meth:`pyvista.Plotter.add_mesh` /
@@ -231,30 +291,26 @@ def classified_scalars(
         }
 
     if isinstance(scheme, str) and scheme.lower() == "categorical":
-        cut = _classes_of(scale)
-        if cut is None:
-            categories, colours = categorical_colors(
-                values, cmap=resolve_categorical_cmap(cmap)
-            )
-        else:
-            categories, colours = cut
-        index = {category: position for position, category in enumerate(categories)}
-        # `categorical_colors` builds its categories from the non-null values alone, so a value the index
-        # has no entry for is a missing one — code it NaN rather than defaulting it into category 0, which
-        # would paint a feature with no value in the first category's colour.
-        codes = np.array(
-            [
-                index.get(value, np.nan)
-                for value in np.asarray(values, dtype=object).ravel()
-            ],
-            dtype="float64",
+        resolved = resolve_categorical_cmap(cmap)
+        reused = _reused_categories(scale)
+        # The description's categories stand in for the pass over the column, which is the cost; the
+        # colours are always this call's, sampled from `cmap`. Categorising the categories is the same
+        # computation `categorical_colors` would do over the whole column — the distinct values of a set of
+        # distinct values are themselves — at the length of the key rather than the length of the data.
+        categories, colours = categorical_colors(
+            values if reused is None else reused, cmap=resolved
         )
+        codes, placed = _category_codes(values, categories)
+        if reused is not None and not placed:
+            # A recorded set that cannot place a value this column carries was cut from another column, and
+            # painting from it draws every unplaced feature as missing data. Categorise here instead.
+            categories, colours = categorical_colors(values, cmap=resolved)
+            codes, _ = _category_codes(values, categories)
         return _discrete_style(codes, colours)
 
     numbers = np.asarray(values, dtype="float64")
-    if scale is not None and scale.is_classified:
-        edges = scale.breaks
-    else:
+    edges = _reused_edges(scale, scheme, k)
+    if edges is None:
         try:
             edges = Scale.breaks_of(numbers, scheme, k)
         # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
