@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -7637,7 +7637,7 @@ the figure records.</p>
                 <code>interval</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="float">float</span>, <span title="digitalearth.web.vector.ContourInterval">ContourInterval</span>, None]</code>
+                  <code><span title="float">float</span> | <span title="digitalearth.web.vector.ContourInterval">ContourInterval</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8097,7 +8097,7 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <a id="__codelineno-0-793" name="__codelineno-0-793"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-794" name="__codelineno-0-794"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-795" name="__codelineno-0-795"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-796" name="__codelineno-0-796"></a>    <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">ContourInterval</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a>    <span class="n">interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">ContourInterval</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-797" name="__codelineno-0-797"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-798" name="__codelineno-0-798"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
 <a id="__codelineno-0-799" name="__codelineno-0-799"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>

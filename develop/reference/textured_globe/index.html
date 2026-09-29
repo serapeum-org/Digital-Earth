@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -7079,7 +7079,7 @@ direction that shades a day/night terminator), <code>ambient</code>, <code>fig</
 <a id="__codelineno-0-2261" name="__codelineno-0-2261"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_animation_fps</span> <span class="o">=</span> <span class="mf">1000.0</span> <span class="o">/</span> <span class="n">interval</span>
 <a id="__codelineno-0-2262" name="__codelineno-0-2262"></a>        <span class="k">return</span> <span class="n">anim</span>
 <a id="__codelineno-0-2263" name="__codelineno-0-2263"></a>
-<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
 <a id="__codelineno-0-2265" name="__codelineno-0-2265"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Save the drawn figure to ``path``.</span>
 <a id="__codelineno-0-2266" name="__codelineno-0-2266"></a>
 <a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">        Args:</span>
@@ -11302,7 +11302,7 @@ overlay clear of the surface so matplotlib does not z-fight it.</p>
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="os.PathLike">PathLike</span>[<span title="str">str</span>]]</code>
+                  <code><span title="str">str</span> | <span title="os.PathLike">PathLike</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -11473,7 +11473,7 @@ overlay clear of the surface so matplotlib does not z-fight it.</p>
 <span class="normal"><a href="#__codelineno-0-2311">2311</a></span>
 <span class="normal"><a href="#__codelineno-0-2312">2312</a></span>
 <span class="normal"><a href="#__codelineno-0-2313">2313</a></span>
-<span class="normal"><a href="#__codelineno-0-2314">2314</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-2314">2314</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
 <a id="__codelineno-0-2265" name="__codelineno-0-2265"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the drawn figure to ``path``.</span>
 <a id="__codelineno-0-2266" name="__codelineno-0-2266"></a>
 <a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">    Args:</span>
