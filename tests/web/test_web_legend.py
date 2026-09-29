@@ -656,6 +656,31 @@ class TestTheKeyFollowsItsLayer:
             "showing the layer must bring its own key back"
         )
 
+    def test_the_two_most_recent_accessors_agree_after_a_removal(self):
+        """`last_breaks` and `last_legend` are set together by every builder, so they must move together.
+
+        Test scenario:
+            `_forget_legend` handed `last_legend` to the most recent *surviving* classification — the whole
+            point being that it must never describe a removed layer — and cleared `last_breaks` only when
+            the map went empty. So after removing one classified layer of two, `last_legend` described the
+            survivor while `last_breaks` still held the removed layer's numbers, and the documented
+            raw-numbers accessor answered for data that is not on the map (review L7). The two are the same
+            classification read two ways — `last_breaks == last_legend["values"]` holds for all three
+            classification shapes — so a reader combining them got a key with one layer's colours and
+            another's edges.
+        """
+        web_map = _two_classified()
+        assert web_map.last_legend["column"] == "rain", web_map.last_legend
+        assert web_map.last_breaks == web_map.last_legend["values"]
+        web_map.remove_layer("B")
+        assert web_map.last_legend["column"] == "pop", (
+            "last_legend must describe the survivor"
+        )
+        assert web_map.last_breaks == web_map.last_legend["values"], (
+            f"last_breaks {web_map.last_breaks} still describes the removed layer; last_legend has moved "
+            f"on to {web_map.last_legend['values']}"
+        )
+
     def test_explicit_labels_survive_a_rebuild(self):
         """The rows a caller named are recorded on the layer, not only in the panel that was built.
 

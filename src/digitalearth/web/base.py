@@ -712,6 +712,8 @@ class WebMapBase:
         #: viewer. Controls and basemaps are not in here — they are not things a viewer turns on and off.
         self._layer_tree: LayerTree = LayerTree()
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
+        #: The same classification :attr:`last_legend` holds, read as raw numbers — they are written together
+        #: and promoted together (:meth:`_forget_legend`), so the two never answer for different layers.
         self.last_breaks: Optional[List[float]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
@@ -1842,6 +1844,8 @@ class WebMapBase:
             or none. `_filed_legend` follows it: it is how `_index_layer` tells a fresh classification from
             the one already filed, and left pointing at the dropped key, the next *unclassified* layer was
             filed under the survivor's key and drew a colour key it was never classified with.
+            :attr:`last_breaks` follows it too, for the plainer reason that it is the same classification
+            read as raw numbers.
 
             Both are still load-bearing after order 24, for narrower jobs than before. The promotion no
             longer decides what is **drawn** — :func:`~digitalearth.web.decoration.refresh_legend_panel`
@@ -1863,8 +1867,14 @@ class WebMapBase:
         ]
         self.last_legend = surviving[-1] if surviving else None
         self._filed_legend = self.last_legend
-        if not surviving:
-            self.last_breaks = None
+        # `last_breaks` is promoted with it, rather than cleared only when the map goes empty. The two are
+        # one classification read two ways — every classifying builder sets them in the same breath, and
+        # `last_breaks == last_legend["values"]` for all three shapes — so promoting one and leaving the
+        # other made the pair describe two different layers, and the documented raw-numbers accessor went
+        # on reporting a layer that had been removed (review L7).
+        self.last_breaks = (
+            None if self.last_legend is None else list(self.last_legend["values"])
+        )
 
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
@@ -2000,9 +2010,9 @@ class WebMapBase:
             a "most recent" accessor rather than a model of what is on the map, so after removing one layer
             of several it still spans the removed one; call :meth:`set_bounds` if that matters.
             :attr:`last_legend` and :attr:`last_breaks` are "most recent" accessors too — that is what they
-            are for — but they no longer decide what is drawn: `last_legend` is handed to the most recent
-            *surviving* classification here so it never describes a removed layer, and the key is drawn from
-            the guides regardless.
+            are for — but they no longer decide what is drawn: both are handed to the most recent
+            *surviving* classification here, **together**, so neither describes a removed layer and the two
+            cannot answer for different layers (review L7); the key is drawn from the guides regardless.
 
             The **id** is not one of those either: it goes back to the pool, so a name removed and asked for
             again is handed back unsuffixed. That is the lifetime all four tiers share —
