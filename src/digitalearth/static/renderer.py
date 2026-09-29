@@ -61,7 +61,7 @@ from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
 from digitalearth.static.capabilities import CAPABILITIES
-from digitalearth.static.guides import draw_guide
+from digitalearth.static.guides import paint_guide, plan_guide
 
 __all__ = [
     "DRAWN_KINDS",
@@ -1001,9 +1001,17 @@ class Renderer:
 
         The one call that puts a key on the figure, whoever asked: :meth:`draw_layer` for a layer whose
         description already carries a guide, and :meth:`~digitalearth.static.scene.Scene.colorbar` /
-        :meth:`~digitalearth.static.scene.Scene.legend` for a caller who has just recorded one. Its first act
-        is to take the layer's previous key off, which is what makes a second call **replace** rather than
-        stack a second bar in the same figure — the same answer the web tier gives for its one legend panel.
+        :meth:`~digitalearth.static.scene.Scene.legend` for a caller who has just recorded one. It takes the
+        layer's previous key off, which is what makes a second call **replace** rather than stack a second
+        bar in the same figure — the same answer the web tier gives for its one legend panel.
+
+        **The new key is derived before the old one comes off.** That removal used to be the first act, so a
+        refusal from the derivation left the layer describing a key that was no longer on the figure and
+        nothing could put back: a ``Colorbar``'s axes is *removed*, which :meth:`_PartialDraw.undo` does not
+        watch — it restores the axes' single legend slot by assignment, and a bar does not use that slot —
+        and a removed axes cannot be re-added (review M4). :func:`~digitalearth.static.guides.plan_guide`
+        answers every refusal a description can earn, so nothing between the removal and the draw can fail
+        except the engine itself.
 
         Its last act is to give the new key the layer's **current visibility**, so a key asked for on a
         hidden layer is drawn hidden. :meth:`set_visible` already carried the key with the layer in the
@@ -1012,7 +1020,7 @@ class Renderer:
 
         Args:
             layer: The layer's description, which carries the guide (see
-                :func:`~digitalearth.static.guides.draw_guide`).
+                :func:`~digitalearth.static.guides.plan_guide`).
             **kwargs: Styling forwarded to the matplotlib colorbar or legend.
 
         Returns:
@@ -1020,15 +1028,17 @@ class Renderer:
             layer this renderer has drawn nothing for.
 
         Raises:
-            ValueError: from :func:`~digitalearth.static.guides.draw_guide`, for a key the layer's scale
-                cannot be drawn as.
+            ValueError: from :func:`~digitalearth.static.guides.plan_guide`, for a key the layer's scale
+                cannot be drawn as — raised before the layer's previous key is taken off, so a refusal
+                leaves the figure exactly as it was.
         """
         drawn = self._drawn.get(layer.id)
         if drawn is None:
             return None
+        plan = plan_guide(layer, drawn)
         for held in drawn.guides:
             _detach_guide(held, self._scene.ax)
-        made = draw_guide(self._scene, layer, drawn, **kwargs)
+        made = None if plan is None else paint_guide(self._scene, plan, **kwargs)
         # The layer records what has to come off with it, which is nothing when no key was drawn.
         guides = () if made is None else (made,)
         self._drawn[layer.id] = with_fields(drawn, guides=guides)

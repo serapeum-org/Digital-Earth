@@ -915,6 +915,70 @@ class TestARefusedKeyTakesTheRebuildWithIt:
                 f"refusal reports {renderer.is_visible('grid')!r} after it"
             )
 
+    def test_a_refused_redraw_leaves_the_bar_it_had_on_the_figure(self, dataset):
+        """A layer that was keyed by a bar keeps the bar, not just the record of it.
+
+        Args:
+            dataset: The committed ``acc4000`` raster.
+
+        Test scenario:
+            The half of the rollback the record-side tests cannot see. `draw_guide`'s first act is to take
+            the layer's previous key off, so when it then refuses, `_drawn[layer_id] = previous` put back a
+            record naming a bar that had just been detached: the layer described a key the reader could not
+            see, and `set_visible`/`remove` then toggled an artist that is not on the figure. It self-healed
+            on the next successful `colorbar()`, which is why nothing noticed (review M4).
+
+            The legend half looked symmetric and is not: `_PartialDraw.undo` restores the axes' single
+            legend slot by assignment, and a *colorbar* has no slot — its axes was **removed**, which
+            `undo` does not watch, and a removed axes cannot be re-added. So the fix is not in the
+            rollback: every refusal the description can be checked for is now raised **before** the
+            previous key comes off, and there is nothing to put back.
+
+            The refusal used is a bar over a categorical scale, which is the one `bar_refusal` gives from
+            inside the draw. `figure_spec` is read above the block because it is a property (a raise from
+            it would satisfy the block and leave `draw_layer` unrun), as is `dataset.epsg`.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import Encoding, Guide, Scale
+        from digitalearth.static.guides import GUIDE_KIND_KEY
+
+        epsg = dataset.epsg
+        with Map(crs=epsg) as canvas:
+            canvas.field(dataset, name="acc")
+            canvas.colorbar("acc", label="flow")
+            bar = canvas._renderer.drawn["acc"].guides[0]
+            axes = len(canvas.fig.axes)
+            layer = canvas.get_layer("acc")
+            symbology = with_fields(
+                layer.symbology,
+                encodings={
+                    **layer.symbology.encodings,
+                    "color": Encoding.by_field(
+                        "color",
+                        "zone",
+                        scale=Scale.categorical(["a", "b"], ["#f00", "#00f"]),
+                    ),
+                },
+                props={**layer.symbology.props, GUIDE_KIND_KEY: "colorbar"},
+            ).with_guide(Guide(show=True, title="zones"))
+            canvas._layer_tree = canvas._layer_tree.replace(
+                with_fields(layer, symbology=symbology)
+            )
+            spec = canvas.figure_spec
+            with pytest.raises(ValueError, match="coloured by category"):
+                canvas._renderer.draw_layer(spec, "acc")
+            assert canvas._renderer.drawn["acc"].guides == (bar,), (
+                "the refused redraw did not put the layer's own key back in the record"
+            )
+            assert bar.ax in canvas.fig.axes, (
+                "the record names a bar that is no longer on the figure, so the layer describes a key the "
+                "reader cannot see"
+            )
+            assert len(canvas.fig.axes) == axes, (
+                f"the figure should still hold its {axes} axes; it holds {len(canvas.fig.axes)}"
+            )
+
 
 class TestOneAxesHoldsOneSwatchLegend:
     """matplotlib keeps one legend per axes, so keying a second layer takes the first layer's key off.

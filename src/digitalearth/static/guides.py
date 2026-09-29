@@ -29,6 +29,7 @@ same `Scale` the layer publishes, so a swatch equals the colour that was drawn b
 by maintenance (#185).
 """
 
+from dataclasses import dataclass
 from math import isfinite
 from typing import Any, List, Optional, Tuple
 
@@ -50,10 +51,13 @@ __all__ = [
     "GUIDE_KINDS",
     "GUIDE_LABELS_KEY",
     "MAGNITUDE_FIELD",
+    "GuidePlan",
     "bar_refusal",
     "color_encoding",
     "draw_guide",
     "guide_kind",
+    "paint_guide",
+    "plan_guide",
     "source_field",
 ]
 
@@ -382,28 +386,45 @@ def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
     return rows
 
 
-def draw_guide(
-    scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any
-) -> Optional[Any]:
-    """Draw the colour key one layer's recorded guide asks for, and return what was drawn.
+@dataclass(frozen=True)
+class GuidePlan:
+    """One layer's colour key, derived and checked but not yet on the figure.
+
+    The seam between deciding what a key *is* and putting it there, so that every refusal a description can
+    earn is raised while the figure is still untouched. :meth:`~digitalearth.static.renderer.Renderer
+    .draw_guide` takes the layer's previous key off between the two, and until this split that removal came
+    **first**: a redraw whose key then refused left the layer describing a bar whose axes had already been
+    taken off the figure, and nothing could put it back — a removed axes cannot be re-added, and
+    ``_PartialDraw.undo`` watches the axes' legend slot, which a colorbar does not use (review M4).
+
+    Attributes:
+        kind: ``"colorbar"`` or ``"legend"``, as :func:`guide_kind` answered it.
+        title: What the key is called, or ``None`` for an unlabelled one.
+        anchor: The corner the guide asks for, or ``None`` to leave the placement to matplotlib.
+        mappable: The artist a bar is drawn from. ``None`` for a swatch list, which needs none.
+        colors: One colour per swatch, in row order — `None` for a row the scale gave none, which is
+            what `LegendEntry.color` allows and what the engine is handed either way. Empty for a bar.
+        rows: One label per swatch, the same length as `colors`. Empty for a bar.
+    """
+
+    kind: str
+    title: Optional[str] = None
+    anchor: Optional[str] = None
+    mappable: Any = None
+    colors: Tuple[Optional[str], ...] = ()
+    rows: Tuple[str, ...] = ()
+
+
+def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
+    """Derive the key one layer's recorded guide asks for, refusing one this tier cannot draw.
 
     Args:
-        scene: The scene the layer is drawn on.
         layer: The layer's description, which carries the guide.
         drawn: What its drawer produced, as :class:`~digitalearth.static.renderer.DrawnLayer` describes it.
-        **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` (a bar) or ``disjoint_legend``
-            (swatches). These are the call's own styling and are **not** part of the record, so a key
-            redrawn from the description comes back with matplotlib's defaults in their place — the same
-            trade :attr:`~digitalearth.static.scene.LayerRecord.opts` makes for a value no figure can carry.
 
     Returns:
-        The one artist the key is — a ``Colorbar`` or a ``Legend`` — or ``None`` when the guide is switched
-        off, when the layer carries no colour encoding, and when nothing was drawn for it.
-
-        One artist rather than a one-long tuple: a key *is* the single object matplotlib hands back, and
-        :meth:`~digitalearth.static.renderer.Renderer.draw_guide` — the only caller — already answers its
-        own callers that way. :attr:`~digitalearth.static.renderer.DrawnLayer.guides` stays a tuple, since
-        that is the layer's *record* of what has to come off with it rather than one call's result.
+        The plan :func:`paint_guide` draws, or ``None`` when there is nothing to draw — the guide is
+        switched off or absent, the layer carries no colour encoding, or nothing was drawn for it.
 
     Raises:
         ValueError: when a colorbar is asked for over a **categorical** scale, naming the swatch legend
@@ -436,28 +457,86 @@ def draw_guide(
         rows = _rows(layer, spec)
         if not guide.show:
             return None
-        # `setdefault` rather than a keyword beside `**kwargs`: the recorded title is this call's default,
-        # not something the caller is forbidden to override. Passed positionally-by-name it made `title=`
-        # — the one keyword a legend most obviously takes — the one keyword `Renderer.draw_guide` could not
-        # be given, raising `got multiple values for keyword argument 'title'` (review L4). `spec` carries
-        # the same title, derived from the same `guide`.
-        kwargs.setdefault("title", spec.title)
-        if guide.anchor is not None:
-            kwargs.setdefault("loc", _LEGEND_LOCATIONS[guide.anchor])
-        return disjoint_legend(
-            scene.ax,
-            [entry.color for entry in spec.entries],
-            rows,
-            **kwargs,
+        return GuidePlan(
+            "legend",
+            title=spec.title,
+            anchor=guide.anchor,
+            colors=tuple(entry.color for entry in spec.entries),
+            rows=tuple(rows),
         )
     refusal = bar_refusal(layer)
     if refusal is not None:
         raise ValueError(refusal)
     if not guide.show:
         return None
-    if guide.anchor is not None:
-        kwargs.setdefault("location", _COLORBAR_SIDES[guide.anchor])
-    bar = colorbar_legend(drawn.artist, ax=scene.ax, **kwargs)
-    if guide.title is not None:
-        bar.set_label(guide.title)
+    return GuidePlan(
+        "colorbar",
+        title=guide.title,
+        anchor=guide.anchor,
+        mappable=drawn.artist,
+    )
+
+
+def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
+    """Put a derived key on the figure, and return the artist it is.
+
+    Args:
+        scene: The scene the layer is drawn on.
+        plan: What :func:`plan_guide` derived. Nothing here can refuse it — every check the description can
+            earn has already been made, which is what lets the caller take the layer's previous key off in
+            between.
+        **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` (a bar) or ``disjoint_legend``
+            (swatches). These are the call's own styling and are **not** part of the record, so a key
+            redrawn from the description comes back with matplotlib's defaults in their place — the same
+            trade :attr:`~digitalearth.static.scene.LayerRecord.opts` makes for a value no figure can carry.
+
+    Returns:
+        The one artist the key is — a ``Colorbar`` or a ``Legend``.
+    """
+    if plan.kind == "legend":
+        # `setdefault` rather than a keyword beside `**kwargs`: the recorded title is this call's default,
+        # not something the caller is forbidden to override. Passed positionally-by-name it made `title=`
+        # — the one keyword a legend most obviously takes — the one keyword `Renderer.draw_guide` could not
+        # be given, raising `got multiple values for keyword argument 'title'` (review L4).
+        kwargs.setdefault("title", plan.title)
+        if plan.anchor is not None:
+            kwargs.setdefault("loc", _LEGEND_LOCATIONS[plan.anchor])
+        return disjoint_legend(scene.ax, list(plan.colors), list(plan.rows), **kwargs)
+    if plan.anchor is not None:
+        kwargs.setdefault("location", _COLORBAR_SIDES[plan.anchor])
+    bar = colorbar_legend(plan.mappable, ax=scene.ax, **kwargs)
+    if plan.title is not None:
+        bar.set_label(plan.title)
     return bar
+
+
+def draw_guide(
+    scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any
+) -> Optional[Any]:
+    """Draw the colour key one layer's recorded guide asks for, and return what was drawn.
+
+    The two halves in one call, for a caller with nothing to do between them.
+    :meth:`~digitalearth.static.renderer.Renderer.draw_guide` has something to do — it takes the layer's
+    previous key off — so it calls :func:`plan_guide` and :func:`paint_guide` itself, with the removal
+    between them and therefore after every refusal (review M4).
+
+    Args:
+        scene: The scene the layer is drawn on.
+        layer: The layer's description, which carries the guide.
+        drawn: What its drawer produced, as :class:`~digitalearth.static.renderer.DrawnLayer` describes it.
+        **kwargs: Forwarded to the engine, as :func:`paint_guide` describes.
+
+    Returns:
+        The one artist the key is — a ``Colorbar`` or a ``Legend`` — or ``None`` when the guide is switched
+        off, when the layer carries no colour encoding, and when nothing was drawn for it.
+
+        One artist rather than a one-long tuple: a key *is* the single object matplotlib hands back, and
+        :meth:`~digitalearth.static.renderer.Renderer.draw_guide` already answers its own callers that way.
+        :attr:`~digitalearth.static.renderer.DrawnLayer.guides` stays a tuple, since that is the layer's
+        *record* of what has to come off with it rather than one call's result.
+
+    Raises:
+        ValueError: whatever :func:`plan_guide` refuses — see there.
+    """
+    plan = plan_guide(layer, drawn)
+    return None if plan is None else paint_guide(scene, plan, **kwargs)
