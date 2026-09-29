@@ -443,11 +443,18 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
         """`position` and `Guide.anchor` are the same four spellings, so neither is translated.
 
         Test scenario:
-            `FURNITURE_ANCHORS` and `CONTROL_POSITIONS` hold the same tuple. A translation table between
-            them would be a second place for the two vocabularies to drift apart.
+            `FURNITURE_ANCHORS` and `CONTROL_POSITIONS` are **equal** tuples — two objects holding one
+            vocabulary, which executed is `==` and not `is` (review N3: the docstrings claimed "the same
+            tuple", and `FURNITURE_ANCHORS is CONTROL_POSITIONS` is `False`). Equality is the property the
+            method relies on and the one asserted here, so a spelling added to one list and not the other
+            fails this test rather than silently needing a translation table between the two.
         """
+        from digitalearth.base.controls import CONTROL_POSITIONS
         from digitalearth.base.registry import FURNITURE_ANCHORS
 
+        assert FURNITURE_ANCHORS == CONTROL_POSITIONS, (
+            f"the two anchor vocabularies have drifted: {FURNITURE_ANCHORS} vs {CONTROL_POSITIONS}"
+        )
         web_map = _two_classified()
         for corner in FURNITURE_ANCHORS:
             web_map.legend(layer_id="A", position=corner)

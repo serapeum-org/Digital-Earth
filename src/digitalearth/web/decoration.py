@@ -855,8 +855,8 @@ class DecorationMixin(_MixinBase):
                 is never guessed: without one the heading is the bare column name, as it always was.
             position: One of the four MapLibre corners. Recorded as the guide's ``anchor``, which takes the
                 same four spellings (:data:`~digitalearth.base.registry.FURNITURE_ANCHORS` and
-                :data:`~digitalearth.base.controls.CONTROL_POSITIONS` are the same tuple), so nothing is
-                translated between them.
+                :data:`~digitalearth.base.controls.CONTROL_POSITIONS` are **equal** tuples — two objects,
+                one vocabulary), so nothing is translated between them.
             labels: Explicit row labels, replacing the derived ones — for units, or for renaming
                 categories. Ignored for a continuous ramp, which has no rows. Recorded on the layer beside
                 its guide, so a key rebuilt after another layer is removed still carries them.
