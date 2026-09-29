@@ -372,3 +372,46 @@ class TestTheColumnIsClassifiedOnce:
         assert np.array_equal(
             drawn, np.asarray(fresh["scalars"], dtype="float64"), equal_nan=True
         ), (drawn, fresh["scalars"])
+
+    def test_a_categorical_scale_carrying_no_colours_is_classified_here_instead(self):
+        """A scale the drawer cannot paint from is ignored, and the column cut as if none were passed.
+
+        Test scenario:
+            The reuse is only sound for a scale that carries one **colour** per category, and `Scale`'s own
+            constructor does not guarantee that: it refuses a colour list of the wrong *length*, so
+            `Scale.categorical(["a", "b"], [])` cannot be built — but one of the right length holding
+            `None` can, and `color_for` then answers `None`. Painting from that would bind `None` where a
+            colour belongs, so the read falls back to categorising the column here.
+
+            Asserted against the same call handed a scale that *does* carry colours, so the two answers are
+            built differently rather than compared with themselves: the painted one hands back the scale's
+            own colours, the colourless one a real palette of its own.
+        """
+        from digitalearth.base.spec import Scale
+        from digitalearth.three_d.base import classified_scalars
+
+        column = np.array(["a", "b", "a"], dtype=object)
+        painted = classified_scalars(
+            column,
+            scheme="categorical",
+            k=2,
+            cmap="viridis",
+            scale=Scale.categorical(["a", "b"], ["#ff0000", "#0000ff"]),
+        )
+        colourless = classified_scalars(
+            column,
+            scheme="categorical",
+            k=2,
+            cmap="viridis",
+            scale=Scale.categorical(["a", "b"], [None, None]),
+        )
+        assert painted["cmap"] == ["#ff0000", "#0000ff"], (
+            f"a scale that carries colours must be painted from: {painted['cmap']}"
+        )
+        assert all(
+            isinstance(colour, str) and colour.startswith("#")
+            for colour in colourless["cmap"]
+        ), (
+            "a scale with no colour per category was painted from anyway, so the drawer was handed "
+            f"{colourless['cmap']}"
+        )
