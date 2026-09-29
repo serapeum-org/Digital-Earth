@@ -577,7 +577,7 @@ class TestAClassifiedLayerPublishesTheFieldItsColourVariesWith:
                 f"the expression draws {len(swatches)} classes, so the scale must record "
                 f"{len(swatches) + 1} edges, not {len(edges)}"
             )
-            assert [edges[0], edges[-1]] == span, (
+            assert span == [edges[0], edges[-1]], (
                 f"the scale's outer edges {(edges[0], edges[-1])} must be the column's own span {span}; "
                 "the `step` expression carries no bounds, so nothing else can catch a drift there"
             )
