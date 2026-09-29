@@ -357,6 +357,33 @@ COLOUR_BY_FIELD: Tuple[Tuple[str, Any], ...] = (
     ("basemap", None),
 )
 
+#: Every caller of `_color_expr`, each drawn **with** the `column=` that makes it classify.
+#:
+#: `COLOUR_BY_FIELD` above probes the *unstyled* call, so four of the six producers — `points`, `lines`,
+#: `polygons` and `extrusion` — are `None` rows there, asserting only the flat direction; their `column=`
+#: path had no coverage at all. Measured: replacing `color_encoding=color_encoding` with `None` at
+#: `web/vector.py` (points / lines / polygons), and filing `encodings={}` unconditionally at
+#: `web/threed.py` (extrusion), left this whole module green — 55 passed — while the same mutation applied
+#: to `contours` reddens its `COLOUR_BY_FIELD` row. The harness was never the problem; the rows were
+#: missing (review H3). One row per caller, and both questions asked of each: the channel names its
+#: column, and the colour key that binding exists for is accepted.
+#:
+#: `choropleth` and `contours` are in here beside the four, because "six callers, six rows" is the
+#: property that stops the next producer from being added without one — a table that lists only the four
+#: that were broken reads as a bug list rather than as the contract.
+CLASSIFIED: Tuple[Tuple[str, Callable[[Any], Any], str], ...] = (
+    ("points", lambda m: m.points(_points(), column="pop"), "pop"),
+    ("lines", lambda m: m.lines(_lines(), column="pop"), "pop"),
+    ("polygons", lambda m: m.polygons(_polygons(), column="pop"), "pop"),
+    ("choropleth", lambda m: m.choropleth(_polygons(), "pop"), "pop"),
+    ("contours", lambda m: m.contours(_dem(), levels=LEVELS), "level"),
+    (
+        "extrusion",
+        lambda m: m.extrusion(_polygons(), height=10.0, column="pop"),
+        "pop",
+    ),
+)
+
 
 class TestAClassifiedLayerPublishesTheFieldItsColourVariesWith:
     """The gap order 24 closed: a data-driven fill described the layer not at all (DE-48)."""
@@ -390,6 +417,87 @@ class TestAClassifiedLayerPublishesTheFieldItsColourVariesWith:
             drawn.close()
         assert published == field, (
             f"{PROBES[kind].builder} bound its colour to {published!r}, expected {field!r}"
+        )
+
+    @pytest.mark.parametrize(
+        ("builder", "draw", "field"),
+        CLASSIFIED,
+        ids=[name for name, _, _ in CLASSIFIED],
+    )
+    def test_a_builder_given_a_column_binds_its_colour_to_it(
+        self, builder, draw, field
+    ):
+        """Every `_color_expr` caller, drawn classified — the four rows the table was missing.
+
+        Args:
+            builder: The builder under test, for the failure message.
+            draw: Draws it on a fresh map with the `column=` that makes it classify.
+            field: The column its colour must be bound to.
+
+        Test scenario:
+            The row above asks this of the *unstyled* call, which for `points`, `lines`, `polygons` and
+            `extrusion` means "not bound to anything" — so the `column=` half of four of the six producers
+            was asserted nowhere. Measured before these rows existed: neutralising all four producers left
+            every test in this module passing (55 passed), while the same mutation on `contours` reddened
+            its row (review H3). The binding is the whole of what a colour key hangs on, so losing it
+            silently loses the feature order 24 exists to add.
+        """
+        drawn = WebMap()
+        try:
+            draw(drawn)
+            published = _color_field(drawn)
+        finally:
+            drawn.close()
+        assert published == field, (
+            f"{builder}(column={field!r}) bound its colour to {published!r}; a classified layer that "
+            "publishes no binding crosses to another tier with its thematic meaning missing"
+        )
+
+    @pytest.mark.parametrize(
+        ("builder", "draw", "field"),
+        CLASSIFIED,
+        ids=[name for name, _, _ in CLASSIFIED],
+    )
+    def test_a_builder_given_a_column_can_be_given_a_colour_key(
+        self, builder, draw, field
+    ):
+        """The binding is worth having only if a key can hang on it, so ask for one.
+
+        Args:
+            builder: The builder under test, for the failure message.
+            draw: Draws it on a fresh map with the `column=` that makes it classify.
+            field: The column its colour is bound to — the heading the key falls back to.
+
+        Test scenario:
+            The other direction of the same gap, and the one a reader would notice: `colorbar()` resolves
+            its target through `keyable_layer_ids`, which skips a layer whose `color` channel publishes no
+            field-driven encoding. So a producer that quietly stops publishing one does not fail loudly —
+            its layer simply becomes unkeyable, and `colorbar()` refuses with "nothing to describe" on a map
+            that is plainly classified. Asserted on the guide *and* on the panel, because recording a guide
+            nothing draws would satisfy neither half of what a caller asked for.
+        """
+        drawn = WebMap()
+        try:
+            draw(drawn)
+            drawn.colorbar(label="Key")
+            guides = {
+                layer_id: drawn.get_layer(layer_id).symbology.guide()
+                for layer_id in drawn.layer_ids
+            }
+            panel = drawn._panels.get("legend")
+        finally:
+            drawn.close()
+        keyed = [layer_id for layer_id, guide in guides.items() if guide is not None]
+        assert len(keyed) == 1, (
+            f"{builder}(column={field!r}) then colorbar() recorded guides on {keyed}; exactly the drawn "
+            "layer should carry one"
+        )
+        assert guides[keyed[0]].show is True, guides[keyed[0]]
+        assert panel is not None, (
+            f"{builder}(column={field!r}) then colorbar() drew no key panel"
+        )
+        assert "Key" in panel[0], (
+            f"the key's heading is not the label that was asked for: {panel[0][:160]}"
         )
 
     @pytest.mark.parametrize("scheme", [None, "quantiles", "categorical"])
