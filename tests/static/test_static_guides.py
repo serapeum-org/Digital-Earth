@@ -397,6 +397,48 @@ class TestTheKeyFollowsItsLayer:
         )
 
 
+class TestAKeyIsTitledByWhatTheCallerWrote:
+    """`label=`/`title=` is the caller's word, and a blank one is the caller's word for "none"."""
+
+    def test_a_blank_label_names_no_key_rather_than_raising(self, keyed):
+        """`colorbar(label="   ")` draws an unlabelled bar instead of refusing.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            `_title_for` returns `asked or None`, so `""` correctly became "no title" — but a whitespace-only
+            label is truthy, so it travelled on to `Guide`, which refuses a blank title. The caller wrote
+            `label=` and got back `ValueError: Guide title must be a non-empty string or None; got '   '`,
+            naming a type they have never heard of for an argument they did not pass (review L5). Two
+            spellings of "no label" must not part company at the space bar.
+        """
+        assert keyed.colorbar("acc", label="   ") is keyed
+        assert keyed.get_layer("acc").symbology.guide().title is None, (
+            "a blank label was recorded as the key's title"
+        )
+        keyed.legend("acc", title="\t\n ")
+        assert keyed.get_layer("acc").symbology.guide().title is None, (
+            "title= and label= disagree about what a blank one means"
+        )
+
+    def test_a_padded_label_reaches_the_record_as_it_was_written(self, keyed):
+        """A label that is not blank is recorded exactly as the caller wrote it.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            The other side of the blank-label fix, and the reason it tests `strip()` rather than assigning
+            it: trimming the caller's padding would be a second, silent change to what the figure records,
+            and `Guide` itself does not trim — it only refuses a title with nothing in it.
+        """
+        keyed.colorbar("acc", label="  Flow  ")
+        assert keyed.get_layer("acc").symbology.guide().title == "  Flow  ", (
+            "the caller's label was trimmed on its way into the record"
+        )
+
+
 class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
     """Review L7 on the web tier, one tier over: one spelling must not be valid only half the time.
 

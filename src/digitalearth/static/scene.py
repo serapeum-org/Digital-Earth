@@ -1510,12 +1510,19 @@ class Scene(WatermarkMixin):
             asked: What the caller passed as ``label=``/``title=``.
 
         Returns:
-            The caller's text; the layer's recorded units when they passed ``None``; and ``None`` when they
-            passed ``""`` or the layer has no units.
+            The caller's text, exactly as they wrote it; the layer's recorded units when they passed
+            ``None``; and ``None`` when they passed a label with nothing in it, or the layer has no units.
+
+            **"Nothing in it" means blank, not just empty.** `""` and `"   "` are the same request — no
+            label — and only the first of them used to be read that way: a whitespace-only label is truthy,
+            so it travelled on to :class:`~digitalearth.base.spec.encoding.Guide`, which refuses a blank
+            title, and the caller who wrote ``label=`` was answered about a ``Guide`` (review L5). A label
+            that is *not* blank is passed through untrimmed, because trimming it would be a second, silent
+            change to what the figure records, and `Guide` does not trim either.
         """
         if asked is None:
             return self._default_label(layer_id)
-        return asked or None
+        return asked if asked.strip() else None
 
     def _record_key(
         self,
