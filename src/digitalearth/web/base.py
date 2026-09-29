@@ -718,10 +718,15 @@ class WebMapBase:
         #: writes both accessors like any classifying builder, so a ``field()`` drawn over a choropleth is
         #: what these answer for (review L3).
         #: The same classification :attr:`last_legend` holds, stripped of the key's furniture: exactly
-        #: ``last_legend["values"]``, which is measurably so for all three shapes — a graduated layer's
-        #: edges (`[0.0, 1.67, 3.33, 5.0]`), a continuous layer's ramp stops (`[0.0, 1.25, 2.5, 3.75, 5.0]`)
-        #: and a **categorical** layer's category values as they come (`['a', 'b', 'c', 'd']` — strings, not
-        #: numbers). The two are written together and promoted together (:meth:`_forget_legend`), so they
+        #: ``last_legend["values"]``, which is measurably so for all three shapes. Over a column of
+        #: ``[0, 5, 2, 4]``, all three literals below are reproducible as written — a graduated layer's
+        #: edges at ``k=3`` (`[0.0, 1.6666666666666667, 3.3333333333333335, 5.0]` for
+        #: ``equal_interval``; a quantile cut of the same column gives `[0.0, 2.0, 4.0, 5.0]`), a
+        #: continuous layer's ramp stops (`[0.0, 1.25, 2.5, 3.75, 5.0]`) and a **categorical** layer's
+        #: category values as they come (`['a', 'b', 'c', 'd']` — strings, not numbers). The graduated one
+        #: used to read `[0.0, 1.67, 3.33, 5.0]`, which no cut of any column reproduces (review L5) —
+        #: rounded edges beside two exact ones, which reads as measured and is not.
+        #: The two are written together and promoted together (:meth:`_forget_legend`), so they
         #: never answer for different layers.
         #:
         #: Annotated ``List[Any]`` for that third shape, and not as a widening of convenience: it was

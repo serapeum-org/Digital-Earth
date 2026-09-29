@@ -68,6 +68,45 @@ def _drawn_fill(web_map):
     return symbology.props["paint"]["fill-color"]
 
 
+def _documented_frame():
+    """Return the frame the :attr:`last_breaks` docstring's literals are measured over.
+
+    Returns:
+        Four polygons carrying ``pop = [0, 5, 2, 4]`` and ``kind = ['a', 'b', 'c', 'd']`` — the values
+        `web/base.py`'s comment names beside each of the three literals it quotes.
+    """
+    return gpd.GeoDataFrame(
+        {"pop": [0.0, 5.0, 2.0, 4.0], "kind": ["a", "b", "c", "d"]},
+        geometry=CELLS,
+        crs="EPSG:4326",
+    )
+
+
+#: Every `last_breaks` literal the attribute's own comment quotes, with the call that must reproduce it.
+#: Pinned because the graduated one used to read `[0.0, 1.67, 3.33, 5.0]` — rounded edges printed beside
+#: two exact ones as if equally measured, which no cut of any column reproduces (review L5).
+_DOCUMENTED_BREAKS = [
+    pytest.param(
+        "pop",
+        {"scheme": "equal_interval", "k": 3},
+        [0.0, 1.6666666666666667, 3.3333333333333335, 5.0],
+        id="graduated-equal-interval",
+    ),
+    pytest.param(
+        "pop",
+        {"scheme": "quantiles", "k": 3},
+        [0.0, 2.0, 4.0, 5.0],
+        id="graduated-quantiles",
+    ),
+    pytest.param(
+        "pop", {"scheme": None}, [0.0, 1.25, 2.5, 3.75, 5.0], id="continuous-ramp"
+    ),
+    pytest.param(
+        "kind", {"scheme": "categorical"}, ["a", "b", "c", "d"], id="categorical"
+    ),
+]
+
+
 class TestTheClassificationIsRecorded:
     """A key must show the colours that were actually drawn, not a second guess at them."""
 
@@ -132,6 +171,33 @@ class TestTheClassificationIsRecorded:
             assert [recorded[0], recorded[-1]] == span, (
                 f"{accessor} holds {recorded}, which does not span the column {span}"
             )
+
+    @pytest.mark.parametrize("column, kwargs, documented", _DOCUMENTED_BREAKS)
+    def test_the_documented_literals_are_the_ones_that_come_back(
+        self, column, kwargs, documented
+    ):
+        """Every `last_breaks` literal the attribute's own comment quotes, reproduced exactly.
+
+        Args:
+            column: The column to classify.
+            kwargs: How to classify it.
+            documented: The list the comment says comes back.
+
+        Test scenario:
+            The comment quoted `[0.0, 1.67, 3.33, 5.0]` for a graduated layer beside a continuous layer's
+            stops and a categorical layer's categories, both of which *are* exactly reproducible — so the
+            rounded one read as measured too. It is not: an equal-interval cut over 0–5 at `k=3` gives
+            `[0.0, 1.6666666666666667, 3.3333333333333335, 5.0]`, and a quantile cut of the same column
+            gives `[0.0, 2.0, 4.0, 5.0]` (review L5). Nothing pinned any of the three literals, so a
+            rounded edge could sit in a public docstring indefinitely.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(_documented_frame(), column=column, **kwargs)
+        assert m.last_breaks == documented, (
+            f"choropleth(column={column!r}, **{kwargs}) records {m.last_breaks}, and the `last_breaks` "
+            f"docstring quotes {documented}"
+        )
 
     def test_a_raster_band_takes_the_record_and_the_unnamed_key(self, cells, dataset):
         """A raster band publishes a ramp, so it is the layer these accessors answer for.
