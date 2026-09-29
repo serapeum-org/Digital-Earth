@@ -374,7 +374,9 @@ class _FakeScene:
     ``layers`` list alone.
     """
 
-    def __init__(self, keyed=(), raises=False, categorical=False):
+    def __init__(
+        self, keyed=(), raises=False, categorical=False, raises_when_drawn=False
+    ):
         """Build the stand-in.
 
         Args:
@@ -382,10 +384,13 @@ class _FakeScene:
             raises: Whether ``colorbar()`` raises, to mimic an unmappable layer.
             categorical: Whether those layers are coloured by category, which is the case keyed by a swatch
                 legend rather than by a bar.
+            raises_when_drawn: Whether the key call raises only when ``visible=True`` — the engine's own
+                failure, which the ``visible=False`` call never reaches because it draws nothing.
         """
         self._keyed = list(keyed)
         self.layers = [f"artist-{held}" for held in self._keyed]
         self._raises = raises
+        self._raises_when_drawn = raises_when_drawn
         self._categorical = categorical
         self.colorbar_calls = 0
         self.legend_calls = 0
@@ -427,7 +432,7 @@ class _FakeScene:
         """
         self.colorbar_calls += 1
         self.asked.append(("colorbar", visible))
-        if self._raises:
+        if self._raises or (self._raises_when_drawn and visible):
             raise ValueError("nothing mappable to colorbar")
 
     def legend(self, *, visible=True):
@@ -438,7 +443,7 @@ class _FakeScene:
         """
         self.legend_calls += 1
         self.asked.append(("legend", visible))
-        if self._raises:
+        if self._raises or (self._raises_when_drawn and visible):
             raise ValueError("nothing mappable to legend")
 
 
@@ -483,6 +488,36 @@ class TestTheKeyIsAskedForEitherWay:
         hidden = _FakeScene(keyed=["zone"], categorical=True)
         qp._add_static_key(hidden, visible=False)
         assert hidden.asked == [("legend", True), ("legend", False)], hidden.asked
+
+    @pytest.mark.parametrize(
+        ("categorical", "kind"), [(False, "colorbar"), (True, "legend")]
+    )
+    def test_a_refusal_from_the_take_over_still_records_the_decision(
+        self, categorical, kind
+    ):
+        """The take-over draw failing must not cost `quickmap(colorbar=False)` its record.
+
+        Args:
+            categorical: Whether the keyed layer is coloured by category.
+            kind: The method that layer's key goes through.
+
+        Test scenario:
+            The take-over call is the **only** one that reaches `colorbar_legend`/`disjoint_legend`, since
+            the second draws nothing — so it is the only one an engine failure can come out of, and one
+            `except UNMAPPABLE` around both meant that failure took the `Guide(show=False)` record with it.
+            The decision is the thing `colorbar=False` exists to record, and the layer resolves and checks
+            identically on both calls, so the second has its own tolerance now (review N1).
+
+            Both kinds are parametrised because the two arms are independent: which key it is, is the
+            layer's property, and a fix to one spelling must not leave the other under a shared `try`.
+        """
+        scene = _FakeScene(
+            keyed=["zone"], categorical=categorical, raises_when_drawn=True
+        )
+        qp._add_static_key(scene, visible=False)
+        assert scene.asked == [(kind, True), (kind, False)], (
+            f"the refusal from the take-over draw stopped the call that records the decision: {scene.asked}"
+        )
 
 
 class _FakeInteractiveScene:
