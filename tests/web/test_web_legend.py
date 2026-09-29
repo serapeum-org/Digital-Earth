@@ -51,6 +51,23 @@ def _payload(html):
     return html[marker:]
 
 
+def _drawn_fill(web_map):
+    """Return the compiled MapLibre fill expression of the map's last layer.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        The ``fill-color`` value the browser is handed. The one reading of "what was drawn" that the
+        recorded classification is not itself the source of, which is what an assertion about the record
+        has to be checked against — comparing the record with another copy of the record is `X == X`
+        (review L10/M13).
+    """
+    figure = web_map.figure_spec
+    symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+    return symbology.props["paint"]["fill-color"]
+
+
 class TestTheClassificationIsRecorded:
     """A key must show the colours that were actually drawn, not a second guess at them."""
 
@@ -78,12 +95,43 @@ class TestTheClassificationIsRecorded:
         assert m.last_legend["column"] == column
         assert m.last_legend["colors"], "no colours were recorded"
 
-    def test_last_breaks_still_holds_the_raw_numbers(self, cells):
-        """`last_breaks` is the documented accessor; adding a richer one must not disturb it."""
+    def test_both_recorded_accessors_hold_the_edges_the_step_was_built_from(
+        self, cells
+    ):
+        """The two documented accessors, each read against the expression the browser is handed.
+
+        Args:
+            cells: The fixture frame.
+
+        Test scenario:
+            This compared `last_breaks` with `last_legend["values"]`, which for a graduated layer are the
+            **same list object**: `_graduated_color_expr` passes `values=self.last_breaks` and
+            `_legend_dict` hands `values` back unchanged, so `last_legend['values'] is last_breaks` is
+            `True` and the assertion was `X == X` (review L10). Measured: under a 1e-9 drift applied to
+            `last_breaks` after the `step` expression is compiled — the record no longer describing the
+            drawing, which is the whole defect — it still passed.
+
+            Each accessor is now read against the `step` arms instead. Those arms are the *interior* edges
+            only, because MapLibre's `step` has no bounds, so the outer two are checked against the
+            column's own span.
+        """
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().choropleth(cells, column="pop", scheme="quantiles", k=3)
-        assert m.last_breaks == m.last_legend["values"], (m.last_breaks, m.last_legend)
+        step = _drawn_fill(m)[2]  # ["case", <is a number>, ["step", …], MISSING_COLOR]
+        cuts = list(step[3::2])
+        span = [float(cells["pop"].min()), float(cells["pop"].max())]
+        for accessor, recorded in (
+            ("last_breaks", list(m.last_breaks)),
+            ("last_legend['values']", list(m.last_legend["values"])),
+        ):
+            assert recorded[1:-1] == cuts, (
+                f"{accessor} holds {recorded}, whose interior edges are not the `step` cuts {cuts} the "
+                "layer draws"
+            )
+            assert [recorded[0], recorded[-1]] == span, (
+                f"{accessor} holds {recorded}, which does not span the column {span}"
+            )
 
 
 class TestTheLegendReachesTheSavedPage:
