@@ -560,7 +560,7 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
         )
 
     def test_a_key_asked_for_with_every_layer_hidden_still_lands_somewhere(self):
-        """"Prefer visible" is a preference, not a refusal: a hidden map is not an error.
+        """Preferring a visible layer is a preference, not a refusal: a hidden map is not an error.
 
         Test scenario:
             The other half of the same choice. Refusing when nothing keyable is visible would turn
