@@ -430,11 +430,19 @@ def _release_bar(
         title: The bar's title.
 
     Note:
-        A custom title is one layer's alone — no other layer's engine title can equal it, since a second
-        layer asking for it is refused — so it comes off with the claim. A shared **engine** title does not:
-        a layer that adopted it and then asked for a title of its own would otherwise take the key away from
-        the layer still reading it. That bar comes off in :func:`_drop_orphaned_bars`, once every layer
-        binding it has settled.
+        **Whether it comes off is asked of the other layers, not of how the title was arrived at.** A title
+        no other layer binds is this layer's alone and comes off with the claim; a shared one does not,
+        because a layer that adopted it and then asked for a title of its own would otherwise take the key
+        away from the layer still reading it. That bar comes off in :func:`_drop_orphaned_bars`, once every
+        layer binding it has settled.
+
+        A *custom* title is not exempt from that question, although a second layer **asking** for one
+        already on the window is refused (:func:`_add_bar`). A second layer's **engine** title is not asked
+        for, and it can equal a custom one: measured, two point clouds given `value_column="depth"` both
+        bind their values under `scalar`, so `colorbar("one", label="scalar")` is accepted — it adopts the
+        bar already there — and `_sharing_bar(scene, figure, "one", "scalar")` then answers `['two']`, so
+        releasing it leaves the bar on the window. :func:`_sharing_bar` is the whole of the rule here; the
+        spelling of the title decides nothing.
     """
     if not _sharing_bar(scene, figure, layer_id, title):
         _remove_bar(plotter, title)
@@ -783,9 +791,10 @@ def _drop_orphaned_bars(
 ) -> None:
     """Take off an engine-drawn bar that no layer keys off any more.
 
-    The one case :func:`_reconcile_bar` cannot settle on its own. Two terrains both bind `elevation`, so
-    PyVista drew **one** bar for both and neither layer may take it away; once each of them has a key of its
-    own, that shared bar explains nothing and would otherwise sit in the corner of the window for good.
+    The one case :func:`_redraw_bars`' two passes cannot settle on their own. Two terrains both bind
+    `elevation`, so PyVista drew **one** bar for both and neither layer may take it away; once each of them
+    has a key of its own, that shared bar explains nothing and would otherwise sit in the corner of the
+    window for good.
 
     Called from :func:`redraw_guides` **after** :func:`_redraw_legend`, because the question it asks of each
     binding layer — has it a key of its own — is answered by `record["keyed"]`, which the legend rebuild
@@ -978,8 +987,8 @@ class GuideMixin(_MixinBase):
         return resolved
 
     # There is deliberately **no** guard here walking the other layers' guides to refuse a title one of them
-    # already holds. The reconcile refuses the same thing (`_redraw_bars`' `taken` map, and
-    # `_reconcile_bar`'s check against the titles already on the window) and refuses strictly more: a figure
+    # already holds. The reconcile refuses the same thing (`_redraw_bars`' `taken` map, and `_add_bar`'s
+    # check against the titles already on the window) and refuses strictly more: a figure
     # built elsewhere and drawn with `from_figure` never goes through this method at all. Two guards for one
     # rule is two messages for one cause and two places to keep in step —
     # and the net effect is the same, because a refusal inside the reconcile rolls the figure *and* the
