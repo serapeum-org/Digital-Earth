@@ -597,6 +597,148 @@ class TestACategoricalFillIsKeyedBySwatches:
         assert zoned.get_layer("acc").symbology.guide() is not None
 
 
+class TestOneAxesHoldsOneSwatchLegend:
+    """matplotlib keeps one legend per axes, so keying a second layer takes the first layer's key off.
+
+    The *drawing* has always worked that way and `Scene.legend` documents it. What did not was the
+    **record**: the displaced layer kept `Guide(show=True)` on its encoding and kept the detached `Legend`
+    in `DrawnLayer.guides`, so a figure written out claimed two swatch keys of which only one can ever be
+    drawn, `set_visible` toggled an artist that is not on the axes, and which of the two the reader sees was
+    decided by draw order. Keeping the record in step with the one legend slot is the whole of what order 24
+    moved the guide onto the layer to do (review M4).
+    """
+
+    @pytest.fixture
+    def two_fills(self, polygons):
+        """A map with two categorical fills on it, `a` below and `b` above.
+
+        Args:
+            polygons: Buffered point features.
+
+        Yields:
+            The map. Closed afterwards.
+        """
+        polygons["zone"] = ["urban", "rural"] * (len(polygons) // 2) + ["urban"] * (
+            len(polygons) % 2
+        )
+        canvas = Map(crs=polygons.epsg)
+        canvas.choropleth(polygons, column="zone", scheme="categorical", name="a")
+        canvas.choropleth(polygons, column="zone", scheme="categorical", name="b")
+        yield canvas
+        canvas.close()
+
+    def test_the_displaced_layer_stops_claiming_a_key(self, two_fills):
+        """Keying `b` takes `a`'s key off both halves of the record, not just off the axes.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            The axes' single legend slot is the fact; the two halves of the record have to agree with it. A
+            `Guide(show=True)` on a layer whose key is not drawn is the disagreement the guide-on-the-layer
+            model exists to remove, and it survives `to_dict()`.
+        """
+        two_fills.legend("a", title="A")
+        first = two_fills._renderer.drawn["a"].guides[0]
+        two_fills.legend("b", title="B")
+        second = two_fills._renderer.drawn["b"].guides[0]
+        assert two_fills.ax.get_legend() is second, (
+            "the axes is not showing the key that was asked for last"
+        )
+        assert first not in list(two_fills.ax.get_children()), (
+            "matplotlib is expected to have displaced the first legend"
+        )
+        assert two_fills._renderer.drawn["a"].guides == (), (
+            "the displaced layer still holds a legend that is not on the axes"
+        )
+        assert two_fills.get_layer("a").symbology.guide().show is False, (
+            "the displaced layer still describes a key the figure cannot draw"
+        )
+        assert two_fills.get_layer("b").symbology.guide().show is True
+
+    def test_removing_the_displaced_layer_leaves_the_drawn_key_alone(self, two_fills):
+        """Removing the layer whose key was displaced must not take the surviving key off the axes.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            The sharpest consequence of the stale record, and a visible one. matplotlib gives every legend
+            it makes for an axes the *same* removal hook — `Axes._remove_legend`, which sets `ax.legend_` to
+            `None` whichever legend is sitting there — so `Renderer.remove` walking the displaced layer's
+            recorded guides called `remove()` on an orphan and wiped **the other layer's** key off the
+            figure. Before this fix: `remove_layer("a")` left `ax.get_legend()` as `None` while `b` still
+            described and still held a key. This is also why the fix drops the displaced legend from the
+            record rather than detaching it — detaching is the very call that does the damage.
+        """
+        two_fills.legend("a", title="A")
+        two_fills.legend("b", title="B")
+        winner = two_fills._renderer.drawn["b"].guides[0]
+        two_fills.remove_layer("a")
+        assert two_fills.ax.get_legend() is winner, (
+            "removing the displaced layer took the surviving layer's key off the axes"
+        )
+        assert two_fills.get_layer("b").symbology.guide().show is True
+
+    def test_keying_the_first_layer_again_takes_the_second_s_key_off(self, two_fills):
+        """The rule is symmetric: whoever asks last owns the slot, and the other stops claiming it.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            Written as the reverse of the first test so the rule cannot be satisfied by "the lower layer
+            always loses" — the loser is whichever one did not ask last, not whichever is further down.
+        """
+        two_fills.legend("a", title="A")
+        two_fills.legend("b", title="B")
+        two_fills.legend("a", title="A again")
+        assert two_fills.get_layer("b").symbology.guide().show is False, (
+            "the layer whose key was displaced still describes one"
+        )
+        assert two_fills._renderer.drawn["b"].guides == ()
+        assert two_fills.get_layer("a").symbology.guide().show is True
+        assert two_fills._renderer.drawn["a"].guides[0] is two_fills.ax.get_legend()
+
+    def test_a_figure_arriving_with_two_shown_legends_only_records_the_drawn_one(
+        self, two_fills
+    ):
+        """Two shown legend guides read back from elsewhere leave one drawn key, recorded once.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            `Scene.legend` cannot produce this state any more, but a figure built where the one-legend rule
+            does not exist can: `from_dict` hands both layers a shown guide and `Renderer.draw_layer` draws
+            each in turn. This drives the renderer directly, which is the path that rebuild takes, so the
+            picture-side record is kept honest even where no scene call is involved.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import Guide
+        from digitalearth.static.guides import GUIDE_KIND_KEY
+
+        for layer_id in ("a", "b"):
+            layer = two_fills.get_layer(layer_id)
+            props = dict(layer.symbology.props)
+            props[GUIDE_KIND_KEY] = "legend"
+            two_fills._layer_tree = two_fills._layer_tree.replace(
+                with_fields(
+                    layer,
+                    symbology=with_fields(layer.symbology, props=props).with_guide(
+                        Guide(show=True, title=layer_id)
+                    ),
+                )
+            )
+        for layer_id in ("a", "b"):
+            two_fills._renderer.draw_guide(two_fills._layer_tree.get(layer_id))
+        assert two_fills._renderer.drawn["a"].guides == (), (
+            "the layer whose legend the axes displaced still holds it"
+        )
+        assert two_fills._renderer.drawn["b"].guides[0] is two_fills.ax.get_legend()
+
+
 class TestDerivedValuesAreNamedByWhatTheyAre:
     """A layer whose kind computes its own values has no column to name, and still needs one."""
 

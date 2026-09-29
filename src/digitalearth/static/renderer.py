@@ -947,10 +947,18 @@ class Renderer:
             return None
         for held in drawn.guides:
             _detach(held, self._scene.ax)
+        held_legend = self._scene.ax.get_legend()
         made = draw_guide(self._scene, layer, drawn, **kwargs)
         # The layer records what has to come off with it, which is nothing when no key was drawn.
         guides = () if made is None else (made,)
         self._drawn[layer.id] = with_fields(drawn, guides=guides)
+        if (
+            made is not None
+            and held_legend is not None
+            and held_legend is not made
+            and self._scene.ax.get_legend() is made
+        ):
+            self._displaced(held_legend, keeper=layer.id)
         if made is not None and not self.is_visible(layer.id):
             # A key is drawn as hidden as the layer it explains. `set_visible` already hid the key it
             # *found*, so hiding a layer and then keying it used to give a different figure from keying it
@@ -961,6 +969,35 @@ class Renderer:
             # owning no artist carries it here instead.
             _set_visible(_guide_artist(made), False)
         return made
+
+    def _displaced(self, legend: Any, keeper: str) -> None:
+        """Forget the swatch legend matplotlib has just replaced, wherever it was recorded.
+
+        An axes holds **one** legend, so drawing a second layer's swatches takes the first layer's off — and
+        the first layer went on holding it in :attr:`DrawnLayer.guides`, a key that is not on the figure and
+        can never be drawn again. The record then disagreed with the axes about which layer the reader is
+        looking at, which is the disagreement order 24 moved the guide onto the layer to remove (review M4).
+
+        The orphan is **dropped, never detached.** matplotlib gives every legend it makes for an axes the
+        same removal hook — ``Axes._remove_legend``, which sets ``legend_`` to ``None`` whichever legend is
+        sitting there — so calling ``remove()`` on the displaced one takes the *surviving* layer's key off
+        the figure. That is what `Renderer.remove` did to it, and dropping it here is what stops that: there
+        is nothing to take off, because matplotlib has already taken it off.
+
+        Args:
+            legend: The ``Legend`` the axes no longer holds.
+            keeper: The layer that has just been keyed, and whose record is left alone.
+        """
+        for layer_id, drawn in list(self._drawn.items()):
+            if layer_id == keeper:
+                continue
+            kept = tuple(held for held in drawn.guides if held is not legend)
+            if len(kept) != len(drawn.guides):
+                self._drawn[layer_id] = with_fields(drawn, guides=kept)
+        # Out of cleopatra's record of what it last rendered as well, for the same reason: it removes what
+        # it finds there by calling `remove()`, and this is the one artist whose `remove()` reaches another
+        # layer's key. Unlike `_detach`, this forgets without removing.
+        _forget_render_artist(self._scene.ax, legend)
 
     @staticmethod
     def _source_object(figure: FigureSpec, layer: LayerSpec) -> Any:

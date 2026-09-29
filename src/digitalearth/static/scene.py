@@ -78,6 +78,7 @@ from digitalearth.static.guides import (
     GUIDE_LABELS_KEY,
     bar_refusal,
     color_encoding,
+    guide_kind,
 )
 from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import (
@@ -1571,6 +1572,42 @@ class Scene(WatermarkMixin):
         except BaseException:
             self._layer_tree = held
             raise
+        if kind == "legend" and visible:
+            # After the draw, not before it: a refused draw must leave every other layer's description
+            # exactly as it found it, and until the draw has happened no key has been displaced.
+            self._displace_other_legends(layer.id)
+
+    def _displace_other_legends(self, keeper: str) -> None:
+        """Switch off every other layer's swatch key, because the axes holds one legend.
+
+        The description half of what :meth:`~digitalearth.static.renderer.Renderer._displaced` does to the
+        drawing. matplotlib keeps a single legend per axes, so keying a second layer takes the first
+        layer's swatches off the figure — :meth:`legend` has always documented that — and the first layer
+        went on carrying ``Guide(show=True)`` on its encoding. A figure written out then claimed two swatch
+        keys of which only one can ever be drawn, with the winner decided by draw order (review M4).
+
+        Switched **off** rather than taken off: the title and the row labels the caller gave are kept, so
+        ``legend(layer_id)`` brings that key back without a second description — the same trade
+        ``visible=False`` makes.
+
+        Args:
+            keeper: The layer that has just been keyed, whose guide is left alone.
+        """
+        for layer_id in self._layer_tree.ids:
+            if layer_id == keeper:
+                continue
+            other = self._layer_tree.get(layer_id)
+            guide = other.symbology.guide()
+            if guide is None or not guide.show or guide_kind(other) != "legend":
+                continue
+            self._layer_tree = self._layer_tree.replace(
+                with_fields(
+                    other,
+                    symbology=other.symbology.with_guide(
+                        with_fields(guide, show=False)
+                    ),
+                )
+            )
 
     def colorbar(
         self,
@@ -1719,7 +1756,10 @@ class Scene(WatermarkMixin):
         Note:
             **One legend per axes.** matplotlib holds a single legend on an axes, so keying a second layer
             this way replaces the first layer's swatches rather than adding a box beside them — unlike
-            :meth:`colorbar`, where each layer gets its own strip. A categorical fill already draws its own
+            :meth:`colorbar`, where each layer gets its own strip. **The displaced layer's guide is switched
+            off with it**, so the figure never describes two swatch keys of which only one can be drawn;
+            ``legend()`` on that layer again brings its key back, title and labels and all, and takes this
+            one off in its turn (review M4). A categorical fill already draws its own
             swatch legend through cleopatra; asking here records it on the layer, which is what lets it be
             titled, relabelled, hidden and removed with the layer.
         """
