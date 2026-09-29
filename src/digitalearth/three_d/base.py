@@ -85,10 +85,18 @@ def _classes_of(scale: Optional[Scale]) -> Optional[tuple[list[Any], list[str]]]
         scale: The colour encoding's scale, or ``None`` when the caller has none to offer.
 
     Returns:
-        ``(categories, colours)`` when the scale is categorical **and** carries one colour per category —
-        which is the invariant :meth:`~digitalearth.base.spec.scale.Scale.categorical` enforces, and the
-        only shape the drawer can paint from. ``None`` for any other scale, including a categorical one
-        assembled without colours, so the caller categorises the column itself as it always did.
+        ``(categories, colours)`` when the scale is categorical **and** every category names a colour,
+        which is the only shape the drawer can paint from. ``None`` for a non-categorical scale and for
+        ``None`` itself, so the caller categorises the column itself as it always did.
+
+        One colour *per* category is an invariant :class:`~digitalearth.base.spec.scale.Scale` enforces in
+        its constructor, so a categorical scale carrying **no** colours cannot be built to be asked about:
+        measured, `Scale.categorical(["a", "b"], [])`, `Scale(0.0, 1.0, categories=("a", "b"))` and
+        `Scale.from_dict({"vmin": 0.0, "vmax": 1.0, "categories": ["a", "b"]})` all raise
+        ``ValueError: a categorical Scale needs one colour per category``. What the per-category check below
+        catches is the shape that *does* get through it — a colour list as long as the categories whose
+        entries are `None`, as `Scale.categorical(["a", "b"], [None, None])` builds — where `color_for`
+        answers `None` and there is nothing to paint with.
     """
     if scale is None or not scale.is_categorical:
         return None
