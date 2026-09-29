@@ -192,6 +192,40 @@ class TestTheLegendRefusesWhatItCannotDescribe:
         with pytest.raises(ValueError):
             web_map.legend(position="middle")
 
+    def test_a_refusal_leaves_the_map_exactly_as_it_was(self, cells):
+        """The atomicity `legend()`'s own comment claims, asserted rather than asserted about.
+
+        Args:
+            cells: The fixture frame.
+
+        Test scenario:
+            `legend()` builds a panel it throws away, so a `labels` list that does not match the
+            classification is refused *before* anything is recorded. Only the refusal itself was tested
+            (`test_a_short_labels_list_is_refused` checks the `ValueError` and nothing else), so hoisting
+            `_attach_guide` above the validating `_legend_panel` call — one plausible way to hoist the
+            `labels` check out from under `visible` — would leave the suite green while leaving a guide
+            behind whose key every later rebuild would fail to draw (review M13). The state a caller can
+            read is what this asserts: the panel on screen, and the layer's own description.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = (
+            WebMap()
+            .basemap()
+            .choropleth(cells, column="kind", scheme="categorical", name="A")
+        )
+        web_map.legend(layer_id="A", title="Land cover")
+        before_panels = dict(web_map._panels)
+        before_symbology = web_map.get_layer("A").symbology
+        with pytest.raises(ValueError, match="entries but the classification"):
+            web_map.legend(layer_id="A", labels=["only one"])
+        assert dict(web_map._panels) == before_panels, (
+            f"the refused call changed the key on screen: {web_map._panels.get('legend')}"
+        )
+        assert web_map.get_layer("A").symbology == before_symbology, (
+            f"the refused call was recorded on the layer: {web_map.get_layer('A').symbology}"
+        )
+
 
 class TestNothingInterpolatedIsMarkup:
     """H3: `InfoBoxControl` assigns its content to `innerHTML`, so every value is markup until escaped."""
