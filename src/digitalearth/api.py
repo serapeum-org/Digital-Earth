@@ -934,8 +934,11 @@ def _quickmap_interactive(
         basemap: ``True`` for the backend's default tile source, or the source itself (provider name or
             keyed preset), forwarded to ``InteractiveMap.tiles``.
         coastlines: When True, overlay a coastline.
-        colorbar: When False, drop the colorbar the builder draws by default (mirrors the
-            matplotlib backend's ``colorbar`` toggle); ``True`` leaves the builder default in place.
+        colorbar: Whether the map carries a colour key, where the drawn layer has one to carry. Routed
+            through the tier's own ``colorbar``/``legend`` (:func:`_add_interactive_key`) rather than left
+            to the builder's option, so the key is recorded on the layer it explains either way — and so a
+            categorical fill, which Bokeh draws no colorbar for, is keyed by its legend instead of not at
+            all.
         **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
 
     Returns:
@@ -955,21 +958,51 @@ def _quickmap_interactive(
         _draw_interactive_raster(scene, data, kind, kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
-    if not colorbar and scene.layers:
-        # Builders draw a colorbar by default; drop it on the data layer. Tolerated the way
-        # `_add_static_key` tolerates the static tier's unmappable artist, and for the same reason at order 24:
-        # `InteractiveMap.colorbar` is a guide on a layer's colour encoding now, so a layer whose colour
-        # varies with nothing — plain `points`, an outline-only `polygons` — refuses the call. `colorbar=False`
-        # asked for a map with no colour key, and such a map already has none, so the request is met either
-        # way and refusing the whole `quickplot` over it would be the review-L9 mistake again.
-        try:
-            scene.colorbar(visible=False)
-        except UNMAPPABLE as error:
-            logger.warning(
-                "quickplot: colorbar skipped — %s: %s", type(error).__name__, error
-            )
+    _add_interactive_key(scene, visible=colorbar)
     _decorate_interactive(scene, basemap, coastlines)
     return scene
+
+
+def _add_interactive_key(scene: Any, *, visible: bool) -> None:
+    """Ask the interactive tier for the colour key of whatever it just drew, tolerating a layer with none.
+
+    The HoloViz counterpart of :func:`_add_static_key`, and here for the same reason. This path used to act
+    only on ``colorbar=False``, leaving the builder's own option in place for ``True`` — so a one-call map
+    carried no :class:`~digitalearth.base.spec.encoding.Guide` at all, and a **categorical** fill, whose
+    builder sets ``colorbar: False`` for itself, came back with no key in the picture either. That is review
+    M6 on this tier.
+
+    **Which key it is, is the layer's property, and the categorical answer is measured rather than assumed.**
+    A categorical fill is coloured through a ``{label: colour}`` map, which Bokeh reads as a
+    `CategoricalColorMapper` and draws no ``ColorBar`` from at all: rendering one with ``colorbar=True``
+    produces zero bars, while ``legend()`` produces one keyed box. So the builder's ``colorbar: False`` is
+    load-bearing and stays; what changes is that the key asked for is the one the scale calls for, which is
+    :func:`~digitalearth.interactive.style_fold.guide_kind`'s question.
+
+    Args:
+        scene: The `InteractiveMap` whose most recent colour-driven layer the key describes.
+        visible: Whether the key is drawn. ``False`` records the guide switched **off** — under the kind the
+            layer actually calls for, so switching it back on asks Bokeh for furniture it can build.
+
+    Returns:
+        Nothing. Both methods return the map itself, as the Core declares.
+    """
+    from digitalearth.interactive.style_fold import guide_kind
+
+    # A layer whose colour varies with nothing — plain `points`, an outline-only `polygons`, a map with no
+    # data layer at all — has no key to speak about, and `colorbar=False` asking for a map without one is
+    # met by a map that already has none. Refusing the whole `quickplot` over that would be review L9 again.
+    if not scene._guidable():
+        return
+    target = scene._guided_layer("quickplot", None)
+    kind = guide_kind(scene.get_layer(target).symbology)
+    ask = scene.legend if kind == "legend" else scene.colorbar
+    try:
+        ask(target, visible=visible)
+    except UNMAPPABLE as error:
+        logger.warning(
+            "quickplot: %s skipped — %s: %s", kind, type(error).__name__, error
+        )
 
 
 def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:

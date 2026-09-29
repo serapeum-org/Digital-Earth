@@ -43,6 +43,7 @@ __all__ = [
     "allowed_options",
     "fold_guide",
     "fold_symbology",
+    "guide_kind",
     "limits_scale",
     "portable_encodings",
     "route_flat_style",
@@ -253,14 +254,66 @@ GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
 GUIDE_LABELS_KEY: str = "guide_labels"
 
 
+def guide_kind(symbology: Symbology) -> str:
+    """Return which kind of colour key one layer's guide asks for.
+
+    **Measured, not chosen by symmetry.** A categorical fill is coloured through a ``{label: colour}`` map,
+    which Bokeh reads as a `CategoricalColorMapper` — and draws **no** ``ColorBar`` from. So ``colorbar()``
+    over such a layer renders nothing at all, while ``legend()`` renders the keyed box; that is why the
+    categorical builder sets ``colorbar: False`` for itself, and why the answer for it is a legend rather
+    than a flag to flip. The static tier reaches the same answer for a different reason — there a bar *is*
+    drawn, and reads the class codes cleopatra assigned — and spells the rule the same way
+    (:func:`~digitalearth.static.guides.guide_kind`).
+
+    Args:
+        symbology: The layer's style.
+
+    Returns:
+        The kind recorded under :data:`GUIDE_KIND_KEY` by the call that asked for the key; failing that —
+        a figure built where the distinction does not exist, or a caller writing
+        :meth:`~digitalearth.base.spec.style.Symbology.with_guide` directly — ``"legend"`` for a
+        categorical scale and ``"colorbar"`` for every other.
+
+    Examples:
+        - What the recording call filed wins:
+            ```python
+            >>> from digitalearth.base.spec import Encoding, Symbology
+            >>> from digitalearth.interactive.style_fold import GUIDE_KIND_KEY, guide_kind
+            >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+            >>> guide_kind(sym.with_props(**{GUIDE_KIND_KEY: "legend"}))
+            'legend'
+
+            ```
+        - And without one, the scale answers:
+            ```python
+            >>> from digitalearth.base.spec import Encoding, Scale, Symbology
+            >>> from digitalearth.interactive.style_fold import guide_kind
+            >>> classes = Scale.categorical(["a", "b"], ["#f00", "#00f"])
+            >>> guide_kind(Symbology(
+            ...     encodings={"color": Encoding.by_field("color", "zone", scale=classes)}
+            ... ))
+            'legend'
+            >>> guide_kind(Symbology(encodings={"color": Encoding.by_field("color", "dem")}))
+            'colorbar'
+
+            ```
+    """
+    recorded = symbology.props.get(GUIDE_KIND_KEY)
+    if recorded in GUIDE_KINDS:
+        return str(recorded)
+    encoding = symbology.encoding("color")
+    scale = None if encoding is None else encoding.scale
+    return "legend" if scale is not None and scale.is_categorical else "colorbar"
+
+
 def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, Any]:
     """Fold a recorded colour guide into the HoloViews options that draw it.
 
     The one translation from :class:`~digitalearth.base.spec.encoding.Guide` to Bokeh's spelling, so the key
     a caller's ``colorbar()``/``legend()`` applies and the key a redraw puts back are built by the same
     code and cannot say different things. A `Guide` carries *whether*, *what it is called* and *where*, and
-    never which furniture — that is read from :data:`GUIDE_KIND_KEY` in the symbology's props, which is
-    where the recording call put it.
+    never which furniture — that is :func:`guide_kind`'s question, answered from the symbology's props or,
+    failing those, from its scale.
 
     Args:
         symbology: The layer's style, carrying the guide on its ``color`` encoding.
@@ -268,9 +321,7 @@ def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, A
             :data:`GUIDE_LABELS_KEY` renames. Unread for a colorbar.
 
     Returns:
-        The options to apply, or an empty dict for a symbology carrying no guide. A kind this module does
-        not know — a figure written by a later version, say — folds as a colorbar, which is the kind every
-        tier draws.
+        The options to apply, or an empty dict for a symbology carrying no guide.
 
     Examples:
         - A guide switched off, with a title, is a named bar that is not drawn:
@@ -304,7 +355,7 @@ def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, A
     guide = symbology.guide()
     if guide is None:
         return {}
-    if symbology.props.get(GUIDE_KIND_KEY) == "legend":
+    if guide_kind(symbology) == "legend":
         opts: Dict[str, Any] = {"show_legend": guide.show}
         if guide.title is not None:
             # Bokeh's own slot for a legend heading, reached through the option HoloViews forwards to the

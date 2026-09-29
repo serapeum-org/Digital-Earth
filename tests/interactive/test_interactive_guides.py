@@ -103,6 +103,29 @@ def _plot_options(element):
     return hv.Store.lookup_options("bokeh", element, "plot").kwargs
 
 
+def _zoned_polygons():
+    """Return a three-polygon frame with one nominal column, as the api tests build it.
+
+    Returns:
+        A `FeatureCollection` of three polygons carrying an unordered `zone` column.
+    """
+    import geopandas as gpd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Polygon
+
+    return FeatureCollection(
+        gpd.GeoDataFrame(
+            {"zone": ["urban", "rural", "park"]},
+            geometry=[
+                Polygon([(4, 52), (5, 52), (5, 53), (4, 53)]),
+                Polygon([(5, 52), (6, 52), (6, 53), (5, 53)]),
+                Polygon([(6, 52), (7, 52), (7, 53), (6, 53)]),
+            ],
+            crs="EPSG:4326",
+        )
+    )
+
+
 def _restyle(interactive_map, layer_id, **props):
     """Restyle one layer through `replace_layer`, so the tier rebuilds its element.
 
@@ -551,3 +574,137 @@ class TestWhatTheEngineDrawsWhenSeveralLayersCarryAGuide:
         ]
         assert len(bars) == 1, f"Bokeh drew {len(bars)} colorbars"
         assert str(bars[0].title) == "Lower", bars[0].title
+
+
+class TestWhatQuickmapLeavesOnThisTier:
+    """`quickmap(colorbar=…)` records the key on this backend too, and records the right kind.
+
+    The order exists to make the four tiers agree about what a one-call map carries, and this one was
+    recording nothing at all: `colorbar=True` left the builder's own option in place and wrote no guide, so
+    a categorical fill — whose builder sets `colorbar=False` deliberately — came back with no key in the
+    picture and none in the description. That is review M6, on a third tier.
+
+    Which key it is has to be the layer's property here as everywhere else, and for a reason measured
+    rather than assumed: a categorical fill is coloured through a `{label: colour}` map, which Bokeh reads
+    as a `CategoricalColorMapper` and draws **no** `ColorBar` from — so `colorbar()` over it renders
+    nothing at all, while `legend()` renders the keyed box.
+    """
+
+    def test_a_categorical_fill_is_keyed_by_its_legend(self, m):
+        """`quickmap(colorbar=True)` records a guide, as a legend, and Bokeh draws it.
+
+        Args:
+            m: Unused; the map under test is the one `quickmap` builds and closes with the fixture's.
+        """
+        from bokeh.models import Legend
+
+        from digitalearth import quickmap
+
+        built = quickmap(
+            _zoned_polygons(),
+            column="zone",
+            scheme="categorical",
+            backend="interactive",
+        )
+        guide = _guide(built, built.layer_ids[-1])
+        assert guide == Guide(show=True), guide
+        options = _plot_options(_element_of(built, hv.Polygons))
+        assert options.get("show_legend") is True, options
+        figure = hv.render(built.render(), backend="bokeh")
+        legends = [
+            model
+            for panel in (
+                figure.right,
+                figure.left,
+                figure.above,
+                figure.below,
+                figure.center,
+            )
+            for model in panel
+            if isinstance(model, Legend)
+        ]
+        assert len(legends) == 1, f"Bokeh drew {len(legends)} legends"
+        built.close()
+
+    def test_a_continuous_raster_is_keyed_by_its_bar(self, m, dataset):
+        """The other branch: a ramp is explained by the colorbar the builder already draws.
+
+        Args:
+            m: Unused; see above.
+            dataset: A small raster.
+        """
+        from digitalearth import quickmap
+
+        built = quickmap(dataset, backend="interactive")
+        guide = _guide(built, built.layer_ids[-1])
+        assert guide == Guide(show=True), guide
+        options = _plot_options(_element_of(built, hv.Image))
+        assert options.get("colorbar") is True, options
+        built.close()
+
+    def test_colorbar_false_records_the_categorical_key_switched_off(self, m):
+        """`colorbar=False` records the guide off under the kind the layer actually calls for.
+
+        Args:
+            m: Unused; see above.
+
+        Test scenario:
+            It recorded `Guide(show=False)` before this, but through `colorbar()` — so the kind filed
+            beside it said "bar" for a layer no bar can describe, and switching the key back on would have
+            asked Bokeh for furniture it does not build here.
+        """
+        from digitalearth import quickmap
+        from digitalearth.interactive.style_fold import GUIDE_KIND_KEY
+
+        built = quickmap(
+            _zoned_polygons(),
+            column="zone",
+            scheme="categorical",
+            backend="interactive",
+            colorbar=False,
+        )
+        layer = built.get_layer(built.layer_ids[-1])
+        assert layer.symbology.guide() == Guide(show=False), layer.symbology.guide()
+        assert layer.symbology.props.get(GUIDE_KIND_KEY) == "legend", dict(
+            layer.symbology.props
+        )
+        options = _plot_options(_element_of(built, hv.Polygons))
+        assert options.get("show_legend") is False, options
+        built.close()
+
+
+class TestWhichKeyAGuideWithoutARecordedKindAsksFor:
+    """A guide that arrived without a kind is read off the scale, as the static tier reads it.
+
+    The kind is recorded beside the guide by the call that asked for it, so this is the figure built
+    somewhere the distinction does not exist — another tier, or a caller writing `Symbology.with_guide`
+    directly — and read back here. Defaulting it to "colorbar" would fold a categorical fill into an
+    option Bokeh draws nothing from.
+    """
+
+    def test_a_categorical_scale_asks_for_the_swatch_key(self):
+        """No recorded kind, a categorical scale: a legend."""
+        from digitalearth.base.spec import Encoding, Scale, Symbology
+        from digitalearth.interactive.style_fold import fold_guide
+
+        scale = Scale.categorical(["a", "b"], ["#f00", "#00f"])
+        symbology = Symbology(
+            encodings={"color": Encoding.by_field("color", "zone", scale=scale)}
+        ).with_guide(Guide(title="Zone"))
+        assert fold_guide(symbology) == {
+            "show_legend": True,
+            "legend_opts": {"title": "Zone"},
+        }, fold_guide(symbology)
+
+    def test_a_continuous_scale_still_asks_for_the_bar(self):
+        """And the other arm, so the fallback cannot swallow every guide."""
+        from digitalearth.base.spec import Encoding, Scale, Symbology
+        from digitalearth.interactive.style_fold import fold_guide
+
+        scale = Scale.from_limits(0.0, 1.0)
+        symbology = Symbology(
+            encodings={"color": Encoding.by_field("color", "dem", scale=scale)}
+        ).with_guide(Guide(title="Flow"))
+        assert fold_guide(symbology) == {"colorbar": True, "clabel": "Flow"}, (
+            fold_guide(symbology)
+        )
