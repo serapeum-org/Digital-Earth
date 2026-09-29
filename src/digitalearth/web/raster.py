@@ -419,9 +419,17 @@ def _band_name(data: Any, band: int) -> str:
     """Return the name of the value a raster layer's colour varies with.
 
     A raster has no classified column, so the honest name for the field its colour is bound to is the
-    **band's own** — read off the raster's metadata, never invented, and never obtained by warping the band
-    a second time to look (:meth:`~digitalearth.web.base.WebMapBase._auto_cmap` already reads band metadata
-    this way to resolve a colormap without touching a pixel).
+    **band's own** — read straight off the raster's ``band_names``/``variable_names``, never invented, and
+    never obtained by warping the band a second time to look.
+
+    The tier's other metadata reader is **not** the precedent for that, although the interactive tier's is:
+    :meth:`~digitalearth.web.base.WebMapBase._auto_cmap` is handed the display-CRS
+    :class:`~digitalearth.base.sources.source.Source` the builder already warped — measured, `field()` calls
+    it with a ``Source``, and it raises ``AttributeError: 'Dataset' object has no attribute 'metadata'`` if
+    given the raster — so it reads the band name only as the extractor already recorded it under the
+    source's ``variable``. The method that reads ``band_names`` off the raster the way this does is
+    :meth:`~digitalearth.interactive.base.InteractiveMapBase._auto_cmap_for_band`, which this tier has no
+    counterpart of.
 
     Args:
         data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF``. Read with `getattr`, so an
