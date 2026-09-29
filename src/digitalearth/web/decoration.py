@@ -200,6 +200,12 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
 #: guide that arrived in a figure read back from disk, where the anchor is optional by design.
 _DEFAULT_LEGEND_ANCHOR = "bottom-right"
 
+#: Where a key sits when the caller names no corner. `legend()`'s own default, and — through the shared
+#: `_record_key` — `colorbar()`'s as well, so two public spellings of one mechanism cannot drift to two
+#: corners. Equal to :data:`_DEFAULT_LEGEND_ANCHOR` and separate from it on purpose: that one answers
+#: "a guide arrived carrying no anchor", this one answers "a caller named no corner".
+DEFAULT_KEY_ANCHOR = "bottom-right"
+
 #: The symbology property a caller's explicit legend row labels are recorded under, on the layer whose key
 #: they label. Held on the layer for the same reason the guide is: the panel is **derived** from the live
 #: layers every time one is added, removed, hidden or restyled, so anything the key is drawn from has to
@@ -869,7 +875,7 @@ class DecorationMixin(_MixinBase):
         *,
         layer_id: Optional[str] = None,
         title: Optional[str] = None,
-        position: str = "bottom-right",
+        position: str = DEFAULT_KEY_ANCHOR,
         labels: Optional[list] = None,
         visible: bool = True,
     ) -> Self:
@@ -951,11 +957,53 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
             digitalearth.web.decoration.refresh_legend_panel: derives the panel from the recorded guides.
         """
+        return self._record_key(
+            layer_id,
+            title=title,
+            position=position,
+            labels=labels,
+            visible=visible,
+            caller="legend()",
+        )
+
+    def _record_key(
+        self,
+        layer_id: Optional[str],
+        *,
+        title: Optional[str],
+        position: str = DEFAULT_KEY_ANCHOR,
+        labels: Optional[list],
+        visible: bool,
+        caller: str,
+    ) -> Self:
+        """Record a colour key on a layer, told which public spelling the caller reached it through.
+
+        :meth:`legend` and :meth:`~digitalearth.web.base.WebMapBase.colorbar` are one mechanism under two
+        names, so the body lives here and each name passes its own. Without that, the one refusal a
+        `colorbar()` caller can actually hit — "nothing to describe" — named `legend()` and told them to add
+        a `column=`, about a method they never called; this tier names the caller in every other refusal it
+        gives (``WebMap.field()``, ``WebMap.extrusion()``).
+
+        Args:
+            layer_id: The caller's chosen layer, or `None` to resolve one.
+            title: The heading, or `None` for the classified column's name.
+            position: The corner, one of :data:`~digitalearth.base.controls.CONTROL_POSITIONS`.
+            labels: Explicit row labels, or `None`.
+            visible: Whether a key is drawn; `False` records that the colour is explained by nothing.
+            caller: How to spell the public method in a refusal — ``"legend()"`` or ``"colorbar()"``.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: as :meth:`legend` documents.
+            KeyError: as :meth:`legend` documents.
+        """
         # Validated before the flag is read: `legend(position="middle", visible=False)` was accepted while
         # `legend(position="middle")` raised, so a caller passing a flag through was checked half the time
         # (review L7). The layer the caller named is now checked on the same terms — see `_guide_target`.
         _check_position(position)
-        target = self._guide_target(layer_id, visible=bool(visible))
+        target = self._guide_target(layer_id, visible=bool(visible), caller=caller)
         if target is None:
             return self
         _require_maplibre()
@@ -978,7 +1026,9 @@ class DecorationMixin(_MixinBase):
         refresh_legend_panel(self)
         return self
 
-    def _guide_target(self, layer_id: Optional[str], *, visible: bool) -> Optional[str]:
+    def _guide_target(
+        self, layer_id: Optional[str], *, visible: bool, caller: str = "legend()"
+    ) -> Optional[str]:
         """Return the layer a colour key should describe.
 
         Args:
@@ -988,6 +1038,9 @@ class DecorationMixin(_MixinBase):
                 key — looks for the key the map already has, and a map with none answers `None` rather than
                 raising, which is what keeps ``WebMap().colorbar(visible=False)`` from being a crash on an
                 empty map.
+            caller: How to spell the public method in the refusal — ``"legend()"`` or ``"colorbar()"``.
+                This is the one refusal both spellings can reach, so naming the method that wrote it sent a
+                `colorbar()` caller to fix a `legend()` call.
 
         Returns:
             The layer id, or `None` when nothing qualifies and nothing was required.
@@ -1041,7 +1094,7 @@ class DecorationMixin(_MixinBase):
         if keyed:
             return keyed[-1]
         raise ValueError(
-            "legend() has nothing to describe: no classified layer has been added yet. Add a "
+            f"{caller} has nothing to describe: no classified layer has been added yet. Add a "
             "choropleth (or any builder given column=...) first."
         )
 

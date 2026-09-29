@@ -184,6 +184,37 @@ class TestTheLegendRefusesWhatItCannotDescribe:
         with pytest.raises(ValueError, match="nothing to describe"):
             web_map.legend()
 
+    @pytest.mark.parametrize(
+        ("call", "named", "other"),
+        [("legend", "legend()", "colorbar()"), ("colorbar", "colorbar()", "legend()")],
+    )
+    def test_the_refusal_names_the_method_that_was_called(self, call, named, other):
+        """A caller who wrote `colorbar()` must not be told to fix their `legend()` call.
+
+        Args:
+            call: The public method under test.
+            named: The spelling its refusal must carry.
+            other: The spelling it must not carry.
+
+        Test scenario:
+            `colorbar()` is a thin call onto `legend()`, and the "nothing to describe" refusal was written
+            by the method underneath — so the one refusal a caller on the `colorbar` spelling actually hits
+            named a method they never called and an argument (`labels=`) it does not take. This tier names
+            the caller in every other refusal it gives (`WebMap.field()`, `WebMap.extrusion()`); this one
+            named whichever of the two wrote the message.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap()
+        with pytest.raises(ValueError, match="nothing to describe") as refusal:
+            getattr(web_map, call)()
+        assert named in str(refusal.value), (
+            f"{call}()'s refusal does not name it: {refusal.value}"
+        )
+        assert other not in str(refusal.value), (
+            f"{call}()'s refusal points at a method the caller never called: {refusal.value}"
+        )
+
     def test_a_bad_position_is_refused(self, cells):
         """The four corners are MapLibre's, and a typo would be silently ignored by the browser."""
         from digitalearth.web import WebMap

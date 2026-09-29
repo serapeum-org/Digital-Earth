@@ -1978,7 +1978,13 @@ class WebMapBase:
 
                 ```
         """
-        return self.legend(layer_id=layer_id, title=label, visible=visible)
+        # Through the shared body rather than through `legend()` itself, so this spelling is the one a
+        # refusal names: "nothing to describe" is the one refusal both public names can reach, and it used
+        # to send a `colorbar()` caller off to fix a `legend()` call they never wrote. Everything else is
+        # unchanged — one mechanism, two names (order 24).
+        return self._record_key(
+            layer_id, title=label, labels=None, visible=visible, caller="colorbar()"
+        )
 
     def _legend_of(self, layer_id: str) -> dict:
         """Return the classification one layer was drawn with.
