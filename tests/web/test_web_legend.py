@@ -656,6 +656,36 @@ class TestTheKeyFollowsItsLayer:
             "showing the layer must bring its own key back"
         )
 
+    def test_restyling_a_layer_flat_takes_its_classification_with_it(self):
+        """A layer restyled to one flat colour has no classes left, so nothing may still file some for it.
+
+        Test scenario:
+            `_legends` is the dict beside the tree that order 24 set out to stop trusting, and
+            `replace_layer` never touched it: after swapping a classified layer's description for a
+            flat-coloured one, `list(m._legends)` still held its id. The leak is readable from the outside
+            in the refusal it produces — `legend(layer_id=...)` resolved through `_legend_of`, found the
+            stale entry, accepted the layer, and then failed a level down in `Symbology.with_guide` with
+            the base-level "nothing drives the 'color' channel" rather than this tier's own "was not drawn
+            with a classification" (review L8). Same refusal for the same reason as a layer that was never
+            classified, so the same message and the same place.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Symbology
+
+        web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B"
+        classified = web_map.get_layer("B")
+        props = dict(classified.symbology.props)
+        props["paint"] = {**props["paint"], "fill-color": "#ff0000"}
+        web_map.replace_layer(replace(classified, symbology=Symbology(props=props)))
+        assert list(web_map._legends) == ["A"], (
+            f"a flat layer is still filed as classified: {list(web_map._legends)}"
+        )
+        assert _whose_key(web_map) is None, "a flat layer has no classes to key"
+        with pytest.raises(ValueError, match="was not drawn with a classification"):
+            web_map.legend(layer_id="B")
+
     def test_the_two_most_recent_accessors_agree_after_a_removal(self):
         """`last_breaks` and `last_legend` are set together by every builder, so they must move together.
 

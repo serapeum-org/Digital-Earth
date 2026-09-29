@@ -1431,6 +1431,13 @@ class WebMapBase:
                 'Capital'
 
                 ```
+
+        Note:
+            **The classification goes with the classes.** A replacement whose ``color`` channel is constant
+            or absent leaves the layer with nothing to label, so the classification filed for it is dropped
+            — as it is when the layer itself goes (:meth:`remove_layer`). A key asked for by name is then
+            refused with the same message an unclassified layer gets, rather than with the lower-level
+            "nothing drives the 'color' channel" the stale entry used to let a caller reach.
         """
         # By type before by id: `getattr(layer, "id", None)` made the id lookup fail first, so a caller who
         # passed the id where the description belongs was answered "no layer None on this map" — an id they
@@ -1468,6 +1475,15 @@ class WebMapBase:
                 f"needs a source_id; got None"
             )
         self._change(self._figure_with(self._layer_tree.replace(layer)))
+        # The classification goes with the classes. `_legends` is the dict beside the tree that order 24
+        # exists to stop trusting, and this was the one layer-management call that never told it anything:
+        # a layer restyled to a flat colour stayed filed as classified, so `legend(layer_id=...)` got past
+        # `_legend_of` on the strength of the stale entry and failed a level down in `Symbology.with_guide`
+        # with the base-level "nothing drives the 'color' channel" instead of this tier's own refusal
+        # (review L8). Dropped after the replacement lands, because `_change` can still refuse it.
+        replaced = layer.symbology.encoding("color")
+        if replaced is None or replaced.is_constant:
+            self._forget_legend(layer.id)
         return self
 
     @property
