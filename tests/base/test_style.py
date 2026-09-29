@@ -156,9 +156,16 @@ class TestTakingAGuideOff:
         Test scenario:
             The carve-out must not widen into "a guide on a flat fill is fine": an empty box is worse than
             an error, which is the position every tier takes for the same question.
+
+            The fixture is built **above** the `with`, leaving one call that can raise inside it. Built
+            inline, the block held three — `Symbology.of`, `Guide`, and the `with_guide` actually under
+            test — so a `Guide` that started refusing `title=` would have satisfied `pytest.raises` and the
+            test would have passed while pinning nothing.
         """
+        flat = Symbology.of(size=6)
+        wanted = Guide(title="People")
         with pytest.raises(ValueError, match="nothing drives the 'color' channel"):
-            Symbology.of(size=6).with_guide(Guide(title="People"))
+            flat.with_guide(wanted)
 
 
 class TestMerging:
