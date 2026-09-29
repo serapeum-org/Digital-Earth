@@ -130,15 +130,30 @@ class TestQuickplot3DBackend:
             coloured by data: the flag must leave the scene unkeyed rather than raise, exactly as
             ``colorbar=True`` would. `tests/three_d/test_guides3d.py` holds what the flag does when there
             *is* a key.
+
+            "Unkeyed" was the claim and the body asserted only the type and the layer count, so the
+            sentence was carried by nothing (review L9). It is asserted now, in both readings it has — no
+            bar in the picture and no guide in the record — which makes this the point-cloud counterpart of
+            `test_guides3d.py::…::test_a_layer_with_no_key_is_neither_keyed_nor_an_error`, whose subject is
+            a flat-coloured raster.
         """
         from digitalearth.api import quickplot
         from digitalearth.three_d import Scene3D
 
         fc = FeatureCollection.read_file("examples/data/rhine_gauges.geojson")
         out = quickplot(fc, backend="3d", colorbar=False)
+        try:
+            layers = len(out.layers)
+            drawn = list(out.plotter.scalar_bars.keys())
+            guide = out.get_layer(out.layer_ids[0]).symbology.guide()
+        finally:
+            out.close()
         assert isinstance(out, Scene3D)
-        assert len(out.layers) == 1
-        out.close()
+        assert layers == 1
+        assert (drawn, guide) == ([], None), (
+            f"a cloud given no column has nothing to explain, so it must carry no bar and no guide; got "
+            f"bars {drawn} and guide {guide}"
+        )
 
     def test_empty_featurecollection_raises_valueerror(self):
         from digitalearth.api import quickplot
