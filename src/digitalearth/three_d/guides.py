@@ -39,7 +39,7 @@ argument rather than reading `scene._figure`, which during `apply` is still the 
   name. That bar is this tier's colour key today, so a guide has to know which bar is its layer's before it can
   retitle or remove one — and the array's name is read back off the engine (:func:`_engine_title`) rather than
   assumed to be the encoding's field, because the two differ wherever a column has a better name than the array
-  it was bound under (a cloud coloured by `value_column="pop"` binds `scalar`). Where they do agree, asking for
+  it was bound under (a cloud coloured by `value_column="depth"` binds `scalar`). Where they do agree, asking
   a key a caller already has changes nothing at all.
 * `Plotter.remove_actor` takes the scalar bar bound to that actor with it. So a layer's bar goes when the layer
   does without this module doing anything — what :func:`redraw_guides` drops for a removed layer is the
@@ -99,7 +99,7 @@ def guide_field(layer: Any) -> Optional[str]:
     Returns:
         The band, variable or column name the layer's `color` encoding names — what a reader wants the key
         titled after. It is **not** always the name of the array the drawer binds on the mesh, and so not
-        always the title PyVista's own bar carries: a cloud given `value_column="pop"` names `pop` here and
+        always the title PyVista's own bar carries: a cloud given `value_column="depth"` names `depth` here and
         binds its values under `scalar`. Where the two differ, the engine's title is read back off the drawn
         actor by :func:`_engine_title` rather than assumed from this. `None` for a layer whose colour is a
         flat constant, or which publishes no colour encoding at all: a key over a colour nothing varies would
@@ -375,8 +375,8 @@ def _engine_title(scene: Any, layer_id: str, field: str) -> str:
     so every colour-driven layer already has a key, and the reconcile has to know which bar is that layer's
     before it can retitle or remove it. The answer is read off the engine rather than kept in a per-kind table
     beside the builders: the array a drawer binds (`elevation`, `scalar`, `value`, `field`) is not always the
-    **field** the encoding names, since a point cloud coloured by `value_column="pop"` binds its values under
-    `scalar` and a key over it should read `pop`.
+    **field** the encoding names, since a point cloud coloured by `value_column="depth"` binds its values under
+    `scalar` and a key over it should read `depth`.
 
     Args:
         scene: The scene holding what was drawn.
