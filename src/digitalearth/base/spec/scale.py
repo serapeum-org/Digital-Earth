@@ -9,13 +9,14 @@ covers, and the **colours** it maps onto — and can be *frozen*: a scale derive
 is what stops an animation's colours flickering, and what lets a legend show the colours that were actually
 drawn rather than a second guess at them.
 
-What it absorbs:
+What it absorbs, and where each was written out before:
 
-| Was | Where |
-|---|---|
-| the constant-band widening rule, `hi = lo + 1.0` | `base/stretch.py`, `static/textured_globe.py`, `web/bigdata.py`, `web/raster.py`, `web/vector.py` |
-| `classify(values, scheme, k)` plus its own `try`/`except` | `interactive/vector.py`, `three_d/base.py`, `web/vector.py` |
-| the stack colour range | :mod:`digitalearth.base.clim` — one way to *construct* frozen limits, not a parallel mechanism |
+* the constant-band widening rule, `hi = lo + 1.0` — `base/stretch.py`, `static/textured_globe.py`,
+  `web/bigdata.py`, `web/raster.py`, `web/vector.py`
+* `classify(values, scheme, k)` plus its own `try`/`except` — `interactive/vector.py`, `three_d/base.py`,
+  `web/vector.py`
+* the stack colour range — :mod:`digitalearth.base.clim`, one way to *construct* frozen limits rather than a
+  parallel mechanism
 
 The stack range was the last holdout: until DE-40 the three temporal paths reduced their frames to a bare
 `(lo, hi)` and handed it straight to a normaliser, so a stack of identical frames produced a zero-width domain
@@ -732,8 +733,8 @@ class Scale:
             field goes through the JSON check, so a numpy number is written as a plain Python one.
 
         Raises:
-            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming
-                the field.
+            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON
+                form, naming the field.
 
         Examples:
             - A continuous scale is its domain:
