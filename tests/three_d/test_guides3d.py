@@ -1368,12 +1368,24 @@ class TestAGuideIsNotAMeshChange:
             with a rebuild meant a `colorbar(label=...)` on a large DEM re-opened the raster, re-ran the
             reprojection and rebuilt the surface to put a text label on the window — the same defect review
             M8 fixed for a change of `label`.
+
+            "Not rebuilt" is only a claim about a call that did something, so the guide is asserted to have
+            landed as well: `is before` is trivially true of a `colorbar()` that returned without touching
+            anything, and the test survived exactly that mutant (review R2-N10). Together the two lines say
+            what the class is named for — the description changed and the mesh did not.
         """
         scene.terrain(_dem())
         before = scene.mesh_of("terrain-1")
         scene.colorbar(label="Elevation (m)")
         assert scene.mesh_of("terrain-1") is before, (
             "a guide is not something PyVista draws the mesh from"
+        )
+        guide = scene.get_layer("terrain-1").symbology.guide()
+        assert guide is not None and guide.title == "Elevation (m)", (
+            f"the key has to have been recorded for 'not rebuilt' to mean anything: {guide}"
+        )
+        assert "Elevation (m)" in scene.plotter.scalar_bars, list(
+            scene.plotter.scalar_bars.keys()
         )
 
     def test_a_colormap_change_still_rebuilds(self, scene):
