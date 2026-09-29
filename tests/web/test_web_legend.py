@@ -706,10 +706,31 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
             `WebMap().colorbar(visible=False)` must not crash on, and a classified layer nobody has keyed,
             which is where `colorbar()` succeeds and `colorbar(visible=False)` has nothing to reach. Neither
             may leave a guide behind either, since the resolution is what decides there is nothing to write.
+
+            **The two arms carry different weight, and say so.** For ``classified`` the guide check is a
+            claim: two keyable layers are on the map, so a stray guide has somewhere to land. For ``empty``
+            it is a comprehension over nothing, which is deliberate — that arm is the "must not crash on an
+            empty map" guard and only that, and the defect it holds the line against is the
+            ``visible=False`` fallback in `_guide_target` being dropped, which turns the documented
+            ``WebMap().colorbar(visible=False)`` into a "nothing to describe" refusal. Each arm now asserts
+            its own precondition, so neither is taken on trust (review N12).
         """
         from digitalearth.web import WebMap
 
         web_map = WebMap() if built == "empty" else _two_classified()
+        expected = [] if built == "empty" else ["A", "B"]
+        assert web_map.layer_ids == expected, (
+            f"a {built} map must hold {expected}, not {web_map.layer_ids}"
+        )
+        varying = [
+            layer_id
+            for layer_id in web_map.layer_ids
+            if web_map.get_layer(layer_id).symbology.encoding("color") is not None
+        ]
+        assert varying == expected, (
+            f"a {built} map's keyable layers are {varying}, so the guide check below reaches "
+            f"{expected} layers"
+        )
         answered = getattr(web_map, call)(visible=False)
         assert answered is web_map, (
             f"{call}(visible=False) on a {built} map handed back {answered!r} rather than the map"
