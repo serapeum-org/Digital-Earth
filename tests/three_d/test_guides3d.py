@@ -1416,8 +1416,11 @@ class TestAGuideIsNotAMeshChange:
             "a guide is not something PyVista draws the mesh from"
         )
         guide = scene.get_layer("terrain-1").symbology.guide()
-        assert guide is not None and guide.title == "Elevation (m)", (
+        assert guide is not None, (
             f"the key has to have been recorded for 'not rebuilt' to mean anything: {guide}"
+        )
+        assert guide.title == "Elevation (m)", (
+            f"the recorded key must carry the changed label, not {guide.title!r}"
         )
         assert "Elevation (m)" in scene.plotter.scalar_bars, list(
             scene.plotter.scalar_bars.keys()
