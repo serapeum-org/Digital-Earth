@@ -468,12 +468,18 @@ class Scale:
 
         Note:
             ``+ 1.0`` is the rule the five consolidated copies chose and it stays the rule wherever it
-            works, because a whole unit is a span a colour ramp can show. It stops working at ``2**53``,
-            where the gap between neighbouring doubles first exceeds one: ``1e20 + 1.0 == 1e20``, so the
-            widened ``hi`` came back equal to ``lo`` and the constructor refused the scale. A constant band
-            holding a large sentinel or an epoch-nanosecond count therefore could not be scaled at all.
-            Above that magnitude the smallest span that exists is one representable step, so that is what
-            is used. At the very top of the float range there is no step above — ``nextafter`` returns
+            works, because a whole unit is a span a colour ramp can show. **Where it stops working is not
+            one threshold.** ``2**53`` is where the gap between neighbouring doubles first exceeds one
+            (measured: 2.0 there, against 1.0 at ``2**52``), and it is where the addition first vanishes —
+            ``2**53 + 1.0 == 2**53`` — so the widened ``hi`` came back equal to ``lo`` and the constructor
+            refused the scale: a constant band holding a large sentinel or an epoch-nanosecond count could
+            not be scaled at all. But it is not a ceiling above which the rule never works, and it is not
+            symmetric. ``(2**53 + 2.0) + 1.0`` still moves, because round-to-nearest carries that sum to
+            the next representable double; and at ``-2**53`` and ``-2**53 - 2.0`` the addition still widens,
+            because on the negative side it moves toward zero, where the spacing is finer. So the question
+            is asked of the value rather than of its magnitude: ``widened > value`` says whether *this* one
+            moved. Where it did not, the smallest span that exists is one representable step, so that is
+            what is used. At the very top of the float range there is no step above — ``nextafter`` returns
             infinity, which the constructor refuses — so the floor moves down instead and `value` stays the
             upper limit.
         """

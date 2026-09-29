@@ -112,11 +112,13 @@ class TestTheDomain:
             value: The constant the whole band holds.
 
         Test scenario:
-            ``+ 1.0`` stops widening at ``2**53``, where the gap between neighbouring doubles first exceeds
-            one: ``1e20 + 1.0 == 1e20``, so ``vmax <= vmin`` survived the rule and the constructor refused
-            the scale. Every builder shared that defect, so a constant float32 band holding anything above
-            ~9e15 — a large sentinel, an epoch-nanosecond field — could not be scaled at all. The widening
-            has to move the limit whatever the magnitude.
+            ``+ 1.0`` first vanishes at ``2**53``, where the gap between neighbouring doubles first exceeds
+            one: ``2**53 + 1.0 == 2**53`` and ``1e20 + 1.0 == 1e20``, so ``vmax <= vmin`` survived the rule
+            and the constructor refused the scale. It is not a clean ceiling — ``(2**53 + 2.0) + 1.0`` still
+            moves, and the negative side is finer still — which is exactly why the widening cannot be gated
+            on a magnitude. Every builder shared that defect, so a constant float32 band holding a large
+            sentinel or an epoch-nanosecond field could not be scaled at all. The widening has to move the
+            limit whatever the value.
         """
         low, high = Scale.from_limits(value, value).as_limits()
         assert high > low, (
