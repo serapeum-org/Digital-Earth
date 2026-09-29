@@ -716,17 +716,21 @@ def artists_added(axes: Any) -> Iterator[List[Any]]:
         axes: The axes being drawn on.
 
     Yields:
-        The list the artists are collected into — empty inside the block, filled on the way out. It stays
-        empty when the axes keeps no list of its own, which leaves the layer with no artists to toggle
-        rather than with the wrong ones.
+        The list the artists are collected into — empty inside the block, filled on the way out **even
+        when the block raises**, which is the case a bare ``yield`` skipped: a drawer that fails part-way
+        has still put artists on the axes, and this list is the only record naming them. It stays empty
+        when the axes keeps no list of its own, which leaves the layer with no artists to toggle rather
+        than with the wrong ones.
     """
     painted = _painted(axes)
     existing = {id(artist) for artist in painted or ()}
     added: List[Any] = []
-    yield added
-    added.extend(
-        artist for artist in _painted(axes) or () if id(artist) not in existing
-    )
+    try:
+        yield added
+    finally:
+        added.extend(
+            artist for artist in _painted(axes) or () if id(artist) not in existing
+        )
 
 
 def _reinsert(
@@ -1031,7 +1035,11 @@ class Renderer:
             legend: The ``Legend`` the axes is showing now, which every other record gives up.
             keeper: The layer that has just been keyed, and whose record is left alone.
         """
-        for layer_id, drawn in list(self._drawn.items()):
+        # Walked live rather than over a copy: every write below lands on a key this walk is already
+        # holding, so the table never gains or loses an entry mid-iteration — the one thing a dict
+        # refuses — and the copy the first version took was insurance against a mutation that cannot
+        # happen here.
+        for layer_id, drawn in self._drawn.items():
             if layer_id == keeper:
                 continue
             kept = tuple(

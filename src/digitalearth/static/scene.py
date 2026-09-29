@@ -42,7 +42,6 @@ from typing import (
     Sequence,
     Set,
     Tuple,
-    Union,
 )
 
 import matplotlib.pyplot as plt
@@ -1442,6 +1441,15 @@ class Scene(WatermarkMixin):
         layer (a registered layer, an image, or a collection), the pre-block x/y limits are captured and
         restored on exit; on an otherwise-empty axes the block is free to set the initial extent.
 
+        **Restored on the way out even when the block raises**, which is the case a bare ``yield`` skipped.
+        A decoration that fails part-way — a Natural-Earth read, a raster backdrop reprojected into the
+        display CRS — has usually already pinned the axes to as far as it got, and the map outlives the
+        failure: a caller that reports the error and goes on drawing was then drawing into a blown-out
+        view rather than into the regional one it had asked for. Measured on an axes held at ``(0, 3)``
+        with a block that widens it to ``(-180, 180)`` and then raises: ``(-180.0, 180.0)`` before,
+        ``(0.0, 3.0)`` after. The normal path is unchanged, and the empty-axes carve-out still keeps the
+        extent the block set, raising or not.
+
         Yields:
             None — run the drawing code inside the ``with`` block.
         """
@@ -1449,10 +1457,12 @@ class Scene(WatermarkMixin):
             bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
         )
         xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
-        yield
-        if has_data:
-            self.ax.set_xlim(xlim)
-            self.ax.set_ylim(ylim)
+        try:
+            yield
+        finally:
+            if has_data:
+                self.ax.set_xlim(xlim)
+                self.ax.set_ylim(ylim)
 
     def _color_keyed(self) -> List[str]:
         """Return the ids of the layers that publish a colour a key could explain, bottom first.
@@ -1938,7 +1948,7 @@ class Scene(WatermarkMixin):
         """
         return self.stamp_mark(mark, **kwargs)
 
-    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs) -> Path:
+    def save(self, path: str | os.PathLike[str], **kwargs) -> Path:
         """Save the figure to ``path`` (``bbox_inches="tight"`` by default).
 
         Args:

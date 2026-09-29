@@ -379,6 +379,40 @@ class TestContextManager:
         )
 
 
+def _widen(ax):
+    """Blow the view out to the whole world from inside a block, the way a global backdrop does.
+
+    **Setting the limits, not plotting into them.** These tests used to draw far-away points with
+    ``ax.plot`` and assert the view had not moved — but ``set_xlim`` turns that axis' autoscaling off, so
+    the plot could not have moved it in the first place, and all three passed with ``_preserve_view``
+    gutted to a bare ``yield`` (measured: the class stays green under that mutation). What the context
+    manager is actually there for is a decoration that *sets* the limits itself — ``add_tiles`` and
+    ``add_features`` both do — which is what this does.
+
+    Args:
+        ax: The axes to widen.
+    """
+    ax.set_xlim(-180, 180)
+    ax.set_ylim(-90, 90)
+
+
+def _widen_then_fail(scene):
+    """Widen the view inside a preserved block and then raise, for the early-exit path.
+
+    A helper rather than the body of the ``pytest.raises`` block: that block may hold one call that can
+    raise (``tests/base/test_refusal_blocks.py``), and the block needs three.
+
+    Args:
+        scene: The scene whose view is preserved.
+
+    Raises:
+        ValueError: always, from inside the ``with`` block.
+    """
+    with scene._preserve_view():
+        _widen(scene.ax)
+        raise ValueError("boom")
+
+
 class TestPreserveView:
     """Tests for Scene._preserve_view (PA-2)."""
 
@@ -386,15 +420,15 @@ class TestPreserveView:
         """A registered layer counts as data, so the block's autoscaling is undone.
 
         Test scenario:
-            With a layer drawn and explicit limits set, plotting far-away points inside the block must
-            not move the view — the pre-block limits are restored on exit.
+            With a layer drawn and explicit limits set, a block that widens the view to the whole world
+            must not leave it there — the pre-block limits are restored on exit.
         """
         scene = Scene()
         _render(scene, np.random.rand(8, 8))
         scene.ax.set_xlim(0, 10)
         scene.ax.set_ylim(0, 5)
         with scene._preserve_view():
-            scene.ax.plot([100, 200], [100, 200])
+            _widen(scene.ax)
         assert scene.ax.get_xlim() == pytest.approx((0.0, 10.0)), (
             f"xlim moved: {scene.ax.get_xlim()}"
         )
@@ -413,7 +447,7 @@ class TestPreserveView:
         scene.ax.set_xlim(0, 3)
         scene.ax.set_ylim(0, 3)
         with scene._preserve_view():
-            scene.ax.plot([100, 200], [100, 200])
+            _widen(scene.ax)
         assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), (
             f"xlim moved: {scene.ax.get_xlim()}"
         )
@@ -429,9 +463,30 @@ class TestPreserveView:
         scene.ax.set_xlim(0, 3)
         scene.ax.set_ylim(0, 3)
         with scene._preserve_view():
-            scene.ax.plot([100, 200], [100, 200])
+            _widen(scene.ax)
         assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), (
             f"xlim moved: {scene.ax.get_xlim()}"
+        )
+
+    def test_restores_limits_when_the_block_raises(self):
+        """A block that fails part-way still gives the view back (SonarCloud S9152).
+
+        Test scenario:
+            The widening happens, then the block raises. The exception reaches the caller unchanged, and
+            the axes is the regional one it was before — not the world the failed decoration left behind,
+            which is what a ``yield`` outside ``try``/``finally`` skipped past.
+        """
+        scene = Scene()
+        scene.ax.imshow(np.random.rand(4, 4))
+        scene.ax.set_xlim(0, 3)
+        scene.ax.set_ylim(0, 3)
+        with pytest.raises(ValueError, match="boom"):
+            _widen_then_fail(scene)
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), (
+            f"xlim left where the failed block put it: {scene.ax.get_xlim()}"
+        )
+        assert scene.ax.get_ylim() == pytest.approx((0.0, 3.0)), (
+            f"ylim left where the failed block put it: {scene.ax.get_ylim()}"
         )
 
     def test_empty_axes_keeps_new_extent(self):

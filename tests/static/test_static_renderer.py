@@ -29,6 +29,7 @@ from digitalearth.static.renderer import (
     DrawnLayer,
     Renderer,
     _reinsert,
+    artists_added,
     drawer_for,
     drawing_opts,
 )
@@ -172,6 +173,27 @@ def _artist_ids(canvas):
         layer_id: tuple(id(artist) for artist in drawn.artists)
         for layer_id, drawn in canvas._renderer.drawn.items()
     }
+
+
+def _collect_then_fail(axes, captured):
+    """Draw one artist inside an `artists_added` block and then fail, keeping hold of its list.
+
+    A helper rather than the body of the ``pytest.raises`` block: that block may hold one call that can
+    raise (``tests/base/test_refusal_blocks.py``), and this needs three. The yielded list is handed out
+    through `captured` because the block is left by an exception, which is the whole point of the check —
+    the ``with`` statement's own target is gone by the time the caller reads it.
+
+    Args:
+        axes: The axes drawn on.
+        captured: The list the collector's own list is appended to.
+
+    Raises:
+        RuntimeError: always, after drawing.
+    """
+    with artists_added(axes) as added:
+        captured.append(added)
+        axes.plot([1, 2], [1, 2])
+        raise RuntimeError("failed after drawing")
 
 
 class TestAKindThisTierDoesNotDraw:
@@ -748,6 +770,25 @@ class TestADrawerThatFailsPartWay:
         canvas.close()
         assert registered == [kept], registered
         assert painted == [kept], painted
+
+    def test_the_collector_names_what_a_failing_block_drew(self):
+        """`artists_added` fills its list on the early exit too (SonarCloud S9152).
+
+        Test scenario:
+            The block draws one line and then raises. The collector's list is the only record of what
+            reached the axes, so it has to be filled on the way out of a failing block as well — a
+            ``yield`` outside ``try``/``finally`` left it empty, and a caller with an empty list has a
+            half-drawn layer it cannot take off again.
+        """
+        canvas = Map()
+        captured: list = []
+        with pytest.raises(RuntimeError, match="after drawing"):
+            _collect_then_fail(canvas.ax, captured)
+        drew = list(canvas.ax.lines)
+        canvas.close()
+        assert captured[0] == drew, (
+            f"the collector recorded {captured[0]} for a block that drew {drew}"
+        )
 
 
 class TestAGraticuleOwnsTheLinesTheFramePutOnTheAxes:
