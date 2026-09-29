@@ -974,8 +974,11 @@ class TestTheRefusalNamesWhatTheCallerWrote:
             caller never wrote, and never saying that the kind already meant it (R2-L4). The refusal names the
             kind, what it draws with, and the kind that means what was asked for instead.
         """
+        # `dataset.epsg` is a pyramids property, read above the block: a raise from *it* would satisfy
+        # the block and leave the refusal under test unreached.
+        epsg = dataset.epsg
         with pytest.raises(ValueError) as excinfo:
-            qp.quickmap(dataset, crs=dataset.epsg, kind="contourf", filled=False)
+            qp.quickmap(dataset, crs=epsg, kind="contourf", filled=False)
         message = str(excinfo.value)
         assert "kind='contourf' is itself filled=True" in message, message
         assert "RasterMixin" not in message, (
@@ -1015,8 +1018,10 @@ class TestTheRefusalNamesWhatTheCallerWrote:
             have taken this call away too. The refusal here comes from cleopatra, naming `filled`, which is
             the tier's own answer rather than this module's.
         """
+        # Read above the block for the reason the test two above gives: `epsg` is a property.
+        epsg = dataset.epsg
         with pytest.raises(ValueError) as excinfo:
-            qp.quickmap(dataset, crs=dataset.epsg, kind="imshow", filled=False)
+            qp.quickmap(dataset, crs=epsg, kind="imshow", filled=False)
         message = str(excinfo.value)
         assert "contradicts it" not in message, (
             f"imshow implies no filled=, so this must not be refused as a contradiction: {message}"
@@ -1035,8 +1040,11 @@ class TestTheRefusalNamesWhatTheCallerWrote:
         from pyramids.feature import FeatureCollection
 
         fc = FeatureCollection.read_file("tests/data/points.geojson")
+        # Read above the block: `epsg` is a pyramids property, so a raise from it would pass this test
+        # with the `column=` refusal never reached.
+        epsg = fc.epsg
         with pytest.raises(ValueError) as excinfo:
-            qp.quickmap(fc, crs=fc.epsg, column="fid")
+            qp.quickmap(fc, crs=epsg, column="fid")
         message = str(excinfo.value)
         assert "column='fid'" in message, message
         assert "size_column=" in message, message

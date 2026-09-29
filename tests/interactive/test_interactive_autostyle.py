@@ -136,8 +136,11 @@ class TestQuickplotBackend:
         """
         from digitalearth.api import quickmap
 
+        # `dataset.epsg` is a pyramids property, read above the block: a raise from *it* would satisfy
+        # the block and leave the `kind=` refusal under test unreached.
+        epsg = dataset.epsg
         with pytest.raises(ValueError) as excinfo:
-            quickmap(dataset, crs=dataset.epsg, backend="interactive", kind="bogus")
+            quickmap(dataset, crs=epsg, backend="interactive", kind="bogus")
         message = str(excinfo.value)
         assert "kind='bogus'" in message, message
         assert "'contourf'" in message, (
