@@ -370,7 +370,19 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
             raise ValueError(
                 f"values length {len(scalar)} does not match {len(points)} points"
             )
-        style = classified_scalars(scalar, scheme=scheme, k=k, cmap=cmap)
+        # The layer's own colour encoding carries the classification `_color_encoding` cut to describe this
+        # cloud, from the same column with the same scheme and k. Handing it over is what makes that one
+        # computation rather than two: a 50,000-point cloud scanned its values twice to draw once, whether
+        # or not a key was ever asked for (review N4). A layer whose column could not be cut publishes no
+        # scale, and the refusal a caller should see is still raised from here.
+        encoding = layer.symbology.encoding("color")
+        style = classified_scalars(
+            scalar,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
+            scale=None if encoding is None else encoding.scale,
+        )
         cloud[SCALAR] = style.pop("scalars")
         # Taken out before the clash check, as `cmap` is above: the classifier fills `nan_color` from the
         # shared missing-data colour as a default, so a caller who named one is choosing, not colliding

@@ -78,8 +78,31 @@ SCENE_EXPORTERS: dict[str, str] = {
 }
 
 
+def _classes_of(scale: Optional[Scale]) -> Optional[tuple[list[Any], list[str]]]:
+    """Return a categorical scale's categories and the colours they were given, or ``None``.
+
+    Args:
+        scale: The colour encoding's scale, or ``None`` when the caller has none to offer.
+
+    Returns:
+        ``(categories, colours)`` when the scale is categorical **and** carries one colour per category —
+        which is the invariant :meth:`~digitalearth.base.spec.scale.Scale.categorical` enforces, and the
+        only shape the drawer can paint from. ``None`` for any other scale, including a categorical one
+        assembled without colours, so the caller categorises the column itself as it always did.
+    """
+    if scale is None or not scale.is_categorical:
+        return None
+    colours: list[str] = []
+    for category in scale.categories:
+        colour = scale.color_for(category)
+        if colour is None:
+            return None
+        colours.append(colour)
+    return list(scale.categories), colours
+
+
 def classified_scalars(
-    values: Any, *, scheme: Any | None, k: int, cmap: Any
+    values: Any, *, scheme: Any | None, k: int, cmap: Any, scale: Optional[Scale] = None
 ) -> dict[str, Any]:
     """Turn a value column into the ``scalars``/``cmap`` keywords that colour a PyVista layer.
 
@@ -120,6 +143,14 @@ def classified_scalars(
             sampled, so on a graduated scheme it must carry exactly one colour per class; a shorter list is
             refused, not recycled, because the lookup table would otherwise clamp every class past its end
             onto the last colour and they would all render identically.
+        scale: The classification the layer's colour encoding already carries, when the caller has one.
+            The builder cuts the same column with the same ``scheme``/``k`` to describe the layer, so
+            computing it again here is a second full pass over the data for a result that is by
+            construction identical — a cost a large cloud paid even when no key was ever asked for (review
+            N4). Passed in, the edges (or the categories and their colours) are read off it and the
+            classifier is not called. ``None``, or a scale whose shape does not match ``scheme``, classifies
+            here as before: a column the builder could not cut publishes no scale, and the refusal below is
+            the one a caller should see.
 
     Returns:
         dict: keyword arguments to splat into :meth:`pyvista.Plotter.add_mesh` /
@@ -192,9 +223,13 @@ def classified_scalars(
         }
 
     if isinstance(scheme, str) and scheme.lower() == "categorical":
-        categories, colours = categorical_colors(
-            values, cmap=resolve_categorical_cmap(cmap)
-        )
+        cut = _classes_of(scale)
+        if cut is None:
+            categories, colours = categorical_colors(
+                values, cmap=resolve_categorical_cmap(cmap)
+            )
+        else:
+            categories, colours = cut
         index = {category: position for position, category in enumerate(categories)}
         # `categorical_colors` builds its categories from the non-null values alone, so a value the index
         # has no entry for is a missing one — code it NaN rather than defaulting it into category 0, which
@@ -209,15 +244,18 @@ def classified_scalars(
         return _discrete_style(codes, colours)
 
     numbers = np.asarray(values, dtype="float64")
-    try:
-        edges = Scale.breaks_of(numbers, scheme, k)
-    # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
-    # swallowing that would present a wiring failure as bad data. The other two tiers already let it
-    # through, so catching it here made the three disagree on exactly that case.
-    except ValueError as error:  # unknown scheme, constant column, k < 1 …
-        # Scale's own message already names the scheme and `k`, and there is no column here to add, so
-        # this only normalises the exception type the tiers raise.
-        raise ValueError(f"cannot classify values: {error}") from error
+    if scale is not None and scale.is_classified:
+        edges = scale.breaks
+    else:
+        try:
+            edges = Scale.breaks_of(numbers, scheme, k)
+        # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
+        # swallowing that would present a wiring failure as bad data. The other two tiers already let it
+        # through, so catching it here made the three disagree on exactly that case.
+        except ValueError as error:  # unknown scheme, constant column, k < 1 …
+            # Scale's own message already names the scheme and `k`, and there is no column here to add, so
+            # this only normalises the exception type the tiers raise.
+            raise ValueError(f"cannot classify values: {error}") from error
     # `edges` bounds the classes, so it holds one more entry than there are classes; digitize against the
     # interior edges to land every value in 0 .. n_classes - 1 (clip catches the closed upper bound).
     n_classes = max(len(edges) - 1, 1)

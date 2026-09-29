@@ -260,3 +260,115 @@ class TestKeywordsTheDrawerWouldOverwrite:
             )
         finally:
             scene.close()
+
+
+class TestTheColumnIsClassifiedOnce:
+    """The builder describes the classification and the drawer paints it — from one computation, not two."""
+
+    @staticmethod
+    def _table(n=200):
+        """Build an ``(n, 3)`` point table whose x column doubles as a value column.
+
+        Args:
+            n: How many points to build.
+
+        Returns:
+            numpy.ndarray: the point table.
+        """
+        return np.column_stack([np.arange(float(n)), np.arange(float(n)), np.zeros(n)])
+
+    def test_a_graduated_column_reaches_the_classifier_once(self, monkeypatch):
+        """Cutting a large cloud's classes twice is a second full pass for an identical result.
+
+        Args:
+            monkeypatch: Counts the calls that reach the shared classifier.
+
+        Test scenario:
+            `_color_encoding` cuts the column to describe the layer, and the drawer cut the same column
+            again with the same scheme and k a moment later — so a 50,000-point cloud scanned its values
+            twice to draw once, whether or not a key was ever asked for (review N4).
+        """
+        from digitalearth.base.spec.scale import Scale
+
+        scanned = []
+        cut = Scale._breaks
+
+        def counted(values, scheme, k):
+            scanned.append(int(np.asarray(values).size))
+            return cut(values, scheme, k)
+
+        monkeypatch.setattr(Scale, "_breaks", staticmethod(counted))
+        points = self._table()
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.point_cloud(points, values=points[:, 0], scheme="quantiles", k=4)
+        finally:
+            scene.close()
+        assert scanned == [200], (
+            f"the column must be cut once and the cut reused; it was scanned {scanned}"
+        )
+
+    def test_a_categorical_column_reaches_the_categoriser_once(self, monkeypatch):
+        """The categorical half is the same shape: one scan for the distinct values, not two.
+
+        Args:
+            monkeypatch: Counts the calls that reach the shared categoriser.
+        """
+        import digitalearth.base.symbology as symbology
+
+        scanned = []
+        categorise = symbology.categorical_colors
+
+        def counted(values, **kwargs):
+            scanned.append(int(np.asarray(values, dtype=object).size))
+            return categorise(values, **kwargs)
+
+        monkeypatch.setattr(symbology, "categorical_colors", counted)
+        points = self._table(60)
+        labels = np.array(["a", "b", "c"] * 20, dtype=object)
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.point_cloud(points, values=labels, scheme="categorical", cmap="tab10")
+        finally:
+            scene.close()
+        assert scanned == [60], (
+            f"the column must be categorised once and reused; it was scanned {scanned}"
+        )
+
+    @pytest.mark.parametrize(
+        "values, scheme, k",
+        [
+            (None, "quantiles", 4),
+            (None, "equal_interval", 3),
+            (["a", "b", "c", "a", "b", "c"], "categorical", 5),
+        ],
+    )
+    def test_the_reused_cut_paints_exactly_what_a_fresh_one_would(
+        self, values, scheme, k
+    ):
+        """Reusing the description's cut is a saving, not a second answer.
+
+        Args:
+            values: A categorical column, or `None` for the table's own x column.
+            scheme: How the values are classified.
+            k: How many classes a graduated scheme cuts.
+
+        Test scenario:
+            The saving is only sound if the two computations were identical to begin with, so the scalars
+            the cloud is drawn with are compared against what the classifier produces when it is handed no
+            description at all.
+        """
+        from digitalearth.three_d.base import classified_scalars
+
+        points = self._table(6)
+        column = points[:, 0] if values is None else np.array(values, dtype=object)
+        fresh = classified_scalars(column, scheme=scheme, k=k, cmap="viridis")
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.point_cloud(points, values=column, scheme=scheme, k=k, cmap="viridis")
+            drawn = np.asarray(scene.layers[0][0][SCALAR], dtype="float64")
+        finally:
+            scene.close()
+        assert np.array_equal(
+            drawn, np.asarray(fresh["scalars"], dtype="float64"), equal_nan=True
+        ), (drawn, fresh["scalars"])
