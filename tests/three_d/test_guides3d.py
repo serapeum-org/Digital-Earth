@@ -1222,9 +1222,20 @@ class TestTheBuildersPublishWhatTheyColourBy:
             The builder reads the colour column to measure its scale. A column that is not there, or one the
             scheme cannot cut, must not raise *here* — the drawer reads the same column a moment later and
             raises the tier's own message for it.
+
+            `pytest.raises(KeyError, match="missing")` alone **cannot say that**, and did not: both
+            behaviours raise `KeyError('missing')` from the same pandas line, and deleting the swallow this
+            test exists to pin left it green along with the rest of the tier (review M14). What the two
+            differ on is *where* the refusal comes from, so that is what is asserted — the builder's own
+            step answers `None` instead of raising, and the refusal that does reach the caller has no frame
+            of `_color_encoding` in it.
         """
+        import traceback
+
         import geopandas as gpd
         from shapely.geometry import Polygon
+
+        from digitalearth.three_d.vector import _color_encoding
 
         squares = gpd.GeoDataFrame(
             {"pop": [1.0, 9.0]},
@@ -1233,8 +1244,18 @@ class TestTheBuildersPublishWhatTheyColourBy:
             ],
             crs=4326,
         )
-        with pytest.raises(KeyError, match="missing"):
+        assert _color_encoding(squares, "missing", "quantiles", 3, "viridis") is None, (
+            "the builder raised for a column it is supposed to leave to the drawer"
+        )
+        with pytest.raises(KeyError, match="missing") as refused:
             scene.extruded_polygons(squares, column="missing")
+        frames = [
+            frame.name for frame in traceback.extract_tb(refused.value.__traceback__)
+        ]
+        assert "_color_encoding" not in frames, (
+            "the refusal came out of the builder's own read of the column rather than the drawer's: "
+            f"{frames}"
+        )
 
     def test_a_column_the_scheme_cannot_cut_publishes_no_scale(self, scene):
         """An unclassifiable column is described without a scale rather than refused early.
