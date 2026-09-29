@@ -1941,9 +1941,14 @@ class TestAnExcuseComesFromATableAndNotFromItsAbsence:
         Test scenario:
             A helper that answered with a reason for every name would pass the live tiers' probes and excuse
             the whole package — the shape of a check narrowed until it passes rather than fixed. Measured
-            against that mutation: removing :func:`_classification_excuse`'s `return None` branch fails here
-            with `'it publishes no encoding at all for a Scale to hang on - None' =
-            _classification_excuse('make-believe')`.
+            against that mutation, re-measured against the helper as it now reads (R2-N7): giving
+            :func:`_classification_excuse`'s lookup a default —
+            ``NO_PORTABLE_CLASSIFICATION.get(backend, "it publishes no encoding at all for a Scale to hang
+            on")`` — fails here with ``assert 'it publishes no encoding at all for a Scale to hang on' is
+            None``, and reddens
+            :meth:`test_every_tier_the_package_ships_is_excused_by_a_named_table` beside it. The mutation
+            recorded before was "removing the `return None` branch", which described a two-table version of
+            the helper that order 24 collapsed to a single ``.get`` — no such branch is left to remove.
         """
         assert _classification_excuse(MAKE_BELIEVE) is None, (
             f"{MAKE_BELIEVE} is named in neither table and was excused anyway, so no tier is held to its "
