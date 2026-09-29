@@ -941,6 +941,33 @@ def points_fc():
     return FeatureCollection.read_file("tests/data/points.geojson")
 
 
+def test_colored_by_carries_every_other_field_of_the_drawing():
+    """`DrawnLayer.colored_by` changes the colour field and nothing else, whatever the fields are.
+
+    Test scenario:
+        Written against `dataclasses.fields` rather than against a list of names, because the hazard is a
+        field added to `DrawnLayer` **later** (review L2): a hand-written copy is correct on the day it is
+        written and silently lossy on the day the dataclass grows, and a test that names the five fields
+        would grow the same blind spot at the same moment. This one covers a sixth field the day it is
+        added, without being touched.
+
+        Proved not vacuous by adding a sixth field and running it against both implementations: the
+        hand-written copy drops it and this test reddens; `replace` carries it and it passes.
+    """
+    from dataclasses import fields
+
+    carried = {
+        held.name: object() for held in fields(DrawnLayer) if held.name != "color_field"
+    }
+    again = DrawnLayer(**carried).colored_by("elev")
+    assert again.color_field == "elev"
+    for name, mark in carried.items():
+        assert getattr(again, name) is mark, (
+            f"colored_by() dropped {name!r}; it copies the drawing field by field, so every field "
+            f"`DrawnLayer` gains has to be added there by hand"
+        )
+
+
 def test_a_key_is_not_in_the_layer_s_artists(keyed):
     """The drawn key is held beside the layer's artists, never among them.
 

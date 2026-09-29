@@ -53,7 +53,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, cast
 
 from matplotlib.artist import Artist
 
@@ -177,11 +177,17 @@ class DrawnLayer:
         """Return this drawing again, carrying the data field its colour varies with.
 
         The one thing a drawer knows that its builder does not, and therefore the one field every drawer
-        fills in on its way out (see :attr:`color_field`). It is a method rather than a
+        fills in on its way out (see :attr:`color_field`). It is a method rather than a bare
         ``dataclasses.replace`` at each of those return statements because that is the whole of what they
         do with it, and because ``replace`` is typed as "some dataclass" rather than as this one — a
         drawer declaring ``-> DrawnLayer`` then hands back a value nothing can check against the
-        declaration.
+        declaration. The ``cast`` is where that narrowing happens, once, instead of at eight call sites.
+
+        Inside, it **is** ``replace``. It was a field-by-field copy, which was correct on the day it was
+        written and would have gone on being correct only until `DrawnLayer` grew a sixth field: a copy
+        that names the fields drops the one nobody remembered to add to it, silently, while ``replace``
+        cannot forget one (review L2). Proved by adding a sixth field and running
+        ``test_colored_by_carries_every_other_field_of_the_drawing`` against both.
 
         Args:
             color_field: The field name, or ``None`` for a layer that colours by no field at all.
@@ -201,13 +207,7 @@ class DrawnLayer:
 
                 ```
         """
-        return DrawnLayer(
-            artist=self.artist,
-            glyph=self.glyph,
-            artists=self.artists,
-            color_field=color_field,
-            guides=self.guides,
-        )
+        return cast("DrawnLayer", with_fields(self, color_field=color_field))
 
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
