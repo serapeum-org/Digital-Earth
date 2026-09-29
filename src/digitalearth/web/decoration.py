@@ -862,7 +862,8 @@ class DecorationMixin(_MixinBase):
                 its guide, so a key rebuilt after another layer is removed still carries them.
             visible: `False` records the guide with ``show=False`` — the layer says outright that its colour
                 is explained by nothing — and draws no key, so a caller passing a flag through does not have
-                to branch. The corner and the layer are still checked, so neither is valid only half the time.
+                to branch. The corner, the layer **and** `labels` are all still checked, so no argument is
+                valid only half the time.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -910,11 +911,18 @@ class DecorationMixin(_MixinBase):
             return self
         _require_maplibre()
         guide = Guide(show=bool(visible), title=title, anchor=position)
-        if visible:
-            # Built and thrown away. A `labels` list that does not match the classification is refused
-            # *before* anything is recorded, so a refusal leaves the map exactly as it was — rather than
-            # leaving behind a guide whose key every later rebuild would fail to draw.
-            _legend_panel(self._legend_of(target), guide, labels)
+        # Built and thrown away, and built **whatever the flag says**. `labels` is a caller argument like
+        # the corner and the layer, and it was the one left under `if visible` when those two were hoisted:
+        # `legend(labels=["one"], visible=False)` recorded a one-entry override against a two-class key
+        # while the same call without the flag raised, which is review L7's bug regressed in the method
+        # whose own comment explains it (review M2).
+        #
+        # A `labels` list that does not match the classification is therefore refused *before* anything is
+        # recorded, so a refusal leaves the map exactly as it was — rather than leaving behind a guide whose
+        # key every later rebuild would fail to draw. Pinned by
+        # `tests/web/test_web_legend.py::…::test_a_refusal_leaves_the_map_exactly_as_it_was`, so moving the
+        # record above this line reddens rather than passing.
+        _legend_panel(self._legend_of(target), guide, labels)
         self._attach_guide(target, guide, labels)
         # Derived, not written: the rule for which of several guides is drawn lives in one place, so this
         # call and a later removal cannot disagree about whose key is on screen.

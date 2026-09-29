@@ -634,3 +634,29 @@ class TestANamedLayerIsCheckedWhateverTheFlagSays:
         web_map.polygons(_layer("pop", [1, 100]), name="plain")
         with pytest.raises(ValueError, match="was not drawn with a classification"):
             web_map.legend(layer_id="plain", visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_a_labels_list_that_does_not_fit_the_classes_is_refused(self, visible):
+        """The third caller argument, checked on the same terms as the corner and the layer.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            A regression of the rule the two tests above exist for, in the very method whose comment
+            explains it: `position` and `layer_id` were hoisted above the flag, and `labels` was left under
+            `if visible` — so `legend(labels=["only one"], visible=False)` recorded a one-entry override
+            against a two-class key while `legend(labels=["only one"])` raised (review M2). The docstring's
+            `Raises:` promises the refusal with no `visible` qualifier, and a caller threading a flag
+            through must not be checked half the time.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().choropleth(
+            _layer("pop", [1, 100]), column="pop", name="A", scheme="quantiles", k=2
+        )
+        with pytest.raises(ValueError, match="entries but the classification"):
+            web_map.legend(layer_id="A", labels=["only one"], visible=visible)
+        assert web_map.get_layer("A").symbology.guide() is None, (
+            "a refused call must record nothing, whatever the flag says"
+        )
