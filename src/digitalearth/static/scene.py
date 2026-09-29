@@ -1705,9 +1705,19 @@ class Scene(WatermarkMixin):
         went on carrying ``Guide(show=True)`` on its encoding. A figure written out then claimed two swatch
         keys of which only one can ever be drawn, with the winner decided by draw order (review M4).
 
-        Switched **off** rather than taken off: the title and the row labels the caller gave are kept, so
-        ``legend(layer_id)`` brings that key back without a second description — the same trade
+        Switched **off** rather than taken off: the *record* keeps the title and the row labels the caller
+        gave, so a figure written out here still says what the displaced key was called and a layer that
+        gave the slot up is still keyable rather than having to be described from scratch — the same trade
         ``visible=False`` makes.
+
+        What it does **not** do is hand them back to the next call. ``legend(layer_id)`` with no ``title``
+        and no ``labels`` resolves ``title`` through :meth:`_title_for`, which answers the layer's own units
+        for a ``None``, and passes ``labels=None``, which clears a recorded override so one call's rename
+        does not outlive it — so the key comes back with a re-derived title and derived rows. Bringing it
+        back *as it was* means repeating them. (This said "brings that key back without a second
+        description" until review L2, which is true of the record and not of the call.) Pinned by
+        ``tests/static/test_static_guides.py::TestOneAxesHoldsOneSwatchLegend``'s
+        ``test_taking_the_key_back_re_derives_what_it_is_called``.
 
         Args:
             keeper: The layer that has just been keyed, whose guide is left alone.
@@ -1878,8 +1888,11 @@ class Scene(WatermarkMixin):
             this way replaces the first layer's swatches rather than adding a box beside them — unlike
             :meth:`colorbar`, where each layer gets its own strip. **The displaced layer's guide is switched
             off with it**, so the figure never describes two swatch keys of which only one can be drawn;
-            ``legend()`` on that layer again brings its key back, title and labels and all, and takes this
-            one off in its turn (review M4). A categorical fill already draws its own
+            ``legend()`` on that layer again brings its key back and takes this one off in its turn (review
+            M4) — with a re-derived title and derived rows, because a call that passes no ``title`` and no
+            ``labels`` derives both, so bringing a displaced key back *as it was* means repeating them
+            (review L2). What the record keeps while the key is off is what the figure says it was called;
+            it is not fed back into the next call. A categorical fill already draws its own
             swatch legend through cleopatra; asking here records it on the layer, which is what lets it be
             titled, relabelled, hidden and removed with the layer.
         """

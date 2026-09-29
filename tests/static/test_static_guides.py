@@ -600,7 +600,7 @@ class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
             keyed.colorbar("caption", visible=False)
 
     def test_visible_false_records_the_guide_and_draws_nothing(self, keyed):
-        """The flag reaches the record, so switching the key on later needs no second description.
+        """The flag reaches the record, so the figure says the key was decided rather than never asked for.
 
         Args:
             keyed: A map with a raster and a text label.
@@ -608,6 +608,11 @@ class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
         Test scenario:
             ``visible=False`` is "no key, please" rather than "no guide" — which is what lets it also take an
             already-drawn key off again.
+
+            The summary line said "so switching the key on later needs no second description", which is the
+            claim review L2 found false one level up: the record keeps the title, but a later
+            ``colorbar()`` with no ``label=`` re-derives it rather than reading the switched-off guide's
+            own. What the flag buys is the *record* of the decision, not a description the next call reuses.
         """
         keyed.colorbar(visible=False)
         assert keyed.get_layer("acc").symbology.guide().show is False
@@ -1161,6 +1166,53 @@ class TestOneAxesHoldsOneSwatchLegend:
         )
         assert (handed_over.show, handed_over.title) == (False, "b"), (
             f"the handed-over key should be switched off and still called 'b'; it is {handed_over}"
+        )
+
+    def test_taking_the_key_back_re_derives_what_it_is_called(self, two_fills):
+        """A bare `legend(layer_id)` brings the key back, but not the title and rows it was given.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            The record keeps the displaced layer's title and row labels — the test above pins that — and
+            both `Scene.legend`'s Note and `_displace_other_legends`' docstring read that as
+            "`legend(layer_id)` brings that key back, title and labels and all". It does not: the call
+            resolves `title` through `_title_for`, which answers the layer's own units for a `None`, and
+            passes `labels=None`, which *clears* a recorded override so one call's rename does not outlive
+            it. So what comes back is a key with a re-derived title and derived rows (review L2).
+
+            Pinned rather than only reworded, because it is the kind of claim that goes stale silently:
+            either the prose or this test has to change if the call ever learns to reuse a switched-off
+            guide's own description.
+        """
+        from digitalearth.static.guides import GUIDE_LABELS_KEY
+
+        two_fills.legend("a", title="Alpha", labels=["x", "y"])
+        two_fills.legend("b", title="Beta")
+        switched_off = two_fills.get_layer("a")
+        assert (
+            switched_off.symbology.guide().show,
+            switched_off.symbology.guide().title,
+        ) == (
+            False,
+            "Alpha",
+        ), (
+            "the record did not keep the displaced layer's own title while switching it off"
+        )
+        assert switched_off.symbology.props.get(GUIDE_LABELS_KEY) == ("x", "y"), (
+            "the record did not keep the displaced layer's own row labels"
+        )
+        two_fills.legend("a")
+        back = two_fills.get_layer("a")
+        assert back.symbology.guide().show is True, "the key did not come back at all"
+        assert back.symbology.guide().title is None, (
+            "a bare legend(layer_id) is documented as re-deriving the title; it kept "
+            f"{back.symbology.guide().title!r}, so the prose that says otherwise is now the right one"
+        )
+        assert GUIDE_LABELS_KEY not in back.symbology.props, (
+            "a bare legend(layer_id) is documented as clearing the recorded row labels; it kept "
+            f"{back.symbology.props.get(GUIDE_LABELS_KEY)!r}"
         )
 
 
