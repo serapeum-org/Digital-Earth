@@ -526,31 +526,60 @@ class TestAClassifiedLayerPublishesTheFieldItsColourVariesWith:
         Test scenario:
             The three arms of `_color_expr` each build a `Scale` for their own reasons, and each hands *that*
             object back rather than a second one built from `last_breaks`. A recomputation is how the top
-            swatch once read `12.900000000000002` for a ramp drawn to `12.9`. Checked against
-            `last_breaks`, which is the independently recorded record of what was drawn, so the two sides of
-            the comparison are not one expression twice.
+            swatch once read `12.900000000000002` for a ramp drawn to `12.9`.
+
+            **Read against the compiled MapLibre expression**, off the layer's own paint — the one side of
+            the comparison the recorded scale is not itself the source of. This used to read `last_breaks`,
+            and the graduated arm builds its scale *from* `last_breaks`
+            (``breaks=tuple(self.last_breaks)``), so ``list(scale.breaks) == last_breaks`` was
+            ``list(tuple(X)) == list(X)`` — one expression twice. Under it a 1e-9 drift between the record
+            and the ``step`` edges the browser is actually handed left the whole `tests/web` suite green
+            (review M13), which is this tier's half of what order 24 is for.
+
+            The graduated arm needs all three assertions, because MapLibre's ``step`` carries only the
+            *interior* cuts — it has no bounds — so the record's outer two edges appear nowhere in the
+            expression and are checked against the frame's own extremes instead. (Measured for this fixture:
+            a quantile cut over ``pop`` spans the data, so the outermost edges are its min and max.)
         """
         drawn = WebMap()
         try:
             drawn.choropleth(_polygons(), "pop", scheme=scheme, k=2)
-            scale = _last(drawn).encoding("color").scale
-            breaks = list(drawn.last_breaks)
+            symbology = _last(drawn)
+            scale = symbology.encoding("color").scale
+            expr = symbology.props["paint"]["fill-color"]
         finally:
             drawn.close()
         assert scale is not None, (
             "a classified colour must carry the scale it was drawn with"
         )
         if scheme == "categorical":
-            assert list(scale.categories) == breaks, (
-                f"the scale's categories {list(scale.categories)} must be the drawn ones {breaks}"
+            keys = list(expr[2:-1:2])
+            assert list(scale.categories) == keys, (
+                f"the scale's categories {list(scale.categories)} must be the `match` keys {keys}"
             )
         elif scheme is None:
-            assert [scale.vmin, scale.vmax] == [breaks[0], breaks[-1]], (
-                f"the ramp's limits {(scale.vmin, scale.vmax)} must span the drawn stops {breaks}"
+            stops = list(expr[3::2])
+            assert [scale.vmin, scale.vmax] == [stops[0], stops[-1]], (
+                f"the ramp's limits {(scale.vmin, scale.vmax)} must be the end stops the "
+                f"`interpolate` draws {(stops[0], stops[-1])}"
             )
         else:
-            assert list(scale.breaks) == breaks, (
-                f"the scale's edges {list(scale.breaks)} must be the drawn ones {breaks}"
+            step = expr[2]  # ["case", <is a number>, ["step", …], MISSING_COLOR]
+            cuts = list(step[3::2])
+            swatches = [step[2], *step[4::2]]
+            edges = list(scale.breaks)
+            values = _polygons()["pop"]
+            span = [float(values.min()), float(values.max())]
+            assert edges[1:-1] == cuts, (
+                f"the scale's interior edges {edges[1:-1]} must be the `step` cuts {cuts}"
+            )
+            assert len(edges) == len(swatches) + 1, (
+                f"the expression draws {len(swatches)} classes, so the scale must record "
+                f"{len(swatches) + 1} edges, not {len(edges)}"
+            )
+            assert [edges[0], edges[-1]] == span, (
+                f"the scale's outer edges {(edges[0], edges[-1])} must be the column's own span {span}; "
+                "the `step` expression carries no bounds, so nothing else can catch a drift there"
             )
 
 
