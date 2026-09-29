@@ -670,8 +670,16 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
             rule: a guide on a hidden layer draws nothing yet is still a key the caller asked for, and
             showing the layer brings it back. Targeting only the drawn key would leave that one
             unreachable, so `colorbar(visible=False)` would be a no-op that the next `set_visible` undid.
+
+            Both of the closing assertions are absences, so one of them has to be preceded by a presence or
+            the test is satisfied by a key that was never asked for: it survived every web mutant tried,
+            including `colorbar` gutted to a `return self` (review L8). The opening assertion is that
+            presence, on the same panel the closing ones read.
         """
         web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B", (
+            "B's key must be drawn before it is hidden, or nothing here is about a recorded key"
+        )
         web_map.set_visible("B", False)
         assert _whose_key(web_map) is None, "a hidden layer's key is not drawn"
         web_map.colorbar(visible=False)
