@@ -16,7 +16,6 @@ The guide now hangs on the layer's colour :class:`~digitalearth.base.spec.encodi
 travels — so the key moves, hides and disappears with the layer for free.
 """
 
-import numpy as np
 import pytest
 
 from digitalearth.base.spec import Symbology
@@ -1212,6 +1211,14 @@ def test_a_key_is_not_in_the_layer_s_artists(keyed):
         into; a colorbar lives on its own axes where neither applies, so putting it there would feed the
         z-order ranking an artist that is not painted on the data axes. What the two share is the layer's
         lifetime, not its stacking.
+
+        The membership of `artists` is the whole of what can be asserted here, and it is asserted twice —
+        by what the tuple *is* and by what it does not hold. A fourth line compared
+        `drawn.artist.get_zorder()` with `keyed.ax.images[0].get_zorder()` and sold itself as the guard on
+        `_rank_zorders`: `drawn.artist` **is** `ax.images[0]`, so both sides read one object, and forcing
+        every drawn artist to `zorder = -4321.0` — feeding the ranking nonsense, which is the defect the
+        line named — left this test passing. Dealing the key into `DrawnLayer.artists` is the mutation that
+        reddens what is left (review M8).
     """
     keyed.colorbar()
     drawn = keyed._renderer.drawn["acc"]
@@ -1220,4 +1227,3 @@ def test_a_key_is_not_in_the_layer_s_artists(keyed):
     assert drawn.guides[0] not in drawn.artists, (
         f"the key is among the layer's artists: {drawn.artists}"
     )
-    assert np.isclose(drawn.artist.get_zorder(), keyed.ax.images[0].get_zorder())
