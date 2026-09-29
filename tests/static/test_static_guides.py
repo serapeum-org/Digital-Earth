@@ -278,6 +278,45 @@ class TestTheKeyFollowsItsLayer:
         keyed.set_visible("acc", True)
         assert bar.ax.get_visible() is True, "the key did not come back with the layer"
 
+    def test_a_key_asked_for_on_a_hidden_layer_is_drawn_hidden(self, keyed):
+        """A bar created on a layer that is already hidden starts hidden too.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            The other half of `test_hiding_the_layer_hides_the_key`, and the symptom order 24 names as its
+            motivation: `set_visible` hid the key it found, but the *draw* never asked whether the layer it
+            explains is on, so keying a hidden layer put a bar on the figure labelling a picture the reader
+            cannot see. Hiding then keying and keying then hiding must leave the same figure.
+        """
+        keyed.set_visible("acc", False)
+        keyed.colorbar("acc")
+        bar = keyed._renderer.drawn["acc"].guides[0]
+        assert bar.ax.get_visible() is False, (
+            "a bar drawn onto a hidden layer is on the figure explaining a picture nobody can see"
+        )
+        keyed.set_visible("acc", True)
+        assert bar.ax.get_visible() is True, (
+            "the key did not come back when its layer did"
+        )
+
+    def test_colorbars_honours_visibility_too(self, keyed):
+        """The plural draws each bar as hidden as the layer it explains.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            `colorbars()` reads the layer tree and keys everything coloured by a value; it never consulted
+            visibility either, so "key everything" un-hid what `set_visible` had put away.
+        """
+        keyed.set_visible("acc", False)
+        keyed.colorbars()
+        assert keyed._renderer.drawn["acc"].guides[0].ax.get_visible() is False, (
+            "colorbars() drew a visible bar for a hidden layer"
+        )
+
     def test_moving_the_layer_does_not_orphan_the_key(self, keyed):
         """A reorder leaves the key attached to the layer it explains.
 
@@ -437,6 +476,23 @@ class TestACategoricalFillIsKeyedBySwatches:
         assert zoned.legend(title="Zone") is zoned
         rows = [text.get_text() for text in zoned.ax.get_legend().get_texts()]
         assert rows == ["rural", "urban"]
+
+    def test_a_swatch_key_on_a_hidden_fill_is_drawn_hidden(self, zoned):
+        """The swatch half of the same rule: a `Legend` drawn onto a hidden layer starts off.
+
+        Args:
+            zoned: A map with a categorical fill.
+
+        Test scenario:
+            A `Legend` *is* an artist, unlike a `Colorbar`, so the two kinds of key carry their flag in
+            different places — which is exactly the sort of difference a rule applied at one of them and not
+            the other slips through.
+        """
+        zoned.set_visible("zone", False)
+        zoned.legend("zone", title="Zone")
+        assert zoned._renderer.drawn["zone"].guides[0].get_visible() is False, (
+            "a swatch key drawn onto a hidden fill is on the figure"
+        )
 
     def test_colorbars_skips_it_rather_than_raising_on_it(self, zoned, dataset):
         """The plural keys what it can and passes over what it cannot.

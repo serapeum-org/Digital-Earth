@@ -924,6 +924,11 @@ class Renderer:
         is to take the layer's previous key off, which is what makes a second call **replace** rather than
         stack a second bar in the same figure — the same answer the web tier gives for its one legend panel.
 
+        Its last act is to give the new key the layer's **current visibility**, so a key asked for on a
+        hidden layer is drawn hidden. :meth:`set_visible` already carried the key with the layer in the
+        other direction; without this, hiding-then-keying and keying-then-hiding left two different figures
+        and the first of them showed a bar explaining a picture the reader cannot see.
+
         Args:
             layer: The layer's description, which carries the guide (see
                 :func:`~digitalearth.static.guides.draw_guide`).
@@ -946,6 +951,15 @@ class Renderer:
         # The layer records what has to come off with it, which is nothing when no key was drawn.
         guides = () if made is None else (made,)
         self._drawn[layer.id] = with_fields(drawn, guides=guides)
+        if made is not None and not self.is_visible(layer.id):
+            # A key is drawn as hidden as the layer it explains. `set_visible` already hid the key it
+            # *found*, so hiding a layer and then keying it used to give a different figure from keying it
+            # and then hiding it — a bar labelling a picture the reader cannot see, which is the symptom
+            # order 24 names as its motivation. Applied here rather than in
+            # :func:`~digitalearth.static.guides.draw_guide` because visibility is the renderer's reading:
+            # it lives on the artists, not in the description, and `is_visible` is what knows that a layer
+            # owning no artist carries it here instead.
+            _set_visible(_guide_artist(made), False)
         return made
 
     @staticmethod
