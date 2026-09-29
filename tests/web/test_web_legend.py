@@ -168,7 +168,7 @@ class TestTheClassificationIsRecorded:
                 f"{accessor} holds {recorded}, whose interior edges are not the `step` cuts {cuts} the "
                 "layer draws"
             )
-            assert [recorded[0], recorded[-1]] == span, (
+            assert span == [recorded[0], recorded[-1]], (
                 f"{accessor} holds {recorded}, which does not span the column {span}"
             )
 
@@ -967,8 +967,11 @@ class TestTheKeyFollowsItsLayer:
         web_map = _two_classified().colorbar("B", label="Rain")
         classified = web_map.get_layer("B")
         asked = classified.symbology.guide()
-        assert asked is not None and asked.show, (
+        assert asked is not None, (
             f"B must be keyed before it is restyled flat; its guide is {asked}"
+        )
+        assert asked.show, (
+            f"B's recorded guide must be shown before it is restyled flat; its guide is {asked}"
         )
         flat = Symbology(
             encodings={
@@ -1345,8 +1348,9 @@ class TestNoArgumentCanBeAddedBelowTheFlag:
             "could be handled — or missed — here instead"
         )
         _, call = _call_to(body, "_record_key")
-        assert call is not None and isinstance(body[0], ast.Return), (
-            f"{spelling}() no longer returns a _record_key call"
+        assert call is not None, f"{spelling}() no longer forwards to _record_key"
+        assert isinstance(body[0], ast.Return), (
+            f"{spelling}()'s single statement is no longer a return: {type(body[0]).__name__}"
         )
         assert body[0].value is call, f"{spelling}() does work around the forward"
         missing = set(_parameters(args)) - _handed_to(call)
@@ -1438,9 +1442,13 @@ class TestOneStopCountServesEveryRamp:
             f"{builder}'s ramp builder makes {len(sampled)} linspace calls; one samples the ramp"
         )
         count = sampled[0].args[-1]
-        assert isinstance(count, ast.Name) and count.id == "DEFAULT_RAMP_STOPS", (
-            f"{builder}'s ramp is sampled at {ast.unparse(count)} rather than at the shared "
-            "DEFAULT_RAMP_STOPS, so the two ramps agree only by coincidence"
+        assert isinstance(count, ast.Name), (
+            f"{builder}'s ramp is sampled at a literal {ast.unparse(count)} rather than a name, so it "
+            "cannot be the shared DEFAULT_RAMP_STOPS"
+        )
+        assert count.id == "DEFAULT_RAMP_STOPS", (
+            f"{builder}'s ramp is sampled at {count.id} rather than at the shared DEFAULT_RAMP_STOPS, so "
+            "the two ramps agree only by coincidence"
         )
 
     def test_a_column_ramp_and_a_band_ramp_hold_the_same_number_of_stops(
