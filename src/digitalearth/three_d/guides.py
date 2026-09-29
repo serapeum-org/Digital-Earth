@@ -425,8 +425,8 @@ def _release_bar(
     Args:
         scene: The scene holding what was drawn.
         figure: The figure being drawn.
-        layer_id: The layer letting the bar go.
-        plotter: The plotter holding it.
+        plotter: The plotter holding the bar.
+        layer_id: The layer letting it go.
         title: The bar's title.
 
     Note:
