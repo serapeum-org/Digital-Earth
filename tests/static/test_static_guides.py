@@ -786,6 +786,63 @@ class TestARefusedKeyTakesTheRebuildWithIt:
             )
             assert first.ax not in canvas.fig.axes
 
+    def test_a_refused_redraw_puts_back_the_drawing_and_the_ask_it_replaced(self):
+        """A layer that was already drawn goes back to the drawing it had, visibility ask and all.
+
+        Test scenario:
+            The other rollback test removes the layer first, so `previous` is `None` and the record is
+            simply popped. The half nobody exercised is the one the arm was written for: a layer that **is**
+            drawn, whose second draw refuses. `draw_layer` overwrites `_drawn` before it draws the key, so
+            without the restore the layer would be left describing a drawing whose artists `undo()` has just
+            taken off the axes.
+
+            A graticule is the layer that reaches the second half too. Its drawer hands back a `DrawnLayer`
+            with an `artist` and **no** `artists`, so `set_visible` has nothing on the axes to write the flag
+            to and remembers it in `_asked` instead — the one state the `asked is not None` arm restores.
+            The key is refused by asking for a bar over a categorical scale, which is the refusal
+            `draw_guide` raises from inside the guarded region.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import Encoding, Guide, Scale
+        from digitalearth.static.guides import GUIDE_KIND_KEY
+
+        with Map(crs=4326) as canvas:
+            canvas.graticule(30, 30, name="grid")
+            renderer = canvas._renderer
+            renderer.set_visible("grid", False)
+            drawn_before = renderer.drawn["grid"]
+            layer = canvas.get_layer("grid")
+            symbology = with_fields(
+                layer.symbology,
+                encodings={
+                    **layer.symbology.encodings,
+                    "color": Encoding.by_field(
+                        "color",
+                        "zone",
+                        scale=Scale.categorical(["a", "b"], ["#f00", "#00f"]),
+                    ),
+                },
+                props={**layer.symbology.props, GUIDE_KIND_KEY: "colorbar"},
+            ).with_guide(Guide(show=True, title="zones"))
+            canvas._layer_tree = canvas._layer_tree.replace(
+                with_fields(layer, symbology=symbology)
+            )
+            with pytest.raises(ValueError, match="coloured by category"):
+                renderer.draw_layer(canvas.figure_spec, "grid")
+            restored = renderer.drawn["grid"]
+            assert restored is drawn_before, (
+                "the refused redraw left the layer describing the drawing it rolled back, not the one it "
+                f"had: {restored}"
+            )
+            assert restored.artist is not canvas._graticule_lines, (
+                "the record still points at the lines the refused draw computed, so nothing was put back"
+            )
+            assert renderer.is_visible("grid") is False, (
+                "the remembered visibility ask was dropped by the rollback, so a layer hidden before the "
+                f"refusal reports {renderer.is_visible('grid')!r} after it"
+            )
+
 
 class TestOneAxesHoldsOneSwatchLegend:
     """matplotlib keeps one legend per axes, so keying a second layer takes the first layer's key off.
