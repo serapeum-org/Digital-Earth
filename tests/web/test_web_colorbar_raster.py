@@ -1,13 +1,17 @@
 """``quickmap(colorbar=...)`` on the web tier when the input is a **raster** (#254).
 
 ``tests/web/test_web_colorbar.py`` covers the vector half, where a ``column`` classifies the layer and there
-is a key to build. The raster half takes the same new branch in ``_quickmap_web`` and behaves differently at
-the end of it — ``field`` records no classification, so the tier has nothing to describe — which makes
-it the case where the ``colorbar=True`` default has to stay *inert* rather than raise.
+is a key to build. The raster half takes the same branch in ``_quickmap_web`` and used to end it with
+nothing: ``field`` published no colour encoding and recorded no classification, so the tier had nothing to
+describe and the ``colorbar=True`` default was *inert* on a raster — on this tier and on no other. Static,
+interactive and 3-D all key that same one-call raster, which made web the odd tier out on order 24's own
+goal. It is not inert any more: a raster's colour varies with its band, the band has a name and the band's
+values have a span, so the layer carries an encoding a guide hangs on like any other.
 
-That is the regression this file guards: before the tier's recorded state was consulted first, the default
-reached ``WebMap.legend()``, which calls ``_require_maplibre()`` before it checks whether it has anything to
-key — so a raster map could fail on the way to discovering it had no key to draw.
+What this file still guards is the older regression underneath it: before the tier's recorded state was
+consulted first, the default reached ``WebMap.legend()``, which calls ``_require_maplibre()`` before it
+checks whether it has anything to key — so a raster map could fail on the way to discovering it had no key
+to draw.
 """
 
 import pytest
@@ -47,22 +51,101 @@ class TestARasterWebMapFollowsTheFlag:
             "the raster layer must be on the map whatever the flag says"
         )
 
-    def test_the_default_is_inert_on_a_raster_rather_than_a_failure(self, dataset):
-        """``quickmap(raster, backend="web")`` succeeds without a classified layer to key.
+    def test_the_default_keys_a_raster_as_every_other_tier_does(self, dataset):
+        """``quickmap(raster, backend="web")`` comes back with the key three other tiers already draw.
 
         Args:
             dataset: The raster to draw.
 
         Test scenario:
-            The default asks for a key *if there is one to draw*. This tier records a classification only
-            for a classified vector layer, so a raster reaches the end of the build with nothing to
-            describe. That is not a caller error and must not surface as one — neither as the builder's own
-            "nothing to describe" refusal nor, where the extra is thin, as the ``ImportError`` raised on the
-            way to it.
+            The measured divergence. `field` published no colour encoding, so the layer carried nothing a
+            guide could hang on, and the one-call raster map ended with `_panels` empty — while
+            `WebMap.colorbar()` on that same map raised "no classified layer has been added yet" about a
+            map whose only layer is coloured by data. Static, interactive and 3-D all key it. The band is
+            the value its colour varies with; naming it is what closes the gap.
         """
         scene = qp.quickmap(dataset, backend="web")
-        assert scene.last_legend is None, (
-            f"a raster records no classification, so there is nothing to key: {scene.last_legend}"
+        assert scene.last_legend is not None, (
+            "a raster's band is a classification this tier can describe"
+        )
+        assert "legend" in scene._panels, (
+            f"the one-call raster map carries no key: panels {sorted(scene._panels)}"
+        )
+
+
+class TestTheBandIsWhatARasterKeyDescribes:
+    """A raster has no classified column, so what its colour varies with is the band itself."""
+
+    def test_a_raster_layer_can_be_keyed_by_hand_too(self, dataset):
+        """`colorbar()` on a raster map is the call the divergence was measured through.
+
+        Args:
+            dataset: The raster to draw.
+
+        Test scenario:
+            The refusal a caller actually hit — "legend() has nothing to describe: no classified layer has
+            been added yet. Add a choropleth (or any builder given column=...) first." — on a map holding
+            one value-coloured raster. Asserted through the public method rather than through `quickmap`,
+            so the builder is pinned independently of the dispatcher that calls it.
+        """
+        from digitalearth.web import WebMap
+
+        scene = WebMap().field(dataset).colorbar(label="Accumulation")
+        panel = scene._panels.get("legend")
+        assert panel is not None, "colorbar() drew no key for a value-coloured raster"
+        assert "Accumulation" in panel[0], (
+            f"the key's heading is not the label asked for: {panel[0][:160]}"
+        )
+
+    def test_a_tiled_raster_is_keyed_on_the_same_terms(self, dataset, tmp_path):
+        """`field`'s two routes describe the band the same way, or the divergence moves inside one builder.
+
+        Args:
+            dataset: The raster to draw.
+            tmp_path: Where the pyramid is written.
+
+        Test scenario:
+            The tiled route never reads the band whole — that is what it exists to avoid — so it resolves
+            one ``(vmin, vmax)`` for the pyramid from a decimated read and colours every tile on it. That
+            pair is the one the key must label, which is why the assertion compares the scale against the
+            limits the route *recorded* rather than against a number written here: a key built from a second
+            reading of the band would disagree with the tiles at the edges of the range.
+        """
+        from digitalearth.web import WebMap
+
+        scene = WebMap().field(
+            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9)
+        )
+        symbology = scene.get_layer(scene.layer_ids[-1]).symbology
+        encoding = symbology.encoding("color")
+        assert encoding is not None, "a tiled band is no less coloured by its values"
+        assert encoding.field == "Band_1", encoding.field
+        assert [encoding.scale.vmin, encoding.scale.vmax] == [
+            symbology.props["vmin"],
+            symbology.props["vmax"],
+        ], (
+            f"the key's scale {(encoding.scale.vmin, encoding.scale.vmax)} is not the pair the tiles were "
+            f"coloured on {(symbology.props['vmin'], symbology.props['vmax'])}"
+        )
+        scene.colorbar(label="Accumulation")
+        assert "legend" in scene._panels, "a tiled raster must be keyable too"
+
+    def test_a_band_with_nothing_to_colour_publishes_no_encoding(self):
+        """The measured "cannot": no finite cell, no span, so nothing honest to say about the colour.
+
+        Test scenario:
+            The other side of the choice. A band of pure NoData has no limits to describe — the draw
+            refuses it on its own terms — and publishing a scale-less encoding would make the layer
+            *keyable* with nothing to put in the key, which is the empty box in the corner the tier refuses
+            everywhere else. So the builder publishes none, and a key on that layer is refused for the same
+            reason it is refused on a flat-coloured one.
+        """
+        import numpy as np
+
+        from digitalearth.web.raster import _colour_domain
+
+        assert _colour_domain(np.full((3, 3), np.nan), vmin=None, vmax=None) is None, (
+            "a band with no finite cell must report no colour domain at all"
         )
 
     @pytest.mark.parametrize(

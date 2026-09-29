@@ -317,31 +317,6 @@ class VectorMixin(_MixinBase):
         digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
     """
 
-    @staticmethod
-    def _legend_dict(legend: LegendSpec, column: str, values: Any = None) -> dict:
-        """Return the ``last_legend`` shape this tier has always stored, derived from a `LegendSpec`.
-
-        The dict is unchanged — it is public-ish, asserted by tests, and read by the legend control — but it
-        is now *derived* from the spec rather than assembled a fourth time. Replacing the attribute itself is
-        a follow-up; producing it from one place is what DE-19 is for.
-
-        Args:
-            legend: The spec the colours and labels come from.
-            column: The column the layer was coloured by.
-            values: Override for the ``values`` list, where the stored shape carries the class *edges*
-                rather than one value per entry.
-
-        Returns:
-            The legend dict, with ``kind``/``column``/``values``/``colors`` exactly as before.
-        """
-        payload = legend.to_dict()
-        return {
-            "kind": payload["kind"],
-            "column": column,
-            "values": payload["values"] if values is None else values,
-            "colors": payload["colors"],
-        }
-
     def _color_expr(
         self,
         values: Any,

@@ -49,12 +49,30 @@ from typing import (
 )
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
-from digitalearth.base.spec import DEFAULT_BAND, Bounds, LayerSpec, Scale, Symbology
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    Bounds,
+    Encoding,
+    LayerSpec,
+    LegendSpec,
+    Scale,
+    Symbology,
+)
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
 from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is refused (name a ``tiles=`` route for big rasters).
 _LARGE_RASTER_PIXELS = 4_000_000
+
+#: What a band with no name of its own is called, so a colour encoding has a field name rather than the
+#: empty string an :class:`~digitalearth.base.spec.encoding.Encoding` refuses. The interactive tier's
+#: ``UNNAMED_VALUE``, spelled the same, so one unnamed raster reads the same on both.
+_UNNAMED_BAND = "z"
+
+#: How many stops describe a band's ramp in its colour key — the same five the vector ramp is sampled at
+#: (:meth:`~digitalearth.web.vector.VectorMixin._ramp_color_expr`), so a continuous key looks the same
+#: whether the values came from a column or from a band.
+_RAMP_STOPS = 5
 
 #: The tiled routes ``tiles=`` accepts, each mapped to the key its MapLibre ``raster`` source addresses the
 #: data under: ``xyz`` lists tile-URL templates, ``cog`` names one file a client-side protocol reads windows
@@ -397,6 +415,80 @@ def _png_bytes(rgba: Any) -> bytes:
     return buffer.getvalue()
 
 
+def _band_name(data: Any, band: int) -> str:
+    """Return the name of the value a raster layer's colour varies with.
+
+    A raster has no classified column, so the honest name for the field its colour is bound to is the
+    **band's own** — read off the raster's metadata, never invented, and never obtained by warping the band
+    a second time to look (:meth:`~digitalearth.web.base.WebMapBase._auto_cmap` already reads band metadata
+    this way to resolve a colormap without touching a pixel).
+
+    Args:
+        data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF``. Read with `getattr`, so an
+            input declaring neither list simply falls back.
+        band: The 1-based band the layer colours by.
+
+    Returns:
+        The band's name, the first variable's name, or :data:`_UNNAMED_BAND` — never an empty string, which
+        an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
+
+    Note:
+        The interactive tier answers the same question, by the same two lookups and with the same fallback,
+        in its own ``coloured_by`` — measured on ``examples/data/acc4000.tif``, both answer ``'Band_1'``.
+        They are not one import on purpose: the four backends are peers, and a backend importing another
+        would tie this tier's ``web`` extra to the ``interactive`` one.
+    """
+    names = list(getattr(data, "band_names", None) or [])
+    if 1 <= band <= len(names) and names[band - 1]:
+        return str(names[band - 1])
+    # A `NetCDF` has variables rather than bands, and the display extractor takes the **first** of them, so
+    # that is the one a colour key would explain.
+    first = next(iter(getattr(data, "variable_names", None) or []), None)
+    return str(first) if first else _UNNAMED_BAND
+
+
+def _colour_domain(
+    values: Any, *, vmin: Any, vmax: Any, nodata: Any = None
+) -> Optional[Tuple[Any, Any, Tuple[float, float]]]:
+    """Return which of a band's cells have a value, and the span its colours are stretched across.
+
+    The one place this tier decides what a band's colours *mean*, so the image and the key that explains
+    it cannot be built on two different answers. :func:`_coloured_png` needs all three parts; the `field`
+    builder needs only the limits, and needs them at a point where no image has been encoded yet — order 24
+    describes a layer before it is drawn, and a colour key hangs on that description.
+
+    Args:
+        values: A 2-D (possibly masked) array of band values.
+        vmin: The caller's lower limit, or ``None`` to measure one from these cells.
+        vmax: The caller's upper limit, or ``None`` to measure one.
+        nodata: A sentinel read as missing alongside the non-finite cells, or ``None``. A windowed tile read
+            hands back the raster's own NoData rather than NaN — including in the padding of an edge tile.
+
+    Returns:
+        ``(data, valid, (lo, hi))`` — the values as plain floats with missing cells as ``nan``, the mask of
+        cells that have one, and the limits those cells are coloured between. ``None`` when no cell has a
+        value: a pyramid legitimately contains tiles the raster does not reach, and a band of pure NoData
+        has no span to describe or to draw.
+    """
+    import numpy as np
+
+    array = np.ma.asarray(values).astype(float)
+    data = (
+        array.filled(np.nan)
+        if np.ma.isMaskedArray(array)
+        else np.asarray(array, dtype=float)
+    )
+    valid = np.isfinite(data)
+    if nodata is not None and np.isfinite(nodata):
+        valid &= data != float(nodata)
+    if not valid.any():
+        return None
+    # The domain, the explicit-limit override and the constant-band widening are one rule, in base/spec.
+    # `valid` is already computed above, so the finite subset is handed over rather than derived twice —
+    # this is the tier with the explicit inline-pixel budget.
+    return data, valid, Scale.from_finite(data[valid], vmin=vmin, vmax=vmax).as_limits()
+
+
 def _coloured_png(
     values: Any,
     cmap: Any,
@@ -435,21 +527,10 @@ def _coloured_png(
 
     from digitalearth.base.symbology import as_colormap
 
-    array = np.ma.asarray(values).astype(float)
-    data = (
-        array.filled(np.nan)
-        if np.ma.isMaskedArray(array)
-        else np.asarray(array, dtype=float)
-    )
-    valid = np.isfinite(data)
-    if nodata is not None and np.isfinite(nodata):
-        valid &= data != float(nodata)
-    if not valid.any():
+    domain = _colour_domain(values, vmin=vmin, vmax=vmax, nodata=nodata)
+    if domain is None:
         return None
-    # The domain, the explicit-limit override and the constant-band widening are one rule, in base/spec.
-    # `valid` is already computed above, so the finite subset is handed over rather than derived twice —
-    # this is the tier with the explicit inline-pixel budget.
-    lo, hi = Scale.from_finite(data[valid], vmin=vmin, vmax=vmax).as_limits()
+    data, valid, (lo, hi) = domain
     rgba = as_colormap(cmap)(Normalize(vmin=lo, vmax=hi)(np.where(valid, data, lo)))
     rgba[~valid, 3] = 0.0  # NoData → transparent
     return _png_bytes(rgba)
@@ -1240,6 +1321,70 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
 class RasterMixin(_MixinBase):
     """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
+    def _band_colour(
+        self,
+        data: Any,
+        *,
+        band: int,
+        cmap: str,
+        limits: Optional[Tuple[float, float]],
+    ) -> dict:
+        """Describe what a band's colour varies with, and record the key that would explain it.
+
+        The raster half of order 24. A colour key is a ``Guide`` on the layer's ``color``
+        :class:`~digitalearth.base.spec.encoding.Encoding`, so a layer that publishes none cannot be keyed
+        at all — which is what left a one-call raster map unkeyable on **this** tier and on no other, while
+        the static, interactive and 3-D tiers all keyed the same raster.
+
+        A raster is not classified by a column, so there is no column to bind to; the band is what its
+        colour varies with, and the span its cells are coloured across is the scale. Both are things the
+        tier already knows at build time, so neither is invented.
+
+        Args:
+            data: The raster the layer draws, for the band's name.
+            band: The 1-based band being coloured.
+            cmap: The colormap already resolved for it, sampled for the key's ramp.
+            limits: The ``(lo, hi)`` its cells are coloured between, or ``None`` when the band has none —
+                nothing finite to colour, which the draw refuses on its own terms.
+
+        Returns:
+            The ``{"color": Encoding}`` mapping for the layer's symbology, or ``{}`` when `limits` is
+            ``None``. Empty rather than a scale-less encoding: a colour key drawn from a span nobody knows
+            would be an invented one, and this tier would rather publish nothing than that.
+
+        Note:
+            Also sets :attr:`~digitalearth.web.base.WebMapBase.last_breaks` and
+            :attr:`~digitalearth.web.base.WebMapBase.last_legend`, which is how the key's **content** —
+            the swatches and the colours they were drawn with — reaches the layer:
+            :meth:`~digitalearth.web.base.WebMapBase._index_layer` files a fresh `last_legend` under the
+            layer being built, exactly as it does for a classifying vector builder. The two are set
+            together, as every other builder sets them (review L7).
+
+            The units go on the key rather than into the encoding, the way `contours` puts them there:
+            ``last_units`` is only set when the band said what it is measured in, so a heading gains
+            ``(mm)`` only when that is the band's own word for it and never a guess.
+        """
+        if limits is None:
+            return {}
+        import numpy as np
+
+        column = _band_name(data, band)
+        scale = Scale.from_limits(*limits)
+        stops = [float(stop) for stop in np.linspace(limits[0], limits[1], _RAMP_STOPS)]
+        self.last_breaks = stops
+        self.last_legend = self._legend_dict(
+            LegendSpec.from_scale(
+                scale,
+                colors=list(self._cmap_hex(cmap, len(stops))),
+                title=column,
+                values=stops,
+            ),
+            column,
+        )
+        if self.last_units:
+            self.last_legend["units"] = self.last_units
+        return {"color": Encoding.by_field("color", column, scale=scale)}
+
     def field(
         self,
         data: Any,
@@ -1408,6 +1553,14 @@ class RasterMixin(_MixinBase):
         cmap_name = self._auto_cmap(source, cmap)
         # Carried for a key built from this band's values (see `_auto_units`); `None` when unknown.
         self.last_units = self._auto_units(source, units)
+        # Resolved here rather than left wholly to the draw, because order 24 hangs the colour key on the
+        # layer's **description** and a description is written before anything is drawn. Through
+        # `_colour_domain`, which is also what `_coloured_png` colours the image through, so the key labels
+        # the ramp that is drawn rather than a second reading of the same band. The limits stay out of
+        # `props`: what a figure records is what the caller *asked* for (#334), and this tier's own
+        # resolution of an unset `vmin`/`vmax` is its business — the tiled route records its pair only
+        # because one span has to hold a whole pyramid together.
+        domain = _colour_domain(source.z.values, vmin=vmin, vmax=vmax)
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
@@ -1421,6 +1574,12 @@ class RasterMixin(_MixinBase):
             source=data,
             placed=source,
             symbology=Symbology(
+                encodings=self._band_colour(
+                    data,
+                    band=band,
+                    cmap=cmap_name,
+                    limits=None if domain is None else domain[2],
+                ),
                 props={
                     "cmap": cmap_name,
                     "vmin": vmin,
@@ -1428,7 +1587,7 @@ class RasterMixin(_MixinBase):
                     "opacity": float(opacity),
                     "band": band,
                     **ask.record,
-                }
+                },
             ),
         ):
             self._last_layer_id = layer_id
@@ -1542,7 +1701,15 @@ class RasterMixin(_MixinBase):
             name,
             kind="raster",
             visible=visible,
-            symbology=Symbology(props=props),
+            # The same description the inline route publishes, off the pair `_scan_limits` already resolved
+            # above — a tiled band is no less coloured by its values than an inlined one, and a key that
+            # appeared on one route and not the other would be a second divergence inside one builder.
+            symbology=Symbology(
+                encodings=self._band_colour(
+                    dataset, band=band, cmap=cmap_name, limits=(low, high)
+                ),
+                props=props,
+            ),
         ):
             self._last_layer_id = layer_id
         return self

@@ -32,6 +32,12 @@ LEVELS = [10.0, 100.0, 1000.0]
 #: The DEM the raster and contour builders draw. Relative, as every other test in this suite is.
 DEM = "examples/data/acc4000.tif"
 
+#: What :data:`DEM`'s only band is called, which is the name of the value a `field` layer's colour varies
+#: with. Measured, not chosen: `Dataset.read_file(DEM).band_names` is `['Band_1']`, and the interactive tier
+#: publishes the same name for the same raster. A raster has no classified column, so this — the band's own
+#: name — is the honest field for its colour encoding.
+DEM_BAND = "Band_1"
+
 
 def _points():
     """Return a small point frame with one numeric column.
@@ -337,27 +343,34 @@ def _resolved(drawn, where: str) -> Mapping[str, Any]:
 #: The classifying builders are the ones order 24 gives a portable colour to: each already built a `Scale` to
 #: compile its MapLibre expression from, and each now publishes `Encoding.by_field("color", column, scale=…)`
 #: from it. `contours` is in here with no `column=` in its probe because it colours the traced level along a
-#: ramp unless a flat `color=` is passed — the attribute it traces is the field. The rest bind a constant
-#: colour or none, and must stay that way: a flat colour has nothing to vary with, which is what makes a
-#: colour key on those layers refusable.
+#: ramp unless a flat `color=` is passed — the attribute it traces is the field. `raster` is in here for
+#: the same reason one step further out: a bare `field()` colours the band by its own values, so the band
+#: is the field even though there is no `column=` to name it. The rest bind a constant colour or none, and
+#: must stay that way: a flat colour has nothing to vary with, which is what makes a colour key on those
+#: layers refusable.
 COLOUR_BY_FIELD: Tuple[Tuple[str, Any], ...] = (
     ("choropleth", "pop"),
     ("contours", "level"),
     # The bands between levels carry `level_min`, not `level` — the lower bound of the band a fill covers.
     ("filled_contours", "level_min"),
+    # Unlike the four below, `field` publishes a binding from a *bare* call: a raster is value-coloured
+    # with no keyword at all. Web was the one tier where a one-call raster map came back unkeyable.
+    ("raster", DEM_BAND),
     ("points", None),
     ("lines", None),
     ("polygons", None),
     ("labels", None),
     ("heatmap", None),
     ("extrusion", None),
-    ("raster", None),
+    # The measured **cannot**: an RGB composite turns three bands into the three colour channels, so there
+    # is no single value its colour varies with and no name for one that would not be invented. It
+    # publishes none, deliberately, and is correspondingly not keyable.
     ("rgb", None),
     ("graticule", None),
     ("basemap", None),
 )
 
-#: Every caller of `_color_expr`, each drawn **with** the `column=` that makes it classify.
+#: Every builder that binds its colour to a value, drawn so that it does.
 #:
 #: `COLOUR_BY_FIELD` above probes the *unstyled* call, so four of the six producers — `points`, `lines`,
 #: `polygons` and `extrusion` — are `None` rows there, asserting only the flat direction; their `column=`
@@ -368,10 +381,13 @@ COLOUR_BY_FIELD: Tuple[Tuple[str, Any], ...] = (
 #: missing (review H3). One row per caller, and both questions asked of each: the channel names its
 #: column, and the colour key that binding exists for is accepted.
 #:
-#: `choropleth` and `contours` are in here beside the four, because "six callers, six rows" is the
-#: property that stops the next producer from being added without one — a table that lists only the four
-#: that were broken reads as a bug list rather than as the contract.
+#: `choropleth` and `contours` are in here beside the four, because "every producer, a row each" is the
+#: property that stops the next one from being added without one — a table that lists only the four that
+#: were broken reads as a bug list rather than as the contract. `field` is the row that property bought:
+#: the raster builder published no colour encoding **at all**, so a `quickmap` raster came back unkeyable
+#: on this tier and on no other, and the table had no row to say so.
 CLASSIFIED: Tuple[Tuple[str, Callable[[Any], Any], str], ...] = (
+    ("field", lambda m: m.field(_dem()), DEM_BAND),
     ("points", lambda m: m.points(_points(), column="pop"), "pop"),
     ("lines", lambda m: m.lines(_lines(), column="pop"), "pop"),
     ("polygons", lambda m: m.polygons(_polygons(), column="pop"), "pop"),
