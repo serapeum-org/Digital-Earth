@@ -756,8 +756,15 @@ class TestTheKeyFollowsItsLayer:
         Test scenario:
             `set_visible(False)` leaves the layer described so a viewer can switch it back on, and used to
             leave its key drawn as well — a panel of classes with no pixels under them.
+
+            The precondition is the test: without it the single "no key is drawn" assertion is satisfied by
+            "no key was ever drawn" as readily as by "the key came off", so gutting `colorbar` to a
+            `return self` or making `refresh_legend_panel` a no-op both left it green (review L7).
         """
         web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B", (
+            "B's key must be on screen first, or taking it off proves nothing"
+        )
         web_map.set_visible("B", False)
         assert _whose_key(web_map) is None, "a hidden layer's key must come off"
 
