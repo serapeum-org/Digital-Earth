@@ -366,7 +366,90 @@ class TestTheKeyFollowsItsLayer:
 
 
 class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
-    """Review L7 on the web tier, one tier over: one spelling must not be valid only half the time."""
+    """Review L7 on the web tier, one tier over: one spelling must not be valid only half the time.
+
+    Both halves of the call are checked here, deliberately. The **layer** is resolved by `Scene._keyed_layer`
+    before anything is recorded, and the two tests below cover that. The **key** is checked inside
+    `guides.draw_guide`, which used to sit behind the `guide.show` early return — so the refusals that
+    describe the key, rather than the layer, were skipped by exactly the flag this class exists to police
+    (review M1). A class that covered only the half that already held reported the property as pinned while
+    it did not hold, which is worse than not testing it at all.
+    """
+
+    @staticmethod
+    def _strip_the_scale(canvas, layer_id: str) -> None:
+        """Leave a layer publishing a colour field with no scale behind it.
+
+        Args:
+            canvas: The map holding the layer.
+            layer_id: The layer to strip.
+
+        Test scenario:
+            The state a figure built elsewhere arrives in: `Encoding` takes a scale or no scale, and a tier
+            that measured no limits publishes none rather than inventing a pair. There is no keyword on this
+            tier that produces it, so it is written onto the tree the way `from_dict` would.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import Encoding
+
+        layer = canvas.get_layer(layer_id)
+        encodings = dict(layer.symbology.encodings)
+        encodings["color"] = Encoding.by_field("color", "Band_1", scale=None)
+        canvas._layer_tree = canvas._layer_tree.replace(
+            with_fields(
+                layer,
+                symbology=with_fields(layer.symbology, encodings=encodings),
+            )
+        )
+
+    def test_labels_that_do_not_number_the_rows_are_refused_either_way(self, keyed):
+        """`legend(labels=["one"], visible=False)` is as wrong as `legend(labels=["one"])`.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            The refusal this class is named for, on the half it never reached. A continuous scale keys as
+            five swatches, so one label is one label for five rows whichever way the flag is set — and a
+            description that can never be drawn must not be recordable just because nothing is drawn from it
+            yet. `visible=False` is "no key, please", not "no checking, please": switching it back on later
+            would then raise from a call the caller has long finished making.
+        """
+        with pytest.raises(ValueError, match="needs 5 labels; got 1") as shown:
+            keyed.legend(labels=["one"])
+        with pytest.raises(ValueError, match="needs 5 labels; got 1") as hidden:
+            keyed.legend(labels=["one"], visible=False)
+        assert str(shown.value) == str(hidden.value), (
+            "the two spellings refuse with different messages"
+        )
+        assert keyed.get_layer("acc").symbology.guide() is None, (
+            "the refused call left a guide on the layer"
+        )
+        assert "guide_labels" not in keyed.get_layer("acc").symbology.props, (
+            "the refused labels were recorded anyway"
+        )
+
+    def test_a_layer_with_no_scale_is_refused_either_way(self, keyed):
+        """The other refusal raised inside the draw: no scale, so no rows to key it with.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            The second of the two checks `visible=False` skipped. It is a different shape from the labels
+            one — that one is about the caller's argument, this one about what the layer publishes — and a
+            fix that hoists only the argument check would leave this one behind, which is how the web tier's
+            L7 fix came to miss `labels` in the first place.
+        """
+        self._strip_the_scale(keyed, "acc")
+        with pytest.raises(ValueError, match="publishes no colour scale"):
+            keyed.legend("acc")
+        with pytest.raises(ValueError, match="publishes no colour scale"):
+            keyed.legend("acc", visible=False)
+        assert keyed.get_layer("acc").symbology.guide() is None, (
+            "the refused call left a guide on the layer"
+        )
 
     def test_an_unknown_id_is_refused_even_with_visible_false(self, keyed):
         """`colorbar("nope", visible=False)` is as wrong as `colorbar("nope")`.

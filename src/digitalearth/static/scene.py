@@ -1700,7 +1700,9 @@ class Scene(WatermarkMixin):
             labels: Explicit row labels, replacing the derived ones — for units, or for renaming categories.
                 One per row. ``None`` (the default) derives them, and clears labels an earlier call recorded.
             visible: ``False`` records the guide and draws nothing, and takes an already-drawn key off again.
-                The layer is resolved and checked before the flag is read.
+                The layer **and the key it would draw** are resolved and checked before the flag is read, so
+                one spelling of a call is not valid only half the time: `labels` that do not number the rows,
+                and a layer publishing no scale to derive rows from, are refused either way (review M1).
             **kwargs: Forwarded to ``cleopatra.styling.styles.disjoint_legend`` and on to ``Axes.legend``
                 (``loc``, ``ncol``, ``fontsize``, …). Styling for this call, not part of the record.
 

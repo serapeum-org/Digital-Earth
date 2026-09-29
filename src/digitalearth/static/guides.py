@@ -400,12 +400,18 @@ def draw_guide(
     Raises:
         ValueError: when a colorbar is asked for over a **categorical** scale, naming the swatch legend
             instead: a categorical fill's norm bins the class codes cleopatra assigned, so a bar over them
-            reads ``0, 1, 2 …`` where the category labels belong. Also when recorded row labels do not
-            number the key's rows.
+            reads ``0, 1, 2 …`` where the category labels belong. Also when the layer publishes no scale for
+            a swatch key's rows to be derived from, and when recorded row labels do not number those rows.
+
+            **Every one of the three is raised whether or not the guide is shown.** A guide switched off is
+            a key the caller asked not to be drawn *yet*, not one that has stopped being described — so a
+            description this tier could never draw is refused when it is recorded rather than when it is
+            switched on, which is what keeps one spelling of a call from being valid only half the time
+            (review M1). The ``show`` flag is read only once the key has been derived.
     """
     guide = layer.symbology.guide()
     encoding = layer.symbology.encoding("color")
-    if guide is None or not guide.show or encoding is None or drawn.artist is None:
+    if guide is None or encoding is None or drawn.artist is None:
         return None
     scale = encoding.scale
     if guide_kind(layer) == "legend":
@@ -415,18 +421,27 @@ def draw_guide(
                 "colorbar() draws the bar its mappable can still carry"
             )
         spec = _legend_spec(scale, drawn.artist, guide.title)
+        # Derived before the `show` gate below, not after it: these two lines are what refuses a key the
+        # description asks for and this tier cannot draw, and behind the gate they were skipped by
+        # `visible=False` — so one spelling of `legend(labels=…)` raised and the other recorded a
+        # description that could never be drawn (review M1).
+        rows = _rows(layer, spec)
+        if not guide.show:
+            return None
         if guide.anchor is not None:
             kwargs.setdefault("loc", _LEGEND_LOCATIONS[guide.anchor])
         return disjoint_legend(
             scene.ax,
             [entry.color for entry in spec.entries],
-            _rows(layer, spec),
+            rows,
             title=guide.title,
             **kwargs,
         )
     refusal = bar_refusal(layer)
     if refusal is not None:
         raise ValueError(refusal)
+    if not guide.show:
+        return None
     if guide.anchor is not None:
         kwargs.setdefault("location", _COLORBAR_SIDES[guide.anchor])
     bar = colorbar_legend(drawn.artist, ax=scene.ax, **kwargs)
