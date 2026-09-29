@@ -17,10 +17,11 @@ stack paths were the one family of call sites running a second, weaker copy of t
 **What DE-40 took out of this module's public surface, and what the replacement returns.**
 ``stack_clim(arrays) -> (float, float)`` was in ``__all__`` here and is **gone**, with no alias behind it:
 `hasattr(digitalearth.base.clim, "stack_clim")` is `False`, and every caller moved in the same commit — no
-call site in ``src/``, ``tests/`` or ``docs/`` names it, only prose recording that it went (the three
-mentions a grep still finds are all in docstrings, here and in ``tests/base/test_clim.py`` and
-``tests/web/test_web_stack_clim.py``; the underscored ``AnimationMixin._stack_clim`` is a different, live
-method). A shim would keep a second spelling of the domain rule alive for nobody. Its work is
+call site in ``src/``, ``tests/`` or ``docs/`` names it, only prose recording that it went — a word-boundary
+grep finds eight mentions, all of them in docstrings, in **three files**: five here, two in
+``tests/base/test_clim.py`` and one in ``tests/web/test_web_stack_clim.py`` (the underscored
+``AnimationMixin._stack_clim`` is a different, live method, and is not among them). A shim would keep a
+second spelling of the domain rule alive for nobody. Its work is
 :func:`stack_scale`, and
 the **return type is not the same**: a :class:`~digitalearth.base.spec.scale.Scale` rather than a pair, so
 what used to read ``lo, hi = stack_clim(...)`` reads ``scale.vmin``/``scale.vmax``. :func:`frozen_scale` is
