@@ -84,3 +84,46 @@ class TestWebBackendDraw:
         assert len(out.layers) >= 2, (
             "basemap=True should add a tile underlay beneath the data"
         )
+
+    @pytest.mark.parametrize("flag", [True, False])
+    def test_the_key_decision_is_recorded_either_way(self, polys_fc, flag):
+        """``colorbar=`` records a guide on the keyed layer whichever way it is set.
+
+        Args:
+            polys_fc: A 4-polygon collection with a spread ``pop`` column.
+            flag: What the caller passed as ``colorbar=``.
+
+        Test scenario:
+            This tier gated the whole key call on the flag, so ``colorbar=False`` left the layer carrying no
+            guide at all while the other three backends recorded `Guide(show=False)` — a web figure written
+            out after ``colorbar=False`` was indistinguishable from one where nobody asked (review M1). The
+            picture agreed either way, which is why nothing caught it: the *record* is what travels through
+            `FigureSpec`, and it is what lets a switcher offer the key back.
+
+            Both values are parametrised rather than asserting the ``False`` case alone, so the fix cannot
+            be "always record `show=False`". The panel is read too: a recorded-but-switched-off key must
+            draw nothing, which is what keeps the record and the picture from disagreeing in the other
+            direction.
+        """
+        out = quickplot(
+            polys_fc,
+            backend="web",
+            column="pop",
+            scheme="quantiles",
+            k=3,
+            colorbar=flag,
+        )
+        keyed = [
+            layer_id
+            for layer_id in out.layer_ids
+            if (out.get_layer(layer_id).symbology.encoding("color") or None) is not None
+            and out.get_layer(layer_id).symbology.guide() is not None
+        ]
+        assert keyed, (
+            f"colorbar={flag} recorded no guide on any layer, so the figure carries no note that the key "
+            "was decided"
+        )
+        guides = [out.get_layer(layer_id).symbology.guide() for layer_id in keyed]
+        assert [guide.show for guide in guides] == [flag], (
+            f"colorbar={flag} must be recorded as show={flag}, got {guides}"
+        )

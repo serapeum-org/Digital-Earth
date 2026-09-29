@@ -57,6 +57,7 @@ CAPABILITIES = Capabilities(
             "heatmap",
             "flow",
             "text",
+            "labels",
             "graticule",
             "basemap",
             "coastlines",
@@ -98,6 +99,12 @@ CAPABILITIES = Capabilities(
         "tooltip": (
             "a matplotlib figure is a picture: there is no pointer over it to hover, so a value is read from "
             "the colorbar or printed into the cell"
+        ),
+        "label_collision": (
+            "matplotlib draws every label it is given, wherever it lands; there is no collision index to ask "
+            "which ones overlap, so `labels` takes no allow_overlap= and a crowded column is thinned by "
+            "filtering the features before drawing them. MapLibre's symbol layer is where that decision is "
+            "made for the tier that has one"
         ),
         "height": (
             "an axes is flat; a layer raised by a column is the 3-D tier's extrusion or the web tier's"

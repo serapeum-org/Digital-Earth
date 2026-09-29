@@ -14,6 +14,7 @@ All CRS work (crop, the un-projection of drawn geometry) goes through pyramids.
 from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -57,7 +58,9 @@ class InteractionMixin(_MixinBase):
                 ``None`` (the default) configures the layer the caller added last, which is not
                 ``layers[-1]`` whenever that layer is drawn beneath an overlay such as coastlines; an
                 underlay added after data does not take it over (see
-                :meth:`~digitalearth.interactive.decoration.DecorationMixin.colorbar`).
+                :meth:`~digitalearth.interactive.base.InteractiveMapBase._last_layer_index`, which is that
+                rule. The colour keys read it too, but tighten it: a layer whose colour varies with nothing
+                cannot take a key over, and a hover has no such condition — any layer can be hovered).
 
         Returns:
             The same map instance, so builder calls chain.
@@ -108,7 +111,9 @@ class InteractionMixin(_MixinBase):
         tap = streams.Tap(source=src, x=0.0, y=0.0)
         return hv.DynamicMap(lambda x, y: callback(x, y), streams=[tap])
 
-    def tap_profile(self, collection: Any, *, source: Any = None, band: int = 1) -> Any:
+    def tap_profile(
+        self, collection: Any, *, source: Any = None, band: int = DEFAULT_BAND
+    ) -> Any:
         """Click a cell to pull a time series from a ``DatasetCollection`` at that point (DI.7).
 
         Returns a ``DynamicMap`` whose ``Tap`` callback reads each member's value at the clicked cell

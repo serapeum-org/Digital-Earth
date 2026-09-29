@@ -21,7 +21,8 @@ goes and the promise that the page decodes with the scheme it was written with.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
-from digitalearth.base.spec import LayerSpec, Symbology
+from digitalearth.base.ask import UNSET, Ask, Maybe
+from digitalearth.base.spec import Encoding, LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, as_finite, placed_features
 from digitalearth.web.bigdata import DECK_TYPE_KEY
 
@@ -38,6 +39,11 @@ from digitalearth.web.raster import (  # noqa: E402 - see the comment above
 #: Default DEM for ``terrain_tiles`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. It is the
 #: fallback for a map that names no DEM of its own; a pyramids ``Dataset`` passed as ``dem`` is encoded to a
 #: pyramid beside the page instead, so a caller with their own elevation data serves nothing.
+#: What an unstyled extrusion is drawn at. The values left the signatures with #334; these are where they
+#: live now, cited by name from the docstrings that used to show them.
+EXTRUSION_COLOR = "#3388ff"
+EXTRUSION_OPACITY = 0.9
+
 _DEFAULT_TERRAIN_TILES = (
     "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 )
@@ -227,8 +233,8 @@ class ThreeDMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        color: str = "#3388ff",
-        opacity: float = 0.9,
+        color: Maybe[str] = UNSET,
+        opacity: Maybe[float] = UNSET,
     ) -> Self:
         """Draw a 3-D choropleth: polygons extruded by ``height`` and coloured by ``column`` (recipe W5).
 
@@ -261,9 +267,15 @@ class ThreeDMixin(_MixinBase):
             FileNotFoundError: when ``features`` is a path that names nothing.
         """
         _require_layer_api()
+        ask = Ask()
+        # `height=` is a required argument, so whatever is under it was asked for — there is no default of
+        # this tier's own for it to be indistinguishable from.
+        ask.always("fill-extrusion-height")
         paint: dict = {
             "fill-extrusion-opacity": as_finite(
-                opacity, "opacity", "WebMap.extrusion()"
+                ask("fill-extrusion-opacity", opacity, EXTRUSION_OPACITY),
+                "opacity",
+                "WebMap.extrusion()",
             ),
             # A string names the column to read the height from and is carried as it is; a number is the
             # height itself, and the figure has to be able to carry that too (review L1).
@@ -272,12 +284,15 @@ class ThreeDMixin(_MixinBase):
             else as_finite(height, "height", "WebMap.extrusion()"),
         }
         gdf = self._display_gdf(features, method="extrusion")
+        color_encoding: Optional[Encoding] = None
         if column is not None:
-            paint["fill-extrusion-color"] = self._color_expr(
+            paint["fill-extrusion-color"], color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
             )
         else:
-            paint["fill-extrusion-color"] = color
+            paint["fill-extrusion-color"] = ask(
+                "fill-extrusion-color", color, EXTRUSION_COLOR
+            )
 
         layer_id = self._uid("extrusion")
         self._index_layer(
@@ -288,7 +303,13 @@ class ThreeDMixin(_MixinBase):
             # handed to the first draw so nothing is warped twice (review H1).
             source=features,
             placed=gdf,
-            symbology=Symbology(props={"paint": dict(paint)}),
+            symbology=Symbology(
+                # An extruded fill coloured by a column drives the same `color` channel a choropleth does,
+                # so it publishes the same encoding and can be given the same colour key — the extrusion
+                # builder does not go through `_vector_layer`, so it files it here itself.
+                encodings={} if color_encoding is None else {"color": color_encoding},
+                props={"paint": dict(paint), **ask.record},
+            ),
         )
         self._last_layer_id = layer_id
         return self

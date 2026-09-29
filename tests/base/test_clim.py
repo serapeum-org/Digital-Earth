@@ -1,19 +1,28 @@
-"""The shared stack colour-range rule (#174 / DE-9).
+"""The shared stack colour-range rule (#174 / DE-9, DE-40).
 
 Three tiers used to derive the colour range of a raster time stack independently — static capped at 24 by an
 stride, web at 50 by a head slice, interactive not at all — so one collection could come out on three
-different scales. These cover the one rule they now share.
+different scales. These cover the one rule they now share: which frames are read
+(:func:`~digitalearth.base.clim.sample_evenly`), what those frames measure
+(:func:`~digitalearth.base.clim.measure_clim`), and the frozen
+:class:`~digitalearth.base.spec.scale.Scale` the measurement becomes
+(:func:`~digitalearth.base.clim.stack_scale`) — the last of which is `Scale`'s job, not this module's, which
+is why the old ``stack_clim`` is gone.
 """
+
+from dataclasses import FrozenInstanceError
 
 import numpy as np
 import pytest
 
 from digitalearth.base.clim import (
     DEFAULT_CLIM_SCAN_CAP,
+    frozen_scale,
     measure_clim,
     sample_evenly,
-    stack_clim,
+    stack_scale,
 )
+from digitalearth.base.spec.scale import Scale
 
 
 class TestSampleEvenly:
@@ -428,8 +437,8 @@ class TestMeasureClim:
         )
 
 
-class TestStackClim:
-    """``stack_clim`` is the public form: a range a colormap can take without a ``None`` check."""
+class TestStackScale:
+    """``stack_scale`` is the public form: the frozen :class:`Scale` every frame of a stack is drawn with."""
 
     def test_it_returns_the_measured_range(self):
         """A measurable stack reduces to its own range.
@@ -437,7 +446,7 @@ class TestStackClim:
         Test scenario:
             The fallback must not shadow a real measurement.
         """
-        assert stack_clim([np.array([2.0, 9.0])]) == (2.0, 9.0), (
+        assert stack_scale([np.array([2.0, 9.0])]).as_limits() == (2.0, 9.0), (
             "the measured range must win"
         )
 
@@ -447,7 +456,9 @@ class TestStackClim:
         Test scenario:
             Every frame off the view draws nothing, and a builder still needs limits to hand the colormap.
         """
-        assert stack_clim([]) == (0.0, 1.0), "an empty stack must fall back to (0, 1)"
+        assert stack_scale([]).as_limits() == (0.0, 1.0), (
+            "an empty stack must fall back to (0, 1)"
+        )
 
     def test_a_stack_of_frames_with_no_finite_value_falls_back_too(self):
         """Frames that exist but hold nothing measurable reach the same fallback as no frames at all.
@@ -457,7 +468,8 @@ class TestStackClim:
             view — as distinct from the empty-list case above. Both must yield limits a colormap can take,
             and neither may raise on the way there.
         """
-        assert stack_clim([np.array([np.nan, np.nan]), np.array([])]) == (0.0, 1.0), (
+        frames = [np.array([np.nan, np.nan]), np.array([])]
+        assert stack_scale(frames).as_limits() == (0.0, 1.0), (
             "an unmeasurable stack must fall back to (0, 1) rather than raise"
         )
 
@@ -467,16 +479,126 @@ class TestStackClim:
         """Data genuinely spanning 0 to 1 is returned as a measurement, not mistaken for the fallback.
 
         Test scenario:
-            ``stack_clim`` collapses "nothing measurable" and "0 to 1" into the same tuple, which is exactly
-            why :func:`measure_clim` exists alongside it. This pins that the collapse is one-way: a real
-            ``(0, 1)`` still measures, so a normalised raster is not quietly treated as unmeasurable.
+            ``stack_scale`` collapses "nothing measurable" and "0 to 1" into the same domain, which is
+            exactly why :func:`measure_clim` exists alongside it. This pins that the collapse is one-way: a
+            real ``(0, 1)`` still measures, so a normalised raster is not quietly treated as unmeasurable.
         """
         frames = [np.array([0.0, 1.0])]
-        assert stack_clim(frames) == (0.0, 1.0), (
-            f"a real 0-1 span must come back unchanged, got {stack_clim(frames)}"
+        assert stack_scale(frames).as_limits() == (0.0, 1.0), (
+            f"a real 0-1 span must come back unchanged, got {stack_scale(frames).as_limits()}"
         )
         assert measure_clim(frames) == (0.0, 1.0), (
             f"the same span must measure rather than read as unmeasurable, got {measure_clim(frames)}"
+        )
+
+    def test_a_constant_stack_gets_a_span_a_ramp_can_show(self):
+        """Every frame holding the same value yields a domain of non-zero width.
+
+        Test scenario:
+            The behaviour change of DE-40. The old ``stack_clim`` handed back the bare ``(7.0, 7.0)`` it
+            measured, so the three tiers passed a zero-width range to their normalisers — matplotlib clamps
+            that to the bottom of the ramp, and any tier dividing by the span would divide by zero. Routing
+            the measurement through ``Scale`` applies the widening rule the other six derivation sites
+            already used, so the stack range obeys the same invariant as every other domain in the package.
+        """
+        low, high = stack_scale([np.array([7.0]), np.array([7.0])]).as_limits()
+        assert (low, high) == (7.0, 8.0), (
+            f"a constant stack must widen to (v, v + 1), got ({low!r}, {high!r})"
+        )
+
+    def test_a_huge_constant_stack_is_scalable_rather_than_refused(self):
+        """A constant stack too large for ``+ 1`` to move still yields a usable domain.
+
+        Test scenario:
+            ``Scale``'s widening was ``hi = lo + 1.0``, which does not move at or above ``2**53``, so
+            routing the stack range through ``Scale`` would have turned a working animation over a constant
+            large-valued band into a ``ValueError``. This is the case that made the widening magnitude-aware.
+        """
+        low, high = stack_scale([np.array([1e20, 1e20])]).as_limits()
+        assert high > low, (
+            f"a constant 1e20 stack must still widen, got ({low!r}, {high!r})"
+        )
+
+    def test_the_scale_it_returns_is_frozen(self, monkeypatch):
+        """The stack scale is a value, so no frame can move the range the others were drawn against.
+
+        Args:
+            monkeypatch: Used to watch `Scale.freeze`, which is the seam this test is about.
+
+        Test scenario:
+            What "one range across 50 frames" actually requires. A mutable range is the flicker bug: any
+            per-frame render that re-derived or adjusted it would put the later frames on a different scale
+            from the earlier ones.
+
+            The seam is watched rather than its result inspected (R2-M10): `Scale` is a frozen dataclass and
+            `Scale.freeze()` returns `self`, so ``scale.freeze() is scale`` held for any scale from anywhere
+            and deleting the ``.freeze()`` call in `frozen_scale` left all 193 tests here green. What this
+            module has to do is *take* that step at the one derivation point, which is what the spy records;
+            that the value is then immutable is `tests/base/test_scale.py`'s, stated once below because it is
+            the guarantee the derivation is for.
+        """
+        frozen = []
+        unspied = Scale.freeze
+
+        def spy(self):
+            frozen.append(self)
+            return unspied(self)
+
+        monkeypatch.setattr(Scale, "freeze", spy)
+        scale = stack_scale([np.array([2.0, 9.0])])
+        assert len(frozen) == 1, (
+            f"the stack range must be frozen once, at its derivation; `freeze()` ran {len(frozen)} times"
+        )
+        assert frozen[0] is scale, (
+            "the scale that was frozen is not the one handed back, so the frozen one went nowhere"
+        )
+        with pytest.raises(FrozenInstanceError):
+            scale.vmin = 0.0
+
+
+class TestFrozenScale:
+    """``frozen_scale`` is the same rule for a caller that has already reduced its frames itself."""
+
+    def test_a_measured_pair_becomes_that_domain(self):
+        """A pair that already has width passes through unchanged.
+
+        Test scenario:
+            The static tier unions one measurement per swept projection and hands the union over; the union
+            must not be re-derived or widened.
+        """
+        assert frozen_scale((-2.0, 5.0)).as_limits() == (-2.0, 5.0), (
+            "an already-measured range must pass through"
+        )
+
+    def test_nothing_measured_becomes_the_unit_range(self):
+        """``None`` — no view showed any data — becomes the same fallback the array form uses.
+
+        Test scenario:
+            ``measure_clim`` answers ``None`` so a union can contribute nothing; the fallback has to happen
+            once, at the point the range becomes a scale, rather than per caller.
+        """
+        assert frozen_scale(None).as_limits() == (0.0, 1.0), (
+            "nothing measured must fall back to the unit range"
+        )
+
+    def test_a_degenerate_pair_is_widened_like_a_measured_one(self):
+        """A union that collapsed to one value widens, exactly as a single measurement does.
+
+        Test scenario:
+            ``rotate`` can sweep a set of projections that all show the same constant cell. The two entry
+            points must not disagree about what that range is.
+
+            Each is pinned to the literal rather than to the other (R2-M9): ``stack_scale`` *is*
+            ``frozen_scale(measure_clim(...))`` and ``measure_clim([array([4.0])])`` is ``(4.0, 4.0)``, so
+            the two sides reduced to one call and the agreement held by construction — breaking the shared
+            ``+ 1`` rule in ``Scale._widen`` left this green while reddening its siblings. Through the
+            literal, the agreement is a measurement and the rule is what both sides are held to.
+        """
+        assert frozen_scale((4.0, 4.0)).as_limits() == (4.0, 5.0), (
+            "a pair that collapsed to one value must widen by the shared +1 rule"
+        )
+        assert stack_scale([np.array([4.0])]).as_limits() == (4.0, 5.0), (
+            "the array form must reach the same widened range as the pair form"
         )
 
 

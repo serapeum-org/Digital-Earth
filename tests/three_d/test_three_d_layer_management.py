@@ -38,8 +38,10 @@ class ThreeDContract(LayerManagementContract):
     """The 3-D tier's adapter for the shared layer-management probes."""
 
     backend = "3d"
-    #: A string at a coordinate: registered, drawn from no data, and a 2-D tier's layer throughout.
-    undrawable_kind = "text"
+    #: Meridians and parallels: registered, drawn from no data, and a 2-D tier's layer throughout. This was
+    #: `text` until #203 gave this tier a `text()` builder of its own — a kind the tier now draws is no longer
+    #: a kind it can refuse, and the probe needs one it genuinely has no drawer for.
+    undrawable_kind = "graticule"
 
     def make(self):
         """Return an off-screen scene.

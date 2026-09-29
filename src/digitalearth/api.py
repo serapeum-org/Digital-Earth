@@ -41,6 +41,7 @@ from digitalearth.interactive.capabilities import (
 )
 from digitalearth.static import Map
 from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
+from digitalearth.static.guides import guide_kind
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
@@ -149,8 +150,10 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
 #:   colorbar toggle.
 #: * ``3d`` draws every layer in one display CRS, given as ``crs`` or taken from the first layer
-#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept, and its
-#:   scalar bar is the ``colorbar`` toggle.
+#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept. Its
+#:   ``colorbar`` toggle reaches the tier's own `colorbar`/`legend` through :func:`_add_3d_key` (order 24):
+#:   PyVista's scalar bar for a layer coloured by a ramp, its keyed legend for one coloured by classes, and
+#:   nothing at all — without an error — for a layer whose colour is flat.
 #: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
 #:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
 #:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
@@ -339,22 +342,83 @@ def _best_effort(step: str, call, *args, **kwargs) -> Any:
         return None
 
 
-def _add_colorbar(scene: Map) -> Any:
-    """Add a colorbar to ``scene``, tolerating only a layer that cannot carry one.
+def _add_static_key(scene: Map, *, visible: bool) -> None:
+    """Ask the matplotlib tier for a layer's colour key, tolerating only a layer that cannot carry one.
+
+    **Which key is a property of the layer, not of the flag** — the branch :func:`_add_3d_key` already had.
+    The rule is stated in full at :func:`~digitalearth.static.guides.guide_kind` and is the same on all four
+    backends: a scale is explained by what it is made of. Here that means a **categorical** fill is keyed by
+    a swatch list and every other scale by a bar — a classified one banded on its class edges, a continuous
+    one as a ramp. ``Map.colorbar`` refuses the categorical case outright, because a bar over it would read
+    the class codes cleopatra assigned rather than the class names. Calling only ``colorbar()`` and
+    swallowing that refusal is what left the default backend recording no key at all for a fill the web and
+    3-D paths both keyed (review M6); the choice is asked of
+    :func:`~digitalearth.static.guides.guide_kind`, which is where this tier already answers it.
+
+    This docstring said "a continuous ramp is explained by a bar and a *categorical* fill by a keyed list"
+    while :func:`_add_3d_key`'s said a *classified* fill gets the list, so the two stated different rules
+    for the same layer a few hundred lines apart (review M2). Neither tier's behaviour changed: what
+    differs is the furniture, and the table at ``guide_kind`` is the one place that says so.
+
+    **Whether it is drawn is the caller's, and it is carried through rather than read as "skip the call".**
+    This tier's builders draw a swatch legend of their own for ``scheme="categorical"``, so a path that only
+    ever *added* a key could not take that one off: ``quickmap(colorbar=False)`` returned a map with a
+    legend on it and a description that said nothing about a key at all, while the interactive and 3-D
+    paths recorded ``Guide(show=False)`` and drew none. Passing the flag down records the decision either
+    way — which is what lets a switcher offer the key back — and keeps the layer resolved and checked before
+    the flag is read, the ordering all four tiers share.
 
     Args:
-        scene: The :class:`Map` whose last layer should get a colorbar.
+        scene: The :class:`Map` whose most recent colour-keyed layer the key describes. Which layer that is
+            is ``Map.colorbar``/``Map.legend``'s own question since order 24 — the most recent one that
+            publishes a colour encoding, never simply the last one added, so a coastline or a basemap drawn
+            after the data cannot take the key. It is read here through the same
+            :meth:`~digitalearth.static.scene.Scene._color_keyed` list those methods resolve through, so the
+            layer this branches on and the layer they key cannot differ.
+        visible: Whether the key is drawn. ``False`` records the guide switched **off** and takes off the
+            key the builder drew, as ``quickmap(colorbar=False)`` asks for. The two calls that takes are
+            tolerated separately, so an engine failure in the first — the only one that draws anything —
+            cannot cost the second its record of the decision (review N1).
 
     Returns:
-        The created colorbar, or ``None`` when the layer is outline-only / unmappable.
+        Nothing. Both methods return the map itself, as the Core declares, so there is no artist to hand
+        back; the drawn key is reachable per layer from the renderer.
     """
+    keyed = scene._color_keyed()
+    if not keyed:  # pragma: no cover - `_has_a_key_to_draw` is asked first
+        return
+    kind = guide_kind(scene.get_layer(keyed[-1]))
+    ask = scene.legend if kind == "legend" else scene.colorbar
+    if not visible:
+        # Take the key over before switching it off. `Renderer.draw_guide` removes the key **it** drew
+        # — `DrawnLayer.guides` — and the swatch legend a categorical glyph draws for itself is not one
+        # of those, so asking for `visible=False` alone recorded the decision and left that legend on
+        # the axes. Drawing the key once through the tier's own method makes it the layer's (matplotlib
+        # holds one legend per axes, so this replaces rather than stacks), and the call below then takes
+        # it off. Both calls resolve and check the layer first, so a refusal still happens before
+        # anything is recorded.
+        #
+        # Tolerated on its own rather than under one `except` with the call below (review N1). This is the
+        # **only** one of the two that reaches `colorbar_legend`/`disjoint_legend`, because the other draws
+        # nothing — so it is the only one an engine failure can come out of, and sharing a guard meant that
+        # failure took the `Guide(show=False)` record with it. The decision is the thing `colorbar=False`
+        # exists to record, and the take-over is housekeeping over a key the builder drew: worth doing,
+        # not worth losing the record over.
+        try:
+            ask()
+        except UNMAPPABLE as error:
+            logger.warning(
+                "quickmap: taking the %s over first skipped — %s: %s",
+                kind,
+                type(error).__name__,
+                error,
+            )
     try:
-        return scene.colorbar()
+        ask(visible=visible)
     except UNMAPPABLE as error:
         logger.warning(
-            "quickmap: colorbar skipped — %s: %s", type(error).__name__, error
+            "quickmap: %s skipped — %s: %s", kind, type(error).__name__, error
         )
-        return None
 
 
 #: The static tier's renderer for each raster ``kind`` whose method is spelled differently, as
@@ -697,7 +761,10 @@ def _quickmap_matplotlib(
         domain: A named region / bbox to frame on, or `None` to leave the extent to the data.
         basemap: ``True`` for the backend's default tile source, or the source itself.
         coastlines: When True, overlay coastlines.
-        colorbar: When True, add a colour key if the drawn layer has one to draw.
+        colorbar: Whether the map carries a colour key, where the drawn layer has one to carry. ``False``
+            records the key switched off and takes off the swatch legend a categorical fill's glyph drew of
+            its own accord, rather than leaving a key the caller asked against — the same thing the
+            interactive and 3-D paths mean by it.
         **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
 
     Returns:
@@ -713,25 +780,35 @@ def _quickmap_matplotlib(
         _best_effort("basemap", scene.basemap, _basemap_source(basemap))
     if domain is not None:
         scene.set_domain()
-    if colorbar and _has_a_key_to_draw(scene):
-        _add_colorbar(scene)
+    if _has_a_key_to_draw(scene):
+        # Asked either way, because `colorbar=False` is a decision to record and a key to take off rather
+        # than a call to skip. A map with nothing coloured by a value has no key to switch, so the gate
+        # above still stands between the two.
+        _add_static_key(scene, visible=colorbar)
     return scene
 
 
 def _has_a_key_to_draw(scene: Map) -> bool:
-    """Whether the map's last layer is one a colorbar can describe.
+    """Whether any layer on the map is one a colour key can describe.
+
+    Asked of the **description** rather than of the last registered artist (order 24). The old reading was
+    ``scene.layers[-1]``, which is the last layer that registered a mappable — so a coastline or a basemap
+    drawn after the data answered for the data, and ``quickmap(ds, coastlines=True)`` decided whether to key
+    a raster by looking at a coastline.
+
+    It used to ask :func:`~digitalearth.static.guides.bar_refusal` — "can a **bar** describe this?" — and so
+    answered `False` for a categorical fill, which is a layer with a key, just not that one. Choosing
+    between the two is :func:`_add_static_key`'s job; the question here is only whether there is anything to
+    explain (review M6).
 
     Args:
         scene: The map that was just drawn.
 
     Returns:
-        `False` for a map with no layers, for a layer with no mappable — a globe fill or an outline-only
-        polygon draw registers one without — and for a categorical layer, which is keyed by the legend its
-        builder drew rather than by a continuous ramp.
+        `False` for a map where nothing is coloured by a value — no layers, a globe fill, an outline-only
+        polygon draw.
     """
-    if not scene.layers or scene.layers[-1][1] is None:
-        return False
-    return not _last_layer_is_categorical(scene)
+    return bool(scene._color_keyed())
 
 
 def _basemap_source(basemap: Any) -> Any:
@@ -881,8 +958,11 @@ def _quickmap_interactive(
         basemap: ``True`` for the backend's default tile source, or the source itself (provider name or
             keyed preset), forwarded to ``InteractiveMap.tiles``.
         coastlines: When True, overlay a coastline.
-        colorbar: When False, drop the colorbar the builder draws by default (mirrors the
-            matplotlib backend's ``colorbar`` toggle); ``True`` leaves the builder default in place.
+        colorbar: Whether the map carries a colour key, where the drawn layer has one to carry. Routed
+            through the tier's own ``colorbar``/``legend`` (:func:`_add_interactive_key`) rather than left
+            to the builder's option, so the key is recorded on the layer it explains either way — and so a
+            categorical fill, which Bokeh draws no colorbar for, is keyed by its legend instead of not at
+            all.
         **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
 
     Returns:
@@ -902,11 +982,51 @@ def _quickmap_interactive(
         _draw_interactive_raster(scene, data, kind, kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
-    if not colorbar and scene.layers:
-        # Builders draw a colorbar by default; drop it on the data layer.
-        scene.colorbar(False)
+    _add_interactive_key(scene, visible=colorbar)
     _decorate_interactive(scene, basemap, coastlines)
     return scene
+
+
+def _add_interactive_key(scene: Any, *, visible: bool) -> None:
+    """Ask the interactive tier for the colour key of whatever it just drew, tolerating a layer with none.
+
+    The HoloViz counterpart of :func:`_add_static_key`, and here for the same reason. This path used to act
+    only on ``colorbar=False``, leaving the builder's own option in place for ``True`` — so a one-call map
+    carried no :class:`~digitalearth.base.spec.encoding.Guide` at all, and a **categorical** fill, whose
+    builder sets ``colorbar: False`` for itself, came back with no key in the picture either. That is review
+    M6 on this tier.
+
+    **Which key it is, is the layer's property, and the categorical answer is measured rather than assumed.**
+    A categorical fill is coloured through a ``{label: colour}`` map, which Bokeh reads as a
+    `CategoricalColorMapper` and draws no ``ColorBar`` from at all: rendering one with ``colorbar=True``
+    produces zero bars, while ``legend()`` produces one keyed box. So the builder's ``colorbar: False`` is
+    load-bearing and stays; what changes is that the key asked for is the one the scale calls for, which is
+    :func:`~digitalearth.interactive.style_fold.guide_kind`'s question.
+
+    Args:
+        scene: The `InteractiveMap` whose most recent colour-driven layer the key describes.
+        visible: Whether the key is drawn. ``False`` records the guide switched **off** — under the kind the
+            layer actually calls for, so switching it back on asks Bokeh for furniture it can build.
+
+    Returns:
+        Nothing. Both methods return the map itself, as the Core declares.
+    """
+    from digitalearth.interactive.style_fold import guide_kind
+
+    # A layer whose colour varies with nothing — plain `points`, an outline-only `polygons`, a map with no
+    # data layer at all — has no key to speak about, and `colorbar=False` asking for a map without one is
+    # met by a map that already has none. Refusing the whole `quickplot` over that would be review L9 again.
+    if not scene._guidable():
+        return
+    target = scene._guided_layer("quickplot", None)
+    kind = guide_kind(scene.get_layer(target).symbology)
+    ask = scene.legend if kind == "legend" else scene.colorbar
+    try:
+        ask(target, visible=visible)
+    except UNMAPPABLE as error:
+        logger.warning(
+            "quickplot: %s skipped — %s: %s", kind, type(error).__name__, error
+        )
 
 
 def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
@@ -932,19 +1052,40 @@ def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
     scene.points(data, **kwargs)
 
 
-def _add_web_legend(scene: Any) -> Any:
+def _add_web_legend(scene: Any, *, visible: bool) -> Any:
     """Add the web tier's colour key, tolerating a map with nothing classified to describe.
 
-    The web counterpart of :func:`_add_colorbar`. ``WebMap.legend`` is a *builder* — it reads the
+    The web counterpart of :func:`_add_static_key`. ``WebMap.legend`` is a *builder* — it reads the
     classification the last layer recorded — so on a map with no classified layer it raises rather than
     drawing an empty box. Under ``quickmap(colorbar=True)`` that is not a caller error: the default asks for
     a key *if there is one to draw*, exactly as the matplotlib path treats an unmappable layer.
 
+    **The flag is carried through rather than read as "skip the call"**, which is the rule the other three
+    backends already follow. This path gated the whole call on it, so ``quickmap(colorbar=False)`` left the
+    layer carrying no :class:`~digitalearth.base.spec.encoding.Guide` at all while the matplotlib,
+    interactive and 3-D paths each recorded ``Guide(show=False)`` — and a web figure written out after
+    ``colorbar=False`` was indistinguishable from one where nobody asked (review M1). The picture agrees
+    either way; the *record* is what travels through ``FigureSpec``, and recording the decision is what lets
+    a switcher offer the key back.
+
+    The layer is resolved through the tier's own ``_guide_target`` with ``visible=True``, for both values of
+    the flag, and named in the call — the shape :func:`_add_interactive_key` already has. That resolution
+    answers "which layer would a key describe"; the flag answers the different question of whether the key
+    is drawn. Leaving it to ``legend(visible=False)`` to resolve instead asks for "the key this map already
+    has", which on a one-call map is nothing at all, and the decision goes unrecorded again.
+
     Args:
         scene: The ``WebMap`` whose most recent classified layer should get a key.
+        visible: Whether the key is drawn. ``False`` records the guide switched **off**, as
+            ``quickmap(colorbar=False)`` asks for.
 
     Returns:
-        The same map, or ``None`` when there was no classification to describe.
+        The same map, or ``None`` when there was no classification to describe — including a **stale**
+        ``last_legend``, which is a sticky side record: a map whose classified layer has since been removed
+        or restyled to a constant colour still carries one while nothing on it can be keyed. Naming the
+        layer moves that resolution out of ``legend()`` and in here, so its "nothing to describe" refusal is
+        tolerated here as well; otherwise ``quickmap`` would start failing on a map it used to return
+        unkeyed, which is the same tolerance the matplotlib path gives an unmappable artist.
 
     Raises:
         AttributeError: if ``scene`` carries no ``last_legend`` — that is a defect, not an unkeyed map.
@@ -960,9 +1101,22 @@ def _add_web_legend(scene: Any) -> Any:
     # instead of silently dropping every web key.
     if not scene.last_legend:
         return None
-    # No `except` around the builder. The guard above leaves only a malformed `last_legend` able to raise --
+    try:
+        target = scene._guide_target(None, visible=True, caller="quickmap()")
+    except ValueError as error:
+        # The same "no mappable layer" tolerance one line up, for the case `last_legend` cannot answer.
+        # It is a *sticky* side record: a map whose classified layer has since been removed, or restyled to
+        # a constant colour, still carries one while nothing on it can be keyed any more. Naming the layer
+        # is what records the decision either way, and it moves this resolution out of `legend()` and in
+        # here -- so its refusal has to be tolerated here too, or `quickmap` would start failing on a map
+        # it used to return unkeyed.
+        logger.warning(
+            "quickmap: web key skipped -- %s: %s", type(error).__name__, error
+        )
+        return None
+    # No `except` around the builder. The guards above leave only a malformed `last_legend` able to raise --
     # a bug in a web builder -- and swallowing that would report a library defect as "no key to draw".
-    return scene.legend()
+    return scene.legend(layer_id=target, visible=visible)
 
 
 def _quickmap_web(
@@ -988,10 +1142,11 @@ def _quickmap_web(
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
-        colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend`,
-            which checks before it builds rather than catching afterwards: a map with no classified layer to
-            describe gets no key and no error, while a failure inside the builder still surfaces. ``False``
-            leaves the map without one.
+        colorbar: Whether this tier's colour key is drawn, carried through :func:`_add_web_legend` rather
+            than read as "skip the call": ``True`` (the default) draws it and ``False`` records the guide
+            switched **off**, so the figure says either way that the key was decided. The helper checks
+            before it builds rather than catching afterwards, so a map with no classified layer to describe
+            gets no key and no error, while a failure inside the builder still surfaces.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
@@ -1016,12 +1171,52 @@ def _quickmap_web(
             scene.basemap()
         else:
             scene.basemap(source)
-    if colorbar:
-        # This tier's key is a builder, not a toggle, and it refuses a map with nothing classified to
-        # describe. That is this tier's "no mappable layer" case, which the matplotlib path tolerates too,
-        # so it is tolerated here rather than turning `colorbar=True` into an error the caller did not cause.
-        _add_web_legend(scene)
+    # Called whichever way the flag is set, so the decision is recorded either way -- the rule the other
+    # three backends follow. This tier's key is a builder, not a toggle, and it refuses a map with nothing
+    # classified to describe; that is this tier's "no mappable layer" case, which the matplotlib path
+    # tolerates too, so it is tolerated inside the helper rather than turning `colorbar=True` into an error
+    # the caller did not cause.
+    _add_web_legend(scene, visible=colorbar)
     return scene
+
+
+def _add_3d_key(scene: Any, *, visible: bool) -> Any:
+    """Ask the 3-D tier for the colour key of whatever it just drew, tolerating a layer with none.
+
+    The 3-D counterpart of :func:`_add_web_legend`, and the reason this path no longer reaches past the tier
+    into a PyVista keyword: `Scene3D` has the methods now (order 24), and a `quickmap` flag routes through
+    them. Which of the two is a property of the layer rather than of the flag, under the rule stated in full
+    at :func:`~digitalearth.static.guides.guide_kind`: a scale is explained by what it is made of, and a
+    **classified** scale means its classes. Here that is the keyed list, because this tier paints a
+    classified fill by class **index** — `classified_scalars` assigns `0, 1, 2 …` — so a scalar bar over it
+    would read those indices where the class ranges belong. The matplotlib and interactive tiers answer the
+    same case with a bar, and it is the same list: matplotlib's `BoundaryNorm` bands the strip and ticks it
+    on the very edges this tier's list spells out (review M2, which found the two docstrings stating two
+    different rules). A **continuous** scale gets PyVista's scalar bar, which reads the values themselves.
+
+    Args:
+        scene: The `Scene3D` whose most recent colour-driven layer should get a key.
+        visible: Whether the key is drawn. `False` takes off the bar PyVista draws of its own accord, which is
+            what ``colorbar=False`` has always meant here.
+
+    Returns:
+        The same scene, or `None` when nothing it drew is coloured by data — a flat-coloured surface, or a
+        point cloud given no values. Under the `colorbar=True` default that is not a caller error: they asked
+        for a key *if there is one to draw*, which is how the matplotlib and web paths treat it too.
+
+    Raises:
+        Exception: whatever the tier's own methods raise for a layer that is coloured by data but cannot be
+            keyed, which would be a 3-D-tier defect rather than an unkeyed scene.
+    """
+    for layer_id in reversed(scene.layer_ids):
+        encoding = scene.get_layer(layer_id).symbology.encoding("color")
+        if encoding is None or encoding.field is None:
+            continue
+        scale = encoding.scale
+        if scale is not None and (scale.is_classified or scale.is_categorical):
+            return scene.legend(layer_id, visible=visible)
+        return scene.colorbar(layer_id, visible=visible)
+    return None
 
 
 def _quickmap_3d(
@@ -1038,8 +1233,14 @@ def _quickmap_3d(
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
-        colorbar: When False, hide the scalar bar (``show_scalar_bar=False``); True leaves PyVista's
-            default (a bar iff the layer carries scalars).
+        colorbar: Whether the scene carries a colour key, routed through the tier's own
+            :meth:`~digitalearth.three_d.guides.GuideMixin.colorbar` /
+            :meth:`~digitalearth.three_d.guides.GuideMixin.legend` rather than through a PyVista keyword
+            (order 24), so the key is recorded on the layer it explains. ``True`` (the default) keys the
+            layer that was drawn, where its colour comes from data: a ramp gets PyVista's scalar bar, which
+            is the bar the engine already drew, and a **classified** fill gets the keyed list instead of a
+            scalar bar reading `0, 1, 2 …` over its class indices. ``False`` takes the bar off. Either way a
+            layer whose colour is flat gets no key and no error, as on the matplotlib and web paths.
         crs: The scene's display CRS; ``None`` takes the data's own.
         **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
             ``column``, ``height``, ``size``).
@@ -1075,10 +1276,6 @@ def _quickmap_3d(
     elif not isinstance(data, Dataset):
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
 
-    if (
-        not colorbar
-    ):  # PyVista shows a scalar bar by default when scalars exist; force it off here
-        kwargs.setdefault("show_scalar_bar", False)
     scene = Scene3D(
         crs=crs
     )  # constructed only after validation, so the error paths above leak no scene
@@ -1090,46 +1287,35 @@ def _quickmap_3d(
         scene.extruded_polygons(data, height=height, column=column, **kwargs)
     else:  # points
         scene.point_cloud(data, value_column=kwargs.pop("column", None), **kwargs)
+    # After the layer, not before it as a `show_scalar_bar=` among its keywords: the key is a guide on that
+    # layer's encoding, so there has to be a layer to put it on (order 24).
+    _add_3d_key(scene, visible=colorbar)
     return scene
 
 
-def _last_layer_is_categorical(scene: Map) -> bool:
-    """Return whether ``scene``'s most recent layer is a categorical fill (keyed by a swatch legend).
-
-    A categorical fill's mappable carries opaque integer class codes, so an aggregated colorbar over it would
-    read ``0, 1, 2 …`` instead of the category labels — the glyph draws its own swatch legend instead
-    (``PolygonGlyph.category_legend`` is set, non-categorical glyphs leave it ``None`` or absent). The one-call
-    wrappers must not add a colorbar on top of that legend.
-
-    Args:
-        scene: The :class:`Map` whose last layer is inspected.
-
-    Returns:
-        ``True`` when the last layer's glyph exposes a drawn ``category_legend``, else ``False``.
-    """
-    if not scene.layers:
-        return False
-    return getattr(scene.layers[-1][0], "category_legend", None) is not None
-
-
 def _finish(scene: Map, *, colorbar: bool) -> Map:
-    """Add an aggregated colorbar to ``scene`` when requested and a mappable layer exists; return ``scene``.
+    """Add the colour key to ``scene`` when this plot kind has one and a keyed layer exists; return it.
 
-    The shared tail of the one-call wrappers: a colorbar is added only when ``colorbar`` is true and a layer
-    was drawn, and an outline-only / unmappable layer (which cannot carry a colorbar) is warned about rather
-    than raised (see :data:`UNMAPPABLE`; anything else propagates). A categorical fill is skipped too — it
-    keys itself with a swatch legend, and a colorbar over its integer class codes would be a meaningless
-    second key (see :func:`_last_layer_is_categorical`).
+    The shared tail of the one-call wrappers: the key is added only when ``colorbar`` is true and some layer
+    publishes a colour to explain (:func:`_has_a_key_to_draw`), and an outline-only / unmappable layer is
+    warned about rather than raised (see :data:`UNMAPPABLE`; anything else propagates). Which key it is —
+    a bar or a swatch legend — is :func:`_add_static_key`'s question.
+
+    ``colorbar`` here is **the wrapper's own answer to "does this kind carry a key at all"**, not a caller's
+    request: every call site spells it ``True`` or ``column is not None``, and a wrapper drawn without a
+    column publishes no colour encoding, so the ``False`` arm and a keyed layer never meet. That is why this
+    passes ``visible=True`` rather than the flag: a caller's ``colorbar=False`` — which *is* a request, and
+    one that has to switch a drawn key off — reaches :func:`_quickmap_matplotlib` instead.
 
     Args:
         scene: The :class:`Map` a wrapper has already drawn on.
-        colorbar: Whether this plot kind should carry a colorbar (e.g. only when a value ``column`` was set).
+        colorbar: Whether this plot kind carries a colour key (e.g. only when a value ``column`` was set).
 
     Returns:
         The same ``scene`` (so wrappers can ``return _finish(...)``).
     """
-    if colorbar and scene.layers and not _last_layer_is_categorical(scene):
-        _add_colorbar(scene)
+    if colorbar and _has_a_key_to_draw(scene):
+        _add_static_key(scene, visible=True)
     return scene
 
 

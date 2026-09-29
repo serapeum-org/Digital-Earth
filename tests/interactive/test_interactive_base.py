@@ -497,6 +497,11 @@ class TestForgettingTheLayerTheTogglesActOn:
     the next toggle answered `ValueError: tuple.index(x): x not in tuple` from inside the lookup where the
     method documents a refusal naming itself. The web tier already re-points its own `_last_layer_id` when
     it forgets a layer (`web/base.py`); this is the same rule on this tier.
+
+    `hover()` is the toggle probed here since order 24, because it is the one that still resolves the pointer
+    through `_last_layer_index`. The colour keys read the same pointer but ask a further question of what it
+    names — does this layer's colour vary with its data — so their refusal is about colour rather than about
+    having a layer at all; `colorbar()` is asked here too, for its own words.
     """
 
     @staticmethod
@@ -529,7 +534,9 @@ class TestForgettingTheLayerTheTogglesActOn:
         try:
             interactive_map._forget_layer(interactive_map.layer_ids[-1])
             with pytest.raises(ValueError, match="at least one layer"):
-                interactive_map.colorbar(False)
+                interactive_map.hover()
+            with pytest.raises(ValueError, match="needs a layer whose colour varies"):
+                interactive_map.colorbar()
         finally:
             interactive_map.close()
 

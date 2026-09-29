@@ -684,3 +684,126 @@ class TestRasterIdentity:
         assert src.metadata("standard_name") == "sea_surface_temperature", (
             "a caller-supplied standard_name must win over the derived one"
         )
+
+
+class TestAMaskedArrayKeepsItsMask:
+    """#343 — a bare array's only way of saying "nodata", and the one the extractor used to drop.
+
+    The module's first cross-cutting rule is that values are masked by pyramids and never by hand, and every
+    other branch honours it through :func:`~digitalearth.base.arrays.read_masked_band`. The numpy branch did
+    not: ``np.asarray`` hands back the *data* buffer of a masked array and the mask goes with the wrapper, so
+    ``np.ma.masked_equal(grid, -9999)`` extracted with its sentinels intact and was drawn as if they were
+    values. A bare array has no sidecar to carry a ``no_data_value``, so the mask is the whole of its nodata
+    vocabulary.
+    """
+
+    def test_a_masked_cell_becomes_nan(self):
+        """`NaN` is the nodata spelling every renderer here already reads."""
+        grid = np.ma.masked_equal(np.array([[1.0, -9999.0], [3.0, 4.0]]), -9999.0)
+        values = get_source(grid).z.values
+        assert np.isnan(values[0, 1]), f"the masked cell came through as {values[0, 1]}"
+
+    def test_the_sentinel_is_gone_from_the_values(self):
+        """Asked of the whole grid, because a mask honoured in one cell and dropped elsewhere is no mask."""
+        grid = np.ma.masked_equal(np.array([[1.0, -9999.0], [-9999.0, 4.0]]), -9999.0)
+        values = get_source(grid).z.values
+        assert float(np.nanmin(values)) == 1.0, (
+            f"the sentinel survived as a value; the smallest finite cell is {np.nanmin(values)}"
+        )
+
+    def test_an_unmasked_cell_is_untouched(self):
+        """The half a blanket "fill everything with NaN" would fail."""
+        grid = np.ma.masked_equal(np.array([[1.0, -9999.0], [3.0, 4.0]]), -9999.0)
+        values = get_source(grid).z.values
+        assert values[1, 0] == 3.0, f"an unmasked cell became {values[1, 0]}"
+
+    def test_an_integer_masked_array_still_comes_back_as_floats(self):
+        """A `Source` is float64 throughout, and `NaN` cannot be stored in an integer grid."""
+        grid = np.ma.masked_equal(np.array([[1, -9999], [3, 4]]), -9999)
+        values = get_source(grid).z.values
+        assert values.dtype == np.dtype("float64"), f"got dtype {values.dtype}"
+
+    def test_a_plain_array_is_unchanged_by_the_masked_path(self):
+        """The guard must not re-type or re-value the input every other caller passes."""
+        plain = np.arange(6.0).reshape(2, 3)
+        np.testing.assert_array_equal(get_source(plain).z.values, plain)
+
+
+class TestRequireDrawableRefusesByName:
+    """#343 — what ``extract`` cannot read, refused where the caller can see it.
+
+    The builders found out by calling: ``Map.field({})`` reached the tier's reprojection, which asked for
+    ``.to_crs`` on whatever it held, and the caller read an `AttributeError` about a method they never called.
+    ``quickmap`` already refused in the right register; this is that register for a builder.
+    """
+
+    def test_a_family_a_builder_declares_is_accepted(self):
+        """A raster field takes a grid, whether pyramids' or numpy's."""
+        from digitalearth.base.sources import require_drawable
+
+        answer = require_drawable(
+            np.zeros((2, 2)), caller="Map.field()", accepts=("raster", "array")
+        )
+        assert answer is None, f"an accepted value returns nothing; got {answer!r}"
+
+    def test_a_family_a_builder_does_not_declare_is_refused(self):
+        """The same array is a grid and not a set of features, so a vector builder says so."""
+        from digitalearth.base.sources import require_drawable
+
+        grid = np.zeros((2, 2))
+        with pytest.raises(TypeError, match=r"Map\.points\(\) cannot draw a ndarray"):
+            require_drawable(grid, caller="Map.points()", accepts=("vector",))
+
+    def test_the_refusal_says_what_the_builder_takes(self):
+        """A caller needs the call, the type *and* the remedy; the attribute error carried none of them."""
+        from digitalearth.base.sources import require_drawable
+
+        with pytest.raises(
+            TypeError, match="it takes a pyramids Dataset .*, a 2-D numpy array"
+        ):
+            require_drawable({}, caller="Map.field()", accepts=("raster", "array"))
+
+    def test_a_reference_is_never_inspected(self, tmp_path):
+        """A path names data opened at the draw; whether it opens is the resolver's answer to give.
+
+        Args:
+            tmp_path: A directory to name a file in that does not exist.
+        """
+        from digitalearth.base.sources import require_drawable
+
+        missing = tmp_path / "nothing-here.tif"
+        answer = require_drawable(missing, caller="Map.field()", accepts=("raster",))
+        assert answer is None, f"a path must pass the guard untouched; got {answer!r}"
+
+    def test_a_dataset_is_recognised_as_a_raster(self, dataset):
+        """Args:
+        dataset: The pyramids raster every other test in this module draws.
+        """
+        from digitalearth.base.sources import require_drawable
+
+        answer = require_drawable(dataset, caller="Map.field()", accepts=("raster",))
+        assert answer is None, f"a pyramids Dataset is a raster; got {answer!r}"
+
+    def test_a_feature_collection_is_recognised_as_a_vector(self):
+        """Duck-typed on the two members a vector render needs, so a plain geopandas frame counts too."""
+        from pyramids.feature import FeatureCollection
+
+        from digitalearth.base.sources import require_drawable
+
+        features = FeatureCollection.read_file("tests/data/points.geojson")
+        answer = require_drawable(features, caller="Map.points()", accepts=("vector",))
+        assert answer is None, f"a FeatureCollection is a vector layer; got {answer!r}"
+
+    def test_a_family_nobody_declared_is_a_defect_in_the_builder(self):
+        """Refused in different words, because it is not the caller's mistake to fix."""
+        from digitalearth.base.sources import require_drawable
+
+        with pytest.raises(ValueError, match="must name families from"):
+            require_drawable({}, caller="Map.field()", accepts=("rastre",))
+
+    def test_declaring_no_family_at_all_is_refused(self):
+        """An empty `accepts` would refuse everything, which is a builder that cannot be called."""
+        from digitalearth.base.sources import require_drawable
+
+        with pytest.raises(ValueError, match="must name families from"):
+            require_drawable({}, caller="Map.field()", accepts=())

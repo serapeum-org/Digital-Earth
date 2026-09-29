@@ -24,7 +24,6 @@ ELSEWHERE = (
     "model",
     "extrusion",
     "clusters",
-    "labels",
     "point_cloud",
     "custom:holoviews",
     "custom:maplibre",
@@ -96,6 +95,7 @@ class TestTheDeclaration:
             "points": lambda canvas: canvas.points(FeatureCollection(points)),
             "coastlines": lambda canvas: canvas.coastlines(),
             "text": lambda canvas: canvas.text(0.0, 0.0, "here"),
+            "labels": lambda canvas: canvas.labels(FeatureCollection(points), "fid"),
             "graticule": lambda canvas: canvas.graticule(),
         }
         with Map() as canvas:

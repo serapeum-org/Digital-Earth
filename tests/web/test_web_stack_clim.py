@@ -133,6 +133,41 @@ class TestTheStackScanSpansTheSeries:
             f"an unmeasurable stack must fall back, got {scene._global_clim(_Stack(3), 1)}"
         )
 
+    def test_a_constant_stack_reports_the_range_its_layers_are_drawn_with(
+        self, monkeypatch
+    ):
+        """A stack of identical members reports the widened domain, which is what ``field`` resolves anyway.
+
+        Args:
+            monkeypatch: Makes every member contribute the same single value.
+
+        Test scenario:
+            DE-40's behaviour change, and the tier where it is provably invisible on the page. The old
+            ``stack_clim`` reported the bare ``(7.0, 7.0)`` it measured, but every member is then drawn by
+            ``field``, which builds its own ``Scale`` from those limits and widens them — so the range the
+            layers used was already ``(7.0, 8.0)`` while ``timeslider`` reported ``(7.0, 7.0)``. Routing the
+            scan through ``Scale`` closes that gap: the reported range and the drawn range are now derived
+            the same way, so the recorded colour range describes the picture.
+        """
+        from digitalearth.base.spec import Scale
+
+        scene = WebMap()
+        values = np.array([7.0, 7.0])
+        monkeypatch.setattr(
+            scene, "_to_display_source", lambda member, band=1: _Source(values)
+        )
+        reported = scene._global_clim(_Stack(3), 1)
+        assert reported[1] > reported[0], (
+            f"a constant stack must report a domain with width, got {reported}"
+        )
+        drawn_from_the_old_pair = Scale.from_finite(
+            values, vmin=7.0, vmax=7.0
+        ).as_limits()
+        assert reported == drawn_from_the_old_pair, (
+            f"the reported range {reported} must be the one the per-member field call already resolved "
+            f"the unwidened pair to, {drawn_from_the_old_pair}"
+        )
+
     def test_this_tier_reads_the_shared_cap(self):
         """The cap is imported, not spelled out again as 50.
 

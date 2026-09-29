@@ -24,8 +24,14 @@ from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.levels import levels_every
 from digitalearth.base.preprocess import add_cyclic_column
-from digitalearth.base.sources import Source, get_stack
-from digitalearth.base.spec import Bounds, LayerSpec, RenderTarget, Symbology
+from digitalearth.base.sources import Source, get_stack, require_drawable
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    Bounds,
+    LayerSpec,
+    RenderTarget,
+    Symbology,
+)
 from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
@@ -33,6 +39,7 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
+from digitalearth.static.guides import source_field
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
@@ -426,7 +433,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # Recorded rather than set by the builder afterwards: a backdrop drawn again from its
         # description has to land behind the data again, and the builder is not there the second time.
         drawn.artist.set_zorder(zorder)
-    return drawn
+    # The band's own name, which only the drawer can answer: the builder records a band *number* and never
+    # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
+    return drawn.colored_by(source_field(identity, props["band"]))
 
 
 def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
@@ -551,7 +560,7 @@ class RasterMixin(_MixinBase):
         dataset: Any,
         *,
         kind: str,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         cmap: Optional[str] = None,
         levels: Any = None,
         interval: Optional[float] = None,
@@ -610,10 +619,31 @@ class RasterMixin(_MixinBase):
             raising, so a rotation past the far side of a globe still renders.
 
         Raises:
-            ValueError: from ``ArrayGlyph`` for a keyword in ``**opts`` it does not accept, naming the
-                ones it does. The layer is dropped from the description again before it propagates, so a
-                refused call leaves the scene exactly as it found it.
+            TypeError: when `dataset` is something no field render can read — see
+                :func:`~digitalearth.base.sources.require_drawable`, which names this call, the type it was
+                handed and what it takes. It used to leak ``AttributeError: ... has no attribute 'to_crs'``
+                from inside the reprojection instead (#343).
+            ValueError: when `dataset` is a bare numpy array and this map is drawn on a globe frame; or from
+                ``ArrayGlyph`` for a keyword in ``**opts`` it does not accept, naming the ones it does. The
+                layer is dropped from the description again before it propagates, so a refused call leaves
+                the scene exactly as it found it.
         """
+        require_drawable(
+            dataset,
+            caller=f"Map.{_FIELD_METHODS[kind]}()",
+            accepts=("raster", "array"),
+        )
+        if isinstance(dataset, np.ndarray) and self.globe:
+            # A globe frame is a clipped projection with a limb, measured in the display CRS's own units —
+            # metres, for every projection this tier draws a globe in. An array is placed at its indices, so
+            # a 3 x 4 grid is a speck at the centre of a disc 12,000 km across, and a larger one is a square
+            # swallowing the globe. Neither is a picture, and neither raises on its own.
+            raise ValueError(
+                f"Map.{_FIELD_METHODS[kind]}() cannot draw a bare numpy array on a globe frame: the frame is "
+                "a projection limb in the display CRS's units and an array is placed at its own indices, so "
+                "nothing relates the two. Wrap the array in a pyramids Dataset to place it, or build the Map "
+                "with globe=False"
+            )
         recorded_cmap, held_cmap = _described_cmap(cmap)
         if held_cmap is not None:
             opts["cmap"] = held_cmap
@@ -656,9 +686,34 @@ class RasterMixin(_MixinBase):
     ) -> Any:
         """Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
+        **A bare 2-D numpy array is drawn too** — the "just show me this grid" case, which was
+        ``StaticGlyph.plot(arr)`` until that class was deleted and which nothing took over (#343). Such a
+        layer is **not georeferenced**, and that is not a detail:
+
+        * its coordinates are its **own indices** — the column index on x, the row index on y, cell centres
+          on the integers and the image covering ``[-0.5, cols - 0.5] x [-0.5, rows - 0.5]``, with the first
+          row drawn at the **top** as matplotlib draws every array;
+        * **nothing is reprojected.** An array declares no CRS, so :attr:`crs` says nothing about where it
+          is and no warp is attempted — :meth:`~digitalearth.static.maps.base.GeoLayerBase._reproject` hands
+          it straight back and the layer's `Source` carries ``crs=None``;
+        * **no georeferenced layer may share the figure.** A basemap, a coastline, a graticule and a
+          reprojected raster are all placed in the display CRS, so mixing one in is refused by
+          :meth:`~digitalearth.static.scene.Scene._require_one_placement` rather than drawn with the array
+          as an invisible speck beside it;
+        * **a globe frame is refused** for the same reason, at this call;
+        * :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` still frames the figure,
+          and its ``bounds`` are read in the display CRS — which for such a figure means *array indices*.
+          ``set_bounds(None)`` fits the array, and ``set_bounds((0, 0, 4, 3))`` frames columns 0-4 and rows
+          0-3. Geographic bounds would frame empty axes, and there is nothing to tell them apart by.
+
+        **Nodata in a bare array is a masked array.** There is no sidecar to carry a ``no_data_value``, so
+        ``np.ma.masked_equal(grid, -9999)`` (or ``NaN`` in the values) is how a cell says it has none, and
+        those cells are left blank.
+
         Args:
-            dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`
-                first). Only a path-backed layer can be written down.
+            dataset: A pyramids ``Dataset``, a bare 2-D numpy array, or a path or URL to a raster
+                (reprojected to :attr:`crs` first, except for the array — see above). Only a path-backed
+                layer can be written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -675,7 +730,24 @@ class RasterMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
-            ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
+            TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
+                (see :meth:`_field`).
+            ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an
+                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept.
+
+        Examples:
+            - Draw a bare grid, and read back where its image was placed:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> with Map() as canvas:
+                ...     image = canvas.field(np.arange(12.0).reshape(3, 4))
+                ...     image.get_extent()
+                [-0.5, 3.5, -0.5, 2.5]
+
+                ```
         """
         return self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
 
@@ -971,7 +1043,13 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable, or ``None`` when the data lies outside what the display CRS shows.
+
+        Raises:
+            TypeError: when `dataset` is not a multiband raster or a reference to one. A bare numpy array is
+                refused here where :meth:`field` takes one: a composite reads three *bands*, and an array is
+                one grid with no band dimension for :func:`~digitalearth.base.sources.get_stack` to index.
         """
+        require_drawable(dataset, caller=f"Map.{via}()", accepts=("raster",))
         record = LayerRecord(
             "rgb",
             source=dataset,
@@ -1080,7 +1158,7 @@ class RasterMixin(_MixinBase):
     def spaghetti(
         self,
         collection: Any,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         *,
         name: Optional[str] = None,
         visible: bool = True,

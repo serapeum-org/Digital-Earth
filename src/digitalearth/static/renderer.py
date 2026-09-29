@@ -52,7 +52,8 @@ second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
+from dataclasses import replace as with_fields
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, cast
 
 from matplotlib.artist import Artist
 
@@ -60,6 +61,7 @@ from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
 from digitalearth.static.capabilities import CAPABILITIES
+from digitalearth.static.guides import paint_guide, plan_guide
 
 __all__ = [
     "DRAWN_KINDS",
@@ -134,6 +136,17 @@ class DrawnLayer:
             returns the axes, so :func:`artists_added` watches the axes and collects whatever appeared while
             it ran. Empty only for a layer with nothing on the axes yet — a graticule, whose lines are
             computed when it is drawn and put on the axes afterwards, by the globe frame.
+        color_field: The data field this layer's colour varies with, when only its drawer can say — the band
+            variable a raster render resolved through
+            :func:`~digitalearth.base.autostyle.auto_style`, which is not in the description because the
+            builder never opened the source. ``None`` for every other layer, whose colour field is the
+            ``column`` its own description already names, and for one that colours by no field at all.
+        guides: The colour key drawn for this layer — one ``Colorbar`` or one ``Legend``, or nothing. Held
+            **beside** `artists` rather than in it, deliberately: `artists` is the layer's drawing, which
+            :meth:`Renderer._repaint` arranges in draw order and :func:`_rank_zorders` gives z-orders to,
+            and a colorbar lives on its own axes where neither applies. What the two share is the layer's
+            *lifetime* — :meth:`Renderer.remove` takes the key off with the drawing and
+            :meth:`Renderer.set_visible` hides it with it (#261, order 24).
 
     Examples:
         - A text label owns the one ``Text`` it drew, and was drawn straight onto the axes rather than
@@ -157,6 +170,44 @@ class DrawnLayer:
     artist: Any = None
     glyph: Any = None
     artists: Tuple[Any, ...] = field(default=())
+    color_field: Optional[str] = None
+    guides: Tuple[Any, ...] = field(default=())
+
+    def colored_by(self, color_field: Optional[str]) -> "DrawnLayer":
+        """Return this drawing again, carrying the data field its colour varies with.
+
+        The one thing a drawer knows that its builder does not, and therefore the one field every drawer
+        fills in on its way out (see :attr:`color_field`). It is a method rather than a bare
+        ``dataclasses.replace`` at each of those return statements because that is the whole of what they
+        do with it, and because ``replace`` is typed as "some dataclass" rather than as this one — a
+        drawer declaring ``-> DrawnLayer`` then hands back a value nothing can check against the
+        declaration. The ``cast`` is where that narrowing happens, once, instead of at eight call sites.
+
+        Inside, it **is** ``replace``. It was a field-by-field copy, which was correct on the day it was
+        written and would have gone on being correct only until `DrawnLayer` grew a sixth field: a copy
+        that names the fields drops the one nobody remembered to add to it, silently, while ``replace``
+        cannot forget one (review L2). Proved by adding a sixth field and running
+        ``test_colored_by_carries_every_other_field_of_the_drawing`` against both.
+
+        Args:
+            color_field: The field name, or ``None`` for a layer that colours by no field at all.
+
+        Returns:
+            A new ``DrawnLayer`` with everything else as it was; this one is frozen and unchanged.
+
+        Examples:
+            - The drawing is untouched apart from the field name:
+                ```python
+                >>> from digitalearth.static.renderer import DrawnLayer
+                >>> drawn = DrawnLayer(artist="im", glyph="g", artists=("im",), guides=("bar",))
+                >>> drawn.colored_by("elev")
+                DrawnLayer(artist='im', glyph='g', artists=('im',), color_field='elev', guides=('bar',))
+                >>> drawn.color_field is None
+                True
+
+                ```
+        """
+        return cast("DrawnLayer", with_fields(self, color_field=color_field))
 
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
@@ -182,6 +233,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "heatmap",
     "flow",
     "text",
+    "labels",
     "graticule",
     "basemap",
     "coastlines",
@@ -258,6 +310,9 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "text": decoration.draw_text,
             "annotate": decoration.draw_annotate,
         },
+        # One string at one coordinate is `text`; one string per feature, read from a column, is its own kind
+        # — and its own drawer, in the vector module, because the coordinates come from the geometry.
+        "labels": {"labels": vector.draw_labels},
         "graticule": {"graticule": projection.draw_graticule},
         # The recipe is cleopatra's own dataset name, which is the singular `coastline` for the plural kind.
         "coastlines": {"coastline": decoration.draw_natural_earth},
@@ -437,6 +492,20 @@ def _set_visible(artist: Any, visible: bool) -> None:
         logger.debug("%r cannot be shown or hidden; leaving it as it is", artist)
 
 
+def _guide_artist(guide: Any) -> Any:
+    """Return the artist that carries a colour key's visibility flag.
+
+    Args:
+        guide: A drawn key — a ``matplotlib.colorbar.Colorbar`` or a ``matplotlib.legend.Legend``.
+
+    Returns:
+        The key itself for a ``Legend``, which is an artist; the **axes** for a ``Colorbar``, which is not
+        one and has no ``set_visible`` of its own — hiding a bar means hiding the axes it was drawn on.
+        Asked by attribute rather than by type so a key this tier does not yet draw still answers.
+    """
+    return getattr(guide, "ax", guide)
+
+
 def _is_visible(artist: Any) -> bool:
     """Whether one matplotlib artist is currently drawn.
 
@@ -473,6 +542,38 @@ def _detach(artist: Any, axes: Any) -> None:
         # are an object that was never one. None of the three is a reason to fail a reconcile.
         logger.debug("%r was not on the axes to remove", artist)
     _forget_render_artist(axes, artist)
+
+
+def _detach_guide(guide: Any, axes: Any) -> None:
+    """Take one colour key off the axes — unless it is a legend the axes has already replaced.
+
+    Args:
+        guide: The drawn key to remove, a ``Colorbar`` or a ``Legend``.
+        axes: The axes it was drawn on.
+
+    Note:
+        **A displaced legend is forgotten, never removed.** An axes holds one legend, in a slot of its own,
+        and matplotlib gives every legend it makes for that axes the same removal hook —
+        ``Axes._remove_legend``, which sets ``legend_`` to ``None`` whichever legend is sitting there. So
+        calling ``remove()`` on a legend the axes has since replaced takes the **surviving** layer's key off
+        the figure, and does it silently: a second removal of an artist normally answers ``ValueError``, and
+        this one does not (review H1).
+
+        :meth:`Renderer._displaced` keeps the *record* clear of those orphans, which is the other half; this
+        is the half that holds wherever a record slipped through, because the renderer is not the only
+        writer of that slot — a categorical fill's cleopatra glyph writes it on its way in. Stated here, at
+        the one call that does the damage, rather than trusted to every caller having swept first.
+
+        A ``Colorbar`` is removed normally: it lives on an axes of its own, any number coexist, and
+        :func:`_guide_artist` is what tells the two kinds apart without asking about types.
+    """
+    if _guide_artist(guide) is guide and axes.get_legend() is not guide:
+        logger.debug(
+            "%r is not the legend the axes holds; forgetting it instead", guide
+        )
+        _forget_render_artist(axes, guide)
+        return
+    _detach(guide, axes)
 
 
 def _forget_render_artist(axes: Any, artist: Any) -> None:
@@ -647,17 +748,21 @@ def artists_added(axes: Any) -> Iterator[List[Any]]:
         axes: The axes being drawn on.
 
     Yields:
-        The list the artists are collected into — empty inside the block, filled on the way out. It stays
-        empty when the axes keeps no list of its own, which leaves the layer with no artists to toggle
-        rather than with the wrong ones.
+        The list the artists are collected into — empty inside the block, filled on the way out **even
+        when the block raises**, which is the case a bare ``yield`` skipped: a drawer that fails part-way
+        has still put artists on the axes, and this list is the only record naming them. It stays empty
+        when the axes keeps no list of its own, which leaves the layer with no artists to toggle rather
+        than with the wrong ones.
     """
     painted = _painted(axes)
     existing = {id(artist) for artist in painted or ()}
     added: List[Any] = []
-    yield added
-    added.extend(
-        artist for artist in _painted(axes) or () if id(artist) not in existing
-    )
+    try:
+        yield added
+    finally:
+        added.extend(
+            artist for artist in _painted(axes) or () if id(artist) not in existing
+        )
 
 
 def _reinsert(
@@ -708,12 +813,20 @@ class _PartialDraw:
         self._existing = {id(artist) for artist in _painted(scene.ax) or ()}
         self._registered = len(scene.layers)
         self._composing = scene._drew_on_axes
+        #: The axes' legend before the draw. An axes holds it in its own slot rather than among the artists
+        #: :func:`_painted` lists, so a drawer that makes one — a categorical fill's swatch legend is made
+        #: by the cleopatra glyph itself — puts something on the figure that watching that list cannot see.
+        self._legend = self._scene.ax.get_legend()
 
     def undo(self) -> None:
         """Take off everything the drawer added since, and forget what it registered.
 
         Only artists that were not there before are touched, so the layers under this one are left alone.
         The compose flag goes back too: a layer that was never drawn is not the first render on the axes.
+
+        The axes' single legend slot goes back as well, and by assignment rather than by ``remove()``:
+        matplotlib's own removal hook for a legend clears whatever is in that slot, so removing the one this
+        draw made would take the previous one with it (see :meth:`Renderer._displaced`).
         """
         axes = self._scene.ax
         added = [
@@ -723,6 +836,8 @@ class _PartialDraw:
         ]
         for artist in added:
             _detach(artist, axes)
+        if axes.get_legend() is not self._legend:
+            axes.legend_ = self._legend
         del self._scene.layers[self._registered :]
         del self._scene._layer_labels[self._registered :]
         self._scene._drew_on_axes = self._composing
@@ -740,7 +855,8 @@ class _Held:
     Attributes:
         drawn: Layer id -> what was drawn for it, in draw order.
         registered: The scene's ``(glyph, mappable)`` pairs with their default colorbar labels, in the order
-            ``colorbar(layer=...)`` indexes them.
+            they were drawn — which is the order :meth:`~digitalearth.static.scene.Scene._registered_index`
+            matches a layer against to find the units its key is titled with.
         painted: The axes' artists in the order they were added (see :func:`_painted`).
     """
 
@@ -813,11 +929,20 @@ class Renderer:
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
             OffLimbError: when the layer's data cannot be placed and the scene is ``strict``.
+            ValueError: from :meth:`draw_guide`, for a key the layer's description asks for and this tier
+                cannot draw — a swatch list over a layer publishing no scale, row labels that do not number
+                the rows, a bar over a categorical scale.
 
         Note:
             A drawer that raises — or declines — after it has already put something on the axes leaves
             artists no layer owns: the layer is not recorded, so nothing would ever take them off. Whatever
             it added to the axes and to the colorbar registry is taken back before the error carries on.
+
+            **The key's draw is inside that guard too.** It was added after it, and after the record was
+            written, so a refusal from the key left the drawer's artists on the axes *and* the layer in
+            :attr:`drawn` while the error carried on — the one shape this note promises cannot happen
+            (review M5). A refusal now puts the record back as it was, empty for a layer that was not drawn
+            before, and takes the new artists off with it.
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
@@ -834,11 +959,164 @@ class Renderer:
         # Before the record, so a layer drawn again does not inherit what was asked of the one that held
         # this id before it: the ask is only consulted for a layer with no artist, where nothing else could
         # correct it.
-        self._asked.pop(layer_id, None)
-        self._drawn[layer_id] = drawn
+        previous = self._drawn.get(layer_id)
+        asked = self._asked.pop(layer_id, None)
+        # The new drawing carries the previous one's key across, so `draw_guide`'s first act — taking the
+        # layer's previous key off — has something to take off. Overwriting with a bare `guides=()` left
+        # that loop iterating an empty tuple, so a layer drawn twice orphaned its own bar on the figure
+        # instead of replacing it (review M5).
+        self._drawn[layer_id] = (
+            drawn if previous is None else with_fields(drawn, guides=previous.guides)
+        )
+        try:
+            # The colour key comes back with the layer. A guide is recorded on the layer's own encoding, so
+            # a rebuild, a restyle, a rollback and a figure read back onto another scene each draw the key
+            # the description asks for — there is no second writer of it, which is what keeps one recorded
+            # guide from becoming two bars. Inside the guard, because it refuses a description this tier
+            # cannot draw and a refusal must not leave the layer half-drawn.
+            self.draw_guide(layer)
+        except BaseException:
+            if previous is None:
+                self._drawn.pop(layer_id, None)
+            else:
+                self._drawn[layer_id] = previous
+            if asked is not None:
+                self._asked[layer_id] = asked
+            partial.undo()
+            raise
+        # The records agree with the axes' single legend slot now, whoever wrote it during this draw — and
+        # a **drawer** writes it too: a categorical fill's cleopatra glyph draws its own swatch legend on
+        # its way in. `draw_guide` only reconciles when it made the new legend itself, so on a layer nobody
+        # keyed the hook never fired and the previously keyed layer went on holding a legend matplotlib had
+        # already dropped (review H1). Here rather than before `draw_guide`, so a refused key leaves every
+        # record exactly as `partial.undo()` leaves the axes: the sweep only ever drops, and nothing could
+        # put a swept record back.
+        self._displaced(self._scene.ax.get_legend())
         if not figure.layers.is_visible(layer_id):
             self.set_visible(layer_id, False)
         return drawn
+
+    def draw_guide(self, layer: LayerSpec, **kwargs: Any) -> Optional[Any]:
+        """Draw the colour key one layer's guide asks for, replacing whatever it already had.
+
+        The one call that puts a key on the figure, whoever asked: :meth:`draw_layer` for a layer whose
+        description already carries a guide, and :meth:`~digitalearth.static.scene.Scene.colorbar` /
+        :meth:`~digitalearth.static.scene.Scene.legend` for a caller who has just recorded one. It takes the
+        layer's previous key off, which is what makes a second call **replace** rather than stack a second
+        bar in the same figure — the same answer the web tier gives for its one legend panel.
+
+        **The new key is derived before the old one comes off.** That removal used to be the first act, so a
+        refusal from the derivation left the layer describing a key that was no longer on the figure and
+        nothing could put back: a ``Colorbar``'s axes is *removed*, which :meth:`_PartialDraw.undo` does not
+        watch — it restores the axes' single legend slot by assignment, and a bar does not use that slot —
+        and a removed axes cannot be re-added (review M4). :func:`~digitalearth.static.guides.plan_guide`
+        answers every refusal a description can earn, so nothing between the removal and the draw can fail
+        except the engine itself.
+
+        Its last act is to give the new key the layer's **current visibility**, so a key asked for on a
+        hidden layer is drawn hidden. :meth:`set_visible` already carried the key with the layer in the
+        other direction; without this, hiding-then-keying and keying-then-hiding left two different figures
+        and the first of them showed a bar explaining a picture the reader cannot see.
+
+        Args:
+            layer: The layer's description, which carries the guide (see
+                :func:`~digitalearth.static.guides.plan_guide`).
+            **kwargs: Styling forwarded to the matplotlib colorbar or legend.
+
+        Returns:
+            The artist drawn, or ``None`` when the guide asks for nothing — switched off, absent, or on a
+            layer this renderer has drawn nothing for.
+
+        Raises:
+            ValueError: from :func:`~digitalearth.static.guides.plan_guide`, for a key the layer's scale
+                cannot be drawn as — raised before the layer's previous key is taken off, so a refusal
+                leaves the figure exactly as it was.
+        """
+        drawn = self._drawn.get(layer.id)
+        if drawn is None:
+            return None
+        plan = plan_guide(layer, drawn)
+        for held in drawn.guides:
+            _detach_guide(held, self._scene.ax)
+        made = None if plan is None else paint_guide(self._scene, plan, **kwargs)
+        # The layer records what has to come off with it, which is nothing when no key was drawn.
+        guides = () if made is None else (made,)
+        self._drawn[layer.id] = with_fields(drawn, guides=guides)
+        if made is not None and self._scene.ax.get_legend() is made:
+            self._displaced(made, keeper=layer.id)
+        if made is not None and not self.is_visible(layer.id):
+            # A key is drawn as hidden as the layer it explains. `set_visible` already hid the key it
+            # *found*, so hiding a layer and then keying it used to give a different figure from keying it
+            # and then hiding it — a bar labelling a picture the reader cannot see, which is the symptom
+            # order 24 names as its motivation. Applied here rather than in
+            # :func:`~digitalearth.static.guides.draw_guide` because visibility is the renderer's reading:
+            # it lives on the artists, not in the description, and `is_visible` is what knows that a layer
+            # owning no artist carries it here instead.
+            _set_visible(_guide_artist(made), False)
+        return made
+
+    def _displaced(self, legend: Any, keeper: Optional[str] = None) -> None:
+        """Forget every swatch legend but the one the axes now holds, wherever it was recorded.
+
+        An axes holds **one** legend, so drawing a second layer's swatches takes the first layer's off — and
+        the first layer went on holding it in :attr:`DrawnLayer.guides`, a key that is not on the figure and
+        can never be drawn again. The record then disagreed with the axes about which layer the reader is
+        looking at, which is the disagreement order 24 moved the guide onto the layer to remove (review M4).
+
+        Stated as "every legend but this one" rather than "the one I just replaced", because this renderer
+        is not the only thing that writes that slot: a **drawer** can, and one does — a categorical fill's
+        cleopatra glyph draws its own swatch legend on its way in, silently displacing whatever another
+        layer's guide had put there before :meth:`draw_guide` is reached at all. Measured on a figure read
+        back with a shown guide on two fills: the second layer's rebuild displaced the first layer's key
+        through the glyph, and a hook that only forgot what *it* had replaced left the first layer holding
+        an orphan. The stronger rule costs one pass over a record that is already in hand.
+
+        Colorbars are left alone: they live on their own axes, any number of them coexist, and
+        :func:`_guide_artist` is what tells the two kinds apart without asking about types — it answers with
+        the key itself for a ``Legend`` and with the axes for a ``Colorbar``.
+
+        The orphan is **dropped, never detached.** matplotlib gives every legend it makes for an axes the
+        same removal hook — ``Axes._remove_legend``, which sets ``legend_`` to ``None`` whichever legend is
+        sitting there — so calling ``remove()`` on a displaced one takes the *surviving* layer's key off the
+        figure. That is what `Renderer.remove` did to it, and dropping it here is what stops that: there is
+        nothing to take off, because matplotlib has already taken it off. :func:`_detach_guide` is the same
+        rule at the call that does the damage, for a record this sweep has not reached yet.
+
+        **Called from both writers**, which is what review H1 closed: :meth:`draw_guide` when it made the
+        new legend, and :meth:`draw_layer` after every drawer, since a drawer writes that slot too and the
+        layer it drew for need not carry a guide at all. Reaching it only from the first left the ordinary
+        flow — key one categorical fill, add a second — with an orphan in the keyed layer's record.
+
+        Args:
+            legend: The ``Legend`` the axes is showing now, which every other record gives up. ``None`` when
+                the axes holds none, in which case every recorded legend is an orphan.
+            keeper: The layer whose record is left alone, or ``None`` for "no layer is exempt" — which is
+                what :meth:`draw_layer` asks for, because the drawer may have displaced the redrawn layer's
+                *own* previous legend. Passing the layer :meth:`draw_guide` has just keyed changes nothing
+                on that path (its one recorded guide **is** `legend`, so the sweep keeps it either way) and
+                is named there for the reader.
+        """
+        # Walked live rather than over a copy: every write below lands on a key this walk is already
+        # holding, so the table never gains or loses an entry mid-iteration — the one thing a dict
+        # refuses — and the copy the first version took was insurance against a mutation that cannot
+        # happen here.
+        for layer_id, drawn in self._drawn.items():
+            if layer_id == keeper:
+                continue
+            kept = tuple(
+                held
+                for held in drawn.guides
+                if held is legend or _guide_artist(held) is not held
+            )
+            if len(kept) != len(drawn.guides):
+                for gone in drawn.guides:
+                    if not any(gone is stays for stays in kept):
+                        # Out of cleopatra's record of what it last rendered as well, for the same reason:
+                        # it removes what it finds there by calling `remove()`, and these are the artists
+                        # whose `remove()` reaches another layer's key. Unlike `_detach`, this forgets
+                        # without removing.
+                        _forget_render_artist(self._scene.ax, gone)
+                self._drawn[layer_id] = with_fields(drawn, guides=kept)
 
     @staticmethod
     def _source_object(figure: FigureSpec, layer: LayerSpec) -> Any:
@@ -1096,10 +1374,12 @@ class Renderer:
     def _restore_registry(self, held: _Held) -> None:
         """Put the scene's colorbar registry back in the order it had, with restored layers in place.
 
-        ``Scene.layers`` is what ``colorbar(layer=-1)`` indexes, so a restored layer re-registered last would
-        silently re-key the default colorbar. The registry is rebuilt from what it held, each restored
-        layer's old pair swapped for the one its re-draw registered, and a layer that could not be restored
-        dropped.
+        ``Scene.layers`` is where each layer's default key title is filed, matched by the identity of its
+        ``(glyph, mappable)`` pair, so a restored layer whose pair is not put back where it was loses the
+        units its colorbar labels itself with. (Until order 24 it was worse: the registry was what
+        ``colorbar(layer=-1)`` indexed, so a re-registration silently re-keyed the default colorbar.) The
+        registry is rebuilt from what it held, each restored layer's old pair swapped for the one its
+        re-draw registered, and a layer that could not be restored dropped.
 
         Args:
             held: What the scene had registered before the refused change.
@@ -1177,6 +1457,10 @@ class Renderer:
         if drawn is None:
             return
         self._scene._unregister_artist(drawn)
+        # The key goes with the layer it explains. It is taken off first, because a colorbar holds a
+        # reference to the mappable it was built from and `Colorbar.remove` is the call that lets it go.
+        for guide in drawn.guides:
+            _detach_guide(guide, self._scene.ax)
         for artist in drawn.artists:
             _detach(artist, self._scene.ax)
 
@@ -1196,6 +1480,11 @@ class Renderer:
         drawn = self._drawn.get(layer_id)
         if drawn is None:
             return
+        # The key is hidden with the layer, before the early return below: a hidden layer whose colorbar
+        # stayed on the figure is a bar labelling something the reader cannot see. `_guide_artist` is what
+        # knows a `Colorbar` carries the flag on its axes rather than on itself.
+        for guide in drawn.guides:
+            _set_visible(_guide_artist(guide), visible)
         if not drawn.artists:
             # Nothing on the axes carries the flag, so the renderer carries it instead. Without this a
             # layer asked to hide answered `True` when asked back, because `all(())` is `True` — and

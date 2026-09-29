@@ -5,6 +5,10 @@ what reaches the exported page's call payload, not about the bundled MapLibre li
 page would match the library's own source and pass either way.
 """
 
+import ast
+import inspect
+import textwrap
+
 import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon
@@ -47,6 +51,62 @@ def _payload(html):
     return html[marker:]
 
 
+def _drawn_fill(web_map):
+    """Return the compiled MapLibre fill expression of the map's last layer.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        The ``fill-color`` value the browser is handed. The one reading of "what was drawn" that the
+        recorded classification is not itself the source of, which is what an assertion about the record
+        has to be checked against — comparing the record with another copy of the record is `X == X`
+        (review L10/M13).
+    """
+    figure = web_map.figure_spec
+    symbology = figure.layers.get(figure.layers.ids[-1]).symbology
+    return symbology.props["paint"]["fill-color"]
+
+
+def _documented_frame():
+    """Return the frame the :attr:`last_breaks` docstring's literals are measured over.
+
+    Returns:
+        Four polygons carrying ``pop = [0, 5, 2, 4]`` and ``kind = ['a', 'b', 'c', 'd']`` — the values
+        `web/base.py`'s comment names beside each of the three literals it quotes.
+    """
+    return gpd.GeoDataFrame(
+        {"pop": [0.0, 5.0, 2.0, 4.0], "kind": ["a", "b", "c", "d"]},
+        geometry=CELLS,
+        crs="EPSG:4326",
+    )
+
+
+#: Every `last_breaks` literal the attribute's own comment quotes, with the call that must reproduce it.
+#: Pinned because the graduated one used to read `[0.0, 1.67, 3.33, 5.0]` — rounded edges printed beside
+#: two exact ones as if equally measured, which no cut of any column reproduces (review L5).
+_DOCUMENTED_BREAKS = [
+    pytest.param(
+        "pop",
+        {"scheme": "equal_interval", "k": 3},
+        [0.0, 1.6666666666666667, 3.3333333333333335, 5.0],
+        id="graduated-equal-interval",
+    ),
+    pytest.param(
+        "pop",
+        {"scheme": "quantiles", "k": 3},
+        [0.0, 2.0, 4.0, 5.0],
+        id="graduated-quantiles",
+    ),
+    pytest.param(
+        "pop", {"scheme": None}, [0.0, 1.25, 2.5, 3.75, 5.0], id="continuous-ramp"
+    ),
+    pytest.param(
+        "kind", {"scheme": "categorical"}, ["a", "b", "c", "d"], id="categorical"
+    ),
+]
+
+
 class TestTheClassificationIsRecorded:
     """A key must show the colours that were actually drawn, not a second guess at them."""
 
@@ -74,12 +134,109 @@ class TestTheClassificationIsRecorded:
         assert m.last_legend["column"] == column
         assert m.last_legend["colors"], "no colours were recorded"
 
-    def test_last_breaks_still_holds_the_raw_numbers(self, cells):
-        """`last_breaks` is the documented accessor; adding a richer one must not disturb it."""
+    def test_both_recorded_accessors_hold_the_edges_the_step_was_built_from(
+        self, cells
+    ):
+        """The two documented accessors, each read against the expression the browser is handed.
+
+        Args:
+            cells: The fixture frame.
+
+        Test scenario:
+            This compared `last_breaks` with `last_legend["values"]`, which for a graduated layer are the
+            **same list object**: `_graduated_color_expr` passes `values=self.last_breaks` and
+            `_legend_dict` hands `values` back unchanged, so `last_legend['values'] is last_breaks` is
+            `True` and the assertion was `X == X` (review L10). Measured: under a 1e-9 drift applied to
+            `last_breaks` after the `step` expression is compiled — the record no longer describing the
+            drawing, which is the whole defect — it still passed.
+
+            Each accessor is now read against the `step` arms instead. Those arms are the *interior* edges
+            only, because MapLibre's `step` has no bounds, so the outer two are checked against the
+            column's own span.
+        """
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().choropleth(cells, column="pop", scheme="quantiles", k=3)
-        assert m.last_breaks == m.last_legend["values"], (m.last_breaks, m.last_legend)
+        step = _drawn_fill(m)[2]  # ["case", <is a number>, ["step", …], MISSING_COLOR]
+        cuts = list(step[3::2])
+        span = [float(cells["pop"].min()), float(cells["pop"].max())]
+        for accessor, recorded in (
+            ("last_breaks", list(m.last_breaks)),
+            ("last_legend['values']", list(m.last_legend["values"])),
+        ):
+            assert recorded[1:-1] == cuts, (
+                f"{accessor} holds {recorded}, whose interior edges are not the `step` cuts {cuts} the "
+                "layer draws"
+            )
+            assert span == [recorded[0], recorded[-1]], (
+                f"{accessor} holds {recorded}, which does not span the column {span}"
+            )
+
+    @pytest.mark.parametrize("column, kwargs, documented", _DOCUMENTED_BREAKS)
+    def test_the_documented_literals_are_the_ones_that_come_back(
+        self, column, kwargs, documented
+    ):
+        """Every `last_breaks` literal the attribute's own comment quotes, reproduced exactly.
+
+        Args:
+            column: The column to classify.
+            kwargs: How to classify it.
+            documented: The list the comment says comes back.
+
+        Test scenario:
+            The comment quoted `[0.0, 1.67, 3.33, 5.0]` for a graduated layer beside a continuous layer's
+            stops and a categorical layer's categories, both of which *are* exactly reproducible — so the
+            rounded one read as measured too. It is not: an equal-interval cut over 0–5 at `k=3` gives
+            `[0.0, 1.6666666666666667, 3.3333333333333335, 5.0]`, and a quantile cut of the same column
+            gives `[0.0, 2.0, 4.0, 5.0]` (review L5). Nothing pinned any of the three literals, so a
+            rounded edge could sit in a public docstring indefinitely.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(_documented_frame(), column=column, **kwargs)
+        assert m.last_breaks == documented, (
+            f"choropleth(column={column!r}, **{kwargs}) records {m.last_breaks}, and the `last_breaks` "
+            f"docstring quotes {documented}"
+        )
+
+    def test_a_raster_band_takes_the_record_and_the_unnamed_key(self, cells, dataset):
+        """A raster band publishes a ramp, so it is the layer these accessors answer for.
+
+        Args:
+            cells: The fixture frame, drawn as the classified layer underneath.
+            dataset: The DEM whose band is drawn over it.
+
+        Test scenario:
+            A raster band gained a colour encoding of its own with order 24, and `_band_colour` writes
+            `last_breaks` and `last_legend` like any classifying builder — so both accessors, and an
+            unnamed `legend()`, answer for the raster rather than for the choropleth beneath it. Two
+            docstrings said otherwise ("the most recent classified `choropleth`/`points`", "the topmost
+            **visible** classified layer"), which is review L3. Nothing pinned the behaviour they were
+            describing, so this is that pin: the prose can only drift back if this reddens.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(
+            cells, column="pop", scheme="quantiles", k=3, name="grad"
+        )
+        m.field(dataset, name="acc")
+        band = dataset.band_names[0]
+        assert (m.last_legend["kind"], m.last_legend["column"]) == (
+            "continuous",
+            band,
+        ), (
+            f"the raster's own ramp must be what is recorded, not the choropleth's: {m.last_legend}"
+        )
+        m.legend()
+        keyed = [
+            layer_id
+            for layer_id in m.layer_ids
+            if m.get_layer(layer_id).symbology.guide() is not None
+        ]
+        assert keyed == ["acc"], (
+            f"an unnamed legend() must key the raster, the topmost layer with a colour scale; it keyed "
+            f"{keyed}"
+        )
 
 
 class TestTheLegendReachesTheSavedPage:
@@ -184,6 +341,38 @@ class TestTheLegendRefusesWhatItCannotDescribe:
         with pytest.raises(ValueError, match="nothing to describe"):
             web_map.legend()
 
+    @pytest.mark.parametrize(
+        ("call", "named", "other"),
+        [("legend", "legend()", "colorbar()"), ("colorbar", "colorbar()", "legend()")],
+    )
+    def test_the_refusal_names_the_method_that_was_called(self, call, named, other):
+        """A caller who wrote `colorbar()` must not be told to fix their `legend()` call.
+
+        Args:
+            call: The public method under test.
+            named: The spelling its refusal must carry.
+            other: The spelling it must not carry.
+
+        Test scenario:
+            `colorbar()` is a thin call onto `legend()`, and the "nothing to describe" refusal was written
+            by the method underneath — so the one refusal a caller on the `colorbar` spelling actually hits
+            named a method they never called and an argument (`labels=`) it does not take. This tier names
+            the caller in every other refusal it gives (`WebMap.field()`, `WebMap.extrusion()`); this one
+            named whichever of the two wrote the message.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap()
+        method = getattr(web_map, call)
+        with pytest.raises(ValueError, match="nothing to describe") as refusal:
+            method()
+        assert named in str(refusal.value), (
+            f"{call}()'s refusal does not name it: {refusal.value}"
+        )
+        assert other not in str(refusal.value), (
+            f"{call}()'s refusal points at a method the caller never called: {refusal.value}"
+        )
+
     def test_a_bad_position_is_refused(self, cells):
         """The four corners are MapLibre's, and a typo would be silently ignored by the browser."""
         from digitalearth.web import WebMap
@@ -191,6 +380,40 @@ class TestTheLegendRefusesWhatItCannotDescribe:
         web_map = WebMap().basemap().choropleth(cells, column="pop")
         with pytest.raises(ValueError):
             web_map.legend(position="middle")
+
+    def test_a_refusal_leaves_the_map_exactly_as_it_was(self, cells):
+        """The atomicity `legend()`'s own comment claims, asserted rather than asserted about.
+
+        Args:
+            cells: The fixture frame.
+
+        Test scenario:
+            `legend()` builds a panel it throws away, so a `labels` list that does not match the
+            classification is refused *before* anything is recorded. Only the refusal itself was tested
+            (`test_a_short_labels_list_is_refused` checks the `ValueError` and nothing else), so hoisting
+            `_attach_guide` above the validating `_legend_panel` call — one plausible way to hoist the
+            `labels` check out from under `visible` — would leave the suite green while leaving a guide
+            behind whose key every later rebuild would fail to draw (review M13). The state a caller can
+            read is what this asserts: the panel on screen, and the layer's own description.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = (
+            WebMap()
+            .basemap()
+            .choropleth(cells, column="kind", scheme="categorical", name="A")
+        )
+        web_map.legend(layer_id="A", title="Land cover")
+        before_panels = dict(web_map._panels)
+        before_symbology = web_map.get_layer("A").symbology
+        with pytest.raises(ValueError, match="entries but the classification"):
+            web_map.legend(layer_id="A", labels=["only one"])
+        assert dict(web_map._panels) == before_panels, (
+            f"the refused call changed the key on screen: {web_map._panels.get('legend')}"
+        )
+        assert web_map.get_layer("A").symbology == before_symbology, (
+            f"the refused call was recorded on the layer: {web_map.get_layer('A').symbology}"
+        )
 
 
 class TestNothingInterpolatedIsMarkup:
@@ -359,3 +582,893 @@ class TestTheThemeIsValidated:
             .layer_control(theme=theme)
         )
         assert f'"theme": "{theme}"' in _payload(m.to_html())
+
+
+#: Two squares apart, the shape every layer in the guide tests below is drawn from.
+_SQUARES = [
+    Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+    Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+]
+
+
+def _layer(column, values):
+    """Return a two-polygon frame carrying one numeric column.
+
+    Args:
+        column: The attribute name to classify by.
+        values: Its two values, chosen so one layer's range cannot be mistaken for another's.
+
+    Returns:
+        A GeoDataFrame in EPSG:4326.
+    """
+    return gpd.GeoDataFrame({column: values}, geometry=_SQUARES, crs=4326)
+
+
+def _whose_key(web_map):
+    """Say which layer's classification the map's key is showing.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        ``"A"`` for the ``pop`` layer's range, ``"B"`` for the ``rain`` layer's, ``None`` when no key is
+        drawn. Read off the panel's markup rather than off the guide, so the assertion is about what a viewer
+        sees rather than about the state the fix writes.
+    """
+    panel = web_map._panels.get("legend")
+    if panel is None:
+        return None
+    drawn = panel[0]
+    if ">1<" in drawn or ">100<" in drawn:
+        return "A"
+    if ">500<" in drawn or ">900<" in drawn:
+        return "B"
+    return "?"
+
+
+def _two_classified():
+    """Return a map with two classified layers, ``A`` below ``B``.
+
+    Returns:
+        The map. ``A`` is coloured by ``pop`` over 1..100, ``B`` by ``rain`` over 500..900, so the two keys
+        are told apart by the numbers in the panel.
+    """
+    from digitalearth.web import WebMap
+
+    web_map = WebMap().choropleth(_layer("pop", [1, 100]), column="pop", name="A")
+    return web_map.choropleth(_layer("rain", [500, 900]), column="rain", name="B")
+
+
+class TestTheKeyIsRecordedOnTheLayerItDescribes:
+    """Order 24: a colour key is a `Guide` on the layer's `color` encoding, not figure decoration."""
+
+    def test_asking_for_a_key_records_a_guide_on_that_layer(self):
+        """`colorbar()` writes the guide the other three tiers write, on the same channel.
+
+        Test scenario:
+            The tier drew a panel and recorded nothing, so a figure written out said nothing about the key
+            and the map's own description could not be asked which layer was explained. The guide is what
+            four tiers now share, so it has to be *on* the layer.
+        """
+        web_map = _two_classified().colorbar("A", label="People")
+        guide = web_map.get_layer("A").symbology.guide()
+        assert guide is not None, "asking for a key must record one on the layer"
+        assert (guide.show, guide.title, guide.anchor) == (
+            True,
+            "People",
+            "bottom-right",
+        ), guide
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            "a layer nobody keyed must carry no guide"
+        )
+
+    def test_position_is_recorded_as_the_guides_anchor(self):
+        """`position` and `Guide.anchor` are the same four spellings, so neither is translated.
+
+        Test scenario:
+            `FURNITURE_ANCHORS` and `CONTROL_POSITIONS` are **equal** tuples — two objects holding one
+            vocabulary, which executed is `==` and not `is` (review N3: the docstrings claimed "the same
+            tuple", and `FURNITURE_ANCHORS is CONTROL_POSITIONS` is `False`). Equality is the property the
+            method relies on and the one asserted here, so a spelling added to one list and not the other
+            fails this test rather than silently needing a translation table between the two.
+        """
+        from digitalearth.base.controls import CONTROL_POSITIONS
+        from digitalearth.base.registry import FURNITURE_ANCHORS
+
+        assert FURNITURE_ANCHORS == CONTROL_POSITIONS, (
+            f"the two anchor vocabularies have drifted: {FURNITURE_ANCHORS} vs {CONTROL_POSITIONS}"
+        )
+        web_map = _two_classified()
+        for corner in FURNITURE_ANCHORS:
+            web_map.legend(layer_id="A", position=corner)
+            assert web_map.get_layer("A").symbology.guide().anchor == corner
+            assert web_map._panels["legend"][1] == corner, (
+                f"the panel must sit where the guide says: {web_map._panels['legend'][1]!r}"
+            )
+
+    def test_visible_false_records_a_guide_that_says_so(self):
+        """`visible=False` is a statement about the layer, not a silent no-op.
+
+        Test scenario:
+            The flag used to return before anything was recorded, so `legend(visible=False)` left a key
+            asked for earlier still on screen. Recording `show=False` says outright that this layer's colour
+            is explained by nothing, and the derived panel honours it.
+        """
+        web_map = _two_classified().colorbar("A", label="People")
+        assert _whose_key(web_map) == "A"
+        web_map.colorbar("A", visible=False)
+        guide = web_map.get_layer("A").symbology.guide()
+        assert guide is not None, "visible=False recorded no guide on the layer"
+        assert guide.show is False, f"the recorded guide does not say so: {guide}"
+        assert _whose_key(web_map) is None, (
+            "a guide that says show=False must leave no key on screen"
+        )
+
+    def test_hiding_with_no_id_takes_off_the_key_that_is_drawn(self):
+        """`colorbar(visible=False)` means "the key on screen, off" — the one on screen, not another.
+
+        Test scenario:
+            With no id the target was `keyable[-1]`, the topmost *classified* layer, whatever layer the
+            drawn key actually belongs to. So on a map where A is keyed and B (topmost) is classified but
+            was never keyed, `colorbar(visible=False)` wrote `Guide(show=False)` onto **B** and left A's key
+            exactly where it was: the call did nothing a viewer could see, and silently described a layer
+            nobody had asked anything about (review M3). A key is asked for and taken off through the same
+            resolution or the two cannot agree.
+        """
+        web_map = _two_classified().colorbar("A", label="People")
+        assert _whose_key(web_map) == "A", "A's key is the one on screen"
+        web_map.colorbar(visible=False)
+        assert _whose_key(web_map) is None, (
+            "the key the call took off is still drawn; a different layer was switched off"
+        )
+        assert web_map.get_layer("A").symbology.guide().show is False, (
+            "the layer whose key was drawn must be the one recorded as unexplained"
+        )
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            "a layer nobody keyed must not gain a guide from a call that named no layer"
+        )
+
+    def test_asking_with_no_id_keys_a_layer_the_viewer_can_see(self):
+        """An unnamed `colorbar()` means "key what is on the map", so it must draw something.
+
+        Test scenario:
+            With no id the target was `keyable[-1]` with visibility never consulted, so on a map whose
+            topmost classified layer is hidden the guide went to the hidden layer and the call drew nothing
+            at all — a `colorbar()` that returns the map and leaves it exactly as it found it, with the
+            visible classified layer below still unexplained (review L6). Naming a hidden layer is a
+            different request and still works; this is only about the one the map picks for the caller.
+        """
+        web_map = _two_classified()
+        web_map.set_visible("B", False)
+        web_map.colorbar(label="People")
+        assert _whose_key(web_map) == "A", (
+            "an unnamed colorbar() drew no key; the hidden topmost layer took the guide"
+        )
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            "the hidden layer must not take a key the caller cannot see"
+        )
+
+    def test_a_key_asked_for_with_every_layer_hidden_still_lands_somewhere(self):
+        """Preferring a visible layer is a preference, not a refusal: a hidden map is not an error.
+
+        Test scenario:
+            The other half of the same choice. Refusing when nothing keyable is visible would turn
+            `quickmap(..., colorbar=True)` on a map built hidden into a crash, and there is a layer to
+            explain — it is simply not on screen yet. The guide is recorded and the key appears with the
+            layer, which is the rule a named hidden layer already follows.
+        """
+        web_map = _two_classified()
+        web_map.set_visible("A", False)
+        web_map.set_visible("B", False)
+        web_map.colorbar(label="Rain")
+        assert _whose_key(web_map) is None, "nothing is visible, so no key is drawn"
+        web_map.set_visible("B", True)
+        assert _whose_key(web_map) == "B", (
+            "showing the topmost classified layer must bring the recorded key with it"
+        )
+
+    def test_hiding_with_no_id_reaches_a_key_recorded_on_a_hidden_layer(self):
+        """Nothing is on screen, but a key was asked for — and asking for none must undo asking for one.
+
+        Test scenario:
+            The same defect from the other side, and why "the layer whose key is drawn" cannot be the whole
+            rule: a guide on a hidden layer draws nothing yet is still a key the caller asked for, and
+            showing the layer brings it back. Targeting only the drawn key would leave that one
+            unreachable, so `colorbar(visible=False)` would be a no-op that the next `set_visible` undid.
+
+            Both of the closing assertions are absences, so one of them has to be preceded by a presence or
+            the test is satisfied by a key that was never asked for: it survived every web mutant tried,
+            including `colorbar` gutted to a `return self` (review L8). The opening assertion is that
+            presence, on the same panel the closing ones read.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B", (
+            "B's key must be drawn before it is hidden, or nothing here is about a recorded key"
+        )
+        web_map.set_visible("B", False)
+        assert _whose_key(web_map) is None, "a hidden layer's key is not drawn"
+        web_map.colorbar(visible=False)
+        web_map.set_visible("B", True)
+        assert _whose_key(web_map) is None, (
+            "showing the layer brought back a key the caller had taken off"
+        )
+
+    @pytest.mark.parametrize("call", ["legend", "colorbar"])
+    @pytest.mark.parametrize("built", ["empty", "classified"])
+    def test_taking_off_a_key_nobody_asked_for_is_answered_not_refused(
+        self, call, built
+    ):
+        """`visible=False` on a map carrying no key comes back with the map, under either spelling.
+
+        Args:
+            call: The public method under test — one mechanism, two names.
+            built: Whether the map holds nothing at all or a classified layer nobody keyed.
+
+        Test scenario:
+            The flag decides which question a `None` `layer_id` asks, and only the `True` arm refuses: a
+            map with nothing classified cannot be *given* a key, but taking one off a map that has none is
+            already true. Both shapes of "no key" go through that arm — an empty map, which is the case
+            `WebMap().colorbar(visible=False)` must not crash on, and a classified layer nobody has keyed,
+            which is where `colorbar()` succeeds and `colorbar(visible=False)` has nothing to reach. Neither
+            may leave a guide behind either, since the resolution is what decides there is nothing to write.
+
+            **The two arms carry different weight, and say so.** For ``classified`` the guide check is a
+            claim: two keyable layers are on the map, so a stray guide has somewhere to land. For ``empty``
+            it is a comprehension over nothing, which is deliberate — that arm is the "must not crash on an
+            empty map" guard and only that, and the defect it holds the line against is the
+            ``visible=False`` fallback in `_guide_target` being dropped, which turns the documented
+            ``WebMap().colorbar(visible=False)`` into a "nothing to describe" refusal. Each arm now asserts
+            its own precondition, so neither is taken on trust (review N12).
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap() if built == "empty" else _two_classified()
+        expected = [] if built == "empty" else ["A", "B"]
+        assert web_map.layer_ids == expected, (
+            f"a {built} map must hold {expected}, not {web_map.layer_ids}"
+        )
+        varying = [
+            layer_id
+            for layer_id in web_map.layer_ids
+            if web_map.get_layer(layer_id).symbology.encoding("color") is not None
+        ]
+        assert varying == expected, (
+            f"a {built} map's keyable layers are {varying}, so the guide check below reaches "
+            f"{expected} layers"
+        )
+        answered = getattr(web_map, call)(visible=False)
+        assert answered is web_map, (
+            f"{call}(visible=False) on a {built} map handed back {answered!r} rather than the map"
+        )
+        described = [
+            layer_id
+            for layer_id in web_map.layer_ids
+            if web_map.get_layer(layer_id).symbology.guide() is not None
+        ]
+        assert described == [], (
+            f"{call}(visible=False) wrote a guide onto {described} although no layer was keyed"
+        )
+
+
+class TestTheKeyFollowsItsLayer:
+    """The deliverable: the panel is derived from the live layers' guides, so it cannot describe a ghost."""
+
+    def test_removing_the_keyed_layer_takes_its_key_with_it(self):
+        """The measured defect: the panel went on showing the removed layer's classes.
+
+        Test scenario:
+            `remove_layer`'s own `Note:` admitted it — the classification a legend described was cleared only
+            when the last layer went, so after removing one layer of several the key still described the
+            removed one. A viewer read a ramp for data that is not on the map.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B"
+        web_map.remove_layer("B")
+        assert web_map.layer_ids == ["A"], web_map.layer_ids
+        assert _whose_key(web_map) is None, (
+            "the removed layer's key must not stay on screen; A was never keyed"
+        )
+
+    def test_a_surviving_keyed_layer_shows_its_own_key(self):
+        """Both keyed, one removed: what is left on screen is the survivor's, not the removed one's.
+
+        Test scenario:
+            The other half of the same defect. Clearing the panel would satisfy "not the removed one's"
+            without satisfying "the survivor's", so the two are separate assertions on separate maps.
+        """
+        web_map = _two_classified()
+        web_map.colorbar("A", label="People").colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B", "the topmost guided layer is drawn"
+        web_map.remove_layer("B")
+        assert _whose_key(web_map) == "A", (
+            "A carries its own guide and is now topmost, so A's key is drawn"
+        )
+
+    def test_hiding_the_keyed_layer_takes_its_key_off_screen(self):
+        """A key for a layer that is not drawn labels nothing.
+
+        Test scenario:
+            `set_visible(False)` leaves the layer described so a viewer can switch it back on, and used to
+            leave its key drawn as well — a panel of classes with no pixels under them.
+
+            The precondition is the test: without it the single "no key is drawn" assertion is satisfied by
+            "no key was ever drawn" as readily as by "the key came off", so gutting `colorbar` to a
+            `return self` or making `refresh_legend_panel` a no-op both left it green (review L7).
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B", (
+            "B's key must be on screen first, or taking it off proves nothing"
+        )
+        web_map.set_visible("B", False)
+        assert _whose_key(web_map) is None, "a hidden layer's key must come off"
+
+    def test_showing_it_again_brings_the_key_back(self):
+        """The guide stayed on the layer, so nothing has to be asked for twice.
+
+        Test scenario:
+            This is what separates "derived" from "cleared": a panel that was merely deleted could not come
+            back, and the caller would have to call `legend()` again after every toggle.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        web_map.set_visible("B", False)
+        web_map.set_visible("B", True)
+        assert _whose_key(web_map) == "B", (
+            "showing the layer must bring its own key back"
+        )
+
+    def test_restyling_a_layer_flat_takes_its_classification_with_it(self):
+        """A layer restyled to one flat colour has no classes left, so nothing may still file some for it.
+
+        Test scenario:
+            `_legends` is the dict beside the tree that order 24 set out to stop trusting, and
+            `replace_layer` never touched it: after swapping a classified layer's description for a
+            flat-coloured one, `list(m._legends)` still held its id. The leak is readable from the outside
+            in the refusal it produces — `legend(layer_id=...)` resolved through `_legend_of`, found the
+            stale entry, accepted the layer, and then failed a level down in `Symbology.with_guide` with
+            the base-level "nothing drives the 'color' channel" rather than this tier's own "was not drawn
+            with a classification" (review L8). Same refusal for the same reason as a layer that was never
+            classified, so the same message and the same place.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Symbology
+
+        web_map = _two_classified().colorbar("B", label="Rain")
+        assert _whose_key(web_map) == "B"
+        classified = web_map.get_layer("B")
+        props = dict(classified.symbology.props)
+        props["paint"] = {**props["paint"], "fill-color": "#ff0000"}
+        web_map.replace_layer(replace(classified, symbology=Symbology(props=props)))
+        assert list(web_map._legends) == ["A"], (
+            f"a flat layer is still filed as classified: {list(web_map._legends)}"
+        )
+        assert _whose_key(web_map) is None, "a flat layer has no classes to key"
+        with pytest.raises(ValueError, match="was not drawn with a classification"):
+            web_map.legend(layer_id="B")
+
+    def test_restyling_a_layer_flat_takes_its_key_with_the_classification(self):
+        """The record follows the picture: a layer with no classes left describes no key either.
+
+        Test scenario:
+            `replace_layer` drops the classification when the replacement's colour is constant or absent,
+            and left the `Guide` where it was — and a *constant* `Encoding` may carry one, so a hand-built
+            replacement came out with `Guide(show=True)` on a channel nothing varies. The panel was right
+            (`refresh_legend_panel` derives it from the keyable layers, which a constant colour is not) and
+            the record was wrong, so a `FigureSpec` written there claimed a key nothing can draw — the
+            record/picture divergence order 24 exists to remove (review L4).
+
+            The sibling above covers a replacement carrying no colour encoding at all; this one is the case
+            that *keeps* an encoding, which is the only way the stale guide could survive.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Encoding, Symbology
+
+        web_map = _two_classified().colorbar("B", label="Rain")
+        classified = web_map.get_layer("B")
+        asked = classified.symbology.guide()
+        assert asked is not None, (
+            f"B must be keyed before it is restyled flat; its guide is {asked}"
+        )
+        assert asked.show, (
+            f"B's recorded guide must be shown before it is restyled flat; its guide is {asked}"
+        )
+        flat = Symbology(
+            encodings={
+                "color": Encoding(channel="color", value="#ff0000", guide=asked)
+            },
+            props=dict(classified.symbology.props),
+        )
+        web_map.replace_layer(replace(classified, symbology=flat))
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            f"B has no classes left, so it must describe no key; it still carries "
+            f"{web_map.get_layer('B').symbology.guide()}"
+        )
+        assert _whose_key(web_map) is None, "and none is drawn, as it already was"
+
+    def test_the_two_most_recent_accessors_agree_after_a_removal(self):
+        """`last_breaks` and `last_legend` are set together by every builder, so they must move together.
+
+        Test scenario:
+            `_forget_legend` handed `last_legend` to the most recent *surviving* classification — the whole
+            point being that it must never describe a removed layer — and cleared `last_breaks` only when
+            the map went empty. So after removing one classified layer of two, `last_legend` described the
+            survivor while `last_breaks` still held the removed layer's numbers, and the documented
+            raw-numbers accessor answered for data that is not on the map (review L7). The two are the same
+            classification read two ways — `last_breaks == last_legend["values"]` holds for all three
+            classification shapes — so a reader combining them got a key with one layer's colours and
+            another's edges.
+        """
+        web_map = _two_classified()
+        assert web_map.last_legend["column"] == "rain", web_map.last_legend
+        assert web_map.last_breaks == web_map.last_legend["values"]
+        web_map.remove_layer("B")
+        assert web_map.last_legend["column"] == "pop", (
+            "last_legend must describe the survivor"
+        )
+        assert web_map.last_breaks == web_map.last_legend["values"], (
+            f"last_breaks {web_map.last_breaks} still describes the removed layer; last_legend has moved "
+            f"on to {web_map.last_legend['values']}"
+        )
+
+    def test_explicit_labels_survive_a_rebuild(self):
+        """The rows a caller named are recorded on the layer, not only in the panel that was built.
+
+        Test scenario:
+            The panel is rebuilt whenever the layers change, so anything it is drawn from has to live on the
+            layer. Labels held only in the built markup were lost the first time an unrelated layer was
+            removed, and the key silently reverted to the derived numbers.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().choropleth(
+            _layer("pop", [1, 100]), column="pop", name="A", scheme="quantiles", k=2
+        )
+        web_map.choropleth(_layer("rain", [500, 900]), column="rain", name="B")
+        web_map.legend(layer_id="A", labels=["few", "many"])
+        assert ">few<" in web_map._panels["legend"][0]
+        web_map.remove_layer("B")
+        assert ">few<" in web_map._panels["legend"][0], (
+            f"the caller's labels must survive: {web_map._panels['legend'][0][:160]}"
+        )
+
+
+class TestANamedLayerIsCheckedWhateverTheFlagSays:
+    """Review L7's rule, applied to the layer as well as to the corner."""
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_an_id_nobody_drew_is_refused(self, visible):
+        """`legend(layer_id="nope", visible=False)` used to be accepted.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            The corner was checked before the flag was read precisely so one spelling of it was not valid
+            half the time. The layer is a caller argument on the same terms, and it was checked half the
+            time: a typo'd id under `visible=False` was silently accepted.
+        """
+        web_map = _two_classified()
+        with pytest.raises(KeyError, match="no layer 'nope'"):
+            web_map.legend(layer_id="nope", visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_a_layer_with_a_flat_colour_is_refused(self, visible):
+        """A key over a colour nothing varies has no values to label.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            The same asymmetry one step in: naming an unclassified layer raised under the default and was
+            accepted under `visible=False`. And this refusal is what the field-driven encoding buys — a flat
+            colour publishes no `color` binding, so there is nothing for a guide to explain.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().choropleth(_layer("pop", [1, 100]), column="pop", name="A")
+        web_map.polygons(_layer("pop", [1, 100]), name="plain")
+        with pytest.raises(ValueError, match="was not drawn with a classification"):
+            web_map.legend(layer_id="plain", visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_a_labels_list_that_does_not_fit_the_classes_is_refused(self, visible):
+        """The third caller argument, checked on the same terms as the corner and the layer.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            A regression of the rule the two tests above exist for, in the very method whose comment
+            explains it: `position` and `layer_id` were hoisted above the flag, and `labels` was left under
+            `if visible` — so `legend(labels=["only one"], visible=False)` recorded a one-entry override
+            against a two-class key while `legend(labels=["only one"])` raised (review M2). The docstring's
+            `Raises:` promises the refusal with no `visible` qualifier, and a caller threading a flag
+            through must not be checked half the time.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().choropleth(
+            _layer("pop", [1, 100]), column="pop", name="A", scheme="quantiles", k=2
+        )
+        with pytest.raises(ValueError, match="entries but the classification"):
+            web_map.legend(layer_id="A", labels=["only one"], visible=visible)
+        assert web_map.get_layer("A").symbology.guide() is None, (
+            "a refused call must record nothing, whatever the flag says"
+        )
+
+
+#: Every malformed key description the two public spellings can be handed, with the refusal it must draw.
+#: One row per caller argument that has a legal range, spelled the way the method that takes it spells it —
+#: ``colorbar()`` has no ``position``/``labels`` of its own and names the heading ``label``.
+_MALFORMED = [
+    pytest.param(
+        "legend", {"title": 123}, "Guide title must be", id="legend-title-number"
+    ),
+    pytest.param(
+        "legend", {"title": "   "}, "Guide title must be", id="legend-title-blank"
+    ),
+    pytest.param(
+        "legend", {"position": "middle"}, "unknown control position", id="legend-corner"
+    ),
+    pytest.param(
+        "legend",
+        {"labels": ["only one"]},
+        "entries but the classification",
+        id="legend-labels",
+    ),
+    pytest.param(
+        "colorbar", {"label": 123}, "Guide title must be", id="colorbar-label-number"
+    ),
+    pytest.param(
+        "colorbar", {"label": "   "}, "Guide title must be", id="colorbar-label-blank"
+    ),
+]
+
+
+def _one_classified(name="A"):
+    """Return a map holding a single two-class layer and nothing else.
+
+    Args:
+        name: The layer's id.
+
+    Returns:
+        The map. Two classes is the smallest classification a one-entry ``labels`` list can mismatch, and
+        nothing on the map is keyed — the state the flag bypass needed.
+    """
+    from digitalearth.web import WebMap
+
+    return WebMap().choropleth(
+        _layer("pop", [1, 100]), column="pop", name=name, scheme="quantiles", k=2
+    )
+
+
+def _method_source(method):
+    """Parse one method and return its signature and its statements, docstring dropped.
+
+    Args:
+        method: The function to read. Read from source rather than called, because the property under test
+            is *where* in the body a check sits — which no call can observe.
+
+    Returns:
+        The ``(ast.arguments, list[ast.stmt])`` pair.
+    """
+    parsed = ast.parse(textwrap.dedent(inspect.getsource(method))).body[0]
+    body = [
+        statement
+        for statement in parsed.body
+        if not (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        )
+    ]
+    return parsed.args, body
+
+
+def _parameters(args):
+    """Return every parameter name of a parsed signature, ``self`` excluded.
+
+    Args:
+        args: The ``ast.arguments`` from :func:`_method_source`.
+
+    Returns:
+        The names, in declaration order.
+    """
+    declared = args.posonlyargs + args.args + args.kwonlyargs
+    return [arg.arg for arg in declared if arg.arg != "self"]
+
+
+def _names_in(node):
+    """Return every bare name read anywhere under one AST node.
+
+    Args:
+        node: Any AST node.
+
+    Returns:
+        The set of `ast.Name` ids.
+    """
+    return {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
+
+
+def _call_to(body, attribute):
+    """Find the first statement holding a call to ``self.<attribute>``.
+
+    Args:
+        body: The statements from :func:`_method_source`.
+        attribute: The method name to look for.
+
+    Returns:
+        The ``(index, ast.Call)`` pair, or ``(None, None)`` when no statement holds one.
+    """
+    for index, statement in enumerate(body):
+        for child in ast.walk(statement):
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr == attribute
+            ):
+                return index, child
+    return None, None
+
+
+def _first_read_of(body, name):
+    """Return the index of the first statement reading ``name``.
+
+    Args:
+        body: The statements from :func:`_method_source`.
+        name: The parameter to look for.
+
+    Returns:
+        The index, or ``len(body)`` when nothing reads it.
+    """
+    for index, statement in enumerate(body):
+        if name in _names_in(statement):
+            return index
+    return len(body)
+
+
+def _handed_to(call):
+    """Return the bare names handed to one call, positionally or by keyword.
+
+    Args:
+        call: The `ast.Call` to read.
+
+    Returns:
+        The set of names. A literal argument contributes nothing, which is the point — a parameter
+        forwarded as ``None`` is not forwarded.
+    """
+    handed = set()
+    for argument in list(call.args) + [keyword.value for keyword in call.keywords]:
+        handed |= _names_in(argument)
+    return handed
+
+
+class TestEveryArgumentIsCheckedWhateverTheFlagSays:
+    """Review H2: the same call must be valid or refused on its own merits, never on call order.
+
+    Test scenario:
+        This is review L7 / M1 / M2 / H2 — **one** defect, found four times, in four different keywords.
+        Each recurrence was fixed by hoisting that one keyword above the flag, and the next one arrived in
+        the keyword nobody had hoisted yet. The matrix below is the behavioural half: every argument that
+        has a legal range, under both spellings of the flag, on a map where a key had been asked for and on
+        one where none ever was — which is the axis all three previous fixes missed, since resolving
+        ``visible=False`` against "the key the map already has" answers `None` on a map nobody keyed and
+        returns before any argument is looked at.
+    """
+
+    @pytest.mark.parametrize("spelling, kwargs, refusal", _MALFORMED)
+    @pytest.mark.parametrize("visible", [True, False], ids=["asked", "taken-off"])
+    @pytest.mark.parametrize(
+        "keyed", [False, True], ids=["never-keyed", "already-keyed"]
+    )
+    def test_a_malformed_argument_is_refused(
+        self, spelling, kwargs, refusal, visible, keyed
+    ):
+        """One bad argument, both flag values, keyed and unkeyed — twenty-four calls, one rule.
+
+        Args:
+            spelling: The public method under test — one mechanism, two names.
+            kwargs: The single malformed argument.
+            refusal: Part of the message it must carry.
+            visible: Both spellings of the flag.
+            keyed: Whether some earlier call already keyed the layer.
+        """
+        web_map = _one_classified()
+        if keyed:
+            web_map.colorbar("A", label="People")
+        before = web_map.get_layer("A").symbology.guide()
+        call = getattr(web_map, spelling)
+        with pytest.raises(ValueError, match=refusal):
+            call(visible=visible, **kwargs)
+        assert web_map.get_layer("A").symbology.guide() == before, (
+            f"{spelling}({kwargs}, visible={visible}) was refused but still changed the record"
+        )
+
+    @pytest.mark.parametrize("visible", [True, False], ids=["asked", "taken-off"])
+    def test_a_malformed_title_is_refused_on_a_map_holding_nothing(self, visible):
+        """The floor of the rule: a title is a caller argument even where there is no layer to key.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            ``WebMap().colorbar(visible=False)`` must come back with the map rather than raise — that is the
+            documented, doctested point of the flag — and the bypass took cover behind exactly that. The two
+            are separable: "this map has nothing to describe" is a fact about the map, while "123 is not a
+            heading" is a fact about the call, and only the first is allowed to depend on the flag.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap()
+        with pytest.raises(ValueError, match="Guide title must be"):
+            web_map.colorbar(label=123, visible=visible)
+
+    def test_an_empty_map_still_answers_a_well_formed_take_off(self):
+        """The other side of the same line, so the fix above cannot be "refuse everything"."""
+        from digitalearth.web import WebMap
+
+        web_map = WebMap()
+        assert web_map.colorbar(visible=False) is web_map, (
+            "a well-formed take-off on an empty map must still be answered, not refused"
+        )
+
+
+class TestNoArgumentCanBeAddedBelowTheFlag:
+    """Review H2's structural half: pin the *shape*, because three hand-written fixes did not hold.
+
+    Test scenario:
+        Every earlier fix pinned one keyword's behaviour, and the class of defect — "a caller argument read
+        below the flag" — stayed open for the next keyword. These three tests read the source instead: the
+        two public spellings must forward every argument they take to the one shared body and do nothing
+        else on the way; the shared body must hand every argument to a single check **above** its first read
+        of the flag; and the check must actually read each one. A keyword added anywhere in that chain and
+        left under the flag reddens here without anybody having thought to write a case for it.
+    """
+
+    #: The two ``_record_key`` parameters that describe nothing about the key, so nothing validates them.
+    #: ``visible`` is the flag itself, and ``caller`` only spells the public method's name in a refusal.
+    NOT_A_DESCRIPTION = frozenset({"visible", "caller"})
+
+    #: The flag whose read the checks must precede.
+    FLAG = "visible"
+
+    @pytest.mark.parametrize("spelling", ["legend", "colorbar"])
+    def test_a_public_spelling_only_forwards(self, spelling):
+        """Each entry point is a pure forward, so the shared body is the only place a check can live.
+
+        Args:
+            spelling: The public method under test.
+        """
+        from digitalearth.web import WebMap
+
+        args, body = _method_source(getattr(WebMap, spelling))
+        assert len(body) == 1, (
+            f"{spelling}() does {len(body)} things; it must only forward to _record_key, or an argument "
+            "could be handled — or missed — here instead"
+        )
+        _, call = _call_to(body, "_record_key")
+        assert call is not None, f"{spelling}() no longer forwards to _record_key"
+        assert isinstance(body[0], ast.Return), (
+            f"{spelling}()'s single statement is no longer a return: {type(body[0]).__name__}"
+        )
+        assert body[0].value is call, f"{spelling}() does work around the forward"
+        missing = set(_parameters(args)) - _handed_to(call)
+        assert missing == set(), (
+            f"{spelling}() takes {sorted(missing)} and does not forward them to the shared body, so "
+            "nothing downstream can check them"
+        )
+
+    def test_the_shared_body_checks_every_argument_above_the_flag(self):
+        """The defect class as a property of the source: no argument is read after the flag first is.
+
+        Test scenario:
+            ``_check_position`` survived three rounds because it sits above the resolution; ``title`` and
+            ``labels`` did not, because they sat below an early return the flag reaches. Rather than assert
+            that about the three keywords known today, assert it about every parameter the body takes.
+        """
+        from digitalearth.web.decoration import DecorationMixin
+
+        args, body = _method_source(DecorationMixin._record_key)
+        described = set(_parameters(args)) - self.NOT_A_DESCRIPTION
+        check_at, check = _call_to(body, "_check_key_arguments")
+        assert check is not None, (
+            "_record_key no longer runs one check over its arguments"
+        )
+        assert check_at < _first_read_of(body, self.FLAG), (
+            "the argument check is reached after the flag is first read, so a flag value can skip it — "
+            "which is review L7/M1/M2/H2, every time"
+        )
+        missing = described - _handed_to(check)
+        assert missing == set(), (
+            f"_record_key takes {sorted(missing)} and does not hand them to the check above the flag"
+        )
+
+    def test_the_check_reads_every_argument_it_is_handed(self):
+        """Threading an argument into the check is not checking it, so the last link is pinned too."""
+        from digitalearth.web.decoration import DecorationMixin
+
+        args, body = _method_source(DecorationMixin._check_key_arguments)
+        read = set()
+        for statement in body:
+            read |= _names_in(statement)
+        missing = set(_parameters(args)) - read
+        assert missing == set(), (
+            f"_check_key_arguments is handed {sorted(missing)} and never reads them"
+        )
+
+
+class TestOneStopCountServesEveryRamp:
+    """Review N6: an invariant a comment states and nothing holds is a coincidence with a docstring.
+
+    Test scenario:
+        `web/raster.py`'s `_RAMP_STOPS` said it was "the same five the vector ramp is sampled at
+        (`VectorMixin._ramp_color_expr`)", and `_ramp_color_expr` hardcoded the literal `5` — so the stated
+        invariant held by agreement between two spellings of one number, either of which a later edit could
+        move in silence. `digitalearth.base.spec.DEFAULT_RAMP_STOPS` already existed for exactly this ("Five
+        is what the web tier already used; sharing the number is what stops a sixth appearing"), and both
+        builders now read it.
+
+        Both halves are asserted, because neither is the other: the source check refuses a literal creeping
+        back in — it is the only one that could fail before the fix, since the two numbers agreed — and the
+        behavioural check refuses a constant that is named and then not honoured.
+    """
+
+    @pytest.mark.parametrize("builder", ["raster", "vector"])
+    def test_the_sampling_site_names_the_shared_constant(self, builder):
+        """Neither ramp builder spells its own stop count.
+
+        Args:
+            builder: Which of the two ramp builders to read.
+        """
+        from digitalearth.web.raster import RasterMixin
+        from digitalearth.web.vector import VectorMixin
+
+        method = (
+            RasterMixin._band_colour
+            if builder == "raster"
+            else VectorMixin._ramp_color_expr
+        )
+        _, body = _method_source(method)
+        sampled = [
+            child
+            for statement in body
+            for child in ast.walk(statement)
+            if isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Attribute)
+            and child.func.attr == "linspace"
+        ]
+        assert len(sampled) == 1, (
+            f"{builder}'s ramp builder makes {len(sampled)} linspace calls; one samples the ramp"
+        )
+        count = sampled[0].args[-1]
+        assert isinstance(count, ast.Name), (
+            f"{builder}'s ramp is sampled at a literal {ast.unparse(count)} rather than a name, so it "
+            "cannot be the shared DEFAULT_RAMP_STOPS"
+        )
+        assert count.id == "DEFAULT_RAMP_STOPS", (
+            f"{builder}'s ramp is sampled at {count.id} rather than at the shared DEFAULT_RAMP_STOPS, so "
+            "the two ramps agree only by coincidence"
+        )
+
+    def test_a_column_ramp_and_a_band_ramp_hold_the_same_number_of_stops(
+        self, cells, dataset
+    ):
+        """The constant is honoured on both paths, and to the same number.
+
+        Args:
+            cells: The fixture frame, for the column ramp.
+            dataset: The DEM, for the band ramp.
+        """
+        from digitalearth.base.spec import DEFAULT_RAMP_STOPS
+        from digitalearth.web import WebMap
+
+        column = WebMap().choropleth(cells, column="pop", scheme=None).last_breaks
+        band = WebMap().field(dataset).last_breaks
+        assert len(column) == len(band), (
+            f"a column ramp holds {len(column)} stops and a band ramp {len(band)}, so a continuous key "
+            "reads differently depending on where the values came from"
+        )
+        assert len(column) == DEFAULT_RAMP_STOPS, (
+            f"both ramps hold {len(column)} stops, and the shared constant says {DEFAULT_RAMP_STOPS}"
+        )

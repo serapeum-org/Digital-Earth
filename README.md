@@ -115,9 +115,9 @@ src = Dataset.read_file("examples/data/acc4000.tif")
 points = FeatureCollection.read_file("tests/data/points.geojson")
 
 m = Map(crs=src.epsg)
-m.field(src)
+m.field(src, name="flow")
 m.points(points)
-m.colorbar(layer=0)
+m.colorbar("flow")
 m.set_title("Flow Accumulation")
 m.save("flow_accumulation_with_labels.png")
 ```

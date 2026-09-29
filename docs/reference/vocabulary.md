@@ -103,6 +103,40 @@ task.
 
 ::: digitalearth.base.spec.legend.LegendEntry
 
+## `Guide` — the colour key, attached to the encoding it explains
+
+`LegendSpec` says what a key *contains*. `Guide` says whether to draw one at all, what to call it, and which
+corner it sits in — and it lives on the layer's `Encoding` rather than beside the figure.
+
+That placement is the whole of it. A key used to be figure decoration each tier held its own way: drawn and
+then forgotten on the static tier, keyed **by position** (`layer=-1`); a `show=` flag on whichever layer was
+added last on the interactive tier; a dictionary beside the tree on the web tier, which went on describing a
+layer after it was removed. None of the three could move with its layer, disappear with it, or survive being
+written to a figure and read back.
+
+Attached to the encoding, a guide gets all three for free, because the layer's `Symbology` is already what
+the layer tree holds, what `remove_layer` drops, and what a figure writes:
+
+```python
+m = Map()
+m.choropleth(regions, column="pop", scheme="quantiles", k=5, name="people")
+m.colorbar("people", label="People per km²")      # records Guide(show=True, title=…) on the encoding
+
+m.get_layer("people").symbology.guide().title     # 'People per km²'
+m.remove_layer("people")                          # the key goes with the layer
+```
+
+A channel that nothing drives is **refused** rather than given an empty encoding to hang the guide on: a key
+over a colour that does not vary has no values to label and no scale to sample. That is why `colorbar()` asks
+for a layer whose colour is driven by a field, and why a flat-coloured layer — or one built from a caller's
+own artist — answers with a `ValueError` naming the layers that do have one.
+
+::: digitalearth.base.spec.encoding.Guide
+
+::: digitalearth.base.spec.style.Symbology.with_guide
+
+::: digitalearth.base.spec.style.Symbology.guide
+
 ## `PointArrays` — geometry as coordinate arrays
 
 Turning a `FeatureCollection` into numpy arrays was written out 22 times across 9 files, in three spellings,

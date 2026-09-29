@@ -4,6 +4,7 @@ import pytest
 
 import digitalearth
 from digitalearth import api as qp
+from digitalearth.base.spec import Encoding, Guide, LayerSpec, Scale, Symbology
 from digitalearth.static import Map
 
 
@@ -83,18 +84,118 @@ def test_module_choropleth_categorical_has_no_spurious_colorbar():
     )
 
 
+def test_quickmap_records_the_categorical_key_on_the_layer():
+    """The key a categorical fill gets is the layer's, on this backend as on the other three.
+
+    Test scenario:
+        The swatch legend the glyph draws for `scheme="categorical"` is pre-order-24 figure decoration: it
+        cannot move with its layer, cannot go away with it, and `to_dict()` carries no note that a key was
+        ever asked for. `quickmap` recorded a `Guide` for the same fill on the web and 3-D backends and
+        nothing at all here, because `_add_static_key` called only `colorbar()` and swallowed the refusal a
+        categorical scale answers with. It asks for the key the layer's scale calls for now, so all four
+        agree about what `quickmap(colorbar=True)` leaves behind.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(fc, crs=fc.epsg, column="zone", scheme="categorical")
+    guide = m.get_layer(m.layer_ids[-1]).symbology.guide()
+    assert guide is not None, "the categorical fill records no key at all"
+    assert guide.show is True, guide
+    drawn = m.ax.get_legend()
+    assert drawn is not None, "the recorded key is not on the figure"
+    assert {text.get_text() for text in drawn.get_texts()} == {
+        "urban",
+        "rural",
+        "park",
+    }, [text.get_text() for text in drawn.get_texts()]
+
+
+def _legend_artists(canvas):
+    """Return the matplotlib `Legend` artists on a map's axes.
+
+    Args:
+        canvas: The :class:`~digitalearth.static.Map`.
+
+    Returns:
+        Every `Legend` child of the axes — asked of the children rather than of ``get_legend()``, so a second
+        one stacked beside the first would show up here instead of hiding behind the one it replaced.
+    """
+    return [
+        child for child in canvas.ax.get_children() if type(child).__name__ == "Legend"
+    ]
+
+
+def test_quickmap_colorbar_false_takes_the_categorical_key_off():
+    """`colorbar=False` asks for a map with no colour key, and must get one on this backend too.
+
+    Test scenario:
+        The other half of the M6 disagreement, one flag-value over. The glyph draws a swatch legend for
+        `scheme="categorical"` whatever the flag says, and the matplotlib path only ever *added* a key — so
+        `quickmap(colorbar=False)` returned a map with a legend on it and nothing in the description to say
+        the caller had asked against it, while the interactive and 3-D paths both recorded
+        `Guide(show=False)` and drew nothing.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(
+        fc, crs=fc.epsg, column="zone", scheme="categorical", colorbar=False
+    )
+    assert m.ax.get_legend() is None, "colorbar=False left a key on the picture"
+    assert _legend_artists(m) == [], "colorbar=False left a legend artist behind"
+    assert m.get_layer(m.layer_ids[-1]).symbology.guide() == Guide(show=False), (
+        m.get_layer(m.layer_ids[-1]).symbology.guide()
+    )
+    assert len(m.fig.axes) == 1, "switching a key off must not add an axes"
+
+
+def test_a_key_quickmap_switched_off_can_be_switched_back_on():
+    """Taking the key off is a recorded decision, not a one-way removal.
+
+    Test scenario:
+        `Guide(show=False)` is how the shared vocabulary spells "there is a key here and it is not drawn",
+        which is exactly what lets a switcher offer it back. A removal that could not be undone would be a
+        new defect in place of the one it fixed.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(
+        fc, crs=fc.epsg, column="zone", scheme="categorical", colorbar=False
+    )
+    assert _legend_artists(m) == [], "the key should start off"
+    m.legend(title="Zones")
+    guide = m.get_layer(m.layer_ids[-1]).symbology.guide()
+    assert guide == Guide(show=True, title="Zones"), guide
+    back = m.ax.get_legend()
+    assert back is not None, "the key did not come back"
+    assert {text.get_text() for text in back.get_texts()} == {
+        "urban",
+        "rural",
+        "park",
+    }, [text.get_text() for text in back.get_texts()]
+    assert len(_legend_artists(m)) == 1, "the key came back twice"
+    assert len(m.fig.axes) == 1, "bringing the key back must not add an axes"
+
+
+def test_quickmap_colorbar_false_records_the_bar_switched_off_too():
+    """A continuous layer's key is recorded switched off as well, so the two kinds agree.
+
+    Test scenario:
+        The picture was already right here — this tier's raster builder draws no bar of its own, so
+        `colorbar=False` simply never added one. What was missing is the *record*: the description said
+        nothing about a key at all, where the 3-D path recorded `Guide(show=False)` for the same call.
+    """
+    from pyramids.dataset import Dataset
+
+    dem = Dataset.read_file("examples/data/acc4000.tif")
+    m = qp.quickmap(dem, crs=dem.epsg, colorbar=False)
+    assert m.get_layer(m.layer_ids[-1]).symbology.guide() == Guide(show=False), (
+        m.get_layer(m.layer_ids[-1]).symbology.guide()
+    )
+    assert len(m.fig.axes) == 1, "colorbar=False must still add no colorbar axes"
+
+
 def test_quickmap_graduated_still_gets_its_colorbar():
     """A non-categorical fill must still receive its aggregated colorbar (the M2 guard must not over-fire)."""
     fc = _zoned_polygons()
     m = qp.quickmap(fc, crs=fc.epsg, column="fid", scheme="quantiles", k=3)
     assert len(m.fig.axes) == 2, "a graduated numeric fill still carries a colorbar"
-
-
-def test_last_layer_is_categorical_on_empty_scene():
-    """The categorical predicate is False on a scene with no layers (self-safe when called directly)."""
-    assert qp._last_layer_is_categorical(Map(crs=4326)) is False, (
-        "an empty scene has no categorical layer"
-    )
 
 
 def test_quickmap_rejects_unsupported_type():
@@ -266,18 +367,279 @@ def test_module_grid_cells_warns_on_colorbar_failure(dataset, mocker):
 
 
 class _FakeScene:
-    """Minimal scene stand-in for _finish: a .layers list and a recording/optionally-raising .colorbar()."""
+    """Minimal scene stand-in for _finish: the layers it keys, and a recording/raising ``colorbar()``.
 
-    def __init__(self, layers, raises=False):
-        self.layers = list(layers)
+    ``_has_a_key_to_draw`` reads the **description** since order 24 — which layers publish a colour encoding
+    — rather than the last registered artist, so the stand-in answers that question instead of holding a
+    ``layers`` list alone.
+    """
+
+    def __init__(
+        self, keyed=(), raises=False, categorical=False, raises_when_drawn=False
+    ):
+        """Build the stand-in.
+
+        Args:
+            keyed: The ids of the layers that publish a colour encoding.
+            raises: Whether ``colorbar()`` raises, to mimic an unmappable layer.
+            categorical: Whether those layers are coloured by category, which is the case keyed by a swatch
+                legend rather than by a bar.
+            raises_when_drawn: Whether the key call raises only when ``visible=True`` — the engine's own
+                failure, which the ``visible=False`` call never reaches because it draws nothing.
+        """
+        self._keyed = list(keyed)
+        self.layers = [f"artist-{held}" for held in self._keyed]
         self._raises = raises
+        self._raises_when_drawn = raises_when_drawn
+        self._categorical = categorical
         self.colorbar_calls = 0
+        self.legend_calls = 0
+        #: Every key call this scene was given, as ``(method, visible)`` in order — so a test can say what
+        #: the sequence was, not only how many calls it held.
+        self.asked = []
 
-    def colorbar(self):
-        """Record the call (and optionally raise to mimic an outline-only/unmappable layer)."""
+    def _color_keyed(self):
+        """Return the ids of the layers a key could explain."""
+        return list(self._keyed)
+
+    def get_layer(self, layer_id):
+        """Return a description carrying the colour encoding this stand-in claims for ``layer_id``.
+
+        Args:
+            layer_id: The layer to describe.
+
+        Returns:
+            A `LayerSpec` whose colour is driven by a field, through a categorical or a continuous scale.
+        """
+        scale = (
+            Scale.categorical(["a", "b"], ["#f00", "#00f"])
+            if self._categorical
+            else Scale.from_limits(0.0, 1.0)
+        )
+        return LayerSpec(
+            layer_id,
+            "raster",
+            symbology=Symbology(
+                encodings={"color": Encoding.by_field("color", "v", scale=scale)}
+            ),
+        )
+
+    def colorbar(self, *, visible=True):
+        """Record the call and its flag (and optionally raise to mimic an unmappable layer).
+
+        Args:
+            visible: Whether the key is drawn, which `quickmap` passes through from its own ``colorbar=``.
+        """
         self.colorbar_calls += 1
-        if self._raises:
+        self.asked.append(("colorbar", visible))
+        if self._raises or (self._raises_when_drawn and visible):
             raise ValueError("nothing mappable to colorbar")
+
+    def legend(self, *, visible=True):
+        """Record the call and its flag — the key a categorical fill is explained by on every tier.
+
+        Args:
+            visible: Whether the key is drawn.
+        """
+        self.legend_calls += 1
+        self.asked.append(("legend", visible))
+        if self._raises or (self._raises_when_drawn and visible):
+            raise ValueError("nothing mappable to legend")
+
+
+class TestTheKeyIsAskedForEitherWay:
+    """`_add_static_key` carries the caller's flag through, as `_add_3d_key` does.
+
+    The flag decides whether the key is *drawn*, never whether the layer is resolved or the decision is
+    recorded — the "validate before honouring visible=False" rule the four tiers share. Reading it as "skip
+    the call entirely" is what left this backend's categorical fill keyed against the caller's wish.
+
+    Switching a key off is two calls rather than one, and that is the point of asserting the sequence
+    instead of a count. `Renderer.draw_guide` takes off the key **it** drew; the swatch legend a categorical
+    glyph draws for itself is not one of those, so the key is taken over first and switched off second.
+    """
+
+    def test_the_bar_is_asked_for_with_the_flag_it_was_given(self):
+        """A continuous layer's key goes through `colorbar()`, ending on the caller's flag.
+
+        Test scenario:
+            Both values, because a helper that only ever passed `True` would look correct against a test
+            that checked the `True` case alone.
+        """
+        shown = _FakeScene(keyed=["layer"])
+        qp._add_static_key(shown, visible=True)
+        assert shown.asked == [("colorbar", True)], shown.asked
+
+        hidden = _FakeScene(keyed=["layer"])
+        qp._add_static_key(hidden, visible=False)
+        assert hidden.asked == [("colorbar", True), ("colorbar", False)], hidden.asked
+
+    def test_the_swatch_legend_is_asked_for_the_same_way(self):
+        """And a categorical layer's goes through `legend()`, by the same two steps.
+
+        Test scenario:
+            The branch and the flag are independent: which key it is, is the layer's property; whether it is
+            drawn is the caller's. A fix to one arm must not leave the other spelling `visible=True`.
+        """
+        shown = _FakeScene(keyed=["zone"], categorical=True)
+        qp._add_static_key(shown, visible=True)
+        assert shown.asked == [("legend", True)], shown.asked
+
+        hidden = _FakeScene(keyed=["zone"], categorical=True)
+        qp._add_static_key(hidden, visible=False)
+        assert hidden.asked == [("legend", True), ("legend", False)], hidden.asked
+
+    @pytest.mark.parametrize(
+        ("categorical", "kind"), [(False, "colorbar"), (True, "legend")]
+    )
+    def test_a_refusal_from_the_take_over_still_records_the_decision(
+        self, categorical, kind
+    ):
+        """The take-over draw failing must not cost `quickmap(colorbar=False)` its record.
+
+        Args:
+            categorical: Whether the keyed layer is coloured by category.
+            kind: The method that layer's key goes through.
+
+        Test scenario:
+            The take-over call is the **only** one that reaches `colorbar_legend`/`disjoint_legend`, since
+            the second draws nothing — so it is the only one an engine failure can come out of, and one
+            `except UNMAPPABLE` around both meant that failure took the `Guide(show=False)` record with it.
+            The decision is the thing `colorbar=False` exists to record, and the layer resolves and checks
+            identically on both calls, so the second has its own tolerance now (review N1).
+
+            Both kinds are parametrised because the two arms are independent: which key it is, is the
+            layer's property, and a fix to one spelling must not leave the other under a shared `try`.
+        """
+        scene = _FakeScene(
+            keyed=["zone"], categorical=categorical, raises_when_drawn=True
+        )
+        qp._add_static_key(scene, visible=False)
+        assert scene.asked == [(kind, True), (kind, False)], (
+            f"the refusal from the take-over draw stopped the call that records the decision: {scene.asked}"
+        )
+
+
+class _FakeInteractiveScene:
+    """Minimal ``InteractiveMap`` stand-in for `_add_interactive_key`.
+
+    Answers the three questions the helper asks — which layers can be explained, which one it keys, and
+    what that layer's colour looks like — and records the key call it is given. A stand-in rather than a
+    real map because the arm under test is what happens when the tier's own `colorbar`/`legend` *fails*,
+    which a working tier does not do; the same trade ``tests/test_add_web_legend.py`` makes, and the reason
+    both run in the default ``dev`` environment with no HoloViz extra installed.
+
+    Args:
+        categorical: Whether the keyed layer is coloured by category, which is keyed by a legend.
+        raises: What the key call raises instead of recording, or ``None`` to record.
+    """
+
+    def __init__(self, *, categorical=False, raises=None):
+        self._categorical = categorical
+        self._raises = raises
+        #: Every key call this scene was given, as ``(method, layer_id, visible)`` in order.
+        self.asked = []
+
+    def _guidable(self):
+        """Return the ids of the layers whose colour varies with their data."""
+        return ["flow"]
+
+    def _guided_layer(self, method, layer_id):
+        """Return the layer the key describes, as the tier resolves it.
+
+        Args:
+            method: The caller's name, for the refusal this stand-in never gives.
+            layer_id: The caller's id, always ``None`` from this helper.
+
+        Returns:
+            The one layer this stand-in holds.
+        """
+        return "flow"
+
+    def get_layer(self, layer_id):
+        """Return a description whose colour is driven through a categorical or a continuous scale.
+
+        Args:
+            layer_id: The layer to describe.
+
+        Returns:
+            A `LayerSpec` carrying that colour encoding.
+        """
+        scale = (
+            Scale.categorical(["a", "b"], ["#f00", "#00f"])
+            if self._categorical
+            else Scale.from_limits(0.0, 1.0)
+        )
+        return LayerSpec(
+            layer_id,
+            "raster",
+            symbology=Symbology(
+                encodings={"color": Encoding.by_field("color", "v", scale=scale)}
+            ),
+        )
+
+    def colorbar(self, layer_id, *, visible=True):
+        """Record the bar call, or raise what this stand-in was built with.
+
+        Args:
+            layer_id: The layer being keyed.
+            visible: Whether the key is drawn.
+        """
+        self.asked.append(("colorbar", layer_id, visible))
+        if self._raises is not None:
+            raise self._raises
+
+    def legend(self, layer_id, *, visible=True):
+        """Record the swatch call, or raise what this stand-in was built with.
+
+        Args:
+            layer_id: The layer being keyed.
+            visible: Whether the key is drawn.
+        """
+        self.asked.append(("legend", layer_id, visible))
+        if self._raises is not None:
+            raise self._raises
+
+
+class TestAnInteractiveKeyThatFailsIsSkippedNotRaised:
+    """`_add_interactive_key` tolerates a layer it cannot key, and only that.
+
+    ``quickplot``'s ``colorbar=`` default asks for a key *if there is one to draw*, so a tier that refuses
+    the one layer it resolved must not take the whole one-call map down with it — the same line
+    :func:`~digitalearth.api._add_static_key` and :func:`~digitalearth.api._add_web_legend` hold. The
+    tolerance is bounded by :data:`~digitalearth.api.UNMAPPABLE`: anything else is a defect, not an
+    unkeyable layer, and has to reach the caller.
+    """
+
+    def test_a_refused_key_is_warned_about_and_the_call_still_returns(self, caplog):
+        """The map comes back and the warning names the key that was skipped.
+
+        Args:
+            caplog: pytest's capture of the stdlib logger `api` warns through.
+        """
+        import logging
+
+        scene = _FakeInteractiveScene(raises=ValueError("nothing mappable to colorbar"))
+        with caplog.at_level(logging.WARNING, logger="digitalearth.api"):
+            assert qp._add_interactive_key(scene, visible=True) is None, (
+                "the helper returns nothing; the map is the caller's own"
+            )
+        assert scene.asked == [("colorbar", "flow", True)], scene.asked
+        assert "quickplot: colorbar skipped" in caplog.text, (
+            f"the skip was not announced: {caplog.text!r}"
+        )
+
+    def test_a_failure_that_is_not_an_unkeyable_layer_reaches_the_caller(self):
+        """A `KeyError` is a defect in the tier, not a layer with no key, so it propagates.
+
+        Test scenario:
+            The counterpart of the tolerance above, and why the `except` names three types rather than
+            `Exception`: swallowing everything would turn a renamed method or a broken install into a map
+            that silently carries no key, which is the failure mode `quickmap` is least able to explain.
+        """
+        scene = _FakeInteractiveScene(raises=KeyError("flow"))
+        with pytest.raises(KeyError):
+            qp._add_interactive_key(scene, visible=True)
 
 
 class TestFinish:
@@ -289,7 +651,7 @@ class TestFinish:
         Test scenario:
             A scene with one layer and colorbar=True gets exactly one colorbar() call.
         """
-        scene = _FakeScene(layers=["layer"])
+        scene = _FakeScene(keyed=["layer"])
         out = qp._finish(scene, colorbar=True)
         assert scene.colorbar_calls == 1, (
             f"expected one colorbar call, got {scene.colorbar_calls}"
@@ -302,21 +664,39 @@ class TestFinish:
         Test scenario:
             Even with layers present, colorbar=False suppresses the colorbar() call.
         """
-        scene = _FakeScene(layers=["layer"])
+        scene = _FakeScene(keyed=["layer"])
         out = qp._finish(scene, colorbar=False)
         assert scene.colorbar_calls == 0, "colorbar must not be drawn when disabled"
         assert out is scene, "the same scene must be returned"
 
-    def test_skips_colorbar_when_no_layers(self):
-        """_finish skips the colorbar when there are no layers, even if requested.
+    def test_skips_the_key_when_nothing_is_coloured_by_a_value(self):
+        """_finish keys nothing when no layer publishes a colour at all.
 
         Test scenario:
-            An empty scene with colorbar=True draws nothing (no layer to map).
+            An empty scene with colorbar=True draws neither kind of key — the one case where "add a key if
+            there is one to draw" has nothing to add.
         """
-        scene = _FakeScene(layers=[])
+        scene = _FakeScene(keyed=[])
         out = qp._finish(scene, colorbar=True)
-        assert scene.colorbar_calls == 0, "colorbar must not be drawn without layers"
+        assert (scene.colorbar_calls, scene.legend_calls) == (0, 0), (
+            "no key must be drawn without a keyed layer"
+        )
         assert out is scene, "the same scene must be returned"
+
+    def test_a_categorical_fill_is_keyed_by_a_legend_rather_than_by_a_bar(self):
+        """The branch the 3-D path already had: which key is the layer's property, not the flag's.
+
+        Test scenario:
+            A bar over a categorical fill would read the class codes cleopatra assigned rather than the
+            class names, which is why `Map.colorbar` refuses it. `_add_static_key` used to call only
+            `colorbar()` and swallow that refusal, so the one backend `quickmap` reaches without an extra
+            recorded no key at all while the web and 3-D paths recorded one.
+        """
+        categorical = _FakeScene(keyed=["zone"], categorical=True)
+        qp._finish(categorical, colorbar=True)
+        assert (categorical.colorbar_calls, categorical.legend_calls) == (0, 1), (
+            "a categorical fill is keyed by a legend, not by a bar"
+        )
 
     def test_swallows_colorbar_exception(self):
         """_finish swallows an exception from colorbar() (outline-only/unmappable layer).
@@ -324,7 +704,7 @@ class TestFinish:
         Test scenario:
             colorbar() raising must not propagate; the scene is still returned.
         """
-        scene = _FakeScene(layers=["layer"], raises=True)
+        scene = _FakeScene(keyed=["layer"], raises=True)
         out = qp._finish(scene, colorbar=True)
         assert scene.colorbar_calls == 1, "colorbar() should have been attempted once"
         assert out is scene, "the scene must be returned despite the swallowed error"
@@ -629,8 +1009,11 @@ class TestTheRefusalNamesWhatTheCallerWrote:
             caller never wrote, and never saying that the kind already meant it (R2-L4). The refusal names the
             kind, what it draws with, and the kind that means what was asked for instead.
         """
+        # `dataset.epsg` is a pyramids property, read above the block: a raise from *it* would satisfy
+        # the block and leave the refusal under test unreached.
+        epsg = dataset.epsg
         with pytest.raises(ValueError) as excinfo:
-            qp.quickmap(dataset, crs=dataset.epsg, kind="contourf", filled=False)
+            qp.quickmap(dataset, crs=epsg, kind="contourf", filled=False)
         message = str(excinfo.value)
         assert "kind='contourf' is itself filled=True" in message, message
         assert "RasterMixin" not in message, (
@@ -670,8 +1053,10 @@ class TestTheRefusalNamesWhatTheCallerWrote:
             have taken this call away too. The refusal here comes from cleopatra, naming `filled`, which is
             the tier's own answer rather than this module's.
         """
+        # Read above the block for the reason the test two above gives: `epsg` is a property.
+        epsg = dataset.epsg
         with pytest.raises(ValueError) as excinfo:
-            qp.quickmap(dataset, crs=dataset.epsg, kind="imshow", filled=False)
+            qp.quickmap(dataset, crs=epsg, kind="imshow", filled=False)
         message = str(excinfo.value)
         assert "contradicts it" not in message, (
             f"imshow implies no filled=, so this must not be refused as a contradiction: {message}"
@@ -690,8 +1075,11 @@ class TestTheRefusalNamesWhatTheCallerWrote:
         from pyramids.feature import FeatureCollection
 
         fc = FeatureCollection.read_file("tests/data/points.geojson")
+        # Read above the block: `epsg` is a pyramids property, so a raise from it would pass this test
+        # with the `column=` refusal never reached.
+        epsg = fc.epsg
         with pytest.raises(ValueError) as excinfo:
-            qp.quickmap(fc, crs=fc.epsg, column="fid")
+            qp.quickmap(fc, crs=epsg, column="fid")
         message = str(excinfo.value)
         assert "column='fid'" in message, message
         assert "size_column=" in message, message

@@ -250,14 +250,18 @@ def test_field_with_colorbar(dataset):
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
 def test_categorical_legend(dataset):
-    """A swatch legend attached over a field keeps its colours, order and placement.
+    """A swatch legend derived from the layer's own scale keeps its colours, order and placement.
+
+    The rows were the caller's own ``legend(colors, labels)`` until order 24, which is how a key could
+    disagree with the picture; they now come from the `Scale` the layer publishes, so the baseline is the
+    swatches the field was actually drawn with, relabelled.
 
     Returns:
         Figure: the rendered map.
     """
     m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
     m.field(dataset, cmap="Greys")
-    m.legend(["#1f77b4", "#d62728", "#2ca02c"], ["river", "ridge", "plain"])
+    m.legend(title="flow accumulation", labels=["none", "low", "some", "more", "most"])
     return m.fig
 
 

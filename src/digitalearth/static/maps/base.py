@@ -15,7 +15,7 @@ from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.display import needs_reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
-from digitalearth.base.spec import Viewport
+from digitalearth.base.spec import DEFAULT_BAND, Viewport
 from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
@@ -136,11 +136,27 @@ class GeoLayerBase(Scene):
                 self.crs,
             )
 
-    def _prepare(self, dataset: Any, band: int = 1) -> Source:
+    def _prepare(self, dataset: Any, band: int = DEFAULT_BAND) -> Source:
         """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
 
+        **A bare numpy array is placed at its own indices**, not in the display CRS: it carries no CRS and no
+        geo-transform, so there is nothing to warp from and nothing that says where its cells are. The
+        column index becomes ``x`` and the row index ``y``, which is what
+        :func:`~digitalearth.base.sources.extractors._from_numpy` already does — except that its rows run
+        *up* (``y = 0`` for row 0), and every render on this tier draws an array's first row at the **top**.
+        Left ascending, one array came out mirrored between two renders of it: ``field`` places its image by
+        extent and matplotlib draws row 0 at ``ymax``, while ``pcolormesh``/``contours`` place their cells by
+        the coordinates and drew row 0 at ``ymin``. So the row axis is handed over descending, which is the
+        convention every pyramids raster already arrives in (north-up, ``y`` decreasing) and the one that
+        makes the tier's renders agree (#343).
+
+        The convention is set here, in this tier's own choke point, rather than in ``_from_numpy``: that
+        extractor's ascending axis is what the 3-D tier's ``terrain`` and the web tier's placeholder read,
+        and flipping it there would flip surfaces those tiers already draw.
+
         Args:
-            dataset: The pyramids ``Dataset`` to place in the display CRS and read.
+            dataset: The pyramids ``Dataset`` to place in the display CRS and read, or a bare 2-D numpy
+                array to place at its own indices.
             band: 1-based band to extract.
 
         Returns:
@@ -148,23 +164,40 @@ class GeoLayerBase(Scene):
 
         Raises:
             OffLimbError: when the data lies outside what the display CRS can show.
+            ValueError: when `dataset` is a numpy array that is not 2-D, from the extractor.
         """
-        return get_source(self._reproject(dataset), band=band)
+        placed = self._reproject(dataset)
+        if isinstance(placed, np.ndarray) and placed.ndim == 2:
+            rows = placed.shape[0]
+            return get_source(
+                placed, band=band, y=np.arange(rows - 1, -1, -1, dtype="float64")
+            )
+        return get_source(placed, band=band)
 
     def _reproject(self, dataset: Any) -> Any:
         """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there).
+
+        **Data with no reprojection to make is handed straight back.** A bare numpy array declares no CRS and
+        has no ``to_crs``, so there is nothing to warp *from*: asking anyway is what leaked
+        ``AttributeError: 'numpy.ndarray' object has no attribute 'to_crs'`` out of ``Map.field`` (#343). It
+        is the carve-out :func:`~digitalearth.base.display.to_display_source` already makes for the same
+        input, said here because this tier reprojects through its own choke point rather than through that
+        one. What a builder will and will not accept is not decided here — that is
+        :func:`~digitalearth.base.sources.require_drawable`, at the call — so an input this passes over
+        still meets whatever the reader after it needs.
 
         Args:
             dataset: The pyramids ``Dataset`` to place in the display CRS.
 
         Returns:
-            The reprojected dataset, or ``dataset`` itself when it is already in the display CRS.
+            The reprojected dataset, or ``dataset`` itself when it is already in the display CRS or has no
+            CRS to be warped out of.
 
         Raises:
             OffLimbError: when the warp reports too few surviving sample points to bound an output, i.e. the
                 data is outside the projection's visible area. Any *other* ``RuntimeError`` is re-raised as
                 it came — a real projection failure must not be mistaken for an empty view.
         """
-        if not self._needs_reproject(dataset):
+        if not hasattr(dataset, "to_crs") or not self._needs_reproject(dataset):
             return dataset
         return reproject(dataset, self.crs)

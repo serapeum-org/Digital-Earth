@@ -35,6 +35,8 @@ from typing import Any, Callable, Dict, List
 
 import numpy as np
 
+from digitalearth.base.spec import DEFAULT_BAND
+
 __all__ = ["NAN_REDUCERS", "finite", "read_masked_band", "ring_runs"]
 
 
@@ -139,7 +141,7 @@ def finite(arr: Any) -> np.ndarray:
     return a[np.isfinite(a)]
 
 
-def read_masked_band(dataset: Any, band: int = 1) -> np.ndarray:
+def read_masked_band(dataset: Any, band: int = DEFAULT_BAND) -> np.ndarray:
     """Read a 1-based ``band`` of a pyramids ``Dataset`` as ``float64`` with its masked cells set to ``NaN``.
 
     The mask comes from pyramids (``read_array(band=..., masked=True)``), not from comparing values against

@@ -9,13 +9,20 @@ covers, and the **colours** it maps onto — and can be *frozen*: a scale derive
 is what stops an animation's colours flickering, and what lets a legend show the colours that were actually
 drawn rather than a second guess at them.
 
-What it absorbs:
+What it absorbs, and where each was written out before:
 
-| Was | Where |
-|---|---|
-| the constant-band widening rule, `hi = lo + 1.0` | `base/stretch.py`, `static/textured_globe.py`, `web/bigdata.py`, `web/raster.py`, `web/vector.py` |
-| `classify(values, scheme, k)` plus its own `try`/`except` | `interactive/vector.py`, `three_d/base.py`, `web/vector.py` |
-| the stack colour range | :mod:`digitalearth.base.clim` — one way to *construct* frozen limits, not a parallel mechanism |
+* the constant-band widening rule, `hi = lo + 1.0` — `base/stretch.py`, `static/textured_globe.py`,
+  `web/bigdata.py`, `web/raster.py`, `web/vector.py`
+* `classify(values, scheme, k)` plus its own `try`/`except` — `interactive/vector.py`, `three_d/base.py`,
+  `web/vector.py`
+* the stack colour range — :mod:`digitalearth.base.clim`, one way to *construct* frozen limits rather than a
+  parallel mechanism
+
+The stack range was the last holdout: until DE-40 the three temporal paths reduced their frames to a bare
+`(lo, hi)` and handed it straight to a normaliser, so a stack of identical frames produced a zero-width domain
+this type refuses everywhere else. They now go through `Scale` as well, via
+:func:`digitalearth.base.clim.stack_scale`, which is also what gave :meth:`Scale.freeze` its first production
+caller.
 
 Engine-neutral, and the classifier is the part that took thought. The arithmetic lives in cleopatra, which
 `base/` may not import **at all** — not even lazily, since `tests/test_base_is_engine_neutral.py` reads the
@@ -26,12 +33,11 @@ into classes — and only the arithmetic is injected.
 """
 
 from dataclasses import dataclass, field
-from math import isfinite
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from math import inf, isfinite, nextafter
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from digitalearth.base.arrays import finite
 from digitalearth.base.registry import get_classifier
 from digitalearth.base.spec._serial import (
     as_list,
@@ -97,7 +103,7 @@ class Scale:
 
     vmin: float
     vmax: float
-    scheme: Optional[Union[str, Tuple[float, ...]]] = None
+    scheme: str | Tuple[float, ...] | None = None
     breaks: Tuple[float, ...] = ()
     categories: Tuple[Any, ...] = ()
     missing: Optional[str] = None
@@ -311,12 +317,20 @@ class Scale:
                 (4.0, 5.0)
 
                 ```
+            - A constant too large for ``+ 1`` to move widens by one representable step instead:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> low, high = Scale.from_limits(1e20, 1e20).as_limits()
+                >>> low == 1e20, high > low
+                (True, True)
+
+                ```
         """
         lo, hi = float(vmin), float(vmax)
         if not (isfinite(lo) and isfinite(hi)):
             raise ValueError(f"Scale needs finite limits; got ({vmin!r}, {vmax!r})")
         if hi <= lo:
-            hi = lo + 1.0
+            lo, hi = Scale._widen(lo)
         return cls(lo, hi, missing=missing)
 
     @classmethod
@@ -384,6 +398,11 @@ class Scale:
         Returns:
             A ``(lo, hi)`` pair with ``hi > lo`` guaranteed.
         """
+        # Imported here, not at module scope: `base/arrays.py` reads this subpackage's DEFAULT_BAND, so a
+        # module-level edge back to it makes `import digitalearth.base.arrays` circular. `base/spec/` holds
+        # the value types and is the lower layer of the two, so the deferral belongs on this side.
+        from digitalearth.base.arrays import finite
+
         measured = finite(values)
         return Scale._apply_limits(measured, vmin, vmax)
 
@@ -435,8 +454,43 @@ class Scale:
             )
         if hi <= lo:
             # The rule all five copies chose: a constant domain is widened by one rather than divided by.
-            hi = lo + 1.0
+            lo, hi = Scale._widen(lo)
         return lo, hi
+
+    @staticmethod
+    def _widen(value: float) -> Tuple[float, float]:
+        """Return a domain of non-zero width around a constant ``value``.
+
+        Args:
+            value: The single value the whole band holds.
+
+        Returns:
+            A ``(lo, hi)`` pair with ``hi > lo``, both finite, and `value` inside it.
+
+        Note:
+            ``+ 1.0`` is the rule the five consolidated copies chose and it stays the rule wherever it
+            works, because a whole unit is a span a colour ramp can show. **Where it stops working is not
+            one threshold.** ``2**53`` is where the gap between neighbouring doubles first exceeds one
+            (measured: 2.0 there, against 1.0 at ``2**52``), and it is where the addition first vanishes —
+            ``2**53 + 1.0 == 2**53`` — so the widened ``hi`` came back equal to ``lo`` and the constructor
+            refused the scale: a constant band holding a large sentinel or an epoch-nanosecond count could
+            not be scaled at all. But it is not a ceiling above which the rule never works, and it is not
+            symmetric. ``(2**53 + 2.0) + 1.0`` still moves, because round-to-nearest carries that sum to
+            the next representable double; and at ``-2**53`` and ``-2**53 - 2.0`` the addition still widens,
+            because on the negative side it moves toward zero, where the spacing is finer. So the question
+            is asked of the value rather than of its magnitude: ``widened > value`` says whether *this* one
+            moved. Where it did not, the smallest span that exists is one representable step, so that is
+            what is used. At the very top of the float range there is no step above — ``nextafter`` returns
+            infinity, which the constructor refuses — so the floor moves down instead and `value` stays the
+            upper limit.
+        """
+        widened = value + 1.0
+        if widened > value:
+            return value, widened
+        stepped = nextafter(value, inf)
+        if isfinite(stepped):
+            return value, stepped
+        return nextafter(value, -inf), value
 
     @staticmethod
     def _breaks(values: Any, scheme: str, k: int) -> Tuple[float, ...]:
@@ -679,8 +733,8 @@ class Scale:
             field goes through the JSON check, so a numpy number is written as a plain Python one.
 
         Raises:
-            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming
-                the field.
+            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON
+                form, naming the field.
 
         Examples:
             - A continuous scale is its domain:

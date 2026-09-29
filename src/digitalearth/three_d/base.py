@@ -17,7 +17,7 @@ import sys
 from contextlib import suppress
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Self, Sequence, Union
 
 import numpy as np
 
@@ -34,6 +34,7 @@ from digitalearth.base.sources import Source
 from digitalearth.base.spec import (
     Camera,
     DataRef,
+    Encoding,
     FigureSpec,
     LayerSpec,
     PanelSpec,
@@ -77,8 +78,91 @@ SCENE_EXPORTERS: dict[str, str] = {
 }
 
 
+def _reused_categories(scale: Optional[Scale]) -> Optional[list[Any]]:
+    """Return a categorical scale's categories — the pass over the column — or ``None``.
+
+    Args:
+        scale: The colour encoding's scale, or ``None`` when the caller has none to offer.
+
+    Returns:
+        The categories, in the order their colours were assigned, for a categorical scale;
+        ``None`` for a non-categorical scale and for ``None`` itself, so the caller categorises the column
+        itself as it always did.
+
+        Only the **categories** come back, never the colours the scale carries. Finding the distinct values
+        is the pass over the data this reuse exists to save; which colour each of them gets is settled by
+        the ``cmap`` this call is drawing with, and a recorded colour that outvoted it left
+        ``replace_layer(cmap=...)`` unable to repaint a cloud — ``Set1`` asked for and ``tab10`` painted
+        (review R2-H3). Reading no colour also retires the one shape they had to be screened for: a colour
+        list as long as its categories whose entries are ``None``, as
+        ``Scale.categorical(["a", "b"], [None, None])`` builds and ``color_for`` answers ``None`` for.
+    """
+    if scale is None or not scale.is_categorical:
+        return None
+    return list(scale.categories)
+
+
+def _reused_edges(
+    scale: Optional[Scale], scheme: Any, k: int
+) -> Optional[tuple[float, ...]]:
+    """Return the class edges a graduated request may draw from the description, or ``None``.
+
+    Args:
+        scale: The colour encoding's scale, or ``None`` when the caller has none to offer.
+        scheme: The scheme this call is classifying with.
+        k: The class count this call is classifying with.
+
+    Returns:
+        The recorded edges when they are the edges **this** request asks for — the same scheme, cut into as
+        many classes as the request wants — so cutting the column again would hand back the same numbers.
+        ``None`` otherwise, and the column is cut here: a description cut with another ``scheme`` or another
+        ``k`` is not an answer to this request, and letting it win left ``replace_layer(k=6)`` painting the
+        three classes the layer was built with (review R2-H3).
+
+        ``k`` is only asked of a **named** scheme. An explicit sequence of edges carries its own class count
+        and :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` ignores ``k`` for it, so there the scheme
+        alone settles the question.
+    """
+    if scale is None or not scale.is_classified or scale.scheme != scheme:
+        return None
+    if isinstance(scheme, str) and len(scale.breaks) - 1 != k:
+        return None
+    return scale.breaks
+
+
+def _category_codes(values: Any, categories: Sequence[Any]) -> tuple[np.ndarray, bool]:
+    """Code every value by its position among ``categories``, saying whether they all landed.
+
+    Args:
+        values: The colour column, as the caller handed it over.
+        categories: The categories to code against, in class order.
+
+    Returns:
+        ``(codes, placed)`` — one class index per value with ``NaN`` where it has none, and whether every
+        value that **is** a value found a category. `categorical_colors` builds its categories from the
+        non-null values alone, so a value the index has no entry for is a missing one; coding it ``NaN``
+        rather than defaulting it into category 0 is what stops a feature with no value being painted in
+        the first category's colour. ``placed`` is ``False`` only for a value that is not null and still
+        found no category, which cannot happen for categories cut from this very column — it is how a
+        **reused** set from another column is recognised.
+    """
+    from digitalearth.base.symbology import is_null
+
+    index = {category: position for position, category in enumerate(categories)}
+    codes: list[float] = []
+    placed = True
+    for value in np.asarray(values, dtype=object).ravel():
+        position = index.get(value)
+        if position is None:
+            codes.append(float("nan"))
+            placed = placed and is_null(value)
+        else:
+            codes.append(float(position))
+    return np.array(codes, dtype="float64"), placed
+
+
 def classified_scalars(
-    values: Any, *, scheme: Any | None, k: int, cmap: Any
+    values: Any, *, scheme: Any | None, k: int, cmap: Any, scale: Optional[Scale] = None
 ) -> dict[str, Any]:
     """Turn a value column into the ``scalars``/``cmap`` keywords that colour a PyVista layer.
 
@@ -119,6 +203,22 @@ def classified_scalars(
             sampled, so on a graduated scheme it must carry exactly one colour per class; a shorter list is
             refused, not recycled, because the lookup table would otherwise clamp every class past its end
             onto the last colour and they would all render identically.
+        scale: The classification the layer's colour encoding already carries, when the caller has one.
+            The builder cuts the same column with the same ``scheme``/``k`` to describe the layer, so
+            computing it again here is a second full pass over the data for a result that is by
+            construction identical — a cost a large cloud paid even when no key was ever asked for (review
+            N4).
+
+            **It is read only as far as it answers this call, never as an override of it.** A graduated
+            scheme takes the recorded edges when they are the edges this request asks for — the same
+            ``scheme``, cut into ``k`` classes (:func:`_reused_edges`); a categorical one takes the
+            recorded **categories**, which is the pass over the column, and samples their colours from
+            this call's ``cmap`` (:func:`_reused_categories`). Anything else is classified here as if no
+            scale had been passed: a description cut with another ``scheme``, ``k`` or ``cmap`` — which is
+            what :meth:`Scene3DBase.replace_layer` installs, since it does not republish the encoding —
+            would otherwise decide the picture and silently refuse the restyle (review R2-H3). ``None``
+            classifies here too: a column the builder could not cut publishes no scale, and the refusal
+            below is the one a caller should see.
 
     Returns:
         dict: keyword arguments to splat into :meth:`pyvista.Plotter.add_mesh` /
@@ -191,32 +291,35 @@ def classified_scalars(
         }
 
     if isinstance(scheme, str) and scheme.lower() == "categorical":
+        resolved = resolve_categorical_cmap(cmap)
+        reused = _reused_categories(scale)
+        # The description's categories stand in for the pass over the column, which is the cost; the
+        # colours are always this call's, sampled from `cmap`. Categorising the categories is the same
+        # computation `categorical_colors` would do over the whole column — the distinct values of a set of
+        # distinct values are themselves — at the length of the key rather than the length of the data.
         categories, colours = categorical_colors(
-            values, cmap=resolve_categorical_cmap(cmap)
+            values if reused is None else reused, cmap=resolved
         )
-        index = {category: position for position, category in enumerate(categories)}
-        # `categorical_colors` builds its categories from the non-null values alone, so a value the index
-        # has no entry for is a missing one — code it NaN rather than defaulting it into category 0, which
-        # would paint a feature with no value in the first category's colour.
-        codes = np.array(
-            [
-                index.get(value, np.nan)
-                for value in np.asarray(values, dtype=object).ravel()
-            ],
-            dtype="float64",
-        )
+        codes, placed = _category_codes(values, categories)
+        if reused is not None and not placed:
+            # A recorded set that cannot place a value this column carries was cut from another column, and
+            # painting from it draws every unplaced feature as missing data. Categorise here instead.
+            categories, colours = categorical_colors(values, cmap=resolved)
+            codes, _ = _category_codes(values, categories)
         return _discrete_style(codes, colours)
 
     numbers = np.asarray(values, dtype="float64")
-    try:
-        edges = Scale.breaks_of(numbers, scheme, k)
-    # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
-    # swallowing that would present a wiring failure as bad data. The other two tiers already let it
-    # through, so catching it here made the three disagree on exactly that case.
-    except ValueError as error:  # unknown scheme, constant column, k < 1 …
-        # Scale's own message already names the scheme and `k`, and there is no column here to add, so
-        # this only normalises the exception type the tiers raise.
-        raise ValueError(f"cannot classify values: {error}") from error
+    edges = _reused_edges(scale, scheme, k)
+    if edges is None:
+        try:
+            edges = Scale.breaks_of(numbers, scheme, k)
+        # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
+        # swallowing that would present a wiring failure as bad data. The other two tiers already let it
+        # through, so catching it here made the three disagree on exactly that case.
+        except ValueError as error:  # unknown scheme, constant column, k < 1 …
+            # Scale's own message already names the scheme and `k`, and there is no column here to add, so
+            # this only normalises the exception type the tiers raise.
+            raise ValueError(f"cannot classify values: {error}") from error
     # `edges` bounds the classes, so it holds one more entry than there are classes; digitize against the
     # interior edges to land every value in 0 .. n_classes - 1 (clip catches the closed upper bound).
     n_classes = max(len(edges) - 1, 1)
@@ -551,6 +654,19 @@ class Scene3DBase:
         #: The vertical view scale, kept here so it survives a plotter that has not been built yet and so it
         #: can be written onto the figure's camera.
         self._vertical: float = 1.0
+        #: How the scene's figure furniture is drawn (#203), keyed by the method that asked for it — the
+        #: title's size, colour and subtitle. Kept here, beside the view scale and the camera, for the same
+        #: reason: it belongs to the scene rather than to whichever plotter happens to exist, so
+        #: `_dress_plotter` puts it onto a window the scene has just been given. The heading itself is on the
+        #: figure instead, as the panel's own `title`, since `PanelSpec` carries one.
+        self._decoration: dict[str, Any] = {}
+        #: How each layer's colour key is *drawn*, keyed by layer id (order 24) — the title the scalar bar is
+        #: currently on the plotter under, whether the layer is in the keyed list, and the row labels a caller
+        #: overrode. The same split as `_decoration`: what the key **is** travels on the layer's encoding as a
+        #: `Guide`, and this is the drawing state that cannot, because a bar's title is a slot on one plotter
+        #: rather than a property of the figure. :func:`~digitalearth.three_d.guides.redraw_guides` owns it
+        #: and prunes an entry when its layer goes.
+        self._guides: dict[str, dict[str, Any]] = {}
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
         self.strict: bool = strict
         #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
@@ -617,12 +733,18 @@ class Scene3DBase:
         self._dress_plotter()
 
     def _dress_plotter(self) -> None:
-        """Put the scene's own view state onto the plotter it is about to draw on.
+        """Put the scene's own view state and figure furniture onto the plotter it is about to draw on.
 
         A view scale or a camera set before anything was drawn belongs to the scene, not to whichever plotter
         happens to exist, so both are applied to a window the scene has just been given — whether it built it
         or a caller handed it over. Only the lazy build did this, so swapping a plotter in silently reverted
         the scene to true scale and PyVista's default viewpoint, permanently (review M7).
+
+        The scene's decoration is the same kind of state and is applied here for the same reason (#203):
+        `set_title()` on a described scene must not force a render window open, and a heading drawn only at
+        the call would be missing from the window that is finally built — and from the next one the scene is
+        handed. :func:`~digitalearth.three_d.decoration.redraw_decoration` reads the heading off the figure
+        and its styling off :attr:`_decoration`.
 
         The scale is applied unconditionally: `set_scale(zscale=1.0)` leaves a fresh plotter at
         `[1.0, 1.0, 1.0]`, so skipping it for the identity bought nothing and asked a float to be exactly 1.0
@@ -634,6 +756,11 @@ class Scene3DBase:
         if hasattr(plotter, "set_scale"):
             plotter.set_scale(zscale=self._vertical, render=False)
         self._apply_camera()
+        # Imported here rather than at module level: `decoration` is one of the builder modules, and every one
+        # of them declares this class as its typing base, so a module-level import would close a cycle.
+        from digitalearth.three_d.decoration import redraw_decoration
+
+        redraw_decoration(self)
 
     def _place(self, data: Any, *, layer: str) -> Any:
         """Return `data` in the scene's display CRS, adopting the data's CRS when the scene has none yet.
@@ -1386,6 +1513,11 @@ class Scene3DBase:
         if isinstance(view, Camera):
             self.camera = view
         self._change(figure)
+        # The panel's own `title` is part of the figure (#203), and nothing in the layer diff re-reads it, so
+        # a heading drawn only at `set_title()` would be lost on exactly the round trip the seam exists for.
+        from digitalearth.three_d.decoration import redraw_decoration
+
+        redraw_decoration(self)
         return self
 
     @classmethod
@@ -1524,6 +1656,7 @@ class Scene3DBase:
         band: Any = None,
         selection: Any = None,
         label: Any = None,
+        encodings: Optional[Mapping[str, Encoding]] = None,
         **props: Any,
     ) -> Any:
         """Describe a layer, add it to the scene's figure, and draw it.
@@ -1541,6 +1674,10 @@ class Scene3DBase:
             band: Where it is drawn relative to the data (#292); `None` takes the kind's own band.
             selection: Which slice of the source it draws.
             label: What a layer switcher would call it.
+            encodings: The visual channels this layer's data drives, by channel name — today the `color`
+                encoding a builder publishes when its colour comes from a band, a variable or a column
+                (order 24). `None` for a layer whose look is engine keywords alone, which is what publishing
+                nothing means: a key over it is refused rather than drawn over nothing.
             **props: The engine keywords, stored on the layer's symbology. An array among them is stored as a
                 reference rather than copied (:mod:`digitalearth.three_d.layer`).
 
@@ -1568,7 +1705,9 @@ class Scene3DBase:
             band=band,
             label=label,
             selection=selection if selection is not None else Selection(),
-            symbology=Symbology(props=stored_props(**props)),
+            symbology=Symbology(
+                encodings=dict(encodings or {}), props=stored_props(**props)
+            ),
         )
         candidate = self._figure_with(
             layers=self._figure.layers.add(spec), sources=sources

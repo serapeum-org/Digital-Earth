@@ -365,6 +365,11 @@ class TestTheRecordedOptionsAreReadBackAsChannels:
     this tier drew described its style in a form only this tier could read, and `Symbology.encodings` came
     back empty however the layer was styled. :func:`portable_encodings` is the read-back, and it changes
     nothing a drawer sees: the resolved options stay exactly where they were.
+
+    Every probe below records an ``asked`` list beside the style it hands over, because that is what the lift
+    reads the derived halves through (#334): without one the lift publishes nothing, and each of the rules
+    these check — the vdims colour, the container, the non-finite number, the engine-only option — would pass
+    for the wrong reason, on a layer that published nothing whatever the rule said.
     """
 
     def test_every_lifted_keyword_drives_a_channel_the_schema_declares(self):
@@ -378,22 +383,27 @@ class TestTheRecordedOptionsAreReadBackAsChannels:
 
     def test_a_builders_resolved_size_reads_back_as_the_size_channel(self):
         """`common` is where a builder files the style it derived, and it is read first."""
-        lifted = portable_encodings(Symbology(props={"common": {"size": 7.0}}))
+        props = {"common": {"size": 7.0}, "asked": ["size"]}
+        lifted = portable_encodings(Symbology(props=props))
         assert lifted["size"].resolve() == 7.0, lifted
 
     def test_the_callers_own_keyword_outranks_the_builders_derived_one(self):
         """`opts` is merged over `common` by every drawer, so the lift must read them in that order."""
-        props = {"common": {"alpha": 0.2}, "opts": {"alpha": 0.9}}
+        props = {"common": {"alpha": 0.2}, "opts": {"alpha": 0.9}, "asked": ["alpha"]}
         assert portable_encodings(Symbology(props=props))["opacity"].resolve() == 0.9
 
     def test_a_flat_style_at_the_top_of_props_is_read_too(self):
         """`image` and `rgb` file `alpha` beside `via` rather than in `common`, and mean the same by it."""
-        props = {"via": "image", "alpha": 0.4, "opts": {}}
+        props = {"via": "image", "alpha": 0.4, "opts": {}, "asked": ["alpha"]}
         assert portable_encodings(Symbology(props=props))["opacity"].resolve() == 0.4
 
     def test_a_colour_that_names_a_value_dimension_is_a_column_not_a_colour(self):
         """HoloViews reads a colour naming a dimension as "colour by that column"."""
-        props = {"vdims": ("pop",), "common": {"color": "pop", "colorbar": True}}
+        props = {
+            "vdims": ("pop",),
+            "common": {"color": "pop", "colorbar": True},
+            "asked": ["color"],
+        }
         assert sorted(portable_encodings(Symbology(props=props))) == []
 
     def test_a_colour_naming_no_dimension_is_the_colour_it_looks_like(self):
@@ -416,15 +426,20 @@ class TestTheRecordedOptionsAreReadBackAsChannels:
             "url": "https://tiles.example/{z}/{x}/{y}.png",
             "apikey": "NOT-REAL",
         }
-        lifted = portable_encodings(Symbology(props={"common": {"color": provider}}))
+        props = {"common": {"color": provider}, "asked": ["color"]}
+        lifted = portable_encodings(Symbology(props=props))
         assert sorted(lifted) == [], lifted
 
     def test_a_value_no_figure_could_be_written_with_is_not_lifted(self):
         """JSON has no NaN, so lifting one would turn a drawable layer into an unsavable figure."""
-        lifted = portable_encodings(Symbology(props={"common": {"size": float("nan")}}))
+        props = {"common": {"size": float("nan")}, "asked": ["size"]}
+        lifted = portable_encodings(Symbology(props=props))
         assert sorted(lifted) == [], lifted
 
     def test_an_engine_option_that_drives_no_channel_stays_an_engine_option(self):
         """`cmap` and `colorbar` have no portable reading, and claiming one would invent a channel."""
-        props = {"common": {"cmap": "viridis", "colorbar": True, "clabel": "m"}}
+        props = {
+            "common": {"cmap": "viridis", "colorbar": True, "clabel": "m"},
+            "asked": ["cmap", "colorbar", "clabel"],
+        }
         assert sorted(portable_encodings(Symbology(props=props))) == []

@@ -34,9 +34,11 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
     {
         201: "The 3-D tier cannot draw line geometries — no rivers, roads, tracks or trajectories",
         226: "feat(static): add Map.lines for plain line geometry, matching the web tier",
-        261: (
-            "fix(api): legend() now has three incompatible shapes, and web still has no colorbar()"
-        ),
+        # `261` ("legend() now has three incompatible shapes, and web still has no colorbar()") stood here
+        # against the four `KEYWORD_SHORTFALLS` rows that named it. Order 24 settled it: all four tiers take
+        # the one Core shape, so those rows are off and nothing names the issue any more. A row here that
+        # nothing cites is what `test_the_allowlist_holds_nothing_either_table_stopped_naming` refuses —
+        # vouching for an issue is a claim someone is waiting on it, and nobody is.
         265: (
             "fix(web): title(), fit_bounds() and labels() introduce third names for existing concepts"
         ),

@@ -21,9 +21,10 @@ from loguru import logger
 from digitalearth.base.clim import (
     DEFAULT_CLIM_SCAN_CAP,
     sample_evenly,
-    stack_clim,
+    stack_scale,
 )
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.web.base import _require_layer_api
 
 #: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
@@ -92,12 +93,15 @@ class TemporalMixin(_MixinBase):
 
         Returns:
             ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
-            holds a finite value.
+            holds a finite value. The pair comes from the frozen
+            :class:`~digitalearth.base.spec.scale.Scale` the measurement builds, which is the same widening
+            the per-member :meth:`~digitalearth.web.raster.RasterMixin.field` call applies to it downstream —
+            so a stack of identical members now reports the range it is actually drawn with.
         """
-        return stack_clim(
+        return stack_scale(
             self._to_display_source(member, band=band).z.values
             for member in sample_evenly(collection.datasets, cap=_CLIM_SCAN_CAP)
-        )
+        ).as_limits()
 
     def timeslider(
         self,
@@ -105,7 +109,7 @@ class TemporalMixin(_MixinBase):
         *,
         kdim: str = "time",
         labels: Optional[Sequence] = None,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         column: Optional[str] = None,
         scheme: Optional[Any] = None,
         k: int = 5,

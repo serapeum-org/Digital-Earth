@@ -7,8 +7,11 @@ decides which backend to build.
 
 Read it as a list of decisions rather than a list of methods. `absent` is the interesting half: a 3-D scene has
 no extent to frame and no tile basemap, and that is a property of drawing in a camera's view rather than a gap
-somebody has yet to fill. What is simply not built yet — a title, text at a coordinate (#203) — is in neither
-half, because "we decided not to" and "not yet" are different answers and only the tier can tell them apart.
+somebody has yet to fill. What is simply not built yet is in neither half, because "we decided not to" and "not
+yet" are different answers and only the tier can tell them apart. Text at a coordinate was in neither half and
+is now a declared kind (#203); the scalar bar and the keyed list were in neither either, and order 24 has built
+both — so `colorbar` and `legend` are declared **features** here and are no longer in `contract.PENDING`
+(:mod:`digitalearth.three_d.guides`).
 """
 
 from digitalearth.base.capabilities import Capabilities
@@ -33,6 +36,9 @@ CAPABILITIES = Capabilities(
             # A globe draws its own shoreline onto the sphere — `globe(data)` records one by default — so the
             # tier draws this kind even though it has no standalone coastline builder (review M6).
             "coastlines",
+            # A string placed at a coordinate (#203). It is a layer rather than furniture for the same reason
+            # it is one on the interactive and web tiers: it is drawn where the data is, not in a corner.
+            "text",
             "custom:pyvista",
         }
     ),
@@ -53,6 +59,11 @@ CAPABILITIES = Capabilities(
         {
             "display_crs",
             "colorbar",
+            # "a keyed list of classes", which order 24 built: a classified layer's classes are drawn as
+            # PyVista's own legend box, derived from the `Scale` the layer was painted with. `colorbar` was
+            # already here on the strength of the scalar bar PyVista draws for a scalar layer; the two are
+            # now both real methods as well as declared features (:mod:`digitalearth.three_d.guides`).
+            "legend",
             "animation",
             "export_image",
             "export_html",
@@ -69,9 +80,11 @@ CAPABILITIES = Capabilities(
             "a globe draws its own shoreline onto the sphere, and a flat scene has none to trace, so there "
             "is no builder to add one to a scene"
         ),
-        # `legend` and `colorbar` are not listed: they are Core *methods* this tier has not built, which is
-        # `contract.PENDING`'s answer, not this one. "We decided against it" and "nobody has written it yet"
-        # are different, and a name cannot be both (review M19).
+        # `legend` and `colorbar` are not listed here and never will be: both are now built (order 24) and
+        # declared as features above. What that comment used to say — that they were Core *methods* this tier
+        # had not written, which was `contract.PENDING`'s answer rather than this one — is the reason they
+        # were never in `absent`: "we decided against it" and "nobody has written it yet" are different
+        # answers, and a name cannot be both (review M19).
         "scale_bar": "a screen distance means nothing when the camera decides the scale of what is in front",
         "north_arrow": "the scene can be looked at from any direction, so there is no fixed north on screen",
         "attribution": "a render window has no credit line; a caller writes one beside the image it saves",

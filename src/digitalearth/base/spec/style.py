@@ -26,8 +26,9 @@ backend's job, and in the static tier there is exactly one place it happens.
 """
 
 from dataclasses import dataclass, field
+from dataclasses import replace as with_fields
 from difflib import get_close_matches
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Container, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -42,7 +43,7 @@ from digitalearth.base.spec._serial import (
     to_json_value,
     travels_in_a_figure,
 )
-from digitalearth.base.spec.encoding import CHANNELS, Encoding
+from digitalearth.base.spec.encoding import CHANNELS, Encoding, Guide
 
 __all__ = [
     "PORTABLE_VALUES",
@@ -287,6 +288,45 @@ class Symbology:
         """
         return self.encodings.get(channel)
 
+    def guide(self, channel: str = "color") -> Optional[Guide]:
+        """Return what explains one channel to the reader — the legend or colorbar asked for on it.
+
+        The read side of :meth:`with_guide`, and the reason a guide lives on the encoding rather than beside
+        it: a renderer asking "does this layer want a colour key, and what is it called?" asks the layer, so
+        the answer moves, hides and disappears with it (DE-48, order 24).
+
+        Args:
+            channel: The channel whose guide is wanted. Defaults to ``"color"``, which is the channel a
+                colorbar and a keyed legend both explain — the other channels have guides too, and none of
+                them has a default worth guessing.
+
+        Returns:
+            The :class:`~digitalearth.base.spec.encoding.Guide` on that channel's encoding, or ``None`` —
+            both when nothing drives the channel and when something does and nobody asked for a guide.
+            The two are one answer on purpose: a renderer's question is whether to draw a key, and there is
+            nothing to draw in either case.
+
+        Examples:
+            - A guide asked for on a channel is read back from it:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "dem")})
+                >>> sym.with_guide(Guide(title="Elevation (m)")).guide().title
+                'Elevation (m)'
+
+                ```
+            - A channel nobody asked a guide of, and a channel nothing drives, both answer ``None``:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "dem")})
+                >>> sym.guide() is None, sym.guide("size") is None
+                (True, True)
+
+                ```
+        """
+        encoding = self.encodings.get(channel)
+        return None if encoding is None else encoding.guide
+
     def merged_over(self, defaults: "Symbology") -> "Symbology":
         """Return this symbology laid over `defaults`, channel by channel and property by property.
 
@@ -343,6 +383,85 @@ class Symbology:
         merged = dict(self.props)
         merged.update(props)
         return Symbology(encodings=dict(self.encodings), props=merged)
+
+    def with_guide(
+        self, guide: Optional[Guide], *, channel: str = "color"
+    ) -> "Symbology":
+        """Return a copy whose `channel` encoding carries `guide`.
+
+        **A guide explains an encoding**, so it is attached to one rather than held beside it. That is the
+        whole of what order 24 changes: a colour key used to be figure decoration a tier drew when asked and
+        then forgot — keyed by position on the static tier, a `show=` toggle on the most recent layer on the
+        interactive one — so it could not move with its layer, could not go away with it, and could not be
+        written into a figure and read back. Attached here it does all three for free, because the layer's
+        `Symbology` is already what travels.
+
+        Args:
+            guide: What to say about the channel, or ``None`` to attach nothing — which is how a guide is
+                taken off again, and why this does not raise for it: a channel nothing drives carries no
+                guide, so asking for the one there to come off is already true.
+            channel: The channel being explained. Defaults to ``"color"``.
+
+        Returns:
+            A new symbology; this one is unchanged, as every `Symbology` writer here is. For ``None`` on a
+            channel nothing drives, an equal one — the detach is a no-op rather than a refusal.
+
+        Raises:
+            ValueError: when nothing drives `channel` **and** a guide is being attached to it. A key over a
+                colour nothing varies would have no values to label and no scale to sample, so the tiers
+                raise rather than draw an empty box — the message names the channels that *are* driven,
+                since the usual cause is asking for a key on a layer whose colour is one flat constant.
+
+        Examples:
+            - Attached to the colour a field drives, and read back off the layer:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+                >>> sym.with_guide(Guide(title="People", anchor="bottom-right")).guide().anchor
+                'bottom-right'
+
+                ```
+            - ``None`` takes it off again, so a caller does not have to rebuild the encoding to drop a key:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
+                >>> sym.with_guide(Guide(title="People")).with_guide(None).guide() is None
+                True
+
+                ```
+            - A channel nothing drives is refused, and the message says what the layer does drive:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Guide, Symbology
+                >>> Symbology.of(size=6).with_guide(Guide())  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: nothing drives the 'color' channel ...; the channels it does drive are ['size']
+
+                ```
+            - Taking a guide off that same channel is not, because there is none there to refuse:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> flat = Symbology.of(size=6)
+                >>> flat.with_guide(None) == flat
+                True
+
+                ```
+        """
+        encoding = self.encodings.get(channel)
+        if encoding is None:
+            if guide is None:
+                # Detaching what is not there is not an error. The refusal below is about the *guide* — it
+                # would have no values to label and no scale to sample — and so has nothing to say when
+                # there is no guide to attach; applied to `None` as well it refused the one call that
+                # cannot go wrong, and contradicted this method's own `Args` entry (review L1).
+                return Symbology(encodings=dict(self.encodings), props=dict(self.props))
+            raise ValueError(
+                f"nothing drives the {channel!r} channel of this layer, so there is no encoding for a "
+                f"guide to explain; the channels it does drive are {sorted(self.encodings)}"
+            )
+        encodings = dict(self.encodings)
+        encodings[channel] = with_fields(encoding, guide=guide)
+        return Symbology(encodings=encodings, props=dict(self.props))
 
     # ------------------------------------------------------------------ serialisation
 
@@ -521,92 +640,57 @@ def portable_constants(
     return lifted
 
 
-def is_a_tier_default(value: Any, defaults: Tuple[Any, ...]) -> bool:
-    """Say whether a resolved style value is one a tier's builders write when nobody asked.
-
-    The one comparison both 2-D tiers subtract their defaults with. It lived twice, spelled
-    ``type(value) is type(default) and value == default``, which made the published style depend on how a
-    caller *spelled* a number: on the interactive tier, which records what it was handed rather than
-    coercing it, ``points(size=6)`` published ``{'size': 6}`` and ``points(size=6.0)`` published nothing
-    (review R2-M4).
-
-    Args:
-        value: What the tier resolved the style to.
-        defaults: The values that tier's builders write for this key unasked. Empty for a key no builder
-            defaults, which is always the caller's.
-
-    Returns:
-        `True` when `value` is one of `defaults`, comparing numerically. `bool` is the one type held
-        apart, in both directions: `True == 1.0` and `False == 0` in Python, so without the guard a flag a
-        caller really did set would be read as a numeric default and dropped.
-
-    Examples:
-        - The two spellings of one number answer alike, and a key nobody defaults is always an ask:
-            ```python
-            >>> from digitalearth.base.spec.style import is_a_tier_default
-            >>> is_a_tier_default(6, (6.0,)), is_a_tier_default(6.0, (6.0,))
-            (True, True)
-            >>> is_a_tier_default(7.0, (6.0,)), is_a_tier_default(7.0, ())
-            (False, False)
-
-            ```
-        - A boolean is never read as the number it equals:
-            ```python
-            >>> from digitalearth.base.spec.style import is_a_tier_default
-            >>> is_a_tier_default(True, (1.0,)), is_a_tier_default(0, (False,))
-            (False, False)
-
-            ```
-    """
-    return any(
-        isinstance(value, bool) == isinstance(default, bool) and value == default
-        for default in defaults
-    )
-
-
 def asked_constants(
     flat: Mapping[str, Any],
     channels: Mapping[str, str],
-    unasked: Mapping[str, Tuple[Any, ...]],
+    asked: Container[str],
 ) -> Dict[str, Encoding]:
-    """Lift a tier's flat style onto its channels, minus the values its builders wrote unasked.
+    """Lift onto their channels only the style keys a caller actually named.
 
-    :func:`portable_constants` with the one subtraction both 2-D tiers need. A builder resolves its
-    defaults before it records anything, so the recorded style cannot tell an ask from a default;
-    publishing it wholesale made an unstyled layer claim one tier's defaults as the caller's own intent and
-    repaint itself when the figure was carried elsewhere (review R-H2). Which defaults are chargeable to
-    *this* layer is the tier's question — it is the tier that knows which builder wrote the values — so it
-    is passed in rather than decided here.
+    :func:`portable_constants` with the one filter both 2-D tiers need. A builder resolves its defaults before
+    it records anything, so the recorded style cannot tell an ask from a default on its own; publishing it
+    wholesale made an unstyled layer claim one tier's defaults as the caller's own intent and repaint itself
+    when the figure was carried elsewhere (review R-H2).
+
+    What was asked for is **recorded at the builder** — :class:`~digitalearth.base.ask.Ask`, read back with
+    :func:`~digitalearth.base.ask.asked_style` — rather than reconstructed here by subtracting tables of
+    measured defaults. Those tables could not tell a caller who asked for exactly their tier's default from
+    one who asked for nothing, and no row was tied to the default it mirrored; the record can, and a builder
+    that records nothing publishes nothing, which under-describes a layer rather than mis-describing it
+    (#334).
 
     Args:
         flat: The tier's own style values, keyed the way that engine spells them.
         channels: Which declared channel each of those keys drives.
-        unasked: The defaults chargeable to this layer, per key, as the tier resolved them.
+        asked: The keys this layer's caller named, in that same spelling.
 
     Returns:
-        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that
-        name a channel, carry a portable value, and are not one of `unasked`.
+        Channel name -> a constant :class:`~digitalearth.base.spec.encoding.Encoding`, for the keys that were
+        asked for, name a channel, and carry a value a channel can portably hold.
 
     Examples:
-        - A default is passed over and an explicit value is published, for the same key:
+        - One value, one builder, and the only thing that decides whether it publishes:
             ```python
             >>> from digitalearth.base.spec.style import asked_constants
             >>> channels = {"circle-radius": "size"}
-            >>> unasked = {"circle-radius": (5.0,)}
-            >>> sorted(asked_constants({"circle-radius": 5.0}, channels, unasked))
-            []
-            >>> asked_constants({"circle-radius": 12.0}, channels, unasked)["size"].resolve()
-            12.0
+            >>> asked_constants({"circle-radius": 5.0}, channels, frozenset())
+            {}
+            >>> asked_constants({"circle-radius": 5.0}, channels, {"circle-radius"})["size"].resolve()
+            5.0
+
+            ```
+        - A key nobody named is passed over even though the tier recorded a value under it:
+            ```python
+            >>> from digitalearth.base.spec.style import asked_constants
+            >>> paint = {"line-width": 2.0, "line-color": "#ff0000"}
+            >>> channels = {"line-width": "width", "line-color": "color"}
+            >>> sorted(asked_constants(paint, channels, {"line-color"}))
+            ['color']
 
             ```
     """
     return portable_constants(
-        {
-            key: value
-            for key, value in flat.items()
-            if not is_a_tier_default(value, unasked.get(key, ()))
-        },
-        channels,
+        {key: value for key, value in flat.items() if key in asked}, channels
     )
 
 

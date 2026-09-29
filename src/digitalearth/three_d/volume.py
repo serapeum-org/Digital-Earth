@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from digitalearth.base.spec import Encoding
 from digitalearth.three_d.bigdata import (
     DEFAULT_CELL_BUDGET,
     reduce_surface,
@@ -159,6 +160,10 @@ class VolumeMixin(_MixinBase):
             kind="volume",
             data=data,
             name=name,
+            # The cube's colour is driven by the array :data:`FIELD` the grid carries it under, so a key
+            # over this layer explains that field and is titled after it (order 24). No scale: VTK maps
+            # the array's own range through its lookup table, which is what `scale=None` means.
+            encodings={"color": Encoding.by_field("color", FIELD)},
             cmap=cmap,
             opacity=opacity,
             big_data_threshold=self._resolve_big_data_threshold(
@@ -216,6 +221,10 @@ class VolumeMixin(_MixinBase):
             kind="isosurface",
             data=data,
             name=name,
+            # The cube's colour is driven by the array :data:`FIELD` the grid carries it under, so a key
+            # over this layer explains that field and is titled after it (order 24). No scale: VTK maps
+            # the array's own range through its lookup table, which is what `scale=None` means.
+            encodings={"color": Encoding.by_field("color", FIELD)},
             isosurfaces=isosurfaces,
             cmap=cmap,
             big_data_threshold=self._resolve_big_data_threshold(

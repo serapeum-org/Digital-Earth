@@ -18,10 +18,12 @@ from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.clim import (
     DEFAULT_CLIM_SCAN_CAP,
+    frozen_scale,
     measure_clim,
     sample_evenly,
 )
 from digitalearth.base.sources import get_source, get_stack
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -301,7 +303,7 @@ class AnimationMixin(_MixinBase):
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
     def _stack_clim(
-        self, datasets: Sequence[Any], band: int = 1
+        self, datasets: Sequence[Any], band: int = DEFAULT_BAND
     ) -> Tuple[float, float]:
         """Return the ``(min, max)`` of ``band`` across ``datasets``, ignoring nodata/non-finite.
 
@@ -318,13 +320,14 @@ class AnimationMixin(_MixinBase):
         Returns:
             The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value —
             which includes the case where no frame is on the view at all, since a frame that
-            cannot be warped draws nothing and so contributes no colour range.
+            cannot be warped draws nothing and so contributes no colour range. Both come from the frozen
+            :class:`~digitalearth.base.spec.scale.Scale` the measurement builds, so a stack of identical
+            frames reports a domain with width rather than the zero-width pair a normaliser clamps.
         """
-        measured = self._measured_clim(datasets, band=band)
-        return measured if measured is not None else (0.0, 1.0)
+        return frozen_scale(self._measured_clim(datasets, band=band)).as_limits()
 
     def _measured_clim(
-        self, datasets: Sequence[Any], band: int = 1
+        self, datasets: Sequence[Any], band: int = DEFAULT_BAND
     ) -> Optional[Tuple[float, float]]:
         """Return the ``(min, max)`` actually measured across ``datasets``, or ``None`` if nothing was.
 
@@ -343,7 +346,9 @@ class AnimationMixin(_MixinBase):
         """
         return measure_clim(self._frame_values(datasets, band=band))
 
-    def _frame_values(self, datasets: Sequence[Any], band: int = 1) -> Iterator[Any]:
+    def _frame_values(
+        self, datasets: Sequence[Any], band: int = DEFAULT_BAND
+    ) -> Iterator[Any]:
         """Yield the display-CRS values of ``band`` for each frame that can be warped onto the view.
 
         The engine-specific half of the stack scan: warping and band reading are this tier's business, while
@@ -372,7 +377,7 @@ class AnimationMixin(_MixinBase):
             yield read_masked_band(warped, band=band)
 
     def _clim_across_views(
-        self, dataset: Any, views: Sequence[Any], band: int = 1
+        self, dataset: Any, views: Sequence[Any], band: int = DEFAULT_BAND
     ) -> Tuple[float, float]:
         """Return the ``(min, max)`` of one dataset measured under each sampled display CRS.
 
@@ -388,6 +393,8 @@ class AnimationMixin(_MixinBase):
         Returns:
             The widest ``(min, max)`` across the sampled views, or ``(0, 1)`` when no view shows any of the
             data — a full sweep passes the far side of the globe, where the warp has nothing to transform.
+            The union goes through the same frozen :class:`~digitalearth.base.spec.scale.Scale` as the
+            single-view scan, so a sweep over a constant cell answers the same domain that stack does.
         """
         original = self.crs
         try:
@@ -398,11 +405,12 @@ class AnimationMixin(_MixinBase):
                 if measured is None:
                     continue  # this view shows none of the data, so it bounds nothing
                 bounds.append(measured)
-            return (
+            union = (
                 (min(lo for lo, _ in bounds), max(hi for _, hi in bounds))
                 if bounds
-                else (0.0, 1.0)
+                else None
             )
+            return frozen_scale(union).as_limits()
         finally:
             self.crs = original
 
@@ -427,6 +435,12 @@ class AnimationMixin(_MixinBase):
         The scan reads the band the frames will be **drawn** from. ``band`` rides in ``opts`` on its way to
         the renderer, so scanning band 1 regardless would scale every other band against the wrong range —
         usually a fully saturated clip under a colorbar labelled with band 1's numbers.
+
+        What the scan reports is a :class:`~digitalearth.base.spec.scale.Scale` domain, so a stack whose
+        frames all hold one value comes back widened rather than zero-width. That widening applies to the
+        *scan*, not to the caller: a bound already in ``opts`` is still kept verbatim, so passing
+        ``vmin=0.0`` over a stack of constant 7 resolves to ``(0.0, 8.0)`` — the scan's widened upper bound
+        beside the caller's floor.
 
         Args:
             datasets: The animation's frames.

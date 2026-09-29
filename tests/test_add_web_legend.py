@@ -29,15 +29,49 @@ class _FakeWebMap:
     Args:
         last_legend: What the most recent layer recorded, or ``None`` for a map with nothing classified.
         error: An exception ``legend()`` should raise instead of building, or ``None`` to build.
+        unresolvable: Whether ``_guide_target`` refuses, standing in for a map carrying a stale
+            ``last_legend`` whose classified layer has since been removed or restyled flat.
     """
 
-    def __init__(self, last_legend=None, error=None):
+    def __init__(self, last_legend=None, error=None, unresolvable=False):
         self.last_legend = last_legend
         self.error = error
+        self.unresolvable = unresolvable
         self.legend_calls = 0
+        #: Every key call this map was given, as ``(layer_id, visible)`` in order — so a test can say what
+        #: was asked of which layer, not only how many calls there were.
+        self.asked = []
+        #: Every resolution this map was asked for, as ``(layer_id, visible)``.
+        self.resolved = []
 
-    def legend(self):
+    def _guide_target(self, layer_id, *, visible, caller="legend()"):
+        """Stand in for the tier's own resolution of which layer a key describes.
+
+        Args:
+            layer_id: The caller's choice, always ``None`` from this helper.
+            visible: Which question a ``None`` `layer_id` asks.
+            caller: How the public method is spelled in a refusal.
+
+        Returns:
+            The one classified layer this stand-in holds.
+
+        Raises:
+            ValueError: as the tier does when nothing on the map can be keyed, which a map built
+                ``unresolvable=True`` stands in for.
+        """
+        self.resolved.append((layer_id, visible))
+        if self.unresolvable:
+            raise ValueError(
+                f"{caller} has nothing to describe: no classified layer has been added yet."
+            )
+        return "grad"
+
+    def legend(self, *, layer_id=None, visible=True):
         """Stand in for the tier's builder, counting the call and raising ``error`` when one was given.
+
+        Args:
+            layer_id: The layer the key describes.
+            visible: Whether the key is drawn.
 
         Returns:
             The same map, as the real builder does so calls chain.
@@ -46,6 +80,7 @@ class _FakeWebMap:
             BaseException: whatever ``error`` was constructed with.
         """
         self.legend_calls += 1
+        self.asked.append((layer_id, visible))
         if self.error is not None:
             raise self.error
         return self
@@ -68,7 +103,7 @@ class TestAddWebLegend:
             ``last_legend`` first is what keeps the default inert on a map with nothing to key.
         """
         scene = _FakeWebMap(last_legend=None)
-        assert _add_web_legend(scene) is None, (
+        assert _add_web_legend(scene, visible=True) is None, (
             "a map with nothing classified has no key, so None must come back"
         )
         assert scene.legend_calls == 0, (
@@ -85,7 +120,7 @@ class TestAddWebLegend:
         """
         scene = _NoLegendAttribute()
         with pytest.raises(AttributeError):
-            _add_web_legend(scene)
+            _add_web_legend(scene, visible=True)
 
     def test_a_classified_map_gets_its_key_built(self):
         """A recorded classification is passed to the builder, whose result is handed back.
@@ -96,12 +131,67 @@ class TestAddWebLegend:
             short-circuits a map that *does* have something to describe.
         """
         scene = _FakeWebMap(last_legend=CLASSIFIED)
-        assert _add_web_legend(scene) is scene, (
+        assert _add_web_legend(scene, visible=True) is scene, (
             "the builder's result must be returned unchanged"
         )
         assert scene.legend_calls == 1, (
             f"the builder must be called exactly once, got {scene.legend_calls}"
         )
+        assert scene.asked == [("grad", True)], scene.asked
+
+    def test_the_flag_is_carried_through_rather_than_read_as_skip_the_call(self):
+        """``colorbar=False`` reaches the tier as ``legend(visible=False)``, not as no call at all.
+
+        Test scenario:
+            The three other backends record ``Guide(show=False)`` for ``quickmap(colorbar=False)``; this one
+            gated the whole call on the flag, so a web figure written out after ``colorbar=False`` was
+            indistinguishable from one where nobody asked (review M1). The decision has to be *recorded*
+            either way, because the record is what travels through `FigureSpec` — which is the reason
+            `_add_static_key`'s docstring gives for carrying the flag rather than branching on it.
+
+            Both values are asserted, because a helper that only ever passed ``True`` would look correct
+            against a test that checked the ``True`` case alone. The layer is resolved through the tier's
+            own `_guide_target`, asked with ``visible=True`` for both values of the flag: that is the
+            question "which layer would a key describe", and the flag answers a different one — whether the
+            key is drawn. Resolving with ``visible=False`` instead would ask for "the key the map already
+            has", which on a one-call map is nothing at all, and the decision would go unrecorded again.
+        """
+        scene = _FakeWebMap(last_legend=CLASSIFIED)
+        assert _add_web_legend(scene, visible=False) is scene, (
+            "the same map must come back, so `quickmap` can return it"
+        )
+        assert scene.asked == [("grad", False)], (
+            f"the flag did not reach the tier's own key call: {scene.asked}"
+        )
+        assert scene.resolved == [(None, True)], (
+            f"the layer must be resolved as 'which layer would be keyed': {scene.resolved}"
+        )
+
+    def test_a_map_whose_key_cannot_be_placed_is_skipped_rather_than_refused(self):
+        """A `last_legend` the tier can no longer place a key for is "no key to draw", not an error.
+
+        Test scenario:
+            ``last_legend`` is a sticky side record: a map whose classified layer has since been removed,
+            or restyled to a constant colour, still carries one while nothing on it can be keyed. Naming
+            the layer explicitly — which is what records the decision either way (review M1) — means the
+            tier's own resolution happens here rather than inside ``legend()``, so its "nothing to
+            describe" refusal now reaches this helper. Under the ``colorbar=True`` default that is not a
+            caller error: they asked for a key *if there is one to draw*, and the matplotlib path tolerates
+            exactly the same case. Turning it into a raise would make ``quickmap`` fail on a map it used to
+            return.
+
+            Asserted on both values of the flag, because the tolerance has to hold for the call that only
+            records: ``colorbar=False`` must not raise on a map it previously never even asked about.
+        """
+        for visible in (True, False):
+            scene = _FakeWebMap(last_legend=CLASSIFIED, unresolvable=True)
+            assert _add_web_legend(scene, visible=visible) is None, (
+                f"visible={visible}: a map whose key cannot be placed must answer None"
+            )
+            assert scene.legend_calls == 0, (
+                f"visible={visible}: the builder must not be reached at all, it was called "
+                f"{scene.legend_calls}x"
+            )
 
     @pytest.mark.parametrize("error", [ValueError, AttributeError, TypeError])
     def test_a_malformed_classification_surfaces_rather_than_being_swallowed(
@@ -119,7 +209,7 @@ class TestAddWebLegend:
         """
         scene = _FakeWebMap(last_legend={"kind": "graduated"}, error=error("bad spec"))
         with pytest.raises(error):
-            _add_web_legend(scene)
+            _add_web_legend(scene, visible=True)
 
     @pytest.mark.parametrize(
         "error",
@@ -142,4 +232,4 @@ class TestAddWebLegend:
         """
         scene = _FakeWebMap(last_legend=CLASSIFIED, error=error)
         with pytest.raises(type(error)):
-            _add_web_legend(scene)
+            _add_web_legend(scene, visible=True)

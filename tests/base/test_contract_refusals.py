@@ -100,9 +100,7 @@ class TestARoadmapRefusalCountsTheOrdersTheWayTheRoadmapDoes:
         """
         with pytest.raises(KeyError) as refusal:
             roadmap_order(_ABSENT_ORDER)
-        assert refusal.value.args[0].endswith("order 24, order 27a"), (
-            refusal.value.args[0]
-        )
+        assert refusal.value.args[0].endswith("order 27a"), refusal.value.args[0]
 
     def test_a_two_digit_order_is_not_listed_ahead_of_a_one_digit_one(
         self, monkeypatch

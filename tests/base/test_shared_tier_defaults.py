@@ -454,3 +454,124 @@ class TestL11TheColormapSamplerIsShared:
             would paint a single-class layer in a near-black that reads as missing data.
         """
         assert sample_cmap("viridis", 1) == [sample_cmap("viridis", 3)[1]]
+
+
+class TestALabelsDefaultsAreDeclaredOnce:
+    """#345 — the four values ``labels(features, column)`` draws with, given one home before they split.
+
+    The static builder landed after ``WebMap.labels``, with the same four defaults, and the shape of M9 was
+    about to repeat itself: an agreed number written out in each tier's signature is agreed until somebody
+    edits one copy. ``base/symbology.py`` is the home, and **both** tiers now read it by name — the web tier
+    kept literals for one release because its file was out of scope then, and #334 put it in scope, so the
+    weaker "the literals still agree" check it was held by has been replaced by the same check the static
+    tier gets.
+
+    The one wrinkle #334 leaves is where a default is *written*. ``color`` is a declared style channel, so its
+    signature default is :data:`~digitalearth.base.ask.UNSET` — the builder has to be able to tell a caller's
+    ``color="#ffffff"`` from its own default — and the constant it resolves against is one line further down,
+    in the ``ask`` call. :meth:`_web_declared` reads whichever of the two places holds it, so the claim is
+    about the name the tier reads and not about where the tier happens to write it.
+    """
+
+    #: The keyword each shared constant is the default of, on both tiers' ``labels``.
+    LABEL_DEFAULTS = {
+        "text_size": "DEFAULT_LABEL_TEXT_SIZE",
+        "color": "DEFAULT_LABEL_COLOR",
+        "halo_color": "DEFAULT_LABEL_HALO_COLOR",
+        "halo_width": "DEFAULT_LABEL_HALO_WIDTH",
+    }
+
+    @staticmethod
+    def _labels_defaults(relative: str) -> dict:
+        """Return a tier's ``labels`` keyword-only defaults, parsed rather than imported.
+
+        Args:
+            relative: Path of the tier module under ``src/digitalearth``, ``/``-separated.
+
+        Returns:
+            ``{keyword: default}``, where a literal default is that literal and a name is the name as written
+            — which is the difference this class is about.
+        """
+        for node in ast.walk(_tree(relative)):
+            if isinstance(node, ast.FunctionDef) and node.name == "labels":
+                written = []
+                for value in node.args.kw_defaults:
+                    if isinstance(value, ast.Constant):
+                        written.append(value.value)
+                    elif isinstance(value, ast.Name):
+                        written.append(value.id)
+                    else:
+                        written.append(None)
+                return dict(zip([arg.arg for arg in node.args.kwonlyargs], written))
+        raise AssertionError(f"no labels() in {relative}")
+
+    @pytest.mark.parametrize("keyword", sorted(LABEL_DEFAULTS))
+    def test_the_static_signature_reads_the_shared_constant(self, keyword):
+        """The default is the constant's *name*, not a copy of its value.
+
+        Args:
+            keyword: The label keyword under test.
+        """
+        written = self._labels_defaults("static/maps/vector.py")[keyword]
+        assert written == self.LABEL_DEFAULTS[keyword], (
+            f"labels({keyword}=) should default to {self.LABEL_DEFAULTS[keyword]}; it is written {written!r}"
+        )
+
+    @classmethod
+    def _web_declared(cls, keyword: str) -> str:
+        """Return the name ``WebMap.labels`` defaults `keyword` to, from wherever it is written.
+
+        Args:
+            keyword: The label keyword.
+
+        Returns:
+            The name as written — in the signature for a plain keyword, and in the ``ask`` call for one whose
+            signature default is the not-passed sentinel.
+
+        Raises:
+            AssertionError: when the keyword carries the sentinel and no ``ask`` call resolves it, which
+                would be a style channel the builder never resolves at all.
+        """
+        node = next(
+            found
+            for found in ast.walk(_tree("web/vector.py"))
+            if isinstance(found, ast.FunctionDef) and found.name == "labels"
+        )
+        written = dict(
+            zip([arg.arg for arg in node.args.kwonlyargs], node.args.kw_defaults)
+        )
+        default = written[keyword]
+        if not (isinstance(default, ast.Name) and default.id == "UNSET"):
+            return ast.unparse(default) if default is not None else "<no default>"
+        for call in ast.walk(node):
+            resolves = (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "ask"
+                and len(call.args) == 3
+                and isinstance(call.args[1], ast.Name)
+                and call.args[1].id == keyword
+            )
+            if resolves:
+                return ast.unparse(call.args[2])
+        raise AssertionError(
+            f"labels({keyword}=) carries the sentinel and nothing resolves it"
+        )
+
+    @pytest.mark.parametrize("keyword", sorted(LABEL_DEFAULTS))
+    def test_the_web_signature_reads_the_shared_constant_too(self, keyword):
+        """The other tier, held to the same claim rather than to a weaker one.
+
+        Args:
+            keyword: The label keyword under test.
+
+        Test scenario:
+            ``WebMap.labels`` used to write ``text_size: float = 12.0`` and the rest as literals, agreed with
+            the shared constants only by a test comparing the two values. Reading the constant is what makes
+            an edit to it reach both tiers, which is the whole of #345. Read from the source, so the check
+            needs no MapLibre.
+        """
+        assert self._web_declared(keyword) == self.LABEL_DEFAULTS[keyword], (
+            f"WebMap.labels({keyword}=) reads {self._web_declared(keyword)} where the shared default is "
+            f"{self.LABEL_DEFAULTS[keyword]}; one call must give one picture on both tiers"
+        )

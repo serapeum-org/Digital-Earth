@@ -19,6 +19,7 @@ recorded but not applied: VTK composites by depth, not by the order actors were 
 """
 
 import logging
+from dataclasses import replace as with_fields
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.custom import MissingObject, held_object
@@ -44,6 +45,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "extrusion",
     "raster",
     "coastlines",
+    "text",
     "custom:pyvista",
 )
 
@@ -98,7 +100,14 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the scene, so a module-level
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
-    from digitalearth.three_d import globe, point_cloud, terrain, vector, volume
+    from digitalearth.three_d import (
+        decoration,
+        globe,
+        point_cloud,
+        terrain,
+        vector,
+        volume,
+    )
 
     drawers = {
         "terrain": terrain.draw_terrain,
@@ -109,6 +118,7 @@ def drawer_for(kind: str) -> Any:
         "extrusion": vector.draw_extruded_polygons,
         "raster": globe.draw_globe,
         "coastlines": globe.draw_coastlines,
+        "text": decoration.draw_text,
         "custom:pyvista": draw_custom,
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
@@ -281,6 +291,14 @@ class Renderer3D:
             self.set_visible(layer_id, True)
         for layer_id in change.hidden:
             self.set_visible(layer_id, False)
+        # Last, and for every change rather than only a restyle: a colour key follows its layer, so a layer
+        # added, removed, hidden, shown, moved or restyled all change what keys the scene should be showing —
+        # and this is the one place all six funnel through, and the only one where the actors a scalar bar
+        # reads its mapper from are current (order 24). `after` is passed rather than read off the scene:
+        # during a `_change` the scene still holds the figure it is leaving.
+        from digitalearth.three_d.guides import redraw_guides
+
+        redraw_guides(self.scene, after)
 
     @staticmethod
     def _reaches_pyvista(before: FigureSpec, after: FigureSpec, layer_id: str) -> bool:
@@ -291,15 +309,21 @@ class Renderer3D:
         answering both with a rebuild meant renaming a layer re-opened its source, re-ran the reprojection
         and built the whole mesh again (review M8).
 
+        **A guide is in the same position as a label** (order 24): asking for a colour key, titling it or
+        switching it off changes the layer's `Symbology`, and none of it changes the mesh or the mapper — the
+        key is drawn beside them by :func:`~digitalearth.three_d.guides.redraw_guides`. Compared whole, a
+        `colorbar(label=...)` on a 1000x1000 DEM re-opened the raster, re-ran the reprojection and rebuilt the
+        surface to add a text label to the window.
+
         Args:
             before: The figure the plotter shows.
             after: The figure it should show.
             layer_id: The layer whose restyle is being judged.
 
         Returns:
-            `True` when the layer's symbology, filter or group differs — the parts a drawer reads — and for
-            a layer either figure does not hold, which is a question about the layer rather than about its
-            style. `False` for a change to `label` alone.
+            `True` when the layer's symbology apart from its guides, or its filter or group, differs — the
+            parts a drawer reads — and for a layer either figure does not hold, which is a question about the
+            layer rather than about its style. `False` for a change to `label` or to a guide alone.
         """
         try:
             was = before.layers.get(layer_id)
@@ -309,8 +333,8 @@ class Renderer3D:
             # calls this. Guarding both rather than the first is what makes that true of a direct call too
             # (review L13) — and the answer for a layer that is not in both is to draw it.
             return True
-        return (was.symbology, was.filter, was.group) != (
-            now.symbology,
+        return (_mesh_style(was), was.filter, was.group) != (
+            _mesh_style(now),
             now.filter,
             now.group,
         )
@@ -370,6 +394,27 @@ class Renderer3D:
                 f"tier holds {sorted(self._drawn)}"
             )
         return _is_visible(drawn[1])
+
+
+def _mesh_style(layer: LayerSpec) -> Tuple[Any, Any]:
+    """Return the part of a layer's symbology a drawer reads, with its guides taken out.
+
+    Args:
+        layer: The layer whose style is being compared.
+
+    Returns:
+        A `(encodings-without-guides, props)` pair. A guide explains an encoding to the reader; it is not part
+        of what the mesh or the mapper is built from, so two descriptions that differ only in their guides
+        describe the same picture plus a different label beside it.
+    """
+    symbology = layer.symbology
+    bare = {
+        channel: with_fields(encoding, guide=None)
+        for channel, encoding in symbology.encodings.items()
+    }
+    # Plain dicts, compared by content: nothing here is hashed, and sorting the items would have to compare
+    # property values of whatever types a tier's keywords carry.
+    return bare, dict(symbology.props)
 
 
 def _set_visible(actor: Any, visible: bool) -> None:

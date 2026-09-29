@@ -225,7 +225,7 @@ class AnimationMixin(_MixinBase):
                 speed shared with every other tier's animation entry point, declared once in
                 :mod:`digitalearth.base.animation`; this method used to default to ``12``.
             factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
-                Must be positive and finite. Anything :func:`float` accepts is taken, so ``"0.9"`` works as
+                Must be positive and finite. Anything ``float()`` accepts is taken, so ``"0.9"`` works as
                 well as ``0.9``.
             shift: How far to lift the orbit off the data's mid-plane, as an absolute offset **along**
                 ``viewup`` (so along z while ``viewup`` is z-aligned, which is the default). It is in scene

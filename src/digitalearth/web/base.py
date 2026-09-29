@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Self
 from loguru import logger
 from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.ask import UNSET, Unset
 from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD as _SHARED_BIG_DATA_THRESHOLD,
 )
@@ -50,11 +51,13 @@ from digitalearth.base.registry import (
 )
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import (
+    DEFAULT_BAND,
     Bounds,
     DataRef,
     Encoding,
     FigureSpec,
     Furniture,
+    LegendSpec,
     PanelSpec,
     Symbology,
     Viewport,
@@ -73,10 +76,10 @@ from digitalearth.web.capabilities import CAPABILITIES
 #: point, so a page, a PNG snapshot and an animation frame are titled alike.
 DEFAULT_TITLE = "Digital-Earth map"
 
-#: The constructor's zoom when the caller expresses no preference, and the sentinel that says so. A value
-#: comparison cannot distinguish an explicit ``zoom=2`` from the default, and passing it is a choice.
+#: The constructor's zoom when the caller expresses no preference. A value comparison cannot distinguish an
+#: explicit ``zoom=2`` from the default, and passing it is a choice — which is why the signature's default is
+#: :data:`~digitalearth.base.ask.UNSET`, the same "not passed" the style keywords carry (#334).
 _DEFAULT_ZOOM = 2
-_UNSET = object()
 
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -659,7 +662,7 @@ class WebMapBase:
         self,
         *,
         center: Optional[Any] = None,
-        zoom: Any = _UNSET,
+        zoom: Any = UNSET,
         style: Any = "dark",
         crs: Any = DISPLAY_CRS,
         height: Optional[int] = 500,
@@ -675,6 +678,8 @@ class WebMapBase:
         installed. It is also why the view is tracked as *whether* one was asked for rather than
         by its value alone: an explicit ``zoom=2`` equals the default, and only the sentinel
         tells the two apart when :meth:`_map_view` decides whether to frame on the data instead.
+        That is the same question every style keyword on this tier now asks, so it is the same
+        sentinel — :data:`~digitalearth.base.ask.UNSET` — rather than a second one spelled here.
 
         Raises:
             ValueError: when ``crs`` is not EPSG:4326 — see :meth:`_validate_display_crs` for
@@ -683,8 +688,8 @@ class WebMapBase:
         self.center = center
         #: Whether the caller named a view of their own. Tracked from the sentinel rather than the value,
         #: because an explicit ``zoom=2`` is a choice and equals the default.
-        self._view_chosen = center is not None or zoom is not _UNSET
-        self.zoom = _DEFAULT_ZOOM if zoom is _UNSET else zoom
+        self._view_chosen = center is not None or not isinstance(zoom, Unset)
+        self.zoom = _DEFAULT_ZOOM if isinstance(zoom, Unset) else zoom
         self.style = style
         self.crs = self._validate_display_crs(crs)
         self.height = height
@@ -707,16 +712,43 @@ class WebMapBase:
         #: before it here too. The id addresses the layer in MapLibre; the label is what a layer switcher shows a
         #: viewer. Controls and basemaps are not in here — they are not things a viewer turns on and off.
         self._layer_tree: LayerTree = LayerTree()
-        #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
-        self.last_breaks: Optional[List[float]] = None
+        #: Class breaks from the most recent layer that published a colour scale, for an out-of-band legend:
+        #: a classified ``choropleth``/``points``, **or a raster band's ramp** — a band gained a colour
+        #: encoding of its own with order 24, and :meth:`~digitalearth.web.raster.RasterMixin._band_colour`
+        #: writes both accessors like any classifying builder, so a ``field()`` drawn over a choropleth is
+        #: what these answer for (review L3).
+        #: The same classification :attr:`last_legend` holds, stripped of the key's furniture: exactly
+        #: ``last_legend["values"]``, which is measurably so for all three shapes. Over a column of
+        #: ``[0, 5, 2, 4]``, all three literals below are reproducible as written — a graduated layer's
+        #: edges at ``k=3`` (`[0.0, 1.6666666666666667, 3.3333333333333335, 5.0]` for
+        #: ``equal_interval``; a quantile cut of the same column gives `[0.0, 2.0, 4.0, 5.0]`), a
+        #: continuous layer's ramp stops (`[0.0, 1.25, 2.5, 3.75, 5.0]`) and a **categorical** layer's
+        #: category values as they come (`['a', 'b', 'c', 'd']` — strings, not numbers). The graduated one
+        #: used to read `[0.0, 1.67, 3.33, 5.0]`, which no cut of any column reproduces (review L5) —
+        #: rounded edges beside two exact ones, which reads as measured and is not.
+        #: The two are written together and promoted together (:meth:`_forget_legend`), so they
+        #: never answer for different layers.
+        #:
+        #: Annotated ``List[Any]`` for that third shape, and not as a widening of convenience: it was
+        #: ``List[float]`` while a categorical layer had been putting strings in it since the classification
+        #: existed, so the annotation named a type this attribute does not hold. `Any` is the honest answer
+        #: — the element type is the classified column's, which the tier does not constrain — where
+        #: ``List[float]`` was a claim a caller could have written code against.
+        self.last_breaks: Optional[List[Any]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
-        #: :attr:`last_breaks`, which stays the raw-numbers accessor it has always been.
+        #: :attr:`last_breaks`, which stays the bare-``values`` accessor it has always been.
         self.last_legend: Optional[dict] = None
         #: The classification each layer was drawn with, keyed by layer id, so a colour key asked for by id
         #: describes *that* layer. `last_legend` alone answers only "the most recent one", which made
         #: `colorbar("A")` draw layer B's ramp under A's label (review H4).
+        #:
+        #: This is the key's **content** — the swatches and the colours they were drawn with — which is the
+        #: half a :class:`~digitalearth.base.spec.encoding.Guide` deliberately does not hold (see its class
+        #: docstring: "nothing here holds entries or colours"). Whether a key is drawn at all, what it is
+        #: called and which corner it sits in moved onto the layer's ``color`` encoding with order 24; the
+        #: rows stay here, computed from the data by the builder that drew them.
         self._legends: Dict[str, dict] = {}
         #: The legend dict most recently filed above. A classifying builder always writes a *fresh* dict, so
         #: identity is what tells a new classification from the one still sitting in `last_legend` when an
@@ -831,7 +863,7 @@ class WebMapBase:
         logger.warning("{}: {} — the layer was skipped", layer, reason)
 
     def _display_source_or_skip(
-        self, data: Any, *, layer: str, band: int = 1
+        self, data: Any, *, layer: str, band: int = DEFAULT_BAND
     ) -> Optional[Source]:
         """Return :meth:`_to_display_source`'s result, or ``None`` when the data cannot be placed.
 
@@ -1258,6 +1290,13 @@ class WebMapBase:
         # what :meth:`remove_layer` already does for the same reason (review M6).
         kept = set(candidate.layers.ids)
         self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+        # A colour key is derived from the guides the live layers carry, so every change to those layers can
+        # change it: `set_visible` hides the layer a key describes, `move_layer` changes which guided layer is
+        # topmost, and `replace_layer` can take a guide off or put one on. Rebuilt here rather than in each of
+        # the three, because this is the one path all of them go through.
+        from digitalearth.web.decoration import refresh_legend_panel
+
+        refresh_legend_panel(self)
 
     def _require_layer(self, layer_id: Any) -> None:
         """Refuse an id this map does not draw, naming the ids it does.
@@ -1412,6 +1451,19 @@ class WebMapBase:
                 'Capital'
 
                 ```
+
+        Note:
+            **The classification goes with the classes, and so does the key.** A replacement whose ``color``
+            channel is constant or absent leaves the layer with nothing to label, so the classification
+            filed for it is dropped — as it is when the layer itself goes (:meth:`remove_layer`) — and the
+            :class:`~digitalearth.base.spec.encoding.Guide` comes off the replacement with it. A key asked
+            for by name is then refused with the same message an unclassified layer gets, rather than with
+            the lower-level "nothing drives the 'color' channel" the stale entry used to let a caller reach.
+
+            Both halves matter because a **constant** ``Encoding`` may carry a guide. Left there, the layer
+            went on saying its colour was explained by a key nothing can draw — the panel is derived from
+            the keyable layers and correctly drew none — so a ``FigureSpec`` written out claimed a key the
+            picture did not have (review L4).
         """
         # By type before by id: `getattr(layer, "id", None)` made the id lookup fail first, so a caller who
         # passed the id where the description belongs was answered "no layer None on this map" — an id they
@@ -1448,7 +1500,27 @@ class WebMapBase:
                 f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
                 f"needs a source_id; got None"
             )
+        # The classification goes with the classes, and **so does the key**. `_legends` is the dict beside
+        # the tree that order 24 exists to stop trusting, and this was the one layer-management call that
+        # never told it anything: a layer restyled to a flat colour stayed filed as classified, so
+        # `legend(layer_id=...)` got past `_legend_of` on the strength of the stale entry and failed a level
+        # down in `Symbology.with_guide` with the base-level "nothing drives the 'color' channel" instead of
+        # this tier's own refusal (review L8).
+        #
+        # The `Guide` had to follow for the same reason one step out: a *constant* `Encoding` may carry one,
+        # so a hand-built replacement came through with `Guide(show=True)` on a channel nothing varies —
+        # the panel correctly drew nothing for it (a constant colour is not keyable) and the record
+        # correctly claimed a key, which is a `FigureSpec` describing a key nothing can draw (review L4).
+        # Taken off *before* the replacement lands, because it is part of the description being landed;
+        # `with_guide(None)` is a no-op on a channel nothing drives, so this never refuses. The
+        # classification is dropped after, because `_change` can still refuse the replacement.
+        flat = layer.symbology.encoding("color")
+        unkeyable = flat is None or flat.is_constant
+        if unkeyable:
+            layer = replace_fields(layer, symbology=layer.symbology.with_guide(None))
         self._change(self._figure_with(self._layer_tree.replace(layer)))
+        if unkeyable:
+            self._forget_legend(layer.id)
         return self
 
     @property
@@ -1730,13 +1802,11 @@ class WebMapBase:
         # beside it so another tier can read the layer's style at all (#328). Laid *over* the derived half,
         # so an encoding a builder wrote itself — `popup()`'s `tooltip` — outranks anything lifted here.
         #
-        # `kind` is what tells the lift which builder's defaults to subtract. Without it the tables could
-        # only be keyed by the resolved style itself, and three builders write the same three fill keys —
-        # so each was charged with the others' defaults and `polygons(opacity=0.85)`, an explicit
-        # non-default ask, published nothing (review R2-H2). This is the one place every builder passes
-        # its own kind, which is why the argument is threaded from here rather than guessed at there.
+        # The lift needs nothing from here beyond the description: which values were *asked* for is
+        # recorded by the builder that wrote them (#334), so the `kind` this method used to thread through
+        # — the key the tables of measured defaults were looked up by — is no longer part of the question.
         recorded = recorded.merged_over(
-            Symbology(encodings=portable_encodings(recorded, kind))
+            Symbology(encodings=portable_encodings(recorded))
         )
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
@@ -1827,6 +1897,17 @@ class WebMapBase:
             or none. `_filed_legend` follows it: it is how `_index_layer` tells a fresh classification from
             the one already filed, and left pointing at the dropped key, the next *unclassified* layer was
             filed under the survivor's key and drew a colour key it was never classified with.
+            :attr:`last_breaks` follows it too, for the plainer reason that it is the same classification
+            without the key's furniture — ``last_legend["values"]`` and nothing else.
+
+            Both are still load-bearing after order 24, for narrower jobs than before. The promotion no
+            longer decides what is **drawn** — :func:`~digitalearth.web.decoration.refresh_legend_panel`
+            derives that from the guides the live layers carry — but :attr:`last_legend` is a public
+            accessor, and one left describing a removed layer is the wrong answer to a question a caller is
+            invited to ask. And `_filed_legend` still guards the filing itself: a description handed in
+            through :meth:`add_layer` may carry a field-driven ``color`` encoding of its own without any
+            fresh classification behind it, and without the marker whatever `last_legend` happened to hold
+            would be filed under it (pinned by `tests/web/test_web_seam.py`).
         """
         dropped = self._legends.pop(layer_id, None)
         if dropped is None or dropped is not self.last_legend:
@@ -1839,8 +1920,14 @@ class WebMapBase:
         ]
         self.last_legend = surviving[-1] if surviving else None
         self._filed_legend = self.last_legend
-        if not surviving:
-            self.last_breaks = None
+        # `last_breaks` is promoted with it, rather than cleared only when the map goes empty. The two are
+        # one classification read two ways — every classifying builder sets them in the same breath, and
+        # `last_breaks == last_legend["values"]` for all three shapes — so promoting one and leaving the
+        # other made the pair describe two different layers, and the documented class-breaks accessor went
+        # on reporting a layer that had been removed (review L7).
+        self.last_breaks = (
+            None if self.last_legend is None else list(self.last_legend["values"])
+        )
 
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
@@ -1879,14 +1966,19 @@ class WebMapBase:
         """Show the continuous colour key of a layer.
 
         The contract's name for a colour key (#299, #261). On this tier the key is drawn by :meth:`legend`,
-        which builds a panel from what a layer's classification recorded; a continuous ramp is that panel with
-        the ramp's ends labelled, which is why this is a thin call onto it rather than a second mechanism.
+        which records a :class:`~digitalearth.base.spec.encoding.Guide` on the layer's ``color`` encoding and
+        derives the panel from it; a continuous ramp is that panel with the ramp's ends labelled, which is why
+        this is a thin call onto it rather than a second mechanism. So a colorbar here is the same
+        guide-on-an-encoding the other three tiers record — one mechanism, four backends (order 24).
 
         Args:
             layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
-                takes the most recently classified layer, which is what the tier recorded before layers had
-                ids.
-            label: What to call the key — the variable and its units, usually.
+                takes the topmost **visible** layer that published a colour scale (a classified
+                ``choropleth``/``points``, or a raster band's ramp), and under ``visible=False`` the layer
+                whose key is drawn, as :meth:`~digitalearth.web.decoration.DecorationMixin.legend`
+                resolves it.
+            label: What to call the key — the variable and its units, usually. Recorded as the guide's
+                ``title``.
             visible: `False` draws no key, so a caller passing a flag through does not have to branch.
 
         Returns:
@@ -1924,7 +2016,13 @@ class WebMapBase:
 
                 ```
         """
-        return self.legend(layer_id=layer_id, title=label, visible=visible)
+        # Through the shared body rather than through `legend()` itself, so this spelling is the one a
+        # refusal names: "nothing to describe" is the one refusal both public names can reach, and it used
+        # to send a `colorbar()` caller off to fix a `legend()` call they never wrote. Everything else is
+        # unchanged — one mechanism, two names (order 24).
+        return self._record_key(
+            layer_id, title=label, labels=None, visible=visible, caller="colorbar()"
+        )
 
     def _legend_of(self, layer_id: str) -> dict:
         """Return the classification one layer was drawn with.
@@ -1962,13 +2060,23 @@ class WebMapBase:
             The same map instance, so builder calls chain.
 
         Note:
-            The running data extent, and the classification a legend describes, are only cleared when the
-            last layer goes. They are "most recent" accessors rather than a model of what is on the map,
-            so after removing one layer of several they still describe the removed one; call
-            :meth:`set_bounds` or rebuild the legend if that matters.
+            **The colour key goes with the layer.** A key is asked for by hanging a
+            :class:`~digitalearth.base.spec.encoding.Guide` on the layer's own ``color`` encoding
+            (:meth:`~digitalearth.web.decoration.DecorationMixin.legend`), so removing the layer removes the
+            guide, and the panel — derived from the guides the live layers carry — is rebuilt without it. A
+            surviving layer that carries its own guide then shows its own key. Nothing has to be rebuilt by
+            hand, and no key describes a layer that is gone.
 
-            The **id** is not one of those: it goes back to the pool, so a name removed and asked for again
-            is handed back unsuffixed. That is the lifetime all four tiers share —
+            The **running data extent** is not like that, and is not cleared until the last layer goes. It is
+            a "most recent" accessor rather than a model of what is on the map, so after removing one layer
+            of several it still spans the removed one; call :meth:`set_bounds` if that matters.
+            :attr:`last_legend` and :attr:`last_breaks` are "most recent" accessors too — that is what they
+            are for — but they no longer decide what is drawn: both are handed to the most recent
+            *surviving* classification here, **together**, so neither describes a removed layer and the two
+            cannot answer for different layers (review L7); the key is drawn from the guides regardless.
+
+            The **id** is not one of those either: it goes back to the pool, so a name removed and asked for
+            again is handed back unsuffixed. That is the lifetime all four tiers share —
             :func:`~digitalearth.base.spec.layer.free_layer_id` states it.
 
         Raises:
@@ -2069,6 +2177,12 @@ class WebMapBase:
             self._data_bounds = None
             self.last_breaks = None
             self.last_legend = None
+        # The guide went with the layer's description, so the key is rebuilt from what is left. This is the
+        # one layer-management method that does not go through `_change` — the tree is written above, in a
+        # sequence that also frees ids and unqueues closures — so it asks for the rebuild itself.
+        from digitalearth.web.decoration import refresh_legend_panel
+
+        refresh_legend_panel(self)
         return self
 
     def _forget_temporal_step(self, layer_id: str) -> None:
@@ -2383,7 +2497,7 @@ class WebMapBase:
             return DataRef.of(data).open()
         return data
 
-    def _to_display_source(self, data: Any, *, band: int = 1) -> Source:
+    def _to_display_source(self, data: Any, *, band: int = DEFAULT_BAND) -> Source:
         """Reproject ``data`` to the display CRS through pyramids and wrap it as a :class:`Source`.
 
         The single display-CRS choke point every raster/vector builder calls (settling the tier's
@@ -2896,6 +3010,34 @@ class WebMapBase:
             return units
         resolved = self._style_for(source).get("units")
         return str(resolved) if resolved else None
+
+    @staticmethod
+    def _legend_dict(legend: LegendSpec, column: str, values: Any = None) -> dict:
+        """Return the ``last_legend`` shape this tier has always stored, derived from a `LegendSpec`.
+
+        The dict is unchanged — it is public-ish, asserted by tests, and read by the legend control — but it
+        is *derived* from the spec rather than assembled a fourth time (DE-19).
+
+        Lives here, beside :attr:`last_legend` itself, rather than on the vector mixin that first needed it:
+        the raster builder files the same dict for a band's ramp, and a builder reaching across into another
+        backend mixin for the shape of this tier's own state is how one shape becomes two.
+
+        Args:
+            legend: The spec the colours and labels come from.
+            column: The column — or, for a raster, the band — the layer was coloured by.
+            values: Override for the ``values`` list, where the stored shape carries the class *edges*
+                rather than one value per entry.
+
+        Returns:
+            The legend dict, with ``kind``/``column``/``values``/``colors`` exactly as before.
+        """
+        payload = legend.to_dict()
+        return {
+            "kind": payload["kind"],
+            "column": column,
+            "values": payload["values"] if values is None else values,
+            "colors": payload["colors"],
+        }
 
     @staticmethod
     def _cmap_hex(cmap: str, n: int) -> List[str]:

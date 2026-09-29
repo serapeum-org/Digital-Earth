@@ -7,6 +7,7 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 
 import os
 from functools import wraps
+from math import isfinite
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -17,6 +18,7 @@ from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
 from matplotlib.path import Path as MplPath
+from matplotlib.patheffects import withStroke
 from pyramids.dataset import Dataset
 from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
@@ -24,12 +26,26 @@ from shapely.affinity import scale as affine_scale
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.sources import get_source
-from digitalearth.base.spec import DataRef, LayerSpec, Symbology
+from digitalearth.base.sources import get_source, require_drawable
+from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Symbology
+from digitalearth.base.spec._serial import crs_to_json
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.base.symbology import (
+    DEFAULT_LABEL_COLOR,
+    DEFAULT_LABEL_HALO_COLOR,
+    DEFAULT_LABEL_HALO_WIDTH,
+    DEFAULT_LABEL_TEXT_SIZE,
     MISSING_COLOR,
+    is_null,
     nulls_to_none,
     resolve_categorical_cmap,
+)
+from digitalearth.static.capabilities import CAPABILITIES
+from digitalearth.static.guides import (
+    COUNT_FIELD,
+    DENSITY_FIELD,
+    MAGNITUDE_FIELD,
+    source_field,
 )
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
@@ -51,6 +67,103 @@ _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streaml
 #: How a point layer names itself in a refusal. The builder and the drawer that replays it speak for the
 #: same public call, so they share the one spelling.
 _POINTS_CALLER = "Map.points()"
+
+#: The same, for the label layer. Its refusals come from both sides of the seam — the finite checks at the
+#: call, the column and the CRS when the features are opened — and all of them name the one public method.
+_LABELS_CALLER = "Map.labels()"
+
+#: Keywords :meth:`VectorMixin.labels` refuses in ``**opts``, each with what to write instead. Two of them are
+#: matplotlib's own spelling of something this builder already declares, and forwarding either would have the
+#: declared parameter silently win; the third is a capability this tier does not have. A keyword accepted and
+#: then ignored is the defect this package has now fixed twice, so each is refused by name at the call.
+#:
+#: ``allow_overlap`` takes its reason from the tier's own declaration rather than restating it, so the refusal
+#: a caller reads and the ``Capabilities`` entry a dispatcher reads cannot drift apart.
+_LABEL_REFUSED_OPTS = {
+    "allow_overlap": (
+        f"label collision is not a capability of this tier: {CAPABILITIES.reason('label_collision')}"
+    ),
+    "fontsize": "a label's text size is text_size= here, which is the spelling every tier uses",
+    "size": (
+        "a label's text size is text_size=; size= is the visual size of a *marker* on every other builder, "
+        "and one keyword cannot mean both"
+    ),
+}
+
+
+def _label_offset(offset: Any) -> Optional[List[float]]:
+    """Return a label offset in the spelling a description carries, refusing one it could not.
+
+    Args:
+        offset: What the caller gave — ``None``, or a pair of numbers in ems.
+
+    Returns:
+        ``None`` unchanged, else the pair as a two-element list of floats. A **list**, because a figure is
+        written to JSON and read back: a tuple returns as a list, and two symbologies that differ only in
+        that stop comparing equal, which is what makes a redraw think the layer changed.
+
+    Raises:
+        ValueError: for anything that is not two finite numbers — the wrong count, a string (which is iterable
+            and would otherwise be read character by character), or a bound a figure could not be written with.
+    """
+    if offset is None:
+        return None
+    if isinstance(offset, (str, bytes)):
+        raise ValueError(
+            f"{_LABELS_CALLER} needs offset= as two numbers in ems, (x, y); got the string {offset!r}"
+        )
+    try:
+        pair = list(offset)
+    except TypeError:
+        raise ValueError(
+            f"{_LABELS_CALLER} needs offset= as two numbers in ems, (x, y); got {offset!r}"
+        ) from None
+    if len(pair) != 2:
+        raise ValueError(
+            f"{_LABELS_CALLER} needs offset= as two numbers in ems, (x, y); got {len(pair)} of them "
+            f"({offset!r})"
+        )
+    return [_as_finite(value, "offset", _LABELS_CALLER) for value in pair]
+
+
+def _as_finite(value: Any, argument: str, caller: str) -> float:
+    """Return a builder's numeric keyword as a plain float, refusing one a figure could not be written with.
+
+    A label records its text size and halo width in the layer's description, and a description holding NaN or
+    infinity cannot be written at all — ``FigureSpec.to_dict`` refuses the whole figure. Left to be caught
+    there, the refusal names a property path long after the call, for an argument the caller wrote as
+    ``text_size=``.
+
+    Args:
+        value: The keyword's value, as given.
+        argument: The keyword's name, as the caller spells it.
+        caller: The public call, for the message.
+
+    Returns:
+        The value as a `float`.
+
+    Raises:
+        ValueError: when `value` is NaN, infinite, or not a number at all — the conversion's own failure
+            re-raised in the builder's words, since an argument named in the signature should not surface as a
+            bare ``float()`` error several frames down.
+
+    Note:
+        ``digitalearth.web.base.as_finite`` is the same helper for the same reason. The two are not shared
+        because ``base/`` has no such home yet and a tier may not import another tier; giving them one is the
+        obvious follow-up, and until then this docstring is the pointer between them.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{caller} needs {argument}= as a finite number; got {value!r}"
+        ) from None
+    if not isfinite(number):
+        raise ValueError(
+            f"{caller} needs {argument}= as a finite number; got {value!r}. A figure holding it could not be "
+            "written down: JSON has no spelling for NaN or infinity"
+        )
+    return number
 
 
 def _polygon_kind(fill: Any) -> str:
@@ -178,7 +291,195 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         fig=scene.fig,
         **opts,
     )
-    return scene._render_glyph(glyph, artist="plot", **plot_style)
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    # The numeric column `get_source` read the values from, when it found one. A collection with none draws
+    # uniform markers, and the glyph then carries no value array, so no colour encoding is published for it.
+    return drawn.colored_by(source_field(src))
+
+
+def _labelled_features(features: Any, crs: Any) -> Any:
+    """Return the features with a CRS to reproject from, settling ``labels(crs=)`` against their own.
+
+    ``crs=`` is the one Core keyword for ``labels`` whose meaning differs per tier, because what it could
+    possibly name differs: the web tier places labels in EPSG:4326 and so has no use for it at all, while here
+    the coordinates come out of the geometry and pyramids reprojects them from whatever the collection
+    declares. So it has exactly one job — to say what a collection declaring **nothing** is measured in, which
+    is the case ``to_crs`` refuses outright ("Cannot transform naive geometries"). A naive frame is an ordinary
+    thing to hold: coordinates read out of a CSV, or a frame built inline.
+
+    It is never quietly ignored. Against a collection that declares its own CRS it either agrees — the same
+    system, however spelled — or it is refused, because two different answers to "where is this" cannot both
+    be acted on.
+
+    Args:
+        features: The collection the labels are read from, as the layer recorded it.
+        crs: What the call named, in the description's spelling, or `None`.
+
+    Returns:
+        `features` itself when it declares a CRS, and a copy carrying `crs` when it does not. ``set_crs``
+        returns a new frame rather than mutating, so the caller's own object is never re-labelled underneath
+        them.
+
+    Raises:
+        ValueError: when the collection declares no CRS and the call named none, or when the two name
+            different systems.
+    """
+    own = getattr(features, "crs", None)
+    if own is None:
+        if crs is None:
+            raise ValueError(
+                f"{_LABELS_CALLER} cannot place features that declare no CRS: name the one their coordinates "
+                "are measured in with crs=, or set one on the collection"
+            )
+        return features.set_crs(crs)
+    if crs is not None and not same_crs(own, crs):
+        # In the description's spelling rather than `repr`: a pyproj CRS reprs as its whole multi-line WKT
+        # block, which buries the one fact the message is about.
+        declared = crs_to_json(own, "the features' CRS")
+        raise ValueError(
+            f"{_LABELS_CALLER} was given crs={crs!r} for features that already declare a different CRS "
+            f"({declared!r}); drop crs= to use theirs, or reproject the collection first"
+        )
+    return features
+
+
+def _label_text(features: Any, column: str) -> np.ndarray:
+    """Return one label string per feature, refusing a column the features do not carry.
+
+    Args:
+        features: The collection, already placed.
+        column: The attribute the labels are read from.
+
+    Returns:
+        An object array of strings, index-aligned with the features so
+        :meth:`~digitalearth.base.points.PointArrays.finite` can filter it alongside the coordinates. A
+        **missing** value becomes the empty string, which the drawer then draws no artist for: a null is
+        absent data rather than the text ``"None"``, and this is the same reading a MapLibre expression gives
+        a missing property.
+
+    Raises:
+        KeyError: naming the column and listing the ones the features do have — the message the web tier's
+            `labels` already gives, because an expression over a column nobody has renders an empty map with
+            nothing to explain it.
+    """
+    columns = list(getattr(features, "columns", []))
+    if column not in columns:
+        geometry = getattr(getattr(features, "geometry", None), "name", "geometry")
+        raise KeyError(
+            f"{_LABELS_CALLER}: labels(column={column!r}) is not a property of these features; available: "
+            f"{sorted(name for name in columns if name != geometry)}"
+        )
+    return np.asarray(
+        ["" if is_null(value) else str(value) for value in features[column]],
+        dtype=object,
+    )
+
+
+def _label_style(scene: Any, layer: LayerSpec, props: dict) -> dict:
+    """Return the ``Axes.annotate`` keywords one label is drawn with.
+
+    Args:
+        scene: The map being drawn on, for the caller's held keywords.
+        layer: The layer's description.
+        props: Its recorded properties, holding the four style values and the offset.
+
+    Returns:
+        The style, with the caller's own ``**opts`` underneath it. ``text_size`` and ``color`` are declared
+        parameters, so they are *set* rather than defaulted — matplotlib's own spellings of the same two are
+        refused at the call, so nothing of the caller's is overwritten here. Alignment is centred on the
+        feature unless the caller says otherwise, and the halo is a ``path_effects`` stroke — matplotlib's
+        equivalent of MapLibre's text halo, and the reason the two tiers can share the keyword names. A
+        caller's own ``path_effects`` wins, and ``halo_width=0`` asks for none.
+    """
+    style = drawing_style(scene, layer)
+    style.setdefault("ha", "center")
+    style.setdefault("va", "center")
+    style["fontsize"] = props["text_size"]
+    style["color"] = props["color"]
+    if props["halo_width"] > 0:
+        style.setdefault(
+            "path_effects",
+            [withStroke(linewidth=props["halo_width"], foreground=props["halo_color"])],
+        )
+    return style
+
+
+def _label_offset_points(props: dict) -> Tuple[float, float]:
+    """Return the recorded offset as the ``(dx, dy)`` in **points** matplotlib places text by.
+
+    MapLibre's ``text-offset`` is in **ems** — multiples of the text size — and its y axis points *down* the
+    screen, which is why ``(0, -1.2)`` lifts a label off its point there. matplotlib's ``"offset points"``
+    are absolute and its y axis points up. Both differences are resolved here, so one ``offset=(0, -1.2)``
+    lifts the label on either tier by the same fraction of its own size.
+
+    Args:
+        props: The layer's recorded properties, holding ``offset`` and ``text_size``.
+
+    Returns:
+        ``(dx, dy)`` in typographic points; ``(0.0, 0.0)`` when the call named no offset.
+    """
+    offset = props["offset"]
+    if offset is None:
+        return 0.0, 0.0
+    size = float(props["text_size"])
+    return float(offset[0]) * size, -float(offset[1]) * size
+
+
+def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Draw one text label per feature, from the column a described layer names.
+
+    The third member of this tier's text family: :func:`~digitalearth.static.maps.decoration.draw_text` places
+    one string at one coordinate and ``draw_annotate`` points at one, while this reads a string per feature out
+    of an attribute. It draws through ``Axes.annotate`` rather than ``Axes.text`` because the offset is a
+    text-relative one, which only ``annotate``'s ``"offset points"`` expresses.
+
+    Unlike those two, the layer's **name is not read as a font family**. They keep that reading because the
+    artist constructor they call takes ``name=`` as an alias of the family, so a builder had to decide whether
+    a layer's name shadowed the font; nothing here passes a name to an artist, so there is nothing to
+    reconcile and the font is chosen with ``fontname=``/``fontfamily=`` like any other style.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``Annotation`` of every label drawn —
+        one layer however many there are, as a limb-split coastline is one layer — or ``None`` when no label
+        survived: every feature on the far side of a globe, or every value in the column missing. That is a
+        layer that was not drawn rather than an empty one, which is what :meth:`Scene._draw` drops again.
+
+    Raises:
+        KeyError: when the features carry no such column (see :func:`_label_text`).
+        OffLimbError: when the warp places none of the geometry in the display CRS. The builder is wrapped
+            with :func:`_skips_off_limb`, so a caller sees a skipped layer — or, under ``strict``, the error.
+        ValueError: when the features declare no CRS and the call named none, or named a different one (see
+            :func:`_labelled_features`); or when the collection is empty.
+    """
+    props = dict(layer.symbology.props)
+    placed = _labelled_features(data, props["crs"])
+    features = scene._vector_input(placed, name="labels")
+    points = PointArrays.from_features(features, centroids=True)
+    # `finite` drops the points a clipped display CRS placed nowhere and takes the aligned text with them, so
+    # a label never ends up on another feature's coordinates. It types its aligned arrays as optional — a
+    # `None` in, a `None` out — and this one is never `None`, so the name it comes back under is its own.
+    kept, (labelled,) = points.finite(_label_text(features, props["column"]))
+    style = _label_style(scene, layer, props)
+    dx, dy = _label_offset_points(props)
+    drawn = [
+        scene.ax.annotate(
+            label,
+            xy=(x, y),
+            xytext=(dx, dy),
+            textcoords="offset points",
+            **style,
+        )
+        # Spelled `is None` rather than `or`: a numpy array has no truth value, and `labelled or ()` would
+        # raise about an ambiguous one instead of passing the array through.
+        for x, y, label in zip(kept.x, kept.y, () if labelled is None else labelled)
+        if label != ""
+    ]
+    return DrawnLayer(artist=drawn, artists=tuple(drawn)) if drawn else None
 
 
 def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -208,7 +509,9 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         fig=scene.fig,
         **opts,
     )
-    return scene._render_glyph(glyph, artist="plot", **plot_style)
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    # `to_xyz` reads the first band, so that is the band the points are coloured by.
+    return drawn.colored_by(source_field(data))
 
 
 def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -239,7 +542,8 @@ def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     values = read_masked_band(ds, layer.symbology.props["band"]).ravel()
     # drop far-side cells on a globe
     polygons, values = scene._finite_polygons(polygons, values)
-    return scene._polygon_layer(polygons, values, **opts)
+    drawn = scene._polygon_layer(polygons, values, **opts)
+    return drawn.colored_by(source_field(data, layer.symbology.props["band"]))
 
 
 def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -277,7 +581,8 @@ def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     glyph = VectorGlyph(x_grid, y_grid, u, v, ax=scene.ax, fig=scene.fig, **opts)
     drawn = scene._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
     scene._last_vector = (drawn.glyph, drawn.artist, kind)  # remembered for quiverkey()
-    return drawn
+    # A u/v field has no column: the arrows are coloured by the vector's magnitude, computed from the pair.
+    return drawn.colored_by(MAGNITUDE_FIELD)
 
 
 def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -303,7 +608,7 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
     kind = layer.symbology.props["via"]
     opts = drawing_style(scene, layer)
-    x, y, z = scene._scattered(data)
+    x, y, z, field = scene._scattered(data)
     # drop far-side points on a globe (Triangulation needs finite)
     finite = np.isfinite(x) & np.isfinite(y)
     supplied = np.asarray(x).size
@@ -324,17 +629,19 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
     if kind == "tripcolor":
         face_values = z[tri.triangles].mean(axis=1)
-        return scene._render_glyph(
+        drawn = scene._render_glyph(
             glyph, face_values, location="face", colorbar=False, **opts
         )
-    return scene._render_glyph(
-        glyph,
-        z,
-        location="node",
-        filled=(kind == "tricontourf"),
-        colorbar=False,
-        **opts,
-    )
+    else:
+        drawn = scene._render_glyph(
+            glyph,
+            z,
+            location="node",
+            filled=(kind == "tricontourf"),
+            colorbar=False,
+            **opts,
+        )
+    return drawn.colored_by(field)
 
 
 def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -515,7 +822,10 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     polygons, values = _clipped_cell_boxes(cells, scene._clip_geometry(clip))
     values_arr = np.asarray(values, dtype=float)
     polygons, values_arr = scene._finite_polygons(polygons, values_arr)
-    return scene._polygon_layer(polygons, values_arr, **drawing_style(scene, layer))
+    drawn = scene._polygon_layer(polygons, values_arr, **drawing_style(scene, layer))
+    # Without a column the reducer counts the points in each cell, whatever `agg` names, so the cells are
+    # coloured by a count rather than by any attribute (see :func:`_quadtree_reducer`).
+    return drawn.colored_by(column or COUNT_FIELD)
 
 
 def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -553,7 +863,9 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         fig=scene.fig,
         **opts,
     )
-    return scene._render_glyph(glyph, artist="plot", **plot_style)
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    # A KDE has no column either: the bands are the estimated density of the points themselves.
+    return drawn.colored_by(DENSITY_FIELD)
 
 
 def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -873,8 +1185,14 @@ class VectorMixin(_MixinBase):
                 through the drawer and `Scene._draw`, which drops the layer from the description; the
                 public builder is wrapped with :func:`_skips_off_limb`, so the caller sees a skipped layer
                 (or, under ``strict``, the error).
+            TypeError: when `features` is not a vector layer — refused by name here rather than leaking
+                ``AttributeError: ... has no attribute 'to_crs'`` out of the warp below, which is the same
+                defect ``Map.field`` had for a raster (#343). This runs in the drawer rather than in the
+                builder, which is where every vector kind meets, so `name` is what makes the message name
+                the public call the caller wrote.
             ValueError: if the collection is empty, or a geometry is not one of ``geom_types``.
         """
+        require_drawable(features, caller=f"Map.{name}()", accepts=("vector",))
         gdf = reproject(features, self.crs)
         if len(gdf) == 0:
             raise ValueError(f"{name} got an empty FeatureCollection (nothing to draw)")
@@ -904,8 +1222,9 @@ class VectorMixin(_MixinBase):
         categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
         ``0, 1, 2 …`` instead of the category labels. Passing ``add_colorbar=False`` suppresses that swatch
         legend — for a caller keying the map some other way, e.g. drawing one shared legend across several
-        layers via :meth:`~digitalearth.static.scene.Scene.legend` (which takes explicit ``colors``/``labels``;
-        read the drawn legend's swatches/texts off ``layer.category_legend`` to feed it).
+        layers via :meth:`~digitalearth.static.scene.Scene.legend`, which derives its rows from the layer's
+        own :class:`~digitalearth.base.spec.scale.Scale` — the swatches this glyph drew, read back off it by
+        :func:`~digitalearth.static.guides.color_encoding` — rather than being handed colours and labels.
 
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
@@ -1008,6 +1327,161 @@ class VectorMixin(_MixinBase):
             )
         )
 
+    @_skips_off_limb
+    def labels(
+        self,
+        features: Any,
+        column: str,
+        *,
+        text_size: float = DEFAULT_LABEL_TEXT_SIZE,
+        color: str = DEFAULT_LABEL_COLOR,
+        halo_color: str = DEFAULT_LABEL_HALO_COLOR,
+        halo_width: float = DEFAULT_LABEL_HALO_WIDTH,
+        offset: Optional[Any] = None,
+        crs: Any = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Any:
+        """Label every feature with the text in ``column`` — one string per feature, from an attribute.
+
+        The static third of order 27's text layers (ST-16, #345). ``WebMap.labels`` shipped first and the
+        ``labels`` kind was registered with it, so a caller could label a collection on a web map and not on a
+        static one; :meth:`~digitalearth.static.maps.decoration.DecorationMixin.text` is no substitute, since
+        it places **one** string at **one** coordinate.
+
+        The keywords are ``WebMap.labels``'s wherever the two tiers can mean the same thing, which is the point
+        of the Core contract — one spelling per concept:
+
+        * ``text_size``, ``color`` — the same, with the same defaults, so one call gives one picture. It is
+          ``text_size`` and never ``size``: ``size`` is the visual size of a *marker* on every other builder,
+          and a keyword cannot mean both. matplotlib's own ``fontsize``/``size`` are refused here rather than
+          quietly overwritten.
+        * ``halo_color``, ``halo_width`` — MapLibre's text halo is matplotlib's ``path_effects`` stroke: the
+          same idea, a different spelling, so the keywords carry across and this builder builds the stroke.
+          ``halo_width=0`` draws no halo, and a caller's own ``path_effects=`` replaces it.
+        * ``offset`` — carried, and converted. MapLibre measures it in **ems** with y pointing *down*;
+          matplotlib in points with y pointing up. Both are resolved in the drawer, so ``offset=(0, -1.2)``
+          lifts a label off its point by 1.2 of its own text size on either tier.
+        * ``allow_overlap`` — **not** carried, and refused rather than accepted. It asks MapLibre's symbol
+          layer to keep colliding labels; matplotlib has no collision index to ask, and draws every label
+          wherever it lands. The tier declares that under ``label_collision`` in
+          :data:`~digitalearth.static.capabilities.CAPABILITIES`, and the refusal quotes that declaration, so
+          the answer a caller gets and the answer a dispatcher reads are one sentence. A crowded column is
+          thinned by filtering the features before drawing them.
+        * ``crs`` — the Core keyword for this name, and here it has a job the web tier has no use for: it says
+          what a collection declaring **no** CRS is measured in, which is the one case pyramids cannot
+          reproject. It is never ignored — against a collection with its own CRS it either agrees or is
+          refused (see :func:`_labelled_features`).
+
+        Points are labelled at the point; a line or a polygon at its centroid, which is the fallback every
+        other reader of vector geometry in this package uses. A feature whose value is missing, and one on the
+        far side of a globe, are simply not labelled.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` (or a path or URL to one), of any geometry. Only a
+                path-backed layer can be written down.
+            column: The attribute the label text is read from. Checked when the features are opened, because
+                a path-referenced layer has none to check at the call.
+            text_size: Text size in points. Named for the text rather than ``size``, which is a marker's size
+                everywhere else.
+            color: Text colour.
+            halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
+                over a raster field or a basemap.
+            halo_width: Halo width in points; ``0`` draws none.
+            offset: ``(x, y)`` offset in ems — multiples of ``text_size`` — with y **down**, as MapLibre
+                measures it; e.g. ``(0, -1.2)`` to lift the label off its point. ``None`` centres it.
+            crs: What the features' coordinates are measured in, for a collection that declares none.
+                ``None`` (default) reads the collection's own.
+            name: The caller's own name for the layer, used as its id and its label; ``None`` (default)
+                generates one from the kind, and a name already on the figure is suffixed ``-2``, ``-3``, …
+                (#321). Unlike :meth:`~digitalearth.static.maps.decoration.DecorationMixin.text`, it is
+                **not** also read as a font family — see :func:`draw_labels`.
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it hidden, so a
+                switcher reading the figure agrees with the axes (#327).
+            **opts: Forwarded to ``Axes.annotate`` (``fontname``, ``fontweight``, ``rotation``, ``ha``,
+                ``va``, ``zorder``, …), the plain ones described beside the layer as on every other builder.
+
+        Returns:
+            The list of :class:`matplotlib.text.Annotation` drawn, one per labelled feature (registered as one
+            Scene layer). ``None`` instead when nothing was labelled — every feature outside what the display
+            CRS shows, or every value in the column missing.
+
+        Raises:
+            KeyError: when ``column`` is not one of the features' attributes, naming the ones that are.
+            TypeError: when ``features`` is not a vector layer, naming this call and the type.
+            ValueError: for a ``column`` that is not a non-empty name; for a ``text_size``, ``halo_width`` or
+                ``offset`` a figure could not be written with; for a negative ``halo_width``; for one of the
+                keywords in :data:`_LABEL_REFUSED_OPTS`; for an empty collection; or when the CRS question
+                above cannot be answered.
+
+        Examples:
+            - Label each feature with its ``fid``, and count the annotations drawn:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.static import Map
+                >>> places = FeatureCollection.read_file("tests/data/points.geojson")
+                >>> with Map(crs=places.epsg) as canvas:
+                ...     drawn = canvas.labels(places, "fid", text_size=9.0)
+                ...     len(drawn) == len(places)
+                True
+
+                ```
+
+        See Also:
+            digitalearth.static.maps.decoration.DecorationMixin.text: one string at one coordinate.
+            digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with an arrow to a point.
+        """
+        # At the call as well as in the drawer, because the drawer settles the CRS question before it reaches
+        # `_vector_input`'s guard — and an array would be refused for declaring no CRS rather than for being
+        # an array, which is the wrong answer to the right question.
+        require_drawable(features, caller=_LABELS_CALLER, accepts=("vector",))
+        refused = sorted(set(opts).intersection(_LABEL_REFUSED_OPTS))
+        if refused:
+            reasons = "; ".join(
+                f"{key}=: {_LABEL_REFUSED_OPTS[key]}" for key in refused
+            )
+            raise ValueError(f"{_LABELS_CALLER} does not take {refused} — {reasons}")
+        if not isinstance(column, str) or not column.strip():
+            raise ValueError(
+                f"{_LABELS_CALLER} needs column= as the name of an attribute to read the text from; "
+                f"got {column!r}"
+            )
+        text_size = _as_finite(text_size, "text_size", _LABELS_CALLER)
+        halo_width = _as_finite(halo_width, "halo_width", _LABELS_CALLER)
+        if halo_width < 0:
+            raise ValueError(
+                f"{_LABELS_CALLER} needs halo_width= as a width, so zero or more; got {halo_width!r}"
+            )
+        return self._draw(
+            LayerRecord(
+                "labels",
+                source=features,
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "labels",
+                        "column": column,
+                        "text_size": text_size,
+                        "color": color,
+                        "halo_color": halo_color,
+                        "halo_width": halo_width,
+                        # A list, not the caller's tuple: a figure is written to JSON, which has no tuple, so
+                        # a described tuple comes back as a list and the two symbologies stop comparing equal
+                        # (`travels_in_a_figure`).
+                        "offset": _label_offset(offset),
+                        # In the shared CRS spelling, as `Map.text(crs=)` records one: a caller may hand in a
+                        # CRS object, which a figure written to JSON has no form for.
+                        "crs": crs_to_json(crs, "Map.labels(crs=)"),
+                    }
+                ),
+                opts=opts,
+            )
+        )
+
     def grid_points(
         self,
         dataset: Any,
@@ -1049,7 +1523,13 @@ class VectorMixin(_MixinBase):
                 1
 
                 ```
+
+        Raises:
+            TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
+                here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell
+                centres come from pyramids' ``to_xyz``, which reads a geo-transform an array does not carry.
         """
+        require_drawable(dataset, caller="Map.grid_points()", accepts=("raster",))
         record = LayerRecord(
             "points",
             source=dataset,
@@ -1089,7 +1569,7 @@ class VectorMixin(_MixinBase):
     def grid_cells(
         self,
         dataset: Any,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         *,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1118,6 +1598,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
+            TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
+                here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell
+                polygons come from pyramids' ``get_cell_polygons``, which reads a geo-transform an array does
+                not carry.
             ValueError: from ``PolygonGlyph`` for a keyword in ``**opts`` it does not accept, naming the
                 ones it does. The layer is dropped from the description again before it propagates.
 
@@ -1136,6 +1620,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        require_drawable(dataset, caller="Map.grid_cells()", accepts=("raster",))
         record = LayerRecord(
             # A raster's cells always carry their band's values, so this layer is always a choropleth —
             # `_polygon_kind` is named here for the same reason the outline builders name it: what makes a
@@ -1159,7 +1644,7 @@ class VectorMixin(_MixinBase):
         v_dataset: Any,
         *,
         kind: str,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
@@ -1188,6 +1673,10 @@ class VectorMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
+            TypeError: when either component is not a raster or a reference to one. A bare numpy array is
+                refused here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the
+                two components are read band-by-band through the display-CRS choke point, which places them
+                against each other by their geo-transforms.
             ValueError: from ``VectorGlyph`` for a keyword in ``**opts`` it does not accept, naming the
                 ones it does. The layer is dropped from the description again before it propagates.
             FileNotFoundError: when a component's path names nothing, or KeyError when no resolver is
@@ -1195,6 +1684,8 @@ class VectorMixin(_MixinBase):
                 :func:`_opened_component`, which runs **before** the layer is described, so there is
                 nothing to drop.
         """
+        for component in (u_dataset, v_dataset):
+            require_drawable(component, caller=f"Map.{kind}()", accepts=("raster",))
         record = LayerRecord(
             _VECTOR_KINDS[kind],
             # The pair is the source: a field is not drawable from either component alone. It is opened
@@ -1375,15 +1866,18 @@ class VectorMixin(_MixinBase):
         return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
 
     def _scattered(self, data: Any) -> tuple:
-        """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection).
+        """Return ``(x, y, z, field)`` for unstructured/point input (Dataset cells or a FeatureCollection).
 
         Args:
             data: A pyramids ``Dataset``, whose cells become points through ``to_xyz``, or a
                 ``FeatureCollection`` of points. Either is reprojected to the display CRS first.
 
         Returns:
-            Three parallel 1-D arrays — the x coordinates, the y coordinates and the value at each point —
-            in the display CRS.
+            Three parallel 1-D arrays — the x coordinates, the y coordinates and the value at each point — in
+            the display CRS, and the **name** those values are known by: the raster's band or the
+            collection's numeric column, as :func:`~digitalearth.static.guides.source_field` spells it. The
+            name is returned here rather than resolved again by the drawer because this is where the source is
+            opened, and it is what the layer publishes its colour encoding with (#261, order 24).
 
         Raises:
             ValueError: when a ``FeatureCollection`` carries no numeric column to take the value from,
@@ -1395,11 +1889,12 @@ class VectorMixin(_MixinBase):
                 xyz.iloc[:, 0].to_numpy(),
                 xyz.iloc[:, 1].to_numpy(),
                 xyz.iloc[:, 2].to_numpy(),
+                source_field(data),
             )
         src = get_source(reproject(data, self.crs))
         if src.z is None:
             raise ValueError("FeatureCollection has no numeric value column to contour")
-        return src.x.values, src.y.values, src.z.values
+        return src.x.values, src.y.values, src.z.values, source_field(src)
 
     def _tri(
         self,

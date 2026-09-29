@@ -14,6 +14,11 @@ m.colorbar()
 m.save("map.png")
 ```
 
+`colorbar()` with no argument keys **the most recent layer that is coloured by a value** — a coastline, a
+basemap or a text label added after the data cannot take the key. Name a layer (`colorbar("obs")`) to key that
+one instead, and `colorbars()` keys every layer that has a key to show. The request is recorded on the layer,
+so the bar moves, hides and disappears with it.
+
 Every input is reprojected to the display CRS through **pyramids** and drawn on a plain axes — there is no
 Cartopy, because the projection is applied to the *data* rather than to the axes. The rendering itself is
 **cleopatra**'s: each builder assembles a glyph and hands the styling keywords straight to it, which is why
@@ -39,6 +44,15 @@ basemap stays under the data and a label stays over it however the calls were or
 furniture anchored to them. That description is what the other tiers read back, and it is the reason a layer
 records its recipe (`via`) rather than the method that drew it.
 
+## What `field` accepts
+
+A pyramids `Dataset`, a path or URL to a raster — and a **bare 2-D NumPy array**, for the "just show me this
+grid" case. Such a layer is not georeferenced: it is placed at its own indices, nothing is reprojected, and no
+georeferenced layer may share the figure with it (a basemap, a coastline and a reprojected raster are all in
+the display CRS, so mixing them is refused rather than drawn with one of them as an invisible speck). Nodata in
+a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
+by name, saying what the call takes.
+
 ::: digitalearth.static.map.Map
     options:
       inherited_members: true
@@ -55,6 +69,7 @@ records its recipe (`via`) rather than the method that drew it.
         - choropleth
         - quiver
         - streamplot
+        - labels
         - set_bounds
         - set_domain
         - graticule

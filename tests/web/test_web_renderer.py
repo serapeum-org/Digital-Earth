@@ -660,11 +660,16 @@ class TestThePaintIsReadBackAsChannels:
     """What the tier already records, read back in the portable vocabulary (#328).
 
     Every vector builder funnels through `_vector_layer`, which records MapLibre's own `paint` dict because
-    that is what :func:`~digitalearth.web.renderer.draw_vector` rebuilds the layer from. That dict is
+    that is what :func:`~digitalearth.web.vector.draw_vector` rebuilds the layer from. That dict is
     unreadable anywhere else, so a layer this tier drew described its style in a form only this tier could
     use, and `Symbology.encodings` came back empty however the layer was styled.
     :func:`~digitalearth.web.renderer.portable_encodings` is the read-back, and it changes nothing a drawer
     sees: `paint` stays exactly as the builder wrote it.
+
+    Every probe below records an ``asked`` list beside the paint it hands over, because that is what the lift
+    reads the paint through (#334): without one the lift publishes nothing, and each of the rules these check
+    — the compiled expression, the unmapped key, the container — would pass for the wrong reason, on a layer
+    that published nothing whatever the rule said.
     """
 
     def test_every_mapped_paint_key_drives_a_declared_channel(self):
@@ -677,7 +682,9 @@ class TestThePaintIsReadBackAsChannels:
     def test_a_points_paint_reads_back_as_the_channels_a_caller_asked_for(self):
         """The three a point layer always writes: its radius, its opacity and its colour."""
         paint = {"circle-radius": 7.0, "circle-opacity": 0.5, "circle-color": "#cc4444"}
-        lifted = portable_encodings(Symbology(props={"paint": paint}))
+        lifted = portable_encodings(
+            Symbology(props={"paint": paint, "asked": list(paint)})
+        )
         resolved = {channel: lifted[channel].resolve() for channel in sorted(lifted)}
         assert resolved == {"color": "#cc4444", "opacity": 0.5, "size": 7.0}, resolved
 
@@ -685,13 +692,16 @@ class TestThePaintIsReadBackAsChannels:
         """A classified fill is MapLibre's own data-driven form, and means nothing to another engine."""
         expression = ("step", ("get", "pop"), "#440154", 5.0, "#fde725")
         paint = {"fill-color": expression, "fill-opacity": 0.4}
-        lifted = portable_encodings(Symbology(props={"paint": paint}))
+        lifted = portable_encodings(
+            Symbology(props={"paint": paint, "asked": list(paint)})
+        )
         assert sorted(lifted) == ["opacity"], sorted(lifted)
 
     def test_a_paint_key_that_drives_no_channel_stays_in_the_paint_alone(self):
         """There is no stroke or halo channel, so `fill-outline-color` has no portable reading."""
         paint = {"fill-outline-color": "#ffffff", "text-halo-width": 1.0}
-        assert sorted(portable_encodings(Symbology(props={"paint": paint}))) == []
+        recorded = Symbology(props={"paint": paint, "asked": list(paint)})
+        assert sorted(portable_encodings(recorded)) == []
 
     def test_a_layer_with_no_paint_at_all_is_answered_rather_than_refused(self):
         """A graticule and a caller's own MapLibre object record no paint, and must not raise here."""
@@ -710,6 +720,8 @@ class TestThePaintIsReadBackAsChannels:
             "apikey": "NOT-REAL",
         }
         lifted = portable_encodings(
-            Symbology(props={"paint": {"circle-color": provider}})
+            Symbology(
+                props={"paint": {"circle-color": provider}, "asked": ["circle-color"]}
+            )
         )
         assert sorted(lifted) == [], lifted

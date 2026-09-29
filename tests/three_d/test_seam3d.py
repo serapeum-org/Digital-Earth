@@ -390,14 +390,26 @@ class TestACallersOwnMesh:
             elsewhere.close()
 
     def test_a_strict_scene_refuses_a_missing_object(self, scene):
-        """Under `strict`, the same case raises rather than warning."""
+        """Under `strict`, the same case raises rather than warning.
+
+        Args:
+            scene: The scene under test, which holds the object the other scene will not.
+
+        Test scenario:
+            `figure_spec` is a property, so reading it inside the `with` ran package code that can raise
+            there — and this is the one site of five where it could raise the **same** type the block
+            refuses, so the block was satisfiable by the read rather than by `draw_figure` refusing. The
+            description is taken first, leaving exactly one thing inside that can raise (review R2, the
+            property-read half of the one-throwing-call rule).
+        """
         from digitalearth.base.crs import OffLimbError
 
         scene.add_mesh(pv.Sphere(radius=0.5), name="ball")
+        described = scene.figure_spec
         elsewhere = Scene3D(off_screen=True, strict=True)
         try:
             with pytest.raises(OffLimbError, match="does not carry"):
-                elsewhere.draw_figure(scene.figure_spec)
+                elsewhere.draw_figure(described)
         finally:
             elsewhere.close()
 

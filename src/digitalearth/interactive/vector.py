@@ -18,9 +18,17 @@ producing an empty Bokeh layer.
 import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
 
+from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.crs import reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.spec import DataRef, LayerSpec, Scale, Symbology
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    DataRef,
+    Encoding,
+    LayerSpec,
+    Scale,
+    Symbology,
+)
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -33,6 +41,7 @@ from digitalearth.interactive.base import (
     held_props,
     style_value,
 )
+from digitalearth.interactive.style_fold import limits_scale
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -92,6 +101,11 @@ def _as_labels(gdf: Any, column: str, missing: str) -> Any:
 #: How a point layer names itself in a refusal. The big-data threshold's resolution and the refusal of an
 #: unclassifiable `scheme=` speak for the same public call, so they share the one spelling — as
 #: `Map.points()` does on the static tier.
+#: What an unstyled marker is drawn at on this tier. The value left `points`' signature with #334 — a style
+#: keyword's default is now :data:`~digitalearth.base.ask.UNSET`, so the builder can tell an ask from its own
+#: default — and this is where it lives instead, cited by name from the docstring that used to show it.
+POINT_SIZE = 6.0
+
 _POINTS_CALLER = "InteractiveMap.points()"
 
 
@@ -111,12 +125,68 @@ def apply_opacity(opacity: Optional[float], opts: dict) -> None:
         opts["alpha"] = opacity
 
 
+def _categorical_scale(styling: dict, categories: list, labels: dict) -> Scale:
+    """Return the categorical :class:`~digitalearth.base.spec.scale.Scale` a distinct-value fill was drawn with.
+
+    Built from the very options the element is styled with rather than from a second pass over the column, so
+    a swatch cannot disagree with the polygon beside it — which is the guarantee
+    :mod:`digitalearth.base.spec.legend` exists for and the one ``last_breaks`` could only maintain by hand.
+
+    The categories are the **string** form of the caller's values, because that is what this tier colours by:
+    :meth:`VectorMixin._categorical_style` relabels the column to `str(value)` and hands HoloViews a
+    ``{label: colour}`` map, so the strings are the categories the picture actually has. It is also what lets
+    the scale be written into a figure at all — a value with no JSON form (a timestamp, a tuple) would make
+    `Symbology.to_dict` refuse a layer that draws perfectly well. ``last_breaks`` keeps the caller's own
+    values, which is the one thing it still says that the scale does not.
+
+    Args:
+        styling: What :meth:`VectorMixin._categorical_style` returned as the element's options; its ``cmap``
+            is the ``{label: colour}`` map.
+        categories: The caller's distinct values, in classifier order.
+        labels: The relabelling that method returned, whose ``missing`` is the sentinel label the neutral
+            fallback colour is filed under.
+
+    Returns:
+        The scale, one colour per category, carrying the missing colour when the column had gaps.
+    """
+    palette = dict(styling["cmap"])
+    return Scale.categorical(
+        [str(category) for category in categories],
+        [palette[str(category)] for category in categories],
+        missing=palette.get(labels["missing"]),
+    )
+
+
+def _graduated_scale(classified: dict, scheme: Any) -> Scale:
+    """Return the classified :class:`~digitalearth.base.spec.scale.Scale` a graduated fill was drawn with.
+
+    The same derivation as :func:`_categorical_scale`, for the other classified shape: the class edges the
+    element's ``color_levels`` carry *are* the scale's breaks, so the key and the fill cut at one set of
+    numbers rather than two that agree while nobody edits either.
+
+    Args:
+        classified: What :meth:`VectorMixin._graduated_style` returned, whose ``color_levels`` are the edges.
+        scheme: The scheme the caller asked for — a name, or an explicit sequence of edges. Taken as an
+            argument because the options dict does not carry it and the call site does.
+
+    Returns:
+        The scale: the edges' own ends as the domain, the scheme, and the edges as its breaks.
+    """
+    edges = [float(edge) for edge in classified["color_levels"]]
+    # Through `from_limits`, so the one degenerate case a classifier can still hand over — every edge equal —
+    # is widened by the shared rule rather than raising out of a builder that has already styled its element.
+    domain = Scale.from_limits(edges[0], edges[-1])
+    return Scale(domain.vmin, domain.vmax, scheme=scheme, breaks=tuple(edges))
+
+
 def _vector_symbology(
     hv_type: str,
     vdims: Any,
     common: dict,
     labels: Optional[dict] = None,
     opts: Optional[dict] = None,
+    asked: Tuple[str, ...] = (),
+    color: Optional[Encoding] = None,
 ) -> Symbology:
     """Return the description a vector layer is drawn from.
 
@@ -131,12 +201,24 @@ def _vector_symbology(
             it is.
         opts: The caller's own keywords, already through :func:`describe_opts` — the half a figure can
             carry. The drawer merges these over `common`, which is the precedence the builder applied.
+        asked: The style keywords this layer's caller actually named among the builder's *own* parameters,
+            in this tier's spelling. A keyword the caller wrote in `**opts` needs no record — that bucket is
+            the caller's by construction — but a parameter resolves its default before anything is recorded,
+            so the ask has to be recorded to survive (#334). Empty records no key at all, so an unstyled
+            layer's description is exactly what it was.
+        color: What the layer's colour varies with, as an
+            :class:`~digitalearth.base.spec.encoding.Encoding` bound to the column — with the `Scale` it was
+            classified through, where there was one. `None` for a layer drawn in one flat colour, which
+            publishes no colour encoding at all and so refuses a colour key rather than drawing an empty box
+            (order 24). This is a *binding*, not style the builder resolved: it says what the layer **is**,
+            which is why an unstyled classified layer still carries it while publishing no constant.
 
     Returns:
         The symbology. Written by a helper rather than inline at five call sites, so the five kinds cannot
         drift in what they record.
     """
     return Symbology(
+        encodings={} if color is None else {"color": color},
         props={
             "via": "geometry",
             "hv_type": hv_type,
@@ -144,7 +226,8 @@ def _vector_symbology(
             "common": dict(common),
             "labels": dict(labels) if labels else None,
             "opts": dict(opts or {}),
-        }
+            **asked_record(asked),
+        },
     )
 
 
@@ -530,7 +613,7 @@ class VectorMixin(_MixinBase):
         column: Optional[str] = None,
         scheme: Optional[Any] = None,
         k: int = 5,
-        size: float = 6.0,
+        size: Maybe[float] = UNSET,
         cmap: str = "viridis",
         opacity: Optional[float] = None,
         rasterize: Any = "auto",
@@ -583,15 +666,13 @@ class VectorMixin(_MixinBase):
                 classified polygon one.
 
         Note:
-            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
-            for a path that is the length of the string — so a layer named by the 25-character path
-            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
-            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
-            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
-            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
-            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
-            it yourself. The routing log line always names the number the decision used, so a wrong one is
-            visible rather than silent.
+            ``rasterize="auto"`` counts the **rows**, whether ``features`` is a loaded collection or a path.
+            A path used to be measured as a string — a layer named by a 25-character path was reported as
+            *25* features when the file held 10, so a ten-row layer routed through Datashader on the strength
+            of its filename (#316). pyramids now answers the count without reading the geometry
+            (``FeatureCollection.feature_count``, serapeum-org/pyramids#1200, shipped in 0.65.0), so naming a
+            file still costs no open and the two spellings of one input agree. The routing log line names the
+            number the decision used, so a surprising one is visible rather than silent.
 
         Examples:
             - Colour gauging stations by an attribute column:
@@ -613,7 +694,10 @@ class VectorMixin(_MixinBase):
                 column cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit
                 colour list shorter than the class count).
         """
-        from digitalearth.interactive.bigdata import _route_through_rasterize
+        from digitalearth.interactive.bigdata import (
+            _feature_count,
+            _route_through_rasterize,
+        )
 
         apply_opacity(opacity, opts)
         if scheme is not None and not column:
@@ -630,13 +714,12 @@ class VectorMixin(_MixinBase):
         # row count and a column's values — is the same before a warp as after it. Warping here as well did
         # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
         # still refused, by the drawer, and `_skips_off_limb` answers it as before.
-        # The count is `len(features)`, and `features` may be a path: a path's length is its character
-        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
-        # than worked around here — pyramids has no cheap count-from-path to ask
-        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
+        # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
+        # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
+        # the count without the geometry, so naming a file still costs no open.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("points", len(features), threshold)
+            and _route_through_rasterize("points", _feature_count(features), threshold)
         ):
             aggregator = "mean" if column else "count"
             return self.rasterize(
@@ -644,6 +727,11 @@ class VectorMixin(_MixinBase):
             )
         styling: dict = {}
         labels: Optional[dict] = None
+        # What the layer's colour varies with, published beside the engine's own spelling of it so a colour
+        # key can hang on the layer rather than on the tier's most recent classification (order 24). `None`
+        # while no `column` was given: those points are one flat colour, and a key over them would label
+        # nothing.
+        colour: Optional[Encoding] = None
         if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
@@ -652,20 +740,34 @@ class VectorMixin(_MixinBase):
                 features, column, cmap=cmap
             )
             self.last_breaks = categories
+            colour = Encoding.by_field(
+                "color", column, scale=_categorical_scale(styling, categories, labels)
+            )
         elif column and scheme is not None:
             styling = self._graduated_style(
                 features, column, scheme=scheme, k=k, cmap=cmap
             )
             self.last_breaks = list(styling["color_levels"])
+            colour = Encoding.by_field(
+                "color", column, scale=_graduated_scale(styling, scheme)
+            )
         elif column:
             styling = {"color": column, "cmap": cmap, "colorbar": True}
+            # A continuous ramp over the column, with no limits the builder holds: HoloViews measures them
+            # from the data at render time unless the caller wrote a `clim` of their own.
+            colour = Encoding.by_field(
+                "color", column, scale=limits_scale(opts.get("clim"))
+            )
         # The caller's `**opts` are split per value: `describe_opts` writes the JSON-safe half into the
         # description and puts the rest in `held` (review M3). Either way the drawer merges them over
         # this, which keeps the precedence: an explicit style the caller wrote outranks the one
         # classification derived, so one scheme cannot mean two things (review M4).
         held: Dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
-        common: dict = {"size": size, **styling}
+        # Resolved here rather than at the top of the method, so the aggregating route above — which forwards
+        # `**opts` to `rasterize` and never draws a marker — is reached with the keyword untouched.
+        ask = Ask()
+        common: dict = {"size": ask("size", size, POINT_SIZE), **styling}
         return self.add_layer(
             None,
             name=name,
@@ -679,6 +781,8 @@ class VectorMixin(_MixinBase):
                 describe_style(held, common),
                 labels,
                 described_opts,
+                tuple(ask.named),
+                colour,
             ),
         )
 
@@ -774,15 +878,13 @@ class VectorMixin(_MixinBase):
             **opts: Extra HoloViews style options applied to the element.
 
         Note:
-            ``rasterize="auto"`` cannot count a **path or URL**. It measures whatever ``features`` is, and
-            for a path that is the length of the string — so a layer named by the 25-character path
-            ``"tests/data/points.geojson"`` is reported as *25* features when the file holds 10, and a
-            ten-row layer routes through Datashader on the strength of its filename (#316). Opening the
-            file here to count it would defeat naming one, and pyramids offers no cheap count-from-path to
-            ask instead (serapeum-org/pyramids#1200). Until it does: hand this a loaded
-            ``FeatureCollection`` when the threshold matters, or pass ``rasterize=True``/``False`` and decide
-            it yourself. The routing log line always names the number the decision used, so a wrong one is
-            visible rather than silent.
+            ``rasterize="auto"`` counts the **rows**, whether ``features`` is a loaded collection or a path.
+            A path used to be measured as a string — a layer named by a 25-character path was reported as
+            *25* features when the file held 10, so a ten-row layer routed through Datashader on the strength
+            of its filename (#316). pyramids now answers the count without reading the geometry
+            (``FeatureCollection.feature_count``, serapeum-org/pyramids#1200, shipped in 0.65.0), so naming a
+            file still costs no open and the two spellings of one input agree. The routing log line names the
+            number the decision used, so a surprising one is visible rather than silent.
 
         Examples:
             - Outline catchment polygons over a basemap:
@@ -863,17 +965,19 @@ class VectorMixin(_MixinBase):
         Raises:
             ImportError: when the layer routes through Datashader and ``spatialpandas`` is not installed.
         """
-        from digitalearth.interactive.bigdata import _route_through_rasterize
+        from digitalearth.interactive.bigdata import (
+            _feature_count,
+            _route_through_rasterize,
+        )
 
         # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
         # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
-        # The count is `len(features)`, and `features` may be a path: a path's length is its character
-        # count, so the threshold is compared against the filename (#316). Documented on the builder rather
-        # than worked around here — pyramids has no cheap count-from-path to ask
-        # (serapeum-org/pyramids#1200), and opening the file to count it would defeat naming one.
+        # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
+        # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
+        # the count without the geometry, so naming a file still costs no open.
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize(kind, len(features), threshold)
+            and _route_through_rasterize(kind, _feature_count(features), threshold)
         ):
             from importlib.util import find_spec
 
@@ -921,7 +1025,20 @@ class VectorMixin(_MixinBase):
             source=features,
             held=held,
             symbology=_vector_symbology(
-                "Polygons", [column] if column else None, common, None, described_opts
+                "Polygons",
+                [column] if column else None,
+                common,
+                None,
+                described_opts,
+                (),
+                # Filled by the column when there is one, and drawn as outlines when there is not — which is
+                # why the key is refused on an unfilled `polygons()` layer. The limits are the caller's
+                # `clim`, which `choropleth` forwards through `**opts`; without one the engine measures them.
+                None
+                if not column
+                else Encoding.by_field(
+                    "color", column, scale=limits_scale(opts.get("clim"))
+                ),
             ),
         )
 
@@ -943,13 +1060,18 @@ class VectorMixin(_MixinBase):
         column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
         what guarantees one discrete colour per distinct value (no continuous colorbar). Missing values
         (``NaN``/``None``) are drawn with a neutral ``"#cccccc"`` fallback, matching the web tier's default.
-        The categories (original values, in classifier order) are recorded on ``last_breaks`` for legend parity
-        with the web tier.
+        The categories (original values, in classifier order) are recorded on ``last_breaks``, which stays the
+        raw-values accessor the web tier publishes too.
 
         Because the fill is keyed on the **string** form of each value, this assumes a single-dtype attribute
         column: two categories that stringify identically (e.g. the integer ``1`` and the string ``"1"``, or
         ``1`` and ``1.0``) collapse to one colour. Realistic categorical columns are single-dtype; the web tier
         keeps such mixed values distinct via its native ``match``.
+
+        The layer also publishes a **categorical** :class:`~digitalearth.base.spec.scale.Scale` on its colour
+        encoding, carrying the very colours the fill was drawn with, so a key derived from it
+        (:meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale`) cannot disagree with the polygons —
+        which is what order 24 puts in place of the hand-maintained ``last_breaks`` parallel.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
@@ -985,6 +1107,12 @@ class VectorMixin(_MixinBase):
                 describe_style(held, styling),
                 labels,
                 described_opts,
+                (),
+                Encoding.by_field(
+                    "color",
+                    column,
+                    scale=_categorical_scale(styling, categories, labels),
+                ),
             ),
         )
 
@@ -1162,6 +1290,10 @@ class VectorMixin(_MixinBase):
                 describe_style(held, classified),
                 None,
                 described_opts,
+                (),
+                Encoding.by_field(
+                    "color", column, scale=_graduated_scale(classified, scheme)
+                ),
             ),
         )
 
@@ -1186,7 +1318,11 @@ class VectorMixin(_MixinBase):
         ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
         ramp (DC.8), or a **graduated** scheme (``"quantiles"``/``"equal_interval"``/``"fisher_jenks"``/…)
         to classify a numeric column into ``k`` flat classes. Either way the categories or class edges are
-        recorded on ``last_breaks`` for legend parity with the web tier.
+        published on the layer's own colour encoding, as the :class:`~digitalearth.base.spec.scale.Scale` it
+        was classified through — which is what :meth:`colorbar` and :meth:`legend` hang their key on (order
+        24) and what :meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale` derives a swatch list from.
+        They are recorded on ``last_breaks`` as well, which keeps the caller's own category values (the scale
+        colours by their string form) and stays the raw-numbers accessor the web tier also publishes.
 
         Graduated classification goes through :class:`~digitalearth.base.spec.scale.Scale` — the one place
         every tier reaches the classifier — so the same ``column``/``scheme``/``k`` yields the same breaks on
@@ -1318,7 +1454,7 @@ class VectorMixin(_MixinBase):
         u: Any,
         v: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         density: float = 1.0,
         color_by: Optional[str] = "magnitude",
         cmap: str = "viridis",
@@ -1378,7 +1514,7 @@ class VectorMixin(_MixinBase):
         u: Any,
         v: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         density: float = 1.0,
         name: Optional[str] = None,
         visible: bool = True,
@@ -1441,7 +1577,7 @@ class VectorMixin(_MixinBase):
         u: Any,
         v: Any,
         *,
-        band: int = 1,
+        band: int = DEFAULT_BAND,
         density: float = 1.0,
         name: Optional[str] = None,
         visible: bool = True,

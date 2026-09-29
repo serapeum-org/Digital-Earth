@@ -777,7 +777,7 @@ class DecorationMixin(_MixinBase):
         crs: Any = 4326,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Place a text label at a ``lon``/``lat`` location (reprojected to the display CRS).
 
@@ -838,7 +838,7 @@ class DecorationMixin(_MixinBase):
         crs: Any = 4326,
         name: Optional[str] = None,
         visible: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         """Annotate a ``lon``/``lat`` location (reprojected), optionally with an arrow.
 

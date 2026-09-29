@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, Optional
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources import Source, get_source
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.spec.bounds import same_crs
 
 __all__ = ["auto_cmap", "needs_reproject", "to_display_source"]
@@ -91,7 +92,7 @@ def needs_reproject(data: Any, crs: Any) -> bool:
     return not same_crs(own, crs)
 
 
-def to_display_source(data: Any, crs: Any, *, band: int = 1) -> Source:
+def to_display_source(data: Any, crs: Any, *, band: int = DEFAULT_BAND) -> Source:
     """Reproject `data` into the display CRS through pyramids, and wrap it as a :class:`Source`.
 
     The single display-CRS choke point a raster or vector builder calls. It settles the projection decision

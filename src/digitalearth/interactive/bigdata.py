@@ -10,6 +10,7 @@ deterministic arrays. Reprojection still happens upstream in pyramids; Datashade
 projected planar coordinates.
 """
 
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Self
 
 from loguru import logger
@@ -509,6 +510,35 @@ class BigDataMixin(_MixinBase):
             features = features.copy()
             features[column] = features[column].astype("category")
         return features
+
+
+def _feature_count(features: Any) -> int:
+    """Return how many features an input holds, whether it is opened or still a path.
+
+    A builder on this tier may be handed a path rather than an opened collection — that became a first-class
+    input when builders started recording a `DataRef` and left the opening to the drawer. `len()` answers a
+    collection's row count and a **path's character count**, and the two are indistinguishable to it, so asking
+    `len()` of the input compared the big-data threshold against a filename (#316).
+
+    pyramids answers the path case without reading geometry (`FeatureCollection.feature_count`, added upstream in
+    serapeum-org/pyramids#1200 and shipped in 0.65.0), which is what makes naming a file cheap again: the count no
+    longer costs an open.
+
+    Args:
+        features: An opened collection, a `GeoDataFrame`, or a path to a vector file.
+
+    Returns:
+        The number of features.
+
+    Raises:
+        Exception: whatever pyramids raises for a path it cannot read — unchanged and not wrapped, since a
+            builder handed an unreadable path has a problem this function cannot describe better.
+    """
+    if isinstance(features, (str, PurePath)):
+        from pyramids.feature import FeatureCollection
+
+        return int(FeatureCollection.feature_count(features))
+    return len(features)
 
 
 def _route_through_rasterize(kind: str, n_features: int, threshold: int) -> bool:
