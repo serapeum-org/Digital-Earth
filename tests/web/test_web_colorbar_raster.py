@@ -168,29 +168,35 @@ class TestTheBandIsWhatARasterKeyDescribes:
             f"{web_map.last_legend}, {web_map.last_breaks}"
         )
 
-    @pytest.mark.parametrize(
-        ("colorbar", "expected_calls"),
-        [(True, 1), (False, 0)],
-    )
-    def test_the_flag_decides_whether_the_key_is_attempted(
-        self, dataset, mocker, colorbar, expected_calls
+    @pytest.mark.parametrize("colorbar", [True, False])
+    def test_the_flag_is_carried_to_the_key_rather_than_gating_the_call(
+        self, dataset, mocker, colorbar
     ):
-        """``True`` asks the tier for a key exactly once; ``False`` never asks.
+        """Either value asks the tier for a key exactly once, carrying the flag into the call.
 
         Args:
             dataset: The raster to draw.
             mocker: Spies on the translation helper.
             colorbar: The flag under test.
-            expected_calls: How many times the helper should be reached.
 
         Test scenario:
             The raster branch of the dispatcher, asserted where it is decided rather than by what the
             finished map happens to carry — so this still holds the wiring if the tier later learns to key a
-            raster. ``colorbar=False`` must be a real suppression here, not an accepted no-op: a flag that
-            is honoured on three backends and merely tolerated on the fourth is the divergence #254 closes.
+            raster. ``colorbar=False`` must be a real suppression, not an accepted no-op: a flag that is
+            honoured on three backends and merely tolerated on the fourth is the divergence #254 closes.
+
+            It read ``False`` as "the helper is never reached" until review M1, which is the same
+            "skip the call" reading that left this backend recording **no guide at all** where the other
+            three record ``Guide(show=False)``. Suppression is now expressed the way the other three tiers
+            express it — the call happens and carries ``visible=False`` — so what this test pins is that
+            the flag reaches the tier, not that the call is skipped.
         """
         spy = mocker.spy(qp, "_add_web_legend")
         qp.quickmap(dataset, backend="web", colorbar=colorbar)
-        assert spy.call_count == expected_calls, (
-            f"colorbar={colorbar} must reach the key builder {expected_calls}x, got {spy.call_count}"
+        assert spy.call_count == 1, (
+            f"colorbar={colorbar} must reach the key builder exactly once, got {spy.call_count}"
+        )
+        assert spy.call_args.kwargs.get("visible") is colorbar, (
+            f"colorbar={colorbar} did not reach the helper as visible={colorbar}: "
+            f"{spy.call_args!r}"
         )

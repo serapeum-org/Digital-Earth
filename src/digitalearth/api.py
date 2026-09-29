@@ -1028,7 +1028,7 @@ def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
     scene.points(data, **kwargs)
 
 
-def _add_web_legend(scene: Any) -> Any:
+def _add_web_legend(scene: Any, *, visible: bool) -> Any:
     """Add the web tier's colour key, tolerating a map with nothing classified to describe.
 
     The web counterpart of :func:`_add_static_key`. ``WebMap.legend`` is a *builder* — it reads the
@@ -1036,8 +1036,24 @@ def _add_web_legend(scene: Any) -> Any:
     drawing an empty box. Under ``quickmap(colorbar=True)`` that is not a caller error: the default asks for
     a key *if there is one to draw*, exactly as the matplotlib path treats an unmappable layer.
 
+    **The flag is carried through rather than read as "skip the call"**, which is the rule the other three
+    backends already follow. This path gated the whole call on it, so ``quickmap(colorbar=False)`` left the
+    layer carrying no :class:`~digitalearth.base.spec.encoding.Guide` at all while the matplotlib,
+    interactive and 3-D paths each recorded ``Guide(show=False)`` — and a web figure written out after
+    ``colorbar=False`` was indistinguishable from one where nobody asked (review M1). The picture agrees
+    either way; the *record* is what travels through ``FigureSpec``, and recording the decision is what lets
+    a switcher offer the key back.
+
+    The layer is resolved through the tier's own ``_guide_target`` with ``visible=True``, for both values of
+    the flag, and named in the call — the shape :func:`_add_interactive_key` already has. That resolution
+    answers "which layer would a key describe"; the flag answers the different question of whether the key
+    is drawn. Leaving it to ``legend(visible=False)`` to resolve instead asks for "the key this map already
+    has", which on a one-call map is nothing at all, and the decision goes unrecorded again.
+
     Args:
         scene: The ``WebMap`` whose most recent classified layer should get a key.
+        visible: Whether the key is drawn. ``False`` records the guide switched **off**, as
+            ``quickmap(colorbar=False)`` asks for.
 
     Returns:
         The same map, or ``None`` when there was no classification to describe.
@@ -1056,9 +1072,10 @@ def _add_web_legend(scene: Any) -> Any:
     # instead of silently dropping every web key.
     if not scene.last_legend:
         return None
+    target = scene._guide_target(None, visible=True, caller="quickmap()")
     # No `except` around the builder. The guard above leaves only a malformed `last_legend` able to raise --
     # a bug in a web builder -- and swallowing that would report a library defect as "no key to draw".
-    return scene.legend()
+    return scene.legend(layer_id=target, visible=visible)
 
 
 def _quickmap_web(
@@ -1084,10 +1101,11 @@ def _quickmap_web(
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
-        colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend`,
-            which checks before it builds rather than catching afterwards: a map with no classified layer to
-            describe gets no key and no error, while a failure inside the builder still surfaces. ``False``
-            leaves the map without one.
+        colorbar: Whether this tier's colour key is drawn, carried through :func:`_add_web_legend` rather
+            than read as "skip the call": ``True`` (the default) draws it and ``False`` records the guide
+            switched **off**, so the figure says either way that the key was decided. The helper checks
+            before it builds rather than catching afterwards, so a map with no classified layer to describe
+            gets no key and no error, while a failure inside the builder still surfaces.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
@@ -1112,11 +1130,12 @@ def _quickmap_web(
             scene.basemap()
         else:
             scene.basemap(source)
-    if colorbar:
-        # This tier's key is a builder, not a toggle, and it refuses a map with nothing classified to
-        # describe. That is this tier's "no mappable layer" case, which the matplotlib path tolerates too,
-        # so it is tolerated here rather than turning `colorbar=True` into an error the caller did not cause.
-        _add_web_legend(scene)
+    # Called whichever way the flag is set, so the decision is recorded either way -- the rule the other
+    # three backends follow. This tier's key is a builder, not a toggle, and it refuses a map with nothing
+    # classified to describe; that is this tier's "no mappable layer" case, which the matplotlib path
+    # tolerates too, so it is tolerated inside the helper rather than turning `colorbar=True` into an error
+    # the caller did not cause.
+    _add_web_legend(scene, visible=colorbar)
     return scene
 
 
