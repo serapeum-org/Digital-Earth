@@ -313,16 +313,22 @@ class TestAnAnchorArrivingFromAnotherFigure:
     @pytest.mark.parametrize(
         "anchor", ["top-left", "top-right", "bottom-left", "bottom-right"]
     )
-    def test_every_shared_anchor_places_a_bar(self, anchor):
-        """Each of the four shared anchors reaches matplotlib as a colorbar `location`.
+    def test_every_shared_anchor_places_a_bar_on_the_side_it_names(self, anchor):
+        """Each of the four shared anchors reaches matplotlib as the side its own name gives.
 
         Args:
             anchor: One of the four corners `Guide` accepts.
 
         Test scenario:
             The four anchors are the vocabulary `Guide` shares with the web tier's `position`. Matplotlib has
-            no corners for a colorbar — only sides — so the mapping is lossy by nature, and what matters is
-            that every anchor maps to *a* side rather than being dropped on the floor.
+            no corners for a colorbar — only sides — so the mapping is lossy by nature, but it is lossy in
+            one specific way: the **horizontal** half of the corner is what survives.
+
+            Expected side is derived from the anchor's own spelling rather than read back out of the table.
+            The first version of this test asserted `anchor in _COLORBAR_SIDES` and
+            `_COLORBAR_SIDES[anchor] in {"left", "right", "top", "bottom"}` — both true of a table mapping
+            all four anchors to `"left"`, so it restated the constant it imports and could not tell a
+            correct table from a broken one (review N2).
         """
         from digitalearth.static.guides import _COLORBAR_SIDES
 
@@ -330,8 +336,36 @@ class TestAnAnchorArrivingFromAnotherFigure:
             f"{anchor!r} is one of Guide's four corners and has no colorbar side, so a figure carrying it "
             f"would silently lose its placement; the table has {sorted(_COLORBAR_SIDES)}"
         )
-        assert _COLORBAR_SIDES[anchor] in {"left", "right", "top", "bottom"}, (
-            f"{anchor!r} maps to {_COLORBAR_SIDES[anchor]!r}, which matplotlib does not accept as a location"
+        assert _COLORBAR_SIDES[anchor] == anchor.split("-")[1], (
+            f"{anchor!r} maps to {_COLORBAR_SIDES[anchor]!r}, which is not the side it names — a figure "
+            f"carrying this anchor would be drawn with its key on the wrong side of the map, which looks "
+            f"deliberate and is the harder error to see"
+        )
+
+    def test_the_bar_side_table_is_every_shared_anchor_s_horizontal_half(self):
+        """The table is exactly that projection, over exactly the anchors the package shares.
+
+        Test scenario:
+            The parametrised test above says each of the four anchors it names is right. This says there is
+            nothing else in the table and nothing missing from it, against
+            `FURNITURE_ANCHORS` rather than against a list repeated here — so an anchor added to the shared
+            vocabulary and forgotten in this tier reddens without anyone remembering to come back.
+
+            It also pins the coarsening as deliberate: two anchors per side, so the vertical half is dropped
+            for every anchor rather than for the ones nobody looked at. A colorbar is a strip beside the
+            axes and has no corners to keep it in.
+        """
+        from digitalearth.base.registry import FURNITURE_ANCHORS
+        from digitalearth.static.guides import _COLORBAR_SIDES
+
+        assert _COLORBAR_SIDES == {
+            anchor: anchor.split("-")[1] for anchor in FURNITURE_ANCHORS
+        }, (
+            "the colorbar side table is no longer the horizontal half of each shared anchor; the shared "
+            f"anchors are {list(FURNITURE_ANCHORS)} and the table is {_COLORBAR_SIDES}"
+        )
+        assert len(set(_COLORBAR_SIDES.values())) == 2, (
+            "a colorbar has sides and not corners, so the four anchors must collapse onto two sides"
         )
 
     @pytest.mark.parametrize(
