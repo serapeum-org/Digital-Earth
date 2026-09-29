@@ -206,8 +206,9 @@ class TestTheLegendRefusesWhatItCannotDescribe:
         from digitalearth.web import WebMap
 
         web_map = WebMap().basemap()
+        method = getattr(web_map, call)
         with pytest.raises(ValueError, match="nothing to describe") as refusal:
-            getattr(web_map, call)()
+            method()
         assert named in str(refusal.value), (
             f"{call}()'s refusal does not name it: {refusal.value}"
         )
