@@ -1633,8 +1633,18 @@ class Scene(WatermarkMixin):
         another tier and what a reader trusts when the figure is not in front of them, and order 24 exists
         precisely so the record and the picture cannot disagree.
 
-        **The topmost coloured layer keeps it**, which is the layer :meth:`legend` with no id would key
-        (:meth:`_keyed_layer`) — so the rule a reader predicts from the API is the rule a rebuild applies.
+        **The topmost of the layers claiming a swatch key keeps it** — the last of them in draw order, read
+        off the end of a bottom-first list exactly as :meth:`_keyed_layer` reads ``None``.
+
+        That is the topmost *claimant*, which is not always the layer :meth:`legend` with no id would key:
+        only a layer that asked for a swatch key is in this contest, while :meth:`_keyed_layer` takes the
+        topmost layer carrying a colour encoding whether it asked for a key or not. Measured, on three
+        categorical fills ``['a', 'b', 'c']`` where a figure arrives handing a shown swatch guide to ``a``
+        and ``b`` only, the keeper is ``b`` — and ``b`` is what the axes then draws — while
+        ``_keyed_layer(None)`` answers ``c``. Settling on ``c`` instead would key a layer nothing asked to
+        have keyed, so the narrower reading is the right one here; the two coincide whenever every coloured
+        layer on the figure claims a key.
+
         It is not "whichever the renderer happened to draw last": `_reconcile` visits removed, rebuilt,
         restyled and added layers in that order, so the last legend drawn is not reliably the topmost. The
         keeper's key is therefore **drawn again** rather than assumed, which both puts the axes on the
