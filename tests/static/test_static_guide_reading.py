@@ -486,14 +486,26 @@ class TestAnAnchoredGuideIsActuallyDrawnThere:
             exposes no placement. It must not pick a corner on the caller's behalf — `Guide` documents `None`
             as "the tier's own default", and inventing one here would make a figure drawn on this tier
             disagree with the same figure drawn anywhere else.
+
+            Read as geometry, like its sibling, and **not** as `bar.orientation` — which is the reading the
+            sibling's own docstring condemns and which this test carried until review M11 (its second
+            catch). `_COLORBAR_SIDES` holds only `left` and `right`, so every placement the tier can force
+            is vertical: `orientation` survived forcing `location='left'` on every bar, the very defect
+            named above. The drawn bar's `x0` beyond the axes' `x1` is where matplotlib's own default puts
+            it and is where none of `left`, `top` or `bottom` can put it (measured: default and `right`
+            start at x0=0.784 with the axes ending at x1=0.745, while `left` starts at 0.125 and `top` and
+            `bottom` span the axes' full width from 0.125).
         """
         canvas = Map(crs=dataset.epsg)
         try:
             canvas.field(dataset, name="acc")
             bar = canvas.colorbar("acc") and canvas._renderer.drawn["acc"].guides[0]
-            assert bar.orientation == "vertical", (
-                "matplotlib's own default for a colorbar is vertical; an unanchored guide should reach it "
-                f"untouched, and this one is {bar.orientation!r}"
+            bar_x = bar.ax.get_position().x0
+            axes_x = canvas.ax.get_position().x1
+            assert bar_x > axes_x, (
+                "an unanchored guide must leave the placement to matplotlib, which puts the bar clear of "
+                f"the right-hand edge of the axes (x1={axes_x:.3f}); this bar starts at x0={bar_x:.3f}, so "
+                "a side was picked on the caller's behalf"
             )
         finally:
             canvas.close()
