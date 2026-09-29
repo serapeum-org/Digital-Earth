@@ -29,7 +29,7 @@ import inspect
 import os
 import warnings
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -2261,7 +2261,7 @@ class TexturedGlobe(WatermarkMixin):
         self._animation_fps = 1000.0 / interval
         return anim
 
-    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs: Any) -> Path:
+    def save(self, path: str | os.PathLike[str], **kwargs: Any) -> Path:
         """Save the drawn figure to ``path``.
 
         Args:

@@ -42,7 +42,7 @@ import warnings
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 from digitalearth.base.capabilities import CapabilityError
 from digitalearth.base.custom import custom_kind
@@ -86,6 +86,40 @@ class DrawnLayer:
 
     element: Any
     style: Mapping[str, Any] = None  # type: ignore[assignment]
+
+    def drawn_as(self, element: Any) -> "DrawnLayer":
+        """Return this drawing again, carrying a different element for the same layer.
+
+        Every restyle in this tier goes through ``element.opts(...)``, which hands back a *new* element
+        rather than editing the one it was given, so the record of what was drawn has to be re-made around
+        it. It is a method rather than a bare ``dataclasses.replace`` at each such site because ``replace``
+        is typed as "some dataclass" rather than as this one — a function declaring ``-> DrawnLayer`` then
+        hands back a value nothing can check against the declaration. The ``cast`` is where that narrowing
+        happens, once, which is the same reasoning as the static tier's
+        :meth:`~digitalearth.static.renderer.DrawnLayer.colored_by`.
+
+        Inside, it **is** ``replace``: a field-by-field copy would silently drop the next field this record
+        grows, and ``replace`` cannot forget one.
+
+        Args:
+            element: The element to carry — the one the options were applied to.
+
+        Returns:
+            A new ``DrawnLayer`` with the style as it was; this one is frozen and unchanged.
+
+        Examples:
+            - The style rides along untouched, and the original still holds the element it was made with:
+                ```python
+                >>> from digitalearth.interactive.renderer import DrawnLayer
+                >>> drawn = DrawnLayer(element="points", style={"size": 4})
+                >>> drawn.drawn_as("points, keyed")
+                DrawnLayer(element='points, keyed', style={'size': 4})
+                >>> drawn.element
+                'points'
+
+                ```
+        """
+        return cast("DrawnLayer", with_fields(self, element=element))
 
 
 #: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked
@@ -246,7 +280,7 @@ def _draw_recorded_guide(layer: LayerSpec, drawn: DrawnLayer) -> DrawnLayer:
     taken, _refused = split_guide_options(drawn.element, opts)
     if not taken:
         return drawn
-    return with_fields(drawn, element=drawn.element.opts(**taken, backend="bokeh"))
+    return drawn.drawn_as(drawn.element.opts(**taken, backend="bokeh"))
 
 
 def _is_shown(element: Any) -> bool:

@@ -34,7 +34,7 @@ into classes — and only the arithmetic is injected.
 
 from dataclasses import dataclass, field
 from math import inf, isfinite, nextafter
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -103,7 +103,7 @@ class Scale:
 
     vmin: float
     vmax: float
-    scheme: Optional[Union[str, Tuple[float, ...]]] = None
+    scheme: str | Tuple[float, ...] | None = None
     breaks: Tuple[float, ...] = ()
     categories: Tuple[Any, ...] = ()
     missing: Optional[str] = None

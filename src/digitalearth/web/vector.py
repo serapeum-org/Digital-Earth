@@ -15,7 +15,7 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
@@ -133,7 +133,7 @@ def _even_levels(source: Any, count: int) -> list:
 
 
 def _as_interval(
-    interval: Union[float, ContourInterval, None],
+    interval: float | ContourInterval | None,
 ) -> Optional[ContourInterval]:
     """Read the `interval=` argument in either spelling, so a plain number keeps meaning "every N".
 
@@ -179,7 +179,7 @@ class _ContourLevels:
 
     spacing: Optional[ContourInterval]
     fixed: Optional[Any]
-    asked: Union[float, ContourInterval, None] = None
+    asked: float | ContourInterval | None = None
 
     @property
     def asked_as(self) -> str:
@@ -793,7 +793,7 @@ class VectorMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        interval: Union[float, ContourInterval, None] = None,
+        interval: float | ContourInterval | None = None,
         levels: Optional[Any] = None,
         band: int = DEFAULT_BAND,
         filled: bool = False,

@@ -22,7 +22,7 @@ says *where* from. Materialising both is the data tier's job (`DE-16`, Wave 2).
 
 from dataclasses import dataclass, replace
 from numbers import Integral
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from digitalearth.base.spec._serial import (
     as_list,
@@ -151,9 +151,7 @@ class Selection:
         object.__setattr__(self, "band", tuple(bands))
 
     @classmethod
-    def of(
-        cls, band: Union[int, Iterable[int]] = DEFAULT_BAND, **rest: Any
-    ) -> "Selection":
+    def of(cls, band: int | Iterable[int] = DEFAULT_BAND, **rest: Any) -> "Selection":
         """Build a selection, accepting a band as either a scalar or a sequence.
 
         The one constructor both spellings go through, so a builder that takes ``band=2`` and one that takes
@@ -235,7 +233,7 @@ class Selection:
         """
         return self.band[0]
 
-    def with_band(self, band: Union[int, Iterable[int]]) -> "Selection":
+    def with_band(self, band: int | Iterable[int]) -> "Selection":
         """Return a copy naming different bands, keeping every other axis.
 
         Args:
