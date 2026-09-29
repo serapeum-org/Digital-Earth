@@ -628,6 +628,41 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
             "showing the layer brought back a key the caller had taken off"
         )
 
+    @pytest.mark.parametrize("call", ["legend", "colorbar"])
+    @pytest.mark.parametrize("built", ["empty", "classified"])
+    def test_taking_off_a_key_nobody_asked_for_is_answered_not_refused(
+        self, call, built
+    ):
+        """`visible=False` on a map carrying no key comes back with the map, under either spelling.
+
+        Args:
+            call: The public method under test — one mechanism, two names.
+            built: Whether the map holds nothing at all or a classified layer nobody keyed.
+
+        Test scenario:
+            The flag decides which question a `None` `layer_id` asks, and only the `True` arm refuses: a
+            map with nothing classified cannot be *given* a key, but taking one off a map that has none is
+            already true. Both shapes of "no key" go through that arm — an empty map, which is the case
+            `WebMap().colorbar(visible=False)` must not crash on, and a classified layer nobody has keyed,
+            which is where `colorbar()` succeeds and `colorbar(visible=False)` has nothing to reach. Neither
+            may leave a guide behind either, since the resolution is what decides there is nothing to write.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap() if built == "empty" else _two_classified()
+        answered = getattr(web_map, call)(visible=False)
+        assert answered is web_map, (
+            f"{call}(visible=False) on a {built} map handed back {answered!r} rather than the map"
+        )
+        described = [
+            layer_id
+            for layer_id in web_map.layer_ids
+            if web_map.get_layer(layer_id).symbology.guide() is not None
+        ]
+        assert described == [], (
+            f"{call}(visible=False) wrote a guide onto {described} although no layer was keyed"
+        )
+
 
 class TestTheKeyFollowsItsLayer:
     """The deliverable: the panel is derived from the live layers' guides, so it cannot describe a ghost."""
