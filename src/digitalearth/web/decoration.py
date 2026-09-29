@@ -231,6 +231,52 @@ def keyable_layer_ids(web_map: Any) -> List[str]:
     return keyed
 
 
+def guided_layer_ids(web_map: Any) -> List[str]:
+    """Return the live layers asking to have their colour explained, bottom-first.
+
+    The keyable layers (:func:`keyable_layer_ids`) narrowed to those carrying a
+    :class:`~digitalearth.base.spec.encoding.Guide` that says ``show``. Visibility is **not** consulted
+    here: a guide on a hidden layer is a key the caller asked for and will see again the moment the layer
+    is shown, so it is still one of the map's keys — it is simply not the one on screen, which is
+    :func:`drawn_guide_layer`'s question.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        The ids in draw order, bottom first, so the caller reads the topmost off the end.
+    """
+    asked: List[str] = []
+    for layer_id in keyable_layer_ids(web_map):
+        guide = web_map._layer_tree.get(layer_id).symbology.guide()
+        if guide is not None and guide.show:
+            asked.append(layer_id)
+    return asked
+
+
+def drawn_guide_layer(web_map: Any) -> Optional[str]:
+    """Return the layer whose colour key is on screen, or `None` when none is.
+
+    **This tier draws one key**, and this is the one function that decides whose — the topmost *visible*
+    layer asking for one. Both callers need the same answer and for the same reason: the panel is derived
+    from it (:func:`refresh_legend_panel`), and `colorbar(visible=False)` with no id has to take off the key
+    the caller can see rather than whichever classified layer happens to sit on top (review M3). Two
+    readings of "whose key" is exactly how those two came to disagree.
+
+    Args:
+        web_map: The map to read.
+
+    Returns:
+        The layer id, or `None` when nothing on the map asks to be explained or everything that does is
+        hidden.
+    """
+    for layer_id in reversed(guided_layer_ids(web_map)):
+        # `is_visible` rather than `layer.visible`, so a layer hidden with its group counts as hidden.
+        if web_map._layer_tree.is_visible(layer_id):
+            return layer_id
+    return None
+
+
 def _legend_panel(spec: dict, guide: Guide, labels: Optional[Any]) -> tuple:
     """Build one colour key as a floating panel.
 
@@ -278,27 +324,27 @@ def refresh_legend_panel(web_map: Any) -> None:
     that goes with its layer takes the key with it for free.
 
     This tier draws **one** key, so when several layers carry a guide the topmost visible one wins; see
-    :meth:`DecorationMixin.legend` for what that means to a caller.
+    :meth:`DecorationMixin.legend` for what that means to a caller. Which one that is is
+    :func:`drawn_guide_layer`'s question, asked here and by `legend(visible=False)` alike so the two cannot
+    disagree about whose key is on screen.
 
     Args:
         web_map: The map whose panel to rebuild. Its ``_panels["legend"]`` is written, replaced, or removed;
             no other panel is touched.
     """
-    for layer_id in reversed(keyable_layer_ids(web_map)):
-        layer = web_map._layer_tree.get(layer_id)
-        guide = layer.symbology.guide()
-        # `is_visible` rather than `layer.visible`, so a layer hidden with its group counts as hidden.
-        if guide is None or not guide.show:
-            continue
-        if not web_map._layer_tree.is_visible(layer_id):
-            continue
-        web_map._panels["legend"] = _legend_panel(
-            web_map._legends[layer_id], guide, layer.symbology.props.get(LEGEND_LABELS)
-        )
+    layer_id = drawn_guide_layer(web_map)
+    if layer_id is None:
+        # Nothing on the map asks to be explained any more, so neither does the panel. Popped rather than
+        # left empty: `_panels` is what the widget builds its `InfoBoxControl`s from, and an entry here is
+        # a box.
+        web_map._panels.pop("legend", None)
         return
-    # Nothing on the map asks to be explained any more, so neither does the panel. Popped rather than left
-    # empty: `_panels` is what the widget builds its `InfoBoxControl`s from, and an entry here is a box.
-    web_map._panels.pop("legend", None)
+    layer = web_map._layer_tree.get(layer_id)
+    web_map._panels["legend"] = _legend_panel(
+        web_map._legends[layer_id],
+        layer.symbology.guide(),
+        layer.symbology.props.get(LEGEND_LABELS),
+    )
 
 
 #: Degrees between graticule lines when a caller names neither step — the interactive tier's own default, so
@@ -906,7 +952,7 @@ class DecorationMixin(_MixinBase):
         # `legend(position="middle")` raised, so a caller passing a flag through was checked half the time
         # (review L7). The layer the caller named is now checked on the same terms — see `_guide_target`.
         _check_position(position)
-        target = self._guide_target(layer_id, required=bool(visible))
+        target = self._guide_target(layer_id, visible=bool(visible))
         if target is None:
             return self
         _require_maplibre()
@@ -929,24 +975,24 @@ class DecorationMixin(_MixinBase):
         refresh_legend_panel(self)
         return self
 
-    def _guide_target(
-        self, layer_id: Optional[str], *, required: bool
-    ) -> Optional[str]:
+    def _guide_target(self, layer_id: Optional[str], *, visible: bool) -> Optional[str]:
         """Return the layer a colour key should describe.
 
         Args:
-            layer_id: The caller's choice, or `None` for the topmost classified layer.
-            required: Whether a map with nothing to describe is an error. `False` — a caller who passed
-                ``visible=False`` — answers `None` instead, which is what keeps
-                ``WebMap().colorbar(visible=False)`` from being a crash on an empty map.
+            layer_id: The caller's choice, or `None` to resolve one from the map.
+            visible: Which question a `None` `layer_id` asks. `True` — asking for a key — looks for a
+                classified layer to put one on, and a map with none is an error. `False` — asking for no
+                key — looks for the key the map already has, and a map with none answers `None` rather than
+                raising, which is what keeps ``WebMap().colorbar(visible=False)`` from being a crash on an
+                empty map.
 
         Returns:
             The layer id, or `None` when nothing qualifies and nothing was required.
 
         Raises:
             KeyError: when `layer_id` names no layer on this map.
-            ValueError: when `layer_id` names a layer that was not drawn with a classification, or when
-                `required` and no layer on the map was.
+            ValueError: when `layer_id` names a layer that was not drawn with a classification, or when a
+                key was asked for and no layer on the map is classified.
 
         Note:
             A named layer is refused **whatever ``visible`` says**, which is review L7's rule applied to the
@@ -956,23 +1002,35 @@ class DecorationMixin(_MixinBase):
             a ``visible=True``-only refusal — the documented point of the flag is that it can be passed
             through without branching.
 
-            Visibility is not consulted. A hidden layer can be keyed; the key is simply not drawn until it
-            is shown (see :func:`refresh_legend_panel`). One rule, stated once.
+            **The two flag values resolve differently on purpose, and the flag is not a third refusal
+            rule.** Asking for a key and taking one off are different questions of the map: one wants a
+            layer to explain, the other wants the key that is already there. One resolution served both,
+            `keyable[-1]`, so `colorbar(visible=False)` on a map where a lower layer was keyed wrote
+            ``show=False`` onto the topmost *classified* layer — one nobody had keyed — and left the drawn
+            key exactly where it was (review M3).
+
+            A key recorded on a **hidden** layer draws nothing but is still a key the caller asked for, so
+            `visible=False` falls back to the topmost layer *asking* for one when none is drawn — otherwise
+            taking a key off would be a no-op the next `set_visible` undid.
         """
         if layer_id is not None:
             self._legend_of(
                 layer_id
             )  # KeyError by name, then ValueError for no classification
             return layer_id
+        if not visible:
+            drawn = drawn_guide_layer(self)
+            if drawn is not None:
+                return drawn
+            asked = guided_layer_ids(self)
+            return asked[-1] if asked else None
         keyed = keyable_layer_ids(self)
         if keyed:
             return keyed[-1]
-        if required:
-            raise ValueError(
-                "legend() has nothing to describe: no classified layer has been added yet. Add a "
-                "choropleth (or any builder given column=...) first."
-            )
-        return None
+        raise ValueError(
+            "legend() has nothing to describe: no classified layer has been added yet. Add a "
+            "choropleth (or any builder given column=...) first."
+        )
 
     def _attach_guide(
         self, layer_id: str, guide: Guide, labels: Optional[list]

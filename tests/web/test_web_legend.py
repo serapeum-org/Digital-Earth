@@ -515,6 +515,48 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
             "a guide that says show=False must leave no key on screen"
         )
 
+    def test_hiding_with_no_id_takes_off_the_key_that_is_drawn(self):
+        """`colorbar(visible=False)` means "the key on screen, off" — the one on screen, not another.
+
+        Test scenario:
+            With no id the target was `keyable[-1]`, the topmost *classified* layer, whatever layer the
+            drawn key actually belongs to. So on a map where A is keyed and B (topmost) is classified but
+            was never keyed, `colorbar(visible=False)` wrote `Guide(show=False)` onto **B** and left A's key
+            exactly where it was: the call did nothing a viewer could see, and silently described a layer
+            nobody had asked anything about (review M3). A key is asked for and taken off through the same
+            resolution or the two cannot agree.
+        """
+        web_map = _two_classified().colorbar("A", label="People")
+        assert _whose_key(web_map) == "A", "A's key is the one on screen"
+        web_map.colorbar(visible=False)
+        assert _whose_key(web_map) is None, (
+            "the key the call took off is still drawn; a different layer was switched off"
+        )
+        assert web_map.get_layer("A").symbology.guide().show is False, (
+            "the layer whose key was drawn must be the one recorded as unexplained"
+        )
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            "a layer nobody keyed must not gain a guide from a call that named no layer"
+        )
+
+    def test_hiding_with_no_id_reaches_a_key_recorded_on_a_hidden_layer(self):
+        """Nothing is on screen, but a key was asked for — and asking for none must undo asking for one.
+
+        Test scenario:
+            The same defect from the other side, and why "the layer whose key is drawn" cannot be the whole
+            rule: a guide on a hidden layer draws nothing yet is still a key the caller asked for, and
+            showing the layer brings it back. Targeting only the drawn key would leave that one
+            unreachable, so `colorbar(visible=False)` would be a no-op that the next `set_visible` undid.
+        """
+        web_map = _two_classified().colorbar("B", label="Rain")
+        web_map.set_visible("B", False)
+        assert _whose_key(web_map) is None, "a hidden layer's key is not drawn"
+        web_map.colorbar(visible=False)
+        web_map.set_visible("B", True)
+        assert _whose_key(web_map) is None, (
+            "showing the layer brought back a key the caller had taken off"
+        )
+
 
 class TestTheKeyFollowsItsLayer:
     """The deliverable: the panel is derived from the live layers' guides, so it cannot describe a ghost."""
