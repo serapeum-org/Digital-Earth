@@ -610,6 +610,59 @@ class TestTheRowsComeFromTheScaleThatWasDrawn:
         assert scene._guides["point_cloud-1"].get("labels") is None, dict(scene._guides)
         assert derived[0].startswith(str(ranges[0][0])), (derived, ranges)
 
+    @pytest.mark.parametrize(
+        "labels",
+        [[], ["only"], ["a", "b", "c", "d", "e"]],
+        ids=["empty", "short", "long"],
+    )
+    def test_a_label_list_that_does_not_number_the_rows_is_refused(self, scene, labels):
+        """A key that does not number the classes stops matching the picture, on this tier as on three.
+
+        Args:
+            scene: The scene under test.
+            labels: A list that is shorter or longer than the three classes the layer contributes.
+
+        Test scenario:
+            The count was never checked here: a short list left rows with their derived text and a long one
+            was silently dropped — measured `labels=['a','b','c','d','e']` on a 3-class layer drawing three
+            entries, with two labels gone. Static, web and interactive all refuse a mismatch, and round 1
+            hoisted those checks precisely so no argument is valid only half the time (review R2-M5).
+        """
+        points = _points(6)
+        values = np.array(["a", "b", "a", "c", "b", "c"], dtype=object)
+        scene.point_cloud(points, values=values, scheme="categorical")
+        with pytest.raises(ValueError) as excinfo:
+            scene.legend(labels=labels)
+        message = str(excinfo.value)
+        assert f"{len(labels)} entries" in message, message
+        assert "3 rows" in message, message
+
+    def test_a_refused_label_list_leaves_nothing_recorded_behind(self, scene):
+        """A refusal must not leave rows on the record that every later render would trip over.
+
+        Test scenario:
+            The rows are drawn state on the scene, written before the reconcile runs. Refusing from the
+            reconcile instead of from `legend()` would roll the *figure* back and leave the record holding
+            a list that does not number the rows — so the scene would go on refusing every subsequent
+            draw. The refusal therefore happens before anything is recorded, which the second `legend()`
+            here proves by drawing the derived rows.
+
+        Args:
+            scene: The scene under test.
+        """
+        points = _points(6)
+        values = np.array(["a", "b", "a", "c", "b", "c"], dtype=object)
+        scene.point_cloud(points, values=values, scheme="categorical")
+        with pytest.raises(ValueError):
+            scene.legend(labels=["only"])
+        assert "labels" not in scene._guides.get("point_cloud-1", {}), dict(
+            scene._guides
+        )
+        scene.legend()
+        box = scene.plotter.legend
+        rows = [box.GetEntryString(i) for i in range(box.GetNumberOfEntries())]
+        assert rows == ["a", "b", "c"], rows
+
 
 class TestWhatPyvistasOwnSlotsForce:
     """One bar per title, one legend per window — measured on PyVista 0.48.4, not assumed."""

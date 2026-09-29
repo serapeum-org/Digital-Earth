@@ -260,6 +260,25 @@ def _keyed(scale: Optional[Scale]) -> bool:
     return scale is not None and (scale.is_classified or scale.is_categorical)
 
 
+def _keyed_row_count(scale: Scale) -> int:
+    """Return how many rows a keyed layer's classes contribute to the legend box.
+
+    Args:
+        scale: The layer's colour scale, of one of the two shapes :func:`_keyed` answers `True` for.
+
+    Returns:
+        One row per category for a categorical scale, one per class for a graduated one — the two arms
+        :meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale` keys.
+
+        The rows *themselves* are derived at draw time from that method, which needs the colours read back
+        off the drawn lookup table and so cannot be built before the layer is on the window. The **count**
+        is a property of the scale alone, and :meth:`GuideMixin.legend` has to know it before it records
+        anything: refusing from the reconcile instead would roll the figure back and leave the caller's
+        label list on the record, where every later draw would trip over it (review R2-M5).
+    """
+    return len(scale.categories) if scale.is_categorical else len(scale.class_ranges())
+
+
 def _colour_encoding(figure: FigureSpec, layer_id: str) -> Encoding:
     """Return one layer's colour encoding, refusing a layer that has none.
 
@@ -496,8 +515,12 @@ def _legend_rows(
 
     Args:
         spec: The legend derived from the layer's scale.
-        labels: The caller's own row labels, replacing the derived ones. A shorter or longer list is used for
-            as many rows as it covers, so naming the first two categories of five renames two rows.
+        labels: The caller's own row labels, replacing the derived ones. :meth:`GuideMixin.legend` refuses a
+            list that does not number the rows, so in the ordinary case there is exactly one label per
+            entry. The per-row fallback below is for the residual case that check cannot reach: the labels
+            are drawn state on the scene rather than part of the figure, so a layer reclassified by
+            `replace_layer` after they were recorded can arrive here with more classes than the caller
+            named. Those rows keep their derived text rather than the box losing them.
         prefix: The layer's title, prepended to every row when more than one layer is keyed — a render window
             holds one legend box, and an unprefixed box of two layers' classes says nothing about which layer
             a swatch belongs to. `None` leaves the labels bare, which is the single-layer case.
@@ -940,17 +963,20 @@ class GuideMixin(_MixinBase):
                 just drew, and recorded before the checks they would outlive a refused call. `None`
                 **clears** labels an earlier call recorded rather than leaving them in place, so one call's
                 override does not outlive it; `colorbar()` therefore drops them too, exactly as the static
-                tier's `colorbar` does.
+                tier's `colorbar` does. A list that does not number the layer's rows is refused here, which
+                is why "after every check" matters: from the reconcile the figure would roll back and the
+                list would stay on the record, refusing every later draw.
 
         Returns:
             The id of the layer that was keyed.
 
         Raises:
             KeyError: when `layer_id` names no layer on this scene.
-            ValueError: when the layer is not coloured by data, when no layer is and none was named, or when
-                the layer's colour has the wrong shape for the key asked for. A title that collides with
-                another layer's is refused too, from the reconcile the record kicks off rather than from here
-                — see the note below this method.
+            ValueError: when the layer is not coloured by data, when no layer is and none was named, when
+                the layer's colour has the wrong shape for the key asked for, or when `labels` does not
+                number the rows the layer contributes. A title that collides with another layer's is
+                refused too, from the reconcile the record kicks off rather than from here — see the note
+                below this method.
         """
         # Validated before the flag is read, all of it: `colorbar(visible=False)` on a layer with no colour
         # key was accepted while `colorbar()` on the same layer raised, so one spelling was checked only
@@ -967,6 +993,22 @@ class GuideMixin(_MixinBase):
                     "show them with legend()"
                 )
             )
+        scale = encoding.scale
+        if labels is not None and scale is not None and keyed:
+            # Refused before anything is recorded, and before the reconcile runs: a list that does not
+            # number the rows leaves swatches unlabelled or labels swatches that are not drawn, and either
+            # way the key stops matching the picture. This tier alone took it — a short list kept the
+            # derived text for the rows it did not cover and a long one was silently dropped — while
+            # static, web and interactive all refuse, which is the asymmetry round 1 removed between the
+            # other three (review R2-M5).
+            rows = _keyed_row_count(scale)
+            given = len(list(labels))
+            if given != rows:
+                raise ValueError(
+                    f"{caller}: labels= has {given} entries and layer {resolved!r} contributes {rows} "
+                    f"rows; a short list leaves swatches unlabelled and a long one labels swatches that "
+                    f"are not drawn, so either way the key stops matching the picture"
+                )
         # Replaced on every call, not only written on the calls that name rows: `None` *clears* an override
         # an earlier call recorded, so one call's rows do not outlive it. Written only when given, a layer
         # whose rows had once been named could never get its derived ranges back (review M9). This is the
@@ -1098,7 +1140,10 @@ class GuideMixin(_MixinBase):
             layer_id: Which layer's classes to list. `None` takes the most recent layer coloured by data.
             title: Heading for this layer's rows. `None` uses the column or array the colour is driven by.
             labels: The caller's own row labels, replacing the derived ones — for units, or for renaming
-                categories. Recorded as **drawn state** on the scene rather than in the figure, exactly as
+                categories. One per row: a list that does not number the classes this layer contributes is
+                refused, as it is on the other three tiers, because a short one leaves swatches unlabelled
+                and a long one labels swatches that are not drawn. Recorded as **drawn state** on the scene
+                rather than in the figure, exactly as
                 :meth:`~digitalearth.three_d.decoration.DecorationMixin.set_title`'s font size and subtitle
                 are: the guide is what travels, and the labels are how this tier draws it. `None` clears
                 labels an earlier call recorded, bringing the derived ranges or categories back, so one
@@ -1110,9 +1155,9 @@ class GuideMixin(_MixinBase):
 
         Raises:
             KeyError: when `layer_id` names no layer on this scene.
-            ValueError: when the named layer is not coloured by data; when none is and none was named; or
-                when the layer is coloured by a **continuous ramp**, which has no classes to list — its key
-                is :meth:`colorbar`.
+            ValueError: when the named layer is not coloured by data; when none is and none was named; when
+                the layer is coloured by a **continuous ramp**, which has no classes to list — its key is
+                :meth:`colorbar`; or when `labels` does not number the rows the layer contributes.
 
         Examples:
             - A classified point cloud's classes, listed with the colours they were drawn in:
