@@ -28,7 +28,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 from digitalearth.base.sources import get_source  # noqa: E402
-from digitalearth.base.spec import Symbology  # noqa: E402
+from digitalearth.base.spec import Guide, Symbology  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
 from digitalearth.three_d.guides import (  # noqa: E402
@@ -68,6 +68,32 @@ def _points(n=20):
         numpy.ndarray: the point table.
     """
     return np.column_stack([np.arange(float(n)), np.arange(float(n)), np.zeros(n)])
+
+
+def _retitled(figure, layer_id, title):
+    """Return ``figure`` with one layer's colour guide asking for another title.
+
+    Built by hand rather than through :meth:`Scene3D.colorbar`, because the point of the tests that use it
+    is a figure whose layers change **together** — which a call at a time cannot describe.
+
+    Args:
+        figure: The figure to rewrite.
+        layer_id: The layer whose guide to replace.
+        title: What its key should be called.
+
+    Returns:
+        The rewritten :class:`~digitalearth.base.spec.FigureSpec`.
+    """
+    layer = figure.layers.get(layer_id)
+    return with_fields(
+        figure,
+        layers=figure.layers.replace(
+            with_fields(
+                layer,
+                symbology=layer.symbology.with_guide(Guide(show=True, title=title)),
+            )
+        ),
+    )
 
 
 def _raster():
@@ -708,6 +734,65 @@ class TestWhatPyvistasOwnSlotsForce:
         assert list(scene.plotter.scalar_bars.keys()) == [], list(
             scene.plotter.scalar_bars.keys()
         )
+
+    def test_two_layers_swapping_their_titles_in_one_figure_is_not_a_collision(
+        self, scene
+    ):
+        """One bar per title is a rule about the end state, not about every step of reaching it.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Each layer used to be brought all the way to what it wanted before the next was touched, so a
+            figure that swaps two titles reached the second layer with the first's **old** bar still on the
+            window, and an end state that holds one bar per title was refused partway through (review L9).
+            The refusal rolled the scene back, so the swap could not be described at all.
+        """
+        scene.terrain(_dem(), name="a")
+        scene.terrain(_dem(), name="b")
+        scene.colorbar("a", label="A")
+        scene.colorbar("b", label="B")
+        swapped = _retitled(_retitled(scene.figure_spec, "a", "B"), "b", "A")
+        scene.draw_figure(swapped)
+        assert sorted(scene.plotter.scalar_bars.keys()) == ["A", "B"], list(
+            scene.plotter.scalar_bars.keys()
+        )
+        assert (scene._guides["a"]["bar"], scene._guides["b"]["bar"]) == ("B", "A"), (
+            dict(scene._guides)
+        )
+
+    def test_a_refusal_in_the_second_pass_puts_back_what_the_first_took_off(
+        self, scene
+    ):
+        """Bars given up before any is added come back when the pass that follows refuses.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Taking every changing layer's bar off first is what lets a swap through, and it means a refusal
+            can now be reached with bars already off the window. What puts them back is the scene's own
+            rollback — `_change` re-applies the figure it was leaving — and that has to cover the plotter,
+            not only the description. Three terrains are needed: two of them change, and the third holds
+            the title the second one collides with.
+        """
+        for name in ("a", "b", "c"):
+            scene.terrain(_dem(), name=name)
+        scene.colorbar("a", label="A")
+        scene.colorbar("b", label="B")
+        scene.colorbar("c", label="C")
+        bars = sorted(scene.plotter.scalar_bars.keys())
+        clash = _retitled(_retitled(scene.figure_spec, "a", "X"), "b", "C")
+        with pytest.raises(ValueError, match="one bar per title"):
+            scene.draw_figure(clash)
+        assert sorted(scene.plotter.scalar_bars.keys()) == bars == ["A", "B", "C"], (
+            sorted(scene.plotter.scalar_bars.keys()),
+            bars,
+        )
+        assert [
+            scene.get_layer(held).symbology.guide().title for held in scene.layer_ids
+        ] == ["A", "B", "C"], "the refused figure must not be left on the scene"
 
     def test_two_keyed_layers_share_one_box_prefixed_by_their_titles(self, scene):
         """A window holds one legend actor, so the box is built from every keyed layer rather than replaced.

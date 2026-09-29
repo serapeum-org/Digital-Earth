@@ -656,32 +656,94 @@ def _redraw_bars(
 
     Raises:
         ValueError: when a guide wants a title another layer's bar already holds — see :func:`redraw_guides`.
+
+    Note:
+        **Two passes, not one reconcile per layer.** Every changing layer gives its old bar up before any
+        layer asks for a new one, because a plotter holds one bar per title and the rule is about the state
+        this pass arrives at, not about every step of getting there. Bringing each layer all the way through
+        in turn refused a figure that merely **swaps** two titles: the second layer was reached while the
+        first's old bar was still on the window, and an end state holding one bar per title was refused
+        partway (review L9).
     """
+    plans = _guide_plan(figure)
+    current = {
+        plan.layer_id: _current_bar(scene, figure, plotter, held, plan)
+        for plan in plans
+    }
+    for plan in plans:
+        title = current[plan.layer_id]
+        if title is not None and title != plan.wanted_bar:
+            _release_bar(scene, figure, plotter, plan.layer_id, title)
+            held[plan.layer_id].pop("bar", None)
     # Which layer each title has been given to, so a later layer asking for the same one can be told whose it
-    # is. Filled **after** each reconcile rather than before, so a layer never reads its own entry.
+    # is. Filled **after** each add rather than before, so a layer never reads its own entry.
     taken: Dict[str, str] = {}
-    for plan in _guide_plan(figure):
-        _reconcile_bar(scene, figure, plotter, held, plan, taken)
+    for plan in plans:
+        _add_bar(
+            scene, plotter, held[plan.layer_id], plan, current[plan.layer_id], taken
+        )
         if plan.wanted_bar is not None:
             taken[plan.wanted_bar] = plan.layer_id
 
 
-def _reconcile_bar(
+def _current_bar(
     scene: Any,
     figure: FigureSpec,
     plotter: Any,
     held: Dict[str, Dict[str, Any]],
     plan: ColourGuide,
+) -> Optional[str]:
+    """Return the title of the bar one layer's key is on right now, or `None` when it has none.
+
+    Args:
+        scene: The scene whose actors name the arrays.
+        figure: The figure being drawn.
+        plotter: The plotter to read.
+        held: The scene's record of what it has drawn, keyed by layer id. The layer's record is created here
+            if it has none, since every layer in the plan is about to be reconciled.
+        plan: What this layer asks for.
+
+    Returns:
+        The title this layer's key is drawn under: the one it was recorded with, else PyVista's own.
+    """
+    record = held.setdefault(plan.layer_id, {})
+    # Annotated rather than inferred: the record is a `Dict[str, Any]` bag of drawn state, so an unannotated
+    # read of it is `Any` and this function would hand one back under a `str | None` signature.
+    current: Optional[str] = record.get("bar")
+    if current is not None:
+        return current
+    # PyVista titles the bar it draws of its own accord after the scalars array, so that bar *is* this
+    # layer's key. Where another layer binds an array of the same name the engine has bound both mappers to
+    # one bar — which is still this layer's key, so asking for it **by its own title** is the no-op
+    # `colorbar()` is documented to be, and is adopted. Refusing it instead made `colorbar()` with no label
+    # an error on every scene holding two layers over one array (review M8). It is not this layer's alone to
+    # *retitle or take away*, though, which is why adoption stops at that one title and why
+    # :func:`_release_bar` gives it up without removing it.
+    engine = _engine_title(scene, plan.layer_id, plan.field)
+    if engine in plotter.scalar_bars and (
+        plan.wanted_bar == engine
+        or not _sharing_bar(scene, figure, plan.layer_id, engine)
+    ):
+        return engine
+    return None
+
+
+def _add_bar(
+    scene: Any,
+    plotter: Any,
+    record: Dict[str, Any],
+    plan: ColourGuide,
+    current: Optional[str],
     taken: Dict[str, str],
 ) -> None:
-    """Bring one layer's scalar bar to what its guide asks for.
+    """Draw one layer's scalar bar, every changing layer having already given its old one up.
 
     Args:
         scene: The scene whose actors the bar reads its mapper from.
-        figure: The figure being drawn.
         plotter: The plotter to draw on.
-        held: The scene's record of what it has drawn, keyed by layer id.
+        record: This layer's entry in the scene's record of what it has drawn.
         plan: What this layer asks for.
+        current: The title its key was on before this pass, from :func:`_current_bar`.
         taken: The titles already given to earlier layers, for the message.
 
     Raises:
@@ -689,32 +751,12 @@ def _reconcile_bar(
             only place that refusal is made** — see the note under :meth:`GuideMixin._record_guide` for why
             there is no second guard over the guides before the record is written.
     """
-    record = held.setdefault(plan.layer_id, {})
     wanted = plan.wanted_bar
-    current = record.get("bar")
-    if current is None:
-        # PyVista titles the bar it draws of its own accord after the scalars array, so that bar *is* this
-        # layer's key. Where another layer binds an array of the same name the engine has bound both mappers
-        # to one bar — which is still this layer's key, so asking for it **by its own title** is the no-op
-        # `colorbar()` is documented to be, and is adopted. Refusing it instead made `colorbar()` with no
-        # label an error on every scene holding two layers over one array (review M8). It is not this
-        # layer's alone to *retitle or take away*, though, which is why adoption stops at that one title and
-        # why :func:`_release_bar` gives it up without removing it.
-        engine = _engine_title(scene, plan.layer_id, plan.field)
-        if engine in plotter.scalar_bars and (
-            wanted == engine or not _sharing_bar(scene, figure, plan.layer_id, engine)
-        ):
-            current = engine
-    if current == wanted:
-        if wanted is None:
-            record.pop("bar", None)
-        else:
-            record["bar"] = wanted
-        return
-    if current is not None:
-        _release_bar(scene, figure, plotter, plan.layer_id, current)
-        record.pop("bar", None)
     if wanted is None:
+        record.pop("bar", None)
+        return
+    if current == wanted:
+        record["bar"] = wanted
         return
     if wanted in plotter.scalar_bars:
         holder = taken.get(wanted)
