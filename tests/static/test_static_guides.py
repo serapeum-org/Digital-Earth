@@ -537,6 +537,32 @@ class TestTheLayerIsResolvedBeforeVisibleIsHonoured:
             "the refused labels were recorded anyway"
         )
 
+    def test_an_empty_label_list_is_refused_like_any_other_wrong_count(self, keyed):
+        """`legend(labels=[])` is a count that does not number the rows, so it is refused too.
+
+        Args:
+            keyed: A map with a raster and a text label.
+
+        Test scenario:
+            `_rows` asked `if not labels`, so the empty list read as "the caller gave none" and the rows
+            were derived instead — `legend(labels=["a"])` raised on a five-row key while `legend(labels=[])`
+            was accepted, and the refusal could never say "got 0" (review L1). Web and interactive both
+            refuse it. `None` is the spelling for "derive them"; an empty list is a list, and the argument
+            must not be valid only for one of its values.
+        """
+        with pytest.raises(ValueError, match="needs 5 labels; got 0"):
+            keyed.legend(labels=[])
+        assert keyed.get_layer("acc").symbology.guide() is None, (
+            "the refused call left a guide on the layer"
+        )
+        # The neighbouring spelling still derives, so the fix is "an empty list is a count", not "any
+        # falsy labels argument is refused".
+        keyed.legend(labels=None)
+        assert keyed.get_layer("acc").symbology.guide().show is True
+        assert "guide_labels" not in keyed.get_layer("acc").symbology.props, (
+            "labels=None must clear the record rather than store an empty override"
+        )
+
     def test_a_layer_with_no_scale_is_refused_either_way(self, keyed):
         """The other refusal raised inside the draw: no scale, so no rows to key it with.
 

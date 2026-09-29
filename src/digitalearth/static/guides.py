@@ -362,9 +362,16 @@ def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
         ValueError: when the recorded labels do not number the rows — a short list leaves swatches
             unlabelled and a long one labels swatches that are not drawn, and either way the key stops
             matching the picture.
+
+    Note:
+        "The caller gave none" is ``None``, not falsiness. This asked ``if not labels``, so an **empty
+        list** read as "derive them" — ``legend(labels=["a"])`` was refused on a five-row key while
+        ``legend(labels=[])`` was accepted, and the refusal below could never say "got 0" (review L1).
+        `Scene._record_key` stores the caller's list as a tuple and *removes* the property for ``None``, so
+        the two are distinguishable here; the web and interactive tiers both refuse the empty list.
     """
     labels = layer.symbology.props.get(GUIDE_LABELS_KEY)
-    if not labels:
+    if labels is None:
         return [entry.label for entry in spec.entries]
     rows = [str(label) for label in labels]
     if len(rows) != len(spec.entries):
