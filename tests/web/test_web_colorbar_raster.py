@@ -130,8 +130,12 @@ class TestTheBandIsWhatARasterKeyDescribes:
         scene.colorbar(label="Accumulation")
         assert "legend" in scene._panels, "a tiled raster must be keyable too"
 
-    def test_a_band_with_nothing_to_colour_publishes_no_encoding(self):
+    def test_a_band_with_nothing_to_colour_publishes_no_encoding(self, dataset):
         """The measured "cannot": no finite cell, no span, so nothing honest to say about the colour.
+
+        Args:
+            dataset: A real raster, so the band the builder would name is a real one — the point being
+                that it is not named at all.
 
         Test scenario:
             The other side of the choice. A band of pure NoData has no limits to describe — the draw
@@ -139,13 +143,29 @@ class TestTheBandIsWhatARasterKeyDescribes:
             *keyable* with nothing to put in the key, which is the empty box in the corner the tier refuses
             everywhere else. So the builder publishes none, and a key on that layer is refused for the same
             reason it is refused on a flat-coloured one.
+
+            Both halves are asserted, because the first alone is only about the helper: that no domain is
+            reported, and that the builder handed that answer files neither an encoding for a guide to hang
+            on nor the key's content beside it. `last_legend`/`last_breaks` are the half a scale-less
+            encoding would leave inconsistent — a layer describing a colour with a key whose rows were
+            never derived.
         """
         import numpy as np
 
+        from digitalearth.web import WebMap
         from digitalearth.web.raster import _colour_domain
 
         assert _colour_domain(np.full((3, 3), np.nan), vmin=None, vmax=None) is None, (
             "a band with no finite cell must report no colour domain at all"
+        )
+        web_map = WebMap()
+        published = web_map._band_colour(dataset, band=1, cmap="viridis", limits=None)
+        assert published == {}, (
+            f"a band with no span published {sorted(published)} for a guide to hang on"
+        )
+        assert (web_map.last_legend, web_map.last_breaks) == (None, None), (
+            "the key's content was filed for a band whose colours nobody can name: "
+            f"{web_map.last_legend}, {web_map.last_breaks}"
         )
 
     @pytest.mark.parametrize(
