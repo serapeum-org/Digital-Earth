@@ -485,6 +485,128 @@ class TestTheKeyIsAskedForEitherWay:
         assert hidden.asked == [("legend", True), ("legend", False)], hidden.asked
 
 
+class _FakeInteractiveScene:
+    """Minimal ``InteractiveMap`` stand-in for `_add_interactive_key`.
+
+    Answers the three questions the helper asks — which layers can be explained, which one it keys, and
+    what that layer's colour looks like — and records the key call it is given. A stand-in rather than a
+    real map because the arm under test is what happens when the tier's own `colorbar`/`legend` *fails*,
+    which a working tier does not do; the same trade ``tests/test_add_web_legend.py`` makes, and the reason
+    both run in the default ``dev`` environment with no HoloViz extra installed.
+
+    Args:
+        categorical: Whether the keyed layer is coloured by category, which is keyed by a legend.
+        raises: What the key call raises instead of recording, or ``None`` to record.
+    """
+
+    def __init__(self, *, categorical=False, raises=None):
+        self._categorical = categorical
+        self._raises = raises
+        #: Every key call this scene was given, as ``(method, layer_id, visible)`` in order.
+        self.asked = []
+
+    def _guidable(self):
+        """Return the ids of the layers whose colour varies with their data."""
+        return ["flow"]
+
+    def _guided_layer(self, method, layer_id):
+        """Return the layer the key describes, as the tier resolves it.
+
+        Args:
+            method: The caller's name, for the refusal this stand-in never gives.
+            layer_id: The caller's id, always ``None`` from this helper.
+
+        Returns:
+            The one layer this stand-in holds.
+        """
+        return "flow"
+
+    def get_layer(self, layer_id):
+        """Return a description whose colour is driven through a categorical or a continuous scale.
+
+        Args:
+            layer_id: The layer to describe.
+
+        Returns:
+            A `LayerSpec` carrying that colour encoding.
+        """
+        scale = (
+            Scale.categorical(["a", "b"], ["#f00", "#00f"])
+            if self._categorical
+            else Scale.from_limits(0.0, 1.0)
+        )
+        return LayerSpec(
+            layer_id,
+            "raster",
+            symbology=Symbology(
+                encodings={"color": Encoding.by_field("color", "v", scale=scale)}
+            ),
+        )
+
+    def colorbar(self, layer_id, *, visible=True):
+        """Record the bar call, or raise what this stand-in was built with.
+
+        Args:
+            layer_id: The layer being keyed.
+            visible: Whether the key is drawn.
+        """
+        self.asked.append(("colorbar", layer_id, visible))
+        if self._raises is not None:
+            raise self._raises
+
+    def legend(self, layer_id, *, visible=True):
+        """Record the swatch call, or raise what this stand-in was built with.
+
+        Args:
+            layer_id: The layer being keyed.
+            visible: Whether the key is drawn.
+        """
+        self.asked.append(("legend", layer_id, visible))
+        if self._raises is not None:
+            raise self._raises
+
+
+class TestAnInteractiveKeyThatFailsIsSkippedNotRaised:
+    """`_add_interactive_key` tolerates a layer it cannot key, and only that.
+
+    ``quickplot``'s ``colorbar=`` default asks for a key *if there is one to draw*, so a tier that refuses
+    the one layer it resolved must not take the whole one-call map down with it — the same line
+    :func:`~digitalearth.api._add_static_key` and :func:`~digitalearth.api._add_web_legend` hold. The
+    tolerance is bounded by :data:`~digitalearth.api.UNMAPPABLE`: anything else is a defect, not an
+    unkeyable layer, and has to reach the caller.
+    """
+
+    def test_a_refused_key_is_warned_about_and_the_call_still_returns(self, caplog):
+        """The map comes back and the warning names the key that was skipped.
+
+        Args:
+            caplog: pytest's capture of the stdlib logger `api` warns through.
+        """
+        import logging
+
+        scene = _FakeInteractiveScene(raises=ValueError("nothing mappable to colorbar"))
+        with caplog.at_level(logging.WARNING, logger="digitalearth.api"):
+            assert qp._add_interactive_key(scene, visible=True) is None, (
+                "the helper returns nothing; the map is the caller's own"
+            )
+        assert scene.asked == [("colorbar", "flow", True)], scene.asked
+        assert "quickplot: colorbar skipped" in caplog.text, (
+            f"the skip was not announced: {caplog.text!r}"
+        )
+
+    def test_a_failure_that_is_not_an_unkeyable_layer_reaches_the_caller(self):
+        """A `KeyError` is a defect in the tier, not a layer with no key, so it propagates.
+
+        Test scenario:
+            The counterpart of the tolerance above, and why the `except` names three types rather than
+            `Exception`: swallowing everything would turn a renamed method or a broken install into a map
+            that silently carries no key, which is the failure mode `quickmap` is least able to explain.
+        """
+        scene = _FakeInteractiveScene(raises=KeyError("flow"))
+        with pytest.raises(KeyError):
+            qp._add_interactive_key(scene, visible=True)
+
+
 class TestFinish:
     """Tests for api._finish (PA-5)."""
 
