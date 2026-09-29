@@ -57,22 +57,20 @@ GUARD_MODULE = Path(__file__).resolve()
 #: a property declared in an engine-backed tier is still seen from the lean ``dev`` environment.
 PACKAGE_ROOT = Path(digitalearth.__file__).resolve().parent
 
-#: The property reads this guard's second half already found, by module, with the reason each is not fixed
-#: here rather than merely excused.
+#: The property reads this guard's second half is allowed to find, by module, with the reason each is named
+#: rather than fixed.
 #:
-#: Keyed on the read and not on a line number: an entry has to survive every edit above the site it names,
-#: and it is a **subset** check, so fixing one of these never turns this file red for its owner. Each read is
-#: a genuine instance of the shape — `scene.figure_spec` in the 3-D seam test is the sharpest, since
-#: `figure_spec` can itself raise `OffLimbError`, which is exactly what that block matches — and each lives in
-#: a tier whose suite needs an environment the `dev` gate does not run, so a fix here could not be verified:
+#: **Empty, and an empty subset check is an equality**: every site this guard was written alongside has since
+#: been fixed — the static one in the commit that added it, `three_d/test_seam3d.py`'s `scene.figure_spec`,
+#: and the four `crs=dataset.epsg` / `crs=fc.epsg` reads in `test_quickplot.py` and
+#: `interactive/test_interactive_autostyle.py`, each hoisted above its `with` and each proved by a mutant
+#: that makes `epsg` raise the refusal's own `ValueError`. So a read anywhere under ``tests/`` fails the
+#: check below with nothing left to be excused by.
 #:
-#: - ``interactive/`` and ``test_quickplot.py``'s ``crs=dataset.epsg`` / ``crs=fc.epsg``: a *pyramids*
-#:   property, read into the argument list of the refused `quickmap` call.
-#: - ``three_d/test_seam3d.py``'s ``scene.figure_spec``: the same shape as the static site this commit fixed.
-KNOWN_PROPERTY_READS = {
-    "interactive/test_interactive_autostyle.py": {"dataset.epsg"},
-    "test_quickplot.py": {"dataset.epsg", "fc.epsg"},
-}
+#: Kept rather than deleted because it is the documented place for the next one, and keyed on the read rather
+#: than on a line number so an entry survives every edit above the site it names — which also makes it a
+#: **subset** check, so clearing an entry can never turn this file red for whoever clears it.
+KNOWN_PROPERTY_READS: dict = {}
 
 
 def _property_names() -> set:
