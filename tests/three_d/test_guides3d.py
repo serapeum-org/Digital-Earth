@@ -706,6 +706,38 @@ class TestWhatPyvistasOwnSlotsForce:
             f"the refused layer must own no bar, got {dict(scene._guides)}"
         )
 
+    @pytest.mark.parametrize(
+        "holder, asking",
+        [("a", "b"), ("b", "a")],
+        ids=["holder-earlier", "holder-later"],
+    )
+    def test_the_refusal_names_the_holder_whichever_way_draw_order_runs(
+        self, scene, holder, asking
+    ):
+        """One collision is one message: the layer holding the title is named either way round.
+
+        Args:
+            scene: The scene under test.
+            holder: The layer given the title first.
+            asking: The layer refused for asking for it second.
+
+        Test scenario:
+            `taken` is filled as the second pass walks, so a layer refused because a layer **later** in
+            draw order holds the title read an empty map and fell to the anonymous branch — measured,
+            `colorbar("a", label="DEM")` while `b` held `"DEM"` said "for another layer", while the same
+            collision the other way round named `'a'`. The comment above `taken` described only the first
+            half ("so a later layer asking for the same one can be told whose it is"), which is why the
+            other half went unnoticed (review R2-N2).
+        """
+        scene.terrain(_dem(), name="a")
+        scene.terrain(_dem(), name="b")
+        scene.colorbar(holder, label="DEM")
+        with pytest.raises(ValueError) as excinfo:
+            scene.colorbar(asking, label="DEM")
+        message = str(excinfo.value)
+        assert f"for layer {holder!r}" in message, message
+        assert "another layer" not in message, message
+
     def test_two_layers_with_their_own_titles_each_get_a_bar(self, scene):
         """Distinct titles are two bars, and the engine's shared one goes once nothing reads it.
 

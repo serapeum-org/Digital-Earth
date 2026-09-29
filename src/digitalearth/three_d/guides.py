@@ -706,9 +706,18 @@ def _redraw_bars(
         if title is not None and title != plan.wanted_bar:
             _release_bar(scene, figure, plotter, plan.layer_id, title)
             held[plan.layer_id].pop("bar", None)
-    # Which layer each title has been given to, so a later layer asking for the same one can be told whose it
-    # is. Filled **after** each add rather than before, so a layer never reads its own entry.
-    taken: Dict[str, str] = {}
+    # Which layer each title has been given to, so a layer asking for one already held can be told whose it
+    # is. Seeded with the layers **keeping** the title they already hold, then filled after each add.
+    # Filling it only as the pass walked named the holder when it came earlier in draw order and said "for
+    # another layer" when it came later, although the refusal is the same one either way (review R2-N2) —
+    # and a layer that keeps its title is not reached by the release pass above, so it is exactly the case
+    # the walk cannot see. A layer still never reads its own entry: `_add_bar` returns on
+    # `current == wanted`, which is the condition the seed is built from, before it looks anything up.
+    taken: Dict[str, str] = {
+        plan.wanted_bar: plan.layer_id
+        for plan in plans
+        if plan.wanted_bar is not None and current[plan.layer_id] == plan.wanted_bar
+    }
     for plan in plans:
         _add_bar(
             scene, plotter, held[plan.layer_id], plan, current[plan.layer_id], taken
@@ -775,7 +784,9 @@ def _add_bar(
         record: This layer's entry in the scene's record of what it has drawn.
         plan: What this layer asks for.
         current: The title its key was on before this pass, from :func:`_current_bar`.
-        taken: The titles already given to earlier layers, for the message.
+        taken: Which layer holds each title, for the message — the layers keeping the one they already have
+            plus the layers this pass has given one to, so the holder is named whether it comes earlier or
+            later in draw order.
 
     Raises:
         ValueError: when the wanted title is one the window already carries for another layer. **This is the
