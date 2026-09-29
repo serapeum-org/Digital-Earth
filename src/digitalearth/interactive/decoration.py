@@ -1218,11 +1218,12 @@ class DecorationMixin(_MixinBase):
             either. So `field(dem).coastlines().colorbar()` titles the raster, where the old `show=` toggle
             wrote a `colorbar` option onto the coastline.
 
-            Where the layer added last carries no colour, the search falls back to the **topmost** layer in
-            draw order that does. Within the data band draw order *is* the order the layers were added, and
-            every kind that publishes a colour encoding is a data layer, so the fallback picks the
-            last-added coloured layer for every figure this tier can build; it is written as a draw-order
-            walk because that is the order the tree keeps and the only one it can be asked for.
+            Where the layer added last carries no colour, the search falls back to the **topmost coloured
+            layer in draw order**. Draw order is what the tree keeps and the only order it can be asked
+            for; it coincides with the order the layers were added only while none of them has been moved,
+            and `move_layer` parts the two. Measured: after `field(dem).field(dem).coastlines()` and
+            `move_layer("raster-2", 0)` the draw order is `['raster-2', 'raster-1', 'coastlines-1']` and
+            `colorbar()` keys `raster-1` — the topmost coloured layer — not the last-added `raster-2`.
 
         Raises:
             KeyError: when `layer_id` names no layer on this map, naming the ids that are.
