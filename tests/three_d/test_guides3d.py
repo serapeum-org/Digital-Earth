@@ -20,6 +20,8 @@ layer that asks for one, rather than the last caller replacing the previous).
 Gated on the optional ``3d`` extra (pyvista), as every module in this directory is.
 """
 
+from dataclasses import replace as with_fields
+
 import numpy as np
 import pytest
 
@@ -122,7 +124,7 @@ class TestTheKeyIsRecordedBeforeItIsDrawn:
         )
 
     def test_no_label_leaves_the_bar_the_engine_already_drew(self, scene):
-        """Asking for the key a caller already has changes nothing about the picture.
+        """Asking for the key a caller already has records the ask and changes nothing about the picture.
 
         Args:
             scene: The scene under test.
@@ -131,15 +133,27 @@ class TestTheKeyIsRecordedBeforeItIsDrawn:
             The guide's default title is the field the colour is driven by, which is the name PyVista titles
             its own bar with — so `colorbar()` on a freshly drawn terrain is a no-op on the window while
             still recording the ask. That is what makes `quickmap(colorbar=True)` honest.
+
+            Both halves are asserted. The window alone cannot tell "recorded, and drawn exactly as it was"
+            from "did nothing at all", because the engine's own bar is on it either way: a `colorbar()` whose
+            body was deleted outright left this test green (review M12).
         """
         scene.terrain(_dem())
+        engine = list(scene.plotter.scalar_bars.keys())
         scene.colorbar()
-        assert list(scene.plotter.scalar_bars.keys()) == ["elevation"], list(
-            scene.plotter.scalar_bars.keys()
+        guide = scene.get_layer("terrain-1").symbology.guide()
+        assert guide is not None, "colorbar() recorded no guide on the layer"
+        assert (guide.show, guide.title) == (True, None), guide
+        assert scene._guides["terrain-1"].get("bar") == "elevation", (
+            f"the engine's bar must become this layer's key, got {dict(scene._guides)}"
+        )
+        assert list(scene.plotter.scalar_bars.keys()) == engine == ["elevation"], (
+            list(scene.plotter.scalar_bars.keys()),
+            engine,
         )
 
     def test_the_guide_survives_the_round_trip_the_seam_exists_for(self, scene):
-        """`Symbology.to_dict()` → `from_dict()` returns the same guide, because it travels on the layer.
+        """`Symbology.to_dict()` → `from_dict()` returns a guide the tier then **draws** from.
 
         Args:
             scene: The scene under test.
@@ -147,13 +161,33 @@ class TestTheKeyIsRecordedBeforeItIsDrawn:
         Test scenario:
             A key drawn when asked and then forgotten could not be written into a figure. This is the
             property that the record — rather than the drawing — is the source of truth.
+
+            The restored description is carried into a fresh scene rather than only compared, because the
+            comparison alone exercises `base` and nothing else: with the whole of `redraw_guides` neutralised
+            this test stayed green, so it signed a seam it never crossed (review M12). The layer is rebuilt
+            from the **round-tripped** symbology, so the bar on the second window is drawn from a guide that
+            has been through the dict form.
         """
         scene.terrain(_dem())
         scene.colorbar(label="Elevation (m)")
-        symbology = scene.get_layer("terrain-1").symbology
-        restored = Symbology.from_dict(symbology.to_dict())
-        assert restored == symbology, (restored.to_dict(), symbology.to_dict())
+        held = scene.get_layer("terrain-1")
+        restored = Symbology.from_dict(held.symbology.to_dict())
+        assert restored == held.symbology, (
+            restored.to_dict(),
+            held.symbology.to_dict(),
+        )
         assert restored.guide().title == "Elevation (m)", restored.guide()
+        described = scene.figure_spec
+        described = with_fields(
+            described,
+            layers=described.layers.replace(with_fields(held, symbology=restored)),
+        )
+        second = Scene3D.from_figure(described, off_screen=True)
+        try:
+            drawn = list(second.plotter.scalar_bars.keys())
+        finally:
+            second.close()
+        assert drawn == ["Elevation (m)"], drawn
 
     def test_a_described_figure_draws_its_key_again(self, scene):
         """A figure drawn into a fresh scene brings its colour key with it.
@@ -175,15 +209,32 @@ class TestTheKeyIsRecordedBeforeItIsDrawn:
         assert drawn == ["Elevation (m)"], drawn
 
     def test_both_calls_chain(self, scene):
-        """Every decoration method on this tier returns the scene; these are no exception.
+        """Every decoration method on this tier returns the scene, and the chained calls both land.
 
         Args:
             scene: The scene under test.
+
+        Test scenario:
+            The return value alone is not the claim the docstring makes — "a key reads as part of the same
+            expression the layer was drawn in" is about what the window holds afterwards. Asserting only
+            `is scene` left a `colorbar()` that returned the scene and recorded nothing green (review M12),
+            so the two keys the chain asks for are read off the plotter here.
         """
-        scene.terrain(_dem())
-        assert scene.colorbar() is scene, "colorbar() must return the scene"
-        scene.point_cloud(_points(), values=_points()[:, 0], scheme="quantiles", k=3)
-        assert scene.legend() is scene, "legend() must return the scene"
+        points = _points()
+        scene.terrain(_dem(), name="dem")
+        scene.point_cloud(
+            points, values=points[:, 0], scheme="quantiles", k=3, name="classes"
+        )
+        chained = scene.colorbar("dem", label="Elevation (m)").legend(
+            "classes", title="Distance"
+        )
+        assert chained is scene, "both calls must return the scene"
+        assert list(scene.plotter.scalar_bars.keys()) == ["Elevation (m)"], list(
+            scene.plotter.scalar_bars.keys()
+        )
+        assert scene.plotter.legend.GetNumberOfEntries() == 3, (
+            "the second call in the chain must draw its own box"
+        )
 
 
 class TestTheKeyFollowsItsLayer:
@@ -254,20 +305,44 @@ class TestTheKeyFollowsItsLayer:
             list(scene.plotter.scalar_bars.keys()),
         )
 
-    def test_moving_the_layer_does_not_orphan_its_bar(self, scene):
-        """Draw order is recorded rather than drawn here, and a key must not be lost to a reorder.
+    def test_moving_the_layer_keeps_its_bar_and_redeals_the_box(self, scene):
+        """Draw order is recorded rather than drawn here: a key survives a reorder, and follows it.
 
         Args:
             scene: The scene under test.
+
+        Test scenario:
+            A bar keeps its title whether or not a move redraws anything, so asserting only that left this
+            test green with `redraw_guides` skipped for an order-only change (review M12). The keyed box is
+            the half a move is visible in: it is built from every keyed layer **in layer order**, so swapping
+            two keyed clouds swaps their blocks of rows. A move that never reached the reconcile would leave
+            the old order on the window.
         """
         points = _points()
+        scene.point_cloud(
+            points, values=points[:, 0], scheme="quantiles", k=2, name="one"
+        )
+        scene.point_cloud(
+            points, values=points[:, 1], scheme="quantiles", k=2, name="two"
+        )
         scene.terrain(_dem(), name="dem")
-        scene.point_cloud(points, values=points[:, 0], name="cloud")
+        scene.legend("one", title="First")
+        scene.legend("two", title="Second")
         scene.colorbar("dem", label="Elevation (m)")
-        scene.move_layer("dem", -1)
-        assert scene.layer_ids == ["cloud", "dem"], scene.layer_ids
+        box = scene.plotter.legend
+        before = [box.GetEntryString(i) for i in range(box.GetNumberOfEntries())]
+        scene.move_layer("one", -1)
+        box = scene.plotter.legend
+        after = [box.GetEntryString(i) for i in range(box.GetNumberOfEntries())]
+        assert scene.layer_ids == ["two", "dem", "one"], scene.layer_ids
         assert "Elevation (m)" in scene.plotter.scalar_bars, list(
             scene.plotter.scalar_bars.keys()
+        )
+        assert [row.split(":")[0] for row in before] == ["First"] * 2 + [
+            "Second"
+        ] * 2, before
+        assert [row.split(":")[0] for row in after] == ["Second"] * 2 + ["First"] * 2, (
+            after
         )
 
     def test_removing_a_keyed_layer_takes_the_legend_off(self, scene):
@@ -463,16 +538,30 @@ class TestWhatPyvistasOwnSlotsForce:
         scene.terrain(_dem(), name="a")
         scene.terrain(_dem(), name="b")
         scene.colorbar("a", label="DEM")
+        bars = list(scene.plotter.scalar_bars.keys())
+        described = {held: scene.get_layer(held).symbology for held in scene.layer_ids}
         with pytest.raises(ValueError, match="one bar per title"):
             scene.colorbar("b", label="DEM")
-        # The refusal comes from the reconcile, so what it rolls back is the proof the refusal cost nothing:
-        # the first layer's key is untouched and the second carries no guide at all.
-        assert "DEM" in scene.plotter.scalar_bars, list(
-            scene.plotter.scalar_bars.keys()
+        # The refusal comes from the reconcile, so what it rolls back is the proof the refusal cost nothing.
+        # Asserting only that `ValueError` was raised would leave a reconcile that half-applied the change
+        # green, which is the shape review M13 found one tier over: every side of the scene is snapshotted
+        # around the refusing call and compared.
+        assert list(scene.plotter.scalar_bars.keys()) == bars, (
+            list(scene.plotter.scalar_bars.keys()),
+            bars,
+        )
+        assert scene.plotter.legend is None, "a refused bar must not draw a keyed list"
+        assert {
+            held: scene.get_layer(held).symbology for held in scene.layer_ids
+        } == described, (
+            "the refusal must leave every layer's description as it found it"
         )
         assert scene.get_layer("b").symbology.guide() is None, scene.get_layer(
             "b"
         ).symbology.to_dict()
+        assert scene._guides.get("b", {}).get("bar") is None, (
+            f"the refused layer must own no bar, got {dict(scene._guides)}"
+        )
 
     def test_two_layers_with_their_own_titles_each_get_a_bar(self, scene):
         """Distinct titles are two bars, and the engine's shared one goes once nothing reads it.
@@ -506,8 +595,9 @@ class TestWhatPyvistasOwnSlotsForce:
         scene.terrain(_dem(), name="a")
         scene.terrain(_dem(), name="b")
         scene.colorbar("a", label="DEM A")
-        assert "elevation" in scene.plotter.scalar_bars, (
-            "b still reads the engine's bar, so it must survive a's retitle"
+        assert sorted(scene.plotter.scalar_bars.keys()) == ["DEM A", "elevation"], (
+            "a's own bar must be drawn, and b still reads the engine's, so it must survive a's retitle: "
+            f"{list(scene.plotter.scalar_bars.keys())}"
         )
 
     def test_two_keyed_layers_share_one_box_prefixed_by_their_titles(self, scene):
@@ -577,6 +667,68 @@ class TestEverythingIsCheckedBeforeTheFlagIsRead:
         scene.terrain(_dem())
         with pytest.raises(KeyError, match="nope"):
             scene.colorbar("nope", visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_legend_refuses_a_scene_with_nothing_keyed_either_way(self, scene, visible):
+        """`legend` carries the same rule as `colorbar`, and until now only `colorbar` was asked.
+
+        Args:
+            scene: The scene under test.
+            visible: Both readings of the flag.
+
+        Test scenario:
+            The flag-ordering fix is in `_record_guide`, which both names go through — so a regression that
+            moved the checks back behind the flag would break both, while only one of them was covered
+            (review M12).
+        """
+        with pytest.raises(ValueError, match="nothing to describe"):
+            scene.legend(visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_legend_refuses_an_id_nobody_drew_either_way(self, scene, visible):
+        """An unknown layer id is a caller error for `legend` too, whichever way the flag reads.
+
+        Args:
+            scene: The scene under test.
+            visible: Both readings of the flag.
+        """
+        points = _points()
+        scene.point_cloud(points, values=points[:, 0], scheme="quantiles", k=3)
+        with pytest.raises(KeyError, match="nope"):
+            scene.legend("nope", visible=visible)
+
+    @pytest.mark.parametrize("visible", [True, False])
+    def test_legend_over_a_ramp_is_refused_either_way(self, scene, visible):
+        """The wrong-widget refusal is read off the description, so the flag cannot skip it either.
+
+        Args:
+            scene: The scene under test.
+            visible: Both readings of the flag.
+        """
+        scene.terrain(_dem())
+        with pytest.raises(ValueError, match="continuous ramp.*colorbar"):
+            scene.legend(visible=visible)
+
+    def test_a_refused_legend_records_nothing(self, scene):
+        """A refusal leaves the scene as it found it — including the row labels it was handed.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `labels=` is written to the scene's drawn state inside `_record_guide`, between the checks and
+            the reconcile. Recorded before the checks it would outlive a refused call, and nothing asserted
+            that it does not (review M12).
+        """
+        points = _points()
+        scene.point_cloud(points, values=points[:, 0], scheme="quantiles", k=3)
+        with pytest.raises(KeyError, match="nope"):
+            scene.legend("nope", labels=["one", "two", "three"])
+        assert scene._guides.get("nope") is None, dict(scene._guides)
+        assert scene._guides.get("point_cloud-1", {}).get("labels") is None, dict(
+            scene._guides
+        )
+        assert scene.plotter.legend is None, "a refused legend must draw no box"
 
     def test_visible_false_records_what_the_key_would_have_said(self, scene):
         """Switching a key off keeps its title, which is what `Guide(show=False)` is for.
@@ -760,22 +912,49 @@ class TestTheBuildersPublishWhatTheyColourBy:
 
 
 class TestTheDeclarationSaysBothAreBuilt:
-    """The two `contract.PENDING["3d"]` rows came off, so the tier has to answer to both names."""
+    """The two `contract.PENDING["3d"]` rows came off, so the tier has to answer to both names.
 
-    def test_neither_name_is_pending_any_more(self):
-        """Order 24 built them, so the rows are gone and the facade answers instead."""
+    Each test below ties the **declaration** to a **call**, because the two tables are hand-written constants
+    and a membership check over them restates what the declaration wrote by construction: with the bodies of
+    both `colorbar()` and `legend()` replaced by `raise NotImplementedError`, every assertion in this class
+    stayed green (review M12). "Declared built" is only worth asserting together with "and here it draws".
+    """
+
+    def test_colorbar_is_off_the_pending_table_because_it_draws(self, scene):
+        """Order 24 built it, so the row is gone, the feature is declared, and the call reaches the window.
+
+        Args:
+            scene: The scene under test.
+        """
         from digitalearth.base.contract import pending_for
 
         pending = pending_for("3d")
+        scene.terrain(_dem())
+        scene.colorbar(label="Elevation (m)")
         assert "colorbar" not in pending, (
             f"colorbar is still pending: {sorted(pending)}"
         )
-        assert "legend" not in pending, f"legend is still pending: {sorted(pending)}"
+        assert "colorbar" in CAPABILITIES.features, sorted(CAPABILITIES.features)
+        assert list(scene.plotter.scalar_bars.keys()) == ["Elevation (m)"], (
+            f"the declared name drew no bar: {list(scene.plotter.scalar_bars.keys())}"
+        )
 
-    def test_both_are_declared_features_of_the_tier(self):
-        """`colorbar` was declared on the strength of PyVista's bar; `legend` joins it now the box is drawn."""
-        assert {"colorbar", "legend"} <= CAPABILITIES.features, sorted(
-            CAPABILITIES.features
+    def test_legend_is_off_the_pending_table_because_it_draws(self, scene):
+        """`legend` was declared once the box was drawn; this is the box.
+
+        Args:
+            scene: The scene under test.
+        """
+        from digitalearth.base.contract import pending_for
+
+        pending = pending_for("3d")
+        points = _points()
+        scene.point_cloud(points, values=points[:, 0], scheme="quantiles", k=3)
+        scene.legend(title="Distance")
+        assert "legend" not in pending, f"legend is still pending: {sorted(pending)}"
+        assert "legend" in CAPABILITIES.features, sorted(CAPABILITIES.features)
+        assert scene.plotter.legend.GetNumberOfEntries() == 3, (
+            "the declared name drew no keyed list"
         )
 
     def test_the_scene_answers_to_the_declared_keywords(self):
