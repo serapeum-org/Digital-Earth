@@ -1040,9 +1040,11 @@ class GuideMixin(_MixinBase):
         return resolved
 
     # There is deliberately **no** guard here walking the other layers' guides to refuse a title one of them
-    # already holds. The reconcile refuses the same thing (`_redraw_bars`' `taken` map, and `_add_bar`'s
-    # check against the titles already on the window) and refuses strictly more: a figure
-    # built elsewhere and drawn with `from_figure` never goes through this method at all. Two guards for one
+    # already holds. The reconcile refuses the same thing — `_add_bar`'s `wanted in plotter.scalar_bars`,
+    # which is the whole of that refusal and the only place it is made — and refuses strictly more: a figure
+    # built elsewhere and drawn with `from_figure` never goes through this method at all. (`_redraw_bars`'
+    # `taken` map refuses nothing; it is read only to name the layer holding the title, and saying otherwise
+    # here contradicted `_add_bar`'s own note — review R2-N5.) Two guards for one
     # rule is two messages for one cause and two places to keep in step —
     # and the net effect is the same, because a refusal inside the reconcile rolls the figure *and* the
     # plotter back to what the scene was already showing (`Scene3DBase._change`).
