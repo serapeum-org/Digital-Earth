@@ -917,18 +917,22 @@ class DecorationMixin(_MixinBase):
                 its guide, so a key rebuilt after another layer is removed still carries them.
             visible: `False` records the guide with ``show=False`` — the layer says outright that its colour
                 is explained by nothing — and draws no key, so a caller passing a flag through does not have
-                to branch. The corner, the layer **and** `labels` are all still checked, so no argument is
-                valid only half the time.
+                to branch. **Every other argument is checked before this one is read**, whether or not any
+                layer has been keyed yet, so no argument is valid only half the time and none is valid only
+                in a particular call order. The one refusal the flag does decide is "this map has nothing to
+                describe", which is a fact about the map rather than about the call.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`
-                names a layer that carries no classification, when no classified layer has been added at
-                all — there is nothing to build a key from, and an empty box would be worse than an error —
-                or when `labels` has a different number of entries from the classification.
+            ValueError: when ``position`` is not one of the four legal MapLibre corners, when `title` is not
+                a non-empty string, when `layer_id` names a layer that carries no classification, when no
+                classified layer has been added at all — there is nothing to build a key from, and an empty
+                box would be worse than an error — or when `labels` has a different number of entries from
+                the classification. Only the "nothing classified" one waits on ``visible``.
             KeyError: when `layer_id` names no layer on this map.
+            TypeError: when `labels` is not a sequence.
 
         Note:
             **This tier draws one key, and the four tiers differ here.** ``_panels`` holds one entry per
@@ -984,6 +988,10 @@ class DecorationMixin(_MixinBase):
         a `column=`, about a method they never called; this tier names the caller in every other refusal it
         gives (``WebMap.field()``, ``WebMap.extrusion()``).
 
+        **One mechanism means one validation site.** Both public names being pure forwards onto this body is
+        what lets `_check_key_arguments` be the single place a caller argument is refused from, so the two
+        spellings cannot drift to two answers for the same malformed call (review H2).
+
         Args:
             layer_id: The caller's chosen layer, or `None` to resolve one.
             title: The heading, or `None` for the classified column's name.
@@ -999,24 +1007,28 @@ class DecorationMixin(_MixinBase):
             ValueError: as :meth:`legend` documents.
             KeyError: as :meth:`legend` documents.
         """
-        # Validated before the flag is read: `legend(position="middle", visible=False)` was accepted while
-        # `legend(position="middle")` raised, so a caller passing a flag through was checked half the time
-        # (review L7). The layer the caller named is now checked on the same terms — see `_guide_target`.
-        _check_position(position)
+        # EVERY caller argument is checked here, in one call, above the first read of `visible` — and that
+        # ordering is pinned structurally, not case by case. It came back three times otherwise: the corner
+        # (review L7), then the layer (review M1/M2), then `title` and `labels` (review H2), each fix
+        # hoisting the one keyword that had just been caught and leaving the next one under the flag. The
+        # *class* of defect is "a caller argument read below the flag", so there is now exactly one place a
+        # caller argument may be read from — see `_check_key_arguments` — and
+        # `tests/web/test_web_legend.py::TestNoArgumentCanBeAddedBelowTheFlag` reads this body's source to
+        # refuse a fourth recurrence: a keyword added to either public spelling and not handed to the check
+        # above this line reddens with no case written for it.
+        self._check_key_arguments(
+            layer_id, title=title, position=position, labels=labels
+        )
         target = self._guide_target(layer_id, visible=bool(visible), caller=caller)
         if target is None:
             return self
         _require_maplibre()
         guide = Guide(show=bool(visible), title=title, anchor=position)
-        # Built and thrown away, and built **whatever the flag says**. `labels` is a caller argument like
-        # the corner and the layer, and it was the one left under `if visible` when those two were hoisted:
-        # `legend(labels=["one"], visible=False)` recorded a one-entry override against a two-class key
-        # while the same call without the flag raised, which is review L7's bug regressed in the method
-        # whose own comment explains it (review M2).
-        #
-        # A `labels` list that does not match the classification is therefore refused *before* anything is
-        # recorded, so a refusal leaves the map exactly as it was — rather than leaving behind a guide whose
-        # key every later rebuild would fail to draw. Pinned by
+        # Checked a second time, now against the layer the record actually lands on: `visible=False`
+        # resolves to the layer whose key is *drawn*, which need not be the one the check above could see,
+        # and `labels` has to fit the classification it will be drawn beside. Built and thrown away, so a
+        # refusal leaves the map exactly as it was rather than leaving behind a guide whose key every later
+        # rebuild would fail to draw. Pinned by
         # `tests/web/test_web_legend.py::…::test_a_refusal_leaves_the_map_exactly_as_it_was`, so moving the
         # record above this line reddens rather than passing.
         _legend_panel(self._legend_of(target), guide, labels)
@@ -1025,6 +1037,61 @@ class DecorationMixin(_MixinBase):
         # call and a later removal cannot disagree about whose key is on screen.
         refresh_legend_panel(self)
         return self
+
+    def _check_key_arguments(
+        self,
+        layer_id: Optional[str],
+        *,
+        title: Optional[str],
+        position: str,
+        labels: Optional[list],
+    ) -> None:
+        """Refuse a malformed key description, before the `visible` flag has been read at all.
+
+        **The one place a caller argument to :meth:`legend` /
+        :meth:`~digitalearth.web.base.WebMapBase.colorbar` may be checked from**, which is what makes the
+        rule "no argument is valid only half the time" a property of the method rather than a property of
+        the three keywords somebody remembered. The flag is deliberately not a parameter here: it cannot be
+        consulted, so it cannot skip anything.
+
+        The split is between two different questions. *Is this a well-formed description?* — the corner, the
+        named layer, the heading, the row labels — is a fact about the call and is answered here, whatever
+        the flag says. *Does this map have anything to describe?* is a fact about the map, and stays
+        :meth:`_guide_target`'s ``visible=True``-only refusal, because the documented point of the flag is
+        that ``WebMap().colorbar(visible=False)`` is an answer and not a crash.
+
+        Args:
+            layer_id: The caller's chosen layer, or `None`. When given it is looked up and required to
+                carry a classification. When `None` the topmost keyable layer stands in, purely so
+                `labels` can be counted against a real classification on a map nobody has keyed yet —
+                the state the three previous fixes all left open.
+            title: The heading, or `None`. Checked by building the
+                :class:`~digitalearth.base.spec.encoding.Guide` that will hold it.
+            position: The corner, checked against :data:`~digitalearth.base.controls.CONTROL_POSITIONS`.
+            labels: Explicit row labels, or `None`. Its *shape* is checked unconditionally — a
+                non-sequence is a ``TypeError`` here as it was where the panel used to build it — and its
+                *length* whenever there is a classification to count against.
+
+        Raises:
+            ValueError: when `position` is not one of the four legal corners, when `layer_id` names a layer
+                that carries no classification, when `title` is not a non-empty string, or when `labels`
+                has a different number of entries from the classification.
+            KeyError: when `layer_id` names no layer on this map.
+            TypeError: when `labels` is not a sequence.
+        """
+        _check_position(position)
+        if layer_id is not None:
+            # KeyError by name, then ValueError for no classification — the same two refusals
+            # `_guide_target` gives a named layer, reached here so neither waits on the flag.
+            self._legend_of(layer_id)
+            described: Optional[str] = layer_id
+        else:
+            keyable = keyable_layer_ids(self)
+            described = keyable[-1] if keyable else None
+        guide = Guide(show=True, title=title, anchor=position)
+        rows = None if labels is None else list(labels)
+        if described is not None:
+            _legend_panel(self._legend_of(described), guide, rows)
 
     def _guide_target(
         self, layer_id: Optional[str], *, visible: bool, caller: str = "legend()"
@@ -1051,12 +1118,14 @@ class DecorationMixin(_MixinBase):
                 key was asked for and no layer on the map is classified.
 
         Note:
-            A named layer is refused **whatever ``visible`` says**, which is review L7's rule applied to the
-            layer as well as to the corner: `legend(layer_id="nope", visible=False)` used to be accepted
-            while `legend(layer_id="nope")` raised, so a caller threading a flag through was checked half
-            the time. The "nothing on this map is classified" question is not a caller argument, so it stays
-            a ``visible=True``-only refusal — the documented point of the flag is that it can be passed
-            through without branching.
+            **Nothing a caller passed is validated here.** Every caller argument — the corner, the named
+            layer, the heading and the row labels — is refused by `_check_key_arguments` before this is
+            reached, so no check can be reached through a flag value (review H2). A named layer is looked
+            up again below all the same, so this stays answerable on its own; what it must never become is
+            the *only* place a caller argument is looked at, which is how `legend(layer_id="nope",
+            visible=False)` came to be accepted while `legend(layer_id="nope")` raised. The "nothing on
+            this map is classified" question is not a caller argument, so it stays a ``visible=True``-only
+            refusal — the documented point of the flag is that it can be passed through without branching.
 
             **The two flag values resolve differently on purpose, and the flag is not a third refusal
             rule.** Asking for a key and taking one off are different questions of the map: one wants a

@@ -5,6 +5,10 @@ what reaches the exported page's call payload, not about the bundled MapLibre li
 page would match the library's own source and pass either way.
 """
 
+import ast
+import inspect
+import textwrap
+
 import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon
@@ -862,4 +866,303 @@ class TestANamedLayerIsCheckedWhateverTheFlagSays:
             web_map.legend(layer_id="A", labels=["only one"], visible=visible)
         assert web_map.get_layer("A").symbology.guide() is None, (
             "a refused call must record nothing, whatever the flag says"
+        )
+
+
+#: Every malformed key description the two public spellings can be handed, with the refusal it must draw.
+#: One row per caller argument that has a legal range, spelled the way the method that takes it spells it —
+#: ``colorbar()`` has no ``position``/``labels`` of its own and names the heading ``label``.
+_MALFORMED = [
+    pytest.param(
+        "legend", {"title": 123}, "Guide title must be", id="legend-title-number"
+    ),
+    pytest.param(
+        "legend", {"title": "   "}, "Guide title must be", id="legend-title-blank"
+    ),
+    pytest.param(
+        "legend", {"position": "middle"}, "unknown control position", id="legend-corner"
+    ),
+    pytest.param(
+        "legend",
+        {"labels": ["only one"]},
+        "entries but the classification",
+        id="legend-labels",
+    ),
+    pytest.param(
+        "colorbar", {"label": 123}, "Guide title must be", id="colorbar-label-number"
+    ),
+    pytest.param(
+        "colorbar", {"label": "   "}, "Guide title must be", id="colorbar-label-blank"
+    ),
+]
+
+
+def _one_classified(name="A"):
+    """Return a map holding a single two-class layer and nothing else.
+
+    Args:
+        name: The layer's id.
+
+    Returns:
+        The map. Two classes is the smallest classification a one-entry ``labels`` list can mismatch, and
+        nothing on the map is keyed — the state the flag bypass needed.
+    """
+    from digitalearth.web import WebMap
+
+    return WebMap().choropleth(
+        _layer("pop", [1, 100]), column="pop", name=name, scheme="quantiles", k=2
+    )
+
+
+def _method_source(method):
+    """Parse one method and return its signature and its statements, docstring dropped.
+
+    Args:
+        method: The function to read. Read from source rather than called, because the property under test
+            is *where* in the body a check sits — which no call can observe.
+
+    Returns:
+        The ``(ast.arguments, list[ast.stmt])`` pair.
+    """
+    parsed = ast.parse(textwrap.dedent(inspect.getsource(method))).body[0]
+    body = [
+        statement
+        for statement in parsed.body
+        if not (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        )
+    ]
+    return parsed.args, body
+
+
+def _parameters(args):
+    """Return every parameter name of a parsed signature, ``self`` excluded.
+
+    Args:
+        args: The ``ast.arguments`` from :func:`_method_source`.
+
+    Returns:
+        The names, in declaration order.
+    """
+    declared = args.posonlyargs + args.args + args.kwonlyargs
+    return [arg.arg for arg in declared if arg.arg != "self"]
+
+
+def _names_in(node):
+    """Return every bare name read anywhere under one AST node.
+
+    Args:
+        node: Any AST node.
+
+    Returns:
+        The set of `ast.Name` ids.
+    """
+    return {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
+
+
+def _call_to(body, attribute):
+    """Find the first statement holding a call to ``self.<attribute>``.
+
+    Args:
+        body: The statements from :func:`_method_source`.
+        attribute: The method name to look for.
+
+    Returns:
+        The ``(index, ast.Call)`` pair, or ``(None, None)`` when no statement holds one.
+    """
+    for index, statement in enumerate(body):
+        for child in ast.walk(statement):
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr == attribute
+            ):
+                return index, child
+    return None, None
+
+
+def _first_read_of(body, name):
+    """Return the index of the first statement reading ``name``.
+
+    Args:
+        body: The statements from :func:`_method_source`.
+        name: The parameter to look for.
+
+    Returns:
+        The index, or ``len(body)`` when nothing reads it.
+    """
+    for index, statement in enumerate(body):
+        if name in _names_in(statement):
+            return index
+    return len(body)
+
+
+def _handed_to(call):
+    """Return the bare names handed to one call, positionally or by keyword.
+
+    Args:
+        call: The `ast.Call` to read.
+
+    Returns:
+        The set of names. A literal argument contributes nothing, which is the point — a parameter
+        forwarded as ``None`` is not forwarded.
+    """
+    handed = set()
+    for argument in list(call.args) + [keyword.value for keyword in call.keywords]:
+        handed |= _names_in(argument)
+    return handed
+
+
+class TestEveryArgumentIsCheckedWhateverTheFlagSays:
+    """Review H2: the same call must be valid or refused on its own merits, never on call order.
+
+    Test scenario:
+        This is review L7 / M1 / M2 / H2 — **one** defect, found four times, in four different keywords.
+        Each recurrence was fixed by hoisting that one keyword above the flag, and the next one arrived in
+        the keyword nobody had hoisted yet. The matrix below is the behavioural half: every argument that
+        has a legal range, under both spellings of the flag, on a map where a key had been asked for and on
+        one where none ever was — which is the axis all three previous fixes missed, since resolving
+        ``visible=False`` against "the key the map already has" answers `None` on a map nobody keyed and
+        returns before any argument is looked at.
+    """
+
+    @pytest.mark.parametrize("spelling, kwargs, refusal", _MALFORMED)
+    @pytest.mark.parametrize("visible", [True, False], ids=["asked", "taken-off"])
+    @pytest.mark.parametrize(
+        "keyed", [False, True], ids=["never-keyed", "already-keyed"]
+    )
+    def test_a_malformed_argument_is_refused(
+        self, spelling, kwargs, refusal, visible, keyed
+    ):
+        """One bad argument, both flag values, keyed and unkeyed — twenty-four calls, one rule.
+
+        Args:
+            spelling: The public method under test — one mechanism, two names.
+            kwargs: The single malformed argument.
+            refusal: Part of the message it must carry.
+            visible: Both spellings of the flag.
+            keyed: Whether some earlier call already keyed the layer.
+        """
+        web_map = _one_classified()
+        if keyed:
+            web_map.colorbar("A", label="People")
+        before = web_map.get_layer("A").symbology.guide()
+        call = getattr(web_map, spelling)
+        with pytest.raises(ValueError, match=refusal):
+            call(visible=visible, **kwargs)
+        assert web_map.get_layer("A").symbology.guide() == before, (
+            f"{spelling}({kwargs}, visible={visible}) was refused but still changed the record"
+        )
+
+    @pytest.mark.parametrize("visible", [True, False], ids=["asked", "taken-off"])
+    def test_a_malformed_title_is_refused_on_a_map_holding_nothing(self, visible):
+        """The floor of the rule: a title is a caller argument even where there is no layer to key.
+
+        Args:
+            visible: Both spellings of the flag.
+
+        Test scenario:
+            ``WebMap().colorbar(visible=False)`` must come back with the map rather than raise — that is the
+            documented, doctested point of the flag — and the bypass took cover behind exactly that. The two
+            are separable: "this map has nothing to describe" is a fact about the map, while "123 is not a
+            heading" is a fact about the call, and only the first is allowed to depend on the flag.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap()
+        with pytest.raises(ValueError, match="Guide title must be"):
+            web_map.colorbar(label=123, visible=visible)
+
+    def test_an_empty_map_still_answers_a_well_formed_take_off(self):
+        """The other side of the same line, so the fix above cannot be "refuse everything"."""
+        from digitalearth.web import WebMap
+
+        web_map = WebMap()
+        assert web_map.colorbar(visible=False) is web_map, (
+            "a well-formed take-off on an empty map must still be answered, not refused"
+        )
+
+
+class TestNoArgumentCanBeAddedBelowTheFlag:
+    """Review H2's structural half: pin the *shape*, because three hand-written fixes did not hold.
+
+    Test scenario:
+        Every earlier fix pinned one keyword's behaviour, and the class of defect — "a caller argument read
+        below the flag" — stayed open for the next keyword. These three tests read the source instead: the
+        two public spellings must forward every argument they take to the one shared body and do nothing
+        else on the way; the shared body must hand every argument to a single check **above** its first read
+        of the flag; and the check must actually read each one. A keyword added anywhere in that chain and
+        left under the flag reddens here without anybody having thought to write a case for it.
+    """
+
+    #: The two ``_record_key`` parameters that describe nothing about the key, so nothing validates them.
+    #: ``visible`` is the flag itself, and ``caller`` only spells the public method's name in a refusal.
+    NOT_A_DESCRIPTION = frozenset({"visible", "caller"})
+
+    #: The flag whose read the checks must precede.
+    FLAG = "visible"
+
+    @pytest.mark.parametrize("spelling", ["legend", "colorbar"])
+    def test_a_public_spelling_only_forwards(self, spelling):
+        """Each entry point is a pure forward, so the shared body is the only place a check can live.
+
+        Args:
+            spelling: The public method under test.
+        """
+        from digitalearth.web import WebMap
+
+        args, body = _method_source(getattr(WebMap, spelling))
+        assert len(body) == 1, (
+            f"{spelling}() does {len(body)} things; it must only forward to _record_key, or an argument "
+            "could be handled — or missed — here instead"
+        )
+        _, call = _call_to(body, "_record_key")
+        assert call is not None and isinstance(body[0], ast.Return), (
+            f"{spelling}() no longer returns a _record_key call"
+        )
+        assert body[0].value is call, f"{spelling}() does work around the forward"
+        missing = set(_parameters(args)) - _handed_to(call)
+        assert missing == set(), (
+            f"{spelling}() takes {sorted(missing)} and does not forward them to the shared body, so "
+            "nothing downstream can check them"
+        )
+
+    def test_the_shared_body_checks_every_argument_above_the_flag(self):
+        """The defect class as a property of the source: no argument is read after the flag first is.
+
+        Test scenario:
+            ``_check_position`` survived three rounds because it sits above the resolution; ``title`` and
+            ``labels`` did not, because they sat below an early return the flag reaches. Rather than assert
+            that about the three keywords known today, assert it about every parameter the body takes.
+        """
+        from digitalearth.web.decoration import DecorationMixin
+
+        args, body = _method_source(DecorationMixin._record_key)
+        described = set(_parameters(args)) - self.NOT_A_DESCRIPTION
+        check_at, check = _call_to(body, "_check_key_arguments")
+        assert check is not None, (
+            "_record_key no longer runs one check over its arguments"
+        )
+        assert check_at < _first_read_of(body, self.FLAG), (
+            "the argument check is reached after the flag is first read, so a flag value can skip it — "
+            "which is review L7/M1/M2/H2, every time"
+        )
+        missing = described - _handed_to(check)
+        assert missing == set(), (
+            f"_record_key takes {sorted(missing)} and does not hand them to the check above the flag"
+        )
+
+    def test_the_check_reads_every_argument_it_is_handed(self):
+        """Threading an argument into the check is not checking it, so the last link is pinned too."""
+        from digitalearth.web.decoration import DecorationMixin
+
+        args, body = _method_source(DecorationMixin._check_key_arguments)
+        read = set()
+        for statement in body:
+            read |= _names_in(statement)
+        missing = set(_parameters(args)) - read
+        assert missing == set(), (
+            f"_check_key_arguments is handed {sorted(missing)} and never reads them"
         )
