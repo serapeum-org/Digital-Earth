@@ -86,6 +86,7 @@ from digitalearth.static.renderer import (
     drawing_opts,
 )
 from digitalearth.static.renderer import _detach as detach_artist
+from digitalearth.static.renderer import _detach_guide as detach_guide
 from digitalearth.static.renderer import _is_visible as artist_is_visible
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
@@ -1345,10 +1346,13 @@ class Scene(WatermarkMixin):
         self._issued_ids = set()
         # A colour key is the exception, and is taken off rather than dropped: a colorbar lives on an axes of
         # its own, which clearing the data axes does not touch, so a dropped one would stay on the figure with
-        # no layer left to explain — fifty frames of an animation, fifty bars.
+        # no layer left to explain — fifty frames of an animation, fifty bars. Through `detach_guide` rather
+        # than `detach_artist`, for the reason that helper states: a legend the axes has already replaced is
+        # forgotten instead, because `remove()` on one of those clears the slot whichever legend is in it and
+        # would take a surviving frame's key off with it (review H1).
         for drawn in self._renderer.drawn.values():
             for guide in drawn.guides:
-                detach_artist(guide, self.ax)
+                detach_guide(guide, self.ax)
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
         # than removable: it is dropped, not removed.
         self._renderer = Renderer(self)

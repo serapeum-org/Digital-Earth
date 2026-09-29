@@ -975,11 +975,15 @@ class TestOneAxesHoldsOneSwatchLegend:
         )
         assert two_fills.get_layer("b").symbology.guide().show is True
 
-    def test_removing_the_displaced_layer_leaves_the_drawn_key_alone(self, two_fills):
+    @pytest.mark.parametrize("second_writer", ["legend()", "the fill's own glyph"])
+    def test_removing_the_displaced_layer_leaves_the_drawn_key_alone(
+        self, polygons, second_writer
+    ):
         """Removing the layer whose key was displaced must not take the surviving key off the axes.
 
         Args:
-            two_fills: A map with two categorical fills.
+            polygons: Buffered point features.
+            second_writer: What put the surviving legend in the axes' slot.
 
         Test scenario:
             The sharpest consequence of the stale record, and a visible one. matplotlib gives every legend
@@ -989,15 +993,72 @@ class TestOneAxesHoldsOneSwatchLegend:
             figure. Before this fix: `remove_layer("a")` left `ax.get_legend()` as `None` while `b` still
             described and still held a key. This is also why the fix drops the displaced legend from the
             record rather than detaching it — detaching is the very call that does the damage.
+
+            **Parametrised over who wrote that slot, because the renderer is not the only writer** — which
+            is what `Renderer._displaced`'s own docstring says and what this test could not see until
+            review R2-H1. It keyed **both** layers, so `draw_guide` always made the surviving legend and
+            the reconcile hook always ran. A categorical fill's cleopatra glyph writes the slot on its way
+            in, for a layer nobody has keyed; on that arm the hook never fired, `a` went on holding a
+            legend matplotlib had already dropped, and `remove_layer("a")` wiped `b`'s swatches off the
+            figure. Measured on the most ordinary flow there is — key one fill, add a second, remove the
+            first.
         """
+        polygons["zone"] = ["urban", "rural"] * (len(polygons) // 2) + ["urban"] * (
+            len(polygons) % 2
+        )
+        with Map(crs=polygons.epsg) as canvas:
+            canvas.choropleth(polygons, column="zone", scheme="categorical", name="a")
+            canvas.legend("a", title="A")
+            canvas.choropleth(polygons, column="zone", scheme="categorical", name="b")
+            if second_writer == "legend()":
+                canvas.legend("b", title="B")
+            winner = canvas.ax.get_legend()
+            assert winner is not None, "no legend is on the axes to survive anything"
+            assert canvas._renderer.drawn["a"].guides == (), (
+                f"with the slot written by {second_writer}, the keyed layer still holds a legend "
+                "matplotlib has already dropped"
+            )
+            canvas.remove_layer("a")
+            assert canvas.ax.get_legend() is winner, (
+                "removing the displaced layer took the surviving layer's key off the axes"
+            )
+
+    def test_removing_a_record_that_still_holds_an_orphan_leaves_the_slot_alone(
+        self, two_fills
+    ):
+        """Even with a stale legend in the record, removing its layer must not clear the axes' slot.
+
+        Args:
+            two_fills: A map with two categorical fills.
+
+        Test scenario:
+            The other half of the fix, and the half that holds for a writer the reconcile sweep has not
+            been taught about. `Renderer._displaced` keeps the *record* clear of orphans; this pins that
+            the damage is impossible even when one slips through, because `_detach_guide` refuses to call
+            `remove()` on a legend the axes does not hold. Without it the guarantee is only as good as the
+            list of places the sweep is called from — which is exactly how review H1 happened, the sweep
+            having been reached from one of the slot's two writers.
+
+            The orphan is put back by hand, on the renderer's own record, because with the sweep in place
+            no supported call can produce one any more. matplotlib's removal hook is what makes this
+            destructive: `Axes._remove_legend` sets `legend_` to `None` whichever legend is sitting there,
+            and a *second* `remove()` of an artist does not raise, so nothing else would notice.
+        """
+        from dataclasses import replace as with_fields
+
         two_fills.legend("a", title="A")
+        stale = two_fills._renderer.drawn["a"].guides[0]
         two_fills.legend("b", title="B")
-        winner = two_fills._renderer.drawn["b"].guides[0]
+        winner = two_fills.ax.get_legend()
+        assert winner is not stale, "the second key did not displace the first"
+        two_fills._renderer._drawn["a"] = with_fields(
+            two_fills._renderer.drawn["a"], guides=(stale,)
+        )
         two_fills.remove_layer("a")
         assert two_fills.ax.get_legend() is winner, (
-            "removing the displaced layer took the surviving layer's key off the axes"
+            "removing a layer whose record held a displaced legend called remove() on it, and matplotlib's "
+            "hook took the surviving layer's key off the figure with it"
         )
-        assert two_fills.get_layer("b").symbology.guide().show is True
 
     def test_keying_the_first_layer_again_takes_the_second_s_key_off(self, two_fills):
         """The rule is symmetric: whoever asks last owns the slot, and the other stops claiming it.

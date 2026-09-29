@@ -544,6 +544,38 @@ def _detach(artist: Any, axes: Any) -> None:
     _forget_render_artist(axes, artist)
 
 
+def _detach_guide(guide: Any, axes: Any) -> None:
+    """Take one colour key off the axes — unless it is a legend the axes has already replaced.
+
+    Args:
+        guide: The drawn key to remove, a ``Colorbar`` or a ``Legend``.
+        axes: The axes it was drawn on.
+
+    Note:
+        **A displaced legend is forgotten, never removed.** An axes holds one legend, in a slot of its own,
+        and matplotlib gives every legend it makes for that axes the same removal hook —
+        ``Axes._remove_legend``, which sets ``legend_`` to ``None`` whichever legend is sitting there. So
+        calling ``remove()`` on a legend the axes has since replaced takes the **surviving** layer's key off
+        the figure, and does it silently: a second removal of an artist normally answers ``ValueError``, and
+        this one does not (review H1).
+
+        :meth:`Renderer._displaced` keeps the *record* clear of those orphans, which is the other half; this
+        is the half that holds wherever a record slipped through, because the renderer is not the only
+        writer of that slot — a categorical fill's cleopatra glyph writes it on its way in. Stated here, at
+        the one call that does the damage, rather than trusted to every caller having swept first.
+
+        A ``Colorbar`` is removed normally: it lives on an axes of its own, any number coexist, and
+        :func:`_guide_artist` is what tells the two kinds apart without asking about types.
+    """
+    if _guide_artist(guide) is guide and axes.get_legend() is not guide:
+        logger.debug(
+            "%r is not the legend the axes holds; forgetting it instead", guide
+        )
+        _forget_render_artist(axes, guide)
+        return
+    _detach(guide, axes)
+
+
 def _forget_render_artist(axes: Any, artist: Any) -> None:
     """Drop one artist from cleopatra's per-axes record of what it last rendered.
 
@@ -952,6 +984,14 @@ class Renderer:
                 self._asked[layer_id] = asked
             partial.undo()
             raise
+        # The records agree with the axes' single legend slot now, whoever wrote it during this draw — and
+        # a **drawer** writes it too: a categorical fill's cleopatra glyph draws its own swatch legend on
+        # its way in. `draw_guide` only reconciles when it made the new legend itself, so on a layer nobody
+        # keyed the hook never fired and the previously keyed layer went on holding a legend matplotlib had
+        # already dropped (review H1). Here rather than before `draw_guide`, so a refused key leaves every
+        # record exactly as `partial.undo()` leaves the axes: the sweep only ever drops, and nothing could
+        # put a swept record back.
+        self._displaced(self._scene.ax.get_legend())
         if not figure.layers.is_visible(layer_id):
             self.set_visible(layer_id, False)
         return drawn
@@ -987,7 +1027,7 @@ class Renderer:
         if drawn is None:
             return None
         for held in drawn.guides:
-            _detach(held, self._scene.ax)
+            _detach_guide(held, self._scene.ax)
         made = draw_guide(self._scene, layer, drawn, **kwargs)
         # The layer records what has to come off with it, which is nothing when no key was drawn.
         guides = () if made is None else (made,)
@@ -1005,7 +1045,7 @@ class Renderer:
             _set_visible(_guide_artist(made), False)
         return made
 
-    def _displaced(self, legend: Any, keeper: str) -> None:
+    def _displaced(self, legend: Any, keeper: Optional[str] = None) -> None:
         """Forget every swatch legend but the one the axes now holds, wherever it was recorded.
 
         An axes holds **one** legend, so drawing a second layer's swatches takes the first layer's off — and
@@ -1029,11 +1069,22 @@ class Renderer:
         same removal hook — ``Axes._remove_legend``, which sets ``legend_`` to ``None`` whichever legend is
         sitting there — so calling ``remove()`` on a displaced one takes the *surviving* layer's key off the
         figure. That is what `Renderer.remove` did to it, and dropping it here is what stops that: there is
-        nothing to take off, because matplotlib has already taken it off.
+        nothing to take off, because matplotlib has already taken it off. :func:`_detach_guide` is the same
+        rule at the call that does the damage, for a record this sweep has not reached yet.
+
+        **Called from both writers**, which is what review H1 closed: :meth:`draw_guide` when it made the
+        new legend, and :meth:`draw_layer` after every drawer, since a drawer writes that slot too and the
+        layer it drew for need not carry a guide at all. Reaching it only from the first left the ordinary
+        flow — key one categorical fill, add a second — with an orphan in the keyed layer's record.
 
         Args:
-            legend: The ``Legend`` the axes is showing now, which every other record gives up.
-            keeper: The layer that has just been keyed, and whose record is left alone.
+            legend: The ``Legend`` the axes is showing now, which every other record gives up. ``None`` when
+                the axes holds none, in which case every recorded legend is an orphan.
+            keeper: The layer whose record is left alone, or ``None`` for "no layer is exempt" — which is
+                what :meth:`draw_layer` asks for, because the drawer may have displaced the redrawn layer's
+                *own* previous legend. Passing the layer :meth:`draw_guide` has just keyed changes nothing
+                on that path (its one recorded guide **is** `legend`, so the sweep keeps it either way) and
+                is named there for the reader.
         """
         # Walked live rather than over a copy: every write below lands on a key this walk is already
         # holding, so the table never gains or loses an entry mid-iteration — the one thing a dict
@@ -1399,7 +1450,7 @@ class Renderer:
         # The key goes with the layer it explains. It is taken off first, because a colorbar holds a
         # reference to the mappable it was built from and `Colorbar.remove` is the call that lets it go.
         for guide in drawn.guides:
-            _detach(guide, self._scene.ax)
+            _detach_guide(guide, self._scene.ax)
         for artist in drawn.artists:
             _detach(artist, self._scene.ax)
 
