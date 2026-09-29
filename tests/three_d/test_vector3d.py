@@ -354,3 +354,171 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
             f"one colour slot per class, got {style['n_colors']}"
         )
         assert style["clim"] == (-0.5, 2.5), f"class-index range, got {style['clim']}"
+
+
+class TestTheExtrudedColumnIsClassifiedOnce:
+    """The extrusion builder describes the classification and its drawer paints it — one computation.
+
+    The point cloud's half of this claim is
+    `tests/three_d/test_point_cloud3d.py::TestTheColumnIsClassifiedOnce`. These are the tier's only two
+    classifying builders, and the reuse reached the cloud alone, leaving a claim documented as a property
+    of the tier resting on one drawer — and leaving `replace_layer` behaving differently on the two
+    (review R2-L11).
+    """
+
+    @staticmethod
+    def _grid(n=8):
+        """Build ``n`` unit squares in a row, with a skewed numeric column and a label column.
+
+        Args:
+            n: How many squares to build.
+
+        Returns:
+            geopandas.GeoDataFrame: the polygons, a ``pop`` column to classify and a ``band`` column to
+            categorise.
+        """
+        return gpd.GeoDataFrame(
+            {
+                "pop": [float(i) ** 2 for i in range(n)],
+                "band": ["low", "mid", "high"] * (n // 3) + ["low"] * (n % 3),
+            },
+            geometry=[
+                Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(n)
+            ],
+        )
+
+    @staticmethod
+    def _painted(actor):
+        """Read the class colours back off the engine's own lookup table.
+
+        Args:
+            actor: The layer's drawn actor.
+
+        Returns:
+            list[str]: one ``#rrggbb`` per class, as VTK holds them.
+        """
+        from matplotlib.colors import to_hex
+
+        rows = np.asarray(actor.mapper.lookup_table.values, dtype="float64") / 255.0
+        return [to_hex(row[:3]) for row in rows]
+
+    def test_a_graduated_column_reaches_the_classifier_once(self, monkeypatch):
+        """Cutting an extrusion's classes twice is a second full pass for an identical result.
+
+        Args:
+            monkeypatch: Counts the calls that reach the shared classifier.
+
+        Test scenario:
+            `_color_encoding` cuts the column to describe the layer, and the drawer cut the same column
+            again with the same scheme and k a moment later. The cloud stopped doing that in `dbe8ac07`;
+            the extrusion went on doing it (review R2-L11).
+        """
+        from digitalearth.base.spec.scale import Scale
+
+        scanned = []
+        cut = Scale._breaks
+
+        def counted(values, scheme, k):
+            scanned.append(int(np.asarray(values).size))
+            return cut(values, scheme, k)
+
+        monkeypatch.setattr(Scale, "_breaks", staticmethod(counted))
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.extruded_polygons(
+                self._grid(), height=1.0, column="pop", scheme="quantiles", k=4
+            )
+        finally:
+            scene.close()
+        assert scanned == [8], (
+            f"the column must be cut once and the cut reused; it was scanned {scanned}"
+        )
+
+    def test_a_categorical_column_reaches_the_categoriser_once(self, monkeypatch):
+        """The categorical half is the same shape: one scan for the distinct values, not two.
+
+        Args:
+            monkeypatch: Counts the calls that reach the shared categoriser.
+
+        Test scenario:
+            The second call is over the three categories the first one found — the key's length, not the
+            data's — because the colours are always sampled from the drawing call's cmap (review R2-H3).
+        """
+        import digitalearth.base.symbology as symbology
+
+        scanned = []
+        categorise = symbology.categorical_colors
+
+        def counted(values, **kwargs):
+            scanned.append(int(np.asarray(values, dtype=object).size))
+            return categorise(values, **kwargs)
+
+        monkeypatch.setattr(symbology, "categorical_colors", counted)
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.extruded_polygons(
+                self._grid(9),
+                height=1.0,
+                column="band",
+                scheme="categorical",
+                cmap="tab10",
+            )
+        finally:
+            scene.close()
+        assert scanned == [9, 3], (
+            f"the column must be categorised once and the categories reused; it was scanned {scanned}"
+        )
+
+    @pytest.mark.parametrize(
+        "changed, column, scheme, k, cmap",
+        [
+            ({"k": 6}, "pop", "quantiles", 3, "viridis"),
+            ({"cmap": "Set1"}, "band", "categorical", 5, "tab10"),
+        ],
+    )
+    def test_a_fresh_request_overrules_the_cut_the_description_carries(
+        self, changed, column, scheme, k, cmap
+    ):
+        """Reusing the cut must not cost the extrusion what it costs the cloud nothing to keep.
+
+        Args:
+            changed: The symbology property `replace_layer` asks for, replacing the one it was built with.
+            column: The attribute column the prisms are coloured by.
+            scheme: The scheme the layer is first built with.
+            k: The class count it is first built with.
+            cmap: The colormap it is first built with.
+
+        Test scenario:
+            The two sides are built from **different** requests: the layer's description carries the cut its
+            builder made, and `replace_layer` installs a symbology asking for another `k` or another `cmap`
+            without republishing the encoding. Handing that stale cut over unconditionally is what made the
+            cloud unable to be restyled (review R2-H3); passing a scale here must not import that.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.three_d.base import classified_scalars
+
+        gdf = self._grid(9)
+        asked = {"scheme": scheme, "k": k, "cmap": cmap, **changed}
+        wanted = classified_scalars(gdf[column].to_numpy(), **asked)
+        scene = Scene3D(off_screen=True)
+        try:
+            scene.extruded_polygons(
+                gdf, height=1.0, column=column, scheme=scheme, k=k, cmap=cmap
+            )
+            held = scene.get_layer("extrusion-1")
+            props = {**held.symbology.props, **changed}
+            scene.replace_layer(
+                with_fields(held, symbology=with_fields(held.symbology, props=props))
+            )
+            drawn = sorted(set(float(v) for v in scene.layers[0][0].cell_data[VALUE]))
+            painted = self._painted(scene.layers[0][1])
+        finally:
+            scene.close()
+        assert drawn == sorted(set(float(v) for v in wanted["scalars"])), (
+            f"replace_layer({changed}) painted classes {drawn}, not the "
+            f"{sorted(set(float(v) for v in wanted['scalars']))} it asked for"
+        )
+        assert painted == list(wanted["cmap"]), (
+            f"replace_layer({changed}) painted {painted}, not the {list(wanted['cmap'])} it asked for"
+        )

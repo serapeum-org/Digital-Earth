@@ -263,7 +263,13 @@ class TestKeywordsTheDrawerWouldOverwrite:
 
 
 class TestTheColumnIsClassifiedOnce:
-    """The builder describes the classification and the drawer paints it — from one computation, not two."""
+    """The builder describes the classification and the drawer paints it — from one computation, not two.
+
+    Every case here goes through `point_cloud`, which is one of the tier's **two** classifying builders.
+    The extrusion's half of the same claim is
+    `tests/three_d/test_vector3d.py::TestTheExtrudedColumnIsClassifiedOnce` — the reuse reached the cloud
+    first and the class was named for the tier while resting on one drawer (review R2-L11).
+    """
 
     @staticmethod
     def _table(n=200):

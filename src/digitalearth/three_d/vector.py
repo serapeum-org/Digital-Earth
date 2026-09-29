@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
-from digitalearth.base.spec import Encoding, LayerSpec
+from digitalearth.base.spec import Encoding, LayerSpec, Scale
 from digitalearth.three_d.base import classified_scalars
 from digitalearth.three_d.layer import drawing_props
 
@@ -87,6 +87,7 @@ def _classify_or_refuse(
     k: int,
     cmap: Any,
     pinned: dict[str, Any],
+    scale: Optional[Scale] = None,
 ) -> tuple[dict[str, Any], Optional[np.ndarray]]:
     """Cut `colours` into classes once, per feature, and refuse a colour keyword the scheme owns.
 
@@ -100,6 +101,12 @@ def _classify_or_refuse(
         k: Number of classes.
         cmap: Colormap the classes are drawn from.
         pinned: The caller's remaining keyword arguments, checked for a collision with the scheme's own.
+        scale: The classification the layer's colour encoding already carries, when it has one.
+            `_color_encoding` cut this very column with this very `scheme`/`k` to describe the layer, so
+            cutting it again here is a second full pass for a result that is by construction identical.
+            :func:`~digitalearth.three_d.base.classified_scalars` reads it only as far as it answers this
+            request — a `scheme`/`k`/`cmap` the description was not cut with is cut here — so the saving
+            cannot become a veto over a restyle (review R2-L11, R2-H3).
 
     Returns:
         A ``(style, scalars)`` pair: the colour keywords to forward to `add_mesh`, and the per-feature class
@@ -114,7 +121,7 @@ def _classify_or_refuse(
     """
     if colours is None:
         return {}, None
-    style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
+    style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap, scale=scale)
     scalars = np.asarray(style.pop("scalars"), dtype=float)
     chosen_nan_color = pinned.pop("nan_color", None)
     clashing = sorted(set(style) & set(pinned))
@@ -443,8 +450,17 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     # Classify once, per feature, *before* building the prisms. The per-cell array is then filled
     # straight from the result, so a label column ("categorical") and a column carrying NaN both work:
     # neither survives a round-trip through float(), which is what re-keying the raw values required.
+    # "Once" counts the builder's cut too: the layer's colour encoding already carries the classification
+    # `_color_encoding` made of this column, so handing it over is what makes the tier's one-computation
+    # claim true of the extrusion and not only of the point cloud (review R2-L11).
+    encoding = layer.symbology.encoding("color")
     style, scalars = _classify_or_refuse(
-        colours, scheme=scheme, k=k, cmap=cmap, pinned=props
+        colours,
+        scheme=scheme,
+        k=k,
+        cmap=cmap,
+        pinned=props,
+        scale=None if encoding is None else encoding.scale,
     )
 
     prisms: list["pv.PolyData"] = []
