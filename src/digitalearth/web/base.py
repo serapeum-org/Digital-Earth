@@ -716,10 +716,16 @@ class WebMapBase:
         #: The same classification :attr:`last_legend` holds, stripped of the key's furniture: exactly
         #: ``last_legend["values"]``, which is measurably so for all three shapes — a graduated layer's
         #: edges (`[0.0, 1.67, 3.33, 5.0]`), a continuous layer's ramp stops (`[0.0, 1.25, 2.5, 3.75, 5.0]`)
-        #: and, despite the ``List[float]`` annotation, a **categorical** layer's category values as they
-        #: come (`['a', 'b', 'c', 'd']` — strings, not numbers). The two are written together and promoted
-        #: together (:meth:`_forget_legend`), so they never answer for different layers.
-        self.last_breaks: Optional[List[float]] = None
+        #: and a **categorical** layer's category values as they come (`['a', 'b', 'c', 'd']` — strings, not
+        #: numbers). The two are written together and promoted together (:meth:`_forget_legend`), so they
+        #: never answer for different layers.
+        #:
+        #: Annotated ``List[Any]`` for that third shape, and not as a widening of convenience: it was
+        #: ``List[float]`` while a categorical layer had been putting strings in it since the classification
+        #: existed, so the annotation named a type this attribute does not hold. `Any` is the honest answer
+        #: — the element type is the classified column's, which the tier does not constrain — where
+        #: ``List[float]`` was a claim a caller could have written code against.
+        self.last_breaks: Optional[List[Any]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside

@@ -50,7 +50,14 @@ PACKAGE_ROOT = Path(digitalearth.__file__).resolve().parent
 DOTTED_REFERENCE = re.compile(r"`~?([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)`")
 
 #: A bare cross-reference, as opposed to a dotted one, which the pattern above takes.
-BARE_REFERENCE = re.compile(r":meth:`~?([A-Za-z_][A-Za-z0-9_]*)`")
+#:
+#: **Both roles, not just `:meth:`.** Round 1 of order 24's review left two dangling ``:func:`_reconcile_bar```
+#: references — to a function split into `_current_bar`/`_add_bar` and gone from the tree — and they survived
+#: because this pattern read `:meth:` alone. A `:func:` role sat outside every guard the package has, which is
+#: the one place a stale reference is least likely to be noticed by eye: a module-level helper has no class to
+#: anchor the reader's memory. Measured when widening it, exactly one bare `:func:` in the package resolved to
+#: no function of ours -- ``:func:`float```, the builtin, which is now spelled as code rather than a role.
+BARE_REFERENCE = re.compile(r":(?:meth|func):`~?([A-Za-z_][A-Za-z0-9_]*)`")
 
 
 #: Attribute names set on an instance rather than declared on the class, collected from the package's own
