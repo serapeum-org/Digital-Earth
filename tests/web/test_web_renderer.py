@@ -660,7 +660,7 @@ class TestThePaintIsReadBackAsChannels:
     """What the tier already records, read back in the portable vocabulary (#328).
 
     Every vector builder funnels through `_vector_layer`, which records MapLibre's own `paint` dict because
-    that is what :func:`~digitalearth.web.renderer.draw_vector` rebuilds the layer from. That dict is
+    that is what :func:`~digitalearth.web.vector.draw_vector` rebuilds the layer from. That dict is
     unreadable anywhere else, so a layer this tier drew described its style in a form only this tier could
     use, and `Symbology.encodings` came back empty however the layer was styled.
     :func:`~digitalearth.web.renderer.portable_encodings` is the read-back, and it changes nothing a drawer
