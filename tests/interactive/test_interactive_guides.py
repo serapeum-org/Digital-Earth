@@ -584,8 +584,11 @@ class TestTheKeyIsDrawnAgainWhenItsLayerIs:
             "the restyle drew no new element, so this proves nothing"
         )
         options = _plot_options(after)
-        assert "colorbar" not in options and "clabel" not in options, (
-            f"the redraw applied a key this element has no option to draw: {options}"
+        assert "colorbar" not in options, (
+            f"the redraw applied a colorbar option this element has no way to draw: {options}"
+        )
+        assert "clabel" not in options, (
+            f"the redraw applied a clabel option this element has no way to draw: {options}"
         )
         assert [str(raised.message) for raised in caught] == [], (
             f"the redraw warned again about a key the recording call already refused: {caught}"
@@ -625,8 +628,11 @@ class TestTheKeyIsDrawnAgainWhenItsLayerIs:
         with pytest.warns(UserWarning, match="Bokeh gives no clabel, colorbar to draw"):
             m.colorbar("true", label="Reflectance")
         options = _plot_options(_element_of(m, hv.RGB))
-        assert "colorbar" not in options and "clabel" not in options, (
-            f"a key the element takes none of was applied to it anyway: {options}"
+        assert "colorbar" not in options, (
+            f"a colorbar option the element takes none of was applied to it anyway: {options}"
+        )
+        assert "clabel" not in options, (
+            f"a clabel option the element takes none of was applied to it anyway: {options}"
         )
         recorded = m.get_layer("true").symbology.guide()
         assert (recorded.show, recorded.title) == (True, "Reflectance"), (
