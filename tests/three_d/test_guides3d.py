@@ -299,15 +299,29 @@ class TestTheKeyFollowsItsLayer:
             labels — so a record that outlived its layer would be picked up by the next layer called the
             same thing: a fresh terrain titled after a cloud that is no longer on the scene, or drawn with
             its labels.
+
+            The closing assertion used to be the bar list alone, which is PyVista's own default: a fresh
+            terrain already carries an `elevation` bar, so `['elevation']` held whether `colorbar()` worked
+            or not (review R2-N11). What carries the claim is the **record**: that the cloud's rows were
+            recorded in the first place, that the record went with the layer, and that the bar the new
+            layer of that name ends up on is its own array's.
         """
         points = _points(6)
         labels = np.array(["a", "b", "a", "c", "b", "c"], dtype=object)
         scene.point_cloud(points, values=labels, scheme="categorical", name="shared")
         scene.legend(title="Cover", labels=["one", "two", "three"])
+        recorded = dict(scene._guides["shared"])
+        assert recorded.get("labels") == ("one", "two", "three"), (
+            f"the cloud's key has to have been recorded for its loss to mean anything: {recorded}"
+        )
         scene.remove_layer("shared")
         assert "shared" not in scene._guides, dict(scene._guides)
         scene.terrain(_dem(), name="shared")
         scene.colorbar("shared")
+        inherited = scene._guides["shared"]
+        assert inherited.get("bar") == "elevation", (
+            f"the new layer's key is its own array's bar, not the removed layer's: {inherited}"
+        )
         assert list(scene.plotter.scalar_bars.keys()) == ["elevation"], (
             "the new layer must be titled after its own array, not the removed layer's key"
         )
