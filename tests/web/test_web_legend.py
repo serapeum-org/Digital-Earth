@@ -539,6 +539,45 @@ class TestTheKeyIsRecordedOnTheLayerItDescribes:
             "a layer nobody keyed must not gain a guide from a call that named no layer"
         )
 
+    def test_asking_with_no_id_keys_a_layer_the_viewer_can_see(self):
+        """An unnamed `colorbar()` means "key what is on the map", so it must draw something.
+
+        Test scenario:
+            With no id the target was `keyable[-1]` with visibility never consulted, so on a map whose
+            topmost classified layer is hidden the guide went to the hidden layer and the call drew nothing
+            at all — a `colorbar()` that returns the map and leaves it exactly as it found it, with the
+            visible classified layer below still unexplained (review L6). Naming a hidden layer is a
+            different request and still works; this is only about the one the map picks for the caller.
+        """
+        web_map = _two_classified()
+        web_map.set_visible("B", False)
+        web_map.colorbar(label="People")
+        assert _whose_key(web_map) == "A", (
+            "an unnamed colorbar() drew no key; the hidden topmost layer took the guide"
+        )
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            "the hidden layer must not take a key the caller cannot see"
+        )
+
+    def test_a_key_asked_for_with_every_layer_hidden_still_lands_somewhere(self):
+        """"Prefer visible" is a preference, not a refusal: a hidden map is not an error.
+
+        Test scenario:
+            The other half of the same choice. Refusing when nothing keyable is visible would turn
+            `quickmap(..., colorbar=True)` on a map built hidden into a crash, and there is a layer to
+            explain — it is simply not on screen yet. The guide is recorded and the key appears with the
+            layer, which is the rule a named hidden layer already follows.
+        """
+        web_map = _two_classified()
+        web_map.set_visible("A", False)
+        web_map.set_visible("B", False)
+        web_map.colorbar(label="Rain")
+        assert _whose_key(web_map) is None, "nothing is visible, so no key is drawn"
+        web_map.set_visible("B", True)
+        assert _whose_key(web_map) == "B", (
+            "showing the topmost classified layer must bring the recorded key with it"
+        )
+
     def test_hiding_with_no_id_reaches_a_key_recorded_on_a_hidden_layer(self):
         """Nothing is on screen, but a key was asked for — and asking for none must undo asking for one.
 

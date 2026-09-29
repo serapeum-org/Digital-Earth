@@ -893,8 +893,11 @@ class DecorationMixin(_MixinBase):
         ``FigureSpec`` being written and read back, which a panel built once never did.
 
         Args:
-            layer_id: Which layer's classes to describe. `None` takes the topmost classified layer — the
-                most recent one, which is what the tier recorded before layers had ids.
+            layer_id: Which layer's classes to describe. `None` takes the topmost **visible** classified
+                layer — the most recent one a viewer can see, since a key drawn for nothing on screen is
+                the thing this call exists to avoid — falling back to the topmost classified layer of any
+                visibility when none is visible. Under ``visible=False`` it instead takes the layer whose
+                key is drawn, so "no key" takes off the key there is.
             title: Heading above the key. ``None`` uses the classified column's name, followed by the
                 units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them
                 for the raster the classification came from. A title given here always wins, and a unit
@@ -1009,9 +1012,14 @@ class DecorationMixin(_MixinBase):
             ``show=False`` onto the topmost *classified* layer — one nobody had keyed — and left the drawn
             key exactly where it was (review M3).
 
-            A key recorded on a **hidden** layer draws nothing but is still a key the caller asked for, so
-            `visible=False` falls back to the topmost layer *asking* for one when none is drawn — otherwise
-            taking a key off would be a no-op the next `set_visible` undid.
+            **Visibility is a preference on both branches, never a refusal.** Asking for a key prefers the
+            topmost **visible** classified layer, because an unnamed `colorbar()` means "key what is on the
+            map": visibility was consulted nowhere, so a hidden topmost layer took the guide and the call
+            drew nothing at all (review L6). Taking one off prefers the key that is drawn for the matching
+            reason. Neither *requires* it — a key recorded on a hidden layer draws nothing but is still a
+            key the caller asked for, so each branch falls back to the topmost candidate of any visibility:
+            otherwise keying a map built hidden would raise, and taking a key off a hidden layer would be a
+            no-op the next `set_visible` undid. A hidden layer named outright is keyed as it always was.
         """
         if layer_id is not None:
             self._legend_of(
@@ -1025,6 +1033,11 @@ class DecorationMixin(_MixinBase):
             asked = guided_layer_ids(self)
             return asked[-1] if asked else None
         keyed = keyable_layer_ids(self)
+        shown = [
+            candidate for candidate in keyed if self._layer_tree.is_visible(candidate)
+        ]
+        if shown:
+            return shown[-1]
         if keyed:
             return keyed[-1]
         raise ValueError(

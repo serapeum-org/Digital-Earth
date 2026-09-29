@@ -1910,7 +1910,8 @@ class WebMapBase:
 
         Args:
             layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
-                takes the topmost classified layer, which is what the tier recorded before layers had ids.
+                takes the topmost **visible** classified layer, and under ``visible=False`` the layer whose
+                key is drawn, as :meth:`~digitalearth.web.decoration.DecorationMixin.legend` resolves it.
             label: What to call the key — the variable and its units, usually. Recorded as the guide's
                 ``title``.
             visible: `False` draws no key, so a caller passing a flag through does not have to branch.
