@@ -41,7 +41,7 @@ from digitalearth.interactive.capabilities import (
 )
 from digitalearth.static import Map
 from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
-from digitalearth.static.guides import bar_refusal
+from digitalearth.static.guides import guide_kind
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
@@ -342,24 +342,38 @@ def _best_effort(step: str, call, *args, **kwargs) -> Any:
         return None
 
 
-def _add_colorbar(scene: Map) -> None:
-    """Add a colorbar to ``scene``, tolerating only a layer that cannot carry one.
+def _add_static_key(scene: Map) -> None:
+    """Add the matplotlib tier's colour key to ``scene``, tolerating only a layer that cannot carry one.
+
+    **Which key is a property of the layer, not of the flag** — the branch :func:`_add_3d_key` already had.
+    A continuous ramp is explained by a bar and a categorical fill by a keyed list of swatches, and
+    ``Map.colorbar`` refuses the second outright, because a bar over it would read the class codes cleopatra
+    assigned rather than the class names. Calling only ``colorbar()`` and swallowing that refusal is what
+    left the default backend recording no key at all for a fill the web and 3-D paths both keyed (review
+    M6); the choice is asked of :func:`~digitalearth.static.guides.guide_kind`, which is where this tier
+    already answers it.
 
     Args:
-        scene: The :class:`Map` whose most recent colour-keyed layer should get a colorbar. Which layer that
-            is is ``Map.colorbar``'s own question since order 24 — the most recent one that publishes a
-            colour encoding, never simply the last one added, so a coastline or a basemap drawn after the
-            data cannot take the key.
+        scene: The :class:`Map` whose most recent colour-keyed layer should get a key. Which layer that is
+            is ``Map.colorbar``/``Map.legend``'s own question since order 24 — the most recent one that
+            publishes a colour encoding, never simply the last one added, so a coastline or a basemap drawn
+            after the data cannot take the key. It is read here through the same
+            :meth:`~digitalearth.static.scene.Scene._color_keyed` list those methods resolve through, so the
+            layer this branches on and the layer they key cannot differ.
 
     Returns:
-        Nothing. ``Map.colorbar`` returns the map itself, as the Core declares, so there is no colorbar to
-        hand back; the drawn bar is reachable per layer from the renderer.
+        Nothing. Both methods return the map itself, as the Core declares, so there is no artist to hand
+        back; the drawn key is reachable per layer from the renderer.
     """
+    keyed = scene._color_keyed()
+    if not keyed:  # pragma: no cover - `_has_a_key_to_draw` is asked first
+        return
+    kind = guide_kind(scene.get_layer(keyed[-1]))
     try:
-        scene.colorbar()
+        scene.legend() if kind == "legend" else scene.colorbar()
     except UNMAPPABLE as error:
         logger.warning(
-            "quickmap: colorbar skipped — %s: %s", type(error).__name__, error
+            "quickmap: %s skipped — %s: %s", kind, type(error).__name__, error
         )
 
 
@@ -720,30 +734,31 @@ def _quickmap_matplotlib(
     if domain is not None:
         scene.set_domain()
     if colorbar and _has_a_key_to_draw(scene):
-        _add_colorbar(scene)
+        _add_static_key(scene)
     return scene
 
 
 def _has_a_key_to_draw(scene: Map) -> bool:
-    """Whether any layer on the map is one a colorbar can describe.
+    """Whether any layer on the map is one a colour key can describe.
 
     Asked of the **description** rather than of the last registered artist (order 24). The old reading was
     ``scene.layers[-1]``, which is the last layer that registered a mappable — so a coastline or a basemap
     drawn after the data answered for the data, and ``quickmap(ds, coastlines=True)`` decided whether to key
     a raster by looking at a coastline.
 
+    It used to ask :func:`~digitalearth.static.guides.bar_refusal` — "can a **bar** describe this?" — and so
+    answered `False` for a categorical fill, which is a layer with a key, just not that one. Choosing
+    between the two is :func:`_add_static_key`'s job; the question here is only whether there is anything to
+    explain (review M6).
+
     Args:
         scene: The map that was just drawn.
 
     Returns:
         `False` for a map where nothing is coloured by a value — no layers, a globe fill, an outline-only
-        polygon draw — and for one whose only colour-keyed layers are **categorical**, which are keyed by the
-        swatch legend their builder drew rather than by a continuous ramp.
+        polygon draw.
     """
-    return any(
-        bar_refusal(scene.get_layer(layer_id)) is None
-        for layer_id in scene._color_keyed()
-    )
+    return bool(scene._color_keyed())
 
 
 def _basemap_source(basemap: Any) -> Any:
@@ -916,7 +931,7 @@ def _quickmap_interactive(
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
     if not colorbar and scene.layers:
         # Builders draw a colorbar by default; drop it on the data layer. Tolerated the way
-        # `_add_colorbar` tolerates the static tier's unmappable artist, and for the same reason at order 24:
+        # `_add_static_key` tolerates the static tier's unmappable artist, and for the same reason at order 24:
         # `InteractiveMap.colorbar` is a guide on a layer's colour encoding now, so a layer whose colour
         # varies with nothing — plain `points`, an outline-only `polygons` — refuses the call. `colorbar=False`
         # asked for a map with no colour key, and such a map already has none, so the request is met either
@@ -957,7 +972,7 @@ def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
 def _add_web_legend(scene: Any) -> Any:
     """Add the web tier's colour key, tolerating a map with nothing classified to describe.
 
-    The web counterpart of :func:`_add_colorbar`. ``WebMap.legend`` is a *builder* — it reads the
+    The web counterpart of :func:`_add_static_key`. ``WebMap.legend`` is a *builder* — it reads the
     classification the last layer recorded — so on a map with no classified layer it raises rather than
     drawing an empty box. Under ``quickmap(colorbar=True)`` that is not a caller error: the default asks for
     a key *if there is one to draw*, exactly as the matplotlib path treats an unmappable layer.
@@ -1171,7 +1186,7 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
         The same ``scene`` (so wrappers can ``return _finish(...)``).
     """
     if colorbar and _has_a_key_to_draw(scene):
-        _add_colorbar(scene)
+        _add_static_key(scene)
     return scene
 
 

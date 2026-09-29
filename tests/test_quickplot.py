@@ -84,6 +84,31 @@ def test_module_choropleth_categorical_has_no_spurious_colorbar():
     )
 
 
+def test_quickmap_records_the_categorical_key_on_the_layer():
+    """The key a categorical fill gets is the layer's, on this backend as on the other three.
+
+    Test scenario:
+        The swatch legend the glyph draws for `scheme="categorical"` is pre-order-24 figure decoration: it
+        cannot move with its layer, cannot go away with it, and `to_dict()` carries no note that a key was
+        ever asked for. `quickmap` recorded a `Guide` for the same fill on the web and 3-D backends and
+        nothing at all here, because `_add_static_key` called only `colorbar()` and swallowed the refusal a
+        categorical scale answers with. It asks for the key the layer's scale calls for now, so all four
+        agree about what `quickmap(colorbar=True)` leaves behind.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(fc, crs=fc.epsg, column="zone", scheme="categorical")
+    guide = m.get_layer(m.layer_ids[-1]).symbology.guide()
+    assert guide is not None, "the categorical fill records no key at all"
+    assert guide.show is True, guide
+    drawn = m.ax.get_legend()
+    assert drawn is not None, "the recorded key is not on the figure"
+    assert {text.get_text() for text in drawn.get_texts()} == {
+        "urban",
+        "rural",
+        "park",
+    }, [text.get_text() for text in drawn.get_texts()]
+
+
 def test_quickmap_graduated_still_gets_its_colorbar():
     """A non-categorical fill must still receive its aggregated colorbar (the M2 guard must not over-fire)."""
     fc = _zoned_polygons()
@@ -273,14 +298,15 @@ class _FakeScene:
         Args:
             keyed: The ids of the layers that publish a colour encoding.
             raises: Whether ``colorbar()`` raises, to mimic an unmappable layer.
-            categorical: Whether those layers are coloured by category, which is the case a bar is skipped
-                for.
+            categorical: Whether those layers are coloured by category, which is the case keyed by a swatch
+                legend rather than by a bar.
         """
         self._keyed = list(keyed)
         self.layers = [f"artist-{held}" for held in self._keyed]
         self._raises = raises
         self._categorical = categorical
         self.colorbar_calls = 0
+        self.legend_calls = 0
 
     def _color_keyed(self):
         """Return the ids of the layers a key could explain."""
@@ -314,6 +340,12 @@ class _FakeScene:
         if self._raises:
             raise ValueError("nothing mappable to colorbar")
 
+    def legend(self):
+        """Record the call — the key a categorical fill is explained by on every tier."""
+        self.legend_calls += 1
+        if self._raises:
+            raise ValueError("nothing mappable to legend")
+
 
 class TestFinish:
     """Tests for api._finish (PA-5)."""
@@ -342,24 +374,33 @@ class TestFinish:
         assert scene.colorbar_calls == 0, "colorbar must not be drawn when disabled"
         assert out is scene, "the same scene must be returned"
 
-    def test_skips_colorbar_when_nothing_is_coloured_by_a_value(self):
-        """_finish skips the colorbar when no layer publishes a colour a bar could describe.
+    def test_skips_the_key_when_nothing_is_coloured_by_a_value(self):
+        """_finish keys nothing when no layer publishes a colour at all.
 
         Test scenario:
-            An empty scene with colorbar=True draws nothing, and so does one whose only keyed layer is
-            coloured **by category** — a bar over the class codes cleopatra assigned would read ``0, 1, 2 …``
-            beside the swatch legend the glyph already drew.
+            An empty scene with colorbar=True draws neither kind of key — the one case where "add a key if
+            there is one to draw" has nothing to add.
         """
         scene = _FakeScene(keyed=[])
         out = qp._finish(scene, colorbar=True)
-        assert scene.colorbar_calls == 0, (
-            "colorbar must not be drawn without a keyed layer"
+        assert (scene.colorbar_calls, scene.legend_calls) == (0, 0), (
+            "no key must be drawn without a keyed layer"
         )
         assert out is scene, "the same scene must be returned"
+
+    def test_a_categorical_fill_is_keyed_by_a_legend_rather_than_by_a_bar(self):
+        """The branch the 3-D path already had: which key is the layer's property, not the flag's.
+
+        Test scenario:
+            A bar over a categorical fill would read the class codes cleopatra assigned rather than the
+            class names, which is why `Map.colorbar` refuses it. `_add_static_key` used to call only
+            `colorbar()` and swallow that refusal, so the one backend `quickmap` reaches without an extra
+            recorded no key at all while the web and 3-D paths recorded one.
+        """
         categorical = _FakeScene(keyed=["zone"], categorical=True)
         qp._finish(categorical, colorbar=True)
-        assert categorical.colorbar_calls == 0, (
-            "a categorical fill is keyed by its swatch legend, not by a bar"
+        assert (categorical.colorbar_calls, categorical.legend_calls) == (0, 1), (
+            "a categorical fill is keyed by a legend, not by a bar"
         )
 
     def test_swallows_colorbar_exception(self):
