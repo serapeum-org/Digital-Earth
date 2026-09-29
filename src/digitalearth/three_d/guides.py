@@ -199,8 +199,8 @@ def color_scale(
             ```python
             >>> from digitalearth.three_d.guides import color_scale
             >>> scale = color_scale(["a", "b", "a"], scheme="categorical", k=5, cmap="tab10")
-            >>> scale.categories, scale.color_for("a") == scale.color_for("a")
-            (('a', 'b'), True)
+            >>> scale.categories, scale.color_for("a"), scale.color_for("b")
+            (('a', 'b'), '#1f77b4', '#ff7f0e')
 
             ```
         - A column the scheme cannot cut answers `None`, leaving the refusal to the drawer:
