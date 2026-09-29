@@ -317,22 +317,54 @@ class TestTheKeyFollowsItsLayer:
             "colorbars() drew a visible bar for a hidden layer"
         )
 
-    def test_moving_the_layer_does_not_orphan_the_key(self, keyed):
-        """A reorder leaves the key attached to the layer it explains.
+    def test_moving_the_layer_does_not_orphan_the_key(self, dataset):
+        """A reorder leaves each key attached to the layer it explains.
 
         Args:
-            keyed: A map with a raster and a text label.
+            dataset: The committed ``acc4000`` raster, drawn twice so there is something to swap.
 
         Test scenario:
             `move_layer` re-arranges the artists the renderer holds and deals their z-orders back out. A
             colorbar lives on its own axes, so it must be outside that arrangement and still survive it.
+
+            Built with **two** keyed rasters rather than a raster and a text label, because the two sit in
+            different draw-order bands and `LayerTree.move` confines a move to one band: with one layer in
+            the data band there is nowhere for it to go, so the move this test is named for could not
+            happen and `Renderer._repaint` was never called (review M11). Reading `ax.images` on both sides
+            of the move is what says the reorder reached the *picture* — the ids alone would still swap if
+            the renderer ignored the move entirely, which is how the no-op version of this test passed with
+            `move_layer` replaced by `pass`. The z-order half of `_repaint` is deliberately not asserted
+            here: `_rank_zorders` deals back out the values the layers already held, and two rasters both
+            hold matplotlib's default, so it has nothing to distinguish them with.
         """
-        keyed.colorbar()
-        bar = keyed._renderer.drawn["acc"].guides[0]
-        keyed.move_layer("acc", 0)
-        assert keyed.layer_ids == ["acc", "caption"]
-        assert keyed._renderer.drawn["acc"].guides == (bar,)
-        assert len(keyed.fig.axes) == 2
+        with Map(crs=dataset.epsg) as canvas:
+            canvas.field(dataset, name="lower")
+            canvas.field(dataset, name="upper")
+            canvas.colorbar("lower", label="L")
+            canvas.colorbar("upper", label="U")
+            drawn = canvas._renderer.drawn
+            lower_bar, upper_bar = drawn["lower"].guides[0], drawn["upper"].guides[0]
+            lower, upper = drawn["lower"].artist, drawn["upper"].artist
+            painted = [id(image) for image in canvas.ax.images]
+            assert canvas.layer_ids == ["lower", "upper"]
+            assert painted.index(id(lower)) < painted.index(id(upper))
+            canvas.move_layer("lower", 1)
+            assert canvas.layer_ids == ["upper", "lower"], "the move did not happen"
+            painted = [id(image) for image in canvas.ax.images]
+            assert painted.index(id(lower)) > painted.index(id(upper)), (
+                "the reorder reached the description but not the artists on the axes"
+            )
+            drawn = canvas._renderer.drawn
+            assert drawn["lower"].guides == (lower_bar,), (
+                "the moved layer lost the key that explains it"
+            )
+            assert drawn["upper"].guides == (upper_bar,)
+            assert len(canvas.fig.axes) == 3, (
+                "one data axes and one bar per keyed layer; a reorder created or dropped one"
+            )
+            assert lower_bar.ax not in canvas.ax.get_children(), (
+                "the key was dealt into the layers' own arrangement"
+            )
 
     def test_a_rebuilt_layer_draws_its_key_again(self, keyed):
         """A restyle takes the layer off the axes and draws it again — key and all.
