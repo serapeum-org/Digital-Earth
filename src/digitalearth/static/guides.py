@@ -102,9 +102,10 @@ _COLORBAR_SIDES = {
 
 #: What a layer is coloured by when its kind **computes** the values and no column names them.
 #:
-#: Each is the word this tier already uses for the quantity: ``count`` is one of
-#: :data:`~digitalearth.static.maps.vector.AGG_REDUCERS`, a KDE draws a density, and a u/v field colours its
-#: arrows by magnitude. They are named here rather than spelled at each drawer so the three cannot drift.
+#: Each is the word this tier already uses for the quantity: ``count`` is the reducer
+#: :data:`~digitalearth.static.maps.vector._QUADTREE_AGG` adds to the shared NaN-aware registry, a KDE draws a
+#: density, and a u/v field colours its arrows by magnitude. They are named here rather than spelled at each
+#: drawer so the three cannot drift.
 COUNT_FIELD: str = "count"
 DENSITY_FIELD: str = "density"
 MAGNITUDE_FIELD: str = "magnitude"

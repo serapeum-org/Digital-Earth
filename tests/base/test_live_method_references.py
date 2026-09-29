@@ -6,7 +6,7 @@ the class of defect that creates — `tests/three_d/test_capabilities3d.py`'s
 `TestNoMessageNamesAMethodTheTierLost` — globbed ``src/digitalearth/three_d/*.py`` alone. Round 2 then found
 five such sites, four of them outside that tree and one in ``base/``, which no guard read at all (R2-M6).
 
-Two checks, because a reference comes in two shapes and they resolve differently:
+Three checks, because a reference comes in three shapes and they resolve differently:
 
 1. **A dotted reference** — ``WebMap.animate`` — carries its receiver, so it is resolved on that class. This is
    the shape the finding turns on: ``terrain``, ``globe`` and ``animate`` were *web*-tier aliases that were
@@ -16,6 +16,13 @@ Two checks, because a reference comes in two shapes and they resolve differently
 2. **A bare** ``:meth:`name` `` has no receiver, so it is resolved against every class in the package. That is
    looser than the 3-D guard's per-tier reading, and deliberately: a name that exists on some class is at least
    a name a reader can look up, and the 3-D guard keeps its tighter per-tier version of the same check.
+3. **A fully-dotted role** — ``:data:`~digitalearth.static.maps.vector._QUADTREE_AGG` `` — names its own import
+   path, so it is resolved by importing the longest importable prefix and walking the rest. Neither check above
+   could see one: the bare pattern requires a single component, and the dotted one requires the first component
+   to be a class name. Round 2 found a `:data:` role naming ``digitalearth.static.maps.vector.AGG_REDUCERS``
+   in ``static/guides.py`` — a constant that has never existed anywhere in the package (R2-M6) — sitting in
+   that gap, three commits after ``f1588cbc`` widened check 2 to `:func:` for exactly this class of defect.
+   The dead name is spelled without its role here so this module's own prose cannot read as a reference.
 
 Receivers are resolved by import rather than by AST: measured, every module under ``digitalearth`` imports in
 the lean ``dev`` environment — the engines are reached inside the functions that need them — so `hasattr` can
@@ -58,6 +65,17 @@ DOTTED_REFERENCE = re.compile(r"`~?([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*
 #: anchor the reader's memory. Measured when widening it, exactly one bare `:func:` in the package resolved to
 #: no function of ours -- ``:func:`float```, the builtin, which is now spelled as code rather than a role.
 BARE_REFERENCE = re.compile(r":(?:meth|func):`~?([A-Za-z_][A-Za-z0-9_]*)`")
+
+#: A role naming its target by its **full import path**, which is the shape neither pattern above reads: the
+#: bare one takes a single component, and :data:`DOTTED_REFERENCE`'s first component has to be a class name.
+#:
+#: Every role a module-level target is written under is here, not `:data:` alone — a constant, a function, a
+#: class, a module and an instance attribute are all spelled this way, and the hole was not specific to one of
+#: them. Scoped to ``digitalearth.*``: a role naming another project's object (``matplotlib.colors.Normalize``)
+#: resolves against that project's tree, which is not this guard's to police.
+DOTTED_MODULE_REFERENCE = re.compile(
+    r":(?:data|attr|func|meth|class|mod|obj|exc):`~?(digitalearth(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`"
+)
 
 
 #: Attribute names set on an instance rather than declared on the class, collected from the package's own
@@ -126,6 +144,43 @@ def _members_of(held: type) -> set:
             continue
         names |= set(SELF_ASSIGNMENT.findall(source))
     return names
+
+
+def _dangling_reason(target: str) -> str:
+    """Return why `target`'s full import path resolves to nothing, or ``""`` when it resolves.
+
+    Args:
+        target: The dotted path a fully-dotted role named, ``digitalearth`` first.
+
+    Returns:
+        The component that does not exist and what it was looked for on, or ``""`` when every component
+        resolves — so a failure names the piece to fix rather than the whole path.
+    """
+    parts = target.split(".")
+    held: object = None
+    walked = 0
+    for stop in range(len(parts), 0, -1):
+        try:
+            held = importlib.import_module(".".join(parts[:stop]))
+        except ImportError:
+            continue
+        walked = stop
+        break
+    if held is None:  # pragma: no cover - `digitalearth` itself always imports
+        return f"no importable module in {target}"
+    for position, attribute in enumerate(parts[walked:], start=walked):
+        if hasattr(held, attribute):
+            held = getattr(held, attribute)
+            continue
+        # The instance-attribute allowance the class checks above already make: `hasattr` cannot see a name a
+        # constructor sets, and `Scene.ax` is a good reference to one. Nothing can be walked *through* such a
+        # name, though, so it only counts when it is the last component.
+        if isinstance(held, type) and attribute in _members_of(held):
+            if position == len(parts) - 1:
+                return ""
+            return f"{'.'.join(parts[: position + 1])} is an instance attribute, so it holds no {parts[-1]}"
+        return f"{'.'.join(parts[:position])} has no {attribute}"
+    return ""
 
 
 def _sources() -> list:
@@ -214,6 +269,28 @@ class TestNoProseNamesAMethodItsReceiverLost:
             f"these cross-references name a method no class in the package has: {dangling}"
         )
 
+    def test_no_fully_dotted_role_names_something_the_package_does_not_hold(self):
+        """A role carrying its own import path is resolved along it, component by component.
+
+        Test scenario:
+            The hole R2-M6 found: ``AGG_REDUCERS`` was named by its full path, so the bare pattern could not
+            match it and the class pattern would not take ``digitalearth`` as a receiver. Measured over the
+            tree when this was added — 1031 fully-dotted ``digitalearth.*`` roles, of which that one alone
+            resolved to nothing.
+        """
+        dangling = []
+        for path, text in _sources():
+            for number, line in enumerate(text.splitlines(), start=1):
+                for target in DOTTED_MODULE_REFERENCE.findall(line):
+                    reason = _dangling_reason(target)
+                    if reason:
+                        dangling.append(
+                            f"{path.relative_to(PACKAGE_ROOT).as_posix()}:{number}: {target} ({reason})"
+                        )
+        assert dangling == [], (
+            f"these roles name their target by an import path that resolves to nothing: {dangling}"
+        )
+
 
 class TestTheResolverSeesWhatItClaimsTo:
     """A guard is worth what it opened, so what it opened is measured rather than trusted."""
@@ -267,6 +344,44 @@ class TestTheResolverSeesWhatItClaimsTo:
             if len(path.relative_to(PACKAGE_ROOT).parts) > 2
         ]
         assert nested != [], "the scan reads only the top level of each tier"
+
+    def test_the_fully_dotted_pattern_reads_a_corpus_rather_than_nothing(self):
+        """A pattern that matched nothing would leave the check above green over an unread tree.
+
+        Test scenario:
+            The measurement behind the widening: 1031 fully-dotted ``digitalearth.*`` roles across the package,
+            spread over every tier. A floor well under that, rather than the number itself, so ordinary prose
+            edits do not touch this — but a regex typo that stops matching does.
+        """
+        matched = {}
+        for path, text in _sources():
+            found = DOTTED_MODULE_REFERENCE.findall(text)
+            if found:
+                matched.setdefault(path.relative_to(PACKAGE_ROOT).parts[0], []).extend(
+                    found
+                )
+        total = sum(len(found) for found in matched.values())
+        assert total > 500, f"the pattern reads only {total} fully-dotted roles"
+        assert len(matched) > 3, (
+            f"only {sorted(matched)} carry one, so tiers are going unread"
+        )
+
+    def test_the_path_resolver_answers_both_ways(self):
+        """A resolver that said yes to everything would pass the check above without reading a thing.
+
+        Test scenario:
+            Both directions on names chosen here rather than quoted from prose: a live constant, a spelling of
+            it that does not exist, an instance attribute a constructor sets (which `hasattr` cannot see on the
+            class), and a component walked *through* such an attribute, which resolves to nothing.
+        """
+        assert _dangling_reason("digitalearth.base.arrays.NAN_REDUCERS") == ""
+        assert _dangling_reason("digitalearth.static.scene.Scene.ax") == ""
+        assert "has no AGG_REDUCERS" in _dangling_reason(
+            "digitalearth.base.arrays.AGG_REDUCERS"
+        )
+        assert "instance attribute" in _dangling_reason(
+            "digitalearth.static.scene.Scene.ax.nothing_here"
+        )
 
     def test_only_the_names_more_than_one_tier_spells_are_skipped(self, resolver):
         """An ambiguous receiver is skipped, so the set of them must stay small and named.
