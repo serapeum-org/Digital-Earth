@@ -133,6 +133,45 @@ class TestTheClassificationIsRecorded:
                 f"{accessor} holds {recorded}, which does not span the column {span}"
             )
 
+    def test_a_raster_band_takes_the_record_and_the_unnamed_key(self, cells, dataset):
+        """A raster band publishes a ramp, so it is the layer these accessors answer for.
+
+        Args:
+            cells: The fixture frame, drawn as the classified layer underneath.
+            dataset: The DEM whose band is drawn over it.
+
+        Test scenario:
+            A raster band gained a colour encoding of its own with order 24, and `_band_colour` writes
+            `last_breaks` and `last_legend` like any classifying builder — so both accessors, and an
+            unnamed `legend()`, answer for the raster rather than for the choropleth beneath it. Two
+            docstrings said otherwise ("the most recent classified `choropleth`/`points`", "the topmost
+            **visible** classified layer"), which is review L3. Nothing pinned the behaviour they were
+            describing, so this is that pin: the prose can only drift back if this reddens.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(
+            cells, column="pop", scheme="quantiles", k=3, name="grad"
+        )
+        m.field(dataset, name="acc")
+        band = dataset.band_names[0]
+        assert (m.last_legend["kind"], m.last_legend["column"]) == (
+            "continuous",
+            band,
+        ), (
+            f"the raster's own ramp must be what is recorded, not the choropleth's: {m.last_legend}"
+        )
+        m.legend()
+        keyed = [
+            layer_id
+            for layer_id in m.layer_ids
+            if m.get_layer(layer_id).symbology.guide() is not None
+        ]
+        assert keyed == ["acc"], (
+            f"an unnamed legend() must key the raster, the topmost layer with a colour scale; it keyed "
+            f"{keyed}"
+        )
+
 
 class TestTheLegendReachesTheSavedPage:
     """The whole point is a key someone else can read, so export is where it counts."""

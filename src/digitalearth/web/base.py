@@ -712,7 +712,11 @@ class WebMapBase:
         #: before it here too. The id addresses the layer in MapLibre; the label is what a layer switcher shows a
         #: viewer. Controls and basemaps are not in here — they are not things a viewer turns on and off.
         self._layer_tree: LayerTree = LayerTree()
-        #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
+        #: Class breaks from the most recent layer that published a colour scale, for an out-of-band legend:
+        #: a classified ``choropleth``/``points``, **or a raster band's ramp** — a band gained a colour
+        #: encoding of its own with order 24, and :meth:`~digitalearth.web.raster.RasterMixin._band_colour`
+        #: writes both accessors like any classifying builder, so a ``field()`` drawn over a choropleth is
+        #: what these answer for (review L3).
         #: The same classification :attr:`last_legend` holds, stripped of the key's furniture: exactly
         #: ``last_legend["values"]``, which is measurably so for all three shapes — a graduated layer's
         #: edges (`[0.0, 1.67, 3.33, 5.0]`), a continuous layer's ramp stops (`[0.0, 1.25, 2.5, 3.75, 5.0]`)
@@ -1947,8 +1951,10 @@ class WebMapBase:
 
         Args:
             layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
-                takes the topmost **visible** classified layer, and under ``visible=False`` the layer whose
-                key is drawn, as :meth:`~digitalearth.web.decoration.DecorationMixin.legend` resolves it.
+                takes the topmost **visible** layer that published a colour scale (a classified
+                ``choropleth``/``points``, or a raster band's ramp), and under ``visible=False`` the layer
+                whose key is drawn, as :meth:`~digitalearth.web.decoration.DecorationMixin.legend`
+                resolves it.
             label: What to call the key — the variable and its units, usually. Recorded as the guide's
                 ``title``.
             visible: `False` draws no key, so a caller passing a flag through does not have to branch.

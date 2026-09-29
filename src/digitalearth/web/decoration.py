@@ -899,11 +899,13 @@ class DecorationMixin(_MixinBase):
         ``FigureSpec`` being written and read back, which a panel built once never did.
 
         Args:
-            layer_id: Which layer's classes to describe. `None` takes the topmost **visible** classified
-                layer — the most recent one a viewer can see, since a key drawn for nothing on screen is
-                the thing this call exists to avoid — falling back to the topmost classified layer of any
-                visibility when none is visible. Under ``visible=False`` it instead takes the layer whose
-                key is drawn, so "no key" takes off the key there is.
+            layer_id: Which layer's classes to describe. `None` takes the topmost **visible** layer that
+                published a colour scale — a classified ``choropleth``/``points``, or a raster band's ramp,
+                since a band carries a colour encoding of its own — and so the most recent one a viewer can
+                see, since a key drawn for nothing on screen is the thing this call exists to avoid. It
+                falls back to the topmost such layer of any visibility when none is visible. Under
+                ``visible=False`` it instead takes the layer whose key is drawn, so "no key" takes off the
+                key there is.
             title: Heading above the key. ``None`` uses the classified column's name, followed by the
                 units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them
                 for the raster the classification came from. A title given here always wins, and a unit
@@ -1135,7 +1137,9 @@ class DecorationMixin(_MixinBase):
             key exactly where it was (review M3).
 
             **Visibility is a preference on both branches, never a refusal.** Asking for a key prefers the
-            topmost **visible** classified layer, because an unnamed `colorbar()` means "key what is on the
+            topmost **visible** keyable layer — one that published a colour scale, which since order 24
+            includes a raster band's ramp and not only a classified column (review L3) — because an
+            unnamed `colorbar()` means "key what is on the
             map": visibility was consulted nowhere, so a hidden topmost layer took the guide and the call
             drew nothing at all (review L6). Taking one off prefers the key that is drawn for the matching
             reason. Neither *requires* it — a key recorded on a hidden layer draws nothing but is still a
