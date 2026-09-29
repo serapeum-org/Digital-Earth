@@ -735,6 +735,12 @@ def _drop_orphaned_bars(
         held: The scene's record of what it has drawn, keyed by layer id.
     """
     keeping = {record["bar"] for record in held.values() if record.get("bar")}
+    # A layer whose guide asks for **no** bar has settled its claim on this one as surely as a layer holding
+    # a key of its own: `colorbar(visible=False)` is an ask, not silence. It has to be read off the plan
+    # because asking for no bar leaves no record to read — which is why switching the key off on every
+    # terrain sharing one bar left that bar on the window, although one terrain on its own loses it
+    # (review M8). A layer carrying no guide at all is in neither set: it is still reading the engine's bar.
+    silent = {plan.layer_id for plan in _guide_plan(figure) if plan.wanted_bar is None}
     for layer_id in figure.layers.ids:
         field = guide_field(figure.layers.get(layer_id))
         if not field:
@@ -744,7 +750,9 @@ def _drop_orphaned_bars(
             continue
         binding = [layer_id, *_sharing_bar(scene, figure, layer_id, engine)]
         if all(
-            held.get(other, {}).get("bar") or held.get(other, {}).get("keyed")
+            held.get(other, {}).get("bar")
+            or held.get(other, {}).get("keyed")
+            or other in silent
             for other in binding
         ):
             _remove_bar(plotter, engine)

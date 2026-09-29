@@ -685,6 +685,30 @@ class TestWhatPyvistasOwnSlotsForce:
             scene.plotter.scalar_bars.keys()
         )
 
+    def test_switching_every_key_off_takes_the_shared_bar_off_with_them(self, scene):
+        """`visible=False` is an ask, and a bar nothing asks for any more comes off the window.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            One terrain's `colorbar(visible=False)` takes its bar off. Two terrains sharing the engine's
+            single bar could not: neither may remove a bar the other still reads, and the sweep that settles
+            a shared one counted only layers holding a key **of their own**. A layer that had switched its
+            key off held none, so it never counted — and a scene on which every key had been switched off
+            kept the bar for good (review M8).
+        """
+        scene.terrain(_dem(), name="a")
+        scene.terrain(_dem(), name="b")
+        scene.colorbar("a", visible=False)
+        assert list(scene.plotter.scalar_bars.keys()) == ["elevation"], (
+            "b has asked for nothing and still reads that bar, so it must stay"
+        )
+        scene.colorbar("b", visible=False)
+        assert list(scene.plotter.scalar_bars.keys()) == [], list(
+            scene.plotter.scalar_bars.keys()
+        )
+
     def test_two_keyed_layers_share_one_box_prefixed_by_their_titles(self, scene):
         """A window holds one legend actor, so the box is built from every keyed layer rather than replaced.
 
