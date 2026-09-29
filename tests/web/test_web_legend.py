@@ -946,6 +946,41 @@ class TestTheKeyFollowsItsLayer:
         with pytest.raises(ValueError, match="was not drawn with a classification"):
             web_map.legend(layer_id="B")
 
+    def test_restyling_a_layer_flat_takes_its_key_with_the_classification(self):
+        """The record follows the picture: a layer with no classes left describes no key either.
+
+        Test scenario:
+            `replace_layer` drops the classification when the replacement's colour is constant or absent,
+            and left the `Guide` where it was — and a *constant* `Encoding` may carry one, so a hand-built
+            replacement came out with `Guide(show=True)` on a channel nothing varies. The panel was right
+            (`refresh_legend_panel` derives it from the keyable layers, which a constant colour is not) and
+            the record was wrong, so a `FigureSpec` written there claimed a key nothing can draw — the
+            record/picture divergence order 24 exists to remove (review L4).
+
+            The sibling above covers a replacement carrying no colour encoding at all; this one is the case
+            that *keeps* an encoding, which is the only way the stale guide could survive.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Encoding, Symbology
+
+        web_map = _two_classified().colorbar("B", label="Rain")
+        classified = web_map.get_layer("B")
+        asked = classified.symbology.guide()
+        assert asked is not None and asked.show, (
+            f"B must be keyed before it is restyled flat; its guide is {asked}"
+        )
+        flat = Symbology(
+            encodings={"color": Encoding(channel="color", value="#ff0000", guide=asked)},
+            props=dict(classified.symbology.props),
+        )
+        web_map.replace_layer(replace(classified, symbology=flat))
+        assert web_map.get_layer("B").symbology.guide() is None, (
+            f"B has no classes left, so it must describe no key; it still carries "
+            f"{web_map.get_layer('B').symbology.guide()}"
+        )
+        assert _whose_key(web_map) is None, "and none is drawn, as it already was"
+
     def test_the_two_most_recent_accessors_agree_after_a_removal(self):
         """`last_breaks` and `last_legend` are set together by every builder, so they must move together.
 

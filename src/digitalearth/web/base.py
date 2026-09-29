@@ -1453,11 +1453,17 @@ class WebMapBase:
                 ```
 
         Note:
-            **The classification goes with the classes.** A replacement whose ``color`` channel is constant
-            or absent leaves the layer with nothing to label, so the classification filed for it is dropped
-            — as it is when the layer itself goes (:meth:`remove_layer`). A key asked for by name is then
-            refused with the same message an unclassified layer gets, rather than with the lower-level
-            "nothing drives the 'color' channel" the stale entry used to let a caller reach.
+            **The classification goes with the classes, and so does the key.** A replacement whose ``color``
+            channel is constant or absent leaves the layer with nothing to label, so the classification
+            filed for it is dropped — as it is when the layer itself goes (:meth:`remove_layer`) — and the
+            :class:`~digitalearth.base.spec.encoding.Guide` comes off the replacement with it. A key asked
+            for by name is then refused with the same message an unclassified layer gets, rather than with
+            the lower-level "nothing drives the 'color' channel" the stale entry used to let a caller reach.
+
+            Both halves matter because a **constant** ``Encoding`` may carry a guide. Left there, the layer
+            went on saying its colour was explained by a key nothing can draw — the panel is derived from
+            the keyable layers and correctly drew none — so a ``FigureSpec`` written out claimed a key the
+            picture did not have (review L4).
         """
         # By type before by id: `getattr(layer, "id", None)` made the id lookup fail first, so a caller who
         # passed the id where the description belongs was answered "no layer None on this map" — an id they
@@ -1494,15 +1500,26 @@ class WebMapBase:
                 f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
                 f"needs a source_id; got None"
             )
+        # The classification goes with the classes, and **so does the key**. `_legends` is the dict beside
+        # the tree that order 24 exists to stop trusting, and this was the one layer-management call that
+        # never told it anything: a layer restyled to a flat colour stayed filed as classified, so
+        # `legend(layer_id=...)` got past `_legend_of` on the strength of the stale entry and failed a level
+        # down in `Symbology.with_guide` with the base-level "nothing drives the 'color' channel" instead of
+        # this tier's own refusal (review L8).
+        #
+        # The `Guide` had to follow for the same reason one step out: a *constant* `Encoding` may carry one,
+        # so a hand-built replacement came through with `Guide(show=True)` on a channel nothing varies —
+        # the panel correctly drew nothing for it (a constant colour is not keyable) and the record
+        # correctly claimed a key, which is a `FigureSpec` describing a key nothing can draw (review L4).
+        # Taken off *before* the replacement lands, because it is part of the description being landed;
+        # `with_guide(None)` is a no-op on a channel nothing drives, so this never refuses. The
+        # classification is dropped after, because `_change` can still refuse the replacement.
+        flat = layer.symbology.encoding("color")
+        unkeyable = flat is None or flat.is_constant
+        if unkeyable:
+            layer = replace_fields(layer, symbology=layer.symbology.with_guide(None))
         self._change(self._figure_with(self._layer_tree.replace(layer)))
-        # The classification goes with the classes. `_legends` is the dict beside the tree that order 24
-        # exists to stop trusting, and this was the one layer-management call that never told it anything:
-        # a layer restyled to a flat colour stayed filed as classified, so `legend(layer_id=...)` got past
-        # `_legend_of` on the strength of the stale entry and failed a level down in `Symbology.with_guide`
-        # with the base-level "nothing drives the 'color' channel" instead of this tier's own refusal
-        # (review L8). Dropped after the replacement lands, because `_change` can still refuse it.
-        replaced = layer.symbology.encoding("color")
-        if replaced is None or replaced.is_constant:
+        if unkeyable:
             self._forget_legend(layer.id)
         return self
 
