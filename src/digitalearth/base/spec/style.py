@@ -398,17 +398,19 @@ class Symbology:
 
         Args:
             guide: What to say about the channel, or ``None`` to attach nothing — which is how a guide is
-                taken off again, and why this does not raise for it.
+                taken off again, and why this does not raise for it: a channel nothing drives carries no
+                guide, so asking for the one there to come off is already true.
             channel: The channel being explained. Defaults to ``"color"``.
 
         Returns:
-            A new symbology; this one is unchanged, as every `Symbology` writer here is.
+            A new symbology; this one is unchanged, as every `Symbology` writer here is. For ``None`` on a
+            channel nothing drives, an equal one — the detach is a no-op rather than a refusal.
 
         Raises:
-            ValueError: when nothing drives `channel`. A key over a colour nothing varies would have no
-                values to label and no scale to sample, so the tiers raise rather than draw an empty box —
-                the message names the channels that *are* driven, since the usual cause is asking for a key
-                on a layer whose colour is one flat constant.
+            ValueError: when nothing drives `channel` **and** a guide is being attached to it. A key over a
+                colour nothing varies would have no values to label and no scale to sample, so the tiers
+                raise rather than draw an empty box — the message names the channels that *are* driven,
+                since the usual cause is asking for a key on a layer whose colour is one flat constant.
 
         Examples:
             - Attached to the colour a field drives, and read back off the layer:
@@ -436,9 +438,23 @@ class Symbology:
                 ValueError: nothing drives the 'color' channel ...; the channels it does drive are ['size']
 
                 ```
+            - Taking a guide off that same channel is not, because there is none there to refuse:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> flat = Symbology.of(size=6)
+                >>> flat.with_guide(None) == flat
+                True
+
+                ```
         """
         encoding = self.encodings.get(channel)
         if encoding is None:
+            if guide is None:
+                # Detaching what is not there is not an error. The refusal below is about the *guide* — it
+                # would have no values to label and no scale to sample — and so has nothing to say when
+                # there is no guide to attach; applied to `None` as well it refused the one call that
+                # cannot go wrong, and contradicted this method's own `Args` entry (review L1).
+                return Symbology(encodings=dict(self.encodings), props=dict(self.props))
             raise ValueError(
                 f"nothing drives the {channel!r} channel of this layer, so there is no encoding for a "
                 f"guide to explain; the channels it does drive are {sorted(self.encodings)}"

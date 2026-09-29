@@ -9,6 +9,7 @@ import pytest
 
 from digitalearth.base.spec import (
     Encoding,
+    Guide,
     LayerSpec,
     Scale,
     StyleKey,
@@ -127,6 +128,37 @@ class TestSymbology:
         assert sym.props["levels"] == (1.0, 2.0), (
             f"a list property is stored as its own tuple, got {sym.props['levels']!r}"
         )
+
+
+class TestTakingAGuideOff:
+    """`with_guide(None)` is the detach, and detaching what is not there is not an error.
+
+    The refusal exists because a key over a colour nothing varies would have no values to label and no scale
+    to sample — a reason that is about the *guide*, and so has nothing to say when there is none to attach.
+    Applied unconditionally it refused the one call that cannot go wrong, contradicting the method's own
+    `Args` entry ("`None` to attach nothing — which is how a guide is taken off again, and why this does not
+    raise for it"). All four tiers record through this method, so the narrowing is pinned from both sides.
+    """
+
+    def test_taking_a_guide_off_a_channel_nothing_drives_is_a_no_op(self):
+        """Removing a guide that is not there leaves the symbology as it was.
+
+        Test scenario:
+            A caller clearing a key without first asking whether the layer has one — the shape a tier's own
+            `colorbar(visible=False)`-style pass-through takes — is not asking for anything impossible.
+        """
+        flat = Symbology.of(size=6)
+        assert flat.with_guide(None) == flat, flat.with_guide(None)
+
+    def test_attaching_a_guide_to_a_channel_nothing_drives_is_still_refused(self):
+        """The refusal the no-op is carved out of stays exactly where it was.
+
+        Test scenario:
+            The carve-out must not widen into "a guide on a flat fill is fine": an empty box is worse than
+            an error, which is the position every tier takes for the same question.
+        """
+        with pytest.raises(ValueError, match="nothing drives the 'color' channel"):
+            Symbology.of(size=6).with_guide(Guide(title="People"))
 
 
 class TestMerging:
