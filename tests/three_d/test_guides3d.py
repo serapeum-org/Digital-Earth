@@ -634,6 +634,57 @@ class TestWhatPyvistasOwnSlotsForce:
             f"{list(scene.plotter.scalar_bars.keys())}"
         )
 
+    def test_asking_for_a_shared_engine_bar_by_its_own_title_is_not_a_collision(
+        self, scene
+    ):
+        """`colorbar()` with no label asks for the bar the layer already has, shared or not.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The one-bar-per-title refusal is for a title that is **another layer's key**. The engine's own
+            bar is not one: PyVista bound both mappers to it when it drew them, and a caller passing no
+            label named nothing at all. Refusing it turned `colorbar()` — the call documented as "the key
+            you already have" — into an error on every scene with two layers over one array, and
+            `colorbar(layer_id)` with it (review M8).
+        """
+        scene.terrain(_dem(), name="a")
+        scene.terrain(_dem(), name="b")
+        scene.colorbar("a")
+        assert list(scene.plotter.scalar_bars.keys()) == ["elevation"], list(
+            scene.plotter.scalar_bars.keys()
+        )
+        assert scene.get_layer("a").symbology.guide() is not None, "a's ask"
+        scene.colorbar()
+        assert list(scene.plotter.scalar_bars.keys()) == ["elevation"], list(
+            scene.plotter.scalar_bars.keys()
+        )
+        assert scene.get_layer("b").symbology.guide() is not None, (
+            "the unnamed call keys the most recent colour-driven layer"
+        )
+
+    def test_a_layer_that_adopted_the_shared_bar_leaves_it_behind_when_it_retitles(
+        self, scene
+    ):
+        """Adopting the shared bar is a claim on it, not ownership: the other layer keeps reading it.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The path above is the only way a layer's record can hold a title another layer also binds, so
+            the "not this layer's alone to take away" rule has to hold on the way back out too. Releasing a
+            bar unconditionally would have un-keyed `b` the moment `a` asked for a title of its own.
+        """
+        scene.terrain(_dem(), name="a")
+        scene.terrain(_dem(), name="b")
+        scene.colorbar("a")
+        scene.colorbar("a", label="DEM A")
+        assert sorted(scene.plotter.scalar_bars.keys()) == ["DEM A", "elevation"], list(
+            scene.plotter.scalar_bars.keys()
+        )
+
     def test_two_keyed_layers_share_one_box_prefixed_by_their_titles(self, scene):
         """A window holds one legend actor, so the box is built from every keyed layer rather than replaced.
 

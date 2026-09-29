@@ -393,6 +393,29 @@ def _remove_bar(plotter: Any, title: str) -> None:
         plotter.remove_scalar_bar(title, render=False)
 
 
+def _release_bar(
+    scene: Any, figure: FigureSpec, plotter: Any, layer_id: str, title: str
+) -> None:
+    """Give up one layer's claim on a bar, taking it off the window only if nothing else binds it.
+
+    Args:
+        scene: The scene holding what was drawn.
+        figure: The figure being drawn.
+        layer_id: The layer letting the bar go.
+        plotter: The plotter holding it.
+        title: The bar's title.
+
+    Note:
+        A custom title is one layer's alone — no other layer's engine title can equal it, since a second
+        layer asking for it is refused — so it comes off with the claim. A shared **engine** title does not:
+        a layer that adopted it and then asked for a title of its own would otherwise take the key away from
+        the layer still reading it. That bar comes off in :func:`_drop_orphaned_bars`, once every layer
+        binding it has settled.
+    """
+    if not _sharing_bar(scene, figure, layer_id, title):
+        _remove_bar(plotter, title)
+
+
 def _bar_placement(anchor: Optional[str]) -> Dict[str, Any]:
     """Return the `add_scalar_bar` keywords that put a bar where a guide asked for it.
 
@@ -650,11 +673,15 @@ def _reconcile_bar(
     current = record.get("bar")
     if current is None:
         # PyVista titles the bar it draws of its own accord after the scalars array, so that bar *is* this
-        # layer's key — unless another layer binds an array of the same name, in which case the engine has
-        # already bound both mappers to it and it is not this layer's alone to retitle or remove.
+        # layer's key. Where another layer binds an array of the same name the engine has bound both mappers
+        # to one bar — which is still this layer's key, so asking for it **by its own title** is the no-op
+        # `colorbar()` is documented to be, and is adopted. Refusing it instead made `colorbar()` with no
+        # label an error on every scene holding two layers over one array (review M8). It is not this
+        # layer's alone to *retitle or take away*, though, which is why adoption stops at that one title and
+        # why :func:`_release_bar` gives it up without removing it.
         engine = _engine_title(scene, plan.layer_id, plan.field)
-        if engine in plotter.scalar_bars and not _sharing_bar(
-            scene, figure, plan.layer_id, engine
+        if engine in plotter.scalar_bars and (
+            wanted == engine or not _sharing_bar(scene, figure, plan.layer_id, engine)
         ):
             current = engine
     if current == wanted:
@@ -664,7 +691,7 @@ def _reconcile_bar(
             record["bar"] = wanted
         return
     if current is not None:
-        _remove_bar(plotter, current)
+        _release_bar(scene, figure, plotter, plan.layer_id, current)
         record.pop("bar", None)
     if wanted is None:
         return
