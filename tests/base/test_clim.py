@@ -565,11 +565,19 @@ class TestFrozenScale:
         Test scenario:
             ``rotate`` can sweep a set of projections that all show the same constant cell. The two entry
             points must not disagree about what that range is.
+
+            Each is pinned to the literal rather than to the other (R2-M9): ``stack_scale`` *is*
+            ``frozen_scale(measure_clim(...))`` and ``measure_clim([array([4.0])])`` is ``(4.0, 4.0)``, so
+            the two sides reduced to one call and the agreement held by construction — breaking the shared
+            ``+ 1`` rule in ``Scale._widen`` left this green while reddening its siblings. Through the
+            literal, the agreement is a measurement and the rule is what both sides are held to.
         """
-        assert (
-            frozen_scale((4.0, 4.0)).as_limits()
-            == stack_scale([np.array([4.0])]).as_limits()
-        ), "the pair and the array form must agree on a constant range"
+        assert frozen_scale((4.0, 4.0)).as_limits() == (4.0, 5.0), (
+            "a pair that collapsed to one value must widen by the shared +1 rule"
+        )
+        assert stack_scale([np.array([4.0])]).as_limits() == (4.0, 5.0), (
+            "the array form must reach the same widened range as the pair form"
+        )
 
 
 class TestTheTiersShareOneRule:
