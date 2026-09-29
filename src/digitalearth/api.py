@@ -1056,7 +1056,12 @@ def _add_web_legend(scene: Any, *, visible: bool) -> Any:
             ``quickmap(colorbar=False)`` asks for.
 
     Returns:
-        The same map, or ``None`` when there was no classification to describe.
+        The same map, or ``None`` when there was no classification to describe — including a **stale**
+        ``last_legend``, which is a sticky side record: a map whose classified layer has since been removed
+        or restyled to a constant colour still carries one while nothing on it can be keyed. Naming the
+        layer moves that resolution out of ``legend()`` and in here, so its "nothing to describe" refusal is
+        tolerated here as well; otherwise ``quickmap`` would start failing on a map it used to return
+        unkeyed, which is the same tolerance the matplotlib path gives an unmappable artist.
 
     Raises:
         AttributeError: if ``scene`` carries no ``last_legend`` — that is a defect, not an unkeyed map.
@@ -1072,8 +1077,20 @@ def _add_web_legend(scene: Any, *, visible: bool) -> Any:
     # instead of silently dropping every web key.
     if not scene.last_legend:
         return None
-    target = scene._guide_target(None, visible=True, caller="quickmap()")
-    # No `except` around the builder. The guard above leaves only a malformed `last_legend` able to raise --
+    try:
+        target = scene._guide_target(None, visible=True, caller="quickmap()")
+    except ValueError as error:
+        # The same "no mappable layer" tolerance one line up, for the case `last_legend` cannot answer.
+        # It is a *sticky* side record: a map whose classified layer has since been removed, or restyled to
+        # a constant colour, still carries one while nothing on it can be keyed any more. Naming the layer
+        # is what records the decision either way, and it moves this resolution out of `legend()` and in
+        # here -- so its refusal has to be tolerated here too, or `quickmap` would start failing on a map
+        # it used to return unkeyed.
+        logger.warning(
+            "quickmap: web key skipped -- %s: %s", type(error).__name__, error
+        )
+        return None
+    # No `except` around the builder. The guards above leave only a malformed `last_legend` able to raise --
     # a bug in a web builder -- and swallowing that would report a library defect as "no key to draw".
     return scene.legend(layer_id=target, visible=visible)
 
