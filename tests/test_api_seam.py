@@ -101,6 +101,58 @@ class TestImportingApiDoesNotLoadTheMatplotlibTier:
         )
         assert completed.stdout.strip().endswith("OK"), completed.stdout
 
+    def test_a_refused_web_keyword_does_not_load_the_matplotlib_tier(self):
+        """Building a refusal message must not resolve the deferred matplotlib row (review N3).
+
+        Test scenario:
+            The "It is honoured by ..." half of a refusal used to read *every* capability row — including
+            the lazy ``matplotlib`` one — so a ``quickmap(..., backend="web", <bad kw>)`` that should simply
+            refuse imported the whole matplotlib tier as a side effect, just to name who *does* honour the
+            keyword. Both error sites are exercised (``_reject_unsupported`` and the ``field`` wrapper), and
+            the message is checked to still name ``'matplotlib'`` — so the fix keeps the refusal accurate
+            rather than dropping the tier it must point the caller at. The mutation that reintroduces the
+            per-row read turns this red.
+        """
+        completed = _run_fresh(
+            """
+            import sys
+            import digitalearth.api as qp
+
+            try:
+                qp._reject_unsupported("web", domain="europe", crs=qp._UNSET)
+            except ValueError as error:
+                message = str(error)
+            else:
+                raise AssertionError("a domain on the web tier must be refused")
+
+            leaked = sorted(m for m in sys.modules if m.startswith("digitalearth.static"))
+            assert "digitalearth.static" not in sys.modules, (
+                "refusing a web keyword loaded the matplotlib tier: " + repr(leaked)
+            )
+            assert "matplotlib" not in sys.modules, "refusing a web keyword loaded matplotlib"
+            assert "'matplotlib'" in message, (
+                "the refusal must still name the tier that honours domain: " + repr(message)
+            )
+
+            # The module-wrapper error path (field/contours) reads the table too, and must stay lazy.
+            try:
+                qp.field(object(), backend="web")
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("field(backend='web') must be refused")
+            assert "digitalearth.static" not in sys.modules, (
+                "the wrapper refusal loaded the matplotlib tier: "
+                + repr(sorted(m for m in sys.modules if m.startswith("digitalearth.static")))
+            )
+            print("OK")
+            """
+        )
+        assert completed.returncode == 0, (
+            f"the refusal-laziness check failed:\nstdout={completed.stdout!r}\nstderr={completed.stderr!r}"
+        )
+        assert completed.stdout.strip().endswith("OK"), completed.stdout
+
 
 def _points():
     """Return a small point ``FeatureCollection`` (the repo's shared points fixture)."""
@@ -404,6 +456,21 @@ class TestLazyBackendMap:
         table = qp._LazyBackendMap(eager={"e": "E"}, lazy={"l": lambda: "L"})
         with pytest.raises(KeyError, match="nope"):
             table["nope"]
+
+    def test_the_deferred_matplotlib_row_honours_every_checked_keyword(self):
+        """The refusal helper names the matplotlib tier from an invariant; this pins the invariant (N3).
+
+        Test scenario:
+            :func:`~digitalearth.api._honoured_by` does not resolve the deferred ``matplotlib`` row when
+            phrasing a refusal — it names the tier from the standing fact that the default, full tier
+            honours every keyword this module checks. Resolving the row here (loading matplotlib is fine in
+            an ordinary test) proves that fact, so a future tier change that dropped a keyword from
+            matplotlib fails here rather than silently making a ``web``/``interactive``/``3d`` refusal
+            message lie about who honours it.
+        """
+        resolved = set(qp.BACKEND_CAPABILITIES["matplotlib"])
+        checked = set(qp._KEYWORD_CAPABILITIES)
+        assert resolved == checked, sorted(resolved.symmetric_difference(checked))
 
 
 class TestThe3DTierRefusesGeometryItCannotDraw:

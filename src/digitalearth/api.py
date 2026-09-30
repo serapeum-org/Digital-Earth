@@ -301,6 +301,34 @@ def _asks_for_nothing(value: Any, inert: Any) -> bool:
     return value is inert
 
 
+def _honoured_by(keyword: str) -> str:
+    """List the backends that honour ``keyword``, for a refusal message, without loading a deferred tier.
+
+    Reading ``BACKEND_CAPABILITIES[other]`` for *every* backend — the obvious way to phrase "It is honoured
+    by ..." — resolves the lazy ``matplotlib`` row, which loads the matplotlib tier, merely to explain why a
+    ``web``/``interactive``/``3d`` keyword was refused (review N3). The eager rows are read directly (free);
+    the only deferred tier is ``matplotlib``, the default full tier, whose own declaration honours every
+    keyword this module checks (:data:`_KEYWORD_CAPABILITIES`), so it is named from that standing invariant
+    rather than by importing it. The invariant is pinned by
+    ``test_the_deferred_matplotlib_row_honours_every_checked_keyword``, so the message cannot silently drift.
+    A refused ``web`` call therefore no longer imports ``digitalearth.static``.
+
+    Args:
+        keyword: The ``quickmap`` keyword a backend could not honour — always one of
+            :data:`_KEYWORD_CAPABILITIES`, so the deferred matplotlib tier honours it.
+
+    Returns:
+        The backends that honour it, ``repr``-quoted and comma-joined in sorted order — the same text the
+        per-row read produced, minus the tier load. The refusing backend is absent for free: it does not
+        honour ``keyword``, which is why it was refused.
+    """
+    table = BACKEND_CAPABILITIES
+    honoured = {name for name, row in table._eager.items() if keyword in row}
+    # The deferred matplotlib tier honours every checked keyword; name it without resolving its row.
+    honoured |= {name for name in table._lazy if keyword in _KEYWORD_CAPABILITIES}
+    return ", ".join(repr(name) for name in sorted(honoured))
+
+
 def _reject_unsupported(backend: str, **passed: Any) -> None:
     """Refuse any keyword the chosen ``backend`` cannot honour, naming the parameter and the backend.
 
@@ -362,11 +390,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             continue
         if name in _INERT and _asks_for_nothing(value, _INERT[name]):
             continue  # they asked for nothing, so nothing was dropped
-        honoured = ", ".join(
-            repr(other)
-            for other in sorted(BACKEND_CAPABILITIES)
-            if name in BACKEND_CAPABILITIES[other]
-        )
+        honoured = _honoured_by(name)
         reason = _refusal_reason(backend, name)
         raise CapabilityError(
             f"{name}= is not supported by backend={backend!r}; "
@@ -1444,11 +1468,7 @@ def _method(name: str, kind: Optional[str] = None):
         backend = kwargs.get("backend", "matplotlib")
         supported = BACKEND_CAPABILITIES.get(backend)
         if supported is not None and "kind" not in supported:
-            honoured = ", ".join(
-                repr(other)
-                for other in sorted(BACKEND_CAPABILITIES)
-                if "kind" in BACKEND_CAPABILITIES[other]
-            )
+            honoured = _honoured_by("kind")
             reason = _refusal_reason(backend, "kind")
             raise CapabilityError(
                 f"{name}() draws with the {renderer!r} renderer, which backend={backend!r} does not have; "
