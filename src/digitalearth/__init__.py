@@ -2,6 +2,7 @@
 # `importlib_metadata` backport this used to fall back to can never be reached: read the version straight
 # from the installed distribution's metadata.
 import logging
+from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -46,7 +47,12 @@ default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre
 engine-neutral `base`. `quickmap`/`quickplot` are the one-call entry points; `Map` is the composable scene.
 """
 
-from digitalearth.base.registry import register_classifier as _register_classifier
+from digitalearth.base.registry import (
+    register_classifier as _register_classifier,
+)
+from digitalearth.base.registry import (
+    resolvers as _resolvers,
+)
 
 
 def _cleopatra_classify(values, scheme, k):
@@ -92,36 +98,67 @@ _register_classifier(_cleopatra_classify)
 _plugin_logger = logging.getLogger(__name__)
 
 
-def _register_source_plugin(loaded: Any) -> None:
+def _register_source_plugin(name: str, loaded: Any) -> None:
     """Register one ``digitalearth.sources`` plugin: a ``(scheme, resolver)`` pair.
 
+    Warns (M3) when the plugin's scheme is one of the built-in resolvers the package registers itself
+    (:data:`_BUILTIN_RESOLVER_SCHEMES`, the ``file``/``object`` readers). The override still takes effect —
+    ``register_resolver`` is last-wins, which :func:`~digitalearth.base.registry.temporary_resolver` relies on —
+    but it no longer happens silently, so an installed dependency re-pointing the ``file:`` reader for every
+    consumer is at least visible. Shadowing *another plugin's* scheme stays quiet: that is ordinary last-wins.
+
     Args:
+        name: The entry-point name of the plugin, for the shadow warning.
         loaded: What the entry point loaded to — a ``(scheme, resolver)`` pair. A malformed object (not such a
             pair) raises here and is skipped by :func:`register_plugins`.
     """
     scheme, resolver = loaded
     from digitalearth.base.registry import register_resolver
 
+    if scheme in _BUILTIN_RESOLVER_SCHEMES:
+        _plugin_logger.warning(
+            "digitalearth.sources plugin %r registers scheme %r, shadowing the built-in resolver of the same "
+            "name; the plugin wins (last-wins), replacing the built-in %r reader for this process",
+            name,
+            scheme,
+            scheme,
+        )
     register_resolver(scheme, resolver)
 
 
-def _register_style_plugin(loaded: Any) -> None:
+def _register_style_plugin(name: str, loaded: Any) -> None:
     """Register one ``digitalearth.styles`` plugin: a per-variable style mapping.
 
+    Warns (M3) when the plugin redefines a bundled style group (one already shipped in
+    ``base.autostyle``'s library, e.g. ``default``). As with the source resolvers the merge still happens —
+    :func:`~digitalearth.base.autostyle.load_library` is last-wins — but a plugin silently re-colouring the
+    fallback palette for every consumer is made visible. Adding a *new* group, or shadowing another plugin's,
+    stays quiet.
+
     Args:
+        name: The entry-point name of the plugin, for the shadow warning.
         loaded: What the entry point loaded to — a mapping of style-group name to a parameter dict. A
             non-mapping raises in :func:`digitalearth.base.autostyle.register_style_library` and is skipped by
             :func:`register_plugins`.
     """
-    from digitalearth.base.autostyle import register_style_library
+    from digitalearth.base.autostyle import _bundled_library, register_style_library
 
+    if isinstance(loaded, Mapping):
+        shadowed = sorted(set(loaded) & set(_bundled_library()))
+        if shadowed:
+            _plugin_logger.warning(
+                "digitalearth.styles plugin %r redefines bundled style group(s) %s, shadowing the built-in "
+                "group(s) of the same name; the plugin wins (last-wins) for this process",
+                name,
+                shadowed,
+            )
     register_style_library(loaded)
 
 
 #: How each entry-point group's loaded object is registered. Keyed by the same public group strings
 #: :data:`digitalearth.ops.plugins.GROUPS` publishes; a test holds the two sets equal so a new group cannot be
 #: discovered and then silently dropped for want of a registrar here.
-_PLUGIN_REGISTRARS: dict[str, Callable[[Any], None]] = {
+_PLUGIN_REGISTRARS: dict[str, Callable[[str, Any], None]] = {
     "digitalearth.sources": _register_source_plugin,
     "digitalearth.styles": _register_style_plugin,
 }
@@ -134,7 +171,8 @@ def register_plugins(group: str, loaded: dict[str, Any]) -> None:
     with ``load_plugins(group, eps=[...])``) without installing a real package. A plugin whose object is
     malformed for its group is logged and skipped, so one bad plugin cannot stop the rest — the same tolerance
     :func:`digitalearth.ops.plugins.load_plugins` already gives a plugin whose import raises. A group with no
-    registrar is a no-op.
+    registrar is a no-op. A plugin that overrides a built-in name (scheme or style group) is registered but
+    warns first (M3), whereas overriding another plugin's name is ordinary last-wins and stays quiet.
 
     Args:
         group: The entry-point group the objects came from (one of
@@ -146,7 +184,7 @@ def register_plugins(group: str, loaded: dict[str, Any]) -> None:
         return
     for name, obj in loaded.items():
         try:
-            registrar(obj)
+            registrar(name, obj)
         except (
             Exception
         ) as exc:  # a plugin malformed for its group must not abort the healthy ones
@@ -187,6 +225,14 @@ def load_installed_plugins() -> None:
             continue
         register_plugins(group, loaded)
 
+
+#: Resolver schemes the package registers itself — the built-in ``file``/``object`` readers — captured before
+#: any plugin loads (``base.registry`` registers them at its own import, which line 49 above has already
+#: triggered). A ``digitalearth.sources`` plugin that reuses one of these shadows a built-in, which
+#: :func:`_register_source_plugin` warns about (M3); a plugin reusing another plugin's scheme does not, because
+#: that is ordinary last-wins. Snapshotting once keeps "built-in" fixed even though ``load_installed_plugins``
+#: may run again.
+_BUILTIN_RESOLVER_SCHEMES: frozenset[str] = frozenset(_resolvers())
 
 load_installed_plugins()
 

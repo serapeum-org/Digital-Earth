@@ -287,3 +287,84 @@ class TestDiscoveryFailingDoesNotAbortImport:
         assert "corrupt distribution metadata" in caplog.text, (
             "the discovery failure is logged, not propagated"
         )
+
+
+class TestShadowingABuiltInWarns:
+    """A plugin that reuses a built-in scheme / bundled style group is loud about it (M3).
+
+    This is a deliberate middle path. The override still happens — last-wins is kept, matching
+    ``register_resolver``'s contract that :func:`temporary_resolver` relies on — but it no longer happens
+    *silently*, so an installed dependency re-pointing the ``file:`` reader or the ``default`` palette for every
+    consumer is at least visible. Contrast the plugin-vs-plugin case above, which stays quiet: shadowing another
+    plugin is ordinary last-wins, shadowing a *built-in* is what warns. (The maintainer may choose to tighten
+    this to a refusal, as ``register_kind``/``register_furniture`` do; that is their contract decision.)
+    """
+
+    def test_a_sources_plugin_shadowing_a_built_in_scheme_warns(self, caplog):
+        """Reusing a built-in scheme ('file') logs a WARNING naming the plugin and the scheme; last-wins holds.
+
+        Test scenario:
+            ``file`` is a built-in resolver. A plugin registering it silently re-points every ``file:`` read;
+            the warning makes that visible while still letting the override take effect.
+        """
+        ep = _FakeEP("rogue", ("file", lambda uri: "hijacked"))
+        with caplog.at_level(logging.WARNING, logger="digitalearth"):
+            digitalearth.register_plugins(
+                "digitalearth.sources", load_plugins("digitalearth.sources", eps=[ep])
+            )
+        assert "rogue" in caplog.text and "file" in caplog.text, (
+            f"the warning must name the plugin and the built-in scheme, got {caplog.text!r}"
+        )
+        assert resolve_uri("file:anything") == "hijacked", (
+            "last-wins is kept: the plugin still overrides the built-in"
+        )
+
+    def test_a_sources_plugin_with_a_new_scheme_does_not_warn(self, caplog):
+        """A brand-new scheme shadows no built-in, so it registers with no warning.
+
+        Test scenario:
+            The companion to the shadow case — proof the warning is scoped to built-ins, not fired for every
+            plugin registration.
+        """
+        ep = _FakeEP("fresh", ("brandnew", lambda uri: uri))
+        with caplog.at_level(logging.WARNING, logger="digitalearth"):
+            digitalearth.register_plugins(
+                "digitalearth.sources", load_plugins("digitalearth.sources", eps=[ep])
+            )
+        assert caplog.text == "", (
+            f"a new scheme must register without a warning, got {caplog.text!r}"
+        )
+
+    def test_a_styles_plugin_shadowing_a_bundled_group_warns(self, caplog):
+        """Redefining a bundled group ('default') logs a WARNING naming the plugin and the group; last-wins holds.
+
+        Test scenario:
+            ``default`` is a bundled style group. A plugin redefining it silently re-colours every fallback;
+            the warning names it while the override still merges last-wins.
+        """
+        ep = _FakeEP("repaint", {"default": {"cmap": "plasma"}})
+        with caplog.at_level(logging.WARNING, logger="digitalearth"):
+            digitalearth.register_plugins(
+                "digitalearth.styles", load_plugins("digitalearth.styles", eps=[ep])
+            )
+        assert "repaint" in caplog.text and "default" in caplog.text, (
+            f"the warning must name the plugin and the bundled group, got {caplog.text!r}"
+        )
+        assert load_library()["default"]["cmap"] == "plasma", (
+            "last-wins is kept: the plugin still overrides the bundled group"
+        )
+
+    def test_a_styles_plugin_with_a_new_group_does_not_warn(self, caplog):
+        """A brand-new group shadows no bundled built-in, so it merges with no warning.
+
+        Test scenario:
+            The companion to the shadow case on the styles group — the warning is scoped to bundled groups.
+        """
+        ep = _FakeEP("adder", {"brand_new_var": {"cmap": "magma"}})
+        with caplog.at_level(logging.WARNING, logger="digitalearth"):
+            digitalearth.register_plugins(
+                "digitalearth.styles", load_plugins("digitalearth.styles", eps=[ep])
+            )
+        assert caplog.text == "", (
+            f"a new group must merge without a warning, got {caplog.text!r}"
+        )
