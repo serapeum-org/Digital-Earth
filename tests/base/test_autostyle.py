@@ -38,6 +38,45 @@ class TestLoadLibrary:
         assert {"temperature", "precipitation", "elevation"} <= set(lib)
 
 
+class TestLoadLibraryReturnsIsolatedGroups:
+    """load_library() returns a fresh deep copy, so a caller cannot corrupt the cached bundled groups (N1)."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_bundled_cache(self):
+        """Drop the lru_cache after each test.
+
+        A mutation that reached the cache (were the copy shallow) would otherwise leak into every later test in
+        the session; clearing forces the next call to reload the shipped values from YAML.
+        """
+        yield
+        autostyle._bundled_library.cache_clear()
+
+    def test_mutating_a_returned_group_does_not_pollute_a_later_load(self):
+        """Editing a top-level group key through one result does not change what a later load_library() sees.
+
+        Test scenario:
+            A shallow merge shares each inner group dict with the lru_cached _bundled_library(), so
+            ``load_library()[group][key] = ...`` would leak into every later caller. A fresh deep copy isolates
+            it, so the shipped value survives.
+        """
+        load_library()["default"]["cmap"] = "not_the_shipped_value"
+        assert load_library()["default"]["cmap"] == "viridis", (
+            "a later load_library() must still see the shipped default cmap"
+        )
+
+    def test_mutating_a_nested_value_does_not_pollute_a_later_load(self):
+        """Editing a nested list inside a group does not leak either — the copy is deep, not one level.
+
+        Test scenario:
+            The temperature group carries a ``match`` list. Appending to it through one result must not reach
+            the cached group, which a one-level (per-group dict) copy would still allow.
+        """
+        load_library()["temperature"]["match"].append("__leaked__")
+        assert "__leaked__" not in load_library()["temperature"]["match"], (
+            "a later load_library() must see the shipped 'match' list, unmutated"
+        )
+
+
 class TestAutoStyle:
     """Tests for auto_style."""
 

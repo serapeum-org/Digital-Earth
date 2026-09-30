@@ -12,6 +12,7 @@ falls back to the lighter substring library (``variables.yml``) for everything e
 
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
@@ -63,8 +64,11 @@ def load_library() -> Dict[str, dict]:
 
     The bundled ``*.yml`` groups are cached; the plugin-contributed groups (:data:`_PLUGIN_LIBRARY`, filled by
     :func:`register_style_library`) are merged on top, last-wins, so a plugin can add a group or override a
-    bundled one — the same policy the bundled files already merge under. A fresh dict is returned each call, so
-    a caller cannot edit the cached bundled groups by accident.
+    bundled one — the same policy the bundled files already merge under. A fresh **deep** copy is returned each
+    call — the top-level mapping and every inner group dict (and the nested lists inside them, such as
+    ``match``/``levels``) — so a caller that edits a returned group, or a value inside it, cannot corrupt the
+    lru-cached bundled groups or another caller's result. The library is small (a handful of groups of a few
+    keys), so the copy is cheap.
 
     Returns:
         Mapping of style-group name (e.g. ``"temperature"``, ``"default"``) to its parameter dict.
@@ -85,7 +89,7 @@ def load_library() -> Dict[str, dict]:
         register_style_library: How a ``digitalearth.styles`` plugin adds groups to what this returns.
         load_magics_library: The richer ECMWF Magics operational library (loaded separately).
     """
-    return {**_bundled_library(), **_PLUGIN_LIBRARY}
+    return deepcopy({**_bundled_library(), **_PLUGIN_LIBRARY})
 
 
 def register_style_library(library: Mapping[str, dict]) -> None:
