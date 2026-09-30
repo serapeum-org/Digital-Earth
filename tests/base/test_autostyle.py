@@ -1,5 +1,7 @@
 """Tests for T6.2 — auto-style: Source metadata -> cleopatra style params."""
 
+from copy import deepcopy
+
 import numpy as np
 import pytest
 from pyramids.dataset import GeoReference
@@ -38,42 +40,85 @@ class TestLoadLibrary:
         assert {"temperature", "precipitation", "elevation"} <= set(lib)
 
 
-class TestLoadLibraryReturnsIsolatedGroups:
-    """load_library() returns a fresh deep copy, so a caller cannot corrupt the cached bundled groups (N1)."""
+class _RaisesOnDeepCopy:
+    """A style value whose deep copy raises — stands in for a plugin's live object (a Colormap, a callable).
+
+    ``register_style_library`` accepts any mapping without checking its values are plain data, so a plugin may
+    contribute a live object as a style parameter. This reproduces the M1 regression: an unconditional
+    ``deepcopy`` of the whole merged library raised on such a value and disabled *all* styling, where the prior
+    shallow merge passed it through by reference untouched.
+    """
+
+    def __deepcopy__(self, memo):
+        """Raise, as a not-deep-copyable live object (e.g. some Colormap / ColorScale wrappers) would."""
+        raise RuntimeError("cannot deepcopy this style value")
+
+
+class TestLoadLibraryReturnsAFreshTopLevelMapping:
+    """load_library() returns a fresh top-level dict; the group dicts inside it are shared by reference (M1).
+
+    The N1 deepcopy was reverted: deep-copying the merged library made every load_library()/auto_style() call
+    raise the moment a ``digitalearth.styles`` plugin contributed a not-deep-copyable style value — a case the
+    prior shallow merge handled. The contract is now the honest, narrower one N1 also offered: only the
+    top-level mapping is fresh, so a caller may add/drop/replace whole groups but must not mutate a returned
+    group in place. That is safe because the sole in-tree caller, auto_style, only ever reads the library.
+    """
 
     @pytest.fixture(autouse=True)
     def _clear_bundled_cache(self):
         """Drop the lru_cache after each test.
 
-        A mutation that reached the cache (were the copy shallow) would otherwise leak into every later test in
-        the session; clearing forces the next call to reload the shipped values from YAML.
+        The returned group dicts are now the lru-cached bundled objects, so a mutation that reached one (a
+        regression, or a neutralised fix during mutation-proofing) would leak into every later test in the
+        session; clearing forces the next call to reload the shipped values from YAML.
         """
         yield
         autostyle._bundled_library.cache_clear()
 
-    def test_mutating_a_returned_group_does_not_pollute_a_later_load(self):
-        """Editing a top-level group key through one result does not change what a later load_library() sees.
+    def test_a_non_copyable_plugin_style_value_does_not_break_load_library(self):
+        """A plugin group carrying a not-deep-copyable value no longer breaks load_library (M1).
 
         Test scenario:
-            A shallow merge shares each inner group dict with the lru_cached _bundled_library(), so
-            ``load_library()[group][key] = ...`` would leak into every later caller. A fresh deep copy isolates
-            it, so the shipped value survives.
+            The reverted N1 deepcopy raised on any value whose ``__deepcopy__`` raises (a live Colormap, a
+            ColorScale, a callable), so one off-contract plugin disabled *all* styling. A shallow top-level
+            copy passes the value through by reference, so the group loads and the object survives intact.
         """
-        load_library()["default"]["cmap"] = "not_the_shipped_value"
-        assert load_library()["default"]["cmap"] == "viridis", (
-            "a later load_library() must still see the shipped default cmap"
+        live = _RaisesOnDeepCopy()
+        with temporary_style_library({"live_group": {"cmap": live}}):
+            resolved = load_library()
+        assert resolved["live_group"]["cmap"] is live, (
+            "the plugin's live style value must pass through by reference, not be (deep-)copied"
         )
 
-    def test_mutating_a_nested_value_does_not_pollute_a_later_load(self):
-        """Editing a nested list inside a group does not leak either — the copy is deep, not one level.
+    def test_adding_a_group_to_a_returned_library_does_not_leak_into_a_later_load(self):
+        """The top-level mapping is fresh: adding a group to one result is invisible to a later load.
 
         Test scenario:
-            The temperature group carries a ``match`` list. Appending to it through one result must not reach
-            the cached group, which a one-level (per-group dict) copy would still allow.
+            A shallow copy of the top level is enough to isolate membership changes — add, drop or replace a
+            group key — which is the guarantee the reverted fix keeps. (Mutating an *inner* group is explicitly
+            no longer isolated; the docstring warns callers to treat a returned group as read-only.)
         """
-        load_library()["temperature"]["match"].append("__leaked__")
-        assert "__leaked__" not in load_library()["temperature"]["match"], (
-            "a later load_library() must see the shipped 'match' list, unmutated"
+        returned = load_library()
+        returned["__scratch_group__"] = {"cmap": "magma"}
+        assert "__scratch_group__" not in load_library(), (
+            "adding a top-level group to one result must not reach a later load_library()"
+        )
+
+    def test_auto_style_does_not_mutate_the_shared_library(self):
+        """auto_style only reads the library it loads, so sharing the group dicts is safe (the M1 rationale).
+
+        Test scenario:
+            Because the copy is now shallow, the group dicts load_library returns are the lru-cached bundled
+            ones; were auto_style to mutate a group in place it would corrupt them for every later caller.
+            Resolving a matched and an unmatched variable must leave the shipped groups unchanged. The snapshot
+            is an independent deep copy taken before, so the comparison is against a different object, not
+            itself.
+        """
+        before = deepcopy(load_library())
+        auto_style(_source("t2m"))  # matched: exercises the style.update path
+        auto_style(_source("mystery_variable"))  # unmatched: default-only path
+        assert load_library() == before, (
+            "auto_style must not mutate the shared group dicts it reads"
         )
 
 
