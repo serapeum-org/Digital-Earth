@@ -394,8 +394,11 @@ class TestAGenuineRegistrarBugIsNotMasked:
         monkeypatch.setitem(
             digitalearth._PLUGIN_REGISTRARS, "digitalearth.sources", _buggy_registrar
         )
+        # The `object()` built above the block, leaving only `register_plugins` inside it (tree guard
+        # `test_refusal_blocks.py` counts any call in a `pytest.raises` block, so the loaded dict is hoisted).
+        loaded = {"any": object()}
         with pytest.raises(RuntimeError, match="a real bug in the registrar"):
-            digitalearth.register_plugins("digitalearth.sources", {"any": object()})
+            digitalearth.register_plugins("digitalearth.sources", loaded)
 
     def test_a_malformed_plugin_contract_error_is_still_tolerated(self, caplog):
         """A ``ValueError`` from the contract check is still skipped at WARNING, so the narrowing kept tolerance.
