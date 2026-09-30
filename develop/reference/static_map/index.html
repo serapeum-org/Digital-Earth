@@ -4851,9 +4851,9 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-100" name="__codelineno-0-100"></a><span class="sd">            KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.</span>
 <a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">            OffLimbError: when a layer&#39;s data cannot be placed and the map is ``strict``.</span>
 <a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="c1"># Translate any recipe recorded by another tier to this tier&#39;s own before drawing, so a figure that</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="c1"># crossed from the web or interactive tier draws here instead of being refused for an unknown `via`.</span>
-<a id="__codelineno-0-105" name="__codelineno-0-105"></a>        <span class="c1"># A same-tier figure passes through unchanged.</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="c1"># Normalise recipe names before drawing. For a same-tier figure — the only case this tier draws (a</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="c1"># foreign figure&#39;s drawers read non-portable `props`; see `retarget_via` and `to_backend`) — every</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105"></a>        <span class="c1"># recipe is already known, so this is a no-op. Kept symmetric with the interactive tier&#39;s retarget.</span>
 <a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">retarget_via</span>
 <a id="__codelineno-0-107" name="__codelineno-0-107"></a>
 <a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="n">figure</span> <span class="o">=</span> <span class="n">retarget_via</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
