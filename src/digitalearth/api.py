@@ -1364,7 +1364,15 @@ def _add_key(backend: str, scene: Any, *, visible: bool) -> None:
         scene: The finished map to key.
         visible: Whether the key is drawn, carried through from ``quickmap(colorbar=)``.
     """
-    _KEY_ADDERS[backend](scene, visible=visible)
+    # Dispatch through this module's namespace *by name* rather than through the table's stored reference, so
+    # a test that spies or patches the named impl on the module — `mocker.spy(api, "_add_web_legend")`, as the
+    # web tier's colorbar test does — observes the call. `_KEY_ADDERS` still holds the real callables (the
+    # introspectable seam `test_api_seam` asserts identity on), and a per-backend override installed *into the
+    # table* with `monkeypatch.setitem(_KEY_ADDERS, ...)` is still honoured: such an override's ``__name__`` is
+    # not a global of this module, so the lookup falls back to the stored object. Re-collapsing this to
+    # ``_KEY_ADDERS[backend](...)`` silently re-breaks the spy path (CI: tests/web/test_web_colorbar_raster.py).
+    impl = _KEY_ADDERS[backend]
+    globals().get(impl.__name__, impl)(scene, visible=visible)
 
 
 def _quickmap_3d(
