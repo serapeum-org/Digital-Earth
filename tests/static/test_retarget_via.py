@@ -5,7 +5,27 @@ replay (U-6); a typo in it would silently retarget a foreign ``via`` to a recipe
 cover a kind that needs no entry. These hold it to :func:`~digitalearth.static.renderer._recipes`.
 """
 
-from digitalearth.static.renderer import _CANONICAL_VIA, _recipes
+from dataclasses import replace
+
+from digitalearth.static import Map
+from digitalearth.static.renderer import _CANONICAL_VIA, _recipes, retarget_via
+
+
+def _forge_via(figure, layer_id, via):
+    """Return ``figure`` with one layer's recorded ``via`` replaced — a stand-in for a foreign tier's recipe.
+
+    Args:
+        figure: The figure to rewrite.
+        layer_id: The layer whose ``via`` to forge.
+        via: The recipe name to record, as another tier would.
+
+    Returns:
+        A new figure whose ``layer_id`` records ``via``; the source and everything else is unchanged.
+    """
+    layer = figure.layers.get(layer_id)
+    props = {**dict(layer.symbology.props), "via": via}
+    forged = replace(layer, symbology=replace(layer.symbology, props=props))
+    return replace(figure, layers=figure.layers.replace(forged))
 
 
 def test_each_canonical_via_is_a_recipe_the_tier_actually_draws():
@@ -24,4 +44,66 @@ def test_the_table_only_covers_kinds_drawn_more_than_one_way():
     for kind in _CANONICAL_VIA:
         assert len(recipes[kind]) > 1, (
             f"{kind!r} has one recipe, so _CANONICAL_VIA should not name it"
+        )
+
+
+class TestRetargetVia:
+    """``retarget_via`` rewrites a foreign recipe to this tier's own, and leaves a known one alone."""
+
+    def test_a_figure_this_tier_described_passes_through_unchanged(self, dataset):
+        """A figure whose recipes this tier already knows is returned as the same object, untouched.
+
+        Args:
+            dataset: The raster fixture, drawn as a field (recipe ``imshow``).
+
+        Test scenario:
+            A same-tier round trip must not be perturbed — every ``via`` is already known, so nothing is
+            rewritten and the identical object comes back.
+        """
+        source = Map(crs=dataset.epsg)
+        source.field(dataset)
+        figure = source.figure_spec
+        assert retarget_via(figure) is figure, (
+            "a known-recipe figure should be returned unchanged"
+        )
+
+    def test_a_foreign_single_recipe_via_maps_to_the_sole_recipe(self, dataset):
+        """A ``via`` from another tier on a one-recipe kind retargets to that kind's only recipe here.
+
+        Args:
+            dataset: The raster fixture; ``raster`` is drawn one way here (``imshow``).
+
+        Test scenario:
+            A raster the interactive tier recorded as ``image`` must draw here as ``imshow`` — the single
+            recipe makes the retarget unambiguous, no table needed.
+        """
+        source = Map(crs=dataset.epsg)
+        source.field(dataset)
+        layer_id = source.figure_spec.layers.ids[0]
+        forged = _forge_via(source.figure_spec, layer_id, "image")
+        out = retarget_via(forged)
+        assert out.layers.get(layer_id).symbology.props["via"] == "imshow", (
+            "a foreign raster recipe should retarget to this tier's sole raster recipe"
+        )
+
+    def test_a_foreign_multi_recipe_via_maps_through_the_canonical_table(self, points):
+        """A ``via`` from another tier on a multi-recipe kind retargets to the table's plain recipe.
+
+        Args:
+            points: The point-geometry fixture, drawn as points (recipe ``scatter``).
+
+        Test scenario:
+            ``points`` is drawn several ways here, so a foreign ``geometry`` (the interactive tier's) cannot
+            be resolved by count alone; ``_CANONICAL_VIA`` names ``scatter`` as the plain one, and that is what
+            it retargets to.
+        """
+        from pyramids.feature import FeatureCollection
+
+        source = Map(crs=4326)
+        source.points(FeatureCollection(points))
+        layer_id = source.figure_spec.layers.ids[0]
+        forged = _forge_via(source.figure_spec, layer_id, "geometry")
+        out = retarget_via(forged)
+        assert out.layers.get(layer_id).symbology.props["via"] == "scatter", (
+            "a foreign multi-recipe via should retarget through _CANONICAL_VIA to the plain recipe"
         )
