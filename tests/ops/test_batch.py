@@ -84,6 +84,36 @@ class TestBatch:
         paths = b.run([dataset], tmp_path, kind="contourf")
         assert paths[0].exists(), "the override run should still produce an image"
 
+    def test_run_closes_each_scene_via_its_own_close(self, tmp_path):
+        """run frees each scene through its own ``close()`` — so a non-matplotlib scene with no ``.fig``
+        (a WebMap/Scene3D/InteractiveMap) is not crashed on the way out (TD-22, #208).
+
+        Test scenario:
+            A stub plotter returns a scene that has ``save``/``close`` but deliberately no ``.fig`` — the
+            shape of the three engine-backed tiers. The old memory-bounding step reached ``scene.fig``.
+        """
+        closed: list[bool] = []
+
+        class FiglessScene:
+            """A scene that saves and closes but has no matplotlib figure to reach for."""
+
+            def save(self, path):
+                """Write a placeholder file so run() records a written path."""
+                Path(path).write_text("scene", encoding="utf-8")
+                return Path(path)
+
+            def close(self):
+                """Record that the driver freed this scene through its own close()."""
+                closed.append(True)
+
+        paths = Batch(lambda data, **kwargs: FiglessScene()).run(
+            [object()], tmp_path, namer=lambda item, index: "s"
+        )
+        assert closed == [True], (
+            "run must free the scene via scene.close(), not plt.close(scene.fig)"
+        )
+        assert paths[0].exists(), "the stub scene should still have been saved"
+
     def test_run_disambiguates_colliding_stems(self, tmp_path, dataset):
         """Inputs whose namer returns the same stem get index-suffixed names — no silent overwrite (L1)."""
         paths = Batch(crs=dataset.epsg, colorbar=False).run(

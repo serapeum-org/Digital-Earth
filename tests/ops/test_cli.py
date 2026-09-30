@@ -124,6 +124,20 @@ class TestPlotKwargs:
         assert kwargs["levels"] == 8
         assert kwargs["domain"] == "europe"
 
+    def test_backend_defaults_to_matplotlib(self):
+        """With no --backend, quickmap is asked for the matplotlib backend — today's behaviour (TD-22)."""
+        args = build_parser().parse_args(["plot", "in.tif"])
+        assert _plot_kwargs(args)["backend"] == "matplotlib", (
+            f"default backend should be matplotlib, got {_plot_kwargs(args).get('backend')!r}"
+        )
+
+    def test_backend_is_forwarded_when_set(self):
+        """A chosen --backend reaches quickmap through the forwarded kwargs, not just the parser (TD-22)."""
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "interactive"])
+        assert _plot_kwargs(args)["backend"] == "interactive", (
+            f"--backend interactive should be forwarded, got {_plot_kwargs(args).get('backend')!r}"
+        )
+
 
 class TestBuildParser:
     """Tests for build_parser."""
@@ -133,6 +147,12 @@ class TestBuildParser:
         build_parser2 = build_parser()
         with pytest.raises(SystemExit):
             build_parser2.parse_args([])
+
+    def test_backend_rejects_unknown_choice(self):
+        """--backend is constrained to the four quickmap dispatches; an unknown one is a usage error."""
+        parser = build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["plot", "in.tif", "--backend", "bogus"])
 
 
 class TestMain:
@@ -284,3 +304,142 @@ class TestBackend:
         )
         assert rc == 0, "the command should still succeed"
         spy.assert_any_call("Agg", force=True)
+
+
+class TestBackendDispatch:
+    """Tests for --backend (TD-22, #208) — the CLI drives all four quickmap backends, not just matplotlib.
+
+    The forwarding is checked by spying on ``quickmap``/``Batch`` rather than rendering, so these run in the
+    ``dev`` env without the interactive/web/viz3d engines: a real ``--backend web`` render needs the ``web``
+    extra, but whether the CLI *forwards* the choice does not.
+    """
+
+    def test_plot_forwards_backend_to_quickmap(self, tmp_path, dataset, mocker):
+        """``plot --backend web`` reaches ``quickmap(..., backend="web")`` (spied, not rendered)."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(
+            [
+                "plot",
+                str(src),
+                "-o",
+                str(tmp_path / "m.png"),
+                "--backend",
+                "web",
+                "--crs",
+                "4326",
+            ]
+        )
+        assert rc == 0, "the plot command should still exit 0"
+        assert spy.call_args.kwargs.get("backend") == "web", (
+            f"quickmap should be told backend='web', got {spy.call_args}"
+        )
+
+    def test_plot_default_output_extension_follows_backend(
+        self, tmp_path, dataset, mocker
+    ):
+        """Without -o, a web scene defaults to a .html file — a page, not a PNG (native output)."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(["plot", str(src), "--backend", "web", "--crs", "4326"])
+        saved = str(spy.return_value.save.call_args.args[0])
+        assert rc == 0, "the plot command should still exit 0"
+        assert saved.endswith(".html"), (
+            f"a web scene's default output should be .html, got {saved!r}"
+        )
+
+    def test_plot_matplotlib_default_output_stays_png(self, tmp_path, dataset, mocker):
+        """The matplotlib default output stays <stem>.png, exactly as before --backend existed."""
+        src = tmp_path / "scene.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(["plot", str(src), "--crs", str(dataset.epsg)])
+        saved = str(spy.return_value.save.call_args.args[0])
+        assert rc == 0, "the plot command should still exit 0"
+        assert saved.endswith(".png"), (
+            f"matplotlib default output should stay .png, got {saved!r}"
+        )
+
+    def test_plot_explicit_output_wins_over_native_ext(self, tmp_path, dataset, mocker):
+        """An explicit -o path is written as given; the backend's native extension does not override it."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        out = tmp_path / "custom.png"
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(
+            ["plot", str(src), "-o", str(out), "--backend", "web", "--crs", "4326"]
+        )
+        saved = str(spy.return_value.save.call_args.args[0])
+        assert rc == 0, "the plot command should still exit 0"
+        assert saved.endswith("custom.png"), (
+            f"the explicit -o path should win, got {saved!r}"
+        )
+
+    def test_batch_passes_backend_and_native_ext(self, tmp_path, dataset, mocker):
+        """``batch --backend web`` builds a Batch with backend='web' and its native ext ('html')."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(
+            [
+                "batch",
+                str(src),
+                "-o",
+                str(tmp_path / "out"),
+                "--backend",
+                "web",
+                "--crs",
+                "4326",
+            ]
+        )
+        assert rc == 0, "the batch command should still exit 0"
+        assert fake.call_args.kwargs.get("backend") == "web", (
+            f"Batch should be told backend='web', got {fake.call_args}"
+        )
+        assert fake.call_args.kwargs.get("ext") == "html", (
+            f"a web batch should default to ext='html', got {fake.call_args}"
+        )
+
+    def test_batch_ext_default_stays_png_for_matplotlib(
+        self, tmp_path, dataset, mocker
+    ):
+        """A matplotlib batch with no --ext keeps ext='png', exactly as before."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(
+            ["batch", str(src), "-o", str(tmp_path / "out"), "--crs", str(dataset.epsg)]
+        )
+        assert rc == 0, "the batch command should still exit 0"
+        assert fake.call_args.kwargs.get("ext") == "png", (
+            f"a matplotlib batch should default to ext='png', got {fake.call_args}"
+        )
+
+    def test_batch_explicit_ext_beats_native(self, tmp_path, dataset, mocker):
+        """An explicit --ext overrides the backend's native extension (the caller asked for that format)."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(
+            [
+                "batch",
+                str(src),
+                "-o",
+                str(tmp_path / "out"),
+                "--backend",
+                "web",
+                "--ext",
+                "png",
+                "--crs",
+                "4326",
+            ]
+        )
+        assert rc == 0, "the batch command should still exit 0"
+        assert fake.call_args.kwargs.get("ext") == "png", (
+            f"an explicit --ext should win over the native ext, got {fake.call_args}"
+        )
