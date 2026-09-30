@@ -1,10 +1,12 @@
-"""browser — assemble rendered figures into a static, self-contained HTML page (RP.11).
+"""browser — assemble rendered outputs into a static, self-contained HTML page (RP.11).
 
-This is the "browser frame" of earthkit-plots, deliberately kept **static**: there is no server and no
-interactive backend (the interactive tier, RP.9, stays deferred). Figures are PNGs — typically produced by
-:class:`~digitalearth.ops.batch.Batch` — and :func:`gallery` base64-embeds them into one standalone ``.html``
-file with a responsive CSS grid. The file has no external assets, so it opens in any browser and can be
-emailed or archived as-is.
+This is the "browser frame" of earthkit-plots: one standalone ``.html`` file, with no external assets, that
+opens in any browser and can be emailed or archived as-is. :func:`gallery` lays the outputs
+:class:`~digitalearth.ops.batch.Batch` produced into a responsive CSS grid, embedding each one by *what it is*
+(TD-22): a raster (PNG/JPEG/GIF/WebP/SVG) as an ``<img>`` base64 data URI, and an HTML page — as the
+web/interactive/3-D backends save — as an ``<iframe srcdoc>`` carrying the page's own markup, so a
+mixed-backend batch renders every tile in place. Anything else becomes a labelled placeholder that links the
+file by name rather than a broken tile.
 """
 
 import html
@@ -26,6 +28,9 @@ _PAGE = """<!doctype html>
   .grid {{ display: grid; grid-template-columns: repeat({columns}, 1fr); gap: 1rem; }}
   figure {{ margin: 0; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: .5rem; }}
   figure img {{ width: 100%; height: auto; display: block; }}
+  figure iframe {{ width: 100%; height: 22rem; border: 0; display: block; background: #fff; }}
+  figure.placeholder {{ display: flex; flex-direction: column; justify-content: center; min-height: 8rem; }}
+  figure.placeholder p {{ color: #999; margin: 0 0 .4rem; font-size: .85rem; text-align: center; }}
   figcaption {{ font-size: .85rem; color: #555; margin-top: .4rem; text-align: center; word-break: break-all; }}
 </style>
 </head>
@@ -39,18 +44,75 @@ _PAGE = """<!doctype html>
 """
 
 
-def _card(image: Path, caption: str) -> str:
-    """Base64-embed one PNG into a ``<figure>`` card (no external file reference).
+#: Raster suffixes embedded as an ``<img>`` base64 data URI, mapped to the media type each ``data:`` URI needs.
+#: SVG is embedded the same way (``data:image/svg+xml``) rather than inlined into the page: an ``<img>`` renders
+#: it in a restricted image context — so a ``<script>`` inside the SVG cannot run in the gallery's own origin
+#: and its element ids cannot collide with the page's — while keeping every card uniform and the file standalone.
+_RASTER_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+}
 
-    The caption (often a file name) is HTML-escaped before interpolation so that a value containing
-    ``&``/``<``/``>``/``"`` cannot break the markup or inject attributes/scripts.
-    """
+#: HTML-page suffixes embedded as an ``<iframe srcdoc>`` (what the web/interactive/3-D backends save).
+_HTML_SUFFIXES = frozenset({".html", ".htm"})
+
+
+def _image_card(image: Path, media_type: str, safe_caption: str) -> str:
+    """Base64-embed one raster into an ``<img>`` ``<figure>`` card (no external file reference)."""
     data = b64encode(image.read_bytes()).decode("ascii")
-    safe = html.escape(caption, quote=True)
     return (
-        f'  <figure><img alt="{safe}" src="data:image/png;base64,{data}">'
-        f"<figcaption>{safe}</figcaption></figure>"
+        f'  <figure><img alt="{safe_caption}" src="data:{media_type};base64,{data}">'
+        f"<figcaption>{safe_caption}</figcaption></figure>"
     )
+
+
+def _page_card(page: Path, safe_caption: str) -> str:
+    """Embed one HTML page into an ``<iframe srcdoc>`` card so it renders in place.
+
+    The page's whole markup is HTML-escaped with ``quote=True`` — its ``"`` become ``&quot;`` and its
+    ``<``/``>`` become ``&lt;``/``&gt;`` — and placed in the ``srcdoc`` attribute; the browser un-escapes it
+    back into the iframe's own document, so the card renders the real page while the gallery stays one
+    self-contained file (a linked ``src=`` would need the page as a sibling asset and break that). A rich page
+    (e.g. a deck.gl scene) can be megabytes and is inlined in full, so a gallery of many web pages grows to
+    match.
+    """
+    srcdoc = html.escape(page.read_text(encoding="utf-8"), quote=True)
+    return (
+        f'  <figure><iframe title="{safe_caption}" srcdoc="{srcdoc}" loading="lazy"></iframe>'
+        f"<figcaption>{safe_caption}</figcaption></figure>"
+    )
+
+
+def _placeholder_card(output: Path, safe_caption: str) -> str:
+    """Emit a labelled placeholder that links ``output`` by name, for a type with no inline preview."""
+    href = html.escape(output.name, quote=True)
+    return (
+        '  <figure class="placeholder"><p>No inline preview for this file type.</p>'
+        f'<figcaption><a href="{href}">{safe_caption}</a></figcaption></figure>'
+    )
+
+
+def _card(output: Path, caption: str) -> str:
+    """Render one output as a ``<figure>`` card chosen by what the file is (TD-22).
+
+    The dispatch is by file suffix: a raster (:data:`_RASTER_MEDIA_TYPES`) embeds as an ``<img>`` base64 data
+    URI, an HTML page (:data:`_HTML_SUFFIXES`) embeds as an ``<iframe srcdoc>`` so it renders in place, and any
+    other type gets a placeholder card that links the file by name rather than crashing. The caption (often a
+    file name) is HTML-escaped with ``quote=True`` first, so a value containing ``&``/``<``/``>``/``"`` cannot
+    break the markup or inject attributes/scripts.
+    """
+    safe = html.escape(caption, quote=True)
+    suffix = output.suffix.lower()
+    media_type = _RASTER_MEDIA_TYPES.get(suffix)
+    if media_type is not None:
+        return _image_card(output, media_type, safe)
+    if suffix in _HTML_SUFFIXES:
+        return _page_card(output, safe)
+    return _placeholder_card(output, safe)
 
 
 def gallery(
@@ -64,7 +126,11 @@ def gallery(
     """Build a standalone HTML gallery embedding ``images`` and write it to ``path``.
 
     Args:
-        images: Iterable of PNG file paths (``str``/``Path``) to embed, in display order.
+        images: Iterable of rendered-output paths (``str``/``Path``) to embed, in display order. Each is
+            embedded by what it is (TD-22): a raster (``.png``/``.jpg``/``.jpeg``/``.gif``/``.webp``/``.svg``)
+            as an ``<img>`` base64 data URI, an HTML page (``.html``/``.htm``, as the web/interactive/3-D
+            backends save) as an ``<iframe srcdoc>``, and any other type as a placeholder card linking the
+            file by name. A rich HTML page is inlined in full, so a gallery of many web pages can grow large.
         path: Output ``.html`` file path (parent directories are created if missing).
         title: Page heading and ``<title>``.
         columns: Number of columns in the responsive grid.
