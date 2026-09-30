@@ -368,3 +368,51 @@ class TestShadowingABuiltInWarns:
         assert caplog.text == "", (
             f"a new group must merge without a warning, got {caplog.text!r}"
         )
+
+
+class TestAGenuineRegistrarBugIsNotMasked:
+    """register_plugins tolerates a malformed plugin's contract error but lets a real registrar bug surface (L4).
+
+    The broad catch exists so a plugin malformed *for its group* is skipped. But swallowing *every* Exception at
+    WARNING also hid a genuine coding error inside a registrar (or a future one) behind a single log line, during
+    import, invisible to anyone not watching logs. The catch is narrowed to the shapes a malformed plugin
+    actually produces — ``TypeError``/``ValueError`` from the contract check — so a bug still surfaces.
+    """
+
+    def test_an_unexpected_registrar_error_propagates(self, monkeypatch):
+        """A registrar raising something other than a contract error is not swallowed.
+
+        Test scenario:
+            A ``RuntimeError`` from inside a registrar is a wiring bug, not a bad plugin. Under the old broad
+            ``except Exception`` it was logged at WARNING and swallowed; the narrowed catch lets it propagate so
+            the defect is not invisible at import.
+        """
+
+        def _buggy_registrar(name, obj):
+            raise RuntimeError("a real bug in the registrar")
+
+        monkeypatch.setitem(
+            digitalearth._PLUGIN_REGISTRARS, "digitalearth.sources", _buggy_registrar
+        )
+        with pytest.raises(RuntimeError, match="a real bug in the registrar"):
+            digitalearth.register_plugins("digitalearth.sources", {"any": object()})
+
+    def test_a_malformed_plugin_contract_error_is_still_tolerated(self, caplog):
+        """A ``ValueError`` from the contract check is still skipped at WARNING, so the narrowing kept tolerance.
+
+        Test scenario:
+            A sources object that is not a ``(scheme, resolver)`` pair raises when unpacked — here a 3-tuple
+            gives ``ValueError`` (too many values). The narrowing must still catch that and skip the plugin, so a
+            healthy plugin beside it registers and the skip is logged rather than raised.
+        """
+        good = _FakeEP("good", ("good", lambda uri: "opened"))
+        bad = _FakeEP("bad", ("too", "many", "values"))  # unpacks to ValueError
+        with caplog.at_level(logging.WARNING, logger="digitalearth"):
+            digitalearth.register_plugins(
+                "digitalearth.sources",
+                load_plugins("digitalearth.sources", eps=[bad, good]),
+            )
+        assert resolve_uri("good:x") == "opened", "the healthy plugin still registered"
+        assert "skipping plugin 'bad'" in caplog.text, (
+            "the malformed plugin was skipped at WARNING, not raised"
+        )

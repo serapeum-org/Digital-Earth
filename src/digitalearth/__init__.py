@@ -185,9 +185,11 @@ def register_plugins(group: str, loaded: dict[str, Any]) -> None:
     for name, obj in loaded.items():
         try:
             registrar(name, obj)
-        except (
-            Exception
-        ) as exc:  # a plugin malformed for its group must not abort the healthy ones
+        except (TypeError, ValueError) as exc:
+            # Only the shapes a plugin malformed *for its group* produces (a bad object failing the contract
+            # check — a non-(scheme, resolver) pair, a non-mapping style library) are tolerated, so one bad
+            # plugin cannot abort the healthy ones (L4). An unexpected error from a registrar is a genuine
+            # wiring bug, not a bad plugin, and is left to propagate rather than hidden at WARNING during import.
             _plugin_logger.warning(
                 "skipping plugin %r in group %r: %s", name, group, exc
             )
