@@ -355,8 +355,11 @@ class TestShadowingABuiltInWarns:
             digitalearth.register_plugins(
                 "digitalearth.sources", load_plugins("digitalearth.sources", eps=[ep])
             )
-        assert "rogue" in caplog.text and "file" in caplog.text, (
-            f"the warning must name the plugin and the built-in scheme, got {caplog.text!r}"
+        assert "rogue" in caplog.text, (
+            f"the warning must name the plugin, got {caplog.text!r}"
+        )
+        assert "file" in caplog.text, (
+            f"the warning must name the built-in scheme, got {caplog.text!r}"
         )
         assert resolve_uri("file:anything") == "hijacked", (
             "last-wins is kept: the plugin still overrides the built-in"
@@ -390,8 +393,11 @@ class TestShadowingABuiltInWarns:
             digitalearth.register_plugins(
                 "digitalearth.styles", load_plugins("digitalearth.styles", eps=[ep])
             )
-        assert "repaint" in caplog.text and "default" in caplog.text, (
-            f"the warning must name the plugin and the bundled group, got {caplog.text!r}"
+        assert "repaint" in caplog.text, (
+            f"the warning must name the plugin, got {caplog.text!r}"
+        )
+        assert "default" in caplog.text, (
+            f"the warning must name the bundled group, got {caplog.text!r}"
         )
         assert load_library()["default"]["cmap"] == "plasma", (
             "last-wins is kept: the plugin still overrides the bundled group"
