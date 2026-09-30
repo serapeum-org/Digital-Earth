@@ -293,3 +293,49 @@ class TestGalleryPerTileTolerance:
         assert any(bad_utf8_html.name in r.getMessage() for r in warnings), (
             f"the warning should name the file; got {[r.getMessage() for r in warnings]}"
         )
+
+
+class TestGalleryLargePageGuard:
+    """A page past the inline-size limit is linked, not inlined, so one giant page cannot bloat the page (L2)."""
+
+    def test_oversize_html_page_is_linked_not_inlined(self, tmp_path, monkeypatch):
+        """A page larger than the limit degrades to a placeholder linking it, instead of inlining megabytes."""
+        monkeypatch.setattr(browser, "_MAX_INLINE_HTML_BYTES", 256, raising=False)
+        big = tmp_path / "huge.html"
+        big.write_text("<html><body>" + "x" * 4000 + "</body></html>", encoding="utf-8")
+        page = gallery([big], tmp_path / "index.html")
+        text = page.read_text(encoding="utf-8")
+        assert "<iframe" not in text, "an oversize page must not be inlined as an iframe"
+        assert "srcdoc=" not in text, "an oversize page must not be inlined into srcdoc"
+        assert 'href="huge.html"' in text, "an oversize page should be linked by name"
+        assert "MB" in text, "the placeholder should name the page's size"
+
+    def test_small_html_page_is_still_inlined(self, tmp_path, monkeypatch):
+        """A page under the limit still inlines as a sandboxed iframe — the guard only catches large pages."""
+        monkeypatch.setattr(browser, "_MAX_INLINE_HTML_BYTES", 10_000_000, raising=False)
+        small = tmp_path / "small.html"
+        small.write_text("<html><body>tiny</body></html>", encoding="utf-8")
+        page = gallery([small], tmp_path / "index.html")
+        text = page.read_text(encoding="utf-8")
+        assert "<iframe" in text, "a page under the limit should still inline as an iframe"
+        assert "srcdoc=" in text, "a page under the limit should be inlined into srcdoc"
+
+    def test_oversize_html_page_logs_a_warning_naming_the_file(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """The linked-not-inlined decision is announced at WARNING, naming the file (skip-and-warn style)."""
+        monkeypatch.setattr(browser, "_MAX_INLINE_HTML_BYTES", 256, raising=False)
+        big = tmp_path / "huge.html"
+        big.write_text("<html>" + "y" * 4000 + "</html>", encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="digitalearth.ops.browser"):
+            gallery([big], tmp_path / "index.html")
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("huge.html" in r.getMessage() for r in warnings), (
+            f"an oversize page should be logged, naming the file; got {[r.getMessage() for r in warnings]}"
+        )
+
+    def test_default_inline_limit_admits_ordinary_pages(self):
+        """The default limit is multi-MB, so an ordinary deck.gl/MapLibre page still inlines (L2 decision)."""
+        assert browser._MAX_INLINE_HTML_BYTES >= browser._BYTES_PER_MB, (
+            "the default inline limit should be at least 1 MB so ordinary web pages are not needlessly linked"
+        )

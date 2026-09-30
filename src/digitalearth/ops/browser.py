@@ -79,6 +79,20 @@ _NO_PREVIEW_NOTE = "No inline preview for this file type."
 #: interpolated into the gallery's markup.
 _UNREADABLE_NOTE = "Could not read this file for preview."
 
+#: Bytes per mebibyte, for the size threshold and the message it prints.
+_BYTES_PER_MB = 1024 * 1024
+
+#: The size above which an HTML page is **linked** rather than inlined into ``srcdoc`` (L2). Each HTML tile's
+#: whole markup is inlined (escaping can inflate it further) and ``loading="lazy"`` defers only *rendering*,
+#: not the payload — the bytes all live in the one output file — so without a ceiling a batch of rich deck.gl
+#: pages grows the single gallery without bound. The gallery's worth is being one self-contained, openable
+#: file: an ordinary deck.gl/MapLibre page is a few MB and still inlines (keeping that property), while a
+#: page past this ceiling degrades to a placeholder that names its size and links it, so one pathological page
+#: cannot bloat the whole gallery past usefulness. Linking trades the self-contained property for that one
+#: tile (the linked page must travel beside the gallery to open) — the lesser cost, since inlining it would
+#: degrade every tile. It is a module constant so the limit lives in one named place and tests can adjust it.
+_MAX_INLINE_HTML_BYTES = 5 * _BYTES_PER_MB
+
 
 def _image_card(image: Path, media_type: str, safe_caption: str) -> str:
     """Base64-embed one raster into an ``<img>`` ``<figure>`` card (no external file reference)."""
@@ -96,8 +110,10 @@ def _page_card(page: Path, safe_caption: str) -> str:
     ``<``/``>`` become ``&lt;``/``&gt;`` — and placed in the ``srcdoc`` attribute; the browser un-escapes it
     back into the iframe's own document, so the card renders the real page while the gallery stays one
     self-contained file (a linked ``src=`` would need the page as a sibling asset and break that). A rich page
-    (e.g. a deck.gl scene) can be megabytes and is inlined in full, so a gallery of many web pages grows to
-    match.
+    (e.g. a deck.gl scene) is inlined in full up to :data:`_MAX_INLINE_HTML_BYTES`; a larger one is **not**
+    inlined but degraded to a placeholder that names its size and links it (logged at WARNING), so one giant
+    page cannot bloat the whole gallery (L2). The size is read with ``stat`` before the file is opened; a
+    missing/locked file surfaces here as the ``OSError`` :func:`_card` turns into the L1 placeholder.
 
     The iframe carries ``sandbox="allow-scripts"`` (:data:`_IFRAME_SANDBOX`) so a deck.gl/MapLibre page's own
     scripts still run — they must, to draw the map — but the page loads into an **opaque origin**: it cannot
@@ -109,6 +125,16 @@ def _page_card(page: Path, safe_caption: str) -> str:
     genuine same-origin storage (cookies / ``localStorage`` / IndexedDB) will not work when framed — map tiles
     do not need it, so the isolation is the right default.
     """
+    size = page.stat().st_size
+    if size > _MAX_INLINE_HTML_BYTES:
+        logger.warning(
+            "gallery: %s is %.1f MB (over the %.1f MB inline limit) — linking it instead of inlining",
+            page.name,
+            size / _BYTES_PER_MB,
+            _MAX_INLINE_HTML_BYTES / _BYTES_PER_MB,
+        )
+        note = f"Page too large to inline ({size / _BYTES_PER_MB:.1f} MB) — linked instead."
+        return _placeholder_card(page, safe_caption, note=note)
     srcdoc = html.escape(page.read_text(encoding="utf-8"), quote=True)
     return (
         f'  <figure><iframe title="{safe_caption}" srcdoc="{srcdoc}"'
@@ -185,8 +211,10 @@ def gallery(
         images: Iterable of rendered-output paths (``str``/``Path``) to embed, in display order. Each is
             embedded by what it is (TD-22): a raster (``.png``/``.jpg``/``.jpeg``/``.gif``/``.webp``/``.svg``)
             as an ``<img>`` base64 data URI, an HTML page (``.html``/``.htm``, as the web/interactive/3-D
-            backends save) as an ``<iframe srcdoc>``, and any other type as a placeholder card linking the
-            file by name. A rich HTML page is inlined in full, so a gallery of many web pages can grow large.
+            backends save) as a sandboxed ``<iframe srcdoc>``, and any other type as a placeholder card
+            linking the file by name. A rich HTML page is inlined in full up to a size limit, past which it is
+            linked instead so one giant page cannot bloat the gallery (L2); a tile that cannot be read or
+            decoded degrades to a placeholder rather than aborting the build (L1).
         path: Output ``.html`` file path (parent directories are created if missing).
         title: Page heading and ``<title>``.
         columns: Number of columns in the responsive grid.
