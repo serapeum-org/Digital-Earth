@@ -302,8 +302,12 @@ class TestTheMatplotlibDispatchReachesTheRightBuilder:
             unified path, and before the builder is reached.
         """
         scene = _RecordingScene()
+        # `_points()` built above the block, leaving only the refused `_draw` call inside it — a fixture that
+        # raised here would otherwise satisfy `pytest.raises` while `_draw` never ran (tree guard
+        # `test_refusal_blocks.py`).
+        points = _points()
         with pytest.raises(ValueError, match="fills polygons"):
-            qp._draw(scene, _points(), "auto", column="fid")
+            qp._draw(scene, points, "auto", column="fid")
         assert scene.calls == [], scene.calls
 
 
