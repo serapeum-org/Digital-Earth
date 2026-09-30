@@ -899,8 +899,8 @@ def _quickmap_matplotlib(
     if _has_a_key_to_draw(scene):
         # Asked either way, because `colorbar=False` is a decision to record and a key to take off rather
         # than a call to skip. A map with nothing coloured by a value has no key to switch, so the gate
-        # above still stands between the two.
-        _add_static_key(scene, visible=colorbar)
+        # above still stands between the two. Reached through the one seam the four backends share.
+        _add_key("matplotlib", scene, visible=colorbar)
     return scene
 
 
@@ -1078,7 +1078,7 @@ def _quickmap_interactive(
         _draw_polygons(scene, data, kwargs)
     else:  # points / lines / mixed → a marker map, as this tier draws every non-polygon vector
         scene.points(data, **kwargs)
-    _add_interactive_key(scene, visible=colorbar)
+    _add_key("interactive", scene, visible=colorbar)
     _decorate_interactive(scene, basemap, coastlines)
     return scene
 
@@ -1249,8 +1249,8 @@ def _quickmap_web(
     # three backends follow. This tier's key is a builder, not a toggle, and it refuses a map with nothing
     # classified to describe; that is this tier's "no mappable layer" case, which the matplotlib path
     # tolerates too, so it is tolerated inside the helper rather than turning `colorbar=True` into an error
-    # the caller did not cause.
-    _add_web_legend(scene, visible=colorbar)
+    # the caller did not cause. Reached through the one seam the four backends share.
+    _add_key("web", scene, visible=colorbar)
     return scene
 
 
@@ -1291,6 +1291,35 @@ def _add_3d_key(scene: Any, *, visible: bool) -> Any:
             return scene.legend(layer_id, visible=visible)
         return scene.colorbar(layer_id, visible=visible)
     return None
+
+
+#: Each backend's colour-key adder — the one seam the four `_quickmap_*` builders reach a key through,
+#: rather than four call sites naming four different functions. Each impl stays per-tier because each
+#: engine's key is a different thing: a matplotlib colorbar or swatch legend, a Bokeh toggle, a MapLibre
+#: legend builder, a PyVista scalar bar. What they share is the point they are called from and the
+#: `visible=` flag carried through from `quickmap(colorbar=)` (DE-24).
+_KEY_ADDERS: dict[str, Callable[..., Any]] = {
+    "matplotlib": _add_static_key,
+    "interactive": _add_interactive_key,
+    "web": _add_web_legend,
+    "3d": _add_3d_key,
+}
+
+
+def _add_key(backend: str, scene: Any, *, visible: bool) -> None:
+    """Add ``scene``'s colour key through ``backend``'s own key impl — the single seam for all four tiers.
+
+    The four impls differ (each engine's key is its own thing) and each guards internally against a map with
+    nothing to key; this is the one place they are dispatched from, so a fifth backend or a changed key
+    contract is wired here once rather than at four call sites (DE-24). The impl's own return value — some
+    return the scene, some ``None`` — is discarded: every ``_quickmap_*`` builder returns its scene itself.
+
+    Args:
+        backend: The backend whose key impl to use — a key of :data:`_KEY_ADDERS`.
+        scene: The finished map to key.
+        visible: Whether the key is drawn, carried through from ``quickmap(colorbar=)``.
+    """
+    _KEY_ADDERS[backend](scene, visible=visible)
 
 
 def _quickmap_3d(
@@ -1354,8 +1383,9 @@ def _quickmap_3d(
     else:  # points
         scene.point_cloud(data, value_column=kwargs.pop("column", None), **kwargs)
     # After the layer, not before it as a `show_scalar_bar=` among its keywords: the key is a guide on that
-    # layer's encoding, so there has to be a layer to put it on (order 24).
-    _add_3d_key(scene, visible=colorbar)
+    # layer's encoding, so there has to be a layer to put it on (order 24). Reached through the one seam the
+    # four backends share.
+    _add_key("3d", scene, visible=colorbar)
     return scene
 
 

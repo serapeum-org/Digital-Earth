@@ -305,3 +305,62 @@ class TestTheMatplotlibDispatchReachesTheRightBuilder:
         with pytest.raises(ValueError, match="fills polygons"):
             qp._draw(scene, _points(), "auto", column="fid")
         assert scene.calls == [], scene.calls
+
+
+class TestOneKeySeam:
+    """DE-24 invariant 3 — the four per-tier colour-key impls are reached through one seam, ``_add_key``.
+
+    The four ``_quickmap_*`` builders used to each name their own key impl at their own call site. They now
+    all go through ``_add_key(backend, scene, visible=)``, which dispatches on :data:`~digitalearth.api.
+    _KEY_ADDERS`. Each impl stays per-tier; only the call point is shared.
+    """
+
+    def test_the_seam_maps_each_backend_to_its_own_key_impl(self):
+        """``_KEY_ADDERS`` points each backend at its own tier's key impl, not another's.
+
+        Test scenario:
+            The seam is only correct if the table wires each backend to the impl that speaks that engine's
+            key; a swapped entry would key a web map through matplotlib's colorbar. Asserted per entry by
+            identity so a swap fails loudly.
+        """
+        assert qp._KEY_ADDERS["matplotlib"] is qp._add_static_key
+        assert qp._KEY_ADDERS["interactive"] is qp._add_interactive_key
+        assert qp._KEY_ADDERS["web"] is qp._add_web_legend
+        assert qp._KEY_ADDERS["3d"] is qp._add_3d_key
+
+    def test_every_dispatchable_backend_has_a_key_adder(self):
+        """The seam covers exactly the backends ``quickmap`` dispatches to.
+
+        Test scenario:
+            The two tables are built independently — one from the key impls, one from the tier capability
+            declarations — so a backend added to one and not the other would dispatch to a key adder that
+            is not there (a ``KeyError`` inside ``_add_key``) or leave a backend unkeyed.
+        """
+        assert set(qp._KEY_ADDERS) == set(qp.BACKEND_CAPABILITIES), sorted(
+            set(qp._KEY_ADDERS).symmetric_difference(qp.BACKEND_CAPABILITIES)
+        )
+
+    @pytest.mark.parametrize("backend", ["matplotlib", "interactive", "web", "3d"])
+    def test_add_key_calls_the_backend_s_impl_carrying_the_flag(
+        self, backend, monkeypatch
+    ):
+        """``_add_key`` invokes the table's impl for the backend, passing ``visible`` through.
+
+        Args:
+            backend: The backend whose key adder is exercised.
+            monkeypatch: Swaps in a recording impl for that backend only.
+
+        Test scenario:
+            The seam has to reach the *named* backend's impl and carry the ``colorbar=`` decision as
+            ``visible=``. Both are asserted — a seam that dropped the flag, or dispatched to a fixed impl,
+            would go red here.
+        """
+        recorded = []
+
+        def _spy(scene, *, visible):
+            recorded.append((scene, visible))
+
+        monkeypatch.setitem(qp._KEY_ADDERS, backend, _spy)
+        sentinel = object()
+        assert qp._add_key(backend, sentinel, visible=False) is None
+        assert recorded == [(sentinel, False)], recorded
