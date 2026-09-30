@@ -900,11 +900,17 @@ def to_backend(
     tier's own ``from_figure``. So nothing here renders — it only dispatches, reusing the same lazy backend
     seam ``quickmap`` does (DE-24), so importing ``api`` still loads no renderer until one is asked for.
 
-    One ``FigureSpec``, four renderings: the figure carries kinds, sources, draw order, visibility and the
-    portable half of each layer's colour encoding, so the same description drawn on another backend is the
-    same map its engine can express. What a tier cannot carry portably — style keywords the matplotlib and
-    3-D tiers keep flat in ``props`` — redraws with that engine's defaults rather than being faked; a figure
-    with an ``object:`` (in-memory) source replays in-process but cannot be stored (``to_dict`` refuses it).
+    **Every backend renders a figure it itself described** — the round trip the seam exists for: a scene's
+    :attr:`figure_spec`, optionally through ``to_dict()``/``from_dict()``, drawn again on the same backend,
+    carrying kinds, sources, draw order, visibility and the portable half of each layer's colour encoding.
+
+    **Cross-tier — a figure one tier described drawn on *another* — is supported into the interactive tier**,
+    whose drawers fall back to their own defaults for the style a portable figure does not carry; the foreign
+    recipe name (``via``) is retargeted to the drawing tier's own. The **web, matplotlib and 3-D** tiers read a
+    layer's style from ``props`` their own builders write and a portable figure does not carry (the
+    ``NO_PORTABLE_CHANNELS`` gap), so drawing a *foreign* figure on them is not supported in this cut and may
+    raise from inside a drawer; they are same-tier only. A figure with an ``object:`` (in-memory) source
+    replays in-process but cannot be stored (``to_dict`` refuses it).
 
     Args:
         figure: The :class:`~digitalearth.base.spec.FigureSpec` to draw, from another scene's

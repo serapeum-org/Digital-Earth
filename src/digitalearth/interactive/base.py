@@ -863,6 +863,12 @@ class InteractiveMapBase:
             CapabilityError: when a layer is of a kind this tier keeps rather than draws.
             KeyError: when a layer names a kind this tier does not draw.
         """
+        # Translate any recipe recorded by another tier to this tier's own before drawing, so a figure that
+        # crossed from the web or static tier draws here instead of being refused for an unknown `via`. A
+        # same-tier figure passes through unchanged.
+        from digitalearth.interactive.renderer import retarget_via
+
+        figure = retarget_via(figure)
         self._sources = dict(figure.sources)
         self._change(figure)
         # This tier's figure_spec does not carry a title, so a same-tier round trip has nothing to restore;

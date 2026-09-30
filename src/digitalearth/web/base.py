@@ -1335,8 +1335,8 @@ class WebMapBase:
 
         Args:
             figure: The figure to draw.
-            **scene_kwargs: Passed to the constructor — ``style``, ``height``, ``strict``; a ``crs``, ``center``
-                or ``zoom`` here overrides the one the figure's viewport carries.
+            **scene_kwargs: Passed to the constructor — ``style``, ``height``, ``strict``, and ``crs`` for the
+                rare caller who overrides it; ``center`` or ``zoom`` here override the figure's viewport.
 
         Returns:
             The map, with every layer drawn.
@@ -1346,10 +1346,11 @@ class WebMapBase:
             need MapLibre, so no doctest runs it here).
         """
         view = figure.panels[0].view
+        # The display CRS is **not** taken from the figure: this tier renders in EPSG:4326 only and reprojects
+        # every layer through pyramids itself, so a figure another tier described in its own projected CRS
+        # (32618, 3857, …) draws here correctly without carrying that CRS across — which `WebMap(crs=)` would
+        # otherwise refuse. Only the pan-and-zoom view the figure holds is carried.
         kwargs: Dict[str, Any] = {}
-        crs = getattr(view, "crs", None)
-        if crs is not None:
-            kwargs["crs"] = crs
         center = getattr(view, "center", None)
         if center is not None:
             kwargs["center"] = center

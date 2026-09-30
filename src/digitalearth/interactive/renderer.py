@@ -470,6 +470,65 @@ def drawer_for(kind: str) -> Any:
     return _dispatch(kind, recipes[kind])
 
 
+#: The plain recipe of each kind this tier draws more than one way — the one a bare
+#: ``field``/``points``/``choropleth`` records. Used only to retarget a ``via`` this tier does not know, when
+#: a figure another tier described is drawn here (:func:`retarget_via`): a kind drawn one way needs no entry,
+#: and a kind whose plain recipe is a genuine judgement — ``heatmap`` (hexbin vs kde) — is left out, so its
+#: foreign ``via`` is refused rather than guessed wrong. Held against :func:`_recipes` by a test.
+_CANONICAL_VIA: Dict[str, str] = {
+    "points": "geometry",
+    "lines": "geometry",
+    "raster": "image",
+    "vectors": "vectorfield",
+}
+
+
+def retarget_via(figure: FigureSpec) -> FigureSpec:
+    """Rewrite each layer's recorded ``via`` to this tier's recipe for the same kind, for cross-tier replay.
+
+    A ``via`` names *how* a layer was drawn, and the name is the drawing tier's own: a ``choropleth`` the
+    static tier records as ``"choropleth"`` this tier records as ``"geometry"``. So a figure another tier
+    described, drawn here through :meth:`draw_figure`, would otherwise reach :func:`_dispatch` with a ``via``
+    this tier has no recipe for and be refused — the refusal that guards a genuine same-tier bug. This
+    translates a foreign ``via`` (or none) to the recipe this tier draws the kind with, so the layer draws
+    here as the same *kind*; the engine-specific style a ``via`` cannot carry redraws with this tier's
+    defaults, the portability limit :func:`digitalearth.api.to_backend` states.
+
+    A ``via`` this tier already knows is left untouched, so a same-tier round trip passes through unchanged. A
+    kind with one recipe retargets to it unambiguously; a kind drawn several ways uses :data:`_CANONICAL_VIA`,
+    and one absent from that table keeps its foreign ``via`` and is refused rather than drawn as a guess.
+
+    Args:
+        figure: The figure to draw, as another tier (or this one) described it.
+
+    Returns:
+        The figure with foreign recipes retargeted; the same object when nothing needed changing.
+    """
+    recipes = _recipes()
+    tree = figure.layers
+    changed = False
+    for layer in figure.layers:
+        kind_recipes = recipes.get(layer.kind)
+        if not kind_recipes:
+            continue
+        via = layer.symbology.props.get("via")
+        if via in kind_recipes:
+            continue
+        target = (
+            next(iter(kind_recipes))
+            if len(kind_recipes) == 1
+            else _CANONICAL_VIA.get(layer.kind)
+        )
+        if target is None:
+            continue
+        props = {**dict(layer.symbology.props), "via": target}
+        tree = tree.replace(
+            with_fields(layer, symbology=with_fields(layer.symbology, props=props))
+        )
+        changed = True
+    return with_fields(figure, layers=tree) if changed else figure
+
+
 class Renderer:
     """Draws a figure's layers as HoloViews elements, and reconciles one figure with another.
 
