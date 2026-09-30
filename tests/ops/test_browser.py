@@ -219,6 +219,30 @@ class TestGalleryIframeSandbox:
             f"the sandbox should grant only allow-scripts, got {granted!r}"
         )
 
+    def test_caller_can_widen_the_sandbox_with_the_security_caveat(
+        self, tmp_path, web_page
+    ):
+        """A caller who trusts the content can opt into extra sandbox tokens; the chosen set reaches the iframe.
+
+        The escape hatch exists because ``allow-scripts`` alone puts a page in an opaque origin, where a
+        MapLibre/deck.gl page's storage/cache access throws (it degrades gracefully, but an edge page may
+        blank). Opting into ``allow-same-origin`` re-enables that — at the documented cost of letting the
+        framed document escape its sandbox, so it is never the default and only a trusted-content choice.
+        """
+        page = gallery(
+            [web_page],
+            tmp_path / "index.html",
+            sandbox="allow-scripts allow-same-origin",
+        )
+        text = page.read_text(encoding="utf-8")
+        match = re.search(r'<iframe[^>]*\bsandbox="([^"]*)"', text)
+        assert match is not None, "the iframe must carry a sandbox attribute"
+        granted = match.group(1).split()
+        # The expected set is written independently of the argument string (not a value == itself check).
+        assert set(granted) == {"allow-scripts", "allow-same-origin"}, (
+            f"the caller-supplied sandbox tokens should reach the iframe, got {granted!r}"
+        )
+
 
 @pytest.fixture
 def bad_utf8_html(tmp_path):

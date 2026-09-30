@@ -63,12 +63,33 @@ _RASTER_MEDIA_TYPES = {
 #: HTML-page suffixes embedded as an ``<iframe srcdoc>`` (what the web/interactive/3-D backends save).
 _HTML_SUFFIXES = frozenset({".html", ".htm"})
 
-#: The ``sandbox`` token set every embedded HTML page's ``<iframe>`` carries (M4). ``allow-scripts`` lets a
-#: deck.gl/MapLibre page's own scripts run — they must, to draw the map — while the absence of
-#: ``allow-same-origin`` keeps the page in an opaque origin with no reach to ``window.parent`` (the gallery) or
-#: its sibling frames. The two together would let the framed document escape its sandbox, so
-#: ``allow-same-origin`` is never added; a page needing genuine same-origin storage cannot be framed, which map
-#: tiles never need. This makes the ``<iframe>`` path as script-safe as the SVG-via-``<img>`` path already is.
+#: The **default** ``sandbox`` token set every embedded HTML page's ``<iframe>`` carries (M4, L3). It is the
+#: default of :func:`gallery`'s ``sandbox=`` parameter, so a caller can override it (see there). ``allow-scripts``
+#: lets a deck.gl/MapLibre page's own scripts run — they must, to draw the map — while the absence of
+#: ``allow-same-origin`` keeps the page in an **opaque origin** with no reach to ``window.parent`` (the gallery)
+#: or its sibling frames. The two together would let the framed document remove its own sandbox, so
+#: ``allow-same-origin`` is never added to the default. This makes the ``<iframe>`` path as script-safe as the
+#: SVG-via-``<img>`` path already is.
+#:
+#: What ``allow-scripts`` alone costs a real MapLibre/deck.gl page (L3, reasoned — not browser-verified here):
+#:
+#: * **WebGL** (deck.gl's renderer, MapLibre's GL canvas) is not origin-gated and works in the sandbox.
+#: * **Web Workers** — MapLibre parses vector tiles, and loaders.gl parses data, in a Worker built from a
+#:   same-origin ``blob:`` URL. A blob the document creates inherits its (opaque) origin, and a Worker from a
+#:   same-opaque-origin blob is allowed on current Chromium/Firefox/WebKit, so worker creation generally
+#:   succeeds. The web tier inlines its scripts offline (``web/export.py._inline_offline_assets``), so the
+#:   worker source is inline, not a blocked cross-origin ``<script src>``.
+#: * **Storage** — ``localStorage``/``sessionStorage``/``indexedDB``/``caches`` throw ``SecurityError`` in an
+#:   opaque origin. MapLibre guards these and degrades to no client-side tile cache (re-fetch from network) —
+#:   a performance loss, **not** a blank map.
+#: * **Network** — an opaque origin can still issue CORS tile/style/glyph fetches; whether they load depends on
+#:   the tile server's CORS headers, which is independent of the sandbox.
+#:
+#: So the expected result under the default is a working-but-uncached map, not a blank one. The residual risk is
+#: an older/edge browser that blocks blob-worker creation in a sandboxed opaque origin, or a page that hard-
+#: requires storage without guarding (rare for these libraries). A caller who hits that in a *trusted* local
+#: gallery can widen the sandbox via :func:`gallery`'s ``sandbox=``; alternatively, each embedded page is also
+#: saved as its own ``.html`` beside the gallery, and opening that file directly renders it **unsandboxed**.
 _IFRAME_SANDBOX = "allow-scripts"
 
 #: The placeholder message for a type the gallery has no inline preview for (the original default).
@@ -103,7 +124,7 @@ def _image_card(image: Path, media_type: str, safe_caption: str) -> str:
     )
 
 
-def _page_card(page: Path, safe_caption: str) -> str:
+def _page_card(page: Path, safe_caption: str, sandbox: str) -> str:
     """Embed one HTML page into a sandboxed ``<iframe srcdoc>`` card so it renders in place.
 
     The page's whole markup is HTML-escaped with ``quote=True`` — its ``"`` become ``&quot;`` and its
@@ -115,15 +136,22 @@ def _page_card(page: Path, safe_caption: str) -> str:
     page cannot bloat the whole gallery (L2). The size is read with ``stat`` before the file is opened; a
     missing/locked file surfaces here as the ``OSError`` :func:`_card` turns into the L1 placeholder.
 
-    The iframe carries ``sandbox="allow-scripts"`` (:data:`_IFRAME_SANDBOX`) so a deck.gl/MapLibre page's own
-    scripts still run — they must, to draw the map — but the page loads into an **opaque origin**: it cannot
-    reach ``window.parent`` (the gallery) or its sibling frames, so a tile whose markup derives from untrusted
-    source data (feature attributes interpolated into popups/labels) cannot script the rest of the page. This
-    mirrors the script-safety the SVG-via-``<img>`` path already has (see :data:`_RASTER_MEDIA_TYPES`).
-    ``allow-same-origin`` is deliberately **not** granted: combined with ``allow-scripts`` it would let the
-    framed document reach out of its own sandbox, defeating the isolation. The trade-off is that a page needing
-    genuine same-origin storage (cookies / ``localStorage`` / IndexedDB) will not work when framed — map tiles
-    do not need it, so the isolation is the right default.
+    Args:
+        page: The ``.html`` page to embed.
+        safe_caption: The already-escaped caption shown under the card and used as the iframe title.
+        sandbox: The ``sandbox`` token string the iframe carries — :data:`_IFRAME_SANDBOX` by default (see
+            :func:`gallery`). Its own ``quote``-escaping is not needed: :func:`gallery` only ever passes a
+            space-separated token list, never caption/source data, so no untrusted value reaches this attribute.
+
+    The default ``sandbox="allow-scripts"`` (:data:`_IFRAME_SANDBOX`) lets a deck.gl/MapLibre page's own scripts
+    run — they must, to draw the map — but loads the page into an **opaque origin**: it cannot reach
+    ``window.parent`` (the gallery) or its sibling frames, so a tile whose markup derives from untrusted source
+    data (feature attributes interpolated into popups/labels) cannot script the rest of the page. This mirrors
+    the script-safety the SVG-via-``<img>`` path already has (see :data:`_RASTER_MEDIA_TYPES`).
+    ``allow-same-origin`` is deliberately **not** in the default: combined with ``allow-scripts`` it would let
+    the framed document reach out of its own sandbox, defeating the isolation. :data:`_IFRAME_SANDBOX` documents
+    what that costs a real map page (opaque-origin storage throws; blob workers still run) and how a caller who
+    trusts the content can widen it through :func:`gallery`'s ``sandbox=``.
     """
     size = page.stat().st_size
     if size > _MAX_INLINE_HTML_BYTES:
@@ -138,7 +166,7 @@ def _page_card(page: Path, safe_caption: str) -> str:
     srcdoc = html.escape(page.read_text(encoding="utf-8"), quote=True)
     return (
         f'  <figure><iframe title="{safe_caption}" srcdoc="{srcdoc}"'
-        f' sandbox="{_IFRAME_SANDBOX}" loading="lazy"></iframe>'
+        f' sandbox="{sandbox}" loading="lazy"></iframe>'
         f"<figcaption>{safe_caption}</figcaption></figure>"
     )
 
@@ -163,14 +191,15 @@ def _placeholder_card(
     )
 
 
-def _card(output: Path, caption: str) -> str:
+def _card(output: Path, caption: str, sandbox: str) -> str:
     """Render one output as a ``<figure>`` card chosen by what the file is (TD-22).
 
     The dispatch is by file suffix: a raster (:data:`_RASTER_MEDIA_TYPES`) embeds as an ``<img>`` base64 data
     URI, an HTML page (:data:`_HTML_SUFFIXES`) embeds as an ``<iframe srcdoc>`` so it renders in place, and any
     other type gets a placeholder card that links the file by name rather than crashing. The caption (often a
     file name) is HTML-escaped with ``quote=True`` first, so a value containing ``&``/``<``/``>``/``"`` cannot
-    break the markup or inject attributes/scripts.
+    break the markup or inject attributes/scripts. ``sandbox`` is forwarded to :func:`_page_card` for the
+    HTML-page branch (:func:`gallery` supplies it; :data:`_IFRAME_SANDBOX` by default).
 
     A tile whose bytes cannot be read (missing/locked file, ``OSError``) or whose HTML cannot be decoded as
     UTF-8 (``UnicodeDecodeError``) does not abort the whole gallery (L1): it is logged at WARNING — naming the
@@ -185,7 +214,7 @@ def _card(output: Path, caption: str) -> str:
         if media_type is not None:
             return _image_card(output, media_type, safe)
         if suffix in _HTML_SUFFIXES:
-            return _page_card(output, safe)
+            return _page_card(output, safe, sandbox)
     except (OSError, UnicodeDecodeError) as error:
         logger.warning(
             "gallery: could not read %s (%s: %s) — using a placeholder card",
@@ -204,6 +233,7 @@ def gallery(
     title: str = "digitalearth gallery",
     columns: int = 3,
     captions: Optional[Sequence[str]] = None,
+    sandbox: str = _IFRAME_SANDBOX,
 ) -> Path:
     """Build a standalone HTML gallery embedding ``images`` and write it to ``path``.
 
@@ -220,6 +250,16 @@ def gallery(
         columns: Number of columns in the responsive grid.
         captions: Caption per image; defaults to each image's file name. Must match ``images`` in length
             when supplied.
+        sandbox: The ``sandbox`` token string every embedded HTML page's ``<iframe>`` carries. Defaults to the
+            secure :data:`_IFRAME_SANDBOX` (``"allow-scripts"``) — scripts run so a map draws, but the page is
+            isolated in an opaque origin with no reach to the gallery or sibling frames (L3, M4). Under that
+            default a MapLibre/deck.gl page renders but cannot use client-side storage/caching (it degrades
+            gracefully); an edge page that hard-requires storage may show blank tiles. A caller who **trusts**
+            the embedded content and hits that can widen it, e.g. ``sandbox="allow-scripts allow-same-origin"``,
+            to restore same-origin storage — at the documented cost that ``allow-scripts`` together with
+            ``allow-same-origin`` lets the framed document remove its own sandbox, so use it only for trusted
+            content. ``""`` sandboxes fully (no scripts). As an alternative to widening, each embedded page is
+            also saved as its own ``.html`` beside the gallery and opens **unsandboxed** on its own.
 
     Returns:
         The written HTML file path.
@@ -271,7 +311,7 @@ def gallery(
             f"captions ({len(captions)}) must match images ({len(images)})"
         )
     labels = list(captions) if captions is not None else [p.name for p in images]
-    cards = "\n".join(_card(img, label) for img, label in zip(images, labels))
+    cards = "\n".join(_card(img, label, sandbox) for img, label in zip(images, labels))
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     page = _PAGE.format(
