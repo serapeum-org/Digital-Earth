@@ -1083,3 +1083,85 @@ class TestTheRefusalNamesWhatTheCallerWrote:
         message = str(excinfo.value)
         assert "column='fid'" in message, message
         assert "size_column=" in message, message
+
+
+class TestColumnOnPointsDiffersByTier:
+    """Review L3 — ``column`` on point input is refused on matplotlib but *accepted* on web/interactive.
+
+    Measured, not assumed: ``Map.points`` (matplotlib) has no ``column`` parameter — it sizes markers by
+    ``size_column`` — so :func:`~digitalearth.api._draw` refuses ``column`` on points by name rather than
+    let cleopatra answer with an opaque keyword error (review M19). But ``WebMap.points`` and
+    ``InteractiveMap.points`` each *declare* a ``column`` keyword that colours the markers by that field,
+    and have since before this wave (``e8f1d210``), so those tiers forward it. The DE-24 collapse did not
+    (and must not) erase that deliberate per-tier difference — the ``quickmap`` façade lets a caller colour
+    web/interactive point markers by a column, which matplotlib expresses differently. These pin the
+    difference so the ``_quickmap_interactive``/``_quickmap_web`` docstrings that describe it cannot drift
+    from it, and so a future change cannot quietly make one tier refuse what another accepts.
+
+    The tier ``points`` builder is patched, so the marker *render* (which needs the web/interactive extra)
+    is CI's job; what is pinned here is that ``column`` reaches it rather than being refused first.
+    """
+
+    @staticmethod
+    def _points():
+        """Return the shared point ``FeatureCollection`` fixture."""
+        from pyramids.feature import FeatureCollection
+
+        return FeatureCollection.read_file("tests/data/points.geojson")
+
+    def test_web_forwards_a_point_column_to_its_marker_builder(self, mocker):
+        """``quickmap(points, backend="web", column=...)`` forwards ``column`` into ``WebMap.points``.
+
+        Args:
+            mocker: Patches ``WebMap.points`` so the deck.gl render is not needed — only the routing is
+                asserted.
+
+        Test scenario:
+            The matplotlib path refuses this exact call; the web path must instead colour the markers by
+            the column, because ``WebMap.points`` takes one. A regression that added a matplotlib-style
+            refusal to the shared path would take that capability away, and would go red here.
+        """
+        web = pytest.importorskip("digitalearth.web")
+        points = mocker.patch.object(web.WebMap, "points")
+        qp.quickmap(self._points(), backend="web", column="fid")
+        assert points.called, "the web marker builder was not reached"
+        assert points.call_args.kwargs.get("column") == "fid", (
+            f"column must be forwarded to WebMap.points, got {points.call_args!r}"
+        )
+
+    def test_interactive_forwards_a_point_column_to_its_marker_builder(self, mocker):
+        """``quickmap(points, backend="interactive", column=...)`` forwards it into ``InteractiveMap.points``.
+
+        Args:
+            mocker: Patches ``InteractiveMap.points`` so the HoloViz render is not needed.
+
+        Test scenario:
+            The interactive counterpart of the web check above and the mirror of the matplotlib refusal:
+            this tier's ``points`` takes a ``column`` and colours by it, so the shared dispatch forwards
+            rather than refuses.
+        """
+        interactive = pytest.importorskip("digitalearth.interactive")
+        points = mocker.patch.object(interactive.InteractiveMap, "points")
+        qp.quickmap(self._points(), backend="interactive", column="fid")
+        assert points.called, "the interactive marker builder was not reached"
+        assert points.call_args.kwargs.get("column") == "fid", (
+            f"column must be forwarded to InteractiveMap.points, got {points.call_args!r}"
+        )
+
+    def test_the_2d_tier_docstrings_name_the_column_on_points_difference(self):
+        """The web/interactive builder docstrings must state that ``column`` on points is *not* refused.
+
+        Test scenario:
+            The docstrings once claimed they dispatch "exactly like ``_draw``" / "mirroring ``_draw``",
+            which overstates the equivalence: ``_draw`` refuses ``column`` on points and these tiers forward
+            it (review L3). The prose must name that per-tier difference so the claim matches the measured
+            behaviour the two tests above pin — this goes red on the pre-fix docstrings.
+        """
+        for builder in (qp._quickmap_interactive, qp._quickmap_web):
+            doc = (builder.__doc__ or "").lower()
+            assert "not refused" in doc, (
+                f"{builder.__name__} must say column on points is not refused here: {doc!r}"
+            )
+            assert "size_column" in doc, (
+                f"{builder.__name__} must contrast with Map.points' size_column: {doc!r}"
+            )

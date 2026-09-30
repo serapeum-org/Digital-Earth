@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, cast
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -331,7 +331,10 @@ def _honoured_by(keyword: str) -> str:
         per-row read produced, minus the tier load. The refusing backend is absent for free: it does not
         honour ``keyword``, which is why it was refused.
     """
-    table = BACKEND_CAPABILITIES
+    # Cast to the concrete table so the eager/lazy split is visible: the module-level binding is typed as
+    # the plain ``Mapping`` its consumers see, but only ``_LazyBackendMap`` distinguishes a row that is free
+    # to read from one whose resolution would load a tier.
+    table = cast("_LazyBackendMap[frozenset[str]]", BACKEND_CAPABILITIES)
     honoured = {name for name, row in table._eager.items() if keyword in row}
     # The deferred matplotlib tier honours every checked keyword; name it without resolving its row.
     honoured |= {name for name in table._lazy if keyword in _KEYWORD_CAPABILITIES}
@@ -1073,10 +1076,14 @@ def _quickmap_interactive(
 ) -> Any:
     """Build a finished ``InteractiveMap`` from ``data`` (the ``backend="interactive"`` path, DX.1).
 
-    Dispatches by input type exactly like :func:`_draw`: a polygon ``FeatureCollection`` with a
-    ``column`` becomes a ``choropleth`` (else ``polygons``); other vectors become ``points``; a raster
-    is drawn with the ``kind`` method (``"auto"`` → ``field``). The ``InteractiveMap`` import is lazy so
-    the core ``api`` works without the ``interactive`` extra.
+    Dispatches by input type as :func:`_draw` does, with **one deliberate difference in how point input
+    treats** ``column``: a polygon ``FeatureCollection`` with a ``column`` becomes a ``choropleth`` (else
+    ``polygons``); other vectors become ``points``; a raster is drawn with the ``kind`` method
+    (``"auto"`` → ``field``). Unlike the matplotlib path, ``column`` on **point** input is **not refused**
+    here — it is forwarded, because ``InteractiveMap.points`` takes a ``column`` and colours the markers by
+    it, whereas ``Map.points`` has no such parameter (it sizes by ``size_column``), which is why
+    :func:`_draw` raises for it (review L3). The ``InteractiveMap`` import is lazy so the core ``api`` works
+    without the ``interactive`` extra.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
@@ -1235,9 +1242,13 @@ def _quickmap_web(
 ) -> Any:
     """Build a finished ``WebMap`` from ``data`` (the ``backend="web"`` path, DX.1).
 
-    Dispatches by input type, mirroring :func:`_draw`: a polygon ``FeatureCollection`` with a ``column``
-    becomes a ``choropleth`` (else outline ``polygons``); other vectors become ``points``; a raster
-    ``Dataset`` becomes ``field``. The ``WebMap`` import is lazy so the core ``api`` works without the
+    Dispatches by input type as :func:`_draw` does, with **one deliberate difference in how point input
+    treats** ``column``: a polygon ``FeatureCollection`` with a ``column`` becomes a ``choropleth`` (else
+    outline ``polygons``); other vectors become ``points``; a raster ``Dataset`` becomes ``field``. Unlike
+    the matplotlib path, ``column`` on **point** input is **not refused** here — it is forwarded, because
+    ``WebMap.points`` takes a ``column`` and colours the markers by it, whereas ``Map.points`` has no such
+    parameter (it sizes by ``size_column``), which is why :func:`_draw` raises for it (review L3). The
+    ``WebMap`` import is lazy so the core ``api`` works without the
     ``web`` extra. The web tier normalises data to lon/lat itself, so the matplotlib-oriented ``kind`` /
     ``domain`` / ``coastlines`` kwargs have no counterpart here and :func:`_reject_unsupported` refuses them
     upstream. ``crs`` **is** forwarded: ``WebMap`` carries one and validates it, so a CRS it cannot place
