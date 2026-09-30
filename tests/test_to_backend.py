@@ -37,6 +37,14 @@ class TestDispatch:
         with pytest.raises(ValueError, match="unknown backend 'nope'"):
             api.to_backend(figure, backend="nope")
 
+    def test_a_non_figurespec_is_refused_with_a_clear_message(self):
+        """A bad ``figure`` with a valid backend raises ``TypeError`` naming the expected type, not an opaque
+        ``AttributeError`` from deep inside a tier's ``from_figure``.
+        """
+        argument = {"not": "a figure"}
+        with pytest.raises(TypeError, match="to_backend draws a FigureSpec"):
+            api.to_backend(argument, backend="matplotlib")
+
     def test_the_default_backend_is_matplotlib(self, dataset):
         """``to_backend(figure)`` with no backend builds the static tier, the same default ``quickmap`` has."""
         from digitalearth.static import Map

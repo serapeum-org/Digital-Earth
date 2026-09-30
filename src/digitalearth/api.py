@@ -946,6 +946,15 @@ def to_backend(
             f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
             f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
         )
+    from digitalearth.base.spec import FigureSpec
+
+    if not isinstance(figure, FigureSpec):
+        # Caught here, not deep inside a tier's from_figure, where a non-figure fails with an opaque
+        # `AttributeError` on `.panels` that names neither the argument nor the type expected.
+        raise TypeError(
+            f"to_backend draws a FigureSpec; got {type(figure).__name__}. Pass a scene's `figure_spec` "
+            f"(optionally through to_dict()/from_dict())."
+        )
     if backend == "3d":
         from digitalearth.three_d import Scene3D
 
