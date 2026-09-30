@@ -566,27 +566,69 @@ def _renderer_for(table: dict, kind: str, kwargs: dict, caller: str) -> tuple:
     )
 
 
-def _vector_kind(data: FeatureCollection, caller: str) -> str:
-    """Classify a vector input as the family of renderer it needs, refusing an empty collection.
+def _input_kind(data: PlottableData, caller: str) -> str:
+    """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
+
+    This is the single input-type→kind decision every backend routes through (DE-24). The ``isinstance``
+    ladder, the empty-collection guard and the geometry check used to be re-derived once per backend — four
+    hand-written ladders that could drift apart; here they are one. Each family returned is a data family in
+    the shared kind registry's vocabulary (:data:`digitalearth.base.registry.KIND_TAKES`): a ``Dataset`` is
+    ``"raster"``, and a uniform ``FeatureCollection`` is ``"points"``, ``"lines"`` or ``"polygons"``.
+
+    A collection whose geometries disagree is ``"mixed"``. No tier draws one uniformly — the 2-D tiers drew
+    every non-polygon vector as a marker map, and the 3-D tier refuses anything that is not uniformly point,
+    polygon or raster — so ``"mixed"`` (and ``"lines"``) is *named* here and answered by each backend rather
+    than guessed once for all of them.
 
     Args:
-        data: The ``FeatureCollection`` about to be drawn.
-        caller: Public function name to blame in the error, e.g. ``"quickmap"``.
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector), or an unsupported type.
+        caller: Public function name to blame in a refusal — ``"quickmap"`` or ``"quickplot"``.
 
     Returns:
-        ``"polygons"`` when every geometry is a (multi)polygon, ``"points"`` otherwise — the split the
-        static and web dispatchers both make. A mixed collection reads as ``"points"``, which is what the
-        marker renderers already accepted.
+        ``"raster"`` for a ``Dataset``; ``"points"``, ``"lines"`` or ``"polygons"`` for a uniform
+        ``FeatureCollection``; ``"mixed"`` for one whose geometry types disagree.
 
     Raises:
-        ValueError: when the collection is empty. Without this guard the all-``True`` result of an empty
-            ``geom_type`` check classifies it as polygons and the map draws nothing, silently.
+        ValueError: when a ``FeatureCollection`` is empty. Without this guard the all-``True`` result of an
+            empty ``geom_type`` check reads as polygons and the map draws nothing, silently.
+        TypeError: when ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
-    if len(data) == 0:
-        raise ValueError(f"{caller} got an empty FeatureCollection (nothing to draw)")
-    if data.geometry.geom_type.isin(["Polygon", "MultiPolygon"]).all():
-        return "polygons"
-    return "points"
+    if isinstance(data, Dataset):
+        return "raster"
+    if isinstance(data, FeatureCollection):
+        if len(data) == 0:
+            raise ValueError(
+                f"{caller} got an empty FeatureCollection (nothing to draw)"
+            )
+        geometry = data.geometry.geom_type
+        if geometry.isin(["Polygon", "MultiPolygon"]).all():
+            return "polygons"
+        if geometry.isin(["Point", "MultiPoint"]).all():
+            return "points"
+        if geometry.isin(["LineString", "MultiLineString"]).all():
+            return "lines"
+        return "mixed"
+    raise TypeError(f"{caller} cannot draw a {type(data).__name__}")
+
+
+def _draw_polygons(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
+    """Draw a polygon collection as a ``choropleth`` when a ``column`` selects one, else as outlines.
+
+    The one branch the three 2-D tiers share once :func:`_input_kind` has said the input is polygons: a
+    ``column`` picks ``choropleth``, its absence ``polygons``. Consumed in place from ``kwargs`` so the
+    remaining styling keywords forward unchanged. The 3-D tier extrudes polygons instead, so it keeps its
+    own polygon draw rather than this one.
+
+    Args:
+        scene: The map (static, interactive or web) being built.
+        data: The polygon ``FeatureCollection`` to draw.
+        kwargs: The caller's remaining keywords; ``column`` is popped here, the rest are forwarded.
+    """
+    column = kwargs.pop("column", None)
+    if column is not None:
+        scene.choropleth(data, column=column, **kwargs)
+    else:
+        scene.polygons(data, **kwargs)
 
 
 def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
@@ -611,29 +653,24 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
             from :func:`_renderer_for`, if a keyword contradicts the ``kind`` that already settles it.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
-    if isinstance(data, FeatureCollection):
-        if _vector_kind(data, "quickmap") == "polygons":
-            column = kwargs.pop("column", None)
-            if column is not None:
-                scene.choropleth(data, column=column, **kwargs)
-            else:
-                scene.polygons(data, **kwargs)
-            return
-        if "column" in kwargs:
-            # `Map.points` has no fill column: it sizes markers by `size_column` and colours them from
-            # the collection's own value column. Forwarding `column` reached cleopatra, which answered
-            # with its own keyword list and never named the caller's parameter (review M19).
-            raise ValueError(
-                f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
-                "size the markers with size_column=, or drop column="
-            )
-        scene.points(data, **kwargs)
-        return
-    if isinstance(data, Dataset):
+    family = _input_kind(data, "quickmap")
+    if family == "raster":
         method, picked = _renderer_for(_STATIC_RASTER_KINDS, kind, kwargs, "quickmap")
         getattr(scene, method)(data, **picked, **kwargs)
         return
-    raise TypeError(f"quickmap cannot draw a {type(data).__name__}")
+    if family == "polygons":
+        _draw_polygons(scene, data, kwargs)
+        return
+    # points / lines / mixed → a marker map, as this tier has always drawn every non-polygon vector.
+    if "column" in kwargs:
+        # `Map.points` has no fill column: it sizes markers by `size_column` and colours them from
+        # the collection's own value column. Forwarding `column` reached cleopatra, which answered
+        # with its own keyword list and never named the caller's parameter (review M19).
+        raise ValueError(
+            f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
+            "size the markers with size_column=, or drop column="
+        )
+    scene.points(data, **kwargs)
 
 
 def quickmap(
@@ -947,27 +984,6 @@ _INTERACTIVE_RASTER_KINDS = {
 }
 
 
-def _draw_interactive_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
-    """Route a vector collection to the interactive tier's builder for its geometry.
-
-    Args:
-        scene: The ``InteractiveMap`` being built.
-        data: The collection to draw.
-        kwargs: The caller's remaining keywords, consumed in place.
-
-    Raises:
-        ValueError: if `data` is an empty collection, from `_vector_kind`.
-    """
-    if _vector_kind(data, "quickplot") != "polygons":
-        scene.points(data, **kwargs)
-        return
-    column = kwargs.pop("column", None)
-    if column is not None:
-        scene.choropleth(data, column=column, **kwargs)
-    else:
-        scene.polygons(data, **kwargs)
-
-
 def _draw_interactive_raster(
     scene: Any, data: Dataset, kind: str, kwargs: dict
 ) -> None:
@@ -1055,12 +1071,13 @@ def _quickmap_interactive(
     from digitalearth.interactive import InteractiveMap
 
     scene = InteractiveMap(crs=crs)
-    if isinstance(data, FeatureCollection):
-        _draw_interactive_vector(scene, data, kwargs)
-    elif isinstance(data, Dataset):
+    family = _input_kind(data, "quickplot")
+    if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
-    else:
-        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    elif family == "polygons":
+        _draw_polygons(scene, data, kwargs)
+    else:  # points / lines / mixed → a marker map, as this tier draws every non-polygon vector
+        scene.points(data, **kwargs)
     _add_interactive_key(scene, visible=colorbar)
     _decorate_interactive(scene, basemap, coastlines)
     return scene
@@ -1106,29 +1123,6 @@ def _add_interactive_key(scene: Any, *, visible: bool) -> None:
         logger.warning(
             "quickplot: %s skipped — %s: %s", kind, type(error).__name__, error
         )
-
-
-def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
-    """Route a vector collection to the web tier's builder for its geometry, mirroring :func:`_draw`.
-
-    Args:
-        scene: The ``WebMap`` being built.
-        data: The ``FeatureCollection`` to draw.
-        kwargs: The caller's remaining styling keywords, forwarded to the chosen builder. A ``column`` is
-            consumed here rather than forwarded, since it is what selects ``choropleth`` over the plain
-            polygon outline.
-
-    Raises:
-        ValueError: if ``data`` is empty — see :func:`_vector_kind`.
-    """
-    if _vector_kind(data, "quickplot") == "polygons":
-        column = kwargs.pop("column", None)
-        if column is not None:
-            scene.choropleth(data, column=column, **kwargs)
-        else:
-            scene.polygons(data, **kwargs)
-        return
-    scene.points(data, **kwargs)
 
 
 def _add_web_legend(scene: Any, *, visible: bool) -> Any:
@@ -1238,12 +1232,13 @@ def _quickmap_web(
     from digitalearth.web import WebMap
 
     scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
-    if isinstance(data, FeatureCollection):
-        _draw_web_vector(scene, data, kwargs)
-    elif isinstance(data, Dataset):
+    family = _input_kind(data, "quickplot")
+    if family == "raster":
         scene.field(data, **kwargs)
-    else:
-        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    elif family == "polygons":
+        _draw_polygons(scene, data, kwargs)
+    else:  # points / lines / mixed → a marker map
+        scene.points(data, **kwargs)
     if basemap:
         source = _basemap_source(basemap)
         if source is None:
@@ -1333,34 +1328,26 @@ def _quickmap_3d(
     """
     from digitalearth.three_d import Scene3D
 
-    # Validate the input up front: a bad type / unsupported geometry must raise BEFORE a Scene3D (which opens a
-    # VTK plotter) is constructed — otherwise every error path leaks an open plotter.
-    geom_kind = None
-    if isinstance(data, FeatureCollection):
-        if len(data) == 0:
-            raise ValueError(
-                "quickplot got an empty FeatureCollection (nothing to draw)"
-            )
-        geom_type = data.geometry.geom_type
-        if geom_type.isin(["Polygon", "MultiPolygon"]).all():
-            geom_kind = "polygons"
-        elif geom_type.isin(["Point", "MultiPoint"]).all():
-            geom_kind = "points"
-        else:
-            raise TypeError(
-                "backend='3d' needs a uniformly point, polygon, or raster input "
-                "(point_cloud / extruded_polygons / terrain); got geometry types "
-                f"{sorted(geom_type.unique())}"
-            )
-    elif not isinstance(data, Dataset):
-        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    # Classify the input up front, through the same decision the other three backends make (DE-24): a bad
+    # type, an empty collection or a geometry this tier has no builder for must raise BEFORE a Scene3D
+    # (which opens a VTK plotter) is constructed, or every error path leaks an open plotter. The families
+    # this tier cannot draw — lines and mixed — are refused here, in this tier's own words.
+    family = _input_kind(data, "quickplot")
+    if isinstance(data, FeatureCollection) and family in ("lines", "mixed"):
+        # Only a FeatureCollection yields the `lines`/`mixed` families, so this is the geometry this tier has
+        # no builder for; the isinstance also narrows `data` for the geom-type read in the message.
+        raise TypeError(
+            "backend='3d' needs a uniformly point, polygon, or raster input "
+            "(point_cloud / extruded_polygons / terrain); got geometry types "
+            f"{sorted(data.geometry.geom_type.unique())}"
+        )
 
     scene = Scene3D(
         crs=crs
     )  # constructed only after validation, so the error paths above leak no scene
-    if isinstance(data, Dataset):
+    if family == "raster":
         scene.terrain(data, **kwargs)
-    elif geom_kind == "polygons":
+    elif family == "polygons":
         column = kwargs.pop("column", None)
         height = kwargs.pop("height", column if column is not None else 1.0)
         scene.extruded_polygons(data, height=height, column=column, **kwargs)
