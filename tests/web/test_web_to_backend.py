@@ -46,3 +46,25 @@ class TestWebRoundTrip:
         replayed = api.to_backend(source.figure_spec, backend="web")
         assert replayed.viewport.center == source.viewport.center
         assert replayed.viewport.zoom == source.viewport.zoom
+
+    def test_fitted_bounds_and_globe_projection_survive_the_round_trip(self, dataset):
+        """A web map framed with ``set_bounds`` and set to the globe projection keeps both on a round trip.
+
+        Args:
+            dataset: The raster fixture, so the figure holds a layer as well as the framing.
+
+        Test scenario:
+            The viewport records fitted ``bounds`` and ``globe`` alongside center/zoom; ``from_figure`` must
+            restore them (the constructor takes neither), or a ``set_bounds``/globe web map loses its framing
+            silently on replay.
+        """
+        source = WebMap(crs=4326)
+        source.field(dataset)
+        source.set_bounds([3.0, 50.0, 7.0, 54.0])
+        source.projection("globe")
+        replayed = api.to_backend(source.figure_spec, backend="web")
+        assert replayed.viewport.globe is True, "globe projection dropped on replay"
+        assert replayed.viewport.bounds is not None, "fitted bounds dropped on replay"
+        assert replayed.viewport.bounds.as_bbox() == [3.0, 50.0, 7.0, 54.0], (
+            f"fitted bounds not carried: {replayed.viewport.bounds.as_bbox()}"
+        )

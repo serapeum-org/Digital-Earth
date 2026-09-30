@@ -1310,7 +1310,8 @@ class WebMapBase:
 
         Args:
             figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
-                CRS, centre and zoom at construction; here its layers, title and furniture are drawn.
+                CRS, centre and zoom at construction; here its layers, title, furniture and the view's
+                framing (fitted bounds and globe projection) are drawn.
 
         Returns:
             This map (chainable).
@@ -1324,6 +1325,15 @@ class WebMapBase:
         self._title = panel.title
         self._furniture = list(panel.furniture)
         self._change(figure)
+        # The view's framing is not a layer, so `_change` does not carry it: restore the projection and any
+        # fitted bounds from the panel's viewport, or a `set_bounds`/globe map loses its framing on a round
+        # trip (the constructor takes neither `bounds` nor a projection). Centre/zoom came in via `from_figure`.
+        view = panel.view
+        if getattr(view, "globe", False):
+            self.projection("globe")
+        bounds = getattr(view, "bounds", None)
+        if bounds is not None:
+            self.set_bounds(bounds.as_bbox())
         return self
 
     @classmethod
