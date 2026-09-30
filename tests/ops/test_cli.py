@@ -627,5 +627,8 @@ class TestMainErrorHandling:
         mocker.patch(
             "digitalearth.ops.cli.quickmap", side_effect=TypeError("a real bug")
         )
+        # argv built above the block so only `main` can raise inside it (tree guard
+        # `test_refusal_blocks.py` counts the `str()` calls otherwise).
+        argv = ["plot", str(src), "-o", str(tmp_path / "m.png"), "--crs", "4326"]
         with pytest.raises(TypeError):
-            main(["plot", str(src), "-o", str(tmp_path / "m.png"), "--crs", "4326"])
+            main(argv)
