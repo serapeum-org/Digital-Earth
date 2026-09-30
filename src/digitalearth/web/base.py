@@ -1311,7 +1311,9 @@ class WebMapBase:
         Args:
             figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
                 CRS, centre and zoom at construction; here its layers, title, furniture and the view's
-                framing (fitted bounds and globe projection) are drawn.
+                framing (fitted bounds and globe projection) are drawn. An ``object:`` (in-memory) source is
+                replayed in process, so the scene that registered it must stay alive until this returns; a
+                path or URL source has no such constraint.
 
         Returns:
             This map (chainable).
