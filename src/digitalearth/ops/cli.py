@@ -44,6 +44,19 @@ _NATIVE_EXT: dict = {
     "web": "html",
 }
 
+#: The CRS forwarded to ``quickmap`` when the caller passes no ``--crs``, per backend (M2). The web tier
+#: renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the shared 3857 default made a bare
+#: ``digitalearth plot IN --backend web`` always raise a ``ValueError`` out of the box. A sensible per-backend
+#: default just works, which is less surprising than an error the user must decode — so ``web`` defaults to
+#: 4326 while matplotlib/interactive/3d keep 3857 (:data:`_FALLBACK_CRS`), which they accept. Applied only when
+#: ``--crs`` is unset: an explicit ``--crs`` is always honoured, so a genuinely incompatible explicit choice
+#: (e.g. ``--backend web --crs 3857``) still reaches the tier's own clear error rather than being silently
+#: rewritten.
+_DEFAULT_CRS: dict = {"web": 4326}
+
+#: The CRS default for every backend not named in :data:`_DEFAULT_CRS` — the historical CLI default, unchanged.
+_FALLBACK_CRS = 3857
+
 
 def _parse_crs(value: str) -> Any:
     """Parse a ``--crs`` argument as an EPSG int when all-digits, else a proj4/WKT string."""
@@ -61,8 +74,8 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--crs",
         type=_parse_crs,
-        default=3857,
-        help="display CRS (EPSG int or proj4 string)",
+        default=None,
+        help="display CRS (EPSG int or proj4 string); default 3857, or 4326 for --backend web",
     )
     parser.add_argument(
         "--kind",
@@ -93,10 +106,17 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
 
 
 def _plot_kwargs(args: argparse.Namespace) -> dict:
-    """Collect the ``quickmap`` keyword arguments set on ``args`` (omitting unset optional styling)."""
+    """Collect the ``quickmap`` keyword arguments set on ``args`` (omitting unset optional styling).
+
+    When the caller passed no ``--crs`` (``args.crs is None``), the display CRS is the chosen backend's
+    default (:data:`_DEFAULT_CRS`, falling back to :data:`_FALLBACK_CRS`) — 4326 for the web tier, which
+    accepts only that, and 3857 for every other tier, so ``--backend web`` works out of the box (M2). An
+    explicit ``--crs`` is forwarded unchanged.
+    """
+    crs = args.crs if args.crs is not None else _DEFAULT_CRS.get(args.backend, _FALLBACK_CRS)
     kwargs: dict = {
         "backend": args.backend,
-        "crs": args.crs,
+        "crs": crs,
         "kind": args.kind,
         "basemap": args.basemap,
         "coastlines": args.coastlines,
@@ -121,12 +141,14 @@ def build_parser() -> argparse.ArgumentParser:
     Examples:
         - Parse a ``plot`` invocation and read back the options:
             ```python
-            >>> from digitalearth.ops.cli import build_parser
+            >>> from digitalearth.ops.cli import build_parser, _plot_kwargs
             >>> args = build_parser().parse_args(["plot", "in.tif", "-o", "out.png", "--kind", "contourf"])
-            >>> args.input, args.output, args.kind, args.crs
-            ('in.tif', 'out.png', 'contourf', 3857)
+            >>> args.input, args.output, args.kind
+            ('in.tif', 'out.png', 'contourf')
             >>> args.backend  # the default backend, preserving matplotlib behaviour
             'matplotlib'
+            >>> _plot_kwargs(args)["crs"]  # no --crs given, so the backend's default (3857 for matplotlib)
+            3857
 
             ```
         - Parse a ``batch`` invocation with a gallery page, a non-EPSG CRS and a chosen backend:

@@ -139,6 +139,71 @@ class TestPlotKwargs:
         )
 
 
+class TestBackendCrsDefault:
+    """The ``--crs`` default is backend-aware so ``--backend web`` works out of the box (M2).
+
+    The web tier renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the shared 3857
+    default made a bare ``--backend web`` always raise. When the caller passes no ``--crs``, the web backend
+    now defaults to 4326 while every other tier keeps 3857; an explicit ``--crs`` is never overridden.
+    """
+
+    def test_web_backend_defaults_crs_to_4326(self):
+        """With no --crs, --backend web forwards crs=4326 (the only CRS the web tier accepts)."""
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "web"])
+        assert _plot_kwargs(args)["crs"] == 4326, (
+            f"a web plot with no --crs should default to 4326, got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_matplotlib_backend_keeps_crs_3857(self):
+        """With no --crs, the matplotlib backend keeps the 3857 default — unchanged behaviour."""
+        args = build_parser().parse_args(["plot", "in.tif"])
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            f"a matplotlib plot with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_interactive_and_3d_keep_crs_3857(self):
+        """interactive/3d accept 3857, so they keep the shared default — only web is special-cased."""
+        for backend in ("interactive", "3d"):
+            args = build_parser().parse_args(["plot", "in.tif", "--backend", backend])
+            assert _plot_kwargs(args)["crs"] == 3857, (
+                f"--backend {backend} with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
+            )
+
+    def test_explicit_crs_is_not_overridden_for_web(self):
+        """An explicit --crs wins even for web, so the tier's own error still fires for a bad explicit choice."""
+        args = build_parser().parse_args(
+            ["plot", "in.tif", "--backend", "web", "--crs", "3857"]
+        )
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            "an explicit --crs 3857 must be preserved for web, not silently rewritten to 4326"
+        )
+
+    def test_plot_web_default_runs_and_forwards_4326(self, tmp_path, dataset, mocker):
+        """`plot --backend web` with no --crs no longer raises and reaches quickmap with crs=4326 (spied)."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(
+            ["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "web"]
+        )
+        assert rc == 0, "a bare `plot --backend web` should succeed, not raise"
+        assert spy.call_args.kwargs.get("crs") == 4326, (
+            f"quickmap should be told crs=4326 for a default web plot, got {spy.call_args}"
+        )
+
+    def test_batch_web_default_forwards_4326(self, tmp_path, dataset, mocker):
+        """`batch --backend web` with no --crs builds a Batch with crs=4326, not the failing 3857 default."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(["batch", str(src), "-o", str(tmp_path / "out"), "--backend", "web"])
+        assert rc == 0, "a bare `batch --backend web` should succeed, not raise"
+        assert fake.call_args.kwargs.get("crs") == 4326, (
+            f"Batch should be told crs=4326 for a default web batch, got {fake.call_args}"
+        )
+
+
 class TestBuildParser:
     """Tests for build_parser."""
 
