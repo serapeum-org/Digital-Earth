@@ -103,9 +103,18 @@ class _LazyBackendMap(Mapping[str, _V]):
     loading matplotlib. The three tiers that declare their capabilities engine-free (``3d``, ``web``,
     ``interactive``) are held eagerly; ``matplotlib`` is deferred. Membership and iteration name all four
     backends **without** resolving any row, so ``import digitalearth.api``, ``backend in
-    BACKEND_CAPABILITIES`` — asked on every ``quickmap`` — and a ``web``/``interactive``/``3d`` call never
-    load matplotlib (DE-24). Only reading the matplotlib row itself, or a refusal message that has to name
-    which backends honour a keyword, does.
+    BACKEND_CAPABILITIES`` — asked on every ``quickmap`` — a ``web``/``interactive``/``3d`` call, and even
+    an unsupported-keyword refusal (which names the matplotlib tier from its invariant rather than its row,
+    see :func:`_honoured_by`, review N3) never load matplotlib (DE-24). Only reading the matplotlib row
+    itself does.
+
+    **The cache is not thread-synchronized, and deliberately so.** ``__getitem__`` fills ``_cache`` with an
+    unguarded read-modify-write, so two threads racing on the first read of a deferred row can both run its
+    builder. That is benign: the deferred builder is **idempotent** — a deterministic ``frozenset`` over an
+    import Python itself caches — so the worst a race does is build the same row twice and converge on an
+    equal value, and after the first read the row is hot and no builder runs at all. A lock would guard a
+    table read once and then never rebuilt, which was judged more machinery than the race is worth
+    (review N2); a future deferred row whose builder stops being idempotent would need one.
 
     Args:
         eager: The rows that need no engine to build, by backend.

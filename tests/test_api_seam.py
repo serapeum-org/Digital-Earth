@@ -472,6 +472,26 @@ class TestLazyBackendMap:
         checked = set(qp._KEYWORD_CAPABILITIES)
         assert resolved == checked, sorted(resolved.symmetric_difference(checked))
 
+    def test_the_class_documents_its_cache_is_unsynchronized_and_why_that_is_safe(self):
+        """The lazy cache is not thread-synchronized; the class must say so and why it is safe (review N2).
+
+        Test scenario:
+            ``__getitem__`` fills ``_cache`` with an unguarded read-modify-write, so two threads on the
+            first read of the matplotlib row could both run the builder. A lock was judged unnecessary
+            because that builder is idempotent — a deterministic ``frozenset`` over a cached import — so a
+            race at most builds the same row twice and converges. That trade-off only protects a future
+            maintainer if it is written down, so this pins that the class docstring records both the
+            non-synchronization and the idempotence rationale rather than leaving the reader to rediscover
+            them (or "fix" the race with a lock the note explains away).
+        """
+        doc = (qp._LazyBackendMap.__doc__ or "").lower()
+        assert "not thread-synchronized" in doc, (
+            "the class must note the cache fill is not synchronized"
+        )
+        assert "idempotent" in doc, (
+            "the class must explain the unsynchronized cache is safe because the builder is idempotent"
+        )
+
 
 class TestThe3DTierRefusesGeometryItCannotDraw:
     """backend='3d' names the families it has no builder for, before a VTK plotter is ever opened (DE-24)."""
