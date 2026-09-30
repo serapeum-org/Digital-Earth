@@ -925,7 +925,9 @@ def to_backend(
         contract as :func:`quickmap`.
 
     Raises:
-        ValueError: if ``backend`` is not one of the four.
+        ValueError: if ``backend`` is not one of the four, or if ``figure`` has more than one panel (each
+            tier renders a single panel, so a multi-panel figure is refused rather than silently flattened).
+        TypeError: if ``figure`` is not a :class:`~digitalearth.base.spec.FigureSpec`.
 
     Examples:
         - An unknown backend is refused by name, before anything is built:
@@ -954,6 +956,15 @@ def to_backend(
         raise TypeError(
             f"to_backend draws a FigureSpec; got {type(figure).__name__}. Pass a scene's `figure_spec` "
             f"(optionally through to_dict()/from_dict())."
+        )
+    if len(figure.panels) != 1:
+        # Each of the four tiers renders one panel, and a tier's `from_figure` reads only `panels[0]` for the
+        # view while drawing the whole layer tree — so a valid multi-panel figure (panels in different CRSs,
+        # each showing a subset) would be silently flattened into panel 0's view. Refuse it by name rather
+        # than draw the wrong picture; a caller splits a `grid()`-composed figure into one per panel.
+        raise ValueError(
+            f"to_backend draws a single-panel figure; got {len(figure.panels)} panels. Each tier renders "
+            f"one panel, so split a multi-panel figure (e.g. from grid()) into one figure per panel."
         )
     if backend == "3d":
         from digitalearth.three_d import Scene3D

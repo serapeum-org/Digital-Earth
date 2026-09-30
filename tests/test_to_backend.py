@@ -45,6 +45,14 @@ class TestDispatch:
         with pytest.raises(TypeError, match="to_backend draws a FigureSpec"):
             api.to_backend(argument, backend="matplotlib")
 
+    def test_a_multi_panel_figure_is_refused(self):
+        """A figure with more than one panel is refused: the tiers each render a single panel, so a
+        multi-panel figure would otherwise be silently flattened into panel 0's view.
+        """
+        figure = FigureSpec(panels=(PanelSpec("a"), PanelSpec("b")))
+        with pytest.raises(ValueError, match="single-panel figure"):
+            api.to_backend(figure, backend="matplotlib")
+
     def test_the_default_backend_is_matplotlib(self, dataset):
         """``to_backend(figure)`` with no backend builds the static tier, the same default ``quickmap`` has."""
         from digitalearth.static import Map
