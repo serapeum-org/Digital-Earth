@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -102,11 +102,12 @@ class _LazyBackendMap(Mapping[str, _V]):
     ``Map`` eagerly, so its :class:`~digitalearth.base.capabilities.Capabilities` cannot be read without
     loading matplotlib. The three tiers that declare their capabilities engine-free (``3d``, ``web``,
     ``interactive``) are held eagerly; ``matplotlib`` is deferred. Membership and iteration name all four
-    backends **without** resolving any row, so ``import digitalearth.api``, ``backend in
-    BACKEND_CAPABILITIES`` — asked on every ``quickmap`` — a ``web``/``interactive``/``3d`` call, and even
-    an unsupported-keyword refusal (which names the matplotlib tier from its invariant rather than its row,
-    see :func:`_honoured_by`, review N3) never load matplotlib (DE-24). Only reading the matplotlib row
-    itself does.
+    backends **without** resolving any row, so ``import digitalearth.api`` and ``backend in
+    BACKEND_CAPABILITIES`` — asked on every ``quickmap`` — and a *successful* ``web``/``interactive``/``3d``
+    call never load matplotlib (DE-24). A refusal *message* is the one thing that does: it names the backends
+    that honour the refused keyword from their real declared rows (:func:`_honoured_by`), and matplotlib's
+    cannot be read without importing the tier — a rare error path where correctness beats the laziness N3
+    tried to keep there (review L2). Only reading the matplotlib row itself loads the tier.
 
     **The cache is not thread-synchronized, and deliberately so.** ``__getitem__`` fills ``_cache`` with an
     unguarded read-modify-write, so two threads racing on the first read of a deferred row can both run its
@@ -311,33 +312,33 @@ def _asks_for_nothing(value: Any, inert: Any) -> bool:
 
 
 def _honoured_by(keyword: str) -> str:
-    """List the backends that honour ``keyword``, for a refusal message, without loading a deferred tier.
+    """List the backends that honour ``keyword``, for a refusal message, from each tier's real declared row.
 
-    Reading ``BACKEND_CAPABILITIES[other]`` for *every* backend — the obvious way to phrase "It is honoured
-    by ..." — resolves the lazy ``matplotlib`` row, which loads the matplotlib tier, merely to explain why a
-    ``web``/``interactive``/``3d`` keyword was refused (review N3). The eager rows are read directly (free);
-    the only deferred tier is ``matplotlib``, the default full tier, whose own declaration honours every
-    keyword this module checks (:data:`_KEYWORD_CAPABILITIES`), so it is named from that standing invariant
-    rather than by importing it. The invariant is pinned by
-    ``test_the_deferred_matplotlib_row_honours_every_checked_keyword``, so the message cannot silently drift.
-    A refused ``web`` call therefore no longer imports ``digitalearth.static``.
+    Reads every backend's row from :data:`BACKEND_CAPABILITIES`, resolving the deferred ``matplotlib`` one
+    too, so a backend is named **iff** its own declaration honours the keyword. ``matplotlib`` is the only
+    deferred row, and its declaration cannot be read as data without importing the tier —
+    ``digitalearth.static`` imports ``Map`` eagerly, so importing ``digitalearth.static.capabilities`` loads
+    matplotlib — so there is no engine-free row to read here.
+
+    N3 avoided that load by naming ``matplotlib`` from the standing fact that the default full tier honours
+    every checked keyword; but it applied that fact *unconditionally* (``keyword in _KEYWORD_CAPABILITIES``
+    is true at every call site), so it named ``matplotlib`` for a keyword matplotlib does **not** honour as
+    readily as for one it does — a message that would lie the moment such a keyword were added (review L2).
+    A refusal is a rare error path — an exception is about to be raised — so resolving the real row here, at
+    the cost of loading the tier on that path alone, buys a message that cannot lie. Import and a *successful*
+    ``web``/``interactive``/``3d`` dispatch still never resolve the ``matplotlib`` row, which is the laziness
+    that matters (DE-24).
 
     Args:
-        keyword: The ``quickmap`` keyword a backend could not honour — always one of
-            :data:`_KEYWORD_CAPABILITIES`, so the deferred matplotlib tier honours it.
+        keyword: The ``quickmap`` keyword a backend could not honour.
 
     Returns:
-        The backends that honour it, ``repr``-quoted and comma-joined in sorted order — the same text the
-        per-row read produced, minus the tier load. The refusing backend is absent for free: it does not
-        honour ``keyword``, which is why it was refused.
+        The backends whose declaration honours it, ``repr``-quoted and comma-joined in sorted order. The
+        refusing backend is absent for free: it does not honour ``keyword``, which is why it was refused.
     """
-    # Cast to the concrete table so the eager/lazy split is visible: the module-level binding is typed as
-    # the plain ``Mapping`` its consumers see, but only ``_LazyBackendMap`` distinguishes a row that is free
-    # to read from one whose resolution would load a tier.
-    table = cast("_LazyBackendMap[frozenset[str]]", BACKEND_CAPABILITIES)
-    honoured = {name for name, row in table._eager.items() if keyword in row}
-    # The deferred matplotlib tier honours every checked keyword; name it without resolving its row.
-    honoured |= {name for name in table._lazy if keyword in _KEYWORD_CAPABILITIES}
+    honoured = {
+        name for name in BACKEND_CAPABILITIES if keyword in BACKEND_CAPABILITIES[name]
+    }
     return ", ".join(repr(name) for name in sorted(honoured))
 
 

@@ -42,7 +42,15 @@ def _run_fresh(body: str) -> subprocess.CompletedProcess:
 
 
 class TestImportingApiDoesNotLoadTheMatplotlibTier:
-    """DE-24 invariant 2 — ``import digitalearth.api`` must not import ``digitalearth.static``."""
+    """DE-24 invariant 2 — what does, and does not, load the matplotlib tier.
+
+    ``import digitalearth.api`` and a *successful* ``web``/``interactive``/``3d`` dispatch must not import
+    ``digitalearth.static`` (loading it is expensive — the tier imports ``Map`` eagerly). The one path that
+    *does* load it, deliberately, is a **refusal message**: naming the backends that honour a refused keyword
+    reads their real declared rows, and matplotlib's cannot be read without importing the tier (review L2).
+    A refusal is a rare error path, so that load buys a message that cannot lie at a cost it would otherwise
+    avoid.
+    """
 
     def test_a_fresh_import_of_api_leaves_the_static_tier_unloaded(self):
         """Importing only ``api`` leaves ``digitalearth.static`` out of ``sys.modules``.
@@ -101,22 +109,33 @@ class TestImportingApiDoesNotLoadTheMatplotlibTier:
         )
         assert completed.stdout.strip().endswith("OK"), completed.stdout
 
-    def test_a_refused_web_keyword_does_not_load_the_matplotlib_tier(self):
-        """Building a refusal message must not resolve the deferred matplotlib row (review N3).
+    def test_a_refused_web_keyword_resolves_matplotlibs_real_row_to_name_it(self):
+        """A refusal reads matplotlib's real declared row — loading the tier — so the name it prints cannot
+        lie (review L2, reversing N3).
 
         Test scenario:
-            The "It is honoured by ..." half of a refusal used to read *every* capability row — including
-            the lazy ``matplotlib`` one — so a ``quickmap(..., backend="web", <bad kw>)`` that should simply
-            refuse imported the whole matplotlib tier as a side effect, just to name who *does* honour the
-            keyword. Both error sites are exercised (``_reject_unsupported`` and the ``field`` wrapper), and
-            the message is checked to still name ``'matplotlib'`` — so the fix keeps the refusal accurate
-            rather than dropping the tier it must point the caller at. The mutation that reintroduces the
-            per-row read turns this red.
+            N3 named the deferred ``matplotlib`` tier from a standing invariant so a refusal would not load
+            it. But it applied that invariant as ``keyword in _KEYWORD_CAPABILITIES`` — true at every call
+            site — so it named matplotlib for *any* checked keyword, whether or not matplotlib's own
+            declaration honoured it (proven in
+            ``TestLazyBackendMap::test_honoured_by_reads_each_tiers_real_row_not_a_tautology``). matplotlib's
+            row cannot be read as data without importing the tier — ``digitalearth.static`` imports ``Map``
+            eagerly — so the honest fix resolves the real row on the refusal path and accepts the load there.
+            In a fresh interpreter this proves both halves: a refused ``web`` keyword (a) names
+            ``'matplotlib'``, the tier that honours ``domain``, and (b) has loaded ``digitalearth.static`` to
+            say so. The pre-fix tautology left the tier *unloaded*, so assertion (b) reddens against it.
+            Both refusal sites are exercised (``_reject_unsupported`` and the ``field`` wrapper). Import and a
+            *successful* web dispatch staying lazy — the laziness that is kept — are pinned by the two tests
+            above.
         """
         completed = _run_fresh(
             """
             import sys
             import digitalearth.api as qp
+
+            assert "digitalearth.static" not in sys.modules, (
+                "the tier must be unloaded before the refusal, or the load assertion proves nothing"
+            )
 
             try:
                 qp._reject_unsupported("web", domain="europe", crs=qp._UNSET)
@@ -125,31 +144,28 @@ class TestImportingApiDoesNotLoadTheMatplotlibTier:
             else:
                 raise AssertionError("a domain on the web tier must be refused")
 
-            leaked = sorted(m for m in sys.modules if m.startswith("digitalearth.static"))
-            assert "digitalearth.static" not in sys.modules, (
-                "refusing a web keyword loaded the matplotlib tier: " + repr(leaked)
-            )
-            assert "matplotlib" not in sys.modules, "refusing a web keyword loaded matplotlib"
             assert "'matplotlib'" in message, (
-                "the refusal must still name the tier that honours domain: " + repr(message)
+                "the refusal must name the tier that honours domain: " + repr(message)
+            )
+            assert "digitalearth.static" in sys.modules, (
+                "the refusal must resolve matplotlib's real row, which loads the tier (review L2)"
             )
 
-            # The module-wrapper error path (field/contours) reads the table too, and must stay lazy.
+            # The module-wrapper error path (field/contours) reads the table the same way and names it too.
             try:
                 qp.field(object(), backend="web")
-            except ValueError:
-                pass
+            except ValueError as wrapper_error:
+                wrapper_message = str(wrapper_error)
             else:
                 raise AssertionError("field(backend='web') must be refused")
-            assert "digitalearth.static" not in sys.modules, (
-                "the wrapper refusal loaded the matplotlib tier: "
-                + repr(sorted(m for m in sys.modules if m.startswith("digitalearth.static")))
+            assert "'matplotlib'" in wrapper_message, (
+                "the wrapper refusal must also name matplotlib: " + repr(wrapper_message)
             )
             print("OK")
             """
         )
         assert completed.returncode == 0, (
-            f"the refusal-laziness check failed:\nstdout={completed.stdout!r}\nstderr={completed.stderr!r}"
+            f"the refusal real-row check failed:\nstdout={completed.stdout!r}\nstderr={completed.stderr!r}"
         )
         assert completed.stdout.strip().endswith("OK"), completed.stdout
 
@@ -458,38 +474,80 @@ class TestLazyBackendMap:
             table["nope"]
 
     def test_the_deferred_matplotlib_row_honours_every_checked_keyword(self):
-        """The refusal helper names the matplotlib tier from an invariant; this pins the invariant (N3).
+        """matplotlib, the full default tier, honours every keyword this module checks — a sanity invariant.
 
         Test scenario:
-            :func:`~digitalearth.api._honoured_by` does not resolve the deferred ``matplotlib`` row when
-            phrasing a refusal — it names the tier from the standing fact that the default, full tier
-            honours every keyword this module checks. Resolving the row here (loading matplotlib is fine in
-            an ordinary test) proves that fact, so a future tier change that dropped a keyword from
-            matplotlib fails here rather than silently making a ``web``/``interactive``/``3d`` refusal
-            message lie about who honours it.
+            Resolving the matplotlib row (loading matplotlib is fine in an ordinary test) shows it honours
+            exactly the checked keywords. This is no longer load-bearing for
+            :func:`~digitalearth.api._honoured_by`, which reads each tier's real row directly now (review
+            L2); it is kept as a plain invariant — the default tier is the full one, so a change that dropped
+            a keyword from it should surface as a decision made on purpose, not slip by.
         """
         resolved = set(qp.BACKEND_CAPABILITIES["matplotlib"])
         checked = set(qp._KEYWORD_CAPABILITIES)
         assert resolved == checked, sorted(resolved.symmetric_difference(checked))
 
-    def test_the_class_documents_its_cache_is_unsynchronized_and_why_that_is_safe(self):
-        """The lazy cache is not thread-synchronized; the class must say so and why it is safe (review N2).
+    def test_honoured_by_reads_each_tiers_real_row_not_a_tautology(self, monkeypatch):
+        """``_honoured_by`` names a backend iff that backend's own declaration honours the keyword (L2).
 
         Test scenario:
-            ``__getitem__`` fills ``_cache`` with an unguarded read-modify-write, so two threads on the
-            first read of the matplotlib row could both run the builder. A lock was judged unnecessary
-            because that builder is idempotent — a deterministic ``frozenset`` over a cached import — so a
-            race at most builds the same row twice and converges. That trade-off only protects a future
-            maintainer if it is written down, so this pins that the class docstring records both the
-            non-synchronization and the idempotence rationale rather than leaving the reader to rediscover
-            them (or "fix" the race with a lock the note explains away).
+            The N3 helper named the deferred ``matplotlib`` tier from ``keyword in _KEYWORD_CAPABILITIES`` —
+            true at every call site — so it named matplotlib for *any* checked keyword, whether or not
+            matplotlib's declaration honoured it. Two keywords tell a real per-row read from that tautology:
+            ``domain``, which matplotlib honours (so it must be named), and a fabricated keyword mapped to a
+            capability **no** tier declares (so no tier — matplotlib included — may be named). The tautology
+            reddens the second assertion; a helper that simply stopped naming matplotlib reddens the first.
         """
-        doc = (qp._LazyBackendMap.__doc__ or "").lower()
-        assert "not thread-synchronized" in doc, (
-            "the class must note the cache fill is not synchronized"
+        honours_domain = qp._honoured_by("domain")
+        assert "'matplotlib'" in honours_domain, (
+            f"matplotlib honours domain, so it must be named: {honours_domain!r}"
         )
-        assert "idempotent" in doc, (
-            "the class must explain the unsynchronized cache is safe because the builder is idempotent"
+
+        monkeypatch.setitem(
+            qp._KEYWORD_CAPABILITIES, "faketag", ("faketag_capability_no_tier_has",)
+        )
+        honours_faketag = qp._honoured_by("faketag")
+        assert "matplotlib" not in honours_faketag, (
+            "no tier declares faketag's capability, so matplotlib must not be named: "
+            f"{honours_faketag!r}"
+        )
+
+    def test_the_lazy_cache_caches_by_identity_over_an_idempotent_builder(self):
+        """The unsynchronized cache is safe because the builder is idempotent and the row is cached once —
+        pinned as behaviour, not as docstring wording (review N1/N2).
+
+        Test scenario:
+            ``__getitem__`` fills ``_cache`` with an unguarded read-modify-write, which the class documents
+            is safe because (1) the deferred builder is deterministic, so a race that ran it twice converges
+            on an equal value, and (2) the row is cached, so after the first read no builder runs. Both are
+            exercised as behaviour: the real ``matplotlib`` builder gives an equal row on two independent
+            builds, and a model table returns the **same object** on every read while its builder runs once.
+            A ``__getitem__`` changed to rebuild on every read — the "fix" the note warns a maintainer off —
+            reddens the identity and the build-count assertions; a non-deterministic builder reddens the
+            convergence one. The old test only checked the docstring wording and so pinned none of this.
+        """
+        # (1) Determinism / convergence: two independent builds of the real deferred row are equal. Built by
+        # separate calls into separate names, so this is not a value-equals-itself assertion.
+        first_row = qp._declared_row(qp._static_declaration())
+        second_row = qp._declared_row(qp._static_declaration())
+        assert first_row == second_row, (sorted(first_row), sorted(second_row))
+
+        # (2) Caching by identity: a builder that yields a fresh-but-equal object each call, so identity —
+        # not equality — tells a cached read apart from a rebuilt one.
+        builds = []
+
+        def _build():
+            builds.append(1)
+            return frozenset({"crs", "domain"})
+
+        table = qp._LazyBackendMap(eager={"e": frozenset()}, lazy={"l": _build})
+        once = table["l"]
+        twice = table["l"]
+        assert once is twice, (
+            "a cached row must be the same object on every read, not rebuilt"
+        )
+        assert builds == [1], (
+            f"the deferred builder must run once and cache, ran {len(builds)}x"
         )
 
 
