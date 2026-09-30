@@ -368,3 +368,61 @@ class TestOneKeySeam:
         sentinel = object()
         assert qp._add_key(backend, sentinel, visible=False) is None
         assert recorded == [(sentinel, False)], recorded
+
+
+class TestLazyBackendMap:
+    """The backend table defers its matplotlib row yet resolves eager rows and refuses unknown ones."""
+
+    def test_eager_resolves_directly_and_a_lazy_row_builds_once(self):
+        """An eager row returns its stored value; a lazy row runs its builder once and caches the result.
+
+        Test scenario:
+            The matplotlib row is the only deferred one, so this pins the class's contract on a fake table:
+            the eager row needs no builder, and reading a lazy row twice must call its builder a single time
+            (a rebuild on every read would re-import the matplotlib tier on every quickmap).
+        """
+        builds = []
+
+        def _build():
+            builds.append(1)
+            return "L"
+
+        table = qp._LazyBackendMap(eager={"e": "E"}, lazy={"l": _build})
+        reads = [table["e"], table["l"], table["l"]]
+        assert reads == ["E", "L", "L"], f"unexpected resolutions: {reads}"
+        assert builds == [1], (
+            f"the lazy builder must run once and cache, ran {len(builds)}x"
+        )
+
+    def test_an_unknown_backend_raises_keyerror_naming_it(self):
+        """A key in neither the eager nor the lazy table raises KeyError, not a silently-built row.
+
+        Test scenario:
+            Membership and iteration name only the declared backends, so a read of anything else is a
+            programming error the table surfaces rather than a row it fabricates.
+        """
+        table = qp._LazyBackendMap(eager={"e": "E"}, lazy={"l": lambda: "L"})
+        with pytest.raises(KeyError, match="nope"):
+            table["nope"]
+
+
+class TestThe3DTierRefusesGeometryItCannotDraw:
+    """backend='3d' names the families it has no builder for, before a VTK plotter is ever opened (DE-24)."""
+
+    @pytest.mark.parametrize("build", [_lines, _mixed])
+    def test_a_line_or_mixed_collection_is_refused_by_type(self, build):
+        """A line or geometrically-mixed collection is refused with a TypeError listing its geometry.
+
+        Args:
+            build: Builds the unsupported collection under test.
+
+        Test scenario:
+            The 2-D tiers draw these as markers, but the 3-D tier has only point/polygon/raster builders, so
+            the shared decision names the family and this tier refuses it in its own words — and does so
+            before Scene3D constructs a plotter, which is why the refusal is reachable without the 3-D engine.
+        """
+        data = build()
+        with pytest.raises(
+            TypeError, match="needs a uniformly point, polygon, or raster"
+        ):
+            qp._quickmap_3d(data)

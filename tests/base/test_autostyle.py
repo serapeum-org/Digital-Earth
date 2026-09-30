@@ -4,7 +4,13 @@ import numpy as np
 import pytest
 from pyramids.dataset import GeoReference
 
-from digitalearth.base.autostyle import auto_style, load_library
+from digitalearth.base import autostyle
+from digitalearth.base.autostyle import (
+    auto_style,
+    load_library,
+    register_style_library,
+    temporary_style_library,
+)
 from digitalearth.base.sources import DimensionInfo, Source
 from digitalearth.static import Map
 
@@ -93,3 +99,46 @@ def test_explicit_cmap_overrides_auto_style(dataset):
     m = Map(crs=dataset.epsg)
     m.field(dataset, cmap="magma")
     assert m.layers[0][0].default_options["cmap"] == "magma"
+
+
+class TestPluginLibraryRegistration:
+    """register_style_library validates plugin groups, and temporary_style_library scopes them (RP.11)."""
+
+    @pytest.fixture(autouse=True)
+    def _restore(self):
+        """Snapshot and restore the process-global plugin style table around each test.
+
+        The table is module-global and register_style_library has no un-register, so a leaked group would
+        change what every later auto_style sees.
+        """
+        before = dict(autostyle._PLUGIN_LIBRARY)
+        yield
+        autostyle._PLUGIN_LIBRARY.clear()
+        autostyle._PLUGIN_LIBRARY.update(before)
+
+    def test_a_non_mapping_is_refused_by_type(self):
+        """A styles plugin that loads to a non-mapping is refused, so the library is never corrupted.
+
+        Test scenario:
+            The contract is a mapping of style-group name to a parameter dict; a list is not one. The guard
+            raises TypeError before the merge, which is what lets the wiring skip a malformed plugin.
+        """
+        not_a_mapping = ["ocean_heat", "temperature"]
+        with pytest.raises(TypeError, match="must load to a mapping"):
+            register_style_library(not_a_mapping)
+
+    def test_temporary_library_merges_inside_the_block_and_restores_after(self):
+        """A group registered temporarily resolves inside the block and is gone once it exits.
+
+        Test scenario:
+            The scoped form exists so a demonstration does not leave a group behind; the two membership
+            answers (present, then absent) prove the merge and the restore are each real.
+        """
+        with temporary_style_library({"scratch_var": {"cmap": "magma"}}):
+            inside = load_library()["scratch_var"]["cmap"]
+        assert inside == "magma", (
+            f"the scoped group should resolve inside the block, got {inside!r}"
+        )
+        assert "scratch_var" not in load_library(), (
+            "the scoped group must not outlive the block that registered it"
+        )
