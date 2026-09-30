@@ -1,8 +1,10 @@
 # `importlib.metadata` is stdlib from 3.8 on and `requires-python` floors at 3.11, so the
 # `importlib_metadata` backport this used to fall back to can never be reached: read the version straight
 # from the installed distribution's metadata.
+import logging
+from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 try:
     __version__ = version(__name__)
@@ -45,7 +47,12 @@ default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre
 engine-neutral `base`. `quickmap`/`quickplot` are the one-call entry points; `Map` is the composable scene.
 """
 
-from digitalearth.base.registry import register_classifier as _register_classifier
+from digitalearth.base.registry import (
+    register_classifier as _register_classifier,
+)
+from digitalearth.base.registry import (
+    resolvers as _resolvers,
+)
 
 
 def _cleopatra_classify(values, scheme, k):
@@ -69,6 +76,186 @@ def _cleopatra_classify(values, scheme, k):
 
 
 _register_classifier(_cleopatra_classify)
+
+# --- installed plugins, registered at import (RP.11) --------------------------------------------------------
+#
+# `digitalearth.ops.plugins.load_plugins` discovers and imports the entry points in the `digitalearth.styles`
+# and `digitalearth.sources` groups, but nothing registered what it returned — a shipped source adapter or
+# style library was loaded and then dropped. This is the wiring that connects the two: each loaded object is
+# registered into the matching `base` registry, per a small per-group contract.
+#
+# * `digitalearth.sources`: the entry point loads to a `(scheme, resolver)` pair, registered through
+#   `base.registry.register_resolver`, so `resolve_uri("<scheme>:...")` reaches the plugin's reader.
+# * `digitalearth.styles`: the entry point loads to a per-variable style mapping (the `variables.yml` shape),
+#   merged into the autostyle library through `base.autostyle.register_style_library`.
+#
+# It runs at **import**, next to the classifier registration above and for the same reason: the package is set
+# up once, deterministically, the moment it is imported, so a plugin is active without a caller remembering to
+# turn it on. The alternative — loading lazily on first registry use — would force `base` to reach up into
+# `ops.plugins`, an upward-layer import `base` does not otherwise make, for no saving in the ordinary case:
+# the package ships no plugins of its own, so with none installed this costs two empty `entry_points()` lookups
+# and imports no renderer (a `styles` plugin only pulls in `base.autostyle` when one is actually installed).
+_plugin_logger = logging.getLogger(__name__)
+
+
+def _register_source_plugin(name: str, loaded: Any) -> None:
+    """Register one ``digitalearth.sources`` plugin: a ``(scheme, resolver)`` pair.
+
+    Warns (M3) when the plugin's scheme is one of the built-in resolvers the package registers itself
+    (:data:`_BUILTIN_RESOLVER_SCHEMES`, the ``file``/``object`` readers). The override still takes effect —
+    ``register_resolver`` is last-wins, which :func:`~digitalearth.base.registry.temporary_resolver` relies on —
+    but it no longer happens silently, so an installed dependency re-pointing the ``file:`` reader for every
+    consumer is at least visible. Shadowing *another plugin's* scheme stays quiet: that is ordinary last-wins.
+
+    Args:
+        name: The entry-point name of the plugin, for the shadow warning.
+        loaded: What the entry point loaded to — a ``(scheme, resolver)`` pair. A malformed object (not such a
+            pair) raises here and is skipped by :func:`register_plugins`.
+    """
+    scheme, resolver = loaded
+    from digitalearth.base.registry import register_resolver
+
+    if scheme in _BUILTIN_RESOLVER_SCHEMES:
+        _plugin_logger.warning(
+            "digitalearth.sources plugin %r registers scheme %r, shadowing the built-in resolver of the same "
+            "name; the plugin wins (last-wins), replacing the built-in %r reader for this process",
+            name,
+            scheme,
+            scheme,
+        )
+    register_resolver(scheme, resolver)
+
+
+def _register_style_plugin(name: str, loaded: Any) -> None:
+    """Register one ``digitalearth.styles`` plugin: a per-variable style mapping.
+
+    Warns (M3) when the plugin redefines a bundled style group (one already shipped in
+    ``base.autostyle``'s library, e.g. ``default``). As with the source resolvers the merge still happens —
+    :func:`~digitalearth.base.autostyle.load_library` is last-wins — but a plugin silently re-colouring the
+    fallback palette for every consumer is made visible. Adding a *new* group, or shadowing another plugin's,
+    stays quiet.
+
+    Args:
+        name: The entry-point name of the plugin, for the shadow warning.
+        loaded: What the entry point loaded to — a mapping of style-group name to a parameter dict. A
+            non-mapping raises in :func:`digitalearth.base.autostyle.register_style_library` and is skipped by
+            :func:`register_plugins`.
+    """
+    from digitalearth.base.autostyle import _bundled_library, register_style_library
+
+    if isinstance(loaded, Mapping):
+        shadowed = sorted(set(loaded) & set(_bundled_library()))
+        if shadowed:
+            _plugin_logger.warning(
+                "digitalearth.styles plugin %r redefines bundled style group(s) %s, shadowing the built-in "
+                "group(s) of the same name; the plugin wins (last-wins) for this process",
+                name,
+                shadowed,
+            )
+    register_style_library(loaded)
+
+
+#: How each entry-point group's loaded object is registered. Keyed by the same public group strings
+#: :data:`digitalearth.ops.plugins.GROUPS` publishes; a test holds the two sets equal so a new group cannot be
+#: discovered and then silently dropped for want of a registrar here.
+_PLUGIN_REGISTRARS: dict[str, Callable[[str, Any], None]] = {
+    "digitalearth.sources": _register_source_plugin,
+    "digitalearth.styles": _register_style_plugin,
+}
+
+
+def register_plugins(group: str, loaded: dict[str, Any]) -> None:
+    """Register into its registry every plugin object ``load_plugins`` returned for one group.
+
+    The seam :func:`load_installed_plugins` drives, exposed on its own so a test can hand it a fake set (built
+    with ``load_plugins(group, eps=[...])``) without installing a real package. A plugin whose object is
+    malformed for its group is logged and skipped, so one bad plugin cannot stop the rest — the same tolerance
+    :func:`digitalearth.ops.plugins.load_plugins` already gives a plugin whose import raises. A group with no
+    registrar is a no-op. A plugin that overrides a built-in name (scheme or style group) is registered but
+    warns first (M3), whereas overriding another plugin's name is ordinary last-wins and stays quiet.
+
+    Args:
+        group: The entry-point group the objects came from (one of
+            :data:`digitalearth.ops.plugins.GROUPS`).
+        loaded: The ``{name: loaded object}`` mapping :func:`digitalearth.ops.plugins.load_plugins` returned.
+    """
+    registrar = _PLUGIN_REGISTRARS.get(group)
+    if registrar is None:
+        return
+    for name, obj in loaded.items():
+        try:
+            registrar(name, obj)
+        except (TypeError, ValueError) as exc:
+            # Only the shapes a plugin malformed *for its group* produces (a bad object failing the contract
+            # check — a non-(scheme, resolver) pair, a non-mapping style library) are tolerated, so one bad
+            # plugin cannot abort the healthy ones (L4). An unexpected error from a registrar is a genuine
+            # wiring bug, not a bad plugin, and is left to propagate rather than hidden at WARNING during import.
+            # This narrowness is deliberate, and the opposite of load_installed_plugins' broad discovery catch:
+            # here the exception shapes are our own contract check's and thus known; there they are a corrupt
+            # environment's and open-ended. See the comment at that catch (L5) for the full contrast.
+            _plugin_logger.warning(
+                "skipping plugin %r in group %r: %s", name, group, exc
+            )
+
+
+def load_installed_plugins() -> None:
+    """Discover, load and register every installed ``digitalearth.*`` plugin, for both groups.
+
+    Called once at package import. Idempotent — re-running it re-registers the same objects, which the
+    registries absorb as ordinary duplicates (last-wins), so it is safe to call again.
+
+    Discovery is itself best-effort (M1). ``load_plugins`` drives ``iter_plugins``, whose first step is
+    ``importlib.metadata.entry_points()`` — and a corrupt or partial environment (malformed distribution
+    metadata, a broken ``RECORD``) can make *that* raise, before any single plugin is even reached. Because
+    this runs at ``import digitalearth``, an unguarded failure there would abort the import of a package the
+    whole stack depends on. So enumeration of each group is wrapped: a failure logs a WARNING and leaves the
+    package importable with that group's plugins simply absent — the same best-effort stance ``load_plugins``
+    already takes for a single plugin whose ``load()`` raises.
+
+    See Also:
+        register_plugins: Registers the objects for one group; this calls it for each of
+            :data:`digitalearth.ops.plugins.GROUPS`.
+    """
+    from digitalearth.ops.plugins import GROUPS, load_plugins
+
+    for group in GROUPS:
+        # This catch is broad on purpose (L5), and the deliberate opposite of register_plugins' narrow
+        # (TypeError, ValueError) catch, because the two guards protect different things:
+        #   * Here the guarded call is third-party-metadata enumeration. entry_points() reads arbitrary
+        #     installed distributions, whose corruption modes (malformed METADATA, a broken RECORD, a bad
+        #     encoding) are open-ended and raised by importlib/stdlib internals -- there is no narrow exception
+        #     tuple that means "the environment is corrupt". A corrupt env is not a bug in our code, and
+        #     narrowing would let a real enumeration failure abort `import digitalearth`, the exact thing this
+        #     guard exists to prevent. The accepted tradeoff -- a coding bug in the tiny iter_plugins/
+        #     load_plugins loop would also be logged here rather than raised -- is the right call at the import
+        #     boundary, where keeping the package importable outweighs surfacing a bug in two doctest-covered
+        #     functions.
+        #   * register_plugins narrows to (TypeError, ValueError) because those are exactly the shapes its own
+        #     contract check raises for a malformed plugin object; anything else there is our wiring bug and
+        #     must surface (L4). Discovery cannot make that assumption, so it stays broad.
+        # The explicit public API takes the opposite stance again: load_plugins/iter_plugins propagate an
+        # enumeration failure to a direct caller (N2). This import-time path is the sole place it is tolerated.
+        try:
+            loaded = load_plugins(group)
+        except Exception as exc:  # corrupt/partial env: keep the package importable without this group's plugins
+            _plugin_logger.warning(
+                "could not enumerate %r plugins (entry-point discovery failed); continuing without them: %s",
+                group,
+                exc,
+            )
+            continue
+        register_plugins(group, loaded)
+
+
+#: Resolver schemes the package registers itself — the built-in ``file``/``object`` readers — captured before
+#: any plugin loads (``base.registry`` registers them at its own import, which line 49 above has already
+#: triggered). A ``digitalearth.sources`` plugin that reuses one of these shadows a built-in, which
+#: :func:`_register_source_plugin` warns about (M3); a plugin reusing another plugin's scheme does not, because
+#: that is ordinary last-wins. Snapshotting once keeps "built-in" fixed even though ``load_installed_plugins``
+#: may run again.
+_BUILTIN_RESOLVER_SCHEMES: frozenset[str] = frozenset(_resolvers())
+
+load_installed_plugins()
 
 # --- the public names, resolved on first use ----------------------------------------------------------------
 #

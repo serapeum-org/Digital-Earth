@@ -28,8 +28,11 @@ support is forwarded to it.
 ``ValueError`` around ``quickmap`` keeps catching it, and one that wants only this refusal can now name it.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from collections.abc import Callable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -39,11 +42,14 @@ from digitalearth.base.types import PlottableData
 from digitalearth.interactive.capabilities import (
     CAPABILITIES as CAPABILITIES_INTERACTIVE,
 )
-from digitalearth.static import Map
-from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
-from digitalearth.static.guides import guide_kind
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
+
+if TYPE_CHECKING:
+    # A type checker resolves `Map` from here; at runtime it is imported lazily inside each function that
+    # builds one, so importing `api` — and a `web`/`interactive`/`3d` `quickmap` — never loads the
+    # matplotlib tier, which `digitalearth.static` imports eagerly with `Map` (DE-24).
+    from digitalearth.static import Map
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +92,90 @@ _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "colorbar": ("colorbar", "legend"),
 }
 
-#: Every tier's declaration. Each replaces a row that used to be written out here, and the last of them —
-#: `matplotlib` — landed with the static seam's own `capabilities.py`, so no row is hand-written any more.
-_DECLARATIONS: dict[str, Capabilities] = {
-    "matplotlib": CAPABILITIES_STATIC,
-    "3d": CAPABILITIES_3D,
-    "web": CAPABILITIES_WEB,
-    "interactive": CAPABILITIES_INTERACTIVE,
-}
+_V = TypeVar("_V")
+
+
+class _LazyBackendMap(Mapping[str, _V]):
+    """A backend→value table whose ``matplotlib`` row is resolved, and cached, on first read.
+
+    Reading the ``matplotlib`` row is what loads the matplotlib tier: ``digitalearth.static`` imports
+    ``Map`` eagerly, so its :class:`~digitalearth.base.capabilities.Capabilities` cannot be read without
+    loading matplotlib. The three tiers that declare their capabilities engine-free (``3d``, ``web``,
+    ``interactive``) are held eagerly; ``matplotlib`` is deferred. Membership and iteration name all four
+    backends **without** resolving any row, so ``import digitalearth.api`` and ``backend in
+    BACKEND_CAPABILITIES`` — asked on every ``quickmap`` — and a *successful* ``web``/``interactive``/``3d``
+    call never load matplotlib (DE-24). A refusal *message* is the one thing that does: it names the backends
+    that honour the refused keyword from their real declared rows (:func:`_honoured_by`), and matplotlib's
+    cannot be read without importing the tier — a rare error path where correctness beats the laziness N3
+    tried to keep there (review L2). Only reading the matplotlib row itself loads the tier.
+
+    **The cache is not thread-synchronized, and deliberately so.** ``__getitem__`` fills ``_cache`` with an
+    unguarded read-modify-write, so two threads racing on the first read of a deferred row can both run its
+    builder. That is benign: the deferred builder is **idempotent** — a deterministic ``frozenset`` over an
+    import Python itself caches — so the worst a race does is build the same row twice and converge on an
+    equal value, and after the first read the row is hot and no builder runs at all. A lock would guard a
+    table read once and then never rebuilt, which was judged more machinery than the race is worth
+    (review N2); a future deferred row whose builder stops being idempotent would need one.
+
+    Args:
+        eager: The rows that need no engine to build, by backend.
+        lazy: The zero-argument builders for the deferred rows, by backend — each called once and cached.
+    """
+
+    def __init__(
+        self, eager: Mapping[str, _V], lazy: Mapping[str, Callable[[], _V]]
+    ) -> None:
+        self._eager = dict(eager)
+        self._lazy = dict(lazy)
+        self._cache: dict[str, _V] = {}
+
+    def __getitem__(self, backend: str) -> _V:
+        """Return a backend's row, building and caching a deferred one on first read."""
+        if backend in self._eager:
+            return self._eager[backend]
+        if backend not in self._lazy:
+            raise KeyError(backend)
+        if backend not in self._cache:
+            self._cache[backend] = self._lazy[backend]()
+        return self._cache[backend]
+
+    def __contains__(self, backend: object) -> bool:
+        """Answer membership from the backend names alone, resolving no deferred row."""
+        return backend in self._eager or backend in self._lazy
+
+    def __iter__(self) -> Iterator[str]:
+        """Yield the backend names — the eager ones, then the deferred — resolving nothing."""
+        yield from self._eager
+        yield from self._lazy
+
+    def __len__(self) -> int:
+        """Return the number of backends, deferred rows included, resolving nothing."""
+        return len(self._eager) + len(self._lazy)
+
+
+def _static_declaration() -> Capabilities:
+    """Return the matplotlib tier's :class:`Capabilities`, importing ``digitalearth.static`` lazily.
+
+    That import loads matplotlib — the tier imports ``Map`` eagerly — so it is deferred to the moment a
+    caller actually needs the matplotlib row, never at ``import digitalearth.api`` (DE-24).
+    """
+    from digitalearth.static.capabilities import CAPABILITIES
+
+    return CAPABILITIES
+
+
+#: Every tier's declaration, read from the tier's own `capabilities.py`. The three engine-free tiers are
+#: held eagerly; `matplotlib` is deferred through :func:`_static_declaration`, because reading it loads the
+#: matplotlib tier and importing `api` must not (DE-24). It still names all four backends, and reading its
+#: `matplotlib` entry gives the same `Capabilities` the hand-written row derived from before.
+_DECLARATIONS: Mapping[str, Capabilities] = _LazyBackendMap(
+    eager={
+        "3d": CAPABILITIES_3D,
+        "web": CAPABILITIES_WEB,
+        "interactive": CAPABILITIES_INTERACTIVE,
+    },
+    lazy={"matplotlib": _static_declaration},
+)
 
 
 def _declared_row(declaration: Capabilities) -> frozenset[str]:
@@ -160,10 +242,13 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
 #:   and stays with U-3.
-BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
-    backend: _declared_row(declaration)
-    for backend, declaration in _DECLARATIONS.items()
-}
+BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
+    eager={
+        backend: _declared_row(_DECLARATIONS[backend])
+        for backend in ("3d", "web", "interactive")
+    },
+    lazy={"matplotlib": lambda: _declared_row(_static_declaration())},
+)
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
@@ -224,6 +309,37 @@ def _asks_for_nothing(value: Any, inert: Any) -> bool:
     if isinstance(inert, str):
         return isinstance(value, str) and value == inert
     return value is inert
+
+
+def _honoured_by(keyword: str) -> str:
+    """List the backends that honour ``keyword``, for a refusal message, from each tier's real declared row.
+
+    Reads every backend's row from :data:`BACKEND_CAPABILITIES`, resolving the deferred ``matplotlib`` one
+    too, so a backend is named **iff** its own declaration honours the keyword. ``matplotlib`` is the only
+    deferred row, and its declaration cannot be read as data without importing the tier —
+    ``digitalearth.static`` imports ``Map`` eagerly, so importing ``digitalearth.static.capabilities`` loads
+    matplotlib — so there is no engine-free row to read here.
+
+    N3 avoided that load by naming ``matplotlib`` from the standing fact that the default full tier honours
+    every checked keyword; but it applied that fact *unconditionally* (``keyword in _KEYWORD_CAPABILITIES``
+    is true at every call site), so it named ``matplotlib`` for a keyword matplotlib does **not** honour as
+    readily as for one it does — a message that would lie the moment such a keyword were added (review L2).
+    A refusal is a rare error path — an exception is about to be raised — so resolving the real row here, at
+    the cost of loading the tier on that path alone, buys a message that cannot lie. Import and a *successful*
+    ``web``/``interactive``/``3d`` dispatch still never resolve the ``matplotlib`` row, which is the laziness
+    that matters (DE-24).
+
+    Args:
+        keyword: The ``quickmap`` keyword a backend could not honour.
+
+    Returns:
+        The backends whose declaration honours it, ``repr``-quoted and comma-joined in sorted order. The
+        refusing backend is absent for free: it does not honour ``keyword``, which is why it was refused.
+    """
+    honoured = {
+        name for name in BACKEND_CAPABILITIES if keyword in BACKEND_CAPABILITIES[name]
+    }
+    return ", ".join(repr(name) for name in sorted(honoured))
 
 
 def _reject_unsupported(backend: str, **passed: Any) -> None:
@@ -287,11 +403,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             continue
         if name in _INERT and _asks_for_nothing(value, _INERT[name]):
             continue  # they asked for nothing, so nothing was dropped
-        honoured = ", ".join(
-            repr(other)
-            for other in sorted(BACKEND_CAPABILITIES)
-            if name in BACKEND_CAPABILITIES[other]
-        )
+        honoured = _honoured_by(name)
         reason = _refusal_reason(backend, name)
         raise CapabilityError(
             f"{name}= is not supported by backend={backend!r}; "
@@ -384,6 +496,8 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
         Nothing. Both methods return the map itself, as the Core declares, so there is no artist to hand
         back; the drawn key is reachable per layer from the renderer.
     """
+    from digitalearth.static.guides import guide_kind
+
     keyed = scene._color_keyed()
     if not keyed:  # pragma: no cover - `_has_a_key_to_draw` is asked first
         return
@@ -489,27 +603,69 @@ def _renderer_for(table: dict, kind: str, kwargs: dict, caller: str) -> tuple:
     )
 
 
-def _vector_kind(data: FeatureCollection, caller: str) -> str:
-    """Classify a vector input as the family of renderer it needs, refusing an empty collection.
+def _input_kind(data: PlottableData, caller: str) -> str:
+    """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
+
+    This is the single input-type→kind decision every backend routes through (DE-24). The ``isinstance``
+    ladder, the empty-collection guard and the geometry check used to be re-derived once per backend — four
+    hand-written ladders that could drift apart; here they are one. Each family returned is a data family in
+    the shared kind registry's vocabulary (:data:`digitalearth.base.registry.KIND_TAKES`): a ``Dataset`` is
+    ``"raster"``, and a uniform ``FeatureCollection`` is ``"points"``, ``"lines"`` or ``"polygons"``.
+
+    A collection whose geometries disagree is ``"mixed"``. No tier draws one uniformly — the 2-D tiers drew
+    every non-polygon vector as a marker map, and the 3-D tier refuses anything that is not uniformly point,
+    polygon or raster — so ``"mixed"`` (and ``"lines"``) is *named* here and answered by each backend rather
+    than guessed once for all of them.
 
     Args:
-        data: The ``FeatureCollection`` about to be drawn.
-        caller: Public function name to blame in the error, e.g. ``"quickmap"``.
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector), or an unsupported type.
+        caller: Public function name to blame in a refusal — ``"quickmap"`` or ``"quickplot"``.
 
     Returns:
-        ``"polygons"`` when every geometry is a (multi)polygon, ``"points"`` otherwise — the split the
-        static and web dispatchers both make. A mixed collection reads as ``"points"``, which is what the
-        marker renderers already accepted.
+        ``"raster"`` for a ``Dataset``; ``"points"``, ``"lines"`` or ``"polygons"`` for a uniform
+        ``FeatureCollection``; ``"mixed"`` for one whose geometry types disagree.
 
     Raises:
-        ValueError: when the collection is empty. Without this guard the all-``True`` result of an empty
-            ``geom_type`` check classifies it as polygons and the map draws nothing, silently.
+        ValueError: when a ``FeatureCollection`` is empty. Without this guard the all-``True`` result of an
+            empty ``geom_type`` check reads as polygons and the map draws nothing, silently.
+        TypeError: when ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
-    if len(data) == 0:
-        raise ValueError(f"{caller} got an empty FeatureCollection (nothing to draw)")
-    if data.geometry.geom_type.isin(["Polygon", "MultiPolygon"]).all():
-        return "polygons"
-    return "points"
+    if isinstance(data, Dataset):
+        return "raster"
+    if isinstance(data, FeatureCollection):
+        if len(data) == 0:
+            raise ValueError(
+                f"{caller} got an empty FeatureCollection (nothing to draw)"
+            )
+        geometry = data.geometry.geom_type
+        if geometry.isin(["Polygon", "MultiPolygon"]).all():
+            return "polygons"
+        if geometry.isin(["Point", "MultiPoint"]).all():
+            return "points"
+        if geometry.isin(["LineString", "MultiLineString"]).all():
+            return "lines"
+        return "mixed"
+    raise TypeError(f"{caller} cannot draw a {type(data).__name__}")
+
+
+def _draw_polygons(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
+    """Draw a polygon collection as a ``choropleth`` when a ``column`` selects one, else as outlines.
+
+    The one branch the three 2-D tiers share once :func:`_input_kind` has said the input is polygons: a
+    ``column`` picks ``choropleth``, its absence ``polygons``. Consumed in place from ``kwargs`` so the
+    remaining styling keywords forward unchanged. The 3-D tier extrudes polygons instead, so it keeps its
+    own polygon draw rather than this one.
+
+    Args:
+        scene: The map (static, interactive or web) being built.
+        data: The polygon ``FeatureCollection`` to draw.
+        kwargs: The caller's remaining keywords; ``column`` is popped here, the rest are forwarded.
+    """
+    column = kwargs.pop("column", None)
+    if column is not None:
+        scene.choropleth(data, column=column, **kwargs)
+    else:
+        scene.polygons(data, **kwargs)
 
 
 def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
@@ -534,29 +690,24 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
             from :func:`_renderer_for`, if a keyword contradicts the ``kind`` that already settles it.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
-    if isinstance(data, FeatureCollection):
-        if _vector_kind(data, "quickmap") == "polygons":
-            column = kwargs.pop("column", None)
-            if column is not None:
-                scene.choropleth(data, column=column, **kwargs)
-            else:
-                scene.polygons(data, **kwargs)
-            return
-        if "column" in kwargs:
-            # `Map.points` has no fill column: it sizes markers by `size_column` and colours them from
-            # the collection's own value column. Forwarding `column` reached cleopatra, which answered
-            # with its own keyword list and never named the caller's parameter (review M19).
-            raise ValueError(
-                f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
-                "size the markers with size_column=, or drop column="
-            )
-        scene.points(data, **kwargs)
-        return
-    if isinstance(data, Dataset):
+    family = _input_kind(data, "quickmap")
+    if family == "raster":
         method, picked = _renderer_for(_STATIC_RASTER_KINDS, kind, kwargs, "quickmap")
         getattr(scene, method)(data, **picked, **kwargs)
         return
-    raise TypeError(f"quickmap cannot draw a {type(data).__name__}")
+    if family == "polygons":
+        _draw_polygons(scene, data, kwargs)
+        return
+    # points / lines / mixed → a marker map, as this tier has always drawn every non-polygon vector.
+    if "column" in kwargs:
+        # `Map.points` has no fill column: it sizes markers by `size_column` and colours them from
+        # the collection's own value column. Forwarding `column` reached cleopatra, which answered
+        # with its own keyword list and never named the caller's parameter (review M19).
+        raise ValueError(
+            f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
+            "size the markers with size_column=, or drop column="
+        )
+    scene.points(data, **kwargs)
 
 
 def quickmap(
@@ -770,6 +921,8 @@ def _quickmap_matplotlib(
     Returns:
         The decorated map.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
@@ -783,8 +936,8 @@ def _quickmap_matplotlib(
     if _has_a_key_to_draw(scene):
         # Asked either way, because `colorbar=False` is a decision to record and a key to take off rather
         # than a call to skip. A map with nothing coloured by a value has no key to switch, so the gate
-        # above still stands between the two.
-        _add_static_key(scene, visible=colorbar)
+        # above still stands between the two. Reached through the one seam the four backends share.
+        _add_key("matplotlib", scene, visible=colorbar)
     return scene
 
 
@@ -868,27 +1021,6 @@ _INTERACTIVE_RASTER_KINDS = {
 }
 
 
-def _draw_interactive_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
-    """Route a vector collection to the interactive tier's builder for its geometry.
-
-    Args:
-        scene: The ``InteractiveMap`` being built.
-        data: The collection to draw.
-        kwargs: The caller's remaining keywords, consumed in place.
-
-    Raises:
-        ValueError: if `data` is an empty collection, from `_vector_kind`.
-    """
-    if _vector_kind(data, "quickplot") != "polygons":
-        scene.points(data, **kwargs)
-        return
-    column = kwargs.pop("column", None)
-    if column is not None:
-        scene.choropleth(data, column=column, **kwargs)
-    else:
-        scene.polygons(data, **kwargs)
-
-
 def _draw_interactive_raster(
     scene: Any, data: Dataset, kind: str, kwargs: dict
 ) -> None:
@@ -945,10 +1077,14 @@ def _quickmap_interactive(
 ) -> Any:
     """Build a finished ``InteractiveMap`` from ``data`` (the ``backend="interactive"`` path, DX.1).
 
-    Dispatches by input type exactly like :func:`_draw`: a polygon ``FeatureCollection`` with a
-    ``column`` becomes a ``choropleth`` (else ``polygons``); other vectors become ``points``; a raster
-    is drawn with the ``kind`` method (``"auto"`` → ``field``). The ``InteractiveMap`` import is lazy so
-    the core ``api`` works without the ``interactive`` extra.
+    Dispatches by input type as :func:`_draw` does, with **one deliberate difference in how point input
+    treats** ``column``: a polygon ``FeatureCollection`` with a ``column`` becomes a ``choropleth`` (else
+    ``polygons``); other vectors become ``points``; a raster is drawn with the ``kind`` method
+    (``"auto"`` → ``field``). Unlike the matplotlib path, ``column`` on **point** input is **not refused**
+    here — it is forwarded, because ``InteractiveMap.points`` takes a ``column`` and colours the markers by
+    it, whereas ``Map.points`` has no such parameter (it sizes by ``size_column``), which is why
+    :func:`_draw` raises for it (review L3). The ``InteractiveMap`` import is lazy so the core ``api`` works
+    without the ``interactive`` extra.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
@@ -976,13 +1112,14 @@ def _quickmap_interactive(
     from digitalearth.interactive import InteractiveMap
 
     scene = InteractiveMap(crs=crs)
-    if isinstance(data, FeatureCollection):
-        _draw_interactive_vector(scene, data, kwargs)
-    elif isinstance(data, Dataset):
+    family = _input_kind(data, "quickplot")
+    if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
-    else:
-        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
-    _add_interactive_key(scene, visible=colorbar)
+    elif family == "polygons":
+        _draw_polygons(scene, data, kwargs)
+    else:  # points / lines / mixed → a marker map, as this tier draws every non-polygon vector
+        scene.points(data, **kwargs)
+    _add_key("interactive", scene, visible=colorbar)
     _decorate_interactive(scene, basemap, coastlines)
     return scene
 
@@ -1027,29 +1164,6 @@ def _add_interactive_key(scene: Any, *, visible: bool) -> None:
         logger.warning(
             "quickplot: %s skipped — %s: %s", kind, type(error).__name__, error
         )
-
-
-def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
-    """Route a vector collection to the web tier's builder for its geometry, mirroring :func:`_draw`.
-
-    Args:
-        scene: The ``WebMap`` being built.
-        data: The ``FeatureCollection`` to draw.
-        kwargs: The caller's remaining styling keywords, forwarded to the chosen builder. A ``column`` is
-            consumed here rather than forwarded, since it is what selects ``choropleth`` over the plain
-            polygon outline.
-
-    Raises:
-        ValueError: if ``data`` is empty — see :func:`_vector_kind`.
-    """
-    if _vector_kind(data, "quickplot") == "polygons":
-        column = kwargs.pop("column", None)
-        if column is not None:
-            scene.choropleth(data, column=column, **kwargs)
-        else:
-            scene.polygons(data, **kwargs)
-        return
-    scene.points(data, **kwargs)
 
 
 def _add_web_legend(scene: Any, *, visible: bool) -> Any:
@@ -1129,9 +1243,13 @@ def _quickmap_web(
 ) -> Any:
     """Build a finished ``WebMap`` from ``data`` (the ``backend="web"`` path, DX.1).
 
-    Dispatches by input type, mirroring :func:`_draw`: a polygon ``FeatureCollection`` with a ``column``
-    becomes a ``choropleth`` (else outline ``polygons``); other vectors become ``points``; a raster
-    ``Dataset`` becomes ``field``. The ``WebMap`` import is lazy so the core ``api`` works without the
+    Dispatches by input type as :func:`_draw` does, with **one deliberate difference in how point input
+    treats** ``column``: a polygon ``FeatureCollection`` with a ``column`` becomes a ``choropleth`` (else
+    outline ``polygons``); other vectors become ``points``; a raster ``Dataset`` becomes ``field``. Unlike
+    the matplotlib path, ``column`` on **point** input is **not refused** here — it is forwarded, because
+    ``WebMap.points`` takes a ``column`` and colours the markers by it, whereas ``Map.points`` has no such
+    parameter (it sizes by ``size_column``), which is why :func:`_draw` raises for it (review L3). The
+    ``WebMap`` import is lazy so the core ``api`` works without the
     ``web`` extra. The web tier normalises data to lon/lat itself, so the matplotlib-oriented ``kind`` /
     ``domain`` / ``coastlines`` kwargs have no counterpart here and :func:`_reject_unsupported` refuses them
     upstream. ``crs`` **is** forwarded: ``WebMap`` carries one and validates it, so a CRS it cannot place
@@ -1159,12 +1277,13 @@ def _quickmap_web(
     from digitalearth.web import WebMap
 
     scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
-    if isinstance(data, FeatureCollection):
-        _draw_web_vector(scene, data, kwargs)
-    elif isinstance(data, Dataset):
+    family = _input_kind(data, "quickplot")
+    if family == "raster":
         scene.field(data, **kwargs)
-    else:
-        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    elif family == "polygons":
+        _draw_polygons(scene, data, kwargs)
+    else:  # points / lines / mixed → a marker map
+        scene.points(data, **kwargs)
     if basemap:
         source = _basemap_source(basemap)
         if source is None:
@@ -1175,8 +1294,8 @@ def _quickmap_web(
     # three backends follow. This tier's key is a builder, not a toggle, and it refuses a map with nothing
     # classified to describe; that is this tier's "no mappable layer" case, which the matplotlib path
     # tolerates too, so it is tolerated inside the helper rather than turning `colorbar=True` into an error
-    # the caller did not cause.
-    _add_web_legend(scene, visible=colorbar)
+    # the caller did not cause. Reached through the one seam the four backends share.
+    _add_key("web", scene, visible=colorbar)
     return scene
 
 
@@ -1219,6 +1338,43 @@ def _add_3d_key(scene: Any, *, visible: bool) -> Any:
     return None
 
 
+#: Each backend's colour-key adder — the one seam the four `_quickmap_*` builders reach a key through,
+#: rather than four call sites naming four different functions. Each impl stays per-tier because each
+#: engine's key is a different thing: a matplotlib colorbar or swatch legend, a Bokeh toggle, a MapLibre
+#: legend builder, a PyVista scalar bar. What they share is the point they are called from and the
+#: `visible=` flag carried through from `quickmap(colorbar=)` (DE-24).
+_KEY_ADDERS: dict[str, Callable[..., Any]] = {
+    "matplotlib": _add_static_key,
+    "interactive": _add_interactive_key,
+    "web": _add_web_legend,
+    "3d": _add_3d_key,
+}
+
+
+def _add_key(backend: str, scene: Any, *, visible: bool) -> None:
+    """Add ``scene``'s colour key through ``backend``'s own key impl — the single seam for all four tiers.
+
+    The four impls differ (each engine's key is its own thing) and each guards internally against a map with
+    nothing to key; this is the one place they are dispatched from, so a fifth backend or a changed key
+    contract is wired here once rather than at four call sites (DE-24). The impl's own return value — some
+    return the scene, some ``None`` — is discarded: every ``_quickmap_*`` builder returns its scene itself.
+
+    Args:
+        backend: The backend whose key impl to use — a key of :data:`_KEY_ADDERS`.
+        scene: The finished map to key.
+        visible: Whether the key is drawn, carried through from ``quickmap(colorbar=)``.
+    """
+    # Dispatch through this module's namespace *by name* rather than through the table's stored reference, so
+    # a test that spies or patches the named impl on the module — `mocker.spy(api, "_add_web_legend")`, as the
+    # web tier's colorbar test does — observes the call. `_KEY_ADDERS` still holds the real callables (the
+    # introspectable seam `test_api_seam` asserts identity on), and a per-backend override installed *into the
+    # table* with `monkeypatch.setitem(_KEY_ADDERS, ...)` is still honoured: such an override's ``__name__`` is
+    # not a global of this module, so the lookup falls back to the stored object. Re-collapsing this to
+    # ``_KEY_ADDERS[backend](...)`` silently re-breaks the spy path (CI: tests/web/test_web_colorbar_raster.py).
+    impl = _KEY_ADDERS[backend]
+    globals().get(impl.__name__, impl)(scene, visible=visible)
+
+
 def _quickmap_3d(
     data: PlottableData, *, colorbar: bool = True, crs: Any = None, **kwargs
 ) -> Any:
@@ -1254,42 +1410,35 @@ def _quickmap_3d(
     """
     from digitalearth.three_d import Scene3D
 
-    # Validate the input up front: a bad type / unsupported geometry must raise BEFORE a Scene3D (which opens a
-    # VTK plotter) is constructed — otherwise every error path leaks an open plotter.
-    geom_kind = None
-    if isinstance(data, FeatureCollection):
-        if len(data) == 0:
-            raise ValueError(
-                "quickplot got an empty FeatureCollection (nothing to draw)"
-            )
-        geom_type = data.geometry.geom_type
-        if geom_type.isin(["Polygon", "MultiPolygon"]).all():
-            geom_kind = "polygons"
-        elif geom_type.isin(["Point", "MultiPoint"]).all():
-            geom_kind = "points"
-        else:
-            raise TypeError(
-                "backend='3d' needs a uniformly point, polygon, or raster input "
-                "(point_cloud / extruded_polygons / terrain); got geometry types "
-                f"{sorted(geom_type.unique())}"
-            )
-    elif not isinstance(data, Dataset):
-        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    # Classify the input up front, through the same decision the other three backends make (DE-24): a bad
+    # type, an empty collection or a geometry this tier has no builder for must raise BEFORE a Scene3D
+    # (which opens a VTK plotter) is constructed, or every error path leaks an open plotter. The families
+    # this tier cannot draw — lines and mixed — are refused here, in this tier's own words.
+    family = _input_kind(data, "quickplot")
+    if isinstance(data, FeatureCollection) and family in ("lines", "mixed"):
+        # Only a FeatureCollection yields the `lines`/`mixed` families, so this is the geometry this tier has
+        # no builder for; the isinstance also narrows `data` for the geom-type read in the message.
+        raise TypeError(
+            "backend='3d' needs a uniformly point, polygon, or raster input "
+            "(point_cloud / extruded_polygons / terrain); got geometry types "
+            f"{sorted(data.geometry.geom_type.unique())}"
+        )
 
     scene = Scene3D(
         crs=crs
     )  # constructed only after validation, so the error paths above leak no scene
-    if isinstance(data, Dataset):
+    if family == "raster":
         scene.terrain(data, **kwargs)
-    elif geom_kind == "polygons":
+    elif family == "polygons":
         column = kwargs.pop("column", None)
         height = kwargs.pop("height", column if column is not None else 1.0)
         scene.extruded_polygons(data, height=height, column=column, **kwargs)
     else:  # points
         scene.point_cloud(data, value_column=kwargs.pop("column", None), **kwargs)
     # After the layer, not before it as a `show_scalar_bar=` among its keywords: the key is a guide on that
-    # layer's encoding, so there has to be a layer to put it on (order 24).
-    _add_3d_key(scene, visible=colorbar)
+    # layer's encoding, so there has to be a layer to put it on (order 24). Reached through the one seam the
+    # four backends share.
+    _add_key("3d", scene, visible=colorbar)
     return scene
 
 
@@ -1348,11 +1497,7 @@ def _method(name: str, kind: Optional[str] = None):
         backend = kwargs.get("backend", "matplotlib")
         supported = BACKEND_CAPABILITIES.get(backend)
         if supported is not None and "kind" not in supported:
-            honoured = ", ".join(
-                repr(other)
-                for other in sorted(BACKEND_CAPABILITIES)
-                if "kind" in BACKEND_CAPABILITIES[other]
-            )
+            honoured = _honoured_by("kind")
             reason = _refusal_reason(backend, "kind")
             raise CapabilityError(
                 f"{name}() draws with the {renderer!r} renderer, which backend={backend!r} does not have; "
@@ -1467,6 +1612,8 @@ def grid_cells(data: PlottableData, **kwargs) -> Map:
         ValueError: from ``PolygonGlyph`` for a styling keyword it does not accept — which is also what a
             stray ``backend=`` becomes here.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.grid_cells(data, **kwargs)
     return _finish(scene, colorbar=True)
@@ -1542,6 +1689,8 @@ def voronoi(data: PlottableData, column: str | None = None, **kwargs) -> Map:
     See Also:
         digitalearth.static.maps.vector.VectorMixin.voronoi: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.voronoi(data, column=column, **kwargs)
     return _finish(scene, colorbar=column is not None)
@@ -1601,6 +1750,8 @@ def cartogram(
     See Also:
         digitalearth.static.maps.vector.VectorMixin.cartogram: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.cartogram(data, scale=scale, column=column, **kwargs)
     return _finish(scene, colorbar=column is not None)
@@ -1655,6 +1806,8 @@ def quadtree(data: PlottableData, column: str | None = None, **kwargs) -> Map:
     See Also:
         digitalearth.static.maps.vector.VectorMixin.quadtree: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.quadtree(data, column=column, **kwargs)
     return _finish(scene, colorbar=True)
@@ -1679,6 +1832,8 @@ def kde(data: PlottableData, **kwargs) -> Map:
     See Also:
         digitalearth.static.maps.vector.VectorMixin.kde: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.kde(data, **kwargs)
     return _finish(scene, colorbar=True)
@@ -1751,6 +1906,8 @@ def sankey(
     See Also:
         digitalearth.static.maps.vector.VectorMixin.sankey: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.sankey(data, column=column, scale=scale, **kwargs)
     return _finish(scene, colorbar=column is not None)

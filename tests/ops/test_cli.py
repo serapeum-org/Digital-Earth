@@ -6,7 +6,13 @@ import pytest
 from pyramids.feature import FeatureCollection
 
 from digitalearth.ops.batch import load_input
-from digitalearth.ops.cli import _load, _parse_crs, _plot_kwargs, build_parser, main
+from digitalearth.ops.cli import (
+    _load,
+    _parse_crs,
+    _plot_kwargs,
+    build_parser,
+    main,
+)
 
 
 class TestParseCrs:
@@ -124,6 +130,123 @@ class TestPlotKwargs:
         assert kwargs["levels"] == 8
         assert kwargs["domain"] == "europe"
 
+    def test_backend_defaults_to_matplotlib(self):
+        """With no --backend, quickmap is asked for the matplotlib backend — today's behaviour (TD-22)."""
+        args = build_parser().parse_args(["plot", "in.tif"])
+        assert _plot_kwargs(args)["backend"] == "matplotlib", (
+            f"default backend should be matplotlib, got {_plot_kwargs(args).get('backend')!r}"
+        )
+
+    def test_backend_is_forwarded_when_set(self):
+        """A chosen --backend reaches quickmap through the forwarded kwargs, not just the parser (TD-22)."""
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "interactive"])
+        assert _plot_kwargs(args)["backend"] == "interactive", (
+            f"--backend interactive should be forwarded, got {_plot_kwargs(args).get('backend')!r}"
+        )
+
+
+class TestBackendCrsDefault:
+    """The ``--crs`` default is backend-aware so ``--backend web`` works out of the box (M2).
+
+    The web tier renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the shared 3857
+    default made a bare ``--backend web`` always raise. When the caller passes no ``--crs``, the web backend
+    now defaults to 4326 while every other tier keeps 3857; an explicit ``--crs`` is never overridden.
+    """
+
+    def test_web_backend_defaults_crs_to_4326(self):
+        """With no --crs, --backend web forwards crs=4326 (the only CRS the web tier accepts)."""
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "web"])
+        assert _plot_kwargs(args)["crs"] == 4326, (
+            f"a web plot with no --crs should default to 4326, got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_matplotlib_backend_keeps_crs_3857(self):
+        """With no --crs, the matplotlib backend keeps the 3857 default — unchanged behaviour."""
+        args = build_parser().parse_args(["plot", "in.tif"])
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            f"a matplotlib plot with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_interactive_keeps_crs_3857(self):
+        """interactive accepts 3857, so with no --crs it keeps the shared default."""
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "interactive"])
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            f"--backend interactive with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_3d_backend_defaults_crs_to_native(self):
+        """With no --crs, --backend 3d forwards crs=None so the 3-D scene uses the data's own CRS (L4).
+
+        The Python API leaves ``crs`` unset for ``backend="3d"`` (``quickmap`` passes ``crs=None``, so
+        ``_quickmap_3d`` keeps the data's native CRS). The CLI must match that: omitting ``--crs`` for 3d means
+        native, not a silent reprojection to Web Mercator.
+        """
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "3d"])
+        assert _plot_kwargs(args)["crs"] is None, (
+            f"--backend 3d with no --crs should default to native (None), got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_3d_explicit_crs_is_still_forwarded(self):
+        """An explicit --crs for 3d is honoured (native is only the default, not a lock-out)."""
+        args = build_parser().parse_args(
+            ["plot", "in.tif", "--backend", "3d", "--crs", "3857"]
+        )
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            "an explicit --crs must reach the 3-D scene, not be overridden by the native default"
+        )
+
+    def test_explicit_crs_is_not_overridden_for_web(self):
+        """An explicit --crs wins even for web, so the tier's own error still fires for a bad explicit choice."""
+        args = build_parser().parse_args(
+            ["plot", "in.tif", "--backend", "web", "--crs", "3857"]
+        )
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            "an explicit --crs 3857 must be preserved for web, not silently rewritten to 4326"
+        )
+
+    def test_plot_web_default_runs_and_forwards_4326(self, tmp_path, dataset, mocker):
+        """`plot --backend web` with no --crs no longer raises and reaches quickmap with crs=4326 (spied)."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(
+            ["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "web"]
+        )
+        assert rc == 0, "a bare `plot --backend web` should succeed, not raise"
+        assert spy.call_args.kwargs.get("crs") == 4326, (
+            f"quickmap should be told crs=4326 for a default web plot, got {spy.call_args}"
+        )
+
+    def test_batch_web_default_forwards_4326(self, tmp_path, dataset, mocker):
+        """`batch --backend web` with no --crs builds a Batch with crs=4326, not the failing 3857 default."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(["batch", str(src), "-o", str(tmp_path / "out"), "--backend", "web"])
+        assert rc == 0, "a bare `batch --backend web` should succeed, not raise"
+        assert fake.call_args.kwargs.get("crs") == 4326, (
+            f"Batch should be told crs=4326 for a default web batch, got {fake.call_args}"
+        )
+
+    def test_plot_3d_default_forwards_native_crs(self, tmp_path, dataset, mocker):
+        """`plot --backend 3d` with no --crs reaches quickmap with crs=None — native, not 3857 (L4, spied).
+
+        The 3-D render engine (pyvista) is absent from the ``dev`` env, so spying ``quickmap`` proves the
+        forwarded CRS without a real 3-D render.
+        """
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "3d"])
+        assert rc == 0, "a bare `plot --backend 3d` should succeed"
+        assert "crs" in spy.call_args.kwargs, (
+            "quickmap should still be told a crs keyword"
+        )
+        assert spy.call_args.kwargs["crs"] is None, (
+            f"a default 3d plot should forward crs=None (native), got {spy.call_args.kwargs['crs']!r}"
+        )
+
 
 class TestBuildParser:
     """Tests for build_parser."""
@@ -133,6 +256,12 @@ class TestBuildParser:
         build_parser2 = build_parser()
         with pytest.raises(SystemExit):
             build_parser2.parse_args([])
+
+    def test_backend_rejects_unknown_choice(self):
+        """--backend is constrained to the four quickmap dispatches; an unknown one is a usage error."""
+        parser = build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["plot", "in.tif", "--backend", "bogus"])
 
 
 class TestMain:
@@ -284,3 +413,222 @@ class TestBackend:
         )
         assert rc == 0, "the command should still succeed"
         spy.assert_any_call("Agg", force=True)
+
+
+class TestBackendDispatch:
+    """Tests for --backend (TD-22, #208) — the CLI drives all four quickmap backends, not just matplotlib.
+
+    The forwarding is checked by spying on ``quickmap``/``Batch`` rather than rendering, so these run in the
+    ``dev`` env without the interactive/web/viz3d engines: a real ``--backend web`` render needs the ``web``
+    extra, but whether the CLI *forwards* the choice does not.
+    """
+
+    def test_plot_forwards_backend_to_quickmap(self, tmp_path, dataset, mocker):
+        """``plot --backend web`` reaches ``quickmap(..., backend="web")`` (spied, not rendered)."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(
+            [
+                "plot",
+                str(src),
+                "-o",
+                str(tmp_path / "m.png"),
+                "--backend",
+                "web",
+                "--crs",
+                "4326",
+            ]
+        )
+        assert rc == 0, "the plot command should still exit 0"
+        assert spy.call_args.kwargs.get("backend") == "web", (
+            f"quickmap should be told backend='web', got {spy.call_args}"
+        )
+
+    def test_plot_default_output_extension_follows_backend(
+        self, tmp_path, dataset, mocker
+    ):
+        """Without -o, a web scene defaults to a .html file — a page, not a PNG (native output)."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(["plot", str(src), "--backend", "web", "--crs", "4326"])
+        saved = str(spy.return_value.save.call_args.args[0])
+        assert rc == 0, "the plot command should still exit 0"
+        assert saved.endswith(".html"), (
+            f"a web scene's default output should be .html, got {saved!r}"
+        )
+
+    def test_plot_matplotlib_default_output_stays_png(self, tmp_path, dataset, mocker):
+        """The matplotlib default output stays <stem>.png, exactly as before --backend existed."""
+        src = tmp_path / "scene.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(["plot", str(src), "--crs", str(dataset.epsg)])
+        saved = str(spy.return_value.save.call_args.args[0])
+        assert rc == 0, "the plot command should still exit 0"
+        assert saved.endswith(".png"), (
+            f"matplotlib default output should stay .png, got {saved!r}"
+        )
+
+    def test_plot_explicit_output_wins_over_native_ext(self, tmp_path, dataset, mocker):
+        """An explicit -o path is written as given; the backend's native extension does not override it."""
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        out = tmp_path / "custom.png"
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(
+            ["plot", str(src), "-o", str(out), "--backend", "web", "--crs", "4326"]
+        )
+        saved = str(spy.return_value.save.call_args.args[0])
+        assert rc == 0, "the plot command should still exit 0"
+        assert saved.endswith("custom.png"), (
+            f"the explicit -o path should win, got {saved!r}"
+        )
+
+    def test_batch_passes_backend_and_native_ext(self, tmp_path, dataset, mocker):
+        """``batch --backend web`` builds a Batch with backend='web' and its native ext ('html')."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(
+            [
+                "batch",
+                str(src),
+                "-o",
+                str(tmp_path / "out"),
+                "--backend",
+                "web",
+                "--crs",
+                "4326",
+            ]
+        )
+        assert rc == 0, "the batch command should still exit 0"
+        assert fake.call_args.kwargs.get("backend") == "web", (
+            f"Batch should be told backend='web', got {fake.call_args}"
+        )
+        assert fake.call_args.kwargs.get("ext") == "html", (
+            f"a web batch should default to ext='html', got {fake.call_args}"
+        )
+
+    def test_batch_ext_default_stays_png_for_matplotlib(
+        self, tmp_path, dataset, mocker
+    ):
+        """A matplotlib batch with no --ext keeps ext='png', exactly as before."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(
+            ["batch", str(src), "-o", str(tmp_path / "out"), "--crs", str(dataset.epsg)]
+        )
+        assert rc == 0, "the batch command should still exit 0"
+        assert fake.call_args.kwargs.get("ext") == "png", (
+            f"a matplotlib batch should default to ext='png', got {fake.call_args}"
+        )
+
+    def test_batch_explicit_ext_beats_native(self, tmp_path, dataset, mocker):
+        """An explicit --ext overrides the backend's native extension (the caller asked for that format)."""
+        src = tmp_path / "a.tif"
+        dataset.to_file(str(src))
+        fake = mocker.patch("digitalearth.ops.cli.Batch")
+        fake.return_value.run.return_value = []
+        rc = main(
+            [
+                "batch",
+                str(src),
+                "-o",
+                str(tmp_path / "out"),
+                "--backend",
+                "web",
+                "--ext",
+                "png",
+                "--crs",
+                "4326",
+            ]
+        )
+        assert rc == 0, "the batch command should still exit 0"
+        assert fake.call_args.kwargs.get("ext") == "png", (
+            f"an explicit --ext should win over the native ext, got {fake.call_args}"
+        )
+
+
+class TestMainErrorHandling:
+    """``main`` turns a user-facing failure into a clean message, not a raw traceback (L1).
+
+    The M2 fix gave ``--backend web`` a sensible CRS default, but left ``main`` unguarded: an explicit
+    incompatible ``--crs`` (a tier ``ValueError``) or a bad input file (an open error out of the loader) still
+    reached the user as a full Python traceback. ``main`` now catches the user-facing error families
+    (``digitalearth.ops.cli._USER_FACING_ERRORS``) and prints ``error: <message>`` to stderr with a non-zero
+    exit, while a genuine programming error (``TypeError`` and friends) is deliberately *not* caught so it still
+    tracebacks.
+    """
+
+    def test_bad_input_prints_error_and_exits_non_zero(self, tmp_path, capsys):
+        """A file that is neither raster nor vector exits non-zero with an ``error:`` line, not a traceback.
+
+        Test scenario:
+            The loader raises pyogrio's ``DataSourceError`` (a ``RuntimeError``) for a non-geospatial file;
+            ``main`` must surface that as a controlled CLI error rather than letting it escape uncaught.
+        """
+        bogus = tmp_path / "not_geo.tif"
+        bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
+        rc = main(["plot", str(bogus), "-o", str(tmp_path / "out.png")])
+        captured = capsys.readouterr()
+        assert rc != 0, f"a bad input should exit non-zero, got {rc}"
+        assert captured.err.startswith("error:"), (
+            f"a bad input should print a one-line 'error:' message to stderr, got {captured.err!r}"
+        )
+
+    def test_incompatible_crs_prints_error_and_exits_non_zero(
+        self, tmp_path, dataset, mocker, capsys
+    ):
+        """A tier ``ValueError`` (e.g. an incompatible explicit ``--crs``) becomes a clean message, not a trace.
+
+        Test scenario:
+            ``quickmap`` is spied to raise the web tier's real "EPSG:4326 only" ``ValueError`` — the render
+            engine is absent from the ``dev`` env, so spying proves ``main``'s handling without a web render.
+        """
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        message = "the web tier renders in EPSG:4326 only, but crs=3857 was given"
+        mocker.patch("digitalearth.ops.cli.quickmap", side_effect=ValueError(message))
+        rc = main(
+            [
+                "plot",
+                str(src),
+                "-o",
+                str(tmp_path / "m.html"),
+                "--backend",
+                "web",
+                "--crs",
+                "3857",
+            ]
+        )
+        captured = capsys.readouterr()
+        assert rc != 0, f"an incompatible explicit --crs should exit non-zero, got {rc}"
+        assert message in captured.err, (
+            f"the tier's own message should reach stderr, got {captured.err!r}"
+        )
+        assert "Traceback" not in captured.err, (
+            "a user-facing error must not dump a Python traceback"
+        )
+
+    def test_programming_error_still_tracebacks(self, tmp_path, dataset, mocker):
+        """A genuine programming error (``TypeError``) is *not* swallowed — it still propagates (pins breadth).
+
+        Test scenario:
+            ``main`` must narrow its catch to user-facing families; a ``TypeError`` from the render path is a
+            bug, so it must escape to a traceback rather than be reported as a clean CLI error.
+        """
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        mocker.patch(
+            "digitalearth.ops.cli.quickmap", side_effect=TypeError("a real bug")
+        )
+        # argv built above the block so only `main` can raise inside it (tree guard
+        # `test_refusal_blocks.py` counts the `str()` calls otherwise).
+        argv = ["plot", str(src), "-o", str(tmp_path / "m.png"), "--crs", "4326"]
+        with pytest.raises(TypeError):
+            main(argv)

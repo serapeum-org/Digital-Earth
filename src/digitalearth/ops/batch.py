@@ -2,20 +2,33 @@
 
 ``Batch`` is a thin driver around the one-call :func:`~digitalearth.api.quickmap`: give it an iterable of
 inputs (raster/vector paths or already-loaded pyramids objects), a set of shared plot options, and an output
-directory, and it renders + saves one figure per input, closing each figure so a long run stays
+directory, and it renders + saves one scene per input, closing each scene so a long run stays
 memory-bounded. It is the operational counterpart of earthkit-plots' ``Batch``/``workflows`` — pure
 orchestration over the existing visualization API (no new GIS or matplotlib machinery).
 """
 
 import logging
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Iterable, List, Optional, Set, Union
 
-import matplotlib.pyplot as plt
 from pyramids.dataset import Dataset
 
 from digitalearth.api import quickmap
 from digitalearth.static import Map
+
+# The interactive/web/3-D extras need not be installed to type-check this driver.
+if TYPE_CHECKING:
+    from digitalearth.interactive import InteractiveMap
+    from digitalearth.three_d import Scene3D
+    from digitalearth.web import WebMap
+
+#: What ``quickmap`` returns, and therefore what a :class:`Batch`'s plotter produces: the static
+#: :class:`~digitalearth.static.map.Map` by default, or one of the other three tiers' scenes
+#: (:class:`~digitalearth.interactive.map.InteractiveMap`, :class:`~digitalearth.three_d.scene3d.Scene3D`,
+#: :class:`~digitalearth.web.map.WebMap`) when a ``backend=`` is passed through the shared defaults (TD-22).
+#: Named here so the driver's signatures state the whole set it can drive, not just the one backend it began
+#: with. Every member exposes the ``save(path)`` and ``close()`` :class:`Batch` relies on.
+BackendScene = Union[Map, "InteractiveMap", "Scene3D", "WebMap"]
 
 __all__ = ["Batch", "load_input"]
 
@@ -72,9 +85,10 @@ class Batch:
     """Render many inputs to image files with one shared configuration.
 
     Args:
-        plotter: The callable that turns one input into a :class:`~digitalearth.static.map.Map`. Defaults to
-            :func:`~digitalearth.api.quickmap`; any callable with the same ``(data, **kwargs) -> Map``
-            contract works.
+        plotter: The callable that turns one input into a backend scene — a
+            :class:`~digitalearth.static.map.Map`, or one of the other three tiers' scenes when a ``backend=``
+            default is set (see :data:`BackendScene`). Defaults to :func:`~digitalearth.api.quickmap`; any
+            callable with the same ``(data, **kwargs) -> BackendScene`` contract works.
         ext: Image extension/format for saved figures (e.g. ``"png"``, ``"pdf"``).
         **defaults: Plot options applied to every input (e.g. ``crs``, ``kind``, ``cmap``, ``colorbar``);
             per-run ``overrides`` passed to :meth:`run` take precedence.
@@ -99,7 +113,7 @@ class Batch:
 
     def __init__(
         self,
-        plotter: Callable[..., Map] = quickmap,
+        plotter: Callable[..., "BackendScene"] = quickmap,
         *,
         ext: str = "png",
         **defaults: Any,
@@ -109,8 +123,8 @@ class Batch:
         self.ext = ext.lstrip(".")
         self.defaults = defaults
 
-    def render_one(self, item: Any, **overrides: Any) -> Map:
-        """Render a single input to a :class:`Map` (without saving).
+    def render_one(self, item: Any, **overrides: Any) -> "BackendScene":
+        """Render a single input to a backend scene (without saving).
 
         Args:
             item: A raster/vector path (``str``/``Path``, opened by :func:`load_input`, which reads a
@@ -119,7 +133,9 @@ class Batch:
             **overrides: Plot options for this item, merged over (and overriding) the batch ``defaults``.
 
         Returns:
-            The finished :class:`~digitalearth.static.map.Map`.
+            The finished backend scene (see :data:`BackendScene`) — a
+            :class:`~digitalearth.static.map.Map` by default, or the tier's own scene when the plotter was
+            given a ``backend=`` default.
 
         Examples:
             - Render the bundled sample raster in its own CRS:
@@ -148,8 +164,8 @@ class Batch:
     ) -> List[Path]:
         """Render every input and save one image per input into ``outdir``.
 
-        The output directory is created if needed. Each figure is closed immediately after saving so a long
-        batch does not accumulate open figures.
+        The output directory is created if needed. Each scene is closed immediately after saving (through its
+        own ``close()``, whatever backend it is) so a long batch does not accumulate open figures or scenes.
 
         Args:
             items: Iterable of inputs (paths or pyramids objects).
@@ -200,6 +216,9 @@ class Batch:
             used.add(stem)
             path = out / f"{stem}.{self.ext}"
             scene.save(str(path))
-            plt.close(scene.fig)
+            # Free the scene through its own ``close()`` — every backend has one, only the matplotlib tier
+            # has a ``.fig`` — so a web/interactive/3-D batch is memory-bounded the same way without being
+            # crashed on a figure it does not carry.
+            scene.close()
             written.append(path)
         return written

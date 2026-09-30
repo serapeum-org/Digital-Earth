@@ -35,6 +35,14 @@ def iter_plugins(
 ) -> Iterator[EntryPoint]:
     """Yield the entry points registered under ``group`` (without loading them).
 
+    Enumerating the installed environment can itself fail on a corrupt or partial distribution (malformed
+    metadata, a broken ``RECORD``): ``entry_points()`` then raises when this generator is first advanced, and
+    the failure **propagates** to the caller rather than being swallowed into an empty iterator. That is
+    deliberate (N2) -- a direct call to this public helper is an explicit request to read the environment, so
+    the caller owns the failure and can handle it. The one place a corrupt environment is tolerated instead is
+    the import-time convenience path :func:`digitalearth.load_installed_plugins`, which guards this call and
+    logs the failure so ``import digitalearth`` stays alive when no one asked to enumerate.
+
     Args:
         group: The entry-point group to query (e.g. ``"digitalearth.styles"``).
         eps: Override the discovered entry points (mainly for testing); when ``None`` the installed
@@ -75,6 +83,10 @@ def load_plugins(
     actually runs the plugin's target (e.g. resolves ``my_pkg.styles:LIBRARY`` to the object it names). A
     plugin whose ``load()`` raises is skipped (logged at ``WARNING``) so one broken third-party plugin cannot
     abort discovery of the healthy ones.
+
+    Only that per-plugin ``load()`` is tolerated. Enumerating the environment can itself fail on a corrupt
+    distribution (see :func:`iter_plugins`); that failure **propagates** out of this call by the same
+    deliberate policy (N2), since a direct call to a public helper is an explicit request to enumerate.
 
     Args:
         group: The entry-point group to load (e.g. ``"digitalearth.styles"``).
