@@ -1,8 +1,9 @@
 # `importlib.metadata` is stdlib from 3.8 on and `requires-python` floors at 3.11, so the
 # `importlib_metadata` backport this used to fall back to can never be reached: read the version straight
 # from the installed distribution's metadata.
+import logging
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 try:
     __version__ = version(__name__)
@@ -69,6 +70,108 @@ def _cleopatra_classify(values, scheme, k):
 
 
 _register_classifier(_cleopatra_classify)
+
+# --- installed plugins, registered at import (RP.11) --------------------------------------------------------
+#
+# `digitalearth.ops.plugins.load_plugins` discovers and imports the entry points in the `digitalearth.styles`
+# and `digitalearth.sources` groups, but nothing registered what it returned — a shipped source adapter or
+# style library was loaded and then dropped. This is the wiring that connects the two: each loaded object is
+# registered into the matching `base` registry, per a small per-group contract.
+#
+# * `digitalearth.sources`: the entry point loads to a `(scheme, resolver)` pair, registered through
+#   `base.registry.register_resolver`, so `resolve_uri("<scheme>:...")` reaches the plugin's reader.
+# * `digitalearth.styles`: the entry point loads to a per-variable style mapping (the `variables.yml` shape),
+#   merged into the autostyle library through `base.autostyle.register_style_library`.
+#
+# It runs at **import**, next to the classifier registration above and for the same reason: the package is set
+# up once, deterministically, the moment it is imported, so a plugin is active without a caller remembering to
+# turn it on. The alternative — loading lazily on first registry use — would force `base` to reach up into
+# `ops.plugins`, an upward-layer import `base` does not otherwise make, for no saving in the ordinary case:
+# the package ships no plugins of its own, so with none installed this costs two empty `entry_points()` lookups
+# and imports no renderer (a `styles` plugin only pulls in `base.autostyle` when one is actually installed).
+_plugin_logger = logging.getLogger(__name__)
+
+
+def _register_source_plugin(loaded: Any) -> None:
+    """Register one ``digitalearth.sources`` plugin: a ``(scheme, resolver)`` pair.
+
+    Args:
+        loaded: What the entry point loaded to — a ``(scheme, resolver)`` pair. A malformed object (not such a
+            pair) raises here and is skipped by :func:`register_plugins`.
+    """
+    scheme, resolver = loaded
+    from digitalearth.base.registry import register_resolver
+
+    register_resolver(scheme, resolver)
+
+
+def _register_style_plugin(loaded: Any) -> None:
+    """Register one ``digitalearth.styles`` plugin: a per-variable style mapping.
+
+    Args:
+        loaded: What the entry point loaded to — a mapping of style-group name to a parameter dict. A
+            non-mapping raises in :func:`digitalearth.base.autostyle.register_style_library` and is skipped by
+            :func:`register_plugins`.
+    """
+    from digitalearth.base.autostyle import register_style_library
+
+    register_style_library(loaded)
+
+
+#: How each entry-point group's loaded object is registered. Keyed by the same public group strings
+#: :data:`digitalearth.ops.plugins.GROUPS` publishes; a test holds the two sets equal so a new group cannot be
+#: discovered and then silently dropped for want of a registrar here.
+_PLUGIN_REGISTRARS: dict[str, Callable[[Any], None]] = {
+    "digitalearth.sources": _register_source_plugin,
+    "digitalearth.styles": _register_style_plugin,
+}
+
+
+def register_plugins(group: str, loaded: dict[str, Any]) -> None:
+    """Register into its registry every plugin object ``load_plugins`` returned for one group.
+
+    The seam :func:`load_installed_plugins` drives, exposed on its own so a test can hand it a fake set (built
+    with ``load_plugins(group, eps=[...])``) without installing a real package. A plugin whose object is
+    malformed for its group is logged and skipped, so one bad plugin cannot stop the rest — the same tolerance
+    :func:`digitalearth.ops.plugins.load_plugins` already gives a plugin whose import raises. A group with no
+    registrar is a no-op.
+
+    Args:
+        group: The entry-point group the objects came from (one of
+            :data:`digitalearth.ops.plugins.GROUPS`).
+        loaded: The ``{name: loaded object}`` mapping :func:`digitalearth.ops.plugins.load_plugins` returned.
+    """
+    registrar = _PLUGIN_REGISTRARS.get(group)
+    if registrar is None:
+        return
+    for name, obj in loaded.items():
+        try:
+            registrar(obj)
+        except (
+            Exception
+        ) as exc:  # a plugin malformed for its group must not abort the healthy ones
+            _plugin_logger.warning(
+                "skipping plugin %r in group %r: %s", name, group, exc
+            )
+
+
+def load_installed_plugins() -> None:
+    """Discover, load and register every installed ``digitalearth.*`` plugin, for both groups.
+
+    Called once at package import. Idempotent — re-running it re-registers the same objects, which the
+    registries absorb as ordinary duplicates (last-wins), so it is safe to call again.
+
+    See Also:
+        register_plugins: Registers the objects for one group; this calls it for each of
+            :data:`digitalearth.ops.plugins.GROUPS`.
+    """
+    from digitalearth.ops.plugins import GROUPS, load_plugins
+
+    for group in GROUPS:
+        register_plugins(group, load_plugins(group))
+
+
+load_installed_plugins()
 
 # --- the public names, resolved on first use ----------------------------------------------------------------
 #

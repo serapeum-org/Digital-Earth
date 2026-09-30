@@ -109,6 +109,20 @@ all = ["digitalearth[3d,interactive,web]"]
 [project.scripts]
 digitalearth = "digitalearth.ops.cli:main"
 
+# Extension points (RP.11). digitalearth looks up two entry-point groups at import and registers what they
+# load (digitalearth.load_installed_plugins). It ships none itself — a third-party package plugs in by
+# declaring one of these in ITS OWN pyproject.toml, so the blocks below are the documented contract, kept
+# commented so no empty group is advertised here:
+#   [project.entry-points."digitalearth.sources"]
+#   # -> a (scheme, resolver) pair, registered via base.registry.register_resolver; resolve_uri("s3:...")
+#   #    then reaches the resolver, which returns a pyramids Dataset / FeatureCollection.
+#   s3 = "my_pkg.sources:S3_SOURCE"          # e.g. ("s3", lambda uri: Dataset.read_file(...))
+#
+#   [project.entry-points."digitalearth.styles"]
+#   # -> a per-variable style mapping (the variables.yml shape), merged into the autostyle library via
+#   #    base.autostyle.register_style_library; auto_style() then resolves against it beside the bundled groups.
+#   my_vars = "my_pkg.styles:LIBRARY"        # e.g. {"ocean_heat": {"match": ["ohc"], "cmap": "inferno"}}
+
 [dependency-groups]
 dev = [
     "nbval >=0.11.0",
