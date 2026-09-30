@@ -1,11 +1,13 @@
 """Tests for RP.11 — static HTML gallery (digitalearth.ops.browser)."""
 
 import html
+import logging
 import re
 
 import matplotlib.pyplot as plt
 import pytest
 
+import digitalearth.ops.browser as browser
 from digitalearth.ops.browser import gallery
 
 
@@ -215,4 +217,79 @@ class TestGalleryIframeSandbox:
         # Build the expected token set independently of the generated attribute (not a value == itself check).
         assert set(granted) == {"allow-scripts"}, (
             f"the sandbox should grant only allow-scripts, got {granted!r}"
+        )
+
+
+@pytest.fixture
+def bad_utf8_html(tmp_path):
+    """Write a ``.html`` file whose bytes are not valid UTF-8, so decoding it raises.
+
+    Args:
+        tmp_path: pytest temporary directory.
+
+    Returns:
+        Path: an on-disk ``.html`` file that ``read_text(encoding="utf-8")`` cannot decode.
+    """
+    out = tmp_path / "latin1.html"
+    # 0xff is never a valid UTF-8 lead byte — a page saved in another encoding decodes to a UnicodeDecodeError.
+    out.write_bytes(b"<html><body>caf\xe9 \xff\xfe</body></html>")
+    return out
+
+
+@pytest.fixture
+def missing_png(tmp_path):
+    """Return a ``.png`` path that does not exist, so reading its bytes raises ``OSError``.
+
+    Args:
+        tmp_path: pytest temporary directory.
+
+    Returns:
+        Path: a ``.png`` path naming no file on disk.
+    """
+    return tmp_path / "gone.png"
+
+
+class TestGalleryPerTileTolerance:
+    """One unreadable/undecodable tile becomes a placeholder rather than aborting the whole build (L1)."""
+
+    def test_undecodable_html_tile_does_not_lose_the_good_tile(
+        self, tmp_path, png, bad_utf8_html
+    ):
+        """A batch with an undecodable HTML page still renders the good raster tile beside a placeholder."""
+        page = gallery([png, bad_utf8_html], tmp_path / "index.html")
+        text = page.read_text(encoding="utf-8")
+        assert "data:image/png;base64," in text, (
+            "the good PNG tile must survive an undecodable sibling"
+        )
+        assert 'href="latin1.html"' in text, (
+            "the undecodable page should degrade to a placeholder linking the file by name"
+        )
+        assert "srcdoc=" not in text, (
+            "an undecodable page must not be inlined as an iframe srcdoc"
+        )
+
+    def test_unreadable_image_tile_does_not_lose_the_good_tile(
+        self, tmp_path, web_page, missing_png
+    ):
+        """A batch with a missing raster still renders the good HTML tile beside a placeholder."""
+        page = gallery([web_page, missing_png], tmp_path / "index.html")
+        text = page.read_text(encoding="utf-8")
+        assert "<iframe" in text, "the good HTML tile must survive an unreadable sibling"
+        assert 'href="gone.png"' in text, (
+            "the unreadable raster should degrade to a placeholder linking the file by name"
+        )
+        assert "data:image/png;base64," not in text, (
+            "a raster that could not be read must not be embedded as a broken data URI"
+        )
+
+    def test_unreadable_tile_logs_a_warning_naming_the_file(
+        self, tmp_path, bad_utf8_html, caplog
+    ):
+        """The skipped tile is announced with a WARNING naming the file, matching ops' skip-and-warn style."""
+        with caplog.at_level(logging.WARNING, logger="digitalearth.ops.browser"):
+            gallery([bad_utf8_html], tmp_path / "index.html")
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings, "an unreadable tile should be logged, not swallowed silently"
+        assert any(bad_utf8_html.name in r.getMessage() for r in warnings), (
+            f"the warning should name the file; got {[r.getMessage() for r in warnings]}"
         )

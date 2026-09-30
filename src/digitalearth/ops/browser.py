@@ -10,11 +10,14 @@ file by name rather than a broken tile.
 """
 
 import html
+import logging
 from base64 import b64encode
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Sequence
 
 __all__ = ["gallery"]
+
+logger = logging.getLogger(__name__)
 
 _PAGE = """<!doctype html>
 <html lang="en">
@@ -68,6 +71,14 @@ _HTML_SUFFIXES = frozenset({".html", ".htm"})
 #: tiles never need. This makes the ``<iframe>`` path as script-safe as the SVG-via-``<img>`` path already is.
 _IFRAME_SANDBOX = "allow-scripts"
 
+#: The placeholder message for a type the gallery has no inline preview for (the original default).
+_NO_PREVIEW_NOTE = "No inline preview for this file type."
+
+#: The placeholder message for a tile that could not be read or decoded (L1). The specific error goes to the
+#: log — where the file name is also named — rather than into the page, so an exception string is never
+#: interpolated into the gallery's markup.
+_UNREADABLE_NOTE = "Could not read this file for preview."
+
 
 def _image_card(image: Path, media_type: str, safe_caption: str) -> str:
     """Base64-embed one raster into an ``<img>`` ``<figure>`` card (no external file reference)."""
@@ -106,11 +117,22 @@ def _page_card(page: Path, safe_caption: str) -> str:
     )
 
 
-def _placeholder_card(output: Path, safe_caption: str) -> str:
-    """Emit a labelled placeholder that links ``output`` by name, for a type with no inline preview."""
+def _placeholder_card(
+    output: Path, safe_caption: str, note: str = _NO_PREVIEW_NOTE
+) -> str:
+    """Emit a labelled placeholder that links ``output`` by name, carrying ``note`` as its message.
+
+    Args:
+        output: The file the placeholder stands in for and links by name.
+        safe_caption: The already-escaped caption shown under the card.
+        note: The one-line reason shown in the card — the default "no inline preview" for a type the
+            gallery cannot embed, or a read-failure / oversize message for a tile it declined to inline
+            (:data:`_UNREADABLE_NOTE`, L1/L2). Escaped here so a message is never trusted as raw markup.
+    """
     href = html.escape(output.name, quote=True)
+    safe_note = html.escape(note, quote=True)
     return (
-        '  <figure class="placeholder"><p>No inline preview for this file type.</p>'
+        f'  <figure class="placeholder"><p>{safe_note}</p>'
         f'<figcaption><a href="{href}">{safe_caption}</a></figcaption></figure>'
     )
 
@@ -123,14 +145,29 @@ def _card(output: Path, caption: str) -> str:
     other type gets a placeholder card that links the file by name rather than crashing. The caption (often a
     file name) is HTML-escaped with ``quote=True`` first, so a value containing ``&``/``<``/``>``/``"`` cannot
     break the markup or inject attributes/scripts.
+
+    A tile whose bytes cannot be read (missing/locked file, ``OSError``) or whose HTML cannot be decoded as
+    UTF-8 (``UnicodeDecodeError``) does not abort the whole gallery (L1): it is logged at WARNING — naming the
+    file — and degraded to a placeholder card, so one bad output never loses the tiles that were fine. This
+    matches the skip-and-warn tolerance the rest of ``ops`` already uses (e.g. ``Batch.run``'s name-collision
+    warning, the web tier's ``_skipped``).
     """
     safe = html.escape(caption, quote=True)
     suffix = output.suffix.lower()
     media_type = _RASTER_MEDIA_TYPES.get(suffix)
-    if media_type is not None:
-        return _image_card(output, media_type, safe)
-    if suffix in _HTML_SUFFIXES:
-        return _page_card(output, safe)
+    try:
+        if media_type is not None:
+            return _image_card(output, media_type, safe)
+        if suffix in _HTML_SUFFIXES:
+            return _page_card(output, safe)
+    except (OSError, UnicodeDecodeError) as error:
+        logger.warning(
+            "gallery: could not read %s (%s: %s) — using a placeholder card",
+            output.name,
+            type(error).__name__,
+            error,
+        )
+        return _placeholder_card(output, safe, note=_UNREADABLE_NOTE)
     return _placeholder_card(output, safe)
 
 
