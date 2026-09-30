@@ -906,19 +906,23 @@ def to_backend(
 
     **Cross-tier — a figure one tier described drawn on *another* — is supported into the interactive tier**,
     whose drawers fall back to their own defaults for the style a portable figure does not carry; the foreign
-    recipe name (``via``) is retargeted to the drawing tier's own. The **web, matplotlib and 3-D** tiers read a
-    layer's style from ``props`` their own builders write and a portable figure does not carry (the
-    ``NO_PORTABLE_CHANNELS`` gap), so drawing a *foreign* figure on them is not supported in this cut and may
-    raise from inside a drawer; they are same-tier only. A figure with an ``object:`` (in-memory) source
-    replays in-process but cannot be stored (``to_dict`` refuses it).
+    recipe name (``via``) is retargeted to the drawing tier's own. The other three tiers refuse a foreign
+    figure and are **same-tier only**, for two distinct reasons: the **matplotlib** and **3-D** tiers keep a
+    layer's style flat in ``props`` their builders write and fold nothing into portable channels (the
+    ``NO_PORTABLE_CHANNELS`` set, which names exactly those two), and the **web** tier's drawers require
+    per-layer style ``props`` a portable figure does not carry (e.g. a raster's ``vmin``/``vmax``/``opacity``).
+    Drawing a *foreign* figure on any of the three may raise from inside a drawer. A figure with an ``object:``
+    (in-memory) source replays in-process but cannot be stored (``to_dict`` refuses it).
 
     Args:
         figure: The :class:`~digitalearth.base.spec.FigureSpec` to draw, from another scene's
             :attr:`figure_spec` (optionally through ``to_dict()``/``from_dict()``).
         backend: ``"matplotlib"`` (static, the default), ``"interactive"`` (HoloViz), ``"web"``
             (MapLibre + deck.gl) or ``"3d"`` (PyVista). Validated against :data:`BACKEND_CAPABILITIES`.
-        **scene_kwargs: Forwarded to the tier's constructor (e.g. ``strict``, ``figsize``, ``off_screen``);
-            a ``crs=`` here overrides the one the figure's view carries.
+        **scene_kwargs: Forwarded to the tier's constructor (e.g. ``strict``, ``figsize``, ``off_screen``).
+            A ``crs=`` here overrides the one the figure's view carries on the static, interactive and 3-D
+            tiers; the web tier renders in EPSG:4326 only, so a ``crs=`` other than that is refused, not
+            applied.
 
     Returns:
         The built tier scene (``Map`` / ``InteractiveMap`` / ``WebMap`` / ``Scene3D``), the same return

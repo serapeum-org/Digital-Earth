@@ -100,9 +100,9 @@ class Map(
             KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.
             OffLimbError: when a layer's data cannot be placed and the map is ``strict``.
         """
-        # Translate any recipe recorded by another tier to this tier's own before drawing, so a figure that
-        # crossed from the web or interactive tier draws here instead of being refused for an unknown `via`.
-        # A same-tier figure passes through unchanged.
+        # Normalise recipe names before drawing. For a same-tier figure — the only case this tier draws (a
+        # foreign figure's drawers read non-portable `props`; see `retarget_via` and `to_backend`) — every
+        # recipe is already known, so this is a no-op. Kept symmetric with the interactive tier's retarget.
         from digitalearth.static.renderer import retarget_via
 
         figure = retarget_via(figure)

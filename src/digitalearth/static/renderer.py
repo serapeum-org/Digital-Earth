@@ -491,18 +491,21 @@ _CANONICAL_VIA: Dict[str, str] = {
 
 
 def retarget_via(figure: FigureSpec) -> FigureSpec:
-    """Rewrite each layer's recorded ``via`` to this tier's recipe for the same kind, for cross-tier replay.
+    """Rewrite each layer's recorded ``via`` to this tier's recipe for the same kind.
 
     A ``via`` names *how* a layer was drawn, and the name is the drawing tier's own: a ``choropleth`` this tier
-    records as ``"choropleth"`` the interactive tier records as ``"geometry"``. So a figure one tier described,
-    drawn here through :meth:`~digitalearth.static.map.Map.draw_figure`, would otherwise reach
-    :func:`_dispatch` with a ``via`` this tier has no recipe for and be refused — the refusal that guards a
-    genuine same-tier bug. This translates a foreign ``via`` (or none, from a tier that records none) to the
-    recipe this tier draws the kind with, so the layer draws here as the same *kind*; the engine-specific
-    style a ``via`` cannot carry redraws with this tier's defaults, which is the portability limit
-    :func:`digitalearth.api.to_backend` states.
+    records as ``"choropleth"`` the interactive tier records as ``"geometry"``. This translates a foreign
+    ``via`` (or none) to the recipe this tier draws the kind with, so the dispatch step
+    (:func:`_dispatch`) finds a recipe instead of refusing an unknown one.
 
-    A ``via`` this tier already knows is left untouched, so a same-tier round trip passes through unchanged.
+    **This is the shared cross-tier mechanism, but the static tier is not itself a cross-tier target.** For a
+    same-tier figure — the only case this tier draws, per :func:`digitalearth.api.to_backend` — every ``via`` is
+    already known, so this returns the figure unchanged. A figure another tier described would be retargeted
+    here, but its drawers then read per-layer style ``props`` (``cmap``, ``default_cmap``, ``levels``) that a
+    portable figure does not carry, so it raises inside the drawer rather than drawing: drawing a foreign figure
+    on the matplotlib tier is unsupported in this cut. The rewrite is kept symmetric with the interactive
+    tier's (the one supported target) and exercised by its own unit tests.
+
     A kind with one recipe retargets to it unambiguously; a kind drawn several ways uses :data:`_CANONICAL_VIA`,
     and one absent from that table keeps its foreign ``via`` and is refused rather than drawn as a guess.
 

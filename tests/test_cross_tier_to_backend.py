@@ -6,9 +6,11 @@ One ``FigureSpec``, drawn on a different backend from the one that described it.
 
 The **cross-tier target is the interactive tier**: its drawers fall back to their own defaults for the style a
 portable figure does not carry, and the foreign recipe name (``via``) is retargeted to its own — see
-:func:`digitalearth.interactive.renderer.retarget_via`. The web, matplotlib and 3-D tiers read a layer's style
-from ``props`` their own builders write and a portable figure does not carry (``NO_PORTABLE_CHANNELS``), so a
-figure made elsewhere cannot be drawn on them in this cut; they are same-tier only, covered by their own suites.
+:func:`digitalearth.interactive.renderer.retarget_via`. The other three tiers are same-tier only, for two
+distinct reasons: the matplotlib and 3-D tiers keep style flat in ``props`` and fold nothing into portable
+channels (the ``NO_PORTABLE_CHANNELS`` set names exactly those two), while the web tier's drawers require
+per-layer style ``props`` a portable figure does not carry (a raster's ``vmin``/``vmax``/``opacity``). Each is
+covered same-tier by its own suite.
 """
 
 import pytest
