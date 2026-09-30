@@ -47,6 +47,20 @@ def test_the_table_only_covers_kinds_drawn_more_than_one_way():
         )
 
 
+def test_every_multi_recipe_kind_has_a_canonical_entry():
+    """Every kind drawn more than one way is named in ``_CANONICAL_VIA``, so cross-tier retarget cannot
+    silently lose one. A new multi-recipe kind (or a new recipe making a single-recipe kind multi) without an
+    entry would make :func:`retarget_via` return ``None``, keep the foreign ``via`` and be refused at dispatch
+    — a regression this guard turns into a failing test. The static tier has no deliberate exclusions.
+    """
+    recipes = _recipes()
+    multi = {kind for kind, drawers in recipes.items() if len(drawers) > 1}
+    missing = multi - set(_CANONICAL_VIA)
+    assert not missing, (
+        f"multi-recipe kinds with no _CANONICAL_VIA entry: {sorted(missing)}"
+    )
+
+
 class TestRetargetVia:
     """``retarget_via`` rewrites a foreign recipe to this tier's own, and leaves a known one alone."""
 

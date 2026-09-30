@@ -46,6 +46,25 @@ def test_the_table_only_covers_kinds_drawn_more_than_one_way():
         )
 
 
+#: Multi-recipe kinds deliberately left out of ``_CANONICAL_VIA`` — the plain recipe is a genuine judgement, so
+#: a foreign ``via`` for one is refused rather than guessed. ``heatmap`` is hexbin vs kde.
+_ALLOWED_UNMAPPED = frozenset({"heatmap"})
+
+
+def test_every_multi_recipe_kind_has_a_canonical_entry_or_is_deliberately_excluded():
+    """Every kind drawn more than one way is either in ``_CANONICAL_VIA`` or in the deliberate-exclusion set,
+    so a new multi-recipe kind cannot silently lose cross-tier support: without an entry :func:`retarget_via`
+    would return ``None``, keep the foreign ``via`` and be refused at dispatch, with no failing test to catch
+    it. A kind added to the exclusion set is an explicit choice, recorded here.
+    """
+    recipes = _recipes()
+    multi = {kind for kind, drawers in recipes.items() if len(drawers) > 1}
+    missing = multi - set(_CANONICAL_VIA) - _ALLOWED_UNMAPPED
+    assert not missing, (
+        f"multi-recipe kinds with no _CANONICAL_VIA entry and not excluded: {sorted(missing)}"
+    )
+
+
 class TestRetargetVia:
     """``retarget_via`` rewrites a foreign recipe to this tier's own, and leaves a known one alone."""
 
