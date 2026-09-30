@@ -1,0 +1,39 @@
+"""``to_backend(..., backend="interactive")`` — a HoloViz figure draws again (U-6, order 33).
+
+Runs in the ``interactive`` environment: the replay goes through the HoloViz builders. The dispatch itself
+and the matplotlib round trip live in ``tests/test_to_backend.py`` (core, no extra).
+"""
+
+from digitalearth import api
+from digitalearth.interactive import InteractiveMap
+
+
+class TestInteractiveRoundTrip:
+    """A figure an interactive map describes draws again into a fresh interactive map."""
+
+    def test_the_replayed_map_carries_the_same_layers(self, dataset):
+        """Every layer id and kind survives the ``figure_spec`` → ``to_backend`` round trip.
+
+        Args:
+            dataset: The raster fixture, drawn as a field.
+        """
+        source = InteractiveMap(crs=3857)
+        source.field(dataset)
+        replayed = api.to_backend(source.figure_spec, backend="interactive")
+
+        assert isinstance(replayed, InteractiveMap)
+        assert replayed.layer_ids == source.layer_ids, (
+            f"replayed {replayed.layer_ids} from {source.layer_ids}"
+        )
+        for layer_id in source.layer_ids:
+            before, after = source.get_layer(layer_id), replayed.get_layer(layer_id)
+            assert after.kind == before.kind, (
+                f"layer {layer_id!r} changed kind on replay: {after.kind} vs {before.kind}"
+            )
+
+    def test_the_display_crs_is_carried_by_the_figure(self, dataset):
+        """The replayed map is drawn in the CRS the figure's viewport names, without being told."""
+        source = InteractiveMap(crs=3857)
+        source.field(dataset)
+        replayed = api.to_backend(source.figure_spec, backend="interactive")
+        assert replayed.viewport.crs == source.viewport.crs

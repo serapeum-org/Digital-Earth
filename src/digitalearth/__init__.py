@@ -271,7 +271,7 @@ load_installed_plugins()
 #: Each home module, with the public names imported from it. Grouped by module so each path is written once;
 #: :data:`_LAZY_EXPORTS` is the name -> module index `__getattr__` looks names up in.
 _LAZY_MODULES = {
-    "digitalearth.api": ("quickmap", "quickplot"),
+    "digitalearth.api": ("quickmap", "quickplot", "to_backend"),
     "digitalearth.base.sources": ("DimensionInfo", "Source", "get_source"),
     "digitalearth.ops.batch": ("Batch",),
     "digitalearth.ops.browser": ("gallery",),
@@ -323,7 +323,7 @@ if TYPE_CHECKING:
     from digitalearth import base as base
     from digitalearth import ops as ops
     from digitalearth import static as static
-    from digitalearth.api import quickmap, quickplot
+    from digitalearth.api import quickmap, quickplot, to_backend
     from digitalearth.base.sources import DimensionInfo, Source, get_source
     from digitalearth.ops.batch import Batch
     from digitalearth.ops.browser import gallery
@@ -358,6 +358,7 @@ __all__ = [
     # one-call API + composition
     "quickplot",
     "quickmap",
+    "to_backend",
     "Map",
     "Scene",
     "TexturedGlobe",

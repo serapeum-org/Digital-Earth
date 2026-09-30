@@ -1298,6 +1298,68 @@ class WebMapBase:
 
         refresh_legend_panel(self)
 
+    def draw_figure(self, figure: FigureSpec) -> Self:
+        """Draw a figure into this map, bringing it from whatever it showed before.
+
+        This tier's counterpart of the 3-D scene's ``draw_figure``. Unlike the static and interactive tiers,
+        this tier's figure_spec **does** carry the panel's title and furniture (:meth:`_figure_with` reads
+        ``self._title``/``self._furniture``), so those are restored here alongside the sources before
+        :meth:`_change` runs — otherwise a web→web round trip would drop the title and the scale bar. As on the
+        other 2-D tiers, ``_change`` derives sources from ``self._sources``, so the figure's own sources are
+        installed first or :meth:`~digitalearth.web.renderer.Renderer.apply` would have nothing to open.
+
+        Args:
+            figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
+                CRS, centre and zoom at construction; here its layers, title and furniture are drawn.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+            OffLimbError: when the map is ``strict`` and a layer cannot be placed.
+        """
+        panel = figure.panels[0]
+        self._sources = dict(figure.sources)
+        self._title = panel.title
+        self._furniture = list(panel.furniture)
+        self._change(figure)
+        return self
+
+    @classmethod
+    def from_figure(cls, figure: FigureSpec, **scene_kwargs: Any) -> Self:
+        """Build a map and draw a figure into it — the round trip the description seam exists for.
+
+        A map describes itself with :attr:`figure_spec`, the description survives ``to_dict()``/``from_dict()``,
+        and this draws it again. :func:`digitalearth.api.to_backend` dispatches here for ``backend="web"``.
+
+        Args:
+            figure: The figure to draw.
+            **scene_kwargs: Passed to the constructor — ``style``, ``height``, ``strict``; a ``crs``, ``center``
+                or ``zoom`` here overrides the one the figure's viewport carries.
+
+        Returns:
+            The map, with every layer drawn.
+
+        Examples:
+            A round trip is exercised in ``tests/`` under the ``web`` environment (the builders this replays
+            need MapLibre, so no doctest runs it here).
+        """
+        view = figure.panels[0].view
+        kwargs: Dict[str, Any] = {}
+        crs = getattr(view, "crs", None)
+        if crs is not None:
+            kwargs["crs"] = crs
+        center = getattr(view, "center", None)
+        if center is not None:
+            kwargs["center"] = center
+        zoom = getattr(view, "zoom", None)
+        if zoom is not None:
+            kwargs["zoom"] = zoom
+        scene = cls(**{**kwargs, **scene_kwargs})
+        scene.draw_figure(figure)
+        return scene
+
     def _require_layer(self, layer_id: Any) -> None:
         """Refuse an id this map does not draw, naming the ids it does.
 

@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     # A type checker resolves `Map` from here; at runtime it is imported lazily inside each function that
     # builds one, so importing `api` — and a `web`/`interactive`/`3d` `quickmap` — never loads the
     # matplotlib tier, which `digitalearth.static` imports eagerly with `Map` (DE-24).
+    from digitalearth.base.spec import FigureSpec
     from digitalearth.static import Map
 
 logger = logging.getLogger(__name__)
@@ -415,6 +416,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
 __all__ = [
     "quickmap",
     "quickplot",
+    "to_backend",
     "field",
     "contours",
     "pcolormesh",
@@ -886,6 +888,73 @@ def quickmap(
         colorbar=colorbar,
         **kwargs,
     )
+
+
+def to_backend(
+    figure: "FigureSpec", backend: str = "matplotlib", **scene_kwargs: Any
+) -> Any:
+    """Render an engine-neutral :class:`~digitalearth.base.spec.FigureSpec` on a chosen ``backend`` (U-6).
+
+    The inverse of every tier's :attr:`figure_spec`: where that describes a built scene *as data*, this
+    replays the description onto a fresh scene of the named ``backend`` by handing the whole figure to that
+    tier's own ``from_figure``. So nothing here renders — it only dispatches, reusing the same lazy backend
+    seam ``quickmap`` does (DE-24), so importing ``api`` still loads no renderer until one is asked for.
+
+    One ``FigureSpec``, four renderings: the figure carries kinds, sources, draw order, visibility and the
+    portable half of each layer's colour encoding, so the same description drawn on another backend is the
+    same map its engine can express. What a tier cannot carry portably — style keywords the matplotlib and
+    3-D tiers keep flat in ``props`` — redraws with that engine's defaults rather than being faked; a figure
+    with an ``object:`` (in-memory) source replays in-process but cannot be stored (``to_dict`` refuses it).
+
+    Args:
+        figure: The :class:`~digitalearth.base.spec.FigureSpec` to draw, from another scene's
+            :attr:`figure_spec` (optionally through ``to_dict()``/``from_dict()``).
+        backend: ``"matplotlib"`` (static, the default), ``"interactive"`` (HoloViz), ``"web"``
+            (MapLibre + deck.gl) or ``"3d"`` (PyVista). Validated against :data:`BACKEND_CAPABILITIES`.
+        **scene_kwargs: Forwarded to the tier's constructor (e.g. ``strict``, ``figsize``, ``off_screen``);
+            a ``crs=`` here overrides the one the figure's view carries.
+
+    Returns:
+        The built tier scene (``Map`` / ``InteractiveMap`` / ``WebMap`` / ``Scene3D``), the same return
+        contract as :func:`quickmap`.
+
+    Raises:
+        ValueError: if ``backend`` is not one of the four.
+
+    Examples:
+        - An unknown backend is refused by name, before anything is built:
+            ```python
+            >>> from digitalearth.api import to_backend
+            >>> to_backend("anything", backend="nope")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: unknown backend 'nope'; choose 'matplotlib' (static), ...
+
+            ```
+
+        A round-trip example — build a scene, store it, draw it again — lives on each tier's ``from_figure``
+        (e.g. :meth:`digitalearth.three_d.Scene3D.from_figure`).
+    """
+    if backend not in BACKEND_CAPABILITIES:
+        raise ValueError(
+            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
+            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
+        )
+    if backend == "3d":
+        from digitalearth.three_d import Scene3D
+
+        return Scene3D.from_figure(figure, **scene_kwargs)
+    if backend == "interactive":
+        from digitalearth.interactive import InteractiveMap
+
+        return InteractiveMap.from_figure(figure, **scene_kwargs)
+    if backend == "web":
+        from digitalearth.web import WebMap
+
+        return WebMap.from_figure(figure, **scene_kwargs)
+    from digitalearth.static import Map
+
+    return Map.from_figure(figure, **scene_kwargs)
 
 
 def _quickmap_matplotlib(
