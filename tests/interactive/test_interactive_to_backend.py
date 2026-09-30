@@ -32,8 +32,15 @@ class TestInteractiveRoundTrip:
             )
 
     def test_the_display_crs_is_carried_by_the_figure(self, dataset):
-        """The replayed map is drawn in the CRS the figure's viewport names, without being told."""
-        source = InteractiveMap(crs=3857)
+        """The replayed map is drawn in the CRS the figure's viewport names, without being told.
+
+        The source is built in ``4326``, not the tier default ``3857``, so a ``from_figure`` that dropped the
+        CRS would default the replay to ``3857`` and this assertion would fail — the test can only pass when
+        the CRS is genuinely carried across.
+        """
+        source = InteractiveMap(crs=4326)
         source.field(dataset)
         replayed = api.to_backend(source.figure_spec, backend="interactive")
-        assert replayed.viewport.crs == source.viewport.crs
+        assert replayed.viewport.crs == source.viewport.crs == 4326, (
+            f"CRS not carried: source {source.viewport.crs}, replayed {replayed.viewport.crs}"
+        )
