@@ -22,7 +22,7 @@ from digitalearth.base import autostyle, registry
 from digitalearth.base.autostyle import auto_style, load_library
 from digitalearth.base.registry import resolve_uri, resolvers
 from digitalearth.base.sources import DimensionInfo, Source
-from digitalearth.ops.plugins import GROUPS, load_plugins
+from digitalearth.ops.plugins import GROUPS, iter_plugins, load_plugins
 
 
 class _FakeEP:
@@ -287,6 +287,49 @@ class TestDiscoveryFailingDoesNotAbortImport:
         assert "corrupt distribution metadata" in caplog.text, (
             "the discovery failure is logged, not propagated"
         )
+
+
+class TestTheExplicitDiscoveryApiPropagatesEnumerationFailures:
+    """The public iter_plugins/load_plugins propagate a metadata-enumeration failure to a direct caller (N2).
+
+    Deliberate asymmetry with ``load_installed_plugins``, the import-time convenience path (M1/L5): that path
+    tolerates a corrupt environment so ``import digitalearth`` cannot die, but a direct programmatic call to the
+    public helpers is an explicit request to enumerate the environment, so a failure there is the caller's to
+    see and handle rather than one the library silently swallows into an empty result.
+    """
+
+    def test_iter_plugins_propagates_an_entry_points_failure(self, monkeypatch):
+        """Iterating the public generator surfaces a raising ``entry_points()``, not an empty iterator.
+
+        Test scenario:
+            A corrupt/partial environment makes ``entry_points()`` raise. ``iter_plugins`` must not swallow it;
+            the failure reaches the caller who asked to enumerate. ``entry_points()`` is evaluated lazily on the
+            first advance, so the generator is built outside the ``raises`` block, leaving exactly one throwing
+            call (``next``) inside it.
+        """
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("corrupt distribution metadata")
+
+        monkeypatch.setattr("digitalearth.ops.plugins.entry_points", _raise)
+        iterator = iter_plugins("digitalearth.styles")
+        with pytest.raises(RuntimeError, match="corrupt distribution metadata"):
+            next(iterator)
+
+    def test_load_plugins_propagates_an_entry_points_failure(self, monkeypatch):
+        """``load_plugins`` lets the same enumeration failure propagate to its direct caller.
+
+        Test scenario:
+            ``load_plugins`` drives ``iter_plugins``; a raising ``entry_points()`` therefore propagates out of
+            the call. Only a per-plugin ``load()`` is tolerated internally, not enumeration itself.
+        """
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("corrupt distribution metadata")
+
+        monkeypatch.setattr("digitalearth.ops.plugins.entry_points", _raise)
+        with pytest.raises(RuntimeError, match="corrupt distribution metadata"):
+            load_plugins("digitalearth.styles")
 
 
 class TestShadowingABuiltInWarns:

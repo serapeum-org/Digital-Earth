@@ -190,6 +190,9 @@ def register_plugins(group: str, loaded: dict[str, Any]) -> None:
             # check — a non-(scheme, resolver) pair, a non-mapping style library) are tolerated, so one bad
             # plugin cannot abort the healthy ones (L4). An unexpected error from a registrar is a genuine
             # wiring bug, not a bad plugin, and is left to propagate rather than hidden at WARNING during import.
+            # This narrowness is deliberate, and the opposite of load_installed_plugins' broad discovery catch:
+            # here the exception shapes are our own contract check's and thus known; there they are a corrupt
+            # environment's and open-ended. See the comment at that catch (L5) for the full contrast.
             _plugin_logger.warning(
                 "skipping plugin %r in group %r: %s", name, group, exc
             )
@@ -216,9 +219,25 @@ def load_installed_plugins() -> None:
     from digitalearth.ops.plugins import GROUPS, load_plugins
 
     for group in GROUPS:
+        # This catch is broad on purpose (L5), and the deliberate opposite of register_plugins' narrow
+        # (TypeError, ValueError) catch, because the two guards protect different things:
+        #   * Here the guarded call is third-party-metadata enumeration. entry_points() reads arbitrary
+        #     installed distributions, whose corruption modes (malformed METADATA, a broken RECORD, a bad
+        #     encoding) are open-ended and raised by importlib/stdlib internals -- there is no narrow exception
+        #     tuple that means "the environment is corrupt". A corrupt env is not a bug in our code, and
+        #     narrowing would let a real enumeration failure abort `import digitalearth`, the exact thing this
+        #     guard exists to prevent. The accepted tradeoff -- a coding bug in the tiny iter_plugins/
+        #     load_plugins loop would also be logged here rather than raised -- is the right call at the import
+        #     boundary, where keeping the package importable outweighs surfacing a bug in two doctest-covered
+        #     functions.
+        #   * register_plugins narrows to (TypeError, ValueError) because those are exactly the shapes its own
+        #     contract check raises for a malformed plugin object; anything else there is our wiring bug and
+        #     must surface (L4). Discovery cannot make that assumption, so it stays broad.
+        # The explicit public API takes the opposite stance again: load_plugins/iter_plugins propagate an
+        # enumeration failure to a direct caller (N2). This import-time path is the sole place it is tolerated.
         try:
             loaded = load_plugins(group)
-        except Exception as exc:  # metadata enumeration failed; keep the package importable without this group
+        except Exception as exc:  # corrupt/partial env: keep the package importable without this group's plugins
             _plugin_logger.warning(
                 "could not enumerate %r plugins (entry-point discovery failed); continuing without them: %s",
                 group,
