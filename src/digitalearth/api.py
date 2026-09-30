@@ -28,8 +28,11 @@ support is forwarded to it.
 ``ValueError`` around ``quickmap`` keeps catching it, and one that wants only this refusal can now name it.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from collections.abc import Callable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -39,11 +42,14 @@ from digitalearth.base.types import PlottableData
 from digitalearth.interactive.capabilities import (
     CAPABILITIES as CAPABILITIES_INTERACTIVE,
 )
-from digitalearth.static import Map
-from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
-from digitalearth.static.guides import guide_kind
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
+
+if TYPE_CHECKING:
+    # A type checker resolves `Map` from here; at runtime it is imported lazily inside each function that
+    # builds one, so importing `api` — and a `web`/`interactive`/`3d` `quickmap` — never loads the
+    # matplotlib tier, which `digitalearth.static` imports eagerly with `Map` (DE-24).
+    from digitalearth.static import Map
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +92,80 @@ _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "colorbar": ("colorbar", "legend"),
 }
 
-#: Every tier's declaration. Each replaces a row that used to be written out here, and the last of them —
-#: `matplotlib` — landed with the static seam's own `capabilities.py`, so no row is hand-written any more.
-_DECLARATIONS: dict[str, Capabilities] = {
-    "matplotlib": CAPABILITIES_STATIC,
-    "3d": CAPABILITIES_3D,
-    "web": CAPABILITIES_WEB,
-    "interactive": CAPABILITIES_INTERACTIVE,
-}
+_V = TypeVar("_V")
+
+
+class _LazyBackendMap(Mapping[str, _V]):
+    """A backend→value table whose ``matplotlib`` row is resolved, and cached, on first read.
+
+    Reading the ``matplotlib`` row is what loads the matplotlib tier: ``digitalearth.static`` imports
+    ``Map`` eagerly, so its :class:`~digitalearth.base.capabilities.Capabilities` cannot be read without
+    loading matplotlib. The three tiers that declare their capabilities engine-free (``3d``, ``web``,
+    ``interactive``) are held eagerly; ``matplotlib`` is deferred. Membership and iteration name all four
+    backends **without** resolving any row, so ``import digitalearth.api``, ``backend in
+    BACKEND_CAPABILITIES`` — asked on every ``quickmap`` — and a ``web``/``interactive``/``3d`` call never
+    load matplotlib (DE-24). Only reading the matplotlib row itself, or a refusal message that has to name
+    which backends honour a keyword, does.
+
+    Args:
+        eager: The rows that need no engine to build, by backend.
+        lazy: The zero-argument builders for the deferred rows, by backend — each called once and cached.
+    """
+
+    def __init__(
+        self, eager: Mapping[str, _V], lazy: Mapping[str, Callable[[], _V]]
+    ) -> None:
+        self._eager = dict(eager)
+        self._lazy = dict(lazy)
+        self._cache: dict[str, _V] = {}
+
+    def __getitem__(self, backend: str) -> _V:
+        """Return a backend's row, building and caching a deferred one on first read."""
+        if backend in self._eager:
+            return self._eager[backend]
+        if backend not in self._lazy:
+            raise KeyError(backend)
+        if backend not in self._cache:
+            self._cache[backend] = self._lazy[backend]()
+        return self._cache[backend]
+
+    def __contains__(self, backend: object) -> bool:
+        """Answer membership from the backend names alone, resolving no deferred row."""
+        return backend in self._eager or backend in self._lazy
+
+    def __iter__(self) -> Iterator[str]:
+        """Yield the backend names — the eager ones, then the deferred — resolving nothing."""
+        yield from self._eager
+        yield from self._lazy
+
+    def __len__(self) -> int:
+        """Return the number of backends, deferred rows included, resolving nothing."""
+        return len(self._eager) + len(self._lazy)
+
+
+def _static_declaration() -> Capabilities:
+    """Return the matplotlib tier's :class:`Capabilities`, importing ``digitalearth.static`` lazily.
+
+    That import loads matplotlib — the tier imports ``Map`` eagerly — so it is deferred to the moment a
+    caller actually needs the matplotlib row, never at ``import digitalearth.api`` (DE-24).
+    """
+    from digitalearth.static.capabilities import CAPABILITIES
+
+    return CAPABILITIES
+
+
+#: Every tier's declaration, read from the tier's own `capabilities.py`. The three engine-free tiers are
+#: held eagerly; `matplotlib` is deferred through :func:`_static_declaration`, because reading it loads the
+#: matplotlib tier and importing `api` must not (DE-24). It still names all four backends, and reading its
+#: `matplotlib` entry gives the same `Capabilities` the hand-written row derived from before.
+_DECLARATIONS: Mapping[str, Capabilities] = _LazyBackendMap(
+    eager={
+        "3d": CAPABILITIES_3D,
+        "web": CAPABILITIES_WEB,
+        "interactive": CAPABILITIES_INTERACTIVE,
+    },
+    lazy={"matplotlib": _static_declaration},
+)
 
 
 def _declared_row(declaration: Capabilities) -> frozenset[str]:
@@ -160,10 +232,13 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
 #:   and stays with U-3.
-BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
-    backend: _declared_row(declaration)
-    for backend, declaration in _DECLARATIONS.items()
-}
+BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
+    eager={
+        backend: _declared_row(_DECLARATIONS[backend])
+        for backend in ("3d", "web", "interactive")
+    },
+    lazy={"matplotlib": lambda: _declared_row(_static_declaration())},
+)
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
@@ -384,6 +459,8 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
         Nothing. Both methods return the map itself, as the Core declares, so there is no artist to hand
         back; the drawn key is reachable per layer from the renderer.
     """
+    from digitalearth.static.guides import guide_kind
+
     keyed = scene._color_keyed()
     if not keyed:  # pragma: no cover - `_has_a_key_to_draw` is asked first
         return
@@ -770,6 +847,8 @@ def _quickmap_matplotlib(
     Returns:
         The decorated map.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
@@ -1467,6 +1546,8 @@ def grid_cells(data: PlottableData, **kwargs) -> Map:
         ValueError: from ``PolygonGlyph`` for a styling keyword it does not accept — which is also what a
             stray ``backend=`` becomes here.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.grid_cells(data, **kwargs)
     return _finish(scene, colorbar=True)
@@ -1542,6 +1623,8 @@ def voronoi(data: PlottableData, column: str | None = None, **kwargs) -> Map:
     See Also:
         digitalearth.static.maps.vector.VectorMixin.voronoi: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.voronoi(data, column=column, **kwargs)
     return _finish(scene, colorbar=column is not None)
@@ -1601,6 +1684,8 @@ def cartogram(
     See Also:
         digitalearth.static.maps.vector.VectorMixin.cartogram: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.cartogram(data, scale=scale, column=column, **kwargs)
     return _finish(scene, colorbar=column is not None)
@@ -1655,6 +1740,8 @@ def quadtree(data: PlottableData, column: str | None = None, **kwargs) -> Map:
     See Also:
         digitalearth.static.maps.vector.VectorMixin.quadtree: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.quadtree(data, column=column, **kwargs)
     return _finish(scene, colorbar=True)
@@ -1679,6 +1766,8 @@ def kde(data: PlottableData, **kwargs) -> Map:
     See Also:
         digitalearth.static.maps.vector.VectorMixin.kde: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.kde(data, **kwargs)
     return _finish(scene, colorbar=True)
@@ -1751,6 +1840,8 @@ def sankey(
     See Also:
         digitalearth.static.maps.vector.VectorMixin.sankey: the ``Map`` method this wraps.
     """
+    from digitalearth.static import Map
+
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.sankey(data, column=column, scale=scale, **kwargs)
     return _finish(scene, colorbar=column is not None)
