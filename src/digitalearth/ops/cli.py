@@ -113,7 +113,11 @@ def _plot_kwargs(args: argparse.Namespace) -> dict:
     accepts only that, and 3857 for every other tier, so ``--backend web`` works out of the box (M2). An
     explicit ``--crs`` is forwarded unchanged.
     """
-    crs = args.crs if args.crs is not None else _DEFAULT_CRS.get(args.backend, _FALLBACK_CRS)
+    crs = (
+        args.crs
+        if args.crs is not None
+        else _DEFAULT_CRS.get(args.backend, _FALLBACK_CRS)
+    )
     kwargs: dict = {
         "backend": args.backend,
         "crs": crs,

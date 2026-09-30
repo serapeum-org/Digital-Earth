@@ -274,7 +274,9 @@ class TestGalleryPerTileTolerance:
         """A batch with a missing raster still renders the good HTML tile beside a placeholder."""
         page = gallery([web_page, missing_png], tmp_path / "index.html")
         text = page.read_text(encoding="utf-8")
-        assert "<iframe" in text, "the good HTML tile must survive an unreadable sibling"
+        assert "<iframe" in text, (
+            "the good HTML tile must survive an unreadable sibling"
+        )
         assert 'href="gone.png"' in text, (
             "the unreadable raster should degrade to a placeholder linking the file by name"
         )
@@ -305,19 +307,25 @@ class TestGalleryLargePageGuard:
         big.write_text("<html><body>" + "x" * 4000 + "</body></html>", encoding="utf-8")
         page = gallery([big], tmp_path / "index.html")
         text = page.read_text(encoding="utf-8")
-        assert "<iframe" not in text, "an oversize page must not be inlined as an iframe"
+        assert "<iframe" not in text, (
+            "an oversize page must not be inlined as an iframe"
+        )
         assert "srcdoc=" not in text, "an oversize page must not be inlined into srcdoc"
         assert 'href="huge.html"' in text, "an oversize page should be linked by name"
         assert "MB" in text, "the placeholder should name the page's size"
 
     def test_small_html_page_is_still_inlined(self, tmp_path, monkeypatch):
         """A page under the limit still inlines as a sandboxed iframe — the guard only catches large pages."""
-        monkeypatch.setattr(browser, "_MAX_INLINE_HTML_BYTES", 10_000_000, raising=False)
+        monkeypatch.setattr(
+            browser, "_MAX_INLINE_HTML_BYTES", 10_000_000, raising=False
+        )
         small = tmp_path / "small.html"
         small.write_text("<html><body>tiny</body></html>", encoding="utf-8")
         page = gallery([small], tmp_path / "index.html")
         text = page.read_text(encoding="utf-8")
-        assert "<iframe" in text, "a page under the limit should still inline as an iframe"
+        assert "<iframe" in text, (
+            "a page under the limit should still inline as an iframe"
+        )
         assert "srcdoc=" in text, "a page under the limit should be inlined into srcdoc"
 
     def test_oversize_html_page_logs_a_warning_naming_the_file(
