@@ -180,3 +180,39 @@ class TestGalleryBackendDispatch:
         assert 'href="scene.bin"' in text, (
             "the placeholder should link the file by name"
         )
+
+
+class TestGalleryIframeSandbox:
+    """The HTML iframe is sandboxed so an embedded page's scripts cannot reach the gallery or siblings (M4)."""
+
+    def test_html_iframe_carries_a_sandbox_attribute(self, tmp_path, web_page):
+        """An HTML page's ``<iframe>`` is emitted sandboxed, not as an unrestricted frame."""
+        page = gallery([web_page], tmp_path / "index.html")
+        text = page.read_text(encoding="utf-8")
+        iframe = re.search(r"<iframe[^>]*>", text)
+        assert iframe is not None, "the HTML page should render in an <iframe>"
+        assert "sandbox=" in iframe.group(0), (
+            f"the iframe must be sandboxed, got {iframe.group(0)!r}"
+        )
+
+    def test_sandbox_grants_scripts_only_not_same_origin(self, tmp_path, web_page):
+        """The sandbox grants exactly ``allow-scripts`` — deck.gl/MapLibre render, but with no same-origin reach.
+
+        ``allow-scripts`` together with ``allow-same-origin`` would let the framed page remove its own
+        sandbox, so the token set must hold the former and never the latter.
+        """
+        page = gallery([web_page], tmp_path / "index.html")
+        text = page.read_text(encoding="utf-8")
+        match = re.search(r'<iframe[^>]*\bsandbox="([^"]*)"', text)
+        assert match is not None, "the iframe must carry a sandbox attribute"
+        granted = match.group(1).split()
+        assert "allow-scripts" in granted, (
+            "a deck.gl/MapLibre page needs scripts to render, so allow-scripts is required"
+        )
+        assert "allow-same-origin" not in granted, (
+            "allow-scripts + allow-same-origin together would defeat the sandbox"
+        )
+        # Build the expected token set independently of the generated attribute (not a value == itself check).
+        assert set(granted) == {"allow-scripts"}, (
+            f"the sandbox should grant only allow-scripts, got {granted!r}"
+        )

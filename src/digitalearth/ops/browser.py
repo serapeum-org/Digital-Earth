@@ -60,6 +60,14 @@ _RASTER_MEDIA_TYPES = {
 #: HTML-page suffixes embedded as an ``<iframe srcdoc>`` (what the web/interactive/3-D backends save).
 _HTML_SUFFIXES = frozenset({".html", ".htm"})
 
+#: The ``sandbox`` token set every embedded HTML page's ``<iframe>`` carries (M4). ``allow-scripts`` lets a
+#: deck.gl/MapLibre page's own scripts run — they must, to draw the map — while the absence of
+#: ``allow-same-origin`` keeps the page in an opaque origin with no reach to ``window.parent`` (the gallery) or
+#: its sibling frames. The two together would let the framed document escape its sandbox, so
+#: ``allow-same-origin`` is never added; a page needing genuine same-origin storage cannot be framed, which map
+#: tiles never need. This makes the ``<iframe>`` path as script-safe as the SVG-via-``<img>`` path already is.
+_IFRAME_SANDBOX = "allow-scripts"
+
 
 def _image_card(image: Path, media_type: str, safe_caption: str) -> str:
     """Base64-embed one raster into an ``<img>`` ``<figure>`` card (no external file reference)."""
@@ -71,7 +79,7 @@ def _image_card(image: Path, media_type: str, safe_caption: str) -> str:
 
 
 def _page_card(page: Path, safe_caption: str) -> str:
-    """Embed one HTML page into an ``<iframe srcdoc>`` card so it renders in place.
+    """Embed one HTML page into a sandboxed ``<iframe srcdoc>`` card so it renders in place.
 
     The page's whole markup is HTML-escaped with ``quote=True`` — its ``"`` become ``&quot;`` and its
     ``<``/``>`` become ``&lt;``/``&gt;`` — and placed in the ``srcdoc`` attribute; the browser un-escapes it
@@ -79,10 +87,21 @@ def _page_card(page: Path, safe_caption: str) -> str:
     self-contained file (a linked ``src=`` would need the page as a sibling asset and break that). A rich page
     (e.g. a deck.gl scene) can be megabytes and is inlined in full, so a gallery of many web pages grows to
     match.
+
+    The iframe carries ``sandbox="allow-scripts"`` (:data:`_IFRAME_SANDBOX`) so a deck.gl/MapLibre page's own
+    scripts still run — they must, to draw the map — but the page loads into an **opaque origin**: it cannot
+    reach ``window.parent`` (the gallery) or its sibling frames, so a tile whose markup derives from untrusted
+    source data (feature attributes interpolated into popups/labels) cannot script the rest of the page. This
+    mirrors the script-safety the SVG-via-``<img>`` path already has (see :data:`_RASTER_MEDIA_TYPES`).
+    ``allow-same-origin`` is deliberately **not** granted: combined with ``allow-scripts`` it would let the
+    framed document reach out of its own sandbox, defeating the isolation. The trade-off is that a page needing
+    genuine same-origin storage (cookies / ``localStorage`` / IndexedDB) will not work when framed — map tiles
+    do not need it, so the isolation is the right default.
     """
     srcdoc = html.escape(page.read_text(encoding="utf-8"), quote=True)
     return (
-        f'  <figure><iframe title="{safe_caption}" srcdoc="{srcdoc}" loading="lazy"></iframe>'
+        f'  <figure><iframe title="{safe_caption}" srcdoc="{srcdoc}"'
+        f' sandbox="{_IFRAME_SANDBOX}" loading="lazy"></iframe>'
         f"<figcaption>{safe_caption}</figcaption></figure>"
     )
 
