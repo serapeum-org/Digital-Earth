@@ -302,7 +302,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )  # render headless to a file — set on invocation, never on import
     args = build_parser().parse_args(argv)
     try:
-        return args.func(args)
+        exit_code: int = args.func(args)
+        return exit_code
     except _USER_FACING_ERRORS as error:
         # A request a tier refused (incompatible --crs) or an input that is not geospatial data reaches the
         # user as one actionable line, not a traceback (L1). A programming error is not in this set, so it

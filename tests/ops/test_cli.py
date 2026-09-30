@@ -240,7 +240,9 @@ class TestBackendCrsDefault:
         spy = mocker.patch("digitalearth.ops.cli.quickmap")
         rc = main(["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "3d"])
         assert rc == 0, "a bare `plot --backend 3d` should succeed"
-        assert "crs" in spy.call_args.kwargs, "quickmap should still be told a crs keyword"
+        assert "crs" in spy.call_args.kwargs, (
+            "quickmap should still be told a crs keyword"
+        )
         assert spy.call_args.kwargs["crs"] is None, (
             f"a default 3d plot should forward crs=None (native), got {spy.call_args.kwargs['crs']!r}"
         )
@@ -591,12 +593,18 @@ class TestMainErrorHandling:
         src = tmp_path / "in.tif"
         dataset.to_file(str(src))
         message = "the web tier renders in EPSG:4326 only, but crs=3857 was given"
-        mocker.patch(
-            "digitalearth.ops.cli.quickmap", side_effect=ValueError(message)
-        )
+        mocker.patch("digitalearth.ops.cli.quickmap", side_effect=ValueError(message))
         rc = main(
-            ["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "web",
-             "--crs", "3857"]
+            [
+                "plot",
+                str(src),
+                "-o",
+                str(tmp_path / "m.html"),
+                "--backend",
+                "web",
+                "--crs",
+                "3857",
+            ]
         )
         captured = capsys.readouterr()
         assert rc != 0, f"an incompatible explicit --crs should exit non-zero, got {rc}"
