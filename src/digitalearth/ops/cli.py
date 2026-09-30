@@ -57,6 +57,22 @@ _DEFAULT_CRS: dict = {"web": 4326}
 #: The CRS default for every backend not named in :data:`_DEFAULT_CRS` — the historical CLI default, unchanged.
 _FALLBACK_CRS = 3857
 
+#: The error families :func:`main` turns into a clean ``error: <message>`` line on stderr plus a non-zero exit,
+#: instead of letting a raw Python traceback escape (L1). These are the *user-facing* failures a CLI invocation
+#: can legitimately provoke:
+#:
+#: * ``ValueError`` — a tier rejecting an incompatible request, e.g. ``--backend web --crs 3857`` raising
+#:   "the web tier renders in EPSG:4326 only …", or any other value a backend validates and refuses by name.
+#: * ``OSError`` — a missing, locked, or unreadable input path (``FileNotFoundError``/``PermissionError``).
+#: * ``RuntimeError`` — a file that is not geospatial data: the loader (:func:`~digitalearth.ops.batch.load_input`)
+#:   re-raises pyogrio's ``DataSourceError``, which subclasses ``RuntimeError``. It is named by its base class
+#:   here on purpose — pyogrio is a GIS-IO library this package must not import (pyramids is the only GIS
+#:   dependency), so the concrete class cannot be referenced without reaching around pyramids.
+#:
+#: Deliberately *not* listed: ``TypeError``, ``AttributeError``, ``KeyError`` and the rest — a bug in the render
+#: path is not a user error, so it still tracebacks rather than being disguised as a clean CLI message.
+_USER_FACING_ERRORS: tuple = (ValueError, OSError, RuntimeError)
+
 
 def _parse_crs(value: str) -> Any:
     """Parse a ``--crs`` argument as an EPSG int when all-digits, else a proj4/WKT string."""
@@ -242,7 +258,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         argv: Argument list (excluding the program name); defaults to ``sys.argv[1:]``.
 
     Returns:
-        Process exit code (``0`` on success).
+        Process exit code: ``0`` on success, a non-zero code when a user-facing error
+        (:data:`_USER_FACING_ERRORS`) is reported as a clean ``error: <message>`` line on stderr instead of a
+        traceback (L1).
 
     Examples:
         - Render the bundled sample raster to a temporary PNG:
@@ -258,10 +276,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             True
 
             ```
+        - A bad input is reported as a one-line error and a non-zero exit, not a traceback:
+            ```python
+            >>> import tempfile, os
+            >>> from digitalearth.ops.cli import main
+            >>> bogus = os.path.join(tempfile.mkdtemp(), "not_geo.tif")
+            >>> _ = open(bogus, "w").write("plain text, not geospatial data")
+            >>> main(["plot", bogus]) != 0
+            True
+
+            ```
     """
     matplotlib.use(
         "Agg", force=True
     )  # render headless to a file — set on invocation, never on import
     args = build_parser().parse_args(argv)
-    exit_code: int = args.func(args)
-    return exit_code
+    try:
+        return args.func(args)
+    except _USER_FACING_ERRORS as error:
+        # A request a tier refused (incompatible --crs) or an input that is not geospatial data reaches the
+        # user as one actionable line, not a traceback (L1). A programming error is not in this set, so it
+        # still escapes and tracebacks — a bug must not masquerade as a clean CLI error.
+        print(f"error: {error}", file=sys.stderr)
+        return 1

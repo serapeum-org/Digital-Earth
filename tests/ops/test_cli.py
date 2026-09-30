@@ -6,7 +6,13 @@ import pytest
 from pyramids.feature import FeatureCollection
 
 from digitalearth.ops.batch import load_input
-from digitalearth.ops.cli import _load, _parse_crs, _plot_kwargs, build_parser, main
+from digitalearth.ops.cli import (
+    _load,
+    _parse_crs,
+    _plot_kwargs,
+    build_parser,
+    main,
+)
 
 
 class TestParseCrs:
@@ -508,3 +514,74 @@ class TestBackendDispatch:
         assert fake.call_args.kwargs.get("ext") == "png", (
             f"an explicit --ext should win over the native ext, got {fake.call_args}"
         )
+
+
+class TestMainErrorHandling:
+    """``main`` turns a user-facing failure into a clean message, not a raw traceback (L1).
+
+    The M2 fix gave ``--backend web`` a sensible CRS default, but left ``main`` unguarded: an explicit
+    incompatible ``--crs`` (a tier ``ValueError``) or a bad input file (an open error out of the loader) still
+    reached the user as a full Python traceback. ``main`` now catches the user-facing error families
+    (``digitalearth.ops.cli._USER_FACING_ERRORS``) and prints ``error: <message>`` to stderr with a non-zero
+    exit, while a genuine programming error (``TypeError`` and friends) is deliberately *not* caught so it still
+    tracebacks.
+    """
+
+    def test_bad_input_prints_error_and_exits_non_zero(self, tmp_path, capsys):
+        """A file that is neither raster nor vector exits non-zero with an ``error:`` line, not a traceback.
+
+        Test scenario:
+            The loader raises pyogrio's ``DataSourceError`` (a ``RuntimeError``) for a non-geospatial file;
+            ``main`` must surface that as a controlled CLI error rather than letting it escape uncaught.
+        """
+        bogus = tmp_path / "not_geo.tif"
+        bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
+        rc = main(["plot", str(bogus), "-o", str(tmp_path / "out.png")])
+        captured = capsys.readouterr()
+        assert rc != 0, f"a bad input should exit non-zero, got {rc}"
+        assert captured.err.startswith("error:"), (
+            f"a bad input should print a one-line 'error:' message to stderr, got {captured.err!r}"
+        )
+
+    def test_incompatible_crs_prints_error_and_exits_non_zero(
+        self, tmp_path, dataset, mocker, capsys
+    ):
+        """A tier ``ValueError`` (e.g. an incompatible explicit ``--crs``) becomes a clean message, not a trace.
+
+        Test scenario:
+            ``quickmap`` is spied to raise the web tier's real "EPSG:4326 only" ``ValueError`` — the render
+            engine is absent from the ``dev`` env, so spying proves ``main``'s handling without a web render.
+        """
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        message = "the web tier renders in EPSG:4326 only, but crs=3857 was given"
+        mocker.patch(
+            "digitalearth.ops.cli.quickmap", side_effect=ValueError(message)
+        )
+        rc = main(
+            ["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "web",
+             "--crs", "3857"]
+        )
+        captured = capsys.readouterr()
+        assert rc != 0, f"an incompatible explicit --crs should exit non-zero, got {rc}"
+        assert message in captured.err, (
+            f"the tier's own message should reach stderr, got {captured.err!r}"
+        )
+        assert "Traceback" not in captured.err, (
+            "a user-facing error must not dump a Python traceback"
+        )
+
+    def test_programming_error_still_tracebacks(self, tmp_path, dataset, mocker):
+        """A genuine programming error (``TypeError``) is *not* swallowed — it still propagates (pins breadth).
+
+        Test scenario:
+            ``main`` must narrow its catch to user-facing families; a ``TypeError`` from the render path is a
+            bug, so it must escape to a traceback rather than be reported as a clean CLI error.
+        """
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        mocker.patch(
+            "digitalearth.ops.cli.quickmap", side_effect=TypeError("a real bug")
+        )
+        with pytest.raises(TypeError):
+            main(["plot", str(src), "-o", str(tmp_path / "m.png"), "--crs", "4326"])
