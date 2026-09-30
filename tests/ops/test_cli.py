@@ -167,13 +167,33 @@ class TestBackendCrsDefault:
             f"a matplotlib plot with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
         )
 
-    def test_interactive_and_3d_keep_crs_3857(self):
-        """interactive/3d accept 3857, so they keep the shared default — only web is special-cased."""
-        for backend in ("interactive", "3d"):
-            args = build_parser().parse_args(["plot", "in.tif", "--backend", backend])
-            assert _plot_kwargs(args)["crs"] == 3857, (
-                f"--backend {backend} with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
-            )
+    def test_interactive_keeps_crs_3857(self):
+        """interactive accepts 3857, so with no --crs it keeps the shared default."""
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "interactive"])
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            f"--backend interactive with no --crs should stay 3857, got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_3d_backend_defaults_crs_to_native(self):
+        """With no --crs, --backend 3d forwards crs=None so the 3-D scene uses the data's own CRS (L4).
+
+        The Python API leaves ``crs`` unset for ``backend="3d"`` (``quickmap`` passes ``crs=None``, so
+        ``_quickmap_3d`` keeps the data's native CRS). The CLI must match that: omitting ``--crs`` for 3d means
+        native, not a silent reprojection to Web Mercator.
+        """
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "3d"])
+        assert _plot_kwargs(args)["crs"] is None, (
+            f"--backend 3d with no --crs should default to native (None), got {_plot_kwargs(args).get('crs')!r}"
+        )
+
+    def test_3d_explicit_crs_is_still_forwarded(self):
+        """An explicit --crs for 3d is honoured (native is only the default, not a lock-out)."""
+        args = build_parser().parse_args(
+            ["plot", "in.tif", "--backend", "3d", "--crs", "3857"]
+        )
+        assert _plot_kwargs(args)["crs"] == 3857, (
+            "an explicit --crs must reach the 3-D scene, not be overridden by the native default"
+        )
 
     def test_explicit_crs_is_not_overridden_for_web(self):
         """An explicit --crs wins even for web, so the tier's own error still fires for a bad explicit choice."""
@@ -207,6 +227,22 @@ class TestBackendCrsDefault:
         assert rc == 0, "a bare `batch --backend web` should succeed, not raise"
         assert fake.call_args.kwargs.get("crs") == 4326, (
             f"Batch should be told crs=4326 for a default web batch, got {fake.call_args}"
+        )
+
+    def test_plot_3d_default_forwards_native_crs(self, tmp_path, dataset, mocker):
+        """`plot --backend 3d` with no --crs reaches quickmap with crs=None — native, not 3857 (L4, spied).
+
+        The 3-D render engine (pyvista) is absent from the ``dev`` env, so spying ``quickmap`` proves the
+        forwarded CRS without a real 3-D render.
+        """
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        spy = mocker.patch("digitalearth.ops.cli.quickmap")
+        rc = main(["plot", str(src), "-o", str(tmp_path / "m.html"), "--backend", "3d"])
+        assert rc == 0, "a bare `plot --backend 3d` should succeed"
+        assert "crs" in spy.call_args.kwargs, "quickmap should still be told a crs keyword"
+        assert spy.call_args.kwargs["crs"] is None, (
+            f"a default 3d plot should forward crs=None (native), got {spy.call_args.kwargs['crs']!r}"
         )
 
 

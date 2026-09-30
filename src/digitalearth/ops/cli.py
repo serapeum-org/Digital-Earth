@@ -44,15 +44,23 @@ _NATIVE_EXT: dict = {
     "web": "html",
 }
 
-#: The CRS forwarded to ``quickmap`` when the caller passes no ``--crs``, per backend (M2). The web tier
-#: renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the shared 3857 default made a bare
-#: ``digitalearth plot IN --backend web`` always raise a ``ValueError`` out of the box. A sensible per-backend
-#: default just works, which is less surprising than an error the user must decode — so ``web`` defaults to
-#: 4326 while matplotlib/interactive/3d keep 3857 (:data:`_FALLBACK_CRS`), which they accept. Applied only when
-#: ``--crs`` is unset: an explicit ``--crs`` is always honoured, so a genuinely incompatible explicit choice
-#: (e.g. ``--backend web --crs 3857``) still reaches the tier's own clear error rather than being silently
-#: rewritten.
-_DEFAULT_CRS: dict = {"web": 4326}
+#: The CRS forwarded to ``quickmap`` when the caller passes no ``--crs``, per backend (M2, L4). Two tiers need
+#: a default that differs from the shared 3857 (:data:`_FALLBACK_CRS`):
+#:
+#: * ``web`` -> ``4326``. The web tier renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the
+#:   shared 3857 default made a bare ``digitalearth plot IN --backend web`` always raise a ``ValueError`` out of
+#:   the box. A sensible per-backend default just works, which is less surprising than an error the user must
+#:   decode.
+#: * ``3d`` -> ``None`` (native). The Python API leaves ``crs`` unset for ``backend="3d"`` (``quickmap`` passes
+#:   ``crs=None``, so ``_quickmap_3d`` keeps the data's own CRS). The CLI now matches that so ``--backend 3d``
+#:   with no ``--crs`` uses the native CRS instead of silently reprojecting the scene to Web Mercator, and the
+#:   two front doors agree (L4). ``None`` is a real key here, so ``dict.get`` returns it rather than falling
+#:   back to 3857.
+#:
+#: matplotlib/interactive keep 3857, which they accept. Applied only when ``--crs`` is unset: an explicit
+#: ``--crs`` is always honoured, so a genuinely incompatible explicit choice (e.g. ``--backend web --crs 3857``)
+#: still reaches the tier's own clear error rather than being silently rewritten.
+_DEFAULT_CRS: dict = {"web": 4326, "3d": None}
 
 #: The CRS default for every backend not named in :data:`_DEFAULT_CRS` — the historical CLI default, unchanged.
 _FALLBACK_CRS = 3857
@@ -91,7 +99,8 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
         "--crs",
         type=_parse_crs,
         default=None,
-        help="display CRS (EPSG int or proj4 string); default 3857, or 4326 for --backend web",
+        help="display CRS (EPSG int or proj4 string); default 3857, 4326 for --backend web, "
+        "native for --backend 3d",
     )
     parser.add_argument(
         "--kind",
@@ -126,8 +135,9 @@ def _plot_kwargs(args: argparse.Namespace) -> dict:
 
     When the caller passed no ``--crs`` (``args.crs is None``), the display CRS is the chosen backend's
     default (:data:`_DEFAULT_CRS`, falling back to :data:`_FALLBACK_CRS`) — 4326 for the web tier, which
-    accepts only that, and 3857 for every other tier, so ``--backend web`` works out of the box (M2). An
-    explicit ``--crs`` is forwarded unchanged.
+    accepts only that (M2), ``None`` (the data's native CRS) for the 3-D tier, matching the Python API (L4),
+    and 3857 for matplotlib/interactive — so ``--backend web`` and ``--backend 3d`` both work out of the box.
+    An explicit ``--crs`` is forwarded unchanged.
     """
     crs = (
         args.crs
