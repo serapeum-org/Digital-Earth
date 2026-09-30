@@ -12,6 +12,8 @@ behind whichever group a single-group test happened to cover. Fake entry points 
 as its own doctest does) stand in for an installed package; no real plugin is installed for these tests.
 """
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -252,4 +254,36 @@ class TestTheLoaderRunsWithNoPluginsInstalled:
         digitalearth.register_plugins("digitalearth.nonexistent", {"x": object()})
         assert {"file", "object"} <= set(resolvers()), (
             "an unknown group touched no registry"
+        )
+
+
+class TestDiscoveryFailingDoesNotAbortImport:
+    """entry_points() raising during discovery must not abort ``import digitalearth`` (M1)."""
+
+    def test_entry_point_enumeration_raising_is_tolerated(self, monkeypatch, caplog):
+        """A failed entry-point enumeration logs a WARNING and leaves the package importable.
+
+        Test scenario:
+            ``load_installed_plugins`` runs at ``import digitalearth``; driving ``iter_plugins`` calls
+            ``entry_points()``, which a corrupt/partial environment can make raise (malformed distribution
+            metadata, a broken ``RECORD``). The wave already tolerates a single plugin's ``load()`` raising, but
+            the discovery call itself was unguarded, so the exception propagated out of module import and killed
+            ``import digitalearth`` entirely. With discovery guarded, the call returns without raising, registers
+            nothing, leaves the built-in resolvers untouched, and logs the failure — so the import that runs it
+            still succeeds.
+        """
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("corrupt distribution metadata")
+
+        # Patch the name discovery looks it up under: iter_plugins imports entry_points into ops.plugins.
+        monkeypatch.setattr("digitalearth.ops.plugins.entry_points", _raise)
+        before = sorted(resolvers())
+        with caplog.at_level(logging.WARNING, logger="digitalearth"):
+            digitalearth.load_installed_plugins()  # must not raise
+        assert sorted(resolvers()) == before, (
+            "a failed enumeration must change no registry"
+        )
+        assert "corrupt distribution metadata" in caplog.text, (
+            "the discovery failure is logged, not propagated"
         )

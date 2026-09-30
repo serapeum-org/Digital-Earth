@@ -161,6 +161,14 @@ def load_installed_plugins() -> None:
     Called once at package import. Idempotent — re-running it re-registers the same objects, which the
     registries absorb as ordinary duplicates (last-wins), so it is safe to call again.
 
+    Discovery is itself best-effort (M1). ``load_plugins`` drives ``iter_plugins``, whose first step is
+    ``importlib.metadata.entry_points()`` — and a corrupt or partial environment (malformed distribution
+    metadata, a broken ``RECORD``) can make *that* raise, before any single plugin is even reached. Because
+    this runs at ``import digitalearth``, an unguarded failure there would abort the import of a package the
+    whole stack depends on. So enumeration of each group is wrapped: a failure logs a WARNING and leaves the
+    package importable with that group's plugins simply absent — the same best-effort stance ``load_plugins``
+    already takes for a single plugin whose ``load()`` raises.
+
     See Also:
         register_plugins: Registers the objects for one group; this calls it for each of
             :data:`digitalearth.ops.plugins.GROUPS`.
@@ -168,7 +176,16 @@ def load_installed_plugins() -> None:
     from digitalearth.ops.plugins import GROUPS, load_plugins
 
     for group in GROUPS:
-        register_plugins(group, load_plugins(group))
+        try:
+            loaded = load_plugins(group)
+        except Exception as exc:  # metadata enumeration failed; keep the package importable without this group
+            _plugin_logger.warning(
+                "could not enumerate %r plugins (entry-point discovery failed); continuing without them: %s",
+                group,
+                exc,
+            )
+            continue
+        register_plugins(group, loaded)
 
 
 load_installed_plugins()
