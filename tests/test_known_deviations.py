@@ -133,9 +133,7 @@ def render_allowlist() -> str:
     ]
     for category, heading, description in _CATEGORIES:
         rows = grouped.get(category)
-        if (
-            not rows
-        ):  # pragma: no cover - defensive: a category with no live rows is skipped
+        if not rows:
             continue
         wrapped_description = textwrap.fill(
             description, width=118, break_long_words=False, break_on_hyphens=False
@@ -161,6 +159,35 @@ def test_the_known_deviations_allowlist_is_current():
         ALLOWLIST_PATH,
         what="known-deviations allowlist",
         regenerate="python -m tests.test_known_deviations",
+    )
+
+
+def test_render_allowlist_skips_a_category_with_no_live_rows(monkeypatch):
+    """A category whose drift tables yield no live rows contributes no section.
+
+    Test scenario:
+        ``render_allowlist`` emits one section per category in ``_CATEGORIES`` that has at least one entry; a
+        category with none is skipped. With the live tables all four categories are populated, so drive the
+        skip directly by monkeypatching :func:`collect_known_deviations` to return rows for only one category,
+        then confirm the populated category's heading renders and the others' do not.
+    """
+    monkeypatch.setattr(
+        "tests.test_known_deviations.collect_known_deviations",
+        lambda: [
+            {
+                "category": "no_portable_channels",
+                "backend": "web",
+                "subject": "",
+                "reason": "r",
+            }
+        ],
+    )
+    page = render_allowlist()
+    assert "## No portable style channels" in page, (
+        f"the populated category should render:\n{page}"
+    )
+    assert "## No portable classification" not in page, (
+        f"a category with no live rows should be skipped:\n{page}"
     )
 
 
