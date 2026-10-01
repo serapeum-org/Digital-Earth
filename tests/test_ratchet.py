@@ -86,8 +86,9 @@ class TestAssertMatchesCommitted:
             committed: The committed-artifact fixture (ends with a newline).
 
         Test scenario:
-            The comparison is exact, not whitespace-insensitive, so a serialiser that dropped its trailing
-            newline would be caught rather than silently accepted.
+            The comparison is exact apart from line-ending normalisation on read (``read_text`` maps
+            CRLF/CR to LF), so a CRLF-vs-LF-only difference compares equal — but a serialiser that *dropped*
+            its trailing newline is still caught rather than silently accepted.
         """
         with pytest.raises(AssertionError) as exc_info:
             assert_matches_committed(
