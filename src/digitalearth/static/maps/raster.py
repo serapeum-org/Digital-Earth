@@ -394,6 +394,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     opts["cmap"] = auto_cmap(
         src,
         requested,
+        # `auto_cmap`'s fallback, reached only if the lookup answers no cmap. `auto_style` always answers one,
+        # so this is belt-and-suspenders — it just keeps the fallback a real name rather than the `None` a
+        # foreign figure's absent `default_cmap` would otherwise pass.
         props.get("default_cmap") or DEFAULT_FIELD_CMAP,
         lookup=lambda _: style,
     )
@@ -432,8 +435,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     drawn: DrawnLayer = scene._render_glyph(
         glyph,
         kind=kind,
-        # `.get` so a figure another tier described draws here: it carries no static `add_colorbar`/`zorder`,
-        # and a cross-tier field draws with no colorbar (the key is added separately) at the default z-order.
+        # `.get` so a figure another tier described draws here: it carries no static `add_colorbar`/`zorder`.
+        # `add_colorbar=False` is the ordinary path on this tier — the `Scene` (not the glyph) owns the
+        # colorbar and adds it from the layer's colour key — so a cross-tier field is drawn the same way a
+        # same-tier one is; it does not mean no colorbar appears.
         add_colorbar=props.get("add_colorbar", False),
         label=style.get("units"),  # the Scene's colorbar labels itself with it (T6.2)
         **plot_style,

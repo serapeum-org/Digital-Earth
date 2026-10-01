@@ -37,7 +37,7 @@ one the map describes. What `_arrange` does **not** move is a queue entry no lay
 overlay marker, and whatever a caller queued through `add_layer` as a callable, keep their slots.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
 
@@ -796,8 +796,6 @@ def hydrate_foreign_props(figure: FigureSpec) -> FigureSpec:
         The figure with each foreign layer's missing web props filled; the same object when nothing was
         missing.
     """
-    from dataclasses import replace
-
     tree = figure.layers
     changed = False
     for layer in figure.layers:
