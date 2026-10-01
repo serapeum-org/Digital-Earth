@@ -102,3 +102,26 @@ class TestMatplotlibRoundTrip:
         source.field(dataset)
         replayed = api.to_backend(source.figure_spec, backend="matplotlib")
         assert replayed.crs == source.crs
+
+    def test_explicit_set_bounds_framing_survives_the_round_trip(self, dataset):
+        """A map framed on a subregion via ``set_bounds`` keeps that frame on replay.
+
+        Args:
+            dataset: The raster fixture, drawn then framed on a sub-box of its extent.
+
+        Test scenario:
+            ``set_bounds`` records a region on the viewport the figure carries; a round trip that dropped it
+            would silently replay the full data extent instead of the asked-for subregion.
+        """
+        from digitalearth.static import Map
+
+        source = Map(crs=dataset.epsg)
+        source.field(dataset)
+        source.set_bounds([440000.0, 470000.0, 480000.0, 510000.0])
+        replayed = api.to_backend(source.figure_spec, backend="matplotlib")
+        assert replayed.viewport.bounds is not None, (
+            "set_bounds framing lost on round trip"
+        )
+        assert replayed.viewport.bounds.as_bbox() == source.viewport.bounds.as_bbox(), (
+            f"framing changed: {replayed.viewport.bounds.as_bbox()} vs {source.viewport.bounds.as_bbox()}"
+        )

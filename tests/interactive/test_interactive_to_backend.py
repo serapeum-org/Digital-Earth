@@ -44,3 +44,20 @@ class TestInteractiveRoundTrip:
         assert replayed.viewport.crs == source.viewport.crs == 4326, (
             f"CRS not carried: source {source.viewport.crs}, replayed {replayed.viewport.crs}"
         )
+
+    def test_explicit_set_bounds_framing_survives_the_round_trip(self, dataset):
+        """A ``set_bounds`` frame is carried across the interactive round trip, not silently dropped.
+
+        Args:
+            dataset: The raster fixture, drawn before the view is framed on a region.
+        """
+        source = InteractiveMap(crs=4326)
+        source.field(dataset)
+        source.set_bounds([3.0, 50.0, 7.0, 54.0])
+        replayed = api.to_backend(source.figure_spec, backend="interactive")
+        assert replayed.viewport.bounds is not None, (
+            "set_bounds framing lost on round trip"
+        )
+        assert replayed.viewport.bounds.as_bbox() == source.viewport.bounds.as_bbox(), (
+            f"framing changed: {replayed.viewport.bounds.as_bbox()} vs {source.viewport.bounds.as_bbox()}"
+        )

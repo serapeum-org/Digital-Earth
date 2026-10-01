@@ -116,6 +116,13 @@ class Map(
         title = figure.title or figure.panels[0].title
         if title:
             self.set_title(title)
+        # The view's explicit framing is not a layer, so `_change` does not carry it: restore any `set_bounds`
+        # region from the panel's viewport, or a map framed on a subregion replays showing the full data
+        # extent. `set_bounds` reprojects a `Bounds` in any CRS, so a figure another tier described frames
+        # correctly too. A fit-to-data view (no bounds) is left to re-fit.
+        bounds = getattr(figure.panels[0].view, "bounds", None)
+        if bounds is not None:
+            self.set_bounds(bounds)
         return self
 
     @classmethod

@@ -879,6 +879,12 @@ class InteractiveMapBase:
         title = figure.title or figure.panels[0].title
         if title:
             self.title = title
+        # Restore any `set_bounds` framing the viewport carries — `_change` draws layers, not the view, so a
+        # map framed on a subregion would otherwise replay fit to the full data extent. `set_bounds`
+        # reprojects a `Bounds` in any CRS, so a figure another tier described frames correctly too.
+        bounds = getattr(figure.panels[0].view, "bounds", None)
+        if bounds is not None:
+            self.set_bounds(bounds)
         return self
 
     @classmethod
