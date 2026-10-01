@@ -1,0 +1,666 @@
+{
+  "backend_capabilities": {
+    "3d": {
+      "absent": [
+        "attribution",
+        "basemap",
+        "coastline_overlay",
+        "domain",
+        "fullscreen",
+        "layer_switcher",
+        "measure",
+        "navigation",
+        "north_arrow",
+        "raster_renderer",
+        "scale_bar",
+        "time_slider"
+      ],
+      "backend": "3d",
+      "channels": [
+        "color",
+        "height",
+        "opacity",
+        "size"
+      ],
+      "data_driven": [
+        "color",
+        "height"
+      ],
+      "features": [
+        "animation",
+        "colorbar",
+        "display_crs",
+        "export_html",
+        "export_image",
+        "legend"
+      ],
+      "kinds": [
+        "coastlines",
+        "custom:pyvista",
+        "extrusion",
+        "isosurface",
+        "point_cloud",
+        "raster",
+        "terrain",
+        "text",
+        "vectors",
+        "volume"
+      ],
+      "schemes": [
+        "categorical",
+        "equal_interval",
+        "fisher_jenks",
+        "natural_breaks",
+        "percentiles",
+        "quantiles",
+        "std_mean"
+      ]
+    },
+    "interactive": {
+      "absent": [
+        "attribution",
+        "domain",
+        "export_vector",
+        "fullscreen",
+        "height",
+        "measure",
+        "navigation",
+        "north_arrow",
+        "scale_bar"
+      ],
+      "backend": "interactive",
+      "channels": [
+        "color",
+        "opacity",
+        "rotation",
+        "size",
+        "tooltip",
+        "width"
+      ],
+      "data_driven": [
+        "color"
+      ],
+      "features": [
+        "animation",
+        "coastline_overlay",
+        "colorbar",
+        "display_crs",
+        "export_html",
+        "export_image",
+        "layer_switcher",
+        "legend",
+        "raster_renderer",
+        "time_slider"
+      ],
+      "kinds": [
+        "basemap",
+        "borders",
+        "choropleth",
+        "coastlines",
+        "contours",
+        "custom:holoviews",
+        "filled_contours",
+        "flow",
+        "graticule",
+        "heatmap",
+        "labels",
+        "lakes",
+        "land",
+        "lines",
+        "mesh",
+        "ocean",
+        "points",
+        "polygons",
+        "raster",
+        "rgb",
+        "rivers",
+        "streamlines",
+        "text",
+        "unstructured",
+        "vectors"
+      ],
+      "schemes": [
+        "categorical",
+        "equal_interval",
+        "fisher_jenks",
+        "natural_breaks",
+        "percentiles",
+        "quantiles",
+        "std_mean"
+      ]
+    },
+    "matplotlib": {
+      "absent": [
+        "attribution",
+        "export_html",
+        "fullscreen",
+        "height",
+        "label_collision",
+        "layer_switcher",
+        "measure",
+        "navigation",
+        "time_slider",
+        "tooltip"
+      ],
+      "backend": "matplotlib",
+      "channels": [
+        "opacity",
+        "size"
+      ],
+      "data_driven": [],
+      "features": [
+        "animation",
+        "coastline_overlay",
+        "colorbar",
+        "display_crs",
+        "domain",
+        "export_image",
+        "export_vector",
+        "legend",
+        "raster_renderer"
+      ],
+      "kinds": [
+        "basemap",
+        "borders",
+        "choropleth",
+        "coastlines",
+        "contours",
+        "custom:matplotlib",
+        "filled_contours",
+        "flow",
+        "graticule",
+        "heatmap",
+        "labels",
+        "lakes",
+        "land",
+        "mesh",
+        "ocean",
+        "points",
+        "polygons",
+        "raster",
+        "rgb",
+        "rivers",
+        "streamlines",
+        "text",
+        "unstructured",
+        "vectors"
+      ],
+      "schemes": [
+        "categorical",
+        "equal_interval",
+        "fisher_jenks",
+        "natural_breaks",
+        "percentiles",
+        "quantiles",
+        "std_mean"
+      ]
+    },
+    "web": {
+      "absent": [
+        "coastline_overlay",
+        "domain",
+        "export_vector",
+        "mesh",
+        "north_arrow",
+        "raster_renderer",
+        "streamlines",
+        "unstructured",
+        "vectors"
+      ],
+      "backend": "web",
+      "channels": [
+        "color",
+        "height",
+        "opacity",
+        "size",
+        "text",
+        "tooltip",
+        "width"
+      ],
+      "data_driven": [
+        "color",
+        "height",
+        "text"
+      ],
+      "features": [
+        "animation",
+        "attribution",
+        "colorbar",
+        "display_crs",
+        "export_html",
+        "export_image",
+        "fullscreen",
+        "layer_switcher",
+        "legend",
+        "measure",
+        "navigation",
+        "scale_bar",
+        "time_slider"
+      ],
+      "kinds": [
+        "basemap",
+        "choropleth",
+        "clusters",
+        "contours",
+        "custom:maplibre",
+        "extrusion",
+        "filled_contours",
+        "graticule",
+        "heatmap",
+        "labels",
+        "lines",
+        "model",
+        "point_cloud",
+        "points",
+        "polygons",
+        "raster",
+        "rgb",
+        "terrain",
+        "text"
+      ],
+      "schemes": [
+        "categorical",
+        "equal_interval",
+        "fisher_jenks",
+        "natural_breaks",
+        "percentiles",
+        "quantiles",
+        "std_mean"
+      ]
+    }
+  },
+  "backend_keyword_capabilities": {
+    "3d": [
+      "colorbar",
+      "crs"
+    ],
+    "interactive": [
+      "basemap",
+      "coastlines",
+      "colorbar",
+      "crs",
+      "kind"
+    ],
+    "matplotlib": [
+      "basemap",
+      "coastlines",
+      "colorbar",
+      "crs",
+      "domain",
+      "kind"
+    ],
+    "web": [
+      "basemap",
+      "colorbar",
+      "crs"
+    ]
+  },
+  "contract": {
+    "core": [
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "band",
+          "cmap",
+          "limits",
+          "name",
+          "opacity",
+          "visible"
+        ],
+        "name": "field",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "features",
+        "keywords": [
+          "cmap",
+          "column",
+          "k",
+          "name",
+          "opacity",
+          "scheme",
+          "size",
+          "visible"
+        ],
+        "name": "points",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "features",
+        "keywords": [
+          "cmap",
+          "column",
+          "k",
+          "name",
+          "opacity",
+          "scheme",
+          "visible",
+          "width"
+        ],
+        "name": "lines",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "features",
+        "keywords": [
+          "cmap",
+          "column",
+          "k",
+          "name",
+          "opacity",
+          "scheme",
+          "visible"
+        ],
+        "name": "polygons",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "features",
+        "keywords": [
+          "cmap",
+          "column",
+          "k",
+          "name",
+          "opacity",
+          "scheme",
+          "visible"
+        ],
+        "name": "choropleth",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "label",
+          "layer_id",
+          "visible"
+        ],
+        "name": "colorbar",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "labels",
+          "layer_id",
+          "title",
+          "visible"
+        ],
+        "name": "legend",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "band",
+          "name"
+        ],
+        "name": "add_layer",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "layer_id",
+        "keywords": [],
+        "name": "get_layer",
+        "returns": "value",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "layer_id",
+        "keywords": [],
+        "name": "remove_layer",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "layer_id",
+        "keywords": [
+          "visible"
+        ],
+        "name": "set_visible",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "layer_id",
+        "keywords": [
+          "index"
+        ],
+        "name": "move_layer",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "layer",
+        "keywords": [],
+        "name": "replace_layer",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [],
+        "name": "layer_ids",
+        "returns": "value",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "bounds",
+        "keywords": [
+          "padding"
+        ],
+        "name": "set_bounds",
+        "returns": "self",
+        "sequence_order": [
+          "west",
+          "south",
+          "east",
+          "north"
+        ]
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [],
+        "name": "render",
+        "returns": "engine",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "path",
+        "keywords": [],
+        "name": "save",
+        "returns": "path",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [],
+        "name": "show",
+        "returns": "engine",
+        "sequence_order": null
+      }
+    ],
+    "pending": {
+      "3d": [
+        "add_layer",
+        "choropleth",
+        "field",
+        "lines",
+        "points",
+        "polygons",
+        "set_bounds"
+      ],
+      "interactive": [],
+      "matplotlib": [
+        "lines"
+      ],
+      "web": []
+    },
+    "tier2": [
+      {
+        "builds_in": null,
+        "first_argument": "lon",
+        "keywords": [
+          "crs",
+          "name",
+          "s"
+        ],
+        "name": "text",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "features",
+        "keywords": [
+          "column",
+          "crs",
+          "name"
+        ],
+        "name": "labels",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "lon_step",
+        "keywords": [
+          "lat_step",
+          "lon_step",
+          "spacing"
+        ],
+        "name": "graticule",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "url"
+        ],
+        "name": "tiles",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "provider"
+        ],
+        "name": "basemap",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "filled",
+          "interval",
+          "levels"
+        ],
+        "name": "contours",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "layers",
+          "position"
+        ],
+        "name": "layer_control",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": null,
+        "keywords": [
+          "subtitle"
+        ],
+        "name": "set_title",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "path",
+        "keywords": [
+          "fps"
+        ],
+        "name": "save_animation",
+        "returns": "path",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "name",
+        "keywords": [],
+        "name": "projection",
+        "returns": "self",
+        "sequence_order": null
+      }
+    ]
+  },
+  "top_level_exports": [
+    "Batch",
+    "Climatology",
+    "DimensionInfo",
+    "Map",
+    "Scene",
+    "Source",
+    "TexturedGlobe",
+    "TimeSeries",
+    "bar",
+    "bar_by",
+    "boxplot",
+    "envelope",
+    "gallery",
+    "get_source",
+    "grid",
+    "histogram",
+    "line",
+    "line_by",
+    "load_plugins",
+    "multiboxplot",
+    "projections",
+    "quantile_band",
+    "quickmap",
+    "quickplot",
+    "scatter",
+    "shared_colorbar",
+    "statistics",
+    "stripes",
+    "to_backend"
+  ]
+}
