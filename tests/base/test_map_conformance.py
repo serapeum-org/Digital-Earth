@@ -54,18 +54,19 @@ nowhere to hang a `Scale`. That inference is now wrong, because a tier can publi
 → a `size` encoding). The static tier is exactly that, so the two tables measure separate things and the
 probes count constants only. Reading them as one would excuse the static tier from a check it passes.
 
-**About `to_backend()`.** The brief this was written from calls for a minimal `to_backend` round trip, web to
-interactive. `to_backend()` does not exist yet — it is **order 33 (U-6)**, and building it is explicitly not
-this module's job. What is built here is the *probe that will hold it*, exercised today against the two
-tiers' `figure_spec`s directly. A round trip through `to_backend()` is only worth having if the two ends
-describe the same figure, so these probes are the precondition: each tier builds the shared seed figure
-(:func:`_seed`) and is held to one described result, :data:`EXPECTED_SEED`. Held to the same constant, the
-tiers are held to each other — which is what lets each half run in its own CI job, where only one of them
-collects: `web` carries MapLibre, `interactive` carries HoloViz, and neither of those two carries the other.
-The `all` environment does carry both, and :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` uses
-it to ask the two live tiers directly; the constant is what holds them in the jobs that cannot. When
-`to_backend()` lands it gets one more probe — that a figure carried across describes what
-:data:`EXPECTED_SEED` already pins — and nothing here changes.
+**About `to_backend()`.** The brief this was written from calls for a minimal `to_backend` round trip.
+`to_backend()` landed as **order 33 (U-6, #355)**; building it was explicitly not this module's job, and
+nothing here changed when it did — the promised one more probe was added and no constant moved. Each tier
+builds the shared seed figure (:func:`_seed`) and is held to one described result, :data:`EXPECTED_SEED`, and
+`test_the_seed_figure_carried_through_to_backend_still_describes_the_same_way` now carries that figure back
+through `to_backend()` and holds the drawn-again figure to the same constant — so the replay is proven
+faithful on every tier. A round trip is only worth having if the two ends describe the same figure, so the
+seed probes are its precondition. Held to the same constant, the tiers are held to each other — which is what
+lets each half run in its own CI job, where only one of them collects: `web` carries MapLibre, `interactive`
+carries HoloViz, and neither of those two carries the other. The `all` environment does carry both, and
+:class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` uses it to ask the two live tiers directly; the
+constant is what holds them in the jobs that cannot. The cross-engine carry itself — a figure one tier
+described drawn on another — is the full matrix in `tests/test_cross_tier_to_backend.py`.
 
 **What a described result is, and what it deliberately leaves out.** :func:`_described` reduces a figure to
 `(kind, band, visible)` per layer in draw order. It does **not** compare `symbology.props`, because there is
@@ -122,6 +123,7 @@ from typing import Any, Callable, Optional
 
 import pytest
 
+from digitalearth import to_backend
 from digitalearth.base.registry import band_of
 
 #: This module, spelled the way a pixi task and a pytest node id spell it. Both the task guard and the
@@ -1066,8 +1068,11 @@ class MapConformanceBase:
             drawn: The map under test.
 
         Test scenario:
-            This is the check `to_backend()` (order 33) will be held to, exercised today against the tier's
-            own `figure_spec`. Both tiers are compared with one constant rather than with each other,
+            This is the check `to_backend()` (order 33, landed #355) is held to; the probe that carries the
+            seed back through it is
+            `test_the_seed_figure_carried_through_to_backend_still_describes_the_same_way` below, which reads
+            the same constant off the drawn-again figure. Both tiers are compared with one constant rather than
+            with each other,
             because the `web` and `interactive` jobs each carry one engine and collect one tier — so this
             probe still holds them to each other in the jobs where only one of them is live. The `all`
             environment carries both, and :class:`TestOneStyledLayerDescribesOneChannelOnBothTiers` is what
@@ -1076,6 +1081,38 @@ class MapConformanceBase:
         described = _described(self._seed(drawn))
         assert described == EXPECTED_SEED, (
             f"the {self.backend} tier describes the seed figure as {described}"
+        )
+
+    def test_the_seed_figure_carried_through_to_backend_still_describes_the_same_way(
+        self, drawn
+    ):
+        """The probe this module reserved for `to_backend()`: carry the seed back and read it unchanged.
+
+        Args:
+            drawn: The map under test — the tier that describes the seed, and the one it is carried back onto.
+
+        Test scenario:
+            The one more probe the module docstring promised `to_backend()` (order 33, U-6, landed #355)
+            would gain. The probe above holds a tier's own `figure_spec` to :data:`EXPECTED_SEED`; this
+            carries that figure back through `to_backend(..., backend=self.backend)` and holds the
+            *drawn-again* figure to the same constant — so the replay through `from_figure`/`draw_figure` is
+            proven faithful (every kind, band, visibility and the draw order) on each tier, in the job that
+            carries its engine. Same-tier here, because each per-tier job holds one engine; the cross-engine
+            matrix is `tests/test_cross_tier_to_backend.py`. The source map (`drawn`) is kept open across the
+            carry — the fixture closes it only on teardown — so an in-memory source stays readable.
+        """
+        carried = to_backend(self._seed(drawn), backend=self.backend)
+        try:
+            described = _described(carried.figure_spec)
+        finally:
+            try:
+                carried.close()
+            except (
+                Exception
+            ):  # pragma: no cover - a closed map may refuse a second close
+                pass
+        assert described == EXPECTED_SEED, (
+            f"the {self.backend} tier describes the seed carried through to_backend as {described}"
         )
 
     def test_the_same_classification_gives_the_same_class_edges_on_every_tier(
