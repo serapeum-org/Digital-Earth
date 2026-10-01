@@ -49,7 +49,7 @@ def _method(method: contract.Method) -> Dict[str, Any]:
         "returns": method.returns,
         "first_argument": method.first_argument,
         "sequence_order": list(method.sequence_order)
-        if method.sequence_order
+        if method.sequence_order is not None
         else None,
         "builds_in": method.builds_in,
     }
@@ -124,6 +124,24 @@ def test_the_public_api_matches_the_committed_snapshot():
         SNAPSHOT_PATH,
         what="public API surface",
         regenerate="python -m tests.test_api_snapshot",
+    )
+
+
+def test_method_keeps_an_empty_sequence_order_distinct_from_an_undeclared_one():
+    """``_method`` snapshots an empty ``sequence_order=()`` as ``[]``, not as ``null``.
+
+    Test scenario:
+        ``()`` means "declared, no components"; ``None`` means "ordering undeclared". Both are falsy, so a
+        truthiness test would map them to the same ``null`` and lose the distinction. No current contract
+        method has ``()``, so this guards the reduction against a future one.
+    """
+    empty = contract.Method(name="x", doc="d", sequence_order=())
+    undeclared = contract.Method(name="y", doc="d")
+    assert _method(empty)["sequence_order"] == [], (
+        f"an empty sequence_order should snapshot as [], got {_method(empty)['sequence_order']!r}"
+    )
+    assert _method(undeclared)["sequence_order"] is None, (
+        f"an undeclared sequence_order should snapshot as None, got {_method(undeclared)['sequence_order']!r}"
     )
 
 
