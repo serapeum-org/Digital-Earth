@@ -844,6 +844,78 @@ class InteractiveMapBase:
         kept = set(candidate.layers.ids)
         self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
 
+    def draw_figure(self, figure: FigureSpec) -> Self:
+        """Draw a figure into this map, bringing it from whatever it showed before.
+
+        This tier's counterpart of the 3-D scene's ``draw_figure``, with the same plumbing difference the
+        static tier has: :meth:`_change` derives a candidate's sources from ``self._sources`` (filtered to the
+        tree), not from the incoming figure, so the figure's own sources are installed here first — otherwise
+        :meth:`~digitalearth.interactive.renderer.Renderer.apply` would have nothing to open.
+
+        Args:
+            figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
+                CRS at construction; here its layers are drawn in order and its title and any ``set_bounds``
+                framing reapplied. An ``object:`` (in-memory) source is replayed in process, so the scene that
+                registered it must stay alive until this returns; a path or URL source has no such constraint.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            CapabilityError: when a layer is of a kind this tier keeps rather than draws.
+            KeyError: when a layer names a kind this tier does not draw.
+        """
+        # Translate any recipe recorded by another tier to this tier's own before drawing, so a figure that
+        # crossed from the web or static tier draws here instead of being refused for an unknown `via`. A
+        # same-tier figure passes through unchanged.
+        from digitalearth.interactive.renderer import retarget_via
+
+        figure = retarget_via(figure)
+        self._sources = dict(figure.sources)
+        self._change(figure)
+        # This tier's figure_spec does not carry a title, so a same-tier round trip has nothing to restore;
+        # a title carried across from a tier whose figure records one is set best-effort. `self.title` is the
+        # plain attribute `render()` reads.
+        title = figure.title or figure.panels[0].title
+        if title:
+            self.title = title
+        # Restore any `set_bounds` framing the viewport carries — `_change` draws layers, not the view, so a
+        # map framed on a subregion would otherwise replay fit to the full data extent. `set_bounds`
+        # reprojects a `Bounds` in any CRS, so a figure another tier described frames correctly too.
+        bounds = getattr(figure.panels[0].view, "bounds", None)
+        if bounds is not None:
+            self.set_bounds(bounds)
+        return self
+
+    @classmethod
+    def from_figure(cls, figure: FigureSpec, **scene_kwargs: Any) -> Self:
+        """Build a map and draw a figure into it — the round trip the description seam exists for.
+
+        A map describes itself with :attr:`figure_spec`, the description survives ``to_dict()``/``from_dict()``,
+        and this draws it again. :func:`digitalearth.api.to_backend` dispatches here for
+        ``backend="interactive"``.
+
+        Args:
+            figure: The figure to draw.
+            **scene_kwargs: Passed to the constructor — ``width``, ``height``, ``tiles``, ``strict``; a ``crs``
+                here overrides the one the figure's viewport carries.
+
+        Returns:
+            The map, with every layer drawn.
+
+        Examples:
+            A round trip is exercised in ``tests/`` under the ``interactive`` environment (the builders this
+            replays need the HoloViz stack, so no doctest runs it here).
+        """
+        view = figure.panels[0].view
+        kwargs: Dict[str, Any] = {}
+        crs = getattr(view, "crs", None)
+        if crs is not None:
+            kwargs["crs"] = crs
+        scene = cls(**{**kwargs, **scene_kwargs})
+        scene.draw_figure(figure)
+        return scene
+
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
 

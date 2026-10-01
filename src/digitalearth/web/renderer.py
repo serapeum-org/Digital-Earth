@@ -37,7 +37,7 @@ one the map describes. What `_arrange` does **not** move is a queue entry no lay
 overlay marker, and whatever a caller queued through `add_layer` as a callable, keep their slots.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
 
@@ -741,6 +741,83 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
             f"carry them."
         )
     return props
+
+
+#: The style props each kind's web drawer requires but a figure another tier described does not carry. These
+#: are filled *under* a layer's own props (which always win) only when absent, so a same-tier figure — whose
+#: builder recorded them all — is untouched, while a foreign one draws here with this tier's defaults (U-6
+#: cross-tier). ``vmin``/``vmax`` ``None`` auto-scale from the data; the MapLibre type and a plain colour match
+#: the layer's kind.
+_FOREIGN_RASTER_DEFAULTS: Mapping[str, Any] = MappingProxyType(
+    {"cmap": "viridis", "vmin": None, "vmax": None, "opacity": 1.0}
+)
+_FOREIGN_VECTOR_DEFAULTS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        "points": {
+            "maplibre_type": "circle",
+            "paint": {"circle-color": "#3388ff", "circle-radius": 5},
+        },
+        "lines": {
+            "maplibre_type": "line",
+            "paint": {"line-color": "#3388ff", "line-width": 2},
+        },
+        "polygons": {
+            "maplibre_type": "fill",
+            "paint": {"fill-color": "#3388ff", "fill-opacity": 0.5},
+        },
+        "choropleth": {
+            "maplibre_type": "fill",
+            "paint": {"fill-color": "#3388ff", "fill-opacity": 0.5},
+        },
+    }
+)
+
+
+def _foreign_defaults(kind: str) -> Mapping[str, Any]:
+    """Return this tier's fill-in style props for a foreign layer of ``kind`` (empty for a kind with none)."""
+    if kind == "raster":
+        return _FOREIGN_RASTER_DEFAULTS
+    return _FOREIGN_VECTOR_DEFAULTS.get(kind, {})
+
+
+def hydrate_foreign_props(figure: FigureSpec) -> FigureSpec:
+    """Fill the per-layer style props this tier's drawers require but a foreign figure does not carry.
+
+    A figure another tier described carries each layer's kind, source and portable encoding, but not the web
+    tier's resolved style (``cmap``/``vmin``/``vmax``/``opacity`` for a raster, ``maplibre_type``/``paint`` for
+    a vector), so its drawer would refuse it at :func:`required_props`. This fills those from the tier's own
+    defaults for any layer missing them, so a foreign figure draws here (U-6 cross-tier). A same-tier figure
+    already records them, so each ``missing`` set is empty and the figure is returned unchanged.
+
+    Args:
+        figure: The figure about to be drawn on this tier.
+
+    Returns:
+        The figure with each foreign layer's missing web props filled; the same object when nothing was
+        missing.
+    """
+    tree = figure.layers
+    changed = False
+    for layer in figure.layers:
+        defaults = _foreign_defaults(layer.kind)
+        if not defaults:
+            continue
+        current = dict(layer.symbology.props)
+        # Fill a key that is absent, or one recorded as ``None`` whose default is a real value: another tier's
+        # raster records ``cmap=None`` when it chose none (auto), which this tier cannot colour with, so that
+        # ``None`` is treated as "not carried". A default that is itself ``None`` (``vmin``/``vmax``) does not
+        # overwrite a present ``None`` — the drawer auto-scales from it — so a figure is never re-hydrated.
+        fill = {
+            name: value
+            for name, value in defaults.items()
+            if name not in current or (value is not None and current[name] is None)
+        }
+        if not fill:
+            continue
+        symbology = replace(layer.symbology, props={**current, **fill})
+        tree = tree.replace(replace(layer, symbology=symbology))
+        changed = True
+    return replace(figure, layers=tree) if changed else figure
 
 
 class Renderer:

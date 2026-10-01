@@ -1298,6 +1298,91 @@ class WebMapBase:
 
         refresh_legend_panel(self)
 
+    def draw_figure(self, figure: FigureSpec) -> Self:
+        """Draw a figure into this map, bringing it from whatever it showed before.
+
+        This tier's counterpart of the 3-D scene's ``draw_figure``. Unlike the static and interactive tiers,
+        this tier's figure_spec **does** carry the panel's title and furniture (:meth:`_figure_with` reads
+        ``self._title``/``self._furniture``), so those are restored here alongside the sources before
+        :meth:`_change` runs — otherwise a web→web round trip would drop the title and the scale bar. As on the
+        other 2-D tiers, ``_change`` derives sources from ``self._sources``, so the figure's own sources are
+        installed first or :meth:`~digitalearth.web.renderer.Renderer.apply` would have nothing to open.
+
+        Args:
+            figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
+                CRS, centre and zoom at construction; here its layers, title, furniture and the view's
+                framing (fitted bounds and globe projection) are drawn. An ``object:`` (in-memory) source is
+                replayed in process, so the scene that registered it must stay alive until this returns; a
+                path or URL source has no such constraint.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+            OffLimbError: when the map is ``strict`` and a layer cannot be placed.
+        """
+        # Fill the resolved style this tier's drawers require but a figure another tier described does not
+        # carry (a raster's cmap/vmin/vmax/opacity, a vector's maplibre_type/paint), so a foreign figure draws
+        # here instead of being refused at `required_props`. A same-tier figure already records them all, so
+        # this is a no-op for it.
+        from digitalearth.web.renderer import hydrate_foreign_props
+
+        figure = hydrate_foreign_props(figure)
+        panel = figure.panels[0]
+        self._sources = dict(figure.sources)
+        self._title = panel.title
+        self._furniture = list(panel.furniture)
+        self._change(figure)
+        # The view's framing is not a layer, so `_change` does not carry it: restore the projection and any
+        # fitted bounds from the panel's viewport, or a `set_bounds`/globe map loses its framing on a round
+        # trip (the constructor takes neither `bounds` nor a projection). Centre/zoom came in via `from_figure`.
+        view = panel.view
+        if getattr(view, "globe", False):
+            self.projection("globe")
+        bounds = getattr(view, "bounds", None)
+        if bounds is not None:
+            # This tier's `set_bounds` takes lon/lat degrees and does not reproject, but a figure another tier
+            # described frames in its own (often projected) CRS — so reproject to this tier's CRS first, or a
+            # non-4326 source's metres would be applied as degrees and misframe the map silently.
+            self.set_bounds(bounds.to_crs(self.crs).as_bbox())
+        return self
+
+    @classmethod
+    def from_figure(cls, figure: FigureSpec, **scene_kwargs: Any) -> Self:
+        """Build a map and draw a figure into it — the round trip the description seam exists for.
+
+        A map describes itself with :attr:`figure_spec`, the description survives ``to_dict()``/``from_dict()``,
+        and this draws it again. :func:`digitalearth.api.to_backend` dispatches here for ``backend="web"``.
+
+        Args:
+            figure: The figure to draw.
+            **scene_kwargs: Passed to the constructor — ``style``, ``height``, ``strict``, and ``crs`` for the
+                rare caller who overrides it; ``center`` or ``zoom`` here override the figure's viewport.
+
+        Returns:
+            The map, with every layer drawn.
+
+        Examples:
+            A round trip is exercised in ``tests/`` under the ``web`` environment (the builders this replays
+            need MapLibre, so no doctest runs it here).
+        """
+        view = figure.panels[0].view
+        # The display CRS is **not** taken from the figure: this tier renders in EPSG:4326 only and reprojects
+        # every layer through pyramids itself, so a figure another tier described in its own projected CRS
+        # (32618, 3857, …) draws here correctly without carrying that CRS across — which `WebMap(crs=)` would
+        # otherwise refuse. Only the pan-and-zoom view the figure holds is carried.
+        kwargs: Dict[str, Any] = {}
+        center = getattr(view, "center", None)
+        if center is not None:
+            kwargs["center"] = center
+        zoom = getattr(view, "zoom", None)
+        if zoom is not None:
+            kwargs["zoom"] = zoom
+        scene = cls(**{**kwargs, **scene_kwargs})
+        scene.draw_figure(figure)
+        return scene
+
     def _require_layer(self, layer_id: Any) -> None:
         """Refuse an id this map does not draw, naming the ids it does.
 

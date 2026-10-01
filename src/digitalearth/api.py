@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     # A type checker resolves `Map` from here; at runtime it is imported lazily inside each function that
     # builds one, so importing `api` — and a `web`/`interactive`/`3d` `quickmap` — never loads the
     # matplotlib tier, which `digitalearth.static` imports eagerly with `Map` (DE-24).
+    from digitalearth.base.spec import FigureSpec
     from digitalearth.static import Map
 
 logger = logging.getLogger(__name__)
@@ -415,6 +416,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
 __all__ = [
     "quickmap",
     "quickplot",
+    "to_backend",
     "field",
     "contours",
     "pcolormesh",
@@ -886,6 +888,103 @@ def quickmap(
         colorbar=colorbar,
         **kwargs,
     )
+
+
+def to_backend(
+    figure: "FigureSpec", backend: str = "matplotlib", **scene_kwargs: Any
+) -> Any:
+    """Render an engine-neutral :class:`~digitalearth.base.spec.FigureSpec` on a chosen ``backend`` (U-6).
+
+    The inverse of every tier's :attr:`figure_spec`: where that describes a built scene *as data*, this
+    replays the description onto a fresh scene of the named ``backend`` by handing the whole figure to that
+    tier's own ``from_figure``. So nothing here renders — it only dispatches, reusing the same lazy backend
+    seam ``quickmap`` does (DE-24), so importing ``api`` still loads no renderer until one is asked for.
+
+    **Every backend renders a figure it itself described** — the round trip the seam exists for: a scene's
+    :attr:`figure_spec`, optionally through ``to_dict()``/``from_dict()``, drawn again on the same backend,
+    carrying kinds, sources, draw order, visibility and the portable half of each layer's colour encoding.
+
+    **Cross-tier — a figure one 2-D tier described drawn on *another* — works across the three 2-D tiers**
+    (``matplotlib``, ``interactive``, ``web``): the foreign recipe name (``via``) is retargeted to the drawing
+    tier's own, and each tier's drawers fill the resolved style a portable figure does not carry (a raster's
+    ``cmap``/``vmin``/``vmax``, a vector's element type and paint) from their own defaults. It is exercised for
+    raster fields and vector layers; a less-common kind whose target drawer still reads a builder prop not yet
+    defaulted raises from inside that drawer. The **3-D** tier is not a cross-tier target — it draws terrain and
+    volumes, not the flat fields and vectors a 2-D figure carries — so ``to_backend(fig, "3d")`` draws only a
+    figure the 3-D tier itself described. A figure with an ``object:`` (in-memory) source replays in-process but
+    cannot be stored (``to_dict`` refuses it).
+
+    Args:
+        figure: The :class:`~digitalearth.base.spec.FigureSpec` to draw, from another scene's
+            :attr:`figure_spec` (optionally through ``to_dict()``/``from_dict()``).
+        backend: ``"matplotlib"`` (static, the default), ``"interactive"`` (HoloViz), ``"web"``
+            (MapLibre + deck.gl) or ``"3d"`` (PyVista). Validated against :data:`BACKEND_CAPABILITIES`.
+        **scene_kwargs: Forwarded to the tier's constructor (e.g. ``strict``, ``figsize``, ``off_screen``).
+            A ``crs=`` here overrides the one the figure's view carries on the static, interactive and 3-D
+            tiers; the web tier renders in EPSG:4326 only, so a ``crs=`` other than that is refused, not
+            applied.
+
+    Returns:
+        The built tier scene (``Map`` / ``InteractiveMap`` / ``WebMap`` / ``Scene3D``), the same return
+        contract as :func:`quickmap`.
+
+    Raises:
+        ValueError: if ``backend`` is not one of the four, or if ``figure`` has more than one panel (each
+            tier renders a single panel, so a multi-panel figure is refused rather than silently flattened).
+        TypeError: if ``figure`` is not a :class:`~digitalearth.base.spec.FigureSpec`.
+
+    Examples:
+        - An unknown backend is refused by name, before anything is built:
+            ```python
+            >>> from digitalearth.api import to_backend
+            >>> to_backend("anything", backend="nope")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: unknown backend 'nope'; choose 'matplotlib' (static), ...
+
+            ```
+
+        A round-trip example — build a scene, store it, draw it again — lives on each tier's ``from_figure``
+        (e.g. :meth:`digitalearth.three_d.Scene3D.from_figure`).
+    """
+    if backend not in BACKEND_CAPABILITIES:
+        raise ValueError(
+            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
+            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
+        )
+    from digitalearth.base.spec import FigureSpec
+
+    if not isinstance(figure, FigureSpec):
+        # Caught here, not deep inside a tier's from_figure, where a non-figure fails with an opaque
+        # `AttributeError` on `.panels` that names neither the argument nor the type expected.
+        raise TypeError(
+            f"to_backend draws a FigureSpec; got {type(figure).__name__}. Pass a scene's `figure_spec` "
+            f"(optionally through to_dict()/from_dict())."
+        )
+    if len(figure.panels) != 1:
+        # Each of the four tiers renders one panel, and a tier's `from_figure` reads only `panels[0]` for the
+        # view while drawing the whole layer tree — so a valid multi-panel figure (panels in different CRSs,
+        # each showing a subset) would be silently flattened into panel 0's view. Refuse it by name rather
+        # than draw the wrong picture; a caller splits a `grid()`-composed figure into one per panel.
+        raise ValueError(
+            f"to_backend draws a single-panel figure; got {len(figure.panels)} panels. Each tier renders "
+            f"one panel, so split a multi-panel figure (e.g. from grid()) into one figure per panel."
+        )
+    if backend == "3d":
+        from digitalearth.three_d import Scene3D
+
+        return Scene3D.from_figure(figure, **scene_kwargs)
+    if backend == "interactive":
+        from digitalearth.interactive import InteractiveMap
+
+        return InteractiveMap.from_figure(figure, **scene_kwargs)
+    if backend == "web":
+        from digitalearth.web import WebMap
+
+        return WebMap.from_figure(figure, **scene_kwargs)
+    from digitalearth.static import Map
+
+    return Map.from_figure(figure, **scene_kwargs)
 
 
 def _quickmap_matplotlib(

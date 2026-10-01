@@ -47,7 +47,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 from digitalearth.base.capabilities import CapabilityError
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureDiff, FigureSpec, LayerSpec
+from digitalearth.base.spec import FigureDiff, FigureSpec, LayerSpec, retarget_recipes
 from digitalearth.interactive.capabilities import CAPABILITIES
 
 
@@ -468,6 +468,43 @@ def drawer_for(kind: str) -> Any:
             f"{sorted(set(recipes).symmetric_difference(DRAWN_KINDS))}"
         )
     return _dispatch(kind, recipes[kind])
+
+
+#: The plain recipe of each kind this tier draws more than one way — the one a bare
+#: ``field``/``points``/``choropleth`` records. Used only to retarget a ``via`` this tier does not know, when
+#: a figure another tier described is drawn here (:func:`retarget_via`): a kind drawn one way needs no entry,
+#: and a kind whose plain recipe is a genuine judgement — ``heatmap`` (hexbin vs kde) — is left out, so its
+#: foreign ``via`` is refused rather than guessed wrong. Held against :func:`_recipes` by a test.
+_CANONICAL_VIA: Dict[str, str] = {
+    "points": "geometry",
+    "lines": "geometry",
+    "raster": "image",
+    "vectors": "vectorfield",
+}
+
+
+def retarget_via(figure: FigureSpec) -> FigureSpec:
+    """Rewrite each layer's recorded ``via`` to this tier's recipe for the same kind, for cross-tier replay.
+
+    A ``via`` names *how* a layer was drawn, and the name is the drawing tier's own: a ``choropleth`` the
+    static tier records as ``"choropleth"`` this tier records as ``"geometry"``. So a figure another tier
+    described, drawn here through :meth:`draw_figure`, would otherwise reach :func:`_dispatch` with a ``via``
+    this tier has no recipe for and be refused — the refusal that guards a genuine same-tier bug. This
+    translates a foreign ``via`` (or none) to the recipe this tier draws the kind with, so the layer draws
+    here as the same *kind*; the engine-specific style a ``via`` cannot carry redraws with this tier's
+    defaults, the portability limit :func:`digitalearth.api.to_backend` states.
+
+    A ``via`` this tier already knows is left untouched, so a same-tier round trip passes through unchanged. A
+    kind with one recipe retargets to it unambiguously; a kind drawn several ways uses :data:`_CANONICAL_VIA`,
+    and one absent from that table keeps its foreign ``via`` and is refused rather than drawn as a guess.
+
+    Args:
+        figure: The figure to draw, as another tier (or this one) described it.
+
+    Returns:
+        The figure with foreign recipes retargeted; the same object when nothing needed changing.
+    """
+    return retarget_recipes(figure, _recipes(), _CANONICAL_VIA)
 
 
 class Renderer:

@@ -17,6 +17,7 @@ import digitalearth
 EXPECTED = [
     "quickplot",
     "quickmap",
+    "to_backend",
     "Map",
     "Scene",
     "TexturedGlobe",

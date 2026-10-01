@@ -385,11 +385,22 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     style = auto_style(identity)
     # A colormap the caller built themselves has no name a description can carry, so it is held beside the
     # layer; a named one was recorded. Either way the caller's choice wins over the variable's own.
-    requested = opts.pop("cmap", props["cmap"])
+    # `.get` rather than `[]` on the style props the builder records: a figure another tier described (drawn
+    # here through `to_backend`/`Map.from_figure`) carries the kind, source and portable encoding but not this
+    # tier's resolved `cmap`/`default_cmap`/`levels`, so each falls back to the variable's own style (via
+    # `auto_cmap`'s lookup) or the tier default. A same-tier figure always carries them, so this changes nothing
+    # for it.
+    requested = opts.pop("cmap", props.get("cmap"))
     opts["cmap"] = auto_cmap(
-        src, requested, props["default_cmap"], lookup=lambda _: style
+        src,
+        requested,
+        # `auto_cmap`'s fallback, reached only if the lookup answers no cmap. `auto_style` always answers one,
+        # so this is belt-and-suspenders — it just keeps the fallback a real name rather than the `None` a
+        # foreign figure's absent `default_cmap` would otherwise pass.
+        props.get("default_cmap") or DEFAULT_FIELD_CMAP,
+        lookup=lambda _: style,
     )
-    levels = props["levels"]
+    levels = props.get("levels")
     if levels is None and kind in _CONTOUR_KINDS:
         # A caller's `interval=` wins over the variable's canonical levels, because it is the one the caller
         # wrote. Resolved here rather than in the builder: "one level every N" is a fact about the band's
@@ -424,11 +435,15 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     drawn: DrawnLayer = scene._render_glyph(
         glyph,
         kind=kind,
-        add_colorbar=props["add_colorbar"],
+        # `.get` so a figure another tier described draws here: it carries no static `add_colorbar`/`zorder`.
+        # `add_colorbar=False` is the ordinary path on this tier — the `Scene` (not the glyph) owns the
+        # colorbar and adds it from the layer's colour key — so a cross-tier field is drawn the same way a
+        # same-tier one is; it does not mean no colorbar appears.
+        add_colorbar=props.get("add_colorbar", False),
         label=style.get("units"),  # the Scene's colorbar labels itself with it (T6.2)
         **plot_style,
     )
-    zorder = props["zorder"]
+    zorder = props.get("zorder")
     if zorder is not None and drawn.artist is not None:
         # Recorded rather than set by the builder afterwards: a backdrop drawn again from its
         # description has to land behind the data again, and the builder is not there the second time.

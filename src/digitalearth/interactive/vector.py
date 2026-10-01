@@ -231,6 +231,17 @@ def _vector_symbology(
     )
 
 
+#: The HoloViews element each vector kind is built as, so a figure another tier described — which carries the
+#: kind but not this tier's ``hv_type`` — can be drawn here. The builders record ``hv_type`` directly; this is
+#: the inverse, keyed by the shared kind vocabulary, used only when the prop is absent (cross-tier replay).
+_HV_TYPE_FOR_KIND = {
+    "points": "Points",
+    "lines": "Path",
+    "polygons": "Polygons",
+    "choropleth": "Polygons",
+}
+
+
 def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the HoloViews element for any of the kinds that share the vector shape.
 
@@ -253,8 +264,12 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     labels = props.get("labels")
     if labels:
         gdf = _as_labels(gdf, labels["column"], labels["missing"])
+    # A same-tier figure carries `hv_type`; a figure another tier described carries only the kind, so the
+    # element type is derived from it (:data:`_HV_TYPE_FOR_KIND`). The builder's resolved style is likewise
+    # absent and falls back to the tier defaults below (`common`/`opts` are `.get`).
+    hv_type = props.get("hv_type") or _HV_TYPE_FOR_KIND[layer.kind]
     element = interactive_map._vector_element(
-        props["hv_type"],
+        hv_type,
         gdf,
         # Already a list: `held_props` thaws the described half once, for every key, so this drawer no
         # longer names the ones HoloViews refuses as a tuple (`vdims`, `cmap`, `color_levels`).

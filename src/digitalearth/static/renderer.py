@@ -59,7 +59,7 @@ from matplotlib.artist import Artist
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec import FigureSpec, LayerSpec, retarget_recipes
 from digitalearth.static.capabilities import CAPABILITIES
 from digitalearth.static.guides import paint_guide, plan_guide
 
@@ -472,6 +472,49 @@ def drawer_for(kind: str) -> Any:
             f"{sorted(set(recipes).symmetric_difference(DRAWN_KINDS))}"
         )
     return _dispatch(kind, recipes[kind])
+
+
+#: The plain recipe of each kind this tier draws more than one way — the one a bare
+#: ``field``/``points``/``choropleth`` records. Used only to retarget a ``via`` this tier does not know, when
+#: a figure another tier described is drawn here (:func:`retarget_via`): a kind drawn one way needs no entry
+#: (its sole recipe is unambiguous), and a kind whose plain recipe is a genuine judgement (none here) is left
+#: out so its foreign ``via`` is refused rather than guessed. Held against :func:`_recipes` by a test.
+_CANONICAL_VIA: Dict[str, str] = {
+    "rgb": "rgb_composite",
+    "points": "scatter",
+    "choropleth": "choropleth",
+    "polygons": "shapes",
+    "vectors": "quiver",
+    "unstructured": "tricontour",
+    "text": "text",
+}
+
+
+def retarget_via(figure: FigureSpec) -> FigureSpec:
+    """Rewrite each layer's recorded ``via`` to this tier's recipe for the same kind.
+
+    A ``via`` names *how* a layer was drawn, and the name is the drawing tier's own: a ``choropleth`` this tier
+    records as ``"choropleth"`` the interactive tier records as ``"geometry"``. This translates a foreign
+    ``via`` (or none) to the recipe this tier draws the kind with, so the dispatch step
+    (:func:`_dispatch`) finds a recipe instead of refusing an unknown one.
+
+    This is the shared cross-tier mechanism. For a same-tier figure every ``via`` is already known, so this
+    returns the figure unchanged; a figure another tier described has its foreign recipe retargeted here, and
+    the field drawer fills the style a portable figure does not carry (``cmap``/``default_cmap``/``levels``)
+    from the variable's own style or the tier default — so a figure the web or interactive tier described
+    draws here too (the cross-tier contract :func:`digitalearth.api.to_backend` states, across the three 2-D
+    tiers).
+
+    A kind with one recipe retargets to it unambiguously; a kind drawn several ways uses :data:`_CANONICAL_VIA`,
+    and one absent from that table keeps its foreign ``via`` and is refused rather than drawn as a guess.
+
+    Args:
+        figure: The figure to draw, as another tier (or this one) described it.
+
+    Returns:
+        The figure with foreign recipes retargeted; the same object when nothing needed changing.
+    """
+    return retarget_recipes(figure, _recipes(), _CANONICAL_VIA)
 
 
 def _set_visible(artist: Any, visible: bool) -> None:
