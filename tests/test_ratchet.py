@@ -75,8 +75,11 @@ class TestAssertMatchesCommitted:
         assert "python -m tests.test_api_snapshot" in message, (
             f"the regenerate command should be in the message: {message}"
         )
-        assert "-beta" in message and "+gamma" in message, (
-            f"the unified diff should show the changed lines: {message}"
+        assert "-beta" in message, (
+            f"the unified diff should show the removed line: {message}"
+        )
+        assert "+gamma" in message, (
+            f"the unified diff should show the added line: {message}"
         )
 
     def test_a_missing_trailing_newline_is_a_drift(self, committed: Path):

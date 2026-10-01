@@ -160,9 +160,10 @@ def test_absent_section_skips_a_backend_with_nothing_absent():
     assert "### web" not in section, (
         f"a backend with nothing absent should be skipped:\n{section}"
     )
-    assert "### matplotlib" in section and "### 3d" in section, (
-        f"backends with omissions should each get a heading:\n{section}"
+    assert "### matplotlib" in section, (
+        f"matplotlib has omissions and should get a heading:\n{section}"
     )
+    assert "### 3d" in section, f"3d has omissions and should get a heading:\n{section}"
 
 
 if __name__ == "__main__":  # pragma: no cover
