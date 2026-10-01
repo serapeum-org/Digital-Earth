@@ -62,7 +62,8 @@ class TestHydrateForeignProps:
         props = dict(out.layers.get(layer_id).symbology.props)
         assert props["cmap"] == "viridis", f"cmap not filled: {props.get('cmap')}"
         assert props["opacity"] == 1.0, f"opacity not filled: {props.get('opacity')}"
-        assert "vmin" in props and "vmax" in props, "colour limits not filled"
+        assert "vmin" in props, "lower colour limit not filled"
+        assert "vmax" in props, "upper colour limit not filled"
 
     def test_a_foreign_vector_gets_a_maplibre_type_and_paint(self, points):
         """A points layer another tier described is filled with a MapLibre type and a default paint.
