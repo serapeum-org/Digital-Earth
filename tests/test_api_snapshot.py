@@ -169,8 +169,7 @@ def test_the_snapshot_and_matrix_cover_every_tier():
     )
 
 
-if (
-    __name__ == "__main__"
-):  # regenerate the committed snapshot after a deliberate API change
+if __name__ == "__main__":  # pragma: no cover
+    # regenerate the committed snapshot after a deliberate API change
     SNAPSHOT_PATH.write_text(_serialise(public_api_surface()), encoding="utf-8")
     print(f"wrote {SNAPSHOT_PATH}")

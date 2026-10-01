@@ -133,7 +133,9 @@ def render_allowlist() -> str:
     ]
     for category, heading, description in _CATEGORIES:
         rows = grouped.get(category)
-        if not rows:
+        if (
+            not rows
+        ):  # pragma: no cover - defensive: a category with no live rows is skipped
             continue
         wrapped_description = textwrap.fill(
             description, width=118, break_long_words=False, break_on_hyphens=False
@@ -162,8 +164,7 @@ def test_the_known_deviations_allowlist_is_current():
     )
 
 
-if (
-    __name__ == "__main__"
-):  # regenerate the allowlist after a deliberate drift-table change
+if __name__ == "__main__":  # pragma: no cover
+    # regenerate the allowlist after a deliberate drift-table change
     ALLOWLIST_PATH.write_text(render_allowlist(), encoding="utf-8")
     print(f"wrote {ALLOWLIST_PATH}")

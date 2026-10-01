@@ -142,6 +142,30 @@ def test_the_support_matrix_page_is_current():
     )
 
 
-if __name__ == "__main__":  # regenerate the page after a deliberate capability change
+def test_absent_section_skips_a_backend_with_nothing_absent():
+    """A backend whose ``absent`` is empty contributes no subsection to the matrix.
+
+    Test scenario:
+        ``_absent_section`` emits one ``### <backend>`` block per backend that omits something; a backend with
+        an empty ``absent`` is skipped. Build a caps mapping where ``web`` omits nothing and the rest do, and
+        confirm ``web`` gets no heading while the others do.
+    """
+    caps = {
+        "matplotlib": {"absent": {"scale_bar": "a static image has no live bar"}},
+        "web": {"absent": {}},
+        "interactive": {"absent": {"globe": "the interactive tier draws flat"}},
+        "3d": {"absent": {"basemap": "a scene has no tiles to drape"}},
+    }
+    section = _absent_section(caps)
+    assert "### web" not in section, (
+        f"a backend with nothing absent should be skipped:\n{section}"
+    )
+    assert "### matplotlib" in section and "### 3d" in section, (
+        f"backends with omissions should each get a heading:\n{section}"
+    )
+
+
+if __name__ == "__main__":  # pragma: no cover
+    # regenerate the page after a deliberate capability change
     SUPPORT_MATRIX_PATH.write_text(render_support_matrix(), encoding="utf-8")
     print(f"wrote {SUPPORT_MATRIX_PATH}")
