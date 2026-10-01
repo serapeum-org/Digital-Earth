@@ -904,15 +904,15 @@ def to_backend(
     :attr:`figure_spec`, optionally through ``to_dict()``/``from_dict()``, drawn again on the same backend,
     carrying kinds, sources, draw order, visibility and the portable half of each layer's colour encoding.
 
-    **Cross-tier — a figure one tier described drawn on *another* — is supported into the interactive tier**,
-    whose drawers fall back to their own defaults for the style a portable figure does not carry; the foreign
-    recipe name (``via``) is retargeted to the drawing tier's own. The other three tiers refuse a foreign
-    figure and are **same-tier only**, for two distinct reasons: the **matplotlib** and **3-D** tiers keep a
-    layer's style flat in ``props`` their builders write and fold nothing into portable channels (the
-    ``NO_PORTABLE_CHANNELS`` set, which names exactly those two), and the **web** tier's drawers require
-    per-layer style ``props`` a portable figure does not carry (e.g. a raster's ``vmin``/``vmax``/``opacity``).
-    Drawing a *foreign* figure on any of the three may raise from inside a drawer. A figure with an ``object:``
-    (in-memory) source replays in-process but cannot be stored (``to_dict`` refuses it).
+    **Cross-tier — a figure one 2-D tier described drawn on *another* — works across the three 2-D tiers**
+    (``matplotlib``, ``interactive``, ``web``): the foreign recipe name (``via``) is retargeted to the drawing
+    tier's own, and each tier's drawers fill the resolved style a portable figure does not carry (a raster's
+    ``cmap``/``vmin``/``vmax``, a vector's element type and paint) from their own defaults. It is exercised for
+    raster fields and vector layers; a less-common kind whose target drawer still reads a builder prop not yet
+    defaulted raises from inside that drawer. The **3-D** tier is not a cross-tier target — it draws terrain and
+    volumes, not the flat fields and vectors a 2-D figure carries — so ``to_backend(fig, "3d")`` draws only a
+    figure the 3-D tier itself described. A figure with an ``object:`` (in-memory) source replays in-process but
+    cannot be stored (``to_dict`` refuses it).
 
     Args:
         figure: The :class:`~digitalearth.base.spec.FigureSpec` to draw, from another scene's

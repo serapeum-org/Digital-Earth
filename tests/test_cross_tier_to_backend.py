@@ -1,58 +1,66 @@
-"""``to_backend`` carries a figure described by one tier into the interactive tier — the U-6 headline (order 33).
+"""``to_backend`` carries a figure described by one 2-D tier onto any other 2-D tier — the U-6 headline (order 33).
 
 One ``FigureSpec``, drawn on a different backend from the one that described it. The module needs both non-core
 2-D engines to build the source maps, so it skips unless both import (it runs in the ``all`` env /
 ``test-backends`` job, and skips in the lean ``dev`` matrix and the single-backend jobs).
 
-The **cross-tier target is the interactive tier**: its drawers fall back to their own defaults for the style a
-portable figure does not carry, and the foreign recipe name (``via``) is retargeted to its own — see
-:func:`digitalearth.interactive.renderer.retarget_via`. The other three tiers are same-tier only, for two
-distinct reasons: the matplotlib and 3-D tiers keep style flat in ``props`` and fold nothing into portable
-channels (the ``NO_PORTABLE_CHANNELS`` set names exactly those two), while the web tier's drawers require
-per-layer style ``props`` a portable figure does not carry (a raster's ``vmin``/``vmax``/``opacity``). Each is
-covered same-tier by its own suite.
+Every layer carries a kind, a source and the portable half of its style; a tier's drawer fills the rest from
+its own defaults, and the foreign recipe name (``via``) is retargeted to the drawing tier's own (see
+:func:`digitalearth.static.renderer.retarget_via`). So a figure one 2-D tier described draws on any other 2-D
+tier. The 3-D tier is not part of this matrix — it draws terrain/volumes, not the flat fields and vectors these
+carry — and is covered same-tier by ``tests/three_d``.
 """
 
 import pytest
 
-pytest.importorskip(
-    "maplibre", reason="web tier engine (to build a web-described source)"
-)
+pytest.importorskip("maplibre", reason="web tier engine")
 pytest.importorskip("geoviews", reason="interactive tier engine")
 
 from digitalearth import to_backend  # noqa: E402
 
-#: The three 2-D tiers a figure can be described *by* — each becomes a source carried into the interactive tier.
-SOURCES = ("matplotlib", "interactive", "web")
-
-#: The tier a figure described elsewhere can be drawn *on* in this cut. The web, matplotlib and 3-D tiers are
-#: same-tier only (see the module docstring), so they are not cross-tier targets here.
-TARGETS = ("interactive",)
+#: The three 2-D tiers, each of which can both describe a figure and draw one another tier described.
+TIERS = ("matplotlib", "interactive", "web")
 
 
-def _build(tier: str, dataset):
-    """Build a one-layer map of ``tier`` — a raster field — for the cross-tier carry.
+def _new_scene(tier: str):
+    """Return an empty map of ``tier`` in EPSG:4326 (the CRS every tier accepts).
 
     Args:
-        tier: The source backend.
-        dataset: The raster fixture drawn as a field.
+        tier: The backend to build.
 
     Returns:
-        The built tier scene, with one ``raster`` layer.
+        An empty tier scene.
     """
     if tier == "matplotlib":
         from digitalearth.static import Map
 
-        scene = Map(crs=dataset.epsg)
-    elif tier == "interactive":
+        return Map(crs=4326)
+    if tier == "interactive":
         from digitalearth.interactive import InteractiveMap
 
-        scene = InteractiveMap(crs=3857)
-    else:
-        from digitalearth.web import WebMap
+        return InteractiveMap(crs=4326)
+    from digitalearth.web import WebMap
 
-        scene = WebMap(crs=4326)
-    scene.field(dataset)
+    return WebMap(crs=4326)
+
+
+def _build(tier: str, kind: str, dataset, features):
+    """Build a one-layer map of ``tier`` holding a layer of ``kind``.
+
+    Args:
+        tier: The source backend.
+        kind: ``"field"`` (a raster) or ``"points"`` (a vector point layer).
+        dataset: The raster fixture, for ``"field"``.
+        features: A pyramids ``FeatureCollection`` of points, for ``"points"``.
+
+    Returns:
+        The built tier scene, with one layer.
+    """
+    scene = _new_scene(tier)
+    if kind == "field":
+        scene.field(dataset)
+    else:
+        scene.points(features)
     return scene
 
 
@@ -66,34 +74,41 @@ def _close(scene) -> None:
         pass
 
 
-@pytest.mark.parametrize("target", TARGETS)
-@pytest.mark.parametrize("source", SOURCES)
-def test_a_field_described_by_one_tier_draws_on_another(source, target, dataset):
-    """A raster field carried from ``source`` to ``target`` draws there as the same layer.
+@pytest.mark.parametrize("kind", ["field", "points"])
+@pytest.mark.parametrize("target", TIERS)
+@pytest.mark.parametrize("source", TIERS)
+def test_a_layer_described_by_one_2d_tier_draws_on_another(
+    source, target, kind, dataset, points
+):
+    """A ``kind`` layer carried from ``source`` to ``target`` draws there as the same layer.
 
     Args:
         source: The tier that describes the figure.
         target: The tier ``to_backend`` draws it on.
+        kind: The layer kind under test (``field`` or ``points``).
         dataset: The raster fixture.
+        points: The point-geometry fixture (a GeoDataFrame), wrapped in a ``FeatureCollection``.
 
     Test scenario:
-        The source is kept alive across the carry so its in-memory source stays readable (an ``object:``
-        source is not stored, only replayed in process). ``to_backend`` retargets the source tier's recipe
-        name to the target's, so the layer draws rather than being refused for an unknown ``via``; the layer's
-        id and kind are what must survive (style a ``via`` cannot carry is out of scope, as ``to_backend``
-        states).
+        The full 2-D matrix, same-tier included. The source is kept alive across the carry so its in-memory
+        source stays readable. ``to_backend`` retargets the recipe name and each tier's drawer fills the style
+        a portable figure does not carry from its own defaults, so the layer draws rather than being refused;
+        the layer's id and kind must survive.
     """
-    origin = _build(source, dataset)
+    from pyramids.feature import FeatureCollection
+
+    features = FeatureCollection(points)
+    origin = _build(source, kind, dataset, features)
     try:
         replayed = to_backend(origin.figure_spec, backend=target)
         try:
             assert replayed.layer_ids == origin.layer_ids, (
-                f"{source}->{target}: {replayed.layer_ids} from {origin.layer_ids}"
+                f"{source}->{target} [{kind}]: {replayed.layer_ids} from {origin.layer_ids}"
             )
             kinds_before = [origin.get_layer(i).kind for i in origin.layer_ids]
             kinds_after = [replayed.get_layer(i).kind for i in replayed.layer_ids]
             assert kinds_after == kinds_before, (
-                f"{source}->{target}: kinds {kinds_after} from {kinds_before}"
+                f"{source}->{target} [{kind}]: kinds {kinds_after} from {kinds_before}"
             )
         finally:
             _close(replayed)

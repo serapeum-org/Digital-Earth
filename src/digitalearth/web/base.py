@@ -1322,6 +1322,13 @@ class WebMapBase:
             KeyError: when a layer names a kind this tier does not draw.
             OffLimbError: when the map is ``strict`` and a layer cannot be placed.
         """
+        # Fill the resolved style this tier's drawers require but a figure another tier described does not
+        # carry (a raster's cmap/vmin/vmax/opacity, a vector's maplibre_type/paint), so a foreign figure draws
+        # here instead of being refused at `required_props`. A same-tier figure already records them all, so
+        # this is a no-op for it.
+        from digitalearth.web.renderer import hydrate_foreign_props
+
+        figure = hydrate_foreign_props(figure)
         panel = figure.panels[0]
         self._sources = dict(figure.sources)
         self._title = panel.title

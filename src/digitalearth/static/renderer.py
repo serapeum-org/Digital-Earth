@@ -498,13 +498,12 @@ def retarget_via(figure: FigureSpec) -> FigureSpec:
     ``via`` (or none) to the recipe this tier draws the kind with, so the dispatch step
     (:func:`_dispatch`) finds a recipe instead of refusing an unknown one.
 
-    **This is the shared cross-tier mechanism, but the static tier is not itself a cross-tier target.** For a
-    same-tier figure — the only case this tier draws, per :func:`digitalearth.api.to_backend` — every ``via`` is
-    already known, so this returns the figure unchanged. A figure another tier described would be retargeted
-    here, but its drawers then read per-layer style ``props`` (``cmap``, ``default_cmap``, ``levels``) that a
-    portable figure does not carry, so it raises inside the drawer rather than drawing: drawing a foreign figure
-    on the matplotlib tier is unsupported in this cut. The rewrite is kept symmetric with the interactive
-    tier's (the one supported target) and exercised by its own unit tests.
+    This is the shared cross-tier mechanism. For a same-tier figure every ``via`` is already known, so this
+    returns the figure unchanged; a figure another tier described has its foreign recipe retargeted here, and
+    the field drawer fills the style a portable figure does not carry (``cmap``/``default_cmap``/``levels``)
+    from the variable's own style or the tier default — so a figure the web or interactive tier described
+    draws here too (the cross-tier contract :func:`digitalearth.api.to_backend` states, across the three 2-D
+    tiers).
 
     A kind with one recipe retargets to it unambiguously; a kind drawn several ways uses :data:`_CANONICAL_VIA`,
     and one absent from that table keeps its foreign ``via`` and is refused rather than drawn as a guess.
