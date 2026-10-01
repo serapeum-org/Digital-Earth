@@ -6,8 +6,27 @@ HoloViz builders. See the static counterpart for what this guards (U-6's cross-t
 
 from dataclasses import replace
 
-from digitalearth.interactive import InteractiveMap
+from digitalearth.interactive import InteractiveMap, vector
 from digitalearth.interactive.renderer import _CANONICAL_VIA, _recipes, retarget_via
+from digitalearth.interactive.vector import _HV_TYPE_FOR_KIND
+
+
+def test_hv_type_covers_every_kind_draw_vector_serves():
+    """Every kind whose recipe is ``draw_vector`` has a ``_HV_TYPE_FOR_KIND`` entry.
+
+    ``draw_vector`` derives a foreign layer's HoloViews element type from its kind via this table; a kind it
+    draws with no entry would raise a cryptic ``KeyError`` only on the cross-tier path (no ``hv_type`` carried),
+    invisible to same-tier tests. This holds the table against the kinds ``_recipes`` actually routes to it.
+    """
+    routed = {
+        kind
+        for kind, recipes in _recipes().items()
+        if any(drawer is vector.draw_vector for drawer in recipes.values())
+    }
+    missing = routed - set(_HV_TYPE_FOR_KIND)
+    assert not missing, (
+        f"kinds drawn by draw_vector with no _HV_TYPE_FOR_KIND entry: {sorted(missing)}"
+    )
 
 
 def _forge_via(figure, layer_id, via):
