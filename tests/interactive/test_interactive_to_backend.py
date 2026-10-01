@@ -4,8 +4,14 @@ Runs in the ``interactive`` environment: the replay goes through the HoloViz bui
 and the matplotlib round trip live in ``tests/test_to_backend.py`` (core, no extra).
 """
 
-from digitalearth import api
-from digitalearth.interactive import InteractiveMap
+import pytest
+
+pytest.importorskip(
+    "geoviews"
+)  # the interactive tier engine; skip in envs without the HoloViz stack
+
+from digitalearth import api  # noqa: E402
+from digitalearth.interactive import InteractiveMap  # noqa: E402
 
 
 class TestInteractiveRoundTrip:

@@ -4,8 +4,12 @@ Runs in the 3-D environment. ``Scene3D.from_figure``'s own round trip is covered
 pins that :func:`digitalearth.api.to_backend` reaches it, so the public entry point drives the 3-D tier.
 """
 
-from digitalearth import api
-from digitalearth.three_d import Scene3D
+import pytest
+
+pytest.importorskip("pyvista")  # the 3-D tier engine; skip in envs without it
+
+from digitalearth import api  # noqa: E402
+from digitalearth.three_d import Scene3D  # noqa: E402
 
 DEM_PATH = "examples/data/acc4000.tif"
 

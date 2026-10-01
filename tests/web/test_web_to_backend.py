@@ -4,10 +4,14 @@ Runs in the ``web`` environment: the replay goes through MapLibre builders. The 
 matplotlib round trip live in ``tests/test_to_backend.py`` (core, no extra).
 """
 
-from digitalearth import api
-from digitalearth.base.spec import Bounds
-from digitalearth.static import Map
-from digitalearth.web import WebMap
+import pytest
+
+pytest.importorskip("maplibre")  # the web tier engine; skip in envs without it
+
+from digitalearth import api  # noqa: E402
+from digitalearth.base.spec import Bounds  # noqa: E402
+from digitalearth.static import Map  # noqa: E402
+from digitalearth.web import WebMap  # noqa: E402
 
 
 class TestWebRoundTrip:

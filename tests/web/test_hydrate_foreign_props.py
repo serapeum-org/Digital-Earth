@@ -6,11 +6,15 @@ with a real default (``cmap``) is treated as missing while one with a ``None`` d
 pass is idempotent), and a kind with no web defaults is left alone.
 """
 
-from pyramids.feature import FeatureCollection
+import pytest
 
-from digitalearth.static import Map
-from digitalearth.web import WebMap, raster, vector
-from digitalearth.web.renderer import (
+pytest.importorskip("maplibre")  # the web tier engine; skip in envs without it
+
+from pyramids.feature import FeatureCollection  # noqa: E402
+
+from digitalearth.static import Map  # noqa: E402
+from digitalearth.web import WebMap, raster, vector  # noqa: E402
+from digitalearth.web.renderer import (  # noqa: E402
     _FOREIGN_VECTOR_DEFAULTS,
     DRAWN_KINDS,
     drawer_for,

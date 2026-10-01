@@ -6,9 +6,19 @@ HoloViz builders. See the static counterpart for what this guards (U-6's cross-t
 
 from dataclasses import replace
 
-from digitalearth.interactive import InteractiveMap, vector
-from digitalearth.interactive.renderer import _CANONICAL_VIA, _recipes, retarget_via
-from digitalearth.interactive.vector import _HV_TYPE_FOR_KIND
+import pytest
+
+pytest.importorskip(
+    "geoviews"
+)  # the interactive tier engine; _recipes imports the HoloViz builders
+
+from digitalearth.interactive import InteractiveMap, vector  # noqa: E402
+from digitalearth.interactive.renderer import (  # noqa: E402
+    _CANONICAL_VIA,
+    _recipes,
+    retarget_via,
+)
+from digitalearth.interactive.vector import _HV_TYPE_FOR_KIND  # noqa: E402
 
 
 def test_hv_type_covers_every_kind_draw_vector_serves():
