@@ -58,10 +58,11 @@ def _method(method: contract.Method) -> Dict[str, Any]:
 def _capability_shape(caps: Dict[str, Any]) -> Dict[str, Any]:
     """Return a tier's capabilities as API *shape* — its ``absent`` prose reasons reduced to sorted names.
 
-    The snapshot tracks what the API is, not the justification for what a backend omits. Those reasons are
-    documented and ratcheted elsewhere, as wrapped prose: the support matrix (``tests/test_support_matrix.py``)
-    and the known-deviations allowlist (``tests/test_known_deviations.py``). Keeping them out here also stops a
-    reworded reason from reading as an API change, and keeps every snapshot line short.
+    The snapshot tracks what the API is, not the justification for what a backend omits. A tier's ``absent``
+    reasons are ratcheted (as wrapped prose) by the support matrix (``tests/test_support_matrix.py``); the
+    known-deviations allowlist (``tests/test_known_deviations.py``) consolidates different data — the conformance
+    drift tables — not ``absent``. Keeping the reasons out here also stops a reworded reason from reading as an
+    API change, and keeps every snapshot line short.
 
     Args:
         caps: A tier's :meth:`~digitalearth.base.capabilities.Capabilities.to_dict`.
@@ -78,8 +79,10 @@ def public_api_surface() -> Dict[str, Any]:
     Returns:
         The top-level exports, the Core/Tier-2 contract (in declaration order), which methods each backend has
         ``PENDING``, the per-backend honoured keywords, and each tier's capability shape — all deterministic so
-        two machines produce byte-identical output. Prose (method docs, pending/absent reasons) is excluded: it
-        is not API shape, and it is ratcheted as wrapped text by the support matrix and the deviations allowlist.
+        two machines produce byte-identical output. Prose is excluded, because it is not API shape: a tier's
+        ``absent`` reasons are ratcheted (as wrapped text) by the support matrix, while ``contract.PENDING``
+        reasons and ``Method.doc`` are ratcheted by no U-5 artifact (the deviations allowlist consolidates the
+        conformance drift tables, which are different data).
     """
     return {
         "top_level_exports": sorted(TOP_LEVEL_EXPORTS),
