@@ -63,6 +63,7 @@ from digitalearth.base.spec.figure import (
     FigureDiff,
     FigureSpec,
     PanelSpec,
+    retarget_recipes,
 )
 from digitalearth.base.spec.furniture import Furniture
 from digitalearth.base.spec.layer import (
@@ -109,6 +110,7 @@ __all__ = [
     "LegendSpec",
     "PanelSpec",
     "RenderTarget",
+    "retarget_recipes",
     "SCHEMA_VERSION",
     "Scale",
     "Selection",

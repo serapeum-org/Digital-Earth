@@ -59,7 +59,7 @@ from matplotlib.artist import Artist
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec import FigureSpec, LayerSpec, retarget_recipes
 from digitalearth.static.capabilities import CAPABILITIES
 from digitalearth.static.guides import paint_guide, plan_guide
 
@@ -514,29 +514,7 @@ def retarget_via(figure: FigureSpec) -> FigureSpec:
     Returns:
         The figure with foreign recipes retargeted; the same object when nothing needed changing.
     """
-    recipes = _recipes()
-    tree = figure.layers
-    changed = False
-    for layer in figure.layers:
-        kind_recipes = recipes.get(layer.kind)
-        if not kind_recipes:
-            continue
-        via = layer.symbology.props.get("via")
-        if via in kind_recipes:
-            continue
-        target = (
-            next(iter(kind_recipes))
-            if len(kind_recipes) == 1
-            else _CANONICAL_VIA.get(layer.kind)
-        )
-        if target is None:
-            continue
-        props = {**dict(layer.symbology.props), "via": target}
-        tree = tree.replace(
-            with_fields(layer, symbology=with_fields(layer.symbology, props=props))
-        )
-        changed = True
-    return with_fields(figure, layers=tree) if changed else figure
+    return retarget_recipes(figure, _recipes(), _CANONICAL_VIA)
 
 
 def _set_visible(artist: Any, visible: bool) -> None:

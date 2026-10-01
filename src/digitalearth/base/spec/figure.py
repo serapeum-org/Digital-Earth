@@ -15,7 +15,7 @@ layers it shows. Two decisions:
   reader that meets a version it does not know refuses by name instead of guessing.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from digitalearth.base.registry import OBJECT_SCHEME
@@ -1158,3 +1158,49 @@ def _restyled(old: LayerSpec, new: LayerSpec) -> bool:
         new.label,
         new.group,
     )
+
+
+def retarget_recipes(
+    figure: FigureSpec,
+    recipes: Mapping[str, Mapping[str, Any]],
+    canonical: Mapping[str, str],
+) -> FigureSpec:
+    """Rewrite each layer's recorded recipe (``via``) to the drawing tier's own, for cross-tier replay.
+
+    Engine-neutral: it only rewrites ``LayerSpec.symbology.props['via']`` on ``figure`` and imports no
+    renderer. The static and interactive renderers call it with their own recipe tables (DE-24 / U-6), so the
+    one loop lives here rather than being copied per tier.
+
+    Args:
+        figure: The figure to draw, as another tier (or this one) described it.
+        recipes: The drawing tier's ``kind -> {via -> drawer}`` table. A ``via`` already in the kind's entry is
+            left untouched, so a same-tier figure passes through unchanged.
+        canonical: The drawing tier's plain ``via`` for each kind drawn more than one way. A single-recipe kind
+            retargets to its sole recipe; a kind absent from this table keeps its foreign ``via`` and is
+            refused downstream rather than drawn as a guess.
+
+    Returns:
+        The figure with foreign recipes retargeted; the same object when nothing needed changing.
+    """
+    tree = figure.layers
+    changed = False
+    for layer in figure.layers:
+        kind_recipes = recipes.get(layer.kind)
+        if not kind_recipes:
+            continue
+        via = layer.symbology.props.get("via")
+        if via in kind_recipes:
+            continue
+        target = (
+            next(iter(kind_recipes))
+            if len(kind_recipes) == 1
+            else canonical.get(layer.kind)
+        )
+        if target is None:
+            continue
+        props = {**dict(layer.symbology.props), "via": target}
+        tree = tree.replace(
+            replace(layer, symbology=replace(layer.symbology, props=props))
+        )
+        changed = True
+    return replace(figure, layers=tree) if changed else figure
