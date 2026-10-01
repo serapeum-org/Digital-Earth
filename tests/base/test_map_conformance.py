@@ -1106,12 +1106,7 @@ class MapConformanceBase:
         try:
             described = _described(carried.figure_spec)
         finally:
-            try:
-                carried.close()
-            except (
-                Exception
-            ):  # pragma: no cover - a closed map may refuse a second close
-                pass
+            _closed(carried)
         assert described == EXPECTED_SEED, (
             f"the {self.backend} tier describes the seed carried through to_backend as {described}"
         )
