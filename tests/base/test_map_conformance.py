@@ -60,7 +60,8 @@ nothing here changed when it did — the promised one more probe was added and n
 builds the shared seed figure (:func:`_seed`) and is held to one described result, :data:`EXPECTED_SEED`, and
 `test_the_seed_figure_carried_through_to_backend_still_describes_the_same_way` now carries that figure back
 through `to_backend()` and holds the drawn-again figure to the same constant — so the replay is proven
-faithful on every tier. A round trip is only worth having if the two ends describe the same figure, so the
+faithful on every tier that signs the suite (the three 2-D tiers; 3-D is held to the drift tables, and
+`to_backend` does not target it). A round trip is only worth having if the two ends describe the same figure, so the
 seed probes are its precondition. Held to the same constant, the tiers are held to each other — which is what
 lets each half run in its own CI job, where only one of them collects: `web` carries MapLibre, `interactive`
 carries HoloViz, and neither of those two carries the other. The `all` environment does carry both, and
