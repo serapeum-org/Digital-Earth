@@ -805,11 +805,14 @@ def hydrate_foreign_props(figure: FigureSpec) -> FigureSpec:
         if not defaults:
             continue
         current = dict(layer.symbology.props)
-        # Fill a key that is absent *or* recorded as ``None``: another tier's raster records ``cmap=None`` when
-        # it chose none (auto), which this tier cannot colour with, so ``None`` is treated as "not carried"
-        # too. A default of ``None`` (``vmin``/``vmax``) left ``None`` is fine — the drawer auto-scales.
+        # Fill a key that is absent, or one recorded as ``None`` whose default is a real value: another tier's
+        # raster records ``cmap=None`` when it chose none (auto), which this tier cannot colour with, so that
+        # ``None`` is treated as "not carried". A default that is itself ``None`` (``vmin``/``vmax``) does not
+        # overwrite a present ``None`` — the drawer auto-scales from it — so a figure is never re-hydrated.
         fill = {
-            name: value for name, value in defaults.items() if current.get(name) is None
+            name: value
+            for name, value in defaults.items()
+            if name not in current or (value is not None and current[name] is None)
         }
         if not fill:
             continue
