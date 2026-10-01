@@ -13,12 +13,12 @@ live capabilities render, or the test fails with the diff. **To change it on pur
 run ``python -m tests.test_support_matrix`` to rewrite the page, and commit it.
 """
 
-import difflib
 import textwrap
 from pathlib import Path
 from typing import Dict, List
 
 from tests.capability_surface import tier_capabilities
+from tests.ratchet import assert_matches_committed
 
 #: The committed page, under the docs reference section (and in ``mkdocs.yml``'s ``nav``).
 SUPPORT_MATRIX_PATH = (
@@ -125,22 +125,12 @@ def test_the_support_matrix_page_is_current():
         ``docs/reference/support-matrix.md``. A capability added, removed or re-explained with no regenerate
         fails here with the unified diff inline, so the docs cannot silently fall out of step with the code.
     """
-    rendered = render_support_matrix()
-    committed = SUPPORT_MATRIX_PATH.read_text(encoding="utf-8")
-    if rendered != committed:
-        diff = "".join(
-            difflib.unified_diff(
-                committed.splitlines(keepends=True),
-                rendered.splitlines(keepends=True),
-                fromfile="docs/reference/support-matrix.md (committed)",
-                tofile="the live capabilities",
-            )
-        )
-        raise AssertionError(
-            "the support matrix drifted from the backends' capabilities. If the change is intended, "
-            "regenerate it with `python -m tests.test_support_matrix` and commit the page; otherwise a "
-            f"capability changed unexpectedly.\n\n{diff}"
-        )
+    assert_matches_committed(
+        render_support_matrix(),
+        SUPPORT_MATRIX_PATH,
+        what="support matrix",
+        regenerate="python -m tests.test_support_matrix",
+    )
 
 
 if __name__ == "__main__":  # regenerate the page after a deliberate capability change
