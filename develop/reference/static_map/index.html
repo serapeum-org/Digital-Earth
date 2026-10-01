@@ -5697,12 +5697,7 @@ array of any rank but two; or from <code>ArrayGlyph</code> for a styling keyword
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-689">689</a></span>
-<span class="normal"><a href="#__codelineno-0-690">690</a></span>
-<span class="normal"><a href="#__codelineno-0-691">691</a></span>
-<span class="normal"><a href="#__codelineno-0-692">692</a></span>
-<span class="normal"><a href="#__codelineno-0-693">693</a></span>
-<span class="normal"><a href="#__codelineno-0-694">694</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-694">694</a></span>
 <span class="normal"><a href="#__codelineno-0-695">695</a></span>
 <span class="normal"><a href="#__codelineno-0-696">696</a></span>
 <span class="normal"><a href="#__codelineno-0-697">697</a></span>
@@ -5770,80 +5765,85 @@ array of any rank but two; or from <code>ArrayGlyph</code> for a styling keyword
 <span class="normal"><a href="#__codelineno-0-759">759</a></span>
 <span class="normal"><a href="#__codelineno-0-760">760</a></span>
 <span class="normal"><a href="#__codelineno-0-761">761</a></span>
-<span class="normal"><a href="#__codelineno-0-762">762</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind=&quot;imshow&quot;``).</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a><span class="sd">    **A bare 2-D numpy array is drawn too** — the &quot;just show me this grid&quot; case, which was</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="sd">    ``StaticGlyph.plot(arr)`` until that class was deleted and which nothing took over (#343). Such a</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">    layer is **not georeferenced**, and that is not a detail:</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">    * its coordinates are its **own indices** — the column index on x, the row index on y, cell centres</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">      on the integers and the image covering ``[-0.5, cols - 0.5] x [-0.5, rows - 0.5]``, with the first</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a><span class="sd">      row drawn at the **top** as matplotlib draws every array;</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">    * **nothing is reprojected.** An array declares no CRS, so :attr:`crs` says nothing about where it</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">      is and no warp is attempted — :meth:`~digitalearth.static.maps.base.GeoLayerBase._reproject` hands</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">      it straight back and the layer&#39;s `Source` carries ``crs=None``;</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">    * **no georeferenced layer may share the figure.** A basemap, a coastline, a graticule and a</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">      reprojected raster are all placed in the display CRS, so mixing one in is refused by</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a><span class="sd">      :meth:`~digitalearth.static.scene.Scene._require_one_placement` rather than drawn with the array</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a><span class="sd">      as an invisible speck beside it;</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="sd">    * **a globe frame is refused** for the same reason, at this call;</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="sd">    * :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` still frames the figure,</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="sd">      and its ``bounds`` are read in the display CRS — which for such a figure means *array indices*.</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="sd">      ``set_bounds(None)`` fits the array, and ``set_bounds((0, 0, 4, 3))`` frames columns 0-4 and rows</span>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="sd">      0-3. Geographic bounds would frame empty axes, and there is nothing to tell them apart by.</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">    **Nodata in a bare array is a masked array.** There is no sidecar to carry a ``no_data_value``, so</span>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">    ``np.ma.masked_equal(grid, -9999)`` (or ``NaN`` in the values) is how a cell says it has none, and</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">    those cells are left blank.</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">        dataset: A pyramids ``Dataset``, a bare 2-D numpy array, or a path or URL to a raster</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">            (reprojected to :attr:`crs` first, except for the array — see above). Only a path-backed</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">            layer can be written down.</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
-<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">            ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">            left over is the caller&#39;s own engine styling, split between the layer&#39;s description and</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">            the scene (see the class docstring).</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a><span class="sd">        The image mappable (registered as a Scene layer).</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<span class="normal"><a href="#__codelineno-0-762">762</a></span>
+<span class="normal"><a href="#__codelineno-0-763">763</a></span>
+<span class="normal"><a href="#__codelineno-0-764">764</a></span>
+<span class="normal"><a href="#__codelineno-0-765">765</a></span>
+<span class="normal"><a href="#__codelineno-0-766">766</a></span>
+<span class="normal"><a href="#__codelineno-0-767">767</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind=&quot;imshow&quot;``).</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">    **A bare 2-D numpy array is drawn too** — the &quot;just show me this grid&quot; case, which was</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a><span class="sd">    ``StaticGlyph.plot(arr)`` until that class was deleted and which nothing took over (#343). Such a</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">    layer is **not georeferenced**, and that is not a detail:</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">    * its coordinates are its **own indices** — the column index on x, the row index on y, cell centres</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">      on the integers and the image covering ``[-0.5, cols - 0.5] x [-0.5, rows - 0.5]``, with the first</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">      row drawn at the **top** as matplotlib draws every array;</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a><span class="sd">    * **nothing is reprojected.** An array declares no CRS, so :attr:`crs` says nothing about where it</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a><span class="sd">      is and no warp is attempted — :meth:`~digitalearth.static.maps.base.GeoLayerBase._reproject` hands</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="sd">      it straight back and the layer&#39;s `Source` carries ``crs=None``;</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="sd">    * **no georeferenced layer may share the figure.** A basemap, a coastline, a graticule and a</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="sd">      reprojected raster are all placed in the display CRS, so mixing one in is refused by</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="sd">      :meth:`~digitalearth.static.scene.Scene._require_one_placement` rather than drawn with the array</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="sd">      as an invisible speck beside it;</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a><span class="sd">    * **a globe frame is refused** for the same reason, at this call;</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">    * :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` still frames the figure,</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">      and its ``bounds`` are read in the display CRS — which for such a figure means *array indices*.</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">      ``set_bounds(None)`` fits the array, and ``set_bounds((0, 0, 4, 3))`` frames columns 0-4 and rows</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">      0-3. Geographic bounds would frame empty axes, and there is nothing to tell them apart by.</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">    **Nodata in a bare array is a masked array.** There is no sidecar to carry a ``no_data_value``, so</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">    ``np.ma.masked_equal(grid, -9999)`` (or ``NaN`` in the values) is how a cell says it has none, and</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">    those cells are left blank.</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">        dataset: A pyramids ``Dataset``, a bare 2-D numpy array, or a path or URL to a raster</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">            (reprojected to :attr:`crs` first, except for the array — see above). Only a path-backed</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">            layer can be written down.</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a><span class="sd">            ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a><span class="sd">            left over is the caller&#39;s own engine styling, split between the layer&#39;s description and</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a><span class="sd">            the scene (see the class docstring).</span>
 <a id="__codelineno-0-741" name="__codelineno-0-741"></a>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a><span class="sd">        TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="sd">            (see :meth:`_field`).</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="sd">        ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a><span class="sd">            array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept.</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a><span class="sd">        - Draw a bare grid, and read back where its image was placed:</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">            &gt;&gt;&gt; with Map() as canvas:</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a><span class="sd">            ...     image = canvas.field(np.arange(12.0).reshape(3, 4))</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="sd">            ...     image.get_extent()</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a><span class="sd">            [-0.5, 3.5, -0.5, 2.5]</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;imshow&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a><span class="sd">        The image mappable (registered as a Scene layer).</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="sd">        TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a><span class="sd">            (see :meth:`_field`).</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a><span class="sd">        ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="sd">            array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept.</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="sd">        - Draw a bare grid, and read back where its image was placed:</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a><span class="sd">            &gt;&gt;&gt; with Map() as canvas:</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a><span class="sd">            ...     image = canvas.field(np.arange(12.0).reshape(3, 4))</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a><span class="sd">            ...     image.get_extent()</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a><span class="sd">            [-0.5, 3.5, -0.5, 2.5]</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;imshow&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6077,12 +6077,7 @@ it does not accept.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-764">764</a></span>
-<span class="normal"><a href="#__codelineno-0-765">765</a></span>
-<span class="normal"><a href="#__codelineno-0-766">766</a></span>
-<span class="normal"><a href="#__codelineno-0-767">767</a></span>
-<span class="normal"><a href="#__codelineno-0-768">768</a></span>
-<span class="normal"><a href="#__codelineno-0-769">769</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-769">769</a></span>
 <span class="normal"><a href="#__codelineno-0-770">770</a></span>
 <span class="normal"><a href="#__codelineno-0-771">771</a></span>
 <span class="normal"><a href="#__codelineno-0-772">772</a></span>
@@ -6139,69 +6134,74 @@ it does not accept.</p>
 <span class="normal"><a href="#__codelineno-0-823">823</a></span>
 <span class="normal"><a href="#__codelineno-0-824">824</a></span>
 <span class="normal"><a href="#__codelineno-0-825">825</a></span>
-<span class="normal"><a href="#__codelineno-0-826">826</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-764" name="__codelineno-0-764"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>    <span class="n">interval</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Trace iso-value lines through a raster band, or fill between them.</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">    One method for both renders, which is what the Tier-2 contract declares and what the web and</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a><span class="sd">    interactive tiers offer. This tier had two — ``contour`` and ``contourf`` — so ``filled=`` meant</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="sd">    nothing here and a script moving between tiers had to know which of the two to write. Neither</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="sd">    spelling survives: ``filled=`` is the argument that picks the render.</span>
+<span class="normal"><a href="#__codelineno-0-826">826</a></span>
+<span class="normal"><a href="#__codelineno-0-827">827</a></span>
+<span class="normal"><a href="#__codelineno-0-828">828</a></span>
+<span class="normal"><a href="#__codelineno-0-829">829</a></span>
+<span class="normal"><a href="#__codelineno-0-830">830</a></span>
+<span class="normal"><a href="#__codelineno-0-831">831</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-769" name="__codelineno-0-769"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a>    <span class="n">interval</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Trace iso-value lines through a raster band, or fill between them.</span>
 <a id="__codelineno-0-781" name="__codelineno-0-781"></a>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">        dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a><span class="sd">            first). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">        levels: The iso-values to trace — an int (a count) or a sequence of values. ``None``</span>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a><span class="sd">            (default) takes the variable&#39;s canonical levels from ``auto_style``, and leaves the choice</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a><span class="sd">            to matplotlib when it carries none. Give at most one of this or ``interval``.</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a><span class="sd">        interval: Spacing between levels — one level every N, in the band&#39;s own units. Resolved</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a><span class="sd">            against the band&#39;s range when it is drawn, so only the multiples *inside* the data are</span>
-<a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="sd">            traced. Give at most one of this or ``levels``.</span>
-<a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="sd">        filled: ``False`` (default) draws the levels as lines; ``True`` fills the bands between them.</span>
-<a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="sd">            The two are different matplotlib renders, so this is the argument that picks one.</span>
-<a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-794" name="__codelineno-0-794"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-797" name="__codelineno-0-797"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
-<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is</span>
-<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">            the caller&#39;s own engine styling, split between the layer&#39;s description and the scene</span>
-<a id="__codelineno-0-800" name="__codelineno-0-800"></a><span class="sd">            (see the class docstring).</span>
-<a id="__codelineno-0-801" name="__codelineno-0-801"></a>
-<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">        The contour mappable (registered as a Scene layer).</span>
-<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
-<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">    One method for both renders, which is what the Tier-2 contract declares and what the web and</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">    interactive tiers offer. This tier had two — ``contour`` and ``contourf`` — so ``filled=`` meant</span>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a><span class="sd">    nothing here and a script moving between tiers had to know which of the two to write. Neither</span>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">    spelling survives: ``filled=`` is the argument that picks the render.</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a><span class="sd">        dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a><span class="sd">            first). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="sd">        levels: The iso-values to trace — an int (a count) or a sequence of values. ``None``</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="sd">            (default) takes the variable&#39;s canonical levels from ``auto_style``, and leaves the choice</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="sd">            to matplotlib when it carries none. Give at most one of this or ``interval``.</span>
+<a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="sd">        interval: Spacing between levels — one level every N, in the band&#39;s own units. Resolved</span>
+<a id="__codelineno-0-794" name="__codelineno-0-794"></a><span class="sd">            against the band&#39;s range when it is drawn, so only the multiples *inside* the data are</span>
+<a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">            traced. Give at most one of this or ``levels``.</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="sd">        filled: ``False`` (default) draws the levels as lines; ``True`` fills the bands between them.</span>
+<a id="__codelineno-0-797" name="__codelineno-0-797"></a><span class="sd">            The two are different matplotlib renders, so this is the argument that picks one.</span>
+<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-800" name="__codelineno-0-800"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
+<a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is</span>
+<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">            the caller&#39;s own engine styling, split between the layer&#39;s description and the scene</span>
+<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">            (see the class docstring).</span>
 <a id="__codelineno-0-806" name="__codelineno-0-806"></a>
-<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">        ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one</span>
-<a id="__codelineno-0-809" name="__codelineno-0-809"></a><span class="sd">            thing, so neither can be silently preferred; when ``interval`` is not a positive finite</span>
-<a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">            spacing or crosses no level inside the band; or from ``ArrayGlyph`` for a styling keyword</span>
-<a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">            it does not accept.</span>
-<a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-813" name="__codelineno-0-813"></a>    <span class="k">if</span> <span class="n">levels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">interval</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-814" name="__codelineno-0-814"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-815" name="__codelineno-0-815"></a>            <span class="s2">&quot;contours() takes at most one of interval= or levels=; &quot;</span>
-<a id="__codelineno-0-816" name="__codelineno-0-816"></a>            <span class="sa">f</span><span class="s2">&quot;got interval=</span><span class="si">{</span><span class="n">interval</span><span class="si">!r}</span><span class="s2"> and levels=</span><span class="si">{</span><span class="n">levels</span><span class="si">!r}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-817" name="__codelineno-0-817"></a>        <span class="p">)</span>
-<a id="__codelineno-0-818" name="__codelineno-0-818"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span>
-<a id="__codelineno-0-819" name="__codelineno-0-819"></a>        <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-820" name="__codelineno-0-820"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;contourf&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;contour&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-821" name="__codelineno-0-821"></a>        <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span>
-<a id="__codelineno-0-822" name="__codelineno-0-822"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
-<a id="__codelineno-0-823" name="__codelineno-0-823"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-824" name="__codelineno-0-824"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-825" name="__codelineno-0-825"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-<a id="__codelineno-0-826" name="__codelineno-0-826"></a>    <span class="p">)</span>
+<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">        The contour mappable (registered as a Scene layer).</span>
+<a id="__codelineno-0-809" name="__codelineno-0-809"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
+<a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<a id="__codelineno-0-811" name="__codelineno-0-811"></a>
+<a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">        ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one</span>
+<a id="__codelineno-0-814" name="__codelineno-0-814"></a><span class="sd">            thing, so neither can be silently preferred; when ``interval`` is not a positive finite</span>
+<a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">            spacing or crosses no level inside the band; or from ``ArrayGlyph`` for a styling keyword</span>
+<a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">            it does not accept.</span>
+<a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-818" name="__codelineno-0-818"></a>    <span class="k">if</span> <span class="n">levels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">interval</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-819" name="__codelineno-0-819"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-820" name="__codelineno-0-820"></a>            <span class="s2">&quot;contours() takes at most one of interval= or levels=; &quot;</span>
+<a id="__codelineno-0-821" name="__codelineno-0-821"></a>            <span class="sa">f</span><span class="s2">&quot;got interval=</span><span class="si">{</span><span class="n">interval</span><span class="si">!r}</span><span class="s2"> and levels=</span><span class="si">{</span><span class="n">levels</span><span class="si">!r}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-822" name="__codelineno-0-822"></a>        <span class="p">)</span>
+<a id="__codelineno-0-823" name="__codelineno-0-823"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span>
+<a id="__codelineno-0-824" name="__codelineno-0-824"></a>        <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-825" name="__codelineno-0-825"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;contourf&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;contour&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-826" name="__codelineno-0-826"></a>        <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span>
+<a id="__codelineno-0-827" name="__codelineno-0-827"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
+<a id="__codelineno-0-828" name="__codelineno-0-828"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-829" name="__codelineno-0-829"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-830" name="__codelineno-0-830"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<a id="__codelineno-0-831" name="__codelineno-0-831"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6375,12 +6375,7 @@ the caller's own engine styling, split between the layer's description and the s
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-828">828</a></span>
-<span class="normal"><a href="#__codelineno-0-829">829</a></span>
-<span class="normal"><a href="#__codelineno-0-830">830</a></span>
-<span class="normal"><a href="#__codelineno-0-831">831</a></span>
-<span class="normal"><a href="#__codelineno-0-832">832</a></span>
-<span class="normal"><a href="#__codelineno-0-833">833</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-833">833</a></span>
 <span class="normal"><a href="#__codelineno-0-834">834</a></span>
 <span class="normal"><a href="#__codelineno-0-835">835</a></span>
 <span class="normal"><a href="#__codelineno-0-836">836</a></span>
@@ -6407,39 +6402,44 @@ the caller's own engine styling, split between the layer's description and the s
 <span class="normal"><a href="#__codelineno-0-857">857</a></span>
 <span class="normal"><a href="#__codelineno-0-858">858</a></span>
 <span class="normal"><a href="#__codelineno-0-859">859</a></span>
-<span class="normal"><a href="#__codelineno-0-860">860</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-828" name="__codelineno-0-828"></a><span class="k">def</span><span class="w"> </span><span class="nf">pcolormesh</span><span class="p">(</span>
-<a id="__codelineno-0-829" name="__codelineno-0-829"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-830" name="__codelineno-0-830"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-831" name="__codelineno-0-831"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-832" name="__codelineno-0-832"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-833" name="__codelineno-0-833"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-835" name="__codelineno-0-835"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-836" name="__codelineno-0-836"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind=&quot;pcolormesh&quot;``).</span>
-<a id="__codelineno-0-837" name="__codelineno-0-837"></a>
-<a id="__codelineno-0-838" name="__codelineno-0-838"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-839" name="__codelineno-0-839"></a><span class="sd">        dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`</span>
-<a id="__codelineno-0-840" name="__codelineno-0-840"></a><span class="sd">            first). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-841" name="__codelineno-0-841"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-842" name="__codelineno-0-842"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-843" name="__codelineno-0-843"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is</span>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">            the caller&#39;s own engine styling, split between the layer&#39;s description and the scene</span>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a><span class="sd">            (see the class docstring).</span>
-<a id="__codelineno-0-849" name="__codelineno-0-849"></a>
-<a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">        The ``QuadMesh`` mappable (registered as a Scene layer).</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<span class="normal"><a href="#__codelineno-0-860">860</a></span>
+<span class="normal"><a href="#__codelineno-0-861">861</a></span>
+<span class="normal"><a href="#__codelineno-0-862">862</a></span>
+<span class="normal"><a href="#__codelineno-0-863">863</a></span>
+<span class="normal"><a href="#__codelineno-0-864">864</a></span>
+<span class="normal"><a href="#__codelineno-0-865">865</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-833" name="__codelineno-0-833"></a><span class="k">def</span><span class="w"> </span><span class="nf">pcolormesh</span><span class="p">(</span>
+<a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-837" name="__codelineno-0-837"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-838" name="__codelineno-0-838"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-839" name="__codelineno-0-839"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-840" name="__codelineno-0-840"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-841" name="__codelineno-0-841"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind=&quot;pcolormesh&quot;``).</span>
+<a id="__codelineno-0-842" name="__codelineno-0-842"></a>
+<a id="__codelineno-0-843" name="__codelineno-0-843"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`</span>
+<a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="sd">            first). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-848" name="__codelineno-0-848"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
+<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is</span>
+<a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="sd">            the caller&#39;s own engine styling, split between the layer&#39;s description and the scene</span>
+<a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">            (see the class docstring).</span>
 <a id="__codelineno-0-854" name="__codelineno-0-854"></a>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">        ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-858" name="__codelineno-0-858"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span>
-<a id="__codelineno-0-859" name="__codelineno-0-859"></a>        <span class="n">dataset</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pcolormesh&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
-<a id="__codelineno-0-860" name="__codelineno-0-860"></a>    <span class="p">)</span>
+<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">        The ``QuadMesh`` mappable (registered as a Scene layer).</span>
+<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
+<a id="__codelineno-0-858" name="__codelineno-0-858"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<a id="__codelineno-0-859" name="__codelineno-0-859"></a>
+<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-861" name="__codelineno-0-861"></a><span class="sd">        ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.</span>
+<a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-863" name="__codelineno-0-863"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span>
+<a id="__codelineno-0-864" name="__codelineno-0-864"></a>        <span class="n">dataset</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pcolormesh&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+<a id="__codelineno-0-865" name="__codelineno-0-865"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6618,12 +6618,7 @@ the caller's own engine styling, split between the layer's description and the s
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-862">862</a></span>
-<span class="normal"><a href="#__codelineno-0-863">863</a></span>
-<span class="normal"><a href="#__codelineno-0-864">864</a></span>
-<span class="normal"><a href="#__codelineno-0-865">865</a></span>
-<span class="normal"><a href="#__codelineno-0-866">866</a></span>
-<span class="normal"><a href="#__codelineno-0-867">867</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-867">867</a></span>
 <span class="normal"><a href="#__codelineno-0-868">868</a></span>
 <span class="normal"><a href="#__codelineno-0-869">869</a></span>
 <span class="normal"><a href="#__codelineno-0-870">870</a></span>
@@ -6656,45 +6651,50 @@ the caller's own engine styling, split between the layer's description and the s
 <span class="normal"><a href="#__codelineno-0-897">897</a></span>
 <span class="normal"><a href="#__codelineno-0-898">898</a></span>
 <span class="normal"><a href="#__codelineno-0-899">899</a></span>
-<span class="normal"><a href="#__codelineno-0-900">900</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="k">def</span><span class="w"> </span><span class="nf">block</span><span class="p">(</span>
-<a id="__codelineno-0-863" name="__codelineno-0-863"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-864" name="__codelineno-0-864"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-865" name="__codelineno-0-865"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-866" name="__codelineno-0-866"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-867" name="__codelineno-0-867"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-868" name="__codelineno-0-868"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.</span>
-<a id="__codelineno-0-871" name="__codelineno-0-871"></a>
-<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">    ``block`` is meant for *discrete* per-cell rectangles aligned to cell **edges**. cleopatra&#39;s</span>
-<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">    ``pcolormesh`` path accepts cell-**centre** coordinates only (it rejects edge arrays of length</span>
-<a id="__codelineno-0-874" name="__codelineno-0-874"></a><span class="sd">    ``n + 1``), so true edge-aligned blocks need an upstream cleopatra option; until that lands ``block``</span>
-<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">    draws the same filled mesh as :meth:`pcolormesh`. It is kept as a distinct, stable entry point so</span>
-<a id="__codelineno-0-876" name="__codelineno-0-876"></a><span class="sd">    callers and examples can switch to true blocks transparently once cleopatra supports them.</span>
-<a id="__codelineno-0-877" name="__codelineno-0-877"></a>
-<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">        dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`</span>
-<a id="__codelineno-0-880" name="__codelineno-0-880"></a><span class="sd">            first). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-883" name="__codelineno-0-883"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
-<a id="__codelineno-0-886" name="__codelineno-0-886"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is</span>
-<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="sd">            the caller&#39;s own engine styling, split between the layer&#39;s description and the scene</span>
-<a id="__codelineno-0-888" name="__codelineno-0-888"></a><span class="sd">            (see the class docstring).</span>
-<a id="__codelineno-0-889" name="__codelineno-0-889"></a>
-<a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">        The ``QuadMesh`` mappable (registered as a Scene layer).</span>
-<a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
-<a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<span class="normal"><a href="#__codelineno-0-900">900</a></span>
+<span class="normal"><a href="#__codelineno-0-901">901</a></span>
+<span class="normal"><a href="#__codelineno-0-902">902</a></span>
+<span class="normal"><a href="#__codelineno-0-903">903</a></span>
+<span class="normal"><a href="#__codelineno-0-904">904</a></span>
+<span class="normal"><a href="#__codelineno-0-905">905</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-867" name="__codelineno-0-867"></a><span class="k">def</span><span class="w"> </span><span class="nf">block</span><span class="p">(</span>
+<a id="__codelineno-0-868" name="__codelineno-0-868"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-869" name="__codelineno-0-869"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-870" name="__codelineno-0-870"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-871" name="__codelineno-0-871"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-872" name="__codelineno-0-872"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-873" name="__codelineno-0-873"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-874" name="__codelineno-0-874"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.</span>
+<a id="__codelineno-0-876" name="__codelineno-0-876"></a>
+<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">    ``block`` is meant for *discrete* per-cell rectangles aligned to cell **edges**. cleopatra&#39;s</span>
+<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">    ``pcolormesh`` path accepts cell-**centre** coordinates only (it rejects edge arrays of length</span>
+<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">    ``n + 1``), so true edge-aligned blocks need an upstream cleopatra option; until that lands ``block``</span>
+<a id="__codelineno-0-880" name="__codelineno-0-880"></a><span class="sd">    draws the same filled mesh as :meth:`pcolormesh`. It is kept as a distinct, stable entry point so</span>
+<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">    callers and examples can switch to true blocks transparently once cleopatra supports them.</span>
+<a id="__codelineno-0-882" name="__codelineno-0-882"></a>
+<a id="__codelineno-0-883" name="__codelineno-0-883"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">        dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to :attr:`crs`</span>
+<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">            first). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-886" name="__codelineno-0-886"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-888" name="__codelineno-0-888"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
+<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">        **kwargs: Forwarded to :meth:`_field`, which documents the named ones. Anything left over is</span>
+<a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="sd">            the caller&#39;s own engine styling, split between the layer&#39;s description and the scene</span>
+<a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="sd">            (see the class docstring).</span>
 <a id="__codelineno-0-894" name="__codelineno-0-894"></a>
-<a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">        ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.</span>
-<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-898" name="__codelineno-0-898"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span>
-<a id="__codelineno-0-899" name="__codelineno-0-899"></a>        <span class="n">dataset</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pcolormesh&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
-<a id="__codelineno-0-900" name="__codelineno-0-900"></a>    <span class="p">)</span>
+<a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">        The ``QuadMesh`` mappable (registered as a Scene layer).</span>
+<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
+<a id="__codelineno-0-898" name="__codelineno-0-898"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<a id="__codelineno-0-899" name="__codelineno-0-899"></a>
+<a id="__codelineno-0-900" name="__codelineno-0-900"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-901" name="__codelineno-0-901"></a><span class="sd">        ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.</span>
+<a id="__codelineno-0-902" name="__codelineno-0-902"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-903" name="__codelineno-0-903"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field</span><span class="p">(</span>
+<a id="__codelineno-0-904" name="__codelineno-0-904"></a>        <span class="n">dataset</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pcolormesh&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+<a id="__codelineno-0-905" name="__codelineno-0-905"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6926,12 +6926,7 @@ digitalearth.base.stretch.channel_limits: Derives the <code>limits</code> this a
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-936"> 936</a></span>
-<span class="normal"><a href="#__codelineno-0-937"> 937</a></span>
-<span class="normal"><a href="#__codelineno-0-938"> 938</a></span>
-<span class="normal"><a href="#__codelineno-0-939"> 939</a></span>
-<span class="normal"><a href="#__codelineno-0-940"> 940</a></span>
-<span class="normal"><a href="#__codelineno-0-941"> 941</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-941"> 941</a></span>
 <span class="normal"><a href="#__codelineno-0-942"> 942</a></span>
 <span class="normal"><a href="#__codelineno-0-943"> 943</a></span>
 <span class="normal"><a href="#__codelineno-0-944"> 944</a></span>
@@ -7011,92 +7006,97 @@ digitalearth.base.stretch.channel_limits: Derives the <code>limits</code> this a
 <span class="normal"><a href="#__codelineno-0-1018">1018</a></span>
 <span class="normal"><a href="#__codelineno-0-1019">1019</a></span>
 <span class="normal"><a href="#__codelineno-0-1020">1020</a></span>
-<span class="normal"><a href="#__codelineno-0-1021">1021</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-936" name="__codelineno-0-936"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
-<a id="__codelineno-0-937" name="__codelineno-0-937"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-938" name="__codelineno-0-938"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-939" name="__codelineno-0-939"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
-<a id="__codelineno-0-940" name="__codelineno-0-940"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-941" name="__codelineno-0-941"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-942" name="__codelineno-0-942"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ChannelLimits</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-943" name="__codelineno-0-943"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-944" name="__codelineno-0-944"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-945" name="__codelineno-0-945"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-946" name="__codelineno-0-946"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-947" name="__codelineno-0-947"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).</span>
-<a id="__codelineno-0-948" name="__codelineno-0-948"></a>
-<a id="__codelineno-0-949" name="__codelineno-0-949"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-950" name="__codelineno-0-950"></a><span class="sd">        dataset: A multiband pyramids ``Dataset``, or a path or URL to one (reprojected to the</span>
-<a id="__codelineno-0-951" name="__codelineno-0-951"></a><span class="sd">            display CRS first). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-952" name="__codelineno-0-952"></a><span class="sd">        bands: Three 1-based band indices mapped to R, G, B. Defaults to ``(1, 2, 3)``.</span>
-<a id="__codelineno-0-953" name="__codelineno-0-953"></a><span class="sd">        mask_nodata: When ``True`` (default) each band&#39;s nodata cells are excluded from the 2-98</span>
-<a id="__codelineno-0-954" name="__codelineno-0-954"></a><span class="sd">            percentile stretch (and render transparent). Pass ``False`` for the raw values (the</span>
-<a id="__codelineno-0-955" name="__codelineno-0-955"></a><span class="sd">            pre-mask behaviour, where the nodata sentinel participates in the stretch).</span>
-<a id="__codelineno-0-956" name="__codelineno-0-956"></a><span class="sd">        limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call</span>
-<a id="__codelineno-0-957" name="__codelineno-0-957"></a><span class="sd">            percentile scan. :meth:`~digitalearth.static.maps.animation.AnimationMixin.animate` fills</span>
-<a id="__codelineno-0-958" name="__codelineno-0-958"></a><span class="sd">            these from the whole stack so a composite animation holds one stretch across its frames.</span>
-<a id="__codelineno-0-959" name="__codelineno-0-959"></a><span class="sd">        **opts: Styling kwargs, filtered to ``ArrayGlyph``&#39;s accepted options.</span>
-<a id="__codelineno-0-960" name="__codelineno-0-960"></a>
-<a id="__codelineno-0-961" name="__codelineno-0-961"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-962" name="__codelineno-0-962"></a><span class="sd">        The image mappable (registered as a Scene layer).</span>
-<a id="__codelineno-0-963" name="__codelineno-0-963"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
-<a id="__codelineno-0-964" name="__codelineno-0-964"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<span class="normal"><a href="#__codelineno-0-1021">1021</a></span>
+<span class="normal"><a href="#__codelineno-0-1022">1022</a></span>
+<span class="normal"><a href="#__codelineno-0-1023">1023</a></span>
+<span class="normal"><a href="#__codelineno-0-1024">1024</a></span>
+<span class="normal"><a href="#__codelineno-0-1025">1025</a></span>
+<span class="normal"><a href="#__codelineno-0-1026">1026</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-941" name="__codelineno-0-941"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
+<a id="__codelineno-0-942" name="__codelineno-0-942"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-943" name="__codelineno-0-943"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-944" name="__codelineno-0-944"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
+<a id="__codelineno-0-945" name="__codelineno-0-945"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-946" name="__codelineno-0-946"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-947" name="__codelineno-0-947"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ChannelLimits</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-948" name="__codelineno-0-948"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-949" name="__codelineno-0-949"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-950" name="__codelineno-0-950"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-951" name="__codelineno-0-951"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-952" name="__codelineno-0-952"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).</span>
+<a id="__codelineno-0-953" name="__codelineno-0-953"></a>
+<a id="__codelineno-0-954" name="__codelineno-0-954"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-955" name="__codelineno-0-955"></a><span class="sd">        dataset: A multiband pyramids ``Dataset``, or a path or URL to one (reprojected to the</span>
+<a id="__codelineno-0-956" name="__codelineno-0-956"></a><span class="sd">            display CRS first). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-957" name="__codelineno-0-957"></a><span class="sd">        bands: Three 1-based band indices mapped to R, G, B. Defaults to ``(1, 2, 3)``.</span>
+<a id="__codelineno-0-958" name="__codelineno-0-958"></a><span class="sd">        mask_nodata: When ``True`` (default) each band&#39;s nodata cells are excluded from the 2-98</span>
+<a id="__codelineno-0-959" name="__codelineno-0-959"></a><span class="sd">            percentile stretch (and render transparent). Pass ``False`` for the raw values (the</span>
+<a id="__codelineno-0-960" name="__codelineno-0-960"></a><span class="sd">            pre-mask behaviour, where the nodata sentinel participates in the stretch).</span>
+<a id="__codelineno-0-961" name="__codelineno-0-961"></a><span class="sd">        limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call</span>
+<a id="__codelineno-0-962" name="__codelineno-0-962"></a><span class="sd">            percentile scan. :meth:`~digitalearth.static.maps.animation.AnimationMixin.animate` fills</span>
+<a id="__codelineno-0-963" name="__codelineno-0-963"></a><span class="sd">            these from the whole stack so a composite animation holds one stretch across its frames.</span>
+<a id="__codelineno-0-964" name="__codelineno-0-964"></a><span class="sd">        **opts: Styling kwargs, filtered to ``ArrayGlyph``&#39;s accepted options.</span>
 <a id="__codelineno-0-965" name="__codelineno-0-965"></a>
-<a id="__codelineno-0-966" name="__codelineno-0-966"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-967" name="__codelineno-0-967"></a><span class="sd">        ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without</span>
-<a id="__codelineno-0-968" name="__codelineno-0-968"></a><span class="sd">            one ``(lo, hi)`` pair per channel.</span>
-<a id="__codelineno-0-969" name="__codelineno-0-969"></a>
-<a id="__codelineno-0-970" name="__codelineno-0-970"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-971" name="__codelineno-0-971"></a><span class="sd">        - Composite three bands of a multiband raster into one RGB image:</span>
-<a id="__codelineno-0-972" name="__codelineno-0-972"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-973" name="__codelineno-0-973"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-974" name="__codelineno-0-974"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-975" name="__codelineno-0-975"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-976" name="__codelineno-0-976"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-977" name="__codelineno-0-977"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-978" name="__codelineno-0-978"></a><span class="sd">            &gt;&gt;&gt; ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-979" name="__codelineno-0-979"></a><span class="sd">            &gt;&gt;&gt; base = np.nan_to_num(ds.read_array(band=0).astype(&quot;float32&quot;))</span>
-<a id="__codelineno-0-980" name="__codelineno-0-980"></a><span class="sd">            &gt;&gt;&gt; rgb = Dataset.from_array(arr=np.stack([base, base, base]),</span>
-<a id="__codelineno-0-981" name="__codelineno-0-981"></a><span class="sd">            ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))</span>
-<a id="__codelineno-0-982" name="__codelineno-0-982"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=rgb.epsg)</span>
-<a id="__codelineno-0-983" name="__codelineno-0-983"></a><span class="sd">            &gt;&gt;&gt; _ = m.rgb_composite(rgb)</span>
-<a id="__codelineno-0-984" name="__codelineno-0-984"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.images)</span>
-<a id="__codelineno-0-985" name="__codelineno-0-985"></a><span class="sd">            1</span>
-<a id="__codelineno-0-986" name="__codelineno-0-986"></a>
-<a id="__codelineno-0-987" name="__codelineno-0-987"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-988" name="__codelineno-0-988"></a><span class="sd">        - Frozen ``limits`` replace the per-call stretch: a white point far above the data renders it</span>
-<a id="__codelineno-0-989" name="__codelineno-0-989"></a><span class="sd">            black, which is what holds a sequence of frames on one scale:</span>
-<a id="__codelineno-0-990" name="__codelineno-0-990"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-991" name="__codelineno-0-991"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-992" name="__codelineno-0-992"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-993" name="__codelineno-0-993"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-994" name="__codelineno-0-994"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-995" name="__codelineno-0-995"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-996" name="__codelineno-0-996"></a><span class="sd">            &gt;&gt;&gt; ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-997" name="__codelineno-0-997"></a><span class="sd">            &gt;&gt;&gt; base = np.nan_to_num(ds.read_array(band=0).astype(&quot;float32&quot;))</span>
-<a id="__codelineno-0-998" name="__codelineno-0-998"></a><span class="sd">            &gt;&gt;&gt; rgb = Dataset.from_array(arr=np.stack([base, base, base]),</span>
-<a id="__codelineno-0-999" name="__codelineno-0-999"></a><span class="sd">            ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))</span>
-<a id="__codelineno-0-1000" name="__codelineno-0-1000"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=rgb.epsg)</span>
-<a id="__codelineno-0-1001" name="__codelineno-0-1001"></a><span class="sd">            &gt;&gt;&gt; _ = m.rgb_composite(rgb, limits=[(0.0, 1e6)] * 3)</span>
-<a id="__codelineno-0-1002" name="__codelineno-0-1002"></a><span class="sd">            &gt;&gt;&gt; round(float(np.nanmax(m.ax.images[-1].get_array())), 3)</span>
-<a id="__codelineno-0-1003" name="__codelineno-0-1003"></a><span class="sd">            0.0</span>
-<a id="__codelineno-0-1004" name="__codelineno-0-1004"></a>
-<a id="__codelineno-0-1005" name="__codelineno-0-1005"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1006" name="__codelineno-0-1006"></a>
-<a id="__codelineno-0-1007" name="__codelineno-0-1007"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1008" name="__codelineno-0-1008"></a><span class="sd">        hsv_composite: The same three bands read as hue/saturation/value instead.</span>
-<a id="__codelineno-0-1009" name="__codelineno-0-1009"></a><span class="sd">        digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.</span>
-<a id="__codelineno-0-1010" name="__codelineno-0-1010"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1011" name="__codelineno-0-1011"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
-<a id="__codelineno-0-1012" name="__codelineno-0-1012"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
-<a id="__codelineno-0-1013" name="__codelineno-0-1013"></a>        <span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1014" name="__codelineno-0-1014"></a>        <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-1015" name="__codelineno-0-1015"></a>        <span class="n">bands</span><span class="p">,</span>
-<a id="__codelineno-0-1016" name="__codelineno-0-1016"></a>        <span class="n">mask_nodata</span><span class="p">,</span>
-<a id="__codelineno-0-1017" name="__codelineno-0-1017"></a>        <span class="n">limits</span><span class="p">,</span>
-<a id="__codelineno-0-1018" name="__codelineno-0-1018"></a>        <span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-1019" name="__codelineno-0-1019"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a>    <span class="p">)</span>
+<a id="__codelineno-0-966" name="__codelineno-0-966"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-967" name="__codelineno-0-967"></a><span class="sd">        The image mappable (registered as a Scene layer).</span>
+<a id="__codelineno-0-968" name="__codelineno-0-968"></a><span class="sd">        ``None`` instead when the data lies entirely outside what the display CRS shows:</span>
+<a id="__codelineno-0-969" name="__codelineno-0-969"></a><span class="sd">        an off-limb draw renders an empty frame rather than raising.</span>
+<a id="__codelineno-0-970" name="__codelineno-0-970"></a>
+<a id="__codelineno-0-971" name="__codelineno-0-971"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-972" name="__codelineno-0-972"></a><span class="sd">        ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without</span>
+<a id="__codelineno-0-973" name="__codelineno-0-973"></a><span class="sd">            one ``(lo, hi)`` pair per channel.</span>
+<a id="__codelineno-0-974" name="__codelineno-0-974"></a>
+<a id="__codelineno-0-975" name="__codelineno-0-975"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-976" name="__codelineno-0-976"></a><span class="sd">        - Composite three bands of a multiband raster into one RGB image:</span>
+<a id="__codelineno-0-977" name="__codelineno-0-977"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-978" name="__codelineno-0-978"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-979" name="__codelineno-0-979"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-980" name="__codelineno-0-980"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-981" name="__codelineno-0-981"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-982" name="__codelineno-0-982"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-983" name="__codelineno-0-983"></a><span class="sd">            &gt;&gt;&gt; ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-984" name="__codelineno-0-984"></a><span class="sd">            &gt;&gt;&gt; base = np.nan_to_num(ds.read_array(band=0).astype(&quot;float32&quot;))</span>
+<a id="__codelineno-0-985" name="__codelineno-0-985"></a><span class="sd">            &gt;&gt;&gt; rgb = Dataset.from_array(arr=np.stack([base, base, base]),</span>
+<a id="__codelineno-0-986" name="__codelineno-0-986"></a><span class="sd">            ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))</span>
+<a id="__codelineno-0-987" name="__codelineno-0-987"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=rgb.epsg)</span>
+<a id="__codelineno-0-988" name="__codelineno-0-988"></a><span class="sd">            &gt;&gt;&gt; _ = m.rgb_composite(rgb)</span>
+<a id="__codelineno-0-989" name="__codelineno-0-989"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.images)</span>
+<a id="__codelineno-0-990" name="__codelineno-0-990"></a><span class="sd">            1</span>
+<a id="__codelineno-0-991" name="__codelineno-0-991"></a>
+<a id="__codelineno-0-992" name="__codelineno-0-992"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-993" name="__codelineno-0-993"></a><span class="sd">        - Frozen ``limits`` replace the per-call stretch: a white point far above the data renders it</span>
+<a id="__codelineno-0-994" name="__codelineno-0-994"></a><span class="sd">            black, which is what holds a sequence of frames on one scale:</span>
+<a id="__codelineno-0-995" name="__codelineno-0-995"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-996" name="__codelineno-0-996"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-997" name="__codelineno-0-997"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-998" name="__codelineno-0-998"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-999" name="__codelineno-0-999"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-1000" name="__codelineno-0-1000"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1001" name="__codelineno-0-1001"></a><span class="sd">            &gt;&gt;&gt; ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-1002" name="__codelineno-0-1002"></a><span class="sd">            &gt;&gt;&gt; base = np.nan_to_num(ds.read_array(band=0).astype(&quot;float32&quot;))</span>
+<a id="__codelineno-0-1003" name="__codelineno-0-1003"></a><span class="sd">            &gt;&gt;&gt; rgb = Dataset.from_array(arr=np.stack([base, base, base]),</span>
+<a id="__codelineno-0-1004" name="__codelineno-0-1004"></a><span class="sd">            ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))</span>
+<a id="__codelineno-0-1005" name="__codelineno-0-1005"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=rgb.epsg)</span>
+<a id="__codelineno-0-1006" name="__codelineno-0-1006"></a><span class="sd">            &gt;&gt;&gt; _ = m.rgb_composite(rgb, limits=[(0.0, 1e6)] * 3)</span>
+<a id="__codelineno-0-1007" name="__codelineno-0-1007"></a><span class="sd">            &gt;&gt;&gt; round(float(np.nanmax(m.ax.images[-1].get_array())), 3)</span>
+<a id="__codelineno-0-1008" name="__codelineno-0-1008"></a><span class="sd">            0.0</span>
+<a id="__codelineno-0-1009" name="__codelineno-0-1009"></a>
+<a id="__codelineno-0-1010" name="__codelineno-0-1010"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1011" name="__codelineno-0-1011"></a>
+<a id="__codelineno-0-1012" name="__codelineno-0-1012"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1013" name="__codelineno-0-1013"></a><span class="sd">        hsv_composite: The same three bands read as hue/saturation/value instead.</span>
+<a id="__codelineno-0-1014" name="__codelineno-0-1014"></a><span class="sd">        digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.</span>
+<a id="__codelineno-0-1015" name="__codelineno-0-1015"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1016" name="__codelineno-0-1016"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
+<a id="__codelineno-0-1017" name="__codelineno-0-1017"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
+<a id="__codelineno-0-1018" name="__codelineno-0-1018"></a>        <span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1019" name="__codelineno-0-1019"></a>        <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a>        <span class="n">bands</span><span class="p">,</span>
+<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a>        <span class="n">mask_nodata</span><span class="p">,</span>
+<a id="__codelineno-0-1022" name="__codelineno-0-1022"></a>        <span class="n">limits</span><span class="p">,</span>
+<a id="__codelineno-0-1023" name="__codelineno-0-1023"></a>        <span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-1024" name="__codelineno-0-1024"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-1025" name="__codelineno-0-1025"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-1026" name="__codelineno-0-1026"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
