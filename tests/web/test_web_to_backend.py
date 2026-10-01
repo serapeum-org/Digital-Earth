@@ -5,11 +5,38 @@ matplotlib round trip live in ``tests/test_to_backend.py`` (core, no extra).
 """
 
 from digitalearth import api
+from digitalearth.base.spec import Bounds
+from digitalearth.static import Map
 from digitalearth.web import WebMap
 
 
 class TestWebRoundTrip:
     """A figure a web map describes draws again into a fresh web map, view and all."""
+
+    def test_a_projected_sources_bounds_are_reprojected_to_lonlat(self, dataset):
+        """A foreign figure framed in a projected CRS has its bounds reprojected to lon/lat for the web tier.
+
+        Args:
+            dataset: The raster fixture (EPSG:32618, projected metres).
+
+        Test scenario:
+            The web tier renders in EPSG:4326 and ``set_bounds`` takes lon/lat degrees. A static source framed
+            with a projected ``Bounds`` (metres) must be reprojected on replay, not fed in as raw metres — so
+            the replayed web view's bounds must be sane lon/lat degrees, not six-figure eastings/northings.
+        """
+        assert dataset.epsg != 4326, (
+            "fixture must be projected to exercise reprojection"
+        )
+        source = Map(crs=dataset.epsg)
+        source.field(dataset)
+        source.set_bounds(
+            Bounds(432968.0, 468007.0, 488968.0, 520007.0, crs=dataset.epsg)
+        )
+        replayed = api.to_backend(source.figure_spec, backend="web")
+        bbox = replayed.viewport.bounds.as_bbox()
+        assert all(abs(value) <= 180 for value in bbox), (
+            f"web bounds were applied as raw projected metres, not reprojected to lon/lat: {bbox}"
+        )
 
     def test_the_replayed_map_carries_the_same_layers(self, dataset):
         """Every layer id and kind survives the ``figure_spec`` → ``to_backend`` round trip.

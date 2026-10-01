@@ -1342,7 +1342,10 @@ class WebMapBase:
             self.projection("globe")
         bounds = getattr(view, "bounds", None)
         if bounds is not None:
-            self.set_bounds(bounds.as_bbox())
+            # This tier's `set_bounds` takes lon/lat degrees and does not reproject, but a figure another tier
+            # described frames in its own (often projected) CRS — so reproject to this tier's CRS first, or a
+            # non-4326 source's metres would be applied as degrees and misframe the map silently.
+            self.set_bounds(bounds.to_crs(self.crs).as_bbox())
         return self
 
     @classmethod
