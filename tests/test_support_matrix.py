@@ -25,8 +25,9 @@ SUPPORT_MATRIX_PATH = (
     Path(__file__).resolve().parents[1] / "docs" / "reference" / "support-matrix.md"
 )
 
-#: The backends as columns, left to right. The default tier first, then the three extras.
-_BACKENDS: List[str] = ["matplotlib", "web", "interactive", "3d"]
+#: The backends as columns, left to right. The default tier first, then the three extras. Guarded against the
+#: package's discovered tier set by ``tests/test_api_snapshot.py::test_the_snapshot_and_matrix_cover_every_tier``.
+BACKENDS: List[str] = ["matplotlib", "web", "interactive", "3d"]
 
 #: The set-valued capability dimensions to tabulate, as (heading, capability key).
 _DIMENSIONS = (
@@ -58,15 +59,15 @@ def _dimension_table(heading: str, key: str, caps: Dict[str, dict]) -> str:
     Returns:
         The ``## heading`` section with one row per value (the sorted union across backends).
     """
-    values = sorted({value for backend in _BACKENDS for value in caps[backend][key]})
-    header = "| capability | " + " | ".join(_BACKENDS) + " |"
-    rule = "| --- | " + " | ".join("---" for _ in _BACKENDS) + " |"
+    values = sorted({value for backend in BACKENDS for value in caps[backend][key]})
+    header = "| capability | " + " | ".join(BACKENDS) + " |"
+    rule = "| --- | " + " | ".join("---" for _ in BACKENDS) + " |"
     rows = [
         "| `"
         + value
         + "` | "
         + " | ".join(
-            "✓" if value in caps[backend][key] else "—" for backend in _BACKENDS
+            "✓" if value in caps[backend][key] else "—" for backend in BACKENDS
         )
         + " |"
         for value in values
@@ -84,7 +85,7 @@ def _absent_section(caps: Dict[str, dict]) -> str:
         The ``## What a backend omits, and why`` section; a backend with nothing absent is skipped.
     """
     blocks = ["## What a backend omits, and why", ""]
-    for backend in _BACKENDS:
+    for backend in BACKENDS:
         absent = caps[backend]["absent"]
         if not absent:
             continue
@@ -111,7 +112,7 @@ def render_support_matrix() -> str:
         The markdown page: a preamble, one table per dimension, then the absent-and-why section. Deterministic
         (backends fixed, values sorted) so two machines render it byte-identically.
     """
-    caps = {backend: tier_capabilities(backend) for backend in _BACKENDS}
+    caps = {backend: tier_capabilities(backend) for backend in BACKENDS}
     sections = [_dimension_table(heading, key, caps) for heading, key in _DIMENSIONS]
     body = "\n\n".join([_PREAMBLE.rstrip(), *sections, _absent_section(caps).rstrip()])
     return body + "\n"
