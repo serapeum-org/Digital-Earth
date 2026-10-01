@@ -104,6 +104,9 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 
 ## What a backend omits, and why
 
+Some entries here (for example a control a tier has no surface for) are not rows in the tables above: they are
+omissions with no positive counterpart on any backend, so they appear only in this section.
+
 ### matplotlib
 
 - **`attribution`** — a credit is text placed on the figure — `text` or `stamp` — rather than a control the tier

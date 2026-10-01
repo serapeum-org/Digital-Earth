@@ -21,6 +21,9 @@ from tests.capability_surface import tier_capabilities
 from tests.ratchet import assert_matches_committed
 
 #: The committed page, under the docs reference section (and in ``mkdocs.yml``'s ``nav``).
+#: Unlike the API-snapshot and known-deviations artifacts (which sit beside their test, so those use
+#: ``Path(__file__).with_name(...)``), this page lives in the docs tree, so it is resolved from the repo root
+#: (``parents[1]`` of ``tests/``).
 SUPPORT_MATRIX_PATH = (
     Path(__file__).resolve().parents[1] / "docs" / "reference" / "support-matrix.md"
 )
@@ -84,7 +87,12 @@ def _absent_section(caps: Dict[str, dict]) -> str:
     Returns:
         The ``## What a backend omits, and why`` section; a backend with nothing absent is skipped.
     """
-    blocks = ["## What a backend omits, and why", ""]
+    intro = textwrap.fill(
+        "Some entries here (for example a control a tier has no surface for) are not rows in the tables above: "
+        "they are omissions with no positive counterpart on any backend, so they appear only in this section.",
+        width=118,
+    )
+    blocks = ["## What a backend omits, and why", "", intro, ""]
     for backend in BACKENDS:
         absent = caps[backend]["absent"]
         if not absent:
