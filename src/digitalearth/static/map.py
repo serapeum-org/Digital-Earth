@@ -91,9 +91,10 @@ class Map(
 
         Args:
             figure: The figure to draw. Its one panel's :class:`~digitalearth.base.spec.Viewport` set the
-                display CRS/domain/globe at construction; here its layers are drawn in order. An ``object:``
-                (in-memory) source is replayed in process, so the scene that registered it must stay alive
-                until this returns; a path or URL source has no such constraint.
+                display CRS/domain/globe at construction; here its layers are drawn in order and its title and
+                any ``set_bounds`` framing reapplied. An ``object:`` (in-memory) source is replayed in process,
+                so the scene that registered it must stay alive until this returns; a path or URL source has no
+                such constraint.
 
         Returns:
             This map (chainable).
