@@ -589,9 +589,10 @@ def _class_lookup(
     """Return a colormap that paints each code's class in that class's colour.
 
     cleopatra classifies through ``BoundaryNorm(edges, ncolors=256)``, which spreads ``n`` classes over 256
-    colour slots rather than onto slots ``0..n-1`` — so a plain ``n``-colour map paints the first class right
-    and every later one in its last colour. This builds a 256-slot map and puts each colour on the slot its code
-    lands in, read off that same norm rather than re-derived, filling forward so every slot is a class colour.
+    colour slots rather than onto slots ``0..n-1`` — so a plain ``n``-colour map paints only the first and last
+    classes in their own colours, and every class between them in whatever colour its slot lands on (for four
+    codes, all the last one). This builds a 256-slot map and puts each colour on the slot its code lands in,
+    read off that same norm rather than re-derived, filling forward so every slot is a class colour.
 
     Args:
         colors: One colour per code, in code order.
