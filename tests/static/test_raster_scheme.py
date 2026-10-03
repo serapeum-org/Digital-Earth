@@ -567,3 +567,46 @@ class TestCategoricalRasterField:
         assert categories == [1, 2, 7, 9], (
             f"the categories {categories} should be the band's codes [1, 2, 7, 9]"
         )
+
+    def test_a_replayed_figure_paints_the_colours_its_key_shows(self, tmp_path):
+        """A categorical raster drawn with an unregistered colormap replays in the same colours it keys.
+
+        Args:
+            tmp_path: Where the path-backed raster is written, so the figure can be stored.
+
+        Test scenario:
+            A ``Colormap`` object cannot be written into a figure description, so a replay through
+            ``to_dict``/``from_dict``/``to_backend`` used to fall back to the default palette while the stored
+            colour encoding still carried the original colours — the key disagreed with the picture. The replay
+            must paint, and key, the colours the figure was drawn with.
+        """
+        from matplotlib.colors import ListedColormap, to_hex
+        from pyramids.dataset import Dataset, GeoReference
+
+        from digitalearth import to_backend
+        from digitalearth.base.spec import FigureSpec
+
+        path = str(tmp_path / "codes.tif")
+        geo = GeoReference(top_left_corner=(10.0, 50.0), cell_size=0.1, epsg=4326)
+        Dataset.from_array(CODES.astype(np.int32), geo_ref=geo).to_file(path)
+        custom = ["#111111", "#222222", "#333333", "#444444"]
+        with Map(crs=4326) as m:
+            m.field(
+                path, scheme="categorical", cmap=ListedColormap(custom), name="cover"
+            )
+            stored = FigureSpec.from_dict(m.figure_spec.to_dict())
+        replay = to_backend(stored, backend="matplotlib")
+        try:
+            painted = sorted(set(_cell_colors(replay.ax.images[-1]).ravel()))
+            replay.legend()
+            keyed = [
+                to_hex(h.get_facecolor()) for h in replay.ax.get_legend().legend_handles
+            ]
+        finally:
+            replay.close()
+        assert painted == custom, (
+            f"the replay painted {painted}, the figure was drawn in {custom}"
+        )
+        assert keyed == custom, (
+            f"the replay keyed {keyed}, the figure was drawn in {custom}"
+        )

@@ -538,7 +538,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         placement = {"extent": scene._extent_of(x_values, y_values)}
     else:
         placement = {"coords": (x_values, y_values)}
-    categorical = _categorical_scale(opts, z_values, requested)
+    described = dict(layer.symbology.encodings).get("color")
+    categorical = _categorical_scale(
+        opts, z_values, requested, getattr(described, "scale", None)
+    )
     # cleopatra's glyph constructors reject the regrouped styling keys (levels/style/color_scale/…);
     # relocate them onto the plot() call, where `_render_glyph` folds them into their group objects.
     plot_style = relocate_flat_style(opts)
@@ -574,7 +577,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 def _categorical_scale(
-    opts: Dict[str, Any], values: Any, requested: Any
+    opts: Dict[str, Any],
+    values: Any,
+    requested: Any,
+    described: Optional[Scale] = None,
 ) -> Optional[Scale]:
     """Turn a ``scheme="categorical"`` raster into what cleopatra draws, and return its categorical scale.
 
@@ -587,6 +593,11 @@ def _categorical_scale(
         opts: The drawing options; read for ``scheme``, and given the edges, the palette and no ``k``.
         values: The band's cell values.
         requested: The caller's ``cmap``, or ``None`` for the shared default categorical palette.
+        described: The categorical scale the layer's description already carries, if any. With no ``cmap`` to
+            work from, its colours are reused when its categories are exactly this band's codes: a replay of a
+            stored figure has lost a caller's unregistered ``Colormap`` (only a name can be written down), but
+            the encoding it stored still holds the colours that were drawn — so the replay paints, and keys, what
+            the figure showed rather than the default palette.
 
     Returns:
         The :class:`~digitalearth.base.spec.scale.Scale` of the codes and their colours, or ``None`` when the
@@ -598,7 +609,18 @@ def _categorical_scale(
     if not _asks_categorical(opts.get("scheme")):
         return None
     codes = _raster_categories(values)
-    categories, colors = categorical_colors(codes, resolve_categorical_cmap(requested))
+    reusable = (
+        requested is None
+        and described is not None
+        and described.is_categorical
+        and list(described.categories) == codes
+    )
+    if reusable:
+        categories, colors = list(codes), [described.color_for(code) for code in codes]
+    else:
+        categories, colors = categorical_colors(
+            codes, resolve_categorical_cmap(requested)
+        )
     edges = _code_edges(codes)
     opts["scheme"] = edges
     opts.pop("k", None)
