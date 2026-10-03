@@ -486,6 +486,13 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
+    if _asks_categorical(opts.get("scheme")) and kind in _CONTOUR_KINDS:
+        # Codes are labels, not a surface: a contour interpolates between them, so filling between codes 1 and
+        # 5 would paint bands of 2 and 3 where no cell holds them. Refused before the band is read.
+        raise ValueError(
+            "scheme='categorical' draws one class per cell, and a contour interpolates between codes; draw "
+            "a categorical raster with field, pcolormesh or block instead"
+        )
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
     # (ST-5). For everything smaller the two are one object and the read is the one this always did.
@@ -1093,8 +1100,9 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one
                 thing, so neither can be silently preferred; when ``interval`` is not a positive finite
-                spacing or crosses no level inside the band; or from ``ArrayGlyph`` for a styling keyword
-                it does not accept.
+                spacing or crosses no level inside the band; for ``scheme="categorical"``, because a contour
+                interpolates between class codes (draw categories with :meth:`field`, :meth:`pcolormesh` or
+                :meth:`block`); or from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         if levels is not None and interval is not None:
             raise ValueError(

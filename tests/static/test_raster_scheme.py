@@ -610,3 +610,22 @@ class TestCategoricalRasterField:
         assert keyed == custom, (
             f"the replay keyed {keyed}, the figure was drawn in {custom}"
         )
+
+    @pytest.mark.parametrize("filled", [True, False], ids=["filled", "lines"])
+    def test_contours_refuse_the_categorical_scheme(self, filled):
+        """``contours(..., scheme="categorical")`` is refused: a contour interpolates between codes.
+
+        Args:
+            filled: Whether the contours are filled bands or lines.
+
+        Test scenario:
+            Codes are labels, not a surface — filling between ``1`` and ``5`` paints bands of ``2`` and ``3``
+            where no cell holds them, and lines sit on half-codes. The refusal must name the cell-based renders.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        geo = GeoReference(top_left_corner=(10.0, 50.0), cell_size=0.1, epsg=4326)
+        codes = Dataset.from_array(CODES.astype(np.int32), geo_ref=geo)
+        with Map(crs=4326) as m:
+            with pytest.raises(ValueError, match="pcolormesh"):
+                m.contours(codes, filled=filled, scheme="categorical")
