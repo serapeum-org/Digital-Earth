@@ -107,6 +107,58 @@ class TestClassifiedRasterField:
             f"an unclassified raster should be continuous, got {norm!r}"
         )
 
+    @pytest.mark.parametrize("builder", ["field", "pcolormesh", "block"])
+    def test_every_raster_builder_classifies(self, dataset, values, builder):
+        """``field``, ``pcolormesh`` and ``block`` all cut ``scheme``/``k`` into the same classes.
+
+        Args:
+            dataset: The raster fixture.
+            values: The fixture's valid cell values.
+            builder: The raster builder under test.
+
+        Test scenario:
+            The three share the classify path, so a renamed upstream keyword would break all three; each must
+            hand back a mappable with a ``BoundaryNorm`` on the equal-interval edges.
+        """
+        expected = _equal_interval_edges(values, 4)
+        with Map(crs=dataset.epsg) as m:
+            mappable = getattr(m, builder)(dataset, scheme="equal_interval", k=4)
+            norm = mappable.norm
+        assert isinstance(norm, BoundaryNorm), (
+            f"{builder} should classify, got {norm!r}"
+        )
+        assert np.allclose(norm.boundaries, expected), (
+            f"{builder} edges {list(norm.boundaries)} != {expected}"
+        )
+
+    def test_fisher_jenks_cuts_at_data_values_within_the_range(self, dataset, values):
+        """``scheme="fisher_jenks"`` cuts the raster into at most ``k`` classes at values the data holds.
+
+        Args:
+            dataset: The raster fixture.
+            values: The fixture's valid cell values.
+
+        Test scenario:
+            Natural breaks have no closed form to compute independently, so the test holds the properties that
+            define them: the outer edges are the data's minimum and maximum, the inner ones are values present
+            in the data, the edges ascend, and there are at most ``k + 1`` of them.
+        """
+        with Map(crs=dataset.epsg) as m:
+            m.field(dataset, scheme="fisher_jenks", k=3)
+            edges = [float(edge) for edge in _drawn_norm(m).boundaries]
+        present = set(values.tolist())
+        assert edges[0] == values.min(), (
+            f"the first edge of {edges} should be the data minimum {values.min()}"
+        )
+        assert edges[-1] == values.max(), (
+            f"the last edge of {edges} should be the data maximum {values.max()}"
+        )
+        assert all(edge in present for edge in edges[1:-1]), (
+            f"inner edges {edges[1:-1]} should be data values"
+        )
+        assert edges == sorted(set(edges)), f"edges {edges} should strictly ascend"
+        assert len(edges) <= 4, f"k=3 gives at most four edges, got {edges}"
+
     def test_k_without_a_scheme_is_ignored(self, dataset):
         """``k=`` alone leaves the field a continuous ramp: it counts a named scheme's classes, so needs one.
 
