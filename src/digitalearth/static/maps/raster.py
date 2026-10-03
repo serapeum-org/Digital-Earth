@@ -742,7 +742,9 @@ class RasterMixin(_MixinBase):
                 ``"fisher_jenks"``, …) cut into ``k`` classes, or a list of explicit class edges. The
                 classes are drawn as steps, published as :attr:`last_breaks` and on the layer's colour
                 encoding, and keyed by :meth:`colorbar` (ticks on the edges) or :meth:`legend` (one swatch
-                per class). Without ``scheme`` the field is a continuous ramp.
+                per class). Cut points that coincide — tied values under ``"quantiles"`` — merge, so fewer
+                than ``k`` classes can be drawn; nodata cells fall in no class and stay blank. Without
+                ``scheme`` the field is a continuous ramp.
 
         Returns:
             The image mappable (registered as a Scene layer).
@@ -753,7 +755,9 @@ class RasterMixin(_MixinBase):
             TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
                 (see :meth:`_field`).
             ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an
-                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept.
+                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept,
+                an unknown ``scheme`` name, or ``scheme="categorical"`` (a raster's values are a magnitude,
+                not nominal class labels).
 
         Examples:
             - Draw a bare grid, and read back where its image was placed:
@@ -777,8 +781,22 @@ class RasterMixin(_MixinBase):
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> with Map(crs=ds.epsg) as m:
                 ...     _ = m.field(ds, scheme="equal_interval", k=4)
-                ...     [float(edge) for edge in m.last_breaks]
+                ...     m.last_breaks
                 [0.0, 22.0, 44.0, 66.0, 88.0]
+
+                ```
+            - A categorical scheme is refused on a raster — its values are a magnitude, not labels:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> with Map(crs=ds.epsg) as m:
+                ...     m.field(ds, scheme="categorical")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: ArrayGlyph does not support scheme='categorical'...
 
                 ```
         """
