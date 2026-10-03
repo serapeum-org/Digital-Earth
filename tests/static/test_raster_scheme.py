@@ -14,11 +14,11 @@ from the figure under test — so they cannot agree with the drawing by construc
 
 import numpy as np
 import pytest
+from digitalearth.base.raster_classes import raster_categories
 from matplotlib.colors import BoundaryNorm
 
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static import Map
-from digitalearth.base.raster_classes import raster_categories
 
 
 @pytest.fixture

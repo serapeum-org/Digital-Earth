@@ -49,6 +49,13 @@ from typing import (
 )
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
+from digitalearth.base.raster_classes import (
+    BandClasses,
+    asks_categorical,
+    class_index,
+    classes_of,
+    classify_band,
+)
 from digitalearth.base.spec import (
     DEFAULT_BAND,
     DEFAULT_RAMP_STOPS,
@@ -58,13 +65,6 @@ from digitalearth.base.spec import (
     LegendSpec,
     Scale,
     Symbology,
-)
-from digitalearth.base.raster_classes import (
-    BandClasses,
-    asks_categorical,
-    class_index,
-    classes_of,
-    classify_band,
 )
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
 from digitalearth.web.base import _require_layer_api, as_finite
