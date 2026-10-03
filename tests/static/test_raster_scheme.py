@@ -508,18 +508,16 @@ class TestCategoricalRasterField:
             f"nodata must not become a category, got {categories}"
         )
 
-    def test_non_integer_values_are_refused(self, dataset):
+    def test_non_integer_values_are_refused(self):
         """A band of non-integer values is refused: it is a magnitude, not class codes.
-
-        Args:
-            dataset: Unused; kept so the fixture set matches the class.
 
         Test scenario:
             ``0.5`` is not a class code, so the categorical scheme must refuse and point at a graduated one.
         """
+        fractional = np.array([[0.5, 1.0], [2.0, 3.0]])
         with Map() as m:
             with pytest.raises(ValueError, match="integer"):
-                m.field(np.array([[0.5, 1.0], [2.0, 3.0]]), scheme="categorical")
+                m.field(fractional, scheme="categorical")
 
     def test_too_many_codes_are_refused(self):
         """A band with more distinct codes than a legend can carry is refused, naming the count.
@@ -527,6 +525,7 @@ class TestCategoricalRasterField:
         Test scenario:
             100 distinct integer codes is a continuous field in disguise; the refusal must say how many.
         """
+        hundred_codes = np.arange(100.0).reshape(10, 10)
         with Map() as m:
             with pytest.raises(ValueError, match="100"):
-                m.field(np.arange(100.0).reshape(10, 10), scheme="categorical")
+                m.field(hundred_codes, scheme="categorical")
