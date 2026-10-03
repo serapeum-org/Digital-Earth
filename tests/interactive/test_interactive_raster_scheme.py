@@ -109,3 +109,107 @@ class TestClassifiedInteractiveField:
         with pytest.raises(ValueError, match="integer class codes"):
             m.field(band, scheme="categorical")
         assert m.layer_ids == [], f"a refused layer was added: {m.layer_ids}"
+
+    def test_a_path_is_opened_to_cut_the_classes(self, tmp_path):
+        """A band handed as a path is opened at build time, so its classes are cut from its cells.
+
+        Args:
+            tmp_path: Where the GeoTIFF is written.
+
+        Test scenario:
+            A GeoTIFF of codes 1, 2, 5 passed as a ``str`` path: the recorded scale's categories are the
+            codes, and the figure records the path itself as the layer's data.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        path = str(tmp_path / "codes.tif")
+        geo = GeoReference(top_left_corner=(10.0, 50.0), cell_size=0.1, epsg=4326)
+        Dataset.from_array(CODES.astype(np.int32), geo_ref=geo).to_file(path)
+        m = InteractiveMap(crs=4326).field(path, scheme="categorical", name="cover")
+        scale = m.figure_spec.layers.get("cover").symbology.encoding("color").scale
+        assert list(scale.categories) == [1, 2, 5], f"categories {scale.categories}"
+
+
+class TestClassOptions:
+    """``_class_options`` — the HoloViews options that step an image at its classes."""
+
+    def test_graduated_classes_have_no_ticker(self):
+        """Graduated classes step at their edges, over their span, with no code ticks.
+
+        Test scenario:
+            ``0..9`` in three equal intervals: levels ``0, 3, 6, 9``, ``clim`` ``(0, 9)``, three viridis
+            samples, and no ``colorbar_opts`` — the edges are the bar's own ticks.
+        """
+        from digitalearth.base.raster_classes import classify_band
+
+        from digitalearth.interactive.raster import _class_options
+
+        options = _class_options(
+            classify_band(np.arange(10.0), "equal_interval", 3, "viridis")
+        )
+        assert options["color_levels"] == pytest.approx([0.0, 3.0, 6.0, 9.0]), (
+            f"levels {options['color_levels']}"
+        )
+        assert tuple(options["clim"]) == pytest.approx((0.0, 9.0)), (
+            f"clim {options['clim']}"
+        )
+        assert options["cmap"] == sample_cmap("viridis", 3), f"cmap {options['cmap']}"
+        assert "colorbar_opts" not in options, f"unexpected ticker in {options}"
+
+    def test_categorical_classes_tick_at_the_codes(self):
+        """Categorical classes step at the half-steps between codes and tick the bar at the codes.
+
+        Test scenario:
+            Codes 1, 2, 5: levels ``0.5, 1.5, 3.5, 5.5`` and ticks ``1, 2, 5``.
+        """
+        from digitalearth.base.raster_classes import classify_band
+
+        from digitalearth.interactive.raster import _class_options
+
+        options = _class_options(classify_band(CODES, "categorical", None, None))
+        assert options["color_levels"] == [0.5, 1.5, 3.5, 5.5], (
+            f"levels {options['color_levels']}"
+        )
+        assert list(options["colorbar_opts"]["ticker"].ticks) == [1, 2, 5], (
+            "the bar should be ticked at the codes"
+        )
+
+
+class TestStaticFigureReplay:
+    """``draw_image`` draws a figure the static tier classified, dropping its cleopatra-only keywords."""
+
+    def test_static_scheme_keywords_are_dropped_and_classes_drawn(self, tmp_path):
+        """A static-tier figure recording ``scheme``/``k`` draws here, stepped at its recorded edges.
+
+        Args:
+            tmp_path: Where the GeoTIFF is written.
+
+        Test scenario:
+            The static tier records ``scheme="quantiles"``, ``k=4`` among its options; HoloViews has no
+            option of either name, so they are stripped, and the image steps at ``numpy``'s quantiles in
+            Set2's samples.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        from digitalearth import to_backend
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.static import Map
+
+        values = np.arange(12.0, dtype=np.float32).reshape(3, 4)
+        path = str(tmp_path / "ramp.tif")
+        geo = GeoReference(top_left_corner=(10.0, 50.0), cell_size=0.1, epsg=4326)
+        Dataset.from_array(values, geo_ref=geo).to_file(path)
+        with Map(crs=4326) as scene:
+            scene.field(path, scheme="quantiles", k=4, cmap="Set2", name="ramp")
+            spec = FigureSpec.from_dict(scene.figure_spec.to_dict())
+        drawn = to_backend(spec, backend="interactive")
+        element = drawn.layers[0]
+        style, plot = _options(element, "style"), _options(element, "plot")
+        assert "scheme" not in {**style, **plot} and "k" not in {**style, **plot}, (
+            f"cleopatra keywords leaked into HoloViews options: {sorted({**style, **plot})}"
+        )
+        expected = list(np.quantile(values, [0, 0.25, 0.5, 0.75, 1.0]))
+        assert list(plot["color_levels"]) == pytest.approx(expected), (
+            f"levels {plot['color_levels']}, expected {expected}"
+        )
+        assert list(style["cmap"]) == sample_cmap("Set2", 4), f"cmap {style['cmap']}"

@@ -100,7 +100,7 @@ def _painted(tier: str, scene, band: np.ndarray) -> tuple:
         )
         cells = np.array(
             [
-                ["#%02x%02x%02x" % tuple(px[:3]) for px in row]
+                ["#{:02x}{:02x}{:02x}".format(*px[:3]) for px in row]
                 for row in np.asarray(png).tolist()
             ]
         )
