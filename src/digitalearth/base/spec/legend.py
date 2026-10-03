@@ -303,6 +303,13 @@ class LegendSpec:
                 ['7.6', '22.0', '10', '123456789012345.0']
 
                 ```
+            - A format spec is applied as given, with no trimming of its own:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec
+                >>> LegendSpec._number(7.600000000000023, ".3f"), LegendSpec._number(0.25, ".0%")
+                ('7.600', '25%')
+
+                ```
         """
         if spec:
             return format(value, spec)

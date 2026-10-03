@@ -261,7 +261,9 @@ def _field_source(
         band: The 1-based band.
         exact: Read every cell, however far past the canvas the raster is. A decimated read *combines*
             neighbouring cells, which is right for a magnitude and wrong for nominal class codes — averaging
-            codes ``1`` and ``9`` invents a ``5`` that no cell holds — so a categorical field asks for this.
+            codes ``1`` and ``9`` invents a ``5`` that no cell holds — so a categorical field asks for this,
+            whether ``scheme="categorical"`` was passed or a categorical colour scale was recorded. ``False``
+            (default) decimates a raster far past the canvas, as every other field is read.
 
     Returns:
         ``(values, identity)`` — the source the render reads its cells and coordinates from, and the source the
@@ -526,6 +528,39 @@ def _classified(
     Raises:
         ValueError: from :func:`~digitalearth.base.raster_classes.classify_band` — a band that is not nominal
             under ``"categorical"``, or an unknown scheme or ``k`` below one.
+
+    Examples:
+        - A graduated scheme is swapped for its edges and a class colormap, and ``k`` is consumed:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import _classified
+            >>> opts = {"scheme": "equal_interval", "k": 3, "cmap": "viridis"}
+            >>> classes = _classified(opts, np.arange(10.0), None)
+            >>> opts["scheme"], "k" in opts, opts["cmap"].N
+            ([0.0, 3.0, 6.0, 9.0], False, 256)
+            >>> classes.colors
+            ('#440154', '#21918c', '#fde725')
+
+            ```
+        - Codes take the categorical palette when no ``cmap`` was asked for, not the resolved ramp:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import _classified
+            >>> opts = {"scheme": "categorical", "cmap": "viridis"}
+            >>> classes = _classified(opts, np.array([1.0, 2.0, 2.0]), None)
+            >>> opts["scheme"], classes.colors
+            ([0.5, 1.5, 2.5], ('#1f77b4', '#ff7f0e'))
+
+            ```
+        - With no ``scheme`` and nothing recorded the band stays a ramp, and ``opts`` is untouched:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import _classified
+            >>> opts = {"cmap": "viridis"}
+            >>> _classified(opts, np.arange(10.0), None), opts
+            (None, {'cmap': 'viridis'})
+
+            ```
     """
     scheme = opts.get("scheme")
     classes: Optional[BandClasses]
@@ -910,10 +945,11 @@ class RasterMixin(_MixinBase):
             TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
                 (see :meth:`_field`).
             ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an
-                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept or
-                an unknown ``scheme`` name; or, under ``scheme="categorical"``, when the band holds
-                non-integer values, more than
-                :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` distinct codes, or no valid cell.
+                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept;
+                or for a ``scheme`` that cannot classify the band — an unknown
+                name, ``k`` below one, or, under ``scheme="categorical"``, a band holding non-integer values,
+                more than :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` distinct codes, or
+                no valid cell.
 
         Examples:
             - Draw a bare grid, and read back where its image was placed:

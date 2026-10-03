@@ -1234,6 +1234,12 @@ def _tiled_layer(web_map: Any, layer: LayerSpec, props: dict) -> Any:
 def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Encode one band as a coloured image and place it on the map.
 
+    A layer whose colour encoding records classes — graduated edges or categorical codes, written by this
+    tier's :meth:`RasterMixin.field` or by another tier's — is coloured class by class (:func:`_classed_png`);
+    a continuous or absent scale is coloured along the recorded ``cmap`` between ``vmin`` and ``vmax``. When
+    the map has no key filed for the layer yet — a layer drawn from a figure rather than built here — one is
+    filed from that colour scale (:meth:`RasterMixin._band_key`), so ``legend()`` can describe it.
+
     Args:
         web_map: The map being drawn.
         data: The layer's source — a pyramids dataset or an array.
@@ -1410,8 +1416,9 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The ``{"color": Encoding}`` mapping for the layer's symbology, or ``{}`` when `limits` is
-            ``None``. Empty rather than a scale-less encoding: a colour key drawn from a span nobody knows
-            would be an invented one, and this tier would rather publish nothing than that.
+            ``None`` and the band is not classified (`classes` is ``None``). Empty rather than a scale-less
+            encoding: a colour key drawn from a span nobody knows would be an invented one, and this tier
+            would rather publish nothing than that.
 
         Note:
             Also sets :attr:`~digitalearth.web.base.WebMapBase.last_breaks` and
@@ -1456,7 +1463,41 @@ class RasterMixin(_MixinBase):
             classes: The band's classes, or ``None`` for a ramp.
 
         Returns:
-            The legend dict this tier stores per layer (:meth:`~digitalearth.web.base.WebMapBase._legend_dict`).
+            The legend dict this tier stores per layer (:meth:`~digitalearth.web.base.WebMapBase._legend_dict`):
+            its ``values`` are the ramp's stops, a graduated band's class edges, or a categorical band's codes.
+
+        Examples:
+            - A graduated band is keyed one swatch per class, valued at its edges:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.arange(10.0), "equal_interval", 3, "viridis")
+                >>> key = WebMap()._band_key("dem", classes.scale, "viridis", classes)
+                >>> key["kind"], key["values"], key["colors"]
+                ('graduated', [0.0, 3.0, 6.0, 9.0], ['#440154', '#21918c', '#fde725'])
+
+                ```
+            - A categorical band is keyed one swatch per code:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.array([1, 3, 3]), "categorical", None, None)
+                >>> key = WebMap()._band_key("landcover", classes.scale, None, classes)
+                >>> key["kind"], key["values"], key["colors"]
+                ('categorical', [1, 3], ['#1f77b4', '#ff7f0e'])
+
+                ```
+            - With no classes the key is a ramp sampled at the shared number of stops:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> from digitalearth.web import WebMap
+                >>> key = WebMap()._band_key("dem", Scale.from_limits(0.0, 4.0), "viridis", None)
+                >>> key["kind"], key["values"]
+                ('continuous', [0.0, 1.0, 2.0, 3.0, 4.0])
+
+                ```
         """
         import numpy as np
 
@@ -1626,6 +1667,34 @@ class RasterMixin(_MixinBase):
                 >>> m = WebMap().field(src, visible=False, name="t0")       # doctest: +SKIP
                 >>> m.layer_ids                                      # doctest: +SKIP
                 ['t0']
+
+                ```
+            - Classify the band into three equal-interval classes; the key is one swatch per class:
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> src = get_source(                                # doctest: +SKIP
+                ...     np.arange(10.0).reshape(2, 5), x=np.arange(5.0), y=np.array([1.0, 0.0])
+                ... )
+                >>> m = WebMap().field(src, scheme="equal_interval", k=3)  # doctest: +SKIP
+                >>> m.last_breaks, m.last_legend["colors"]           # doctest: +SKIP
+                ([0.0, 3.0, 6.0, 9.0], ['#440154', '#21918c', '#fde725'])
+
+                ```
+            - Draw a band of class codes as categories, keyed one swatch per code:
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> src = get_source(                                # doctest: +SKIP
+                ...     np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0]]),
+                ...     x=np.array([0.0, 1.0, 2.0]),
+                ...     y=np.array([1.0, 0.0]),
+                ... )
+                >>> m = WebMap().field(src, scheme="categorical")    # doctest: +SKIP
+                >>> m.last_legend["kind"], m.last_breaks             # doctest: +SKIP
+                ('categorical', [1, 2, 3])
 
                 ```
 
@@ -2345,9 +2414,43 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: when the array has no finite values to colour.
             KeyError: when ``cmap`` is hashable but names no colormap matplotlib's registry holds, which
-                is matplotlib's own message naming it.
+                is matplotlib's own message naming it. Only on the ramp path: with `classes` the colours are
+                the classes' own and ``cmap`` is not resolved.
             TypeError: when ``cmap`` is unhashable — a list of colours, say — which
-                :func:`~digitalearth.base.symbology.as_colormap` reports as ``unhashable type: 'list'``.
+                :func:`~digitalearth.base.symbology.as_colormap` reports as ``unhashable type: 'list'``;
+                likewise only on the ramp path.
+
+        Examples:
+            - Colour a band along a ramp, and get back an inline PNG:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.web import WebMap
+                >>> WebMap._rgba_png_datauri(np.array([[0.0, 1.0]]), "viridis")[:22]
+                'data:image/png;base64,'
+
+                ```
+            - Colour it class by class; the classes carry their colours, so ``cmap`` is not looked up:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
+                >>> WebMap._rgba_png_datauri(np.array([[1.0, 2.0]]), "no-such-cmap", classes=classes)[:22]
+                'data:image/png;base64,'
+
+                ```
+            - A band with nothing to colour is refused, classified or not:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
+                >>> WebMap._rgba_png_datauri(np.array([[np.nan]]), "viridis", classes=classes)
+                Traceback (most recent call last):
+                    ...
+                ValueError: field() got a band with no finite values to colour
+
+                ```
         """
         import base64
 

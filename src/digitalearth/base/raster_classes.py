@@ -82,6 +82,15 @@ class BandClasses:
             ('#440154', '#21918c', '#fde725')
 
             ```
+        - A band of codes gets one class per code, and its scale records the codes as categories:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> classes = classify_band(np.array([[1, 3], [3, 1]]), "categorical", None, None)
+            >>> classes.scale.categories, classes.edges, classes.colors
+            ((1, 3), (0.5, 2.0, 3.5), ('#1f77b4', '#ff7f0e'))
+
+            ```
     """
 
     scale: Scale
@@ -162,6 +171,16 @@ def raster_categories(values: Any) -> List[int]:
             Traceback (most recent call last):
                 ...
             ValueError: scheme='categorical' needs integer class codes ... such as 0.5; ...
+
+            ```
+        - A band of more distinct codes than a key can show is refused, pointing at a graduated scheme:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import raster_categories
+            >>> raster_categories(np.arange(30))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: scheme='categorical' draws one swatch per distinct code, and this band has 30 (at most 24); ...
 
             ```
     """
@@ -290,6 +309,25 @@ def classify_band(values: Any, scheme: Any, k: Any, cmap: Any) -> BandClasses:
             (0.0, 10.0, 20.0)
 
             ```
+        - ``k=None`` cuts the default five classes, each sampled from the colormap:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> classes = classify_band(np.arange(11.0), "equal_interval", None, "viridis")
+            >>> classes.edges, len(classes.colors)
+            ((0.0, 2.0, 4.0, 6.0, 8.0, 10.0), 5)
+
+            ```
+        - A class count below one is refused:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> classify_band(np.arange(10.0), "quantiles", 0, "viridis")
+            Traceback (most recent call last):
+                ...
+            ValueError: scheme='quantiles' with k=0 cannot classify this data: `k` must be >= 1, got 0.
+
+            ```
     """
     if asks_categorical(scheme):
         codes = raster_categories(values)
@@ -339,6 +377,24 @@ def classes_of(scale: Optional[Scale], cmap: Any) -> Optional[BandClasses]:
             True
 
             ```
+        - A recorded graduated scale gives back its edges, recoloured from `cmap` as the classifier did:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classes_of, classify_band
+            >>> recorded = classify_band(np.arange(10.0), "equal_interval", 3, "viridis").scale
+            >>> classes = classes_of(recorded, "viridis")
+            >>> classes.edges, classes.colors
+            ((0.0, 3.0, 6.0, 9.0), ('#440154', '#21918c', '#fde725'))
+
+            ```
+        - Categories named by text are no cell's code, so they give no classes:
+            ```python
+            >>> from digitalearth.base.raster_classes import classes_of
+            >>> from digitalearth.base.spec import Scale
+            >>> classes_of(Scale.categorical(["forest", "water"], ["#111111", "#222222"]), None) is None
+            True
+
+            ```
     """
     if scale is None:
         return None
@@ -384,6 +440,14 @@ def class_index(values: Any, edges: Sequence[float]) -> np.ndarray:
             >>> from digitalearth.base.raster_classes import class_index
             >>> class_index(np.array([-5.0, 0.5, 1.5, 9.0, np.nan]), [0.0, 1.0, 2.0])
             array([ 0,  0,  1,  1, -1])
+
+            ```
+        - A masked cell is nodata too, whatever value sits under the mask:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import class_index
+            >>> class_index(np.ma.masked_array([1.0, 2.0], mask=[True, False]), [0.0, 1.5, 3.0])
+            array([-1,  1])
 
             ```
     """

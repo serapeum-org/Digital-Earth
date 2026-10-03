@@ -209,6 +209,16 @@ def _class_options(classes: BandClasses) -> Dict[str, Any]:
             ([0.0, 3.0, 6.0, 9.0], (0.0, 9.0))
 
             ```
+        - Codes step at the half-steps between them, but the bar is ticked at the codes themselves:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> from digitalearth.interactive.raster import _class_options
+            >>> options = _class_options(classify_band(np.array([1, 4, 4]), "categorical", None, None))
+            >>> options["color_levels"], options["colorbar_opts"]["ticker"].ticks, options["cmap"]
+            ([0.5, 2.5, 4.5], [1, 4], ['#1f77b4', '#ff7f0e'])
+
+            ```
     """
     edges = list(classes.edges)
     options: Dict[str, Any] = {
@@ -247,7 +257,35 @@ def _band_classes(
         The band's classes.
 
     Raises:
-        ValueError: as :func:`~digitalearth.base.raster_classes.classify_band` refuses.
+        ValueError: as :func:`~digitalearth.base.raster_classes.classify_band` refuses — an unknown scheme,
+            ``k`` below one, or, under ``"categorical"``, a band that is not nominal.
+
+    Examples:
+        - Graduated classes are coloured from the colormap this tier resolves for the band:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import get_source
+            >>> from digitalearth.interactive import InteractiveMap
+            >>> from digitalearth.interactive.raster import _band_classes
+            >>> src = get_source(np.arange(10.0).reshape(2, 5), x=np.arange(5.0), y=np.array([1.0, 0.0]))
+            >>> classes = _band_classes(InteractiveMap(), src, 1, "equal_interval", 3, None)
+            >>> classes.edges, classes.colors
+            ((0.0, 3.0, 6.0, 9.0), ('#440154', '#21918c', '#fde725'))
+
+            ```
+        - Codes with no ``cmap`` take the shared categorical palette:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import get_source
+            >>> from digitalearth.interactive import InteractiveMap
+            >>> from digitalearth.interactive.raster import _band_classes
+            >>> codes = np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0]])
+            >>> src = get_source(codes, x=np.array([0.0, 1.0, 2.0]), y=np.array([1.0, 0.0]))
+            >>> classes = _band_classes(InteractiveMap(), src, 1, "categorical", None, None)
+            >>> classes.scale.categories, classes.colors
+            ((1, 2, 3), ('#1f77b4', '#ff7f0e', '#2ca02c'))
+
+            ```
     """
     if isinstance(data, (str, os.PathLike, DataRef)):
         # A path or URL is what the figure records; the drawer is handed it already opened, the builder
@@ -264,6 +302,12 @@ def _band_classes(
 
 def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the colour-mapped raster a described image layer asks for.
+
+    A layer whose colour encoding records classes — graduated edges or categorical codes, written by this
+    tier's :meth:`RasterMixin.field` or by another tier's — is drawn class by class
+    (:func:`_class_options`), over whatever ``clim`` it records; a continuous or absent scale draws the ramp.
+    The classifying keywords another tier records among its options (:data:`_CLASS_KEYWORDS`) are dropped
+    before the element is styled, since HoloViews has no option of either name.
 
     Args:
         interactive_map: The map being drawn.
@@ -549,6 +593,36 @@ class RasterMixin(_MixinBase):
                 >>> m = InteractiveMap().field(dem, cmap="terrain", clim=(0, 60))  # doctest: +SKIP
                 >>> len(m.layers)                                               # doctest: +SKIP
                 1
+
+                ```
+            - Classify a band into three equal-interval classes, and read the edges its colour encoding
+              records — the ones a figure drawn on another tier keeps:
+                ```python
+                >>> import numpy as np                                            # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> src = get_source(                                             # doctest: +SKIP
+                ...     np.arange(10.0).reshape(2, 5), x=np.arange(5.0), y=np.array([1.0, 0.0])
+                ... )
+                >>> m = InteractiveMap().field(src, scheme="equal_interval", k=3, name="dem")  # doctest: +SKIP
+                >>> m.figure_spec.layers.get("dem").symbology.encoding("color").scale.breaks  # doctest: +SKIP
+                (0.0, 3.0, 6.0, 9.0)
+
+                ```
+            - Draw a band of class codes as categories, one colour per code:
+                ```python
+                >>> import numpy as np                                            # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> src = get_source(                                             # doctest: +SKIP
+                ...     np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0]]),
+                ...     x=np.array([0.0, 1.0, 2.0]),
+                ...     y=np.array([1.0, 0.0]),
+                ... )
+                >>> m = InteractiveMap().field(src, scheme="categorical", name="landcover")  # doctest: +SKIP
+                >>> scale = m.figure_spec.layers.get("landcover").symbology.encoding("color").scale  # doctest: +SKIP
+                >>> scale.categories, [scale.color_for(code) for code in scale.categories]  # doctest: +SKIP
+                ((1, 2, 3), ['#1f77b4', '#ff7f0e', '#2ca02c'])
 
                 ```
 
