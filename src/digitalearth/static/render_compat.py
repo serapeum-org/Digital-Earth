@@ -595,8 +595,9 @@ def prepare_plot_kwargs(
     spelling on a layer of points the refusal gives it (review N3).
 
     This assumes each glyph advertises its supported groups as *explicit named* ``plot`` parameters — true for
-    every cleopatra glyph today (``ArrayGlyph`` names ``color``/``contour``/``cells``/``data_style``/``points``;
-    the vector glyphs name ``color``/``contour``/``classify``). A glyph that exposed its groups only through
+    every cleopatra glyph today (``ArrayGlyph`` names ``color``/``contour``/``cells``/``data_style``/``points``/
+    ``classify`` — the last is what lets a raster take ``scheme``/``k``; the vector
+    glyphs name ``color``/``contour``/``classify``). A glyph that exposed its groups only through
     ``**kwargs`` would need this rejection revisited.
 
     Args:
