@@ -42,6 +42,13 @@ def _drawn_norm(m: Map):
     return m.ax.images[-1].norm
 
 
+def _painted(image, value: float) -> str:
+    """Return the hex colour ``image`` paints a cell holding ``value``."""
+    from matplotlib.colors import to_hex
+
+    return to_hex(image.cmap(image.norm(value)))
+
+
 class TestClassifiedRasterField:
     """``Map.field`` with ``scheme=``/``k=`` draws, describes and keys discrete classes."""
 
@@ -177,6 +184,35 @@ class TestClassifiedRasterField:
         )
         assert swatches == drawn, (
             f"swatches {swatches} should be the drawn class colours {drawn}"
+        )
+
+    def test_cells_outside_explicit_edges_take_the_end_class_colours(self, dataset):
+        """Explicit edges narrower than the data paint the cells outside them as the first and last classes.
+
+        Args:
+            dataset: The raster fixture (values ``0``–``88``).
+
+        Test scenario:
+            ``scheme=[10, 50, 70]`` leaves ``0`` below the first edge and ``88`` above the last. matplotlib paints
+            them the colormap's end colours, which for two classes are the first and last class colours — so
+            they read as in a class — while the key lists only the two ranges. Pinned so the documented
+            behaviour cannot drift unnoticed.
+        """
+        with Map(crs=dataset.epsg) as m:
+            m.field(dataset, scheme=[10.0, 50.0, 70.0])
+            image = m.ax.images[-1]
+            first, last = _painted(image, 30.0), _painted(image, 60.0)
+            below, above = _painted(image, 0.0), _painted(image, 88.0)
+            m.legend()
+            labels = [text.get_text() for text in m.ax.get_legend().get_texts()]
+        assert below == first, (
+            f"a cell below the first edge is painted {below}, the first class is {first}"
+        )
+        assert above == last, (
+            f"a cell above the last edge is painted {above}, the last class is {last}"
+        )
+        assert labels == ["10.0 – 50.0", "50.0 – 70.0"], (
+            f"the key should list only the two ranges, got {labels}"
         )
 
     def test_quantiles_on_tied_values_collapse_duplicate_edges(self, dataset, values):

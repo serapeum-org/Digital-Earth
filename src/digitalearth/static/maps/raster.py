@@ -912,7 +912,10 @@ class RasterMixin(_MixinBase):
                 classes are drawn as steps, published as :attr:`last_breaks` and on the layer's colour
                 encoding, and keyed by :meth:`colorbar` (ticks on the edges) or :meth:`legend` (one swatch
                 per class). Cut points that coincide — tied values under ``"quantiles"`` — merge, so fewer
-                than ``k`` classes can be drawn; nodata cells fall in no class and stay blank. Without
+                than ``k`` classes can be drawn; nodata cells fall in no class and stay blank. Explicit edges
+                narrower than the data leave cells outside them, and those are painted the colormap's end
+                colours — the first and last classes' colours when there are two or more classes — while
+                the key lists only the given ranges, so span the data's range when that matters. Without
                 ``scheme`` the field is a continuous ramp. ``scheme="categorical"`` is for a band of
                 integer class codes (land cover, zone ids): each distinct code becomes its own class,
                 coloured from the same categorical palette the vector layers use (``cmap`` picks the
