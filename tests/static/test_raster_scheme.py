@@ -541,3 +541,29 @@ class TestCategoricalRasterField:
         with Map() as m:
             with pytest.raises(ValueError, match="nodata"):
                 m.field(empty, scheme="categorical")
+
+    def test_a_raster_far_past_the_canvas_keeps_its_true_codes(self):
+        """A categorical raster big enough to be read at a reduced resolution still classifies its real codes.
+
+        Test scenario:
+            A 1024x1024 raster of codes ``{1, 2, 7, 9}`` on a 2-inch figure is far past the canvas, so a graduated
+            field would be read decimated — which combines neighbouring cells. Codes are nominal, so combining
+            them invents codes (``3``, ``4``, … appeared before) and loses real ones; the categories must be the
+            band's own codes.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        rng = np.random.default_rng(7)
+        codes = rng.choice(np.array([1, 2, 7, 9], dtype=np.int32), size=(1024, 1024))
+        geo = GeoReference(top_left_corner=(10.0, 50.0), cell_size=0.001, epsg=4326)
+        large = Dataset.from_array(codes, geo_ref=geo)
+        with Map(crs=4326, figsize=(2, 2)) as m:
+            m.field(large, scheme="categorical", name="cover")
+            categories = list(
+                m.figure_spec.layers.get("cover")
+                .symbology.encoding("color")
+                .scale.categories
+            )
+        assert categories == [1, 2, 7, 9], (
+            f"the categories {categories} should be the band's codes [1, 2, 7, 9]"
+        )

@@ -69,6 +69,27 @@ DEFAULT_FIELD_CMAP = "viridis"
 MAX_RASTER_CATEGORIES = 24
 
 
+def _asks_categorical(scheme: Any) -> bool:
+    """Whether a ``scheme`` asks for one class per code, in any spelling of ``"categorical"``.
+
+    Args:
+        scheme: The caller's ``scheme`` — a name, a list of edges, or ``None``.
+
+    Returns:
+        ``True`` for ``"categorical"`` in any case; ``False`` for every other scheme, an edge list and ``None``.
+
+    Examples:
+        - The spelling is case-insensitive, and an edge list is never categorical:
+            ```python
+            >>> from digitalearth.static.maps.raster import _asks_categorical
+            >>> _asks_categorical("Categorical"), _asks_categorical("quantiles"), _asks_categorical([0, 1])
+            (True, False, False)
+
+            ```
+    """
+    return isinstance(scheme, str) and scheme.lower() == "categorical"
+
+
 def _raster_categories(values: Any) -> List[int]:
     """Return a raster band's distinct integer class codes, refusing a band that is not nominal.
 
@@ -329,13 +350,18 @@ def _band_identity(data: Any, band: int) -> Tuple[str, Optional[str]]:
     return str(variable or ""), str(unit) if unit else None
 
 
-def _field_source(scene: Any, data: Any, band: int) -> Tuple[Any, Any]:
+def _field_source(
+    scene: Any, data: Any, band: int, *, exact: bool = False
+) -> Tuple[Any, Any]:
     """Read one band for a field render, at the resolution the figure will draw it (ST-5).
 
     Args:
         scene: The map being drawn on, which carries the display CRS and the canvas.
         data: The raster the layer draws.
         band: The 1-based band.
+        exact: Read every cell, however far past the canvas the raster is. A decimated read *combines*
+            neighbouring cells, which is right for a magnitude and wrong for nominal class codes — averaging
+            codes ``1`` and ``9`` invents a ``5`` that no cell holds — so a categorical field asks for this.
 
     Returns:
         ``(values, identity)`` — the source the render reads its cells and coordinates from, and the source the
@@ -352,7 +378,7 @@ def _field_source(scene: Any, data: Any, band: int) -> Tuple[Any, Any]:
     # for a lazy warp it will not use, and the full read below is the path that owns the off-limb decision.
     view = (
         _windowed_field(scene, data, band, target)
-        if _worth_decimating(data, target)
+        if not exact and _worth_decimating(data, target)
         else None
     )
     if view is None:
@@ -463,7 +489,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
     # (ST-5). For everything smaller the two are one object and the read is the one this always did.
-    src, identity = _field_source(scene, data, props["band"])
+    src, identity = _field_source(
+        scene, data, props["band"], exact=_asks_categorical(opts.get("scheme"))
+    )
     z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
     if opts.pop(
         "cyclic", False
@@ -567,8 +595,7 @@ def _categorical_scale(
     Raises:
         ValueError: from :func:`_raster_categories`, for a band that is not nominal.
     """
-    scheme = opts.get("scheme")
-    if not (isinstance(scheme, str) and scheme.lower() == "categorical"):
+    if not _asks_categorical(opts.get("scheme")):
         return None
     codes = _raster_categories(values)
     categories, colors = categorical_colors(codes, resolve_categorical_cmap(requested))
