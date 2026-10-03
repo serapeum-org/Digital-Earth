@@ -205,9 +205,11 @@ class TestStaticFigureReplay:
         drawn = to_backend(spec, backend="interactive")
         element = drawn.layers[0]
         style, plot = _options(element, "style"), _options(element, "plot")
-        assert "scheme" not in {**style, **plot} and "k" not in {**style, **plot}, (
-            f"cleopatra keywords leaked into HoloViews options: {sorted({**style, **plot})}"
+        options = {**style, **plot}
+        assert "scheme" not in options, (
+            f"scheme leaked into HoloViews options: {sorted(options)}"
         )
+        assert "k" not in options, f"k leaked into HoloViews options: {sorted(options)}"
         expected = list(np.quantile(values, [0, 0.25, 0.5, 0.75, 1.0]))
         assert list(plot["color_levels"]) == pytest.approx(expected), (
             f"levels {plot['color_levels']}, expected {expected}"
