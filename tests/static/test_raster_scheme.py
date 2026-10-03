@@ -417,18 +417,34 @@ class TestCategoricalRasterField:
             f"cells painted {painted.tolist()}, expected {expected.tolist()}"
         )
 
-    def test_a_caller_cmap_is_the_palette(self):
-        """A ``cmap`` passed with the categorical scheme supplies the class colours.
+    @pytest.mark.parametrize(
+        "cmap",
+        ["Set2", "listed", "list"],
+        ids=["registered-name", "Colormap-object", "list-of-colours"],
+    )
+    def test_a_caller_cmap_colours_each_code(self, cmap):
+        """A ``cmap`` passed with the categorical scheme supplies each code's colour, code by code.
+
+        Args:
+            cmap: How the palette is given — a registered name, a ``Colormap`` object, or a list of colours.
 
         Test scenario:
-            ``cmap="Set2"`` must colour the codes from Set2, exactly as ``categorical_colors`` samples it.
+            Every form must colour the codes exactly as ``categorical_colors`` assigns them, cell by cell —
+            comparing the *set* of colours would let a palette assigned to the wrong codes pass.
         """
+        from matplotlib.colors import ListedColormap
+
+        colours = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3"]
+        given = {"Set2": "Set2", "listed": ListedColormap(colours), "list": colours}[
+            cmap
+        ]
+        palette = dict(zip([1, 2, 3, 5], _palette([1, 2, 3, 5], given)))
         with Map() as m:
-            m.field(CODES, scheme="categorical", cmap="Set2")
-            painted = set(_cell_colors(m.ax.images[-1]).ravel())
-        expected = set(_palette([1, 2, 3, 5], "Set2"))
-        assert painted == expected, (
-            f"painted {sorted(painted)}, expected Set2's {sorted(expected)}"
+            m.field(CODES, scheme="categorical", cmap=given)
+            painted = _cell_colors(m.ax.images[-1])
+        expected = np.vectorize(lambda code: palette[int(code)])(CODES)
+        assert (painted == expected).all(), (
+            f"cells painted {painted.tolist()}, expected {expected.tolist()}"
         )
 
     def test_the_legend_lists_each_code_with_its_colour(self):
@@ -648,3 +664,111 @@ class TestCategoricalRasterField:
         values = np.array([base, base + 1], dtype=np.int64)
         with pytest.raises(ValueError, match=r"2\*\*52"):
             _raster_categories(values)
+
+    @pytest.mark.parametrize(
+        "codes, expected",
+        [
+            (np.array([[-3, 0], [7, -3]]), [-3, 0, 7]),
+            (np.full((2, 2), 4), [4]),
+        ],
+        ids=["negative-codes", "single-code"],
+    )
+    def test_negative_and_single_codes_are_categories(self, codes, expected):
+        """Negative codes and a band of one code classify like any other codes.
+
+        Args:
+            codes: The band.
+            expected: Its categories.
+
+        Test scenario:
+            The half-step edges work either side of zero, and a single code gets a one-class key.
+        """
+        with Map() as m:
+            m.field(codes, scheme="categorical", name="codes")
+            categories = list(
+                m.figure_spec.layers.get("codes")
+                .symbology.encoding("color")
+                .scale.categories
+            )
+            painted = _cell_colors(m.ax.images[-1])
+        palette = dict(zip(expected, _palette(expected)))
+        assert categories == expected, f"categories {categories} should be {expected}"
+        assert (painted == np.vectorize(lambda c: palette[int(c)])(codes)).all(), (
+            f"cells painted {painted.tolist()} are not their codes' colours"
+        )
+
+    def test_masked_cells_fall_in_no_category(self):
+        """A masked cell of a masked array is nodata, like a NaN.
+
+        Test scenario:
+            The code under the mask (``9``) must not become a category, and the cell must stay transparent.
+        """
+        codes = np.ma.masked_array(
+            np.array([[1, 2], [9, 1]]), mask=[[False, False], [True, False]]
+        )
+        with Map() as m:
+            m.field(codes, scheme="categorical", name="codes")
+            categories = list(
+                m.figure_spec.layers.get("codes")
+                .symbology.encoding("color")
+                .scale.categories
+            )
+            image = m.ax.images[-1]
+            alpha = image.to_rgba(image.get_array())[1, 0, 3]
+        assert categories == [1, 2], (
+            f"the masked code must not be a category, got {categories}"
+        )
+        assert alpha == 0, f"the masked cell should be transparent, alpha={alpha}"
+
+    def test_a_dataset_integer_nodata_value_is_no_category(self):
+        """A pyramids raster's integer nodata value is excluded, not drawn as a class.
+
+        Test scenario:
+            An ``int32`` band with ``no_data_value=-9999`` holds that value in two cells; the categories must be
+            the real codes only, and those cells must stay blank.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        band = np.array([[1, 2, -9999], [2, 1, -9999]], dtype=np.int32)
+        geo = GeoReference(top_left_corner=(10.0, 50.0), cell_size=0.1, epsg=4326)
+        raster = Dataset.from_array(band, geo_ref=geo, no_data_value=-9999)
+        with Map(crs=4326) as m:
+            m.field(raster, scheme="categorical", name="codes")
+            categories = list(
+                m.figure_spec.layers.get("codes")
+                .symbology.encoding("color")
+                .scale.categories
+            )
+            image = m.ax.images[-1]
+            blank = int((image.to_rgba(image.get_array())[..., 3] == 0).sum())
+        assert categories == [1, 2], (
+            f"the nodata value must not be a category, got {categories}"
+        )
+        assert blank == 2, f"the two nodata cells should be blank, {blank} were"
+
+    @pytest.mark.parametrize(
+        "count, accepted", [(24, True), (25, False)], ids=["24-drawn", "25-refused"]
+    )
+    def test_the_category_limit_is_inclusive(self, count, accepted):
+        """Exactly ``MAX_RASTER_CATEGORIES`` codes draw; one more is refused.
+
+        Args:
+            count: How many distinct codes the band holds.
+            accepted: Whether the band should draw.
+
+        Test scenario:
+            The boundary of the limit, not just a band far over it.
+        """
+        from digitalearth.static.maps.raster import MAX_RASTER_CATEGORIES
+
+        assert MAX_RASTER_CATEGORIES == 24, (
+            f"the limit moved to {MAX_RASTER_CATEGORIES}; update this boundary test"
+        )
+        codes = np.arange(count).reshape(1, count)
+        if accepted:
+            assert _raster_categories(codes) == list(range(count)), (
+                f"{count} codes should all be categories"
+            )
+        else:
+            with pytest.raises(ValueError, match="at most 24"):
+                _raster_categories(codes)
