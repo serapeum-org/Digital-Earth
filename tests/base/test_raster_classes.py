@@ -7,6 +7,7 @@ agreeing with the code it checks.
 
 import numpy as np
 import pytest
+
 from digitalearth.base.raster_classes import (
     DEFAULT_CLASS_CMAP,
     MAX_RASTER_CATEGORIES,
@@ -18,7 +19,6 @@ from digitalearth.base.raster_classes import (
     code_edges,
     raster_categories,
 )
-
 from digitalearth.base.spec import Scale
 from digitalearth.base.symbology import (
     categorical_colors,

@@ -270,7 +270,6 @@ class TestClassedPng:
             Every cell NaN: ``_classed_png`` answers ``None`` rather than an all-clear image.
         """
         from digitalearth.base.raster_classes import classify_band
-
         from digitalearth.web.raster import _classed_png
 
         classes = classify_band(CODES, "categorical", None, None)
@@ -297,8 +296,9 @@ class TestClassedPng:
         Test scenario:
             ``cmap="no-such-cmap"`` with categorical classes still encodes; each pixel is its code's colour.
         """
-        from digitalearth.base.raster_classes import classify_band
         from PIL import Image
+
+        from digitalearth.base.raster_classes import classify_band
 
         classes = classify_band(CODES, "categorical", None, None)
         url = WebMap._rgba_png_datauri(CODES, "no-such-cmap", classes=classes)
