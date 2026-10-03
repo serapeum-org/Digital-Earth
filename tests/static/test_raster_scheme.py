@@ -144,21 +144,39 @@ class TestClassifiedRasterField:
             f"colorbar ticks {ticks} should sit on the class edges {expected}"
         )
 
-    def test_the_legend_draws_one_swatch_per_class(self, dataset):
-        """``legend()`` on a classified raster lists one swatch per class.
+    def test_the_legend_is_a_class_key_in_the_drawn_colours(self, dataset, values):
+        """``legend()`` on a classified raster lists each class's range in the colour that class was drawn.
 
         Args:
             dataset: The raster fixture.
+            values: The fixture's valid cell values.
 
         Test scenario:
-            ``k=4`` equal intervals give four classes, so the class legend has four entries.
+            ``k=4`` equal intervals give four classes. The key must label each with its own range — built here
+            from the independently computed edges — and paint each swatch the colour the image paints a value
+            inside that class, so the key cannot disagree with the picture.
         """
+        from matplotlib.colors import to_hex
+
+        edges = _equal_interval_edges(values, 4)
+        ranges = list(zip(edges, edges[1:]))
         with Map(crs=dataset.epsg) as m:
             m.field(dataset, scheme="equal_interval", k=4)
             m.legend()
-            labels = [text.get_text() for text in m.ax.get_legend().get_texts()]
-        assert len(labels) == 4, (
-            f"four classes should give four legend entries, got {labels}"
+            legend = m.ax.get_legend()
+            labels = [text.get_text() for text in legend.get_texts()]
+            swatches = [
+                to_hex(handle.get_facecolor()) for handle in legend.legend_handles
+            ]
+            image = m.ax.images[-1]
+            drawn = [
+                to_hex(image.cmap(image.norm((low + high) / 2))) for low, high in ranges
+            ]
+        assert labels == [f"{low} – {high}" for low, high in ranges], (
+            f"legend labels {labels} should be the class ranges {ranges}"
+        )
+        assert swatches == drawn, (
+            f"swatches {swatches} should be the drawn class colours {drawn}"
         )
 
     def test_quantiles_on_tied_values_collapse_duplicate_edges(self, dataset, values):
