@@ -363,6 +363,59 @@ def _drawing_limits(limits: Any) -> Any:
     ]
 
 
+def _class_plan(
+    layer: LayerSpec, kind: str, scheme: Any
+) -> Tuple[Optional[Scale], bool]:
+    """Decide, before the band is read, how a field layer is classified.
+
+    Args:
+        layer: The layer's description, for the colour scale it records.
+        kind: The render kind (``via``) — a contour is never drawn class by class from a recorded scale.
+        scheme: The ``scheme`` the drawing options carry, or ``None``.
+
+    Returns:
+        ``(recorded, codes)``: the recorded colour scale a scheme-less field is drawn by (``None`` for a contour,
+        which interpolates), and whether the band holds codes — which must then be read in full, since a
+        decimated read averages neighbouring codes into ones no cell holds.
+
+    Raises:
+        ValueError: for ``scheme="categorical"`` on a contour kind. Codes are labels, not a surface: filling
+            between codes 1 and 5 would paint bands of 2 and 3 where no cell holds them.
+
+    Examples:
+        - A contour refuses codes before anything is read:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.static.maps.raster import _class_plan
+            >>> _class_plan(LayerSpec("a", kind="contours"), "contour", "categorical")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: scheme='categorical' draws one class per cell, and a contour interpolates between codes; ...
+
+            ```
+        - An image asked for codes reads them in full; one with no scheme and no recorded scale does not:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.static.maps.raster import _class_plan
+            >>> _class_plan(LayerSpec("a", kind="raster"), "imshow", "categorical")
+            (None, True)
+            >>> _class_plan(LayerSpec("a", kind="raster"), "imshow", None)
+            (None, False)
+
+            ```
+    """
+    contour = kind in _CONTOUR_KINDS
+    if asks_categorical(scheme) and contour:
+        raise ValueError(
+            "scheme='categorical' draws one class per cell, and a contour interpolates between codes; draw "
+            "a categorical raster with field, pcolormesh or block instead"
+        )
+    described = getattr(dict(layer.symbology.encodings).get("color"), "scale", None)
+    recorded = None if contour else described
+    from_record = scheme is None and recorded is not None and recorded.is_categorical
+    return recorded, asks_categorical(scheme) or from_record
+
+
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -388,23 +441,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
-    if asks_categorical(opts.get("scheme")) and kind in _CONTOUR_KINDS:
-        # Codes are labels, not a surface: a contour interpolates between them, so filling between codes 1 and
-        # 5 would paint bands of 2 and 3 where no cell holds them. Refused before the band is read.
-        raise ValueError(
-            "scheme='categorical' draws one class per cell, and a contour interpolates between codes; draw "
-            "a categorical raster with field, pcolormesh or block instead"
-        )
+    recorded, codes = _class_plan(layer, kind, opts.get("scheme"))
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
     # (ST-5). For everything smaller the two are one object and the read is the one this always did.
-    described = getattr(dict(layer.symbology.encodings).get("color"), "scale", None)
-    # A contour interpolates, so it is never drawn class by class from a recorded scale: only an asked-for
-    # `scheme` classifies one, and a categorical one was refused above.
-    recorded = None if kind in _CONTOUR_KINDS else described
-    codes = asks_categorical(opts.get("scheme")) or (
-        opts.get("scheme") is None and recorded is not None and recorded.is_categorical
-    )
     src, identity = _field_source(scene, data, props["band"], exact=codes)
     z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
     if opts.pop(
