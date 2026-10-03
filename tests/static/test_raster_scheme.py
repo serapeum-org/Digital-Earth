@@ -1,10 +1,12 @@
 """``scheme=``/``k=`` on a raster field: the classes are cut, drawn, published and keyed (ST-7, #222).
 
 A classified raster used to be impossible — cleopatra's ``ArrayGlyph.plot`` took no ``classify`` group, so
-``render_compat`` refused ``scheme``/``k`` on every raster layer. Since cleopatra 0.38 it does, and the static
-tier needed no new code: ``field`` forwards the flat keys, ``render_compat`` folds them into the ``classify``
-group, and the scene reads the class edges back off the drawn norm. Nothing pinned that path, though, so a
-renamed upstream keyword would have turned every classified raster back into a refusal with no failing test.
+``render_compat`` refused ``scheme``/``k`` on every raster layer. On the pinned cleopatra (``>=0.40``) it
+takes one: ``field`` forwards the flat keys, ``render_compat`` folds them into the ``classify`` group, and the
+scene reads the class edges back off the drawn norm. Nothing pinned that path, though, so a renamed upstream
+keyword would have turned every classified raster back into a refusal with no failing test. A categorical
+raster — integer class codes — is the one case cleopatra still refuses; the static tier draws it as explicit
+edges, one class per code, which :class:`TestCategoricalRasterField` holds.
 
 These tests hold each link of the chain to edges computed **independently from the data** — never read back
 from the figure under test — so they cannot agree with the drawing by construction.
@@ -74,21 +76,29 @@ class TestClassifiedRasterField:
                 f"class edges {list(norm.boundaries)} should be the equal intervals {expected}"
             )
 
-    def test_explicit_edges_are_used_as_given(self, dataset):
-        """A list passed as ``scheme`` is taken as the class edges themselves.
+    @pytest.mark.parametrize(
+        "given",
+        [[0.0, 10.0, 50.0, 88.0], [50.0, 0.0, 10.0, 88.0, 10.0]],
+        ids=["sorted", "unsorted-with-a-duplicate"],
+    )
+    def test_explicit_edges_are_the_classes_sorted_and_deduplicated(
+        self, dataset, given
+    ):
+        """A list passed as ``scheme`` is the class edges — sorted and de-duplicated, never re-cut.
 
         Args:
             dataset: The raster fixture.
+            given: The edges as the caller wrote them.
 
         Test scenario:
-            ``scheme=[0, 10, 50, 88]`` must draw exactly those boundaries — no re-cutting.
+            ``[0, 10, 50, 88]`` draws exactly those boundaries; ``[50, 0, 10, 88, 10]`` draws the same, because
+            the edges are normalised (sorted, duplicates dropped) rather than taken in the order written.
         """
-        edges = [0.0, 10.0, 50.0, 88.0]
         with Map(crs=dataset.epsg) as m:
-            m.field(dataset, scheme=edges)
+            m.field(dataset, scheme=given)
             boundaries = list(_drawn_norm(m).boundaries)
-        assert boundaries == edges, (
-            f"explicit edges {edges} were redrawn as {boundaries}"
+        assert boundaries == sorted(set(given)), (
+            f"explicit edges {given} were drawn as {boundaries}"
         )
 
     def test_no_scheme_stays_a_continuous_ramp(self, dataset):
@@ -333,18 +343,27 @@ class TestClassifiedRasterField:
             dataset: The raster fixture, which carries nodata cells.
 
         Test scenario:
-            The drawn array must mask exactly the cells the source marks as nodata, so they are left blank
-            rather than painted with the lowest class colour.
+            The drawn array must mask exactly the cells the source marks as nodata, *on a classified field*
+            (a ``BoundaryNorm`` is asserted, so the test cannot pass with classification dropped), and the
+            colour a masked cell is painted must be fully transparent — which is what "left blank" means.
         """
         expected = int(np.ma.count_masked(dataset.read_array(masked=True)))
         with Map(crs=dataset.epsg) as m:
             m.field(dataset, scheme="equal_interval", k=4)
-            drawn = int(np.ma.count_masked(m.ax.images[-1].get_array()))
+            image = m.ax.images[-1]
+            drawn = int(np.ma.count_masked(image.get_array()))
+            norm, bad_alpha = image.norm, image.cmap.get_bad()[3]
         assert expected > 0, (
             "the fixture should carry nodata cells for this test to mean anything"
         )
+        assert isinstance(norm, BoundaryNorm), (
+            f"the field should be classified, got {norm!r}"
+        )
         assert drawn == expected, (
             f"{expected} nodata cells should stay masked, {drawn} were"
+        )
+        assert bad_alpha == 0, (
+            f"a masked cell should be transparent, its alpha is {bad_alpha}"
         )
 
     def test_an_unknown_scheme_is_refused_by_name(self, dataset):
