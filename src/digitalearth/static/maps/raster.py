@@ -15,7 +15,7 @@ the full read stands, so nothing already drawn moves.
 import logging
 from dataclasses import replace
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -615,8 +615,12 @@ def _categorical_scale(
         and described.is_categorical
         and list(described.categories) == codes
     )
+    colors: List[str]
     if reusable:
-        categories, colors = list(codes), [described.color_for(code) for code in codes]
+        # `color_for` is typed Optional for a value outside the categories; every code here is one of them,
+        # which `reusable` just checked, so each answer is a colour.
+        categories = list(codes)
+        colors = [cast(str, described.color_for(code)) for code in codes]
     else:
         categories, colors = categorical_colors(
             codes, resolve_categorical_cmap(requested)
