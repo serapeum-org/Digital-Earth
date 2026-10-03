@@ -1753,18 +1753,12 @@ class RasterMixin(_MixinBase):
         # resolution of an unset `vmin`/`vmax` is its business — the tiled route records its pair only
         # because one span has to hold a whole pyramid together.
         domain = _colour_domain(source.z.values, vmin=vmin, vmax=vmax)
-        classes = (
-            None
-            if scheme is None
-            else classify_band(
-                source.z.values,
-                scheme,
-                k,
-                # Codes take the categorical palette unless the caller names one; graduated classes the
-                # colormap the band resolved, the one a ramp would have used.
-                cmap if asks_categorical(scheme) else cmap_name,
-            )
-        )
+        classes: Optional[BandClasses] = None
+        if scheme is not None:
+            # Codes take the categorical palette unless the caller names one; graduated classes the colormap
+            # the band resolved, the one a ramp would have used.
+            palette = cmap if asks_categorical(scheme) else cmap_name
+            classes = classify_band(source.z.values, scheme, k, palette)
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
