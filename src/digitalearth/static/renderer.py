@@ -147,6 +147,10 @@ class DrawnLayer:
             and a colorbar lives on its own axes where neither applies. What the two share is the layer's
             *lifetime* — :meth:`Renderer.remove` takes the key off with the drawing and
             :meth:`Renderer.set_visible` hides it with it (#261, order 24).
+        scale: The colour scale the drawer states outright, for the one case its artist's norm cannot say
+            it: a categorical raster, drawn as one class per integer code, whose ``BoundaryNorm`` holds the
+            edges *between* the codes rather than the codes themselves. ``None`` for every other layer, whose
+            scale is read off its norm or its glyph's swatch legend.
 
     Examples:
         - A text label owns the one ``Text`` it drew, and was drawn straight onto the axes rather than
@@ -172,6 +176,7 @@ class DrawnLayer:
     artists: Tuple[Any, ...] = field(default=())
     color_field: Optional[str] = None
     guides: Tuple[Any, ...] = field(default=())
+    scale: Optional[Any] = None
 
     def colored_by(self, color_field: Optional[str]) -> "DrawnLayer":
         """Return this drawing again, carrying the data field its colour varies with.
@@ -201,7 +206,7 @@ class DrawnLayer:
                 >>> from digitalearth.static.renderer import DrawnLayer
                 >>> drawn = DrawnLayer(artist="im", glyph="g", artists=("im",), guides=("bar",))
                 >>> drawn.colored_by("elev")
-                DrawnLayer(artist='im', glyph='g', artists=('im',), color_field='elev', guides=('bar',))
+                DrawnLayer(artist='im', glyph='g', artists=('im',), color_field='elev', guides=('bar',), scale=None)
                 >>> drawn.color_field is None
                 True
 

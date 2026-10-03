@@ -753,9 +753,14 @@ class Scene(WatermarkMixin):
             # no opinion about class edges and must not clear the layer that had one.
             return
         edges = getattr(norm, "boundaries", None)
-        if edges is None or getattr(drawn.glyph, "category_legend", None) is not None:
-            # A continuous ramp cut nothing; a categorical fill's norm bins the codes cleopatra assigned, not
-            # the caller's categories, so neither has class edges to publish (see :attr:`last_breaks`).
+        stated = getattr(drawn, "scale", None)
+        categorical = getattr(drawn.glyph, "category_legend", None) is not None or (
+            stated is not None and stated.is_categorical
+        )
+        if edges is None or categorical:
+            # A continuous ramp cut nothing; a categorical fill's norm bins the codes cleopatra assigned, and a
+            # categorical raster's brackets its codes, not the caller's categories — so neither has class edges
+            # to publish (see :attr:`last_breaks`).
             self.last_breaks = None
             return
         self.last_breaks = [float(edge) for edge in edges]

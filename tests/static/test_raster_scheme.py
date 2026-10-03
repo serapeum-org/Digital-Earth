@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 from matplotlib.colors import BoundaryNorm
 
+from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static import Map
 
 
@@ -233,16 +234,154 @@ class TestClassifiedRasterField:
             with pytest.raises(ValueError, match="nope"):
                 m.field(dataset, scheme="nope", k=4)
 
-    def test_a_categorical_scheme_is_refused_on_a_raster(self, dataset):
-        """``scheme="categorical"`` is refused: a raster's values are a magnitude, not class labels.
 
-        Args:
-            dataset: The raster fixture.
+#: A nominal raster: integer class codes 1, 2, 3 and 5 (no 4, so the edges cannot be a plain ``0.5`` grid).
+CODES = np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0], [5.0, 5.0, 1.0]])
+
+
+def _palette(codes, cmap=None) -> list:
+    """Return the shared categorical palette for ``codes`` — the colours the vector layers would use."""
+    return categorical_colors(codes, resolve_categorical_cmap(cmap))[1]
+
+
+def _cell_colors(image) -> np.ndarray:
+    """Return the hex colour each cell of a drawn image was painted, as an array shaped like the image."""
+    from matplotlib.colors import to_hex
+
+    rgba = image.to_rgba(image.get_array())
+    return np.array([[to_hex(px, keep_alpha=False) for px in row] for row in rgba])
+
+
+class TestCategoricalRasterField:
+    """``Map.field(..., scheme="categorical")`` draws one class per integer code, with a per-code legend."""
+
+    def test_each_code_is_painted_its_palette_colour(self):
+        """Every cell takes the shared categorical colour of its own code.
 
         Test scenario:
-            The categorical scheme belongs to nominal vector columns; on a raster it must raise rather than
-            draw one colour per distinct value.
+            Codes 1, 2, 3, 5 get the palette's first four colours in sorted order — the same assignment a
+            categorical vector column would get — and each cell is painted the colour of its code.
         """
-        with Map(crs=dataset.epsg) as m:
-            with pytest.raises(ValueError, match="categorical"):
-                m.field(dataset, scheme="categorical")
+        palette = dict(zip([1, 2, 3, 5], _palette([1, 2, 3, 5])))
+        with Map() as m:
+            m.field(CODES, scheme="categorical")
+            painted = _cell_colors(m.ax.images[-1])
+        expected = np.vectorize(lambda code: palette[int(code)])(CODES)
+        assert (painted == expected).all(), (
+            f"cells painted {painted.tolist()}, expected {expected.tolist()}"
+        )
+
+    def test_a_caller_cmap_is_the_palette(self):
+        """A ``cmap`` passed with the categorical scheme supplies the class colours.
+
+        Test scenario:
+            ``cmap="Set2"`` must colour the codes from Set2, exactly as ``categorical_colors`` samples it.
+        """
+        with Map() as m:
+            m.field(CODES, scheme="categorical", cmap="Set2")
+            painted = set(_cell_colors(m.ax.images[-1]).ravel())
+        expected = set(_palette([1, 2, 3, 5], "Set2"))
+        assert painted == expected, (
+            f"painted {sorted(painted)}, expected Set2's {sorted(expected)}"
+        )
+
+    def test_the_legend_lists_each_code_with_its_colour(self):
+        """``legend()`` draws one swatch per code, labelled with the code, in the code's colour.
+
+        Test scenario:
+            The key must name the categories themselves (``1``, ``2``, ``3``, ``5``), not value ranges, and
+            each swatch must be the colour its code was painted.
+        """
+        with Map() as m:
+            m.field(CODES, scheme="categorical")
+            m.legend()
+            legend = m.ax.get_legend()
+            labels = [text.get_text() for text in legend.get_texts()]
+            from matplotlib.colors import to_hex
+
+            colors = [
+                to_hex(handle.get_facecolor()) for handle in legend.legend_handles
+            ]
+        assert labels == ["1", "2", "3", "5"], (
+            f"legend labels {labels} should be the codes"
+        )
+        assert colors == _palette([1, 2, 3, 5]), (
+            f"legend colours {colors} should be the palette"
+        )
+
+    def test_categories_are_published_not_class_edges(self):
+        """The layer's colour encoding is categorical, and ``last_breaks`` stays empty.
+
+        Test scenario:
+            A categorical layer has categories, not graduated class edges — the same answer a categorical
+            choropleth gives — so other tiers reading the figure see the codes.
+        """
+        with Map() as m:
+            m.field(CODES, scheme="categorical", name="codes")
+            scale = m.figure_spec.layers.get("codes").symbology.encoding("color").scale
+            breaks = m.last_breaks
+        assert scale.is_categorical, (
+            f"the colour scale should be categorical, got {scale!r}"
+        )
+        assert list(scale.categories) == [1, 2, 3, 5], (
+            f"categories {list(scale.categories)} should be the codes"
+        )
+        assert breaks is None, (
+            f"a categorical raster has no class edges to publish, got {breaks}"
+        )
+
+    def test_a_colorbar_is_refused_in_favour_of_the_legend(self):
+        """A colorbar over categorical codes is refused, naming ``legend()``.
+
+        Test scenario:
+            A bar would read the codes as a magnitude; the categorical choropleth refuses it the same way.
+        """
+        with Map() as m:
+            m.field(CODES, scheme="categorical")
+            with pytest.raises(ValueError, match="legend"):
+                m.colorbar()
+
+    def test_nodata_cells_stay_blank(self):
+        """A NaN cell falls in no category and is left transparent.
+
+        Test scenario:
+            The missing cell must not become a category of its own nor take a class colour.
+        """
+        codes = CODES.copy()
+        codes[0, 0] = np.nan
+        with Map() as m:
+            m.field(codes, scheme="categorical", name="codes")
+            image = m.ax.images[-1]
+            alpha = image.to_rgba(image.get_array())[0, 0, 3]
+            categories = list(
+                m.figure_spec.layers.get("codes")
+                .symbology.encoding("color")
+                .scale.categories
+            )
+        assert alpha == 0, f"the nodata cell should be transparent, alpha={alpha}"
+        assert categories == [1, 2, 3, 5], (
+            f"nodata must not become a category, got {categories}"
+        )
+
+    def test_non_integer_values_are_refused(self, dataset):
+        """A band of non-integer values is refused: it is a magnitude, not class codes.
+
+        Args:
+            dataset: Unused; kept so the fixture set matches the class.
+
+        Test scenario:
+            ``0.5`` is not a class code, so the categorical scheme must refuse and point at a graduated one.
+        """
+        with Map() as m:
+            with pytest.raises(ValueError, match="integer"):
+                m.field(np.array([[0.5, 1.0], [2.0, 3.0]]), scheme="categorical")
+
+    def test_too_many_codes_are_refused(self):
+        """A band with more distinct codes than a legend can carry is refused, naming the count.
+
+        Test scenario:
+            100 distinct integer codes is a continuous field in disguise; the refusal must say how many.
+        """
+        with Map() as m:
+            with pytest.raises(ValueError, match="100"):
+                m.field(np.arange(100.0).reshape(10, 10), scheme="categorical")
