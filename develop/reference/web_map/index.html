@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -8626,7 +8626,13 @@ digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</p
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1928">1928</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1922">1922</a></span>
+<span class="normal"><a href="#__codelineno-0-1923">1923</a></span>
+<span class="normal"><a href="#__codelineno-0-1924">1924</a></span>
+<span class="normal"><a href="#__codelineno-0-1925">1925</a></span>
+<span class="normal"><a href="#__codelineno-0-1926">1926</a></span>
+<span class="normal"><a href="#__codelineno-0-1927">1927</a></span>
+<span class="normal"><a href="#__codelineno-0-1928">1928</a></span>
 <span class="normal"><a href="#__codelineno-0-1929">1929</a></span>
 <span class="normal"><a href="#__codelineno-0-1930">1930</a></span>
 <span class="normal"><a href="#__codelineno-0-1931">1931</a></span>
@@ -8706,99 +8712,93 @@ digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</p
 <span class="normal"><a href="#__codelineno-0-2005">2005</a></span>
 <span class="normal"><a href="#__codelineno-0-2006">2006</a></span>
 <span class="normal"><a href="#__codelineno-0-2007">2007</a></span>
-<span class="normal"><a href="#__codelineno-0-2008">2008</a></span>
-<span class="normal"><a href="#__codelineno-0-2009">2009</a></span>
-<span class="normal"><a href="#__codelineno-0-2010">2010</a></span>
-<span class="normal"><a href="#__codelineno-0-2011">2011</a></span>
-<span class="normal"><a href="#__codelineno-0-2012">2012</a></span>
-<span class="normal"><a href="#__codelineno-0-2013">2013</a></span>
-<span class="normal"><a href="#__codelineno-0-2014">2014</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1928" name="__codelineno-0-1928"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
-<a id="__codelineno-0-1929" name="__codelineno-0-1929"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1930" name="__codelineno-0-1930"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1931" name="__codelineno-0-1931"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
-<a id="__codelineno-0-1932" name="__codelineno-0-1932"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1933" name="__codelineno-0-1933"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1934" name="__codelineno-0-1934"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1935" name="__codelineno-0-1935"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Maybe</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
-<a id="__codelineno-0-1936" name="__codelineno-0-1936"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1937" name="__codelineno-0-1937"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1938" name="__codelineno-0-1938"></a>    <span class="n">tiles</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1939" name="__codelineno-0-1939"></a>    <span class="n">tiles_path</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1940" name="__codelineno-0-1940"></a>    <span class="n">zooms</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1941" name="__codelineno-0-1941"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1942" name="__codelineno-0-1942"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
-<a id="__codelineno-0-1943" name="__codelineno-0-1943"></a>
-<a id="__codelineno-0-1944" name="__codelineno-0-1944"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
-<a id="__codelineno-0-1945" name="__codelineno-0-1945"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
-<a id="__codelineno-0-1946" name="__codelineno-0-1946"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
-<a id="__codelineno-0-1947" name="__codelineno-0-1947"></a>
-<a id="__codelineno-0-1948" name="__codelineno-0-1948"></a><span class="sd">    The three channels are read straight as red, green and blue; :meth:`hsv_composite` reads the same</span>
-<a id="__codelineno-0-1949" name="__codelineno-0-1949"></a><span class="sd">    three as hue, saturation and value.</span>
-<a id="__codelineno-0-1950" name="__codelineno-0-1950"></a>
-<a id="__codelineno-0-1951" name="__codelineno-0-1951"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1952" name="__codelineno-0-1952"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
-<a id="__codelineno-0-1953" name="__codelineno-0-1953"></a><span class="sd">            A path or URL to one is taken too, and is the only input this layer can be</span>
-<a id="__codelineno-0-1954" name="__codelineno-0-1954"></a><span class="sd">            written down with — a pyramids object does not know where it came from. The reference</span>
-<a id="__codelineno-0-1955" name="__codelineno-0-1955"></a><span class="sd">            is opened at the display choke point</span>
-<a id="__codelineno-0-1956" name="__codelineno-0-1956"></a><span class="sd">            (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller&#39;s own path is what</span>
-<a id="__codelineno-0-1957" name="__codelineno-0-1957"></a><span class="sd">            the figure records.</span>
-<a id="__codelineno-0-1958" name="__codelineno-0-1958"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
-<a id="__codelineno-0-1959" name="__codelineno-0-1959"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
-<a id="__codelineno-0-1960" name="__codelineno-0-1960"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
-<a id="__codelineno-0-1961" name="__codelineno-0-1961"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
-<a id="__codelineno-0-1962" name="__codelineno-0-1962"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
-<a id="__codelineno-0-1963" name="__codelineno-0-1963"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
-<a id="__codelineno-0-1964" name="__codelineno-0-1964"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
-<a id="__codelineno-0-1965" name="__codelineno-0-1965"></a><span class="sd">        tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,</span>
-<a id="__codelineno-0-1966" name="__codelineno-0-1966"></a><span class="sd">            and is refused above :data:`_LARGE_RASTER_PIXELS` cells; ``&quot;xyz&quot;`` writes a</span>
-<a id="__codelineno-0-1967" name="__codelineno-0-1967"></a><span class="sd">            ``{z}/{x}/{y}.png`` pyramid beside the page and ``&quot;cog&quot;`` one Cloud-Optimized GeoTIFF the</span>
-<a id="__codelineno-0-1968" name="__codelineno-0-1968"></a><span class="sd">            page reads windows from. Either makes the output a **folder** rather than one file. A tiled</span>
-<a id="__codelineno-0-1969" name="__codelineno-0-1969"></a><span class="sd">            composite is stretched on one set of bounds for the whole pyramid — ``limits`` when given,</span>
-<a id="__codelineno-0-1970" name="__codelineno-0-1970"></a><span class="sd">            otherwise measured from a decimated read — because a tile stretched over its own percentiles</span>
-<a id="__codelineno-0-1971" name="__codelineno-0-1971"></a><span class="sd">            disagrees with its neighbour across their shared edge.</span>
-<a id="__codelineno-0-1972" name="__codelineno-0-1972"></a><span class="sd">        tiles_path: Where a tiled route writes: the pyramid&#39;s root directory, or the ``.tif`` for a COG.</span>
-<a id="__codelineno-0-1973" name="__codelineno-0-1973"></a><span class="sd">        zooms: ``(lowest, highest)`` zoom levels for the ``&quot;xyz&quot;`` pyramid; ``None`` derives them.</span>
-<a id="__codelineno-0-1974" name="__codelineno-0-1974"></a>
-<a id="__codelineno-0-1975" name="__codelineno-0-1975"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1976" name="__codelineno-0-1976"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
-<a id="__codelineno-0-1977" name="__codelineno-0-1977"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
-<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
-<a id="__codelineno-0-1979" name="__codelineno-0-1979"></a>
-<a id="__codelineno-0-1980" name="__codelineno-0-1980"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1981" name="__codelineno-0-1981"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the</span>
-<a id="__codelineno-0-1982" name="__codelineno-0-1982"></a><span class="sd">            composite has no finite pixels to draw, or when ``opacity`` is not a finite number —</span>
-<a id="__codelineno-0-1983" name="__codelineno-0-1983"></a><span class="sd">            refused at this call, because a figure holding NaN or infinity could not be written down.</span>
-<a id="__codelineno-0-1984" name="__codelineno-0-1984"></a><span class="sd">        FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver</span>
-<a id="__codelineno-0-1985" name="__codelineno-0-1985"></a><span class="sd">            is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.</span>
-<a id="__codelineno-0-1986" name="__codelineno-0-1986"></a><span class="sd">        TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;</span>
-<a id="__codelineno-0-1987" name="__codelineno-0-1987"></a><span class="sd">            see :meth:`field`, whose tiled route shares this one&#39;s writer.</span>
+<span class="normal"><a href="#__codelineno-0-2008">2008</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1922" name="__codelineno-0-1922"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
+<a id="__codelineno-0-1923" name="__codelineno-0-1923"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1924" name="__codelineno-0-1924"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1925" name="__codelineno-0-1925"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
+<a id="__codelineno-0-1926" name="__codelineno-0-1926"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1927" name="__codelineno-0-1927"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1928" name="__codelineno-0-1928"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1929" name="__codelineno-0-1929"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Maybe</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+<a id="__codelineno-0-1930" name="__codelineno-0-1930"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1931" name="__codelineno-0-1931"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1932" name="__codelineno-0-1932"></a>    <span class="n">tiles</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1933" name="__codelineno-0-1933"></a>    <span class="n">tiles_path</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1934" name="__codelineno-0-1934"></a>    <span class="n">zooms</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1935" name="__codelineno-0-1935"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-1936" name="__codelineno-0-1936"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
+<a id="__codelineno-0-1937" name="__codelineno-0-1937"></a>
+<a id="__codelineno-0-1938" name="__codelineno-0-1938"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
+<a id="__codelineno-0-1939" name="__codelineno-0-1939"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
+<a id="__codelineno-0-1940" name="__codelineno-0-1940"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
+<a id="__codelineno-0-1941" name="__codelineno-0-1941"></a>
+<a id="__codelineno-0-1942" name="__codelineno-0-1942"></a><span class="sd">    The three channels are read straight as red, green and blue; :meth:`hsv_composite` reads the same</span>
+<a id="__codelineno-0-1943" name="__codelineno-0-1943"></a><span class="sd">    three as hue, saturation and value.</span>
+<a id="__codelineno-0-1944" name="__codelineno-0-1944"></a>
+<a id="__codelineno-0-1945" name="__codelineno-0-1945"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1946" name="__codelineno-0-1946"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
+<a id="__codelineno-0-1947" name="__codelineno-0-1947"></a><span class="sd">            A path or URL to one is taken too, and is the only input this layer can be</span>
+<a id="__codelineno-0-1948" name="__codelineno-0-1948"></a><span class="sd">            written down with — a pyramids object does not know where it came from. The reference</span>
+<a id="__codelineno-0-1949" name="__codelineno-0-1949"></a><span class="sd">            is opened at the display choke point</span>
+<a id="__codelineno-0-1950" name="__codelineno-0-1950"></a><span class="sd">            (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller&#39;s own path is what</span>
+<a id="__codelineno-0-1951" name="__codelineno-0-1951"></a><span class="sd">            the figure records.</span>
+<a id="__codelineno-0-1952" name="__codelineno-0-1952"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
+<a id="__codelineno-0-1953" name="__codelineno-0-1953"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
+<a id="__codelineno-0-1954" name="__codelineno-0-1954"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
+<a id="__codelineno-0-1955" name="__codelineno-0-1955"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
+<a id="__codelineno-0-1956" name="__codelineno-0-1956"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
+<a id="__codelineno-0-1957" name="__codelineno-0-1957"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
+<a id="__codelineno-0-1958" name="__codelineno-0-1958"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-1959" name="__codelineno-0-1959"></a><span class="sd">        tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,</span>
+<a id="__codelineno-0-1960" name="__codelineno-0-1960"></a><span class="sd">            and is refused above :data:`_LARGE_RASTER_PIXELS` cells; ``&quot;xyz&quot;`` writes a</span>
+<a id="__codelineno-0-1961" name="__codelineno-0-1961"></a><span class="sd">            ``{z}/{x}/{y}.png`` pyramid beside the page and ``&quot;cog&quot;`` one Cloud-Optimized GeoTIFF the</span>
+<a id="__codelineno-0-1962" name="__codelineno-0-1962"></a><span class="sd">            page reads windows from. Either makes the output a **folder** rather than one file. A tiled</span>
+<a id="__codelineno-0-1963" name="__codelineno-0-1963"></a><span class="sd">            composite is stretched on one set of bounds for the whole pyramid — ``limits`` when given,</span>
+<a id="__codelineno-0-1964" name="__codelineno-0-1964"></a><span class="sd">            otherwise measured from a decimated read — because a tile stretched over its own percentiles</span>
+<a id="__codelineno-0-1965" name="__codelineno-0-1965"></a><span class="sd">            disagrees with its neighbour across their shared edge.</span>
+<a id="__codelineno-0-1966" name="__codelineno-0-1966"></a><span class="sd">        tiles_path: Where a tiled route writes: the pyramid&#39;s root directory, or the ``.tif`` for a COG.</span>
+<a id="__codelineno-0-1967" name="__codelineno-0-1967"></a><span class="sd">        zooms: ``(lowest, highest)`` zoom levels for the ``&quot;xyz&quot;`` pyramid; ``None`` derives them.</span>
+<a id="__codelineno-0-1968" name="__codelineno-0-1968"></a>
+<a id="__codelineno-0-1969" name="__codelineno-0-1969"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1970" name="__codelineno-0-1970"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
+<a id="__codelineno-0-1971" name="__codelineno-0-1971"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
+<a id="__codelineno-0-1972" name="__codelineno-0-1972"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
+<a id="__codelineno-0-1973" name="__codelineno-0-1973"></a>
+<a id="__codelineno-0-1974" name="__codelineno-0-1974"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1975" name="__codelineno-0-1975"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the</span>
+<a id="__codelineno-0-1976" name="__codelineno-0-1976"></a><span class="sd">            composite has no finite pixels to draw, or when ``opacity`` is not a finite number —</span>
+<a id="__codelineno-0-1977" name="__codelineno-0-1977"></a><span class="sd">            refused at this call, because a figure holding NaN or infinity could not be written down.</span>
+<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">        FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver</span>
+<a id="__codelineno-0-1979" name="__codelineno-0-1979"></a><span class="sd">            is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.</span>
+<a id="__codelineno-0-1980" name="__codelineno-0-1980"></a><span class="sd">        TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;</span>
+<a id="__codelineno-0-1981" name="__codelineno-0-1981"></a><span class="sd">            see :meth:`field`, whose tiled route shares this one&#39;s writer.</span>
+<a id="__codelineno-0-1982" name="__codelineno-0-1982"></a>
+<a id="__codelineno-0-1983" name="__codelineno-0-1983"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1984" name="__codelineno-0-1984"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
+<a id="__codelineno-0-1985" name="__codelineno-0-1985"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1986" name="__codelineno-0-1986"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
+<a id="__codelineno-0-1987" name="__codelineno-0-1987"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
 <a id="__codelineno-0-1988" name="__codelineno-0-1988"></a>
-<a id="__codelineno-0-1989" name="__codelineno-0-1989"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1990" name="__codelineno-0-1990"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
-<a id="__codelineno-0-1991" name="__codelineno-0-1991"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1992" name="__codelineno-0-1992"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
-<a id="__codelineno-0-1993" name="__codelineno-0-1993"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
-<a id="__codelineno-0-1994" name="__codelineno-0-1994"></a>
-<a id="__codelineno-0-1995" name="__codelineno-0-1995"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1996" name="__codelineno-0-1996"></a>
-<a id="__codelineno-0-1997" name="__codelineno-0-1997"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1998" name="__codelineno-0-1998"></a><span class="sd">        digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.</span>
-<a id="__codelineno-0-1999" name="__codelineno-0-1999"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
-<a id="__codelineno-0-2000" name="__codelineno-0-2000"></a><span class="sd">        digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</span>
-<a id="__codelineno-0-2001" name="__codelineno-0-2001"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
-<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a>        <span class="n">_RGB_RECIPE</span><span class="p">,</span>
-<a id="__codelineno-0-2004" name="__codelineno-0-2004"></a>        <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-2005" name="__codelineno-0-2005"></a>        <span class="n">bands</span><span class="p">,</span>
-<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a>        <span class="n">mask_nodata</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">,</span>
-<a id="__codelineno-0-2007" name="__codelineno-0-2007"></a>        <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span>
-<a id="__codelineno-0-2008" name="__codelineno-0-2008"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
-<a id="__codelineno-0-2009" name="__codelineno-0-2009"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2010" name="__codelineno-0-2010"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2011" name="__codelineno-0-2011"></a>        <span class="n">tiles</span><span class="o">=</span><span class="n">tiles</span><span class="p">,</span>
-<a id="__codelineno-0-2012" name="__codelineno-0-2012"></a>        <span class="n">tiles_path</span><span class="o">=</span><span class="n">tiles_path</span><span class="p">,</span>
-<a id="__codelineno-0-2013" name="__codelineno-0-2013"></a>        <span class="n">zooms</span><span class="o">=</span><span class="n">zooms</span><span class="p">,</span>
-<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a>    <span class="p">)</span>
+<a id="__codelineno-0-1989" name="__codelineno-0-1989"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1990" name="__codelineno-0-1990"></a>
+<a id="__codelineno-0-1991" name="__codelineno-0-1991"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1992" name="__codelineno-0-1992"></a><span class="sd">        digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.</span>
+<a id="__codelineno-0-1993" name="__codelineno-0-1993"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
+<a id="__codelineno-0-1994" name="__codelineno-0-1994"></a><span class="sd">        digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</span>
+<a id="__codelineno-0-1995" name="__codelineno-0-1995"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1996" name="__codelineno-0-1996"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
+<a id="__codelineno-0-1997" name="__codelineno-0-1997"></a>        <span class="n">_RGB_RECIPE</span><span class="p">,</span>
+<a id="__codelineno-0-1998" name="__codelineno-0-1998"></a>        <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-1999" name="__codelineno-0-1999"></a>        <span class="n">bands</span><span class="p">,</span>
+<a id="__codelineno-0-2000" name="__codelineno-0-2000"></a>        <span class="n">mask_nodata</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">,</span>
+<a id="__codelineno-0-2001" name="__codelineno-0-2001"></a>        <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span>
+<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
+<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2004" name="__codelineno-0-2004"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2005" name="__codelineno-0-2005"></a>        <span class="n">tiles</span><span class="o">=</span><span class="n">tiles</span><span class="p">,</span>
+<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a>        <span class="n">tiles_path</span><span class="o">=</span><span class="n">tiles_path</span><span class="p">,</span>
+<a id="__codelineno-0-2007" name="__codelineno-0-2007"></a>        <span class="n">zooms</span><span class="o">=</span><span class="n">zooms</span><span class="p">,</span>
+<a id="__codelineno-0-2008" name="__codelineno-0-2008"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
