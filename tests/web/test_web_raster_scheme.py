@@ -19,7 +19,7 @@ from digitalearth.base.symbology import (  # noqa: E402
     resolve_categorical_cmap,
     sample_cmap,
 )
-from digitalearth.web import WebMap  # noqa: E402
+from digitalearth.web import TileRoute, WebMap  # noqa: E402
 
 CODES = np.array([[1.0, 2.0, 5.0], [5.0, 1.0, 2.0]])
 
@@ -123,10 +123,9 @@ class TestClassifiedWebField:
         band = _band(CODES)
         destination = tmp_path / "tiles"
         web_map = WebMap()
+        route = TileRoute(tiles, destination)
         with pytest.raises(ValueError, match="inline route"):
-            web_map.field(
-                band, scheme="categorical", tiles=tiles, tiles_path=destination
-            )
+            web_map.field(band, scheme="categorical", tiles=route)
         assert web_map.layer_ids == [], (
             f"a refused layer was added: {web_map.layer_ids}"
         )

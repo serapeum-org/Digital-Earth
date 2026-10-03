@@ -441,7 +441,7 @@ class ThreeDMixin(_MixinBase):
                 f"'{_TILE_TEMPLATE_MARK}'), a pyramids Dataset, or a path to one; got a "
                 f"{type(dem).__name__}"
             )
-        destination = _destination(tiles_path, "xyz", caller)
+        destination = _destination(tiles_path, "xyz", caller, named="tiles_path=")
         lowest, highest = _zoom_range(_lonlat_bounds(opened), opened, zooms, caller)
         opened.to_terrain_rgb(
             destination,

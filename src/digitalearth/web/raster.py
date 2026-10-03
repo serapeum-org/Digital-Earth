@@ -5,9 +5,9 @@ to lon/lat through pyramids, colour-mapped to an RGBA PNG (NoData → transparen
 and placed by its lon/lat corner coordinates. That is the default, and the only path a page can carry on its
 own — every pixel is inside the HTML.
 
-**A raster too big to inline takes a tiled route instead (#189).** ``tiles="xyz"`` writes a
-``{z}/{x}/{y}.png`` pyramid beside the page and points a MapLibre ``raster`` source at it, needing nothing of
-the page; ``tiles="cog"`` writes one Cloud-Optimized GeoTIFF and addresses it as ``cog://<file>``, which only
+**A raster too big to inline takes a tiled route instead (#189).** ``tiles=TileRoute("xyz", path)``
+writes a ``{z}/{x}/{y}.png`` pyramid beside the page and points a MapLibre ``raster`` source at it, needing nothing of
+the page; ``TileRoute("cog", path)`` writes one Cloud-Optimized GeoTIFF and addresses it as ``cog://<file>``, which only
 resolves on a page that has registered a ``cog://`` protocol — MapLibre has none built in, and
 ``WebMapBase.save`` has no hook to add the script, so that route is for a map embedded in a page somebody
 else writes. Both change what this tier *produces*: the output is a **folder** — the HTML plus the pyramid or
@@ -34,6 +34,7 @@ inside the methods, so importing the tier needs neither the ``web`` extra nor ma
 
 import math
 import pathlib
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -220,10 +221,91 @@ def _refuse_if_large(caller: str, noun: str, pixels: Optional[int]) -> None:
         return
     raise ValueError(
         f"{caller}: a {pixels}-pixel {noun} is too large to inline in the page as a data-URI image source "
-        f'(the ceiling is {_LARGE_RASTER_PIXELS} cells). Name a tiled route instead: tiles="xyz" writes a '
-        '{z}/{x}/{y}.png pyramid beside the page, tiles="cog" writes one Cloud-Optimized GeoTIFF the page '
-        "reads windows from — both need tiles_path= to say where, and both make the output a folder rather "
-        "than one file"
+        f'(the ceiling is {_LARGE_RASTER_PIXELS} cells). Name a tiled route instead: tiles=TileRoute("xyz", path) '
+        'writes a {z}/{x}/{y}.png pyramid beside the page, tiles=TileRoute("cog", path) writes one '
+        "Cloud-Optimized GeoTIFF the page reads windows from — the path says where, and both make the output "
+        "a folder rather than one file"
+    )
+
+
+@dataclass(frozen=True)
+class TileRoute:
+    """Where a tiled raster's pixels are written, and how the page reads them back (#189).
+
+    A raster too big to inline on the page is written beside it instead, and the three things that decide
+    how — the route, where it writes, and over which zoom levels — mean something only together: a path or a
+    zoom range given without a route did nothing. So they are one argument, ``tiles=``, on
+    :meth:`RasterMixin.field`, :meth:`RasterMixin.rgb_composite` and :meth:`RasterMixin.hsv_composite`.
+
+    Attributes:
+        kind: ``"xyz"`` writes a ``{z}/{x}/{y}.png`` pyramid a MapLibre ``raster`` source reads with no
+            client-side dependency; ``"cog"`` writes one Cloud-Optimized GeoTIFF addressed as ``cog://<file>``,
+            which only a page that has registered a ``cog://`` protocol can read. Case and surrounding spaces
+            are ignored.
+        path: Where the route writes: the pyramid's root directory for ``"xyz"``, the ``.tif`` to write for
+            ``"cog"``. Save the page into the same folder — the layer addresses what sits next to it.
+        zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid; ``None`` derives ``(0, native)``,
+            where *native* is the zoom at which a tile pixel is about the size of a source cell. Unread by
+            ``"cog"``.
+
+    Examples:
+        - A pyramid over three zoom levels; the route is read case-insensitively when the layer is built:
+            ```python
+            >>> from digitalearth.web import TileRoute
+            >>> route = TileRoute("XYZ", "tiles/dem", zooms=(6, 8))
+            >>> route.kind, route.path, route.zooms
+            ('XYZ', 'tiles/dem', (6, 8))
+
+            ```
+    """
+
+    kind: str
+    path: Any
+    zooms: Optional[Tuple[int, int]] = None
+
+
+def _route_parts(tiles: Any, caller: str) -> Tuple[Any, Any, Any]:
+    """Unpack a builder's ``tiles=`` into the route name, the destination and the zoom range.
+
+    Args:
+        tiles: The caller's ``tiles=`` — ``None`` for the inline path, or a :class:`TileRoute`.
+        caller: The builder, for the message.
+
+    Returns:
+        ``(kind, path, zooms)``, each ``None`` for the inline path. The route name and the destination are
+        checked where they are used (:func:`_tile_route`, :func:`_destination`), so every builder refuses a bad
+        one in the same words.
+
+    Raises:
+        TypeError: for anything but ``None`` or a :class:`TileRoute`. A route *name* is refused by name: it is
+            the spelling ``tiles=`` took before the route, its destination and its zooms became one argument,
+            and on its own it never said where to write.
+
+    Examples:
+        - The inline path has no parts; a route has all three:
+            ```python
+            >>> from digitalearth.web.raster import TileRoute, _route_parts
+            >>> _route_parts(None, "WebMap.field()"), _route_parts(TileRoute("cog", "a.tif"), "WebMap.field()")
+            ((None, None, None), ('cog', 'a.tif', None))
+
+            ```
+        - A bare route name is refused, pointing at the argument that replaces it:
+            ```python
+            >>> from digitalearth.web.raster import _route_parts
+            >>> _route_parts("xyz", "WebMap.field()")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            TypeError: WebMap.field() tiles= takes a TileRoute, e.g. tiles=TileRoute("xyz", "tiles/dem", ...
+
+            ```
+    """
+    if tiles is None:
+        return None, None, None
+    if isinstance(tiles, TileRoute):
+        return tiles.kind, tiles.path, tiles.zooms
+    raise TypeError(
+        f'{caller} tiles= takes a TileRoute, e.g. tiles=TileRoute("xyz", "tiles/dem", zooms=(0, 8)) — the '
+        f"route, where it writes and its zoom range together; got {tiles!r}"
     )
 
 
@@ -701,7 +783,9 @@ def _windowed_raster(web_map: Any, data: Any, *, route: str, caller: str) -> Any
     return dataset
 
 
-def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
+def _destination(
+    tiles_path: Any, route: str, caller: str, *, named: str = "a path in its TileRoute"
+) -> pathlib.Path:
     """Return where a tiled route writes.
 
     Nothing is created here. A refused call must leave the filesystem as it found it, and every other reason
@@ -714,6 +798,9 @@ def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
         tiles_path: The caller's ``tiles_path=``.
         route: The resolved route, named in the message.
         caller: The builder, for the message.
+        named: How the caller names the destination, for the message — a raster builder's ``TileRoute``
+            path, or ``tiles_path=`` on :meth:`~digitalearth.web.threed.ThreeDMixin.terrain_tiles`, which
+            writes one terrain pyramid and takes no route.
 
     Returns:
         The destination as a path.
@@ -725,7 +812,7 @@ def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
     """
     if tiles_path is None:
         raise ValueError(
-            f'{caller} tiles="{route}" writes its pixels beside the page, so it needs tiles_path= to say '
+            f"{caller}'s {route!r} route writes its pixels beside the page, so it needs {named} to say "
             "where — a directory for the tile pyramid, or the .tif to write for a COG. Save the page into "
             "the same folder: the layer addresses what sits next to it"
         )
@@ -1542,9 +1629,7 @@ class RasterMixin(_MixinBase):
         k: Optional[int] = None,
         visible: bool = True,
         name: Optional[str] = None,
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -1593,9 +1678,11 @@ class RasterMixin(_MixinBase):
                 every frame showing at once — including in a saved page, which carries no slider.
             tiles: How the pixels reach the page. ``None`` (the default) inlines them as a ``data:`` PNG, so
                 the page is one self-contained file — and is refused above :data:`_LARGE_RASTER_PIXELS`
-                cells, because that page would be hundreds of megabytes (#189). ``"xyz"`` writes a
-                ``{z}/{x}/{y}.png`` pyramid under ``tiles_path`` and points a MapLibre ``raster`` source at
-                it, with **no client-side dependency** — it is the route that works as written. ``"cog"``
+                cells, because that page would be hundreds of megabytes (#189). A :class:`TileRoute` writes
+                them beside the page instead, naming the route, where it writes and its zoom range in one
+                argument. ``TileRoute("xyz", path)`` writes a ``{z}/{x}/{y}.png`` pyramid under ``path`` and
+                points a MapLibre ``raster`` source at it, with **no client-side dependency** — it is the
+                route that works as written. ``"cog"``
                 writes one Cloud-Optimized GeoTIFF there instead and addresses it as ``cog://<file>``: fewer,
                 larger files, read by range request, but MapLibre has no built-in reader for one, so the page
                 showing it must register a ``cog://`` protocol itself. This tier cannot put that script in a
@@ -1603,12 +1690,9 @@ class RasterMixin(_MixinBase):
                 the COG route when you control the page the map is embedded in, and ``"xyz"`` when
                 :meth:`~digitalearth.web.base.WebMapBase.save` is the whole pipeline. **Either route makes
                 the output a folder** — the HTML plus the pyramid or the COG — rather than a single file, and
-                the page addresses what sits beside it, so save it into the same directory.
-            tiles_path: Where a tiled route writes: the pyramid's root directory for ``"xyz"``, the ``.tif``
-                to write for ``"cog"``. Required by both, and ignored by the inline default.
-            zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid. ``None`` derives
-                ``(0, native)``, where *native* is the zoom at which a tile pixel is about the size of a
-                source cell — beyond it a pyramid invents detail the raster does not hold.
+                the page addresses what sits beside it, so save it into the same directory. The route's
+                ``zooms`` default to ``(0, native)``, where *native* is the zoom at which a tile pixel is about
+                the size of a source cell — beyond it a pyramid invents detail the raster does not hold.
 
         Returns:
             This map (chainable). When the band cannot be placed — it lies outside what the display CRS
@@ -1620,7 +1704,7 @@ class RasterMixin(_MixinBase):
                 not a `(vmin, vmax)` pair of numbers; when ``opacity`` is not a finite number, refused
                 at this call because a figure holding NaN or infinity could not be written down; when the
                 band is too large to inline and no ``tiles`` route was named; and, for a tiled route, when
-                ``tiles`` names no route this tier writes, ``tiles_path`` is missing, ``zooms`` is not an
+                ``tiles`` names no route this tier writes, its ``path`` is missing, its ``zooms`` are not an
                 ordered pair of levels, or the range produced no tile with any value in it; when ``scheme``
                 is given with a ``tiles`` route, or cannot classify the band — an unknown name, ``k`` below
                 one, or, under ``"categorical"``, a band holding non-integer values, more than
@@ -1707,7 +1791,8 @@ class RasterMixin(_MixinBase):
         opacity = as_finite(
             ask("opacity", opacity, RASTER_OPACITY), "opacity", _FIELD_CALLER
         )
-        route = _tile_route(tiles, _FIELD_CALLER)
+        kind, tiles_path, zooms = _route_parts(tiles, _FIELD_CALLER)
+        route = _tile_route(kind, _FIELD_CALLER)
         if scheme is not None and route is not None:
             # A tile is coloured from pyramids' overviews, which average neighbouring cells — inventing codes
             # no cell holds — and the route never reads the band whole, which a graduated scheme's edges need.
@@ -1929,9 +2014,7 @@ class RasterMixin(_MixinBase):
         opacity: Maybe[float] = UNSET,
         visible: bool = True,
         name: Optional[str] = None,
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Overlay three bands as a true- or false-colour image (recipe W1).
 
@@ -1957,14 +2040,13 @@ class RasterMixin(_MixinBase):
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,
-                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; ``"xyz"`` writes a
-                ``{z}/{x}/{y}.png`` pyramid beside the page and ``"cog"`` one Cloud-Optimized GeoTIFF the
-                page reads windows from. Either makes the output a **folder** rather than one file. A tiled
-                composite is stretched on one set of bounds for the whole pyramid — ``limits`` when given,
-                otherwise measured from a decimated read — because a tile stretched over its own percentiles
-                disagrees with its neighbour across their shared edge.
-            tiles_path: Where a tiled route writes: the pyramid's root directory, or the ``.tif`` for a COG.
-            zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid; ``None`` derives them.
+                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; a :class:`TileRoute` writes them
+                beside the page — ``TileRoute("xyz", path, zooms)`` a ``{z}/{x}/{y}.png`` pyramid,
+                ``TileRoute("cog", path)`` one Cloud-Optimized GeoTIFF the page reads windows from. Either makes
+                the output a **folder** rather than one file. A tiled composite is stretched on one set of
+                bounds for the whole pyramid — ``limits`` when given, otherwise measured from a decimated read —
+                because a tile stretched over its own percentiles disagrees with its neighbour across their
+                shared edge.
 
         Returns:
             The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
@@ -2003,8 +2085,6 @@ class RasterMixin(_MixinBase):
             visible=visible,
             name=name,
             tiles=tiles,
-            tiles_path=tiles_path,
-            zooms=zooms,
         )
 
     def hsv_composite(
@@ -2017,9 +2097,7 @@ class RasterMixin(_MixinBase):
         opacity: Maybe[float] = UNSET,
         visible: bool = True,
         name: Optional[str] = None,
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Overlay three bands as an HSV composite — hue, saturation and value → RGB (#266).
 
@@ -2050,14 +2128,13 @@ class RasterMixin(_MixinBase):
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,
-                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; ``"xyz"`` writes a
-                ``{z}/{x}/{y}.png`` pyramid beside the page and ``"cog"`` one Cloud-Optimized GeoTIFF the
-                page reads windows from. Either makes the output a **folder** rather than one file. A tiled
-                composite is stretched on one set of bounds for the whole pyramid — ``limits`` when given,
-                otherwise measured from a decimated read — because a tile stretched over its own percentiles
-                disagrees with its neighbour across their shared edge.
-            tiles_path: Where a tiled route writes: the pyramid's root directory, or the ``.tif`` for a COG.
-            zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid; ``None`` derives them.
+                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; a :class:`TileRoute` writes them
+                beside the page — ``TileRoute("xyz", path, zooms)`` a ``{z}/{x}/{y}.png`` pyramid,
+                ``TileRoute("cog", path)`` one Cloud-Optimized GeoTIFF the page reads windows from. Either makes
+                the output a **folder** rather than one file. A tiled composite is stretched on one set of
+                bounds for the whole pyramid — ``limits`` when given, otherwise measured from a decimated read —
+                because a tile stretched over its own percentiles disagrees with its neighbour across their
+                shared edge.
 
         Returns:
             The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
@@ -2097,8 +2174,6 @@ class RasterMixin(_MixinBase):
             visible=visible,
             name=name,
             tiles=tiles,
-            tiles_path=tiles_path,
-            zooms=zooms,
         )
 
     def _composite(
@@ -2112,9 +2187,7 @@ class RasterMixin(_MixinBase):
         opacity: Maybe[float],
         visible: bool,
         name: Optional[str],
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Record a three-band composite and draw it, in whichever colour space ``via`` names.
 
@@ -2136,10 +2209,9 @@ class RasterMixin(_MixinBase):
                 resolved and recorded once here rather than twice above.
             visible: Whether the layer starts visible.
             name: The caller's name for the layer; ``None`` generates one under the recipe's own prefix.
-            tiles: The route the pixels reach the page by — see :meth:`field`. Both composites answer to it,
-                because both inline their pixels and so both meet the same ceiling.
-            tiles_path: Where a tiled route writes.
-            zooms: The ``"xyz"`` pyramid's zoom range, or ``None`` to derive it.
+            tiles: The :class:`TileRoute` the pixels reach the page by, or ``None`` to inline them — see
+                :meth:`field`. Both composites answer to it, because both inline their pixels and so both meet
+                the same ceiling.
 
         Returns:
             The map, so builder calls chain.
@@ -2148,7 +2220,8 @@ class RasterMixin(_MixinBase):
         opacity = as_finite(
             ask("opacity", opacity, RASTER_OPACITY), "opacity", f"WebMap.{via}()"
         )
-        route = _tile_route(tiles, f"WebMap.{via}()")
+        kind, tiles_path, zooms = _route_parts(tiles, f"WebMap.{via}()")
+        route = _tile_route(kind, f"WebMap.{via}()")
         _require_layer_api()
         require_three_bands(via, bands)
         if route is not None:

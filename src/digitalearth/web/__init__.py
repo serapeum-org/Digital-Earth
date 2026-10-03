@@ -25,6 +25,7 @@ builder/render method without it raises an actionable ``ImportError`` (``pip ins
 """
 
 from digitalearth.web.map import WebMap
+from digitalearth.web.raster import TileRoute
 from digitalearth.web.vector import ContourInterval
 
-__all__ = ["WebMap", "ContourInterval"]
+__all__ = ["WebMap", "ContourInterval", "TileRoute"]
