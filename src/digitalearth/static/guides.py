@@ -265,6 +265,11 @@ def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
     """
     if not field:
         return None
+    stated = getattr(drawn, "scale", None)
+    if stated is not None:
+        # The drawer knew the scale better than the norm can say it — a categorical raster's codes, which
+        # its `BoundaryNorm` only brackets — so publish that rather than reading the norm.
+        return Encoding.by_field("color", field, scale=stated)
     legend = getattr(drawn.glyph, "category_legend", None)
     if legend is not None:
         categories, colors = _swatches(legend)

@@ -17,10 +17,44 @@ This says what a legend contains. Drawing it stays with each tier — a MapLibre
 colorbar and a Bokeh panel have nothing in common below this line.
 """
 
+import numbers
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from digitalearth.base.spec.scale import Scale
+
+#: The runs floating-point noise sits behind on a value's exact text: five or more zeros, or five or more nines.
+_NOISE_RUNS = ("00000", "99999")
+
+
+def _ends_in_float_noise(text: str) -> bool:
+    """Whether a number's exact text ends in the tail floating-point arithmetic leaves.
+
+    That tail is a run of five or more zeros or nines, then one to three stray digits at the very end
+    (``7.600000000000023``, ``0.30000000000000004``, ``2.9999999999999996``). Checked by suffix rather than by
+    a regular expression, which would backtrack over the run on every digit it could start from.
+
+    Args:
+        text: A float's ``repr`` mantissa.
+
+    Returns:
+        ``True`` when the text ends in such a tail.
+
+    Examples:
+        - Noise is a long run then a few stray digits; a clean value or a short run is not:
+            ```python
+            >>> from digitalearth.base.spec.legend import _ends_in_float_noise
+            >>> [_ends_in_float_noise(t) for t in ("7.600000000000023", "2.9999999999999996", "22.0", "1.0001")]
+            [True, True, False, False]
+
+            ```
+    """
+    for stray in (1, 2, 3):
+        head, tail = text[:-stray], text[-stray:]
+        if len(text) > stray and tail.isdigit() and head.endswith(_NOISE_RUNS):
+            return True
+    return False
+
 
 __all__ = ["DEFAULT_RAMP_STOPS", "LEGEND_KINDS", "LegendEntry", "LegendSpec"]
 
@@ -155,7 +189,7 @@ class LegendSpec:
                 limits is a second computation that *usually* agrees: ``numpy.linspace`` pins its final
                 element to ``stop`` exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For
                 ``lo=-3.7, hi=12.9`` the recomputed top stop is ``12.900000000000002`` while the drawn one is
-                ``12.9`` — so the top swatch is labelled with a value the layer never draws, which is the
+                ``12.9`` — so the top swatch carries a value the layer never draws, which is the
                 disagreement this type exists to remove.
 
         Returns:
@@ -211,8 +245,9 @@ class LegendSpec:
         if scale.is_classified:
             ranges = scale.class_ranges()
             colors = cls._checked(colors, len(ranges), "graduated", "class")
+            texts = cls._texts([edge for pair in ranges for edge in pair], format)
             entries = tuple(
-                LegendEntry(cls._range_label(low, high, format), color, (low, high))
+                LegendEntry(f"{texts[low]} – {texts[high]}", color, (low, high))
                 for (low, high), color in zip(ranges, colors)
             )
             return cls(entries, "graduated", title, units, format, orientation)
@@ -232,8 +267,9 @@ class LegendSpec:
             lo, hi = scale.as_limits()
             ramp = [lo + (hi - lo) * i / (stops - 1) for i in range(stops)]
         colors = cls._checked(colors, len(ramp), "continuous", "stop")
+        texts = cls._texts(ramp, format)
         entries = tuple(
-            LegendEntry(cls._number(value, format), color, value)
+            LegendEntry(texts[value], color, value)
             for value, color in zip(ramp, colors)
         )
         return cls(entries, "continuous", title, units, format, orientation)
@@ -271,31 +307,81 @@ class LegendSpec:
         return listed
 
     @staticmethod
-    def _number(value: float, spec: Optional[str]) -> str:
-        """Format one number for a label.
+    def _number(value: Any, spec: Optional[str]) -> str:
+        """Format one number for a label, trimming float noise and nothing else.
+
+        With a `spec` the number is formatted as asked. Without one it reads as `str` gives it, with one
+        exception: a float whose exact text ends in floating-point noise — a run of zeros or nines and one to
+        three stray digits, as ``7.600000000000023`` or ``0.30000000000000004`` — is shown rounded to twelve
+        significant digits. Integers and genuinely precise floats (``123456789012345.0``) keep every digit.
+        :meth:`_texts` checks that the trim never merges two distinct edges.
 
         Args:
             value: The number.
-            spec: A format spec, or ``None`` for `str`.
+            spec: A format spec, applied as given, or ``None`` for the noise-trimmed `str` form.
 
         Returns:
             The formatted text.
+
+        Examples:
+            - Float noise is trimmed; a clean float, an integer and a precise large value are untouched:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec
+                >>> [LegendSpec._number(v, None) for v in (7.600000000000023, 22.0, 10, 123456789012345.0)]
+                ['7.6', '22.0', '10', '123456789012345.0']
+
+                ```
+            - A format spec is applied as given, with no trimming of its own:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec
+                >>> LegendSpec._number(7.600000000000023, ".3f"), LegendSpec._number(0.25, ".0%")
+                ('7.600', '25%')
+
+                ```
         """
-        return format(value, spec) if spec else str(value)
+        if spec:
+            return format(value, spec)
+        if isinstance(value, numbers.Integral) or not isinstance(value, numbers.Real):
+            return str(value)
+        mantissa = repr(float(value)).split("e")[0]
+        if _ends_in_float_noise(mantissa):
+            return str(float(f"{float(value):.12g}"))
+        return str(value)
 
     @classmethod
-    def _range_label(cls, low: float, high: float, spec: Optional[str]) -> str:
-        """Return the ``low – high`` label a graduated class is shown with.
+    def _texts(cls, values: Sequence[Any], spec: Optional[str]) -> Dict[Any, str]:
+        """Return the label text of each value a legend shows, distinct values always reading distinctly.
 
         Args:
-            low: Lower edge.
-            high: Upper edge.
-            spec: Format spec for the numbers.
+            values: Every number the legend labels (repeats allowed).
+            spec: A format spec, or ``None`` for :meth:`_number`'s noise-trimmed form.
 
         Returns:
-            The label.
+            ``value -> text``. Should trimming give two distinct values the same text — edges that differ only
+            far down their digits, like ``1000000.0000001`` and ``1000000.0000002`` — every value falls back to
+            its exact `str`, so no two classes are ever keyed alike.
+
+        Examples:
+            - Noise is trimmed while the edges stay apart:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec
+                >>> LegendSpec._texts([0.0, 7.600000000000023], None)
+                {0.0: '0.0', 7.600000000000023: '7.6'}
+
+                ```
+            - Edges a trim would merge are kept exact instead:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec
+                >>> sorted(LegendSpec._texts([1000000.0000001, 1000000.0000002], None).values())
+                ['1000000.0000001', '1000000.0000002']
+
+                ```
         """
-        return f"{cls._number(low, spec)} – {cls._number(high, spec)}"
+        distinct = list(dict.fromkeys(values))
+        texts = {value: cls._number(value, spec) for value in distinct}
+        if spec is None and len(set(texts.values())) < len(distinct):
+            texts = {value: str(value) for value in distinct}
+        return texts
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a tier stores or serialises.

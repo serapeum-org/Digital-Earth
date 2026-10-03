@@ -5,9 +5,9 @@ to lon/lat through pyramids, colour-mapped to an RGBA PNG (NoData → transparen
 and placed by its lon/lat corner coordinates. That is the default, and the only path a page can carry on its
 own — every pixel is inside the HTML.
 
-**A raster too big to inline takes a tiled route instead (#189).** ``tiles="xyz"`` writes a
-``{z}/{x}/{y}.png`` pyramid beside the page and points a MapLibre ``raster`` source at it, needing nothing of
-the page; ``tiles="cog"`` writes one Cloud-Optimized GeoTIFF and addresses it as ``cog://<file>``, which only
+**A raster too big to inline takes a tiled route instead (#189).** ``tiles=TileRoute("xyz", path)``
+writes a ``{z}/{x}/{y}.png`` pyramid beside the page and points a MapLibre ``raster`` source at it, needing nothing of
+the page; ``TileRoute("cog", path)`` writes one Cloud-Optimized GeoTIFF and addresses it as ``cog://<file>``, which only
 resolves on a page that has registered a ``cog://`` protocol — MapLibre has none built in, and
 ``WebMapBase.save`` has no hook to add the script, so that route is for a map embedded in a page somebody
 else writes. Both change what this tier *produces*: the output is a **folder** — the HTML plus the pyramid or
@@ -34,6 +34,7 @@ inside the methods, so importing the tier needs neither the ``web`` extra nor ma
 
 import math
 import pathlib
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -49,6 +50,13 @@ from typing import (
 )
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
+from digitalearth.base.raster_classes import (
+    BandClasses,
+    asks_categorical,
+    class_index,
+    classes_of,
+    classify_band,
+)
 from digitalearth.base.spec import (
     DEFAULT_BAND,
     DEFAULT_RAMP_STOPS,
@@ -213,10 +221,91 @@ def _refuse_if_large(caller: str, noun: str, pixels: Optional[int]) -> None:
         return
     raise ValueError(
         f"{caller}: a {pixels}-pixel {noun} is too large to inline in the page as a data-URI image source "
-        f'(the ceiling is {_LARGE_RASTER_PIXELS} cells). Name a tiled route instead: tiles="xyz" writes a '
-        '{z}/{x}/{y}.png pyramid beside the page, tiles="cog" writes one Cloud-Optimized GeoTIFF the page '
-        "reads windows from — both need tiles_path= to say where, and both make the output a folder rather "
-        "than one file"
+        f'(the ceiling is {_LARGE_RASTER_PIXELS} cells). Name a tiled route instead: tiles=TileRoute("xyz", path) '
+        'writes a {z}/{x}/{y}.png pyramid beside the page, tiles=TileRoute("cog", path) writes one '
+        "Cloud-Optimized GeoTIFF the page reads windows from — the path says where, and both make the output "
+        "a folder rather than one file"
+    )
+
+
+@dataclass(frozen=True)
+class TileRoute:
+    """Where a tiled raster's pixels are written, and how the page reads them back (#189).
+
+    A raster too big to inline on the page is written beside it instead, and the three things that decide
+    how — the route, where it writes, and over which zoom levels — mean something only together: a path or a
+    zoom range given without a route did nothing. So they are one argument, ``tiles=``, on
+    :meth:`RasterMixin.field`, :meth:`RasterMixin.rgb_composite` and :meth:`RasterMixin.hsv_composite`.
+
+    Attributes:
+        kind: ``"xyz"`` writes a ``{z}/{x}/{y}.png`` pyramid a MapLibre ``raster`` source reads with no
+            client-side dependency; ``"cog"`` writes one Cloud-Optimized GeoTIFF addressed as ``cog://<file>``,
+            which only a page that has registered a ``cog://`` protocol can read. Case and surrounding spaces
+            are ignored.
+        path: Where the route writes: the pyramid's root directory for ``"xyz"``, the ``.tif`` to write for
+            ``"cog"``. Save the page into the same folder — the layer addresses what sits next to it.
+        zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid; ``None`` derives ``(0, native)``,
+            where *native* is the zoom at which a tile pixel is about the size of a source cell. Unread by
+            ``"cog"``.
+
+    Examples:
+        - A pyramid over three zoom levels; the route is read case-insensitively when the layer is built:
+            ```python
+            >>> from digitalearth.web import TileRoute
+            >>> route = TileRoute("XYZ", "tiles/dem", zooms=(6, 8))
+            >>> route.kind, route.path, route.zooms
+            ('XYZ', 'tiles/dem', (6, 8))
+
+            ```
+    """
+
+    kind: str
+    path: Any
+    zooms: Optional[Tuple[int, int]] = None
+
+
+def _route_parts(tiles: Any, caller: str) -> Tuple[Any, Any, Any]:
+    """Unpack a builder's ``tiles=`` into the route name, the destination and the zoom range.
+
+    Args:
+        tiles: The caller's ``tiles=`` — ``None`` for the inline path, or a :class:`TileRoute`.
+        caller: The builder, for the message.
+
+    Returns:
+        ``(kind, path, zooms)``, each ``None`` for the inline path. The route name and the destination are
+        checked where they are used (:func:`_tile_route`, :func:`_destination`), so every builder refuses a bad
+        one in the same words.
+
+    Raises:
+        TypeError: for anything but ``None`` or a :class:`TileRoute`. A route *name* is refused by name: it is
+            the spelling ``tiles=`` took before the route, its destination and its zooms became one argument,
+            and on its own it never said where to write.
+
+    Examples:
+        - The inline path has no parts; a route has all three:
+            ```python
+            >>> from digitalearth.web.raster import TileRoute, _route_parts
+            >>> _route_parts(None, "WebMap.field()"), _route_parts(TileRoute("cog", "a.tif"), "WebMap.field()")
+            ((None, None, None), ('cog', 'a.tif', None))
+
+            ```
+        - A bare route name is refused, pointing at the argument that replaces it:
+            ```python
+            >>> from digitalearth.web.raster import _route_parts
+            >>> _route_parts("xyz", "WebMap.field()")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            TypeError: WebMap.field() tiles= takes a TileRoute, e.g. tiles=TileRoute("xyz", "tiles/dem", ...
+
+            ```
+    """
+    if tiles is None:
+        return None, None, None
+    if isinstance(tiles, TileRoute):
+        return tiles.kind, tiles.path, tiles.zooms
+    raise TypeError(
+        f'{caller} tiles= takes a TileRoute, e.g. tiles=TileRoute("xyz", "tiles/dem", zooms=(0, 8)) — the '
+        f"route, where it writes and its zoom range together; got {tiles!r}"
     )
 
 
@@ -540,6 +629,44 @@ def _coloured_png(
     return _png_bytes(rgba)
 
 
+def _classed_png(values: Any, classes: BandClasses) -> Optional[bytes]:
+    """Colour a 2-D array class by class to an RGBA PNG, drawing what it has no value for transparent.
+
+    The classed counterpart of :func:`_coloured_png`: each cell takes its class's colour — binned by
+    :func:`~digitalearth.base.raster_classes.class_index`, the rule the other tiers bin by — rather than a
+    position along a ramp.
+
+    Args:
+        values: A 2-D (possibly masked) array of band values, already oriented north-up.
+        classes: The band's classes and their colours.
+
+    Returns:
+        The PNG bytes, or ``None`` when no cell has a value to colour.
+
+    Examples:
+        - Two classes; the NaN cell is transparent:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> from digitalearth.web.raster import _classed_png
+            >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
+            >>> _classed_png(np.array([[1.0, 2.0], [np.nan, 1.0]]), classes)[:8]
+            b'\\x89PNG\\r\\n\\x1a\\n'
+
+            ```
+    """
+    import numpy as np
+    from matplotlib.colors import to_rgba_array
+
+    index = class_index(values, classes.edges)
+    if not (index >= 0).any():
+        return None
+    table = to_rgba_array(list(classes.colors))
+    rgba = table[np.clip(index, 0, None)]
+    rgba[index < 0, 3] = 0.0  # NoData → transparent
+    return _png_bytes(rgba)
+
+
 def _written_pyramid(
     directory: pathlib.Path,
     encode: Callable[[int, int, int], Optional[bytes]],
@@ -656,7 +783,9 @@ def _windowed_raster(web_map: Any, data: Any, *, route: str, caller: str) -> Any
     return dataset
 
 
-def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
+def _destination(
+    tiles_path: Any, route: str, caller: str, *, named: str = "a path in its TileRoute"
+) -> pathlib.Path:
     """Return where a tiled route writes.
 
     Nothing is created here. A refused call must leave the filesystem as it found it, and every other reason
@@ -669,6 +798,9 @@ def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
         tiles_path: The caller's ``tiles_path=``.
         route: The resolved route, named in the message.
         caller: The builder, for the message.
+        named: How the caller names the destination, for the message — a raster builder's ``TileRoute``
+            path, or ``tiles_path=`` on :meth:`~digitalearth.web.threed.ThreeDMixin.terrain_tiles`, which
+            writes one terrain pyramid and takes no route.
 
     Returns:
         The destination as a path.
@@ -680,7 +812,7 @@ def _destination(tiles_path: Any, route: str, caller: str) -> pathlib.Path:
     """
     if tiles_path is None:
         raise ValueError(
-            f'{caller} tiles="{route}" writes its pixels beside the page, so it needs tiles_path= to say '
+            f"{caller}'s {route!r} route writes its pixels beside the page, so it needs {named} to say "
             "where — a directory for the tile pyramid, or the .tif to write for a COG. Save the page into "
             "the same folder: the layer addresses what sits next to it"
         )
@@ -1189,6 +1321,12 @@ def _tiled_layer(web_map: Any, layer: LayerSpec, props: dict) -> Any:
 def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Encode one band as a coloured image and place it on the map.
 
+    A layer whose colour encoding records classes — graduated edges or categorical codes, written by this
+    tier's :meth:`RasterMixin.field` or by another tier's — is coloured class by class (:func:`_classed_png`);
+    a continuous or absent scale is coloured along the recorded ``cmap`` between ``vmin`` and ``vmax``. When
+    the map has no key filed for the layer yet — a layer drawn from a figure rather than built here — one is
+    filed from that colour scale (:meth:`RasterMixin._band_key`), so ``legend()`` can describe it.
+
     Args:
         web_map: The map being drawn.
         data: The layer's source — a pyramids dataset or an array.
@@ -1219,12 +1357,21 @@ def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     if y.size > 1 and y[0] < y[-1]:
         # Ascending y → flip so PNG row 0 is the northern edge.
         values = values[::-1]
+    scale = getattr(dict(layer.symbology.encodings).get("color"), "scale", None)
+    classes = classes_of(scale, props["cmap"])
     url = web_map._rgba_png_datauri(
-        values, props["cmap"], vmin=props["vmin"], vmax=props["vmax"]
+        values, props["cmap"], vmin=props["vmin"], vmax=props["vmax"], classes=classes
     )
     coordinates = _placed_corners(web_map, source, "field")
     if coordinates is None:
         return None
+    if layer.id not in web_map._legends and scale is not None:
+        # A layer this map's own `field()` built had its key filed as it was indexed. One drawn from a figure —
+        # another tier's, or this tier's read back — arrives with only its colour encoding, so the key is
+        # filed from that here, or `legend()` would find nothing to describe on a map with a coloured band.
+        web_map._legends[layer.id] = web_map._band_key(
+            str(layer.symbology.encoding("color").field), scale, props["cmap"], classes
+        )
     return _image_layer(web_map, layer, url, coordinates)
 
 
@@ -1332,6 +1479,7 @@ class RasterMixin(_MixinBase):
         band: int,
         cmap: str,
         limits: Optional[Tuple[float, float]],
+        classes: Optional[BandClasses] = None,
     ) -> dict:
         """Describe what a band's colour varies with, and record the key that would explain it.
 
@@ -1350,11 +1498,14 @@ class RasterMixin(_MixinBase):
             cmap: The colormap already resolved for it, sampled for the key's ramp.
             limits: The ``(lo, hi)`` its cells are coloured between, or ``None`` when the band has none —
                 nothing finite to colour, which the draw refuses on its own terms.
+            classes: The band's classes when ``scheme=`` classified it, or ``None`` for a ramp. A classified
+                band's scale is its classes' and its key one swatch per class.
 
         Returns:
             The ``{"color": Encoding}`` mapping for the layer's symbology, or ``{}`` when `limits` is
-            ``None``. Empty rather than a scale-less encoding: a colour key drawn from a span nobody knows
-            would be an invented one, and this tier would rather publish nothing than that.
+            ``None`` and the band is not classified (`classes` is ``None``). Empty rather than a scale-less
+            encoding: a colour key drawn from a span nobody knows would be an invented one, and this tier
+            would rather publish nothing than that.
 
         Note:
             Also sets :attr:`~digitalearth.web.base.WebMapBase.last_breaks` and
@@ -1368,23 +1519,92 @@ class RasterMixin(_MixinBase):
             ``last_units`` is only set when the band said what it is measured in, so a heading gains
             ``(mm)`` only when that is the band's own word for it and never a guess.
         """
-        if limits is None:
+        if classes is not None:
+            scale = classes.scale
+        elif limits is not None:
+            scale = Scale.from_limits(*limits)
+        else:
             return {}
+        column = _band_name(data, band)
+        self.last_legend = self._band_key(column, scale, cmap, classes)
+        # The values the key was built on, as every builder publishes them: the ramp's stops, a graduated
+        # band's class edges, a categorical band's codes.
+        self.last_breaks = list(self.last_legend["values"])
+        if self.last_units:
+            self.last_legend["units"] = self.last_units
+        return {"color": Encoding.by_field("color", column, scale=scale)}
+
+    def _band_key(
+        self, column: str, scale: Scale, cmap: Any, classes: Optional[BandClasses]
+    ) -> dict:
+        """Build the key a coloured band is explained by — a ramp, one swatch per class, or one per code.
+
+        Written once for the two ways a band reaches this tier: the builder, which files it as the layer is
+        indexed, and the drawer, which files it for a band drawn from a figure, carrying only its colour
+        encoding. One body, so a band keyed either way reads the same.
+
+        Args:
+            column: The band's name, the key's heading.
+            scale: The band's colour scale.
+            cmap: The colormap a ramp's stops are sampled from.
+            classes: The band's classes, or ``None`` for a ramp.
+
+        Returns:
+            The legend dict this tier stores per layer (:meth:`~digitalearth.web.base.WebMapBase._legend_dict`):
+            its ``values`` are the ramp's stops, a graduated band's class edges, or a categorical band's codes.
+
+        Examples:
+            - A graduated band is keyed one swatch per class, valued at its edges:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.arange(10.0), "equal_interval", 3, "viridis")
+                >>> key = WebMap()._band_key("dem", classes.scale, "viridis", classes)
+                >>> key["kind"], key["values"], key["colors"]
+                ('graduated', [0.0, 3.0, 6.0, 9.0], ['#440154', '#21918c', '#fde725'])
+
+                ```
+            - A categorical band is keyed one swatch per code:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.array([1, 3, 3]), "categorical", None, None)
+                >>> key = WebMap()._band_key("landcover", classes.scale, None, classes)
+                >>> key["kind"], key["values"], key["colors"]
+                ('categorical', [1, 3], ['#1f77b4', '#ff7f0e'])
+
+                ```
+            - With no classes the key is a ramp sampled at the shared number of stops:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> from digitalearth.web import WebMap
+                >>> key = WebMap()._band_key("dem", Scale.from_limits(0.0, 4.0), "viridis", None)
+                >>> key["kind"], key["values"]
+                ('continuous', [0.0, 1.0, 2.0, 3.0, 4.0])
+
+                ```
+        """
         import numpy as np
 
-        column = _band_name(data, band)
-        scale = Scale.from_limits(*limits)
+        if classes is not None and classes.is_categorical:
+            return self._legend_dict(LegendSpec.from_scale(scale, title=column), column)
+        if classes is not None:
+            edges = list(classes.edges)
+            return self._legend_dict(
+                LegendSpec.from_scale(scale, colors=list(classes.colors), title=column),
+                column,
+                values=edges,
+            )
         # `DEFAULT_RAMP_STOPS`, not a number of this module's own: the vector ramp
         # (:meth:`~digitalearth.web.vector.VectorMixin._ramp_color_expr`) samples at the same count, so a
         # continuous key reads the same whether the values came from a column or from a band — and that was
         # a coincidence between two spellings of `5` until both read the constant `LegendSpec` itself
         # defaults to (review N6).
-        stops = [
-            float(stop)
-            for stop in np.linspace(limits[0], limits[1], DEFAULT_RAMP_STOPS)
-        ]
-        self.last_breaks = stops
-        self.last_legend = self._legend_dict(
+        lo, hi = scale.as_limits()
+        stops = [float(stop) for stop in np.linspace(lo, hi, DEFAULT_RAMP_STOPS)]
+        return self._legend_dict(
             LegendSpec.from_scale(
                 scale,
                 colors=list(self._cmap_hex(cmap, len(stops))),
@@ -1393,9 +1613,6 @@ class RasterMixin(_MixinBase):
             ),
             column,
         )
-        if self.last_units:
-            self.last_legend["units"] = self.last_units
-        return {"color": Encoding.by_field("color", column, scale=scale)}
 
     def field(
         self,
@@ -1408,11 +1625,11 @@ class RasterMixin(_MixinBase):
         limits: Optional[Sequence[float]] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        scheme: Optional[Any] = None,
+        k: Optional[int] = None,
         visible: bool = True,
         name: Optional[str] = None,
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -1445,15 +1662,27 @@ class RasterMixin(_MixinBase):
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
+            scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
+                classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,
+                coloured from the shared categorical palette (``cmap`` picks another). The classes are cut by
+                :mod:`digitalearth.base.raster_classes`, the classifier the static and interactive tiers use,
+                so one band is classed — and coloured — alike on all three; they are recorded in the layer's
+                colour encoding, and :meth:`~digitalearth.web.decoration.DecorationMixin.legend` keys them
+                one swatch per class. ``limits``/``vmin``/``vmax`` do not apply to a classified band. ``None``
+                (default) draws the continuous ramp. Not taken by a ``tiles`` route.
+            k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
                 :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
                 every frame showing at once — including in a saved page, which carries no slider.
             tiles: How the pixels reach the page. ``None`` (the default) inlines them as a ``data:`` PNG, so
                 the page is one self-contained file — and is refused above :data:`_LARGE_RASTER_PIXELS`
-                cells, because that page would be hundreds of megabytes (#189). ``"xyz"`` writes a
-                ``{z}/{x}/{y}.png`` pyramid under ``tiles_path`` and points a MapLibre ``raster`` source at
-                it, with **no client-side dependency** — it is the route that works as written. ``"cog"``
+                cells, because that page would be hundreds of megabytes (#189). A :class:`TileRoute` writes
+                them beside the page instead, naming the route, where it writes and its zoom range in one
+                argument. ``TileRoute("xyz", path)`` writes a ``{z}/{x}/{y}.png`` pyramid under ``path`` and
+                points a MapLibre ``raster`` source at it, with **no client-side dependency** — it is the
+                route that works as written. ``"cog"``
                 writes one Cloud-Optimized GeoTIFF there instead and addresses it as ``cog://<file>``: fewer,
                 larger files, read by range request, but MapLibre has no built-in reader for one, so the page
                 showing it must register a ``cog://`` protocol itself. This tier cannot put that script in a
@@ -1461,12 +1690,9 @@ class RasterMixin(_MixinBase):
                 the COG route when you control the page the map is embedded in, and ``"xyz"`` when
                 :meth:`~digitalearth.web.base.WebMapBase.save` is the whole pipeline. **Either route makes
                 the output a folder** — the HTML plus the pyramid or the COG — rather than a single file, and
-                the page addresses what sits beside it, so save it into the same directory.
-            tiles_path: Where a tiled route writes: the pyramid's root directory for ``"xyz"``, the ``.tif``
-                to write for ``"cog"``. Required by both, and ignored by the inline default.
-            zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid. ``None`` derives
-                ``(0, native)``, where *native* is the zoom at which a tile pixel is about the size of a
-                source cell — beyond it a pyramid invents detail the raster does not hold.
+                the page addresses what sits beside it, so save it into the same directory. The route's
+                ``zooms`` default to ``(0, native)``, where *native* is the zoom at which a tile pixel is about
+                the size of a source cell — beyond it a pyramid invents detail the raster does not hold.
 
         Returns:
             This map (chainable). When the band cannot be placed — it lies outside what the display CRS
@@ -1478,8 +1704,11 @@ class RasterMixin(_MixinBase):
                 not a `(vmin, vmax)` pair of numbers; when ``opacity`` is not a finite number, refused
                 at this call because a figure holding NaN or infinity could not be written down; when the
                 band is too large to inline and no ``tiles`` route was named; and, for a tiled route, when
-                ``tiles`` names no route this tier writes, ``tiles_path`` is missing, ``zooms`` is not an
-                ordered pair of levels, or the range produced no tile with any value in it.
+                ``tiles`` names no route this tier writes, its ``path`` is missing, its ``zooms`` are not an
+                ordered pair of levels, or the range produced no tile with any value in it; when ``scheme``
+                is given with a ``tiles`` route, or cannot classify the band — an unknown name, ``k`` below
+                one, or, under ``"categorical"``, a band holding non-integer values, more than
+                :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` codes, or no valid cell.
             KeyError: when `cmap` names no registered colormap, or `dataset` is a URL with no resolver.
             TypeError: when `cmap` is neither a name, a ``Colormap``, nor a sequence of colours; and, for a
                 tiled route, when `data` is not a raster pyramids can read windows out of — a `Source` or a
@@ -1524,6 +1753,34 @@ class RasterMixin(_MixinBase):
                 ['t0']
 
                 ```
+            - Classify the band into three equal-interval classes; the key is one swatch per class:
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> src = get_source(                                # doctest: +SKIP
+                ...     np.arange(10.0).reshape(2, 5), x=np.arange(5.0), y=np.array([1.0, 0.0])
+                ... )
+                >>> m = WebMap().field(src, scheme="equal_interval", k=3)  # doctest: +SKIP
+                >>> m.last_breaks, m.last_legend["colors"]           # doctest: +SKIP
+                ([0.0, 3.0, 6.0, 9.0], ['#440154', '#21918c', '#fde725'])
+
+                ```
+            - Draw a band of class codes as categories, keyed one swatch per code:
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> src = get_source(                                # doctest: +SKIP
+                ...     np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0]]),
+                ...     x=np.array([0.0, 1.0, 2.0]),
+                ...     y=np.array([1.0, 0.0]),
+                ... )
+                >>> m = WebMap().field(src, scheme="categorical")    # doctest: +SKIP
+                >>> m.last_legend["kind"], m.last_breaks             # doctest: +SKIP
+                ('categorical', [1, 2, 3])
+
+                ```
 
         See Also:
             digitalearth.web.raster.RasterMixin.rgb_composite: the three-band composite path.
@@ -1534,7 +1791,15 @@ class RasterMixin(_MixinBase):
         opacity = as_finite(
             ask("opacity", opacity, RASTER_OPACITY), "opacity", _FIELD_CALLER
         )
-        route = _tile_route(tiles, _FIELD_CALLER)
+        kind, tiles_path, zooms = _route_parts(tiles, _FIELD_CALLER)
+        route = _tile_route(kind, _FIELD_CALLER)
+        if scheme is not None and route is not None:
+            # A tile is coloured from pyramids' overviews, which average neighbouring cells — inventing codes
+            # no cell holds — and the route never reads the band whole, which a graduated scheme's edges need.
+            raise ValueError(
+                f"{_FIELD_CALLER} classifies a band with scheme= only on the inline route; a tiles= route "
+                "colours each tile from averaged overviews and never reads the whole band to cut classes from"
+            )
         _require_layer_api()
         if route is not None:
             return self._tiled_field(
@@ -1573,6 +1838,12 @@ class RasterMixin(_MixinBase):
         # resolution of an unset `vmin`/`vmax` is its business — the tiled route records its pair only
         # because one span has to hold a whole pyramid together.
         domain = _colour_domain(source.z.values, vmin=vmin, vmax=vmax)
+        classes: Optional[BandClasses] = None
+        if scheme is not None:
+            # Codes take the categorical palette unless the caller names one; graduated classes the colormap
+            # the band resolved, the one a ramp would have used.
+            palette = cmap if asks_categorical(scheme) else cmap_name
+            classes = classify_band(source.z.values, scheme, k, palette)
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
@@ -1591,6 +1862,7 @@ class RasterMixin(_MixinBase):
                     band=band,
                     cmap=cmap_name,
                     limits=None if domain is None else domain[2],
+                    classes=classes,
                 ),
                 props={
                     "cmap": cmap_name,
@@ -1598,6 +1870,12 @@ class RasterMixin(_MixinBase):
                     "vmax": vmax,
                     "opacity": float(opacity),
                     "band": band,
+                    "scheme": (
+                        scheme
+                        if scheme is None or isinstance(scheme, str)
+                        else list(scheme)
+                    ),
+                    "k": k,
                     **ask.record,
                 },
             ),
@@ -1736,9 +2014,7 @@ class RasterMixin(_MixinBase):
         opacity: Maybe[float] = UNSET,
         visible: bool = True,
         name: Optional[str] = None,
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Overlay three bands as a true- or false-colour image (recipe W1).
 
@@ -1764,14 +2040,13 @@ class RasterMixin(_MixinBase):
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,
-                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; ``"xyz"`` writes a
-                ``{z}/{x}/{y}.png`` pyramid beside the page and ``"cog"`` one Cloud-Optimized GeoTIFF the
-                page reads windows from. Either makes the output a **folder** rather than one file. A tiled
-                composite is stretched on one set of bounds for the whole pyramid — ``limits`` when given,
-                otherwise measured from a decimated read — because a tile stretched over its own percentiles
-                disagrees with its neighbour across their shared edge.
-            tiles_path: Where a tiled route writes: the pyramid's root directory, or the ``.tif`` for a COG.
-            zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid; ``None`` derives them.
+                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; a :class:`TileRoute` writes them
+                beside the page — ``TileRoute("xyz", path, zooms)`` a ``{z}/{x}/{y}.png`` pyramid,
+                ``TileRoute("cog", path)`` one Cloud-Optimized GeoTIFF the page reads windows from. Either makes
+                the output a **folder** rather than one file. A tiled composite is stretched on one set of
+                bounds for the whole pyramid — ``limits`` when given, otherwise measured from a decimated read —
+                because a tile stretched over its own percentiles disagrees with its neighbour across their
+                shared edge.
 
         Returns:
             The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
@@ -1810,8 +2085,6 @@ class RasterMixin(_MixinBase):
             visible=visible,
             name=name,
             tiles=tiles,
-            tiles_path=tiles_path,
-            zooms=zooms,
         )
 
     def hsv_composite(
@@ -1824,9 +2097,7 @@ class RasterMixin(_MixinBase):
         opacity: Maybe[float] = UNSET,
         visible: bool = True,
         name: Optional[str] = None,
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Overlay three bands as an HSV composite — hue, saturation and value → RGB (#266).
 
@@ -1857,14 +2128,13 @@ class RasterMixin(_MixinBase):
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,
-                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; ``"xyz"`` writes a
-                ``{z}/{x}/{y}.png`` pyramid beside the page and ``"cog"`` one Cloud-Optimized GeoTIFF the
-                page reads windows from. Either makes the output a **folder** rather than one file. A tiled
-                composite is stretched on one set of bounds for the whole pyramid — ``limits`` when given,
-                otherwise measured from a decimated read — because a tile stretched over its own percentiles
-                disagrees with its neighbour across their shared edge.
-            tiles_path: Where a tiled route writes: the pyramid's root directory, or the ``.tif`` for a COG.
-            zooms: ``(lowest, highest)`` zoom levels for the ``"xyz"`` pyramid; ``None`` derives them.
+                and is refused above :data:`_LARGE_RASTER_PIXELS` cells; a :class:`TileRoute` writes them
+                beside the page — ``TileRoute("xyz", path, zooms)`` a ``{z}/{x}/{y}.png`` pyramid,
+                ``TileRoute("cog", path)`` one Cloud-Optimized GeoTIFF the page reads windows from. Either makes
+                the output a **folder** rather than one file. A tiled composite is stretched on one set of
+                bounds for the whole pyramid — ``limits`` when given, otherwise measured from a decimated read —
+                because a tile stretched over its own percentiles disagrees with its neighbour across their
+                shared edge.
 
         Returns:
             The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
@@ -1904,8 +2174,6 @@ class RasterMixin(_MixinBase):
             visible=visible,
             name=name,
             tiles=tiles,
-            tiles_path=tiles_path,
-            zooms=zooms,
         )
 
     def _composite(
@@ -1919,9 +2187,7 @@ class RasterMixin(_MixinBase):
         opacity: Maybe[float],
         visible: bool,
         name: Optional[str],
-        tiles: Optional[str] = None,
-        tiles_path: Any = None,
-        zooms: Any = None,
+        tiles: Optional[TileRoute] = None,
     ) -> Self:
         """Record a three-band composite and draw it, in whichever colour space ``via`` names.
 
@@ -1943,10 +2209,9 @@ class RasterMixin(_MixinBase):
                 resolved and recorded once here rather than twice above.
             visible: Whether the layer starts visible.
             name: The caller's name for the layer; ``None`` generates one under the recipe's own prefix.
-            tiles: The route the pixels reach the page by — see :meth:`field`. Both composites answer to it,
-                because both inline their pixels and so both meet the same ceiling.
-            tiles_path: Where a tiled route writes.
-            zooms: The ``"xyz"`` pyramid's zoom range, or ``None`` to derive it.
+            tiles: The :class:`TileRoute` the pixels reach the page by, or ``None`` to inline them — see
+                :meth:`field`. Both composites answer to it, because both inline their pixels and so both meet
+                the same ceiling.
 
         Returns:
             The map, so builder calls chain.
@@ -1955,7 +2220,8 @@ class RasterMixin(_MixinBase):
         opacity = as_finite(
             ask("opacity", opacity, RASTER_OPACITY), "opacity", f"WebMap.{via}()"
         )
-        route = _tile_route(tiles, f"WebMap.{via}()")
+        kind, tiles_path, zooms = _route_parts(tiles, f"WebMap.{via}()")
+        route = _tile_route(kind, f"WebMap.{via}()")
         _require_layer_api()
         require_three_bands(via, bands)
         if route is not None:
@@ -2190,6 +2456,7 @@ class RasterMixin(_MixinBase):
         *,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        classes: Optional[BandClasses] = None,
     ) -> str:
         """Colour-map a 2-D array to an RGBA PNG and return it as a ``data:image/png;base64,`` URI.
 
@@ -2205,6 +2472,8 @@ class RasterMixin(_MixinBase):
                 ``Colormap``, which defines ``__eq__`` and so has no hash (#315, review H3).
             vmin: Lower colour limit; ``None`` uses the finite minimum.
             vmax: Upper colour limit; ``None`` uses the finite maximum.
+            classes: The band's classes, to colour it class by class; ``None`` colours it along `cmap`'s
+                ramp between `vmin` and `vmax`.
 
         Returns:
             The PNG data-URI string.
@@ -2212,13 +2481,51 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: when the array has no finite values to colour.
             KeyError: when ``cmap`` is hashable but names no colormap matplotlib's registry holds, which
-                is matplotlib's own message naming it.
+                is matplotlib's own message naming it. Only on the ramp path: with `classes` the colours are
+                the classes' own and ``cmap`` is not resolved.
             TypeError: when ``cmap`` is unhashable — a list of colours, say — which
-                :func:`~digitalearth.base.symbology.as_colormap` reports as ``unhashable type: 'list'``.
+                :func:`~digitalearth.base.symbology.as_colormap` reports as ``unhashable type: 'list'``;
+                likewise only on the ramp path.
+
+        Examples:
+            - Colour a band along a ramp, and get back an inline PNG:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.web import WebMap
+                >>> WebMap._rgba_png_datauri(np.array([[0.0, 1.0]]), "viridis")[:22]
+                'data:image/png;base64,'
+
+                ```
+            - Colour it class by class; the classes carry their colours, so ``cmap`` is not looked up:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
+                >>> WebMap._rgba_png_datauri(np.array([[1.0, 2.0]]), "no-such-cmap", classes=classes)[:22]
+                'data:image/png;base64,'
+
+                ```
+            - A band with nothing to colour is refused, classified or not:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.raster_classes import classify_band
+                >>> from digitalearth.web import WebMap
+                >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
+                >>> WebMap._rgba_png_datauri(np.array([[np.nan]]), "viridis", classes=classes)
+                Traceback (most recent call last):
+                    ...
+                ValueError: field() got a band with no finite values to colour
+
+                ```
         """
         import base64
 
-        payload = _coloured_png(values, cmap, vmin=vmin, vmax=vmax)
+        payload = (
+            _coloured_png(values, cmap, vmin=vmin, vmax=vmax)
+            if classes is None
+            else _classed_png(values, classes)
+        )
         if payload is None:
             raise ValueError("field() got a band with no finite values to colour")
         return "data:image/png;base64," + base64.b64encode(payload).decode("ascii")

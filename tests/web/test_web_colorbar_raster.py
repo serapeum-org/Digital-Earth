@@ -111,10 +111,10 @@ class TestTheBandIsWhatARasterKeyDescribes:
             limits the route *recorded* rather than against a number written here: a key built from a second
             reading of the band would disagree with the tiles at the edges of the range.
         """
-        from digitalearth.web import WebMap
+        from digitalearth.web import TileRoute, WebMap
 
         scene = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9)
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9))
         )
         symbology = scene.get_layer(scene.layer_ids[-1]).symbology
         encoding = symbology.encoding("color")
