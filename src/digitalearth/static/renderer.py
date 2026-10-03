@@ -59,7 +59,7 @@ from matplotlib.artist import Artist
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
-from digitalearth.base.spec import FigureSpec, LayerSpec, retarget_recipes
+from digitalearth.base.spec import FigureSpec, LayerSpec, Scale, retarget_recipes
 from digitalearth.static.capabilities import CAPABILITIES
 from digitalearth.static.guides import paint_guide, plan_guide
 
@@ -176,7 +176,7 @@ class DrawnLayer:
     artists: Tuple[Any, ...] = field(default=())
     color_field: Optional[str] = None
     guides: Tuple[Any, ...] = field(default=())
-    scale: Optional[Any] = None
+    scale: Optional[Scale] = None
 
     def colored_by(self, color_field: Optional[str]) -> "DrawnLayer":
         """Return this drawing again, carrying the data field its colour varies with.
