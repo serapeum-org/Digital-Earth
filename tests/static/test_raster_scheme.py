@@ -529,3 +529,15 @@ class TestCategoricalRasterField:
         with Map() as m:
             with pytest.raises(ValueError, match="100"):
                 m.field(hundred_codes, scheme="categorical")
+
+    def test_an_all_nodata_band_is_refused(self):
+        """A band with no valid cell has no codes to classify, and the refusal says so.
+
+        Test scenario:
+            Every cell NaN leaves nothing to make a category of; drawing an empty key silently would hide
+            that the band carries no data.
+        """
+        empty = np.full((2, 3), np.nan)
+        with Map() as m:
+            with pytest.raises(ValueError, match="nodata"):
+                m.field(empty, scheme="categorical")
