@@ -435,3 +435,55 @@ class TestLabelsCarryNoFloatNoise:
         assert labels == ["0.00 – 7.60", "7.60 – 88.00"], (
             f"the explicit format was not applied: {labels}"
         )
+
+    def test_a_value_with_more_than_twelve_true_digits_is_not_rounded(self):
+        """A large edge that is genuinely that precise keeps every digit.
+
+        Test scenario:
+            ``123456789012345.0`` carries no float noise; rounding it to twelve digits printed
+            ``123456789012000.0`` — a wrong number that looks exact.
+        """
+        scale = Scale(
+            0.0,
+            2e14,
+            scheme=(0.0, 123456789012345.0, 2e14),
+            breaks=(0.0, 123456789012345.0, 2e14),
+        )
+        labels = [
+            e.label
+            for e in LegendSpec.from_scale(scale, colors=["#000", "#fff"]).entries
+        ]
+        assert labels[0] == "0.0 – 123456789012345.0", (
+            f"the large edge was misstated: {labels}"
+        )
+
+    def test_integer_edges_keep_their_integer_labels(self):
+        """Integer class edges read as integers, exactly as ``str`` gives them.
+
+        Test scenario:
+            ``breaks=(0, 10, 50)`` labelled ``0 – 10``; the trim must not reshape them into ``0.0 – 10.0``.
+        """
+        scale = Scale(0, 50, scheme=(0, 10, 50), breaks=(0, 10, 50))
+        labels = [
+            e.label
+            for e in LegendSpec.from_scale(scale, colors=["#000", "#fff"]).entries
+        ]
+        assert labels == ["0 – 10", "10 – 50"], f"integer edges were reshaped: {labels}"
+
+    def test_distinct_edges_never_share_a_label(self):
+        """Edges that differ only far down their digits keep distinct labels.
+
+        Test scenario:
+            ``1000000.0000001`` and ``1000000.0000002`` are real, distinct edges; trimming them would label two
+            different classes ``1000000.0 – 1000000.0``. When a trim would merge distinct edges, the legend keeps
+            them exact instead.
+        """
+        edges = (1000000.0, 1000000.0000001, 1000000.0000002, 1000000.0000003)
+        scale = Scale(edges[0], edges[-1], scheme=edges, breaks=edges)
+        labels = [
+            e.label
+            for e in LegendSpec.from_scale(
+                scale, colors=["#000", "#888", "#fff"]
+            ).entries
+        ]
+        assert len(set(labels)) == 3, f"distinct classes share a label: {labels}"
