@@ -737,7 +737,12 @@ class RasterMixin(_MixinBase):
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
                 ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
                 left over is the caller's own engine styling, split between the layer's description and
-                the scene (see the class docstring).
+                the scene (see the class docstring). ``scheme`` and ``k`` classify the band into discrete
+                classes, as on the vector layers: a named scheme (``"quantiles"``, ``"equal_interval"``,
+                ``"fisher_jenks"``, …) cut into ``k`` classes, or a list of explicit class edges. The
+                classes are drawn as steps, published as :attr:`last_breaks` and on the layer's colour
+                encoding, and keyed by :meth:`colorbar` (ticks on the edges) or :meth:`legend` (one swatch
+                per class). Without ``scheme`` the field is a continuous ramp.
 
         Returns:
             The image mappable (registered as a Scene layer).
@@ -761,6 +766,19 @@ class RasterMixin(_MixinBase):
                 ...     image = canvas.field(np.arange(12.0).reshape(3, 4))
                 ...     image.get_extent()
                 [-0.5, 3.5, -0.5, 2.5]
+
+                ```
+            - Classify a raster into four equal-interval classes, and read back the edges it was cut at:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> with Map(crs=ds.epsg) as m:
+                ...     _ = m.field(ds, scheme="equal_interval", k=4)
+                ...     [float(edge) for edge in m.last_breaks]
+                [0.0, 22.0, 44.0, 66.0, 88.0]
 
                 ```
         """
