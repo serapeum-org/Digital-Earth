@@ -18,15 +18,43 @@ colorbar and a Bokeh panel have nothing in common below this line.
 """
 
 import numbers
-import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from digitalearth.base.spec.scale import Scale
 
-#: The tail floating-point arithmetic leaves on a value's exact text: a run of zeros or nines, then one to three
-#: stray digits at the very end (``7.600000000000023``, ``0.30000000000000004``, ``2.9999999999999996``).
-_FLOAT_NOISE = re.compile(r"(?:0{5,}|9{5,})\d{1,3}$")
+#: The runs floating-point noise sits behind on a value's exact text: five or more zeros, or five or more nines.
+_NOISE_RUNS = ("00000", "99999")
+
+
+def _ends_in_float_noise(text: str) -> bool:
+    """Whether a number's exact text ends in the tail floating-point arithmetic leaves.
+
+    That tail is a run of five or more zeros or nines, then one to three stray digits at the very end
+    (``7.600000000000023``, ``0.30000000000000004``, ``2.9999999999999996``). Checked by suffix rather than by
+    a regular expression, which would backtrack over the run on every digit it could start from.
+
+    Args:
+        text: A float's ``repr`` mantissa.
+
+    Returns:
+        ``True`` when the text ends in such a tail.
+
+    Examples:
+        - Noise is a long run then a few stray digits; a clean value or a short run is not:
+            ```python
+            >>> from digitalearth.base.spec.legend import _ends_in_float_noise
+            >>> [_ends_in_float_noise(t) for t in ("7.600000000000023", "2.9999999999999996", "22.0", "1.0001")]
+            [True, True, False, False]
+
+            ```
+    """
+    for stray in (1, 2, 3):
+        head, tail = text[:-stray], text[-stray:]
+        if len(text) > stray and tail.isdigit() and head.endswith(_NOISE_RUNS):
+            return True
+    return False
+
 
 __all__ = ["DEFAULT_RAMP_STOPS", "LEGEND_KINDS", "LegendEntry", "LegendSpec"]
 
@@ -316,7 +344,7 @@ class LegendSpec:
         if isinstance(value, numbers.Integral) or not isinstance(value, numbers.Real):
             return str(value)
         mantissa = repr(float(value)).split("e")[0]
-        if _FLOAT_NOISE.search(mantissa):
+        if _ends_in_float_noise(mantissa):
             return str(float(f"{float(value):.12g}"))
         return str(value)
 
