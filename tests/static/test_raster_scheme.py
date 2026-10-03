@@ -143,10 +143,11 @@ class TestClassifiedRasterField:
         """
         expected = _equal_interval_edges(values, 4)
         with Map(crs=dataset.epsg) as m:
-            m.field(dataset, scheme="equal_interval", k=4)
+            m.field(dataset, scheme="equal_interval", k=4, name="flow")
             m.colorbar()
-            cax = [ax for ax in m.fig.axes if ax is not m.ax][-1]
-            ticks = list(cax._colorbar.get_ticks())
+            # The colorbar the scene drew for this layer, through the renderer's own record of it (the idiom
+            # `test_static_guides.py` uses) rather than matplotlib's private `Axes._colorbar` back-reference.
+            ticks = list(m._renderer.drawn["flow"].guides[0].get_ticks())
         assert np.allclose(ticks, expected), (
             f"colorbar ticks {ticks} should sit on the class edges {expected}"
         )
