@@ -18,6 +18,7 @@ from matplotlib.colors import BoundaryNorm
 
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static import Map
+from digitalearth.static.maps.raster import _raster_categories
 
 
 @pytest.fixture
@@ -629,3 +630,21 @@ class TestCategoricalRasterField:
         with Map(crs=4326) as m:
             with pytest.raises(ValueError, match="pcolormesh"):
                 m.contours(codes, filled=filled, scheme="categorical")
+
+    @pytest.mark.parametrize(
+        "base", [2**52, 2**60, -(2**60)], ids=["2^52", "2^60", "-2^60"]
+    )
+    def test_codes_too_large_for_exact_edges_are_refused(self, base):
+        """Codes a float cannot hold half a step apart are refused rather than merged.
+
+        Args:
+            base: The first of two adjacent codes.
+
+        Test scenario:
+            Classes are bounded half a step either side of each code, in floats. From ``2**52`` on a float no
+            longer resolves ``0.5``, and from ``2**53`` it no longer resolves ``1`` — ``2**60`` and ``2**60 + 1``
+            came back as one code, and two codes at ``2**52`` shared an edge. The band must be refused instead.
+        """
+        values = np.array([base, base + 1], dtype=np.int64)
+        with pytest.raises(ValueError, match=r"2\*\*52"):
+            _raster_categories(values)

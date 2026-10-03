@@ -68,6 +68,10 @@ DEFAULT_FIELD_CMAP = "viridis"
 #: rather than drawn as a legend nobody can read.
 MAX_RASTER_CATEGORIES = 24
 
+#: The magnitude a class code must stay below: past ``2**52`` a float no longer resolves the half step the class
+#: edges sit on (see :func:`_code_edges`).
+_EXACT_CODE_LIMIT = 2.0**52
+
 
 def _asks_categorical(scheme: Any) -> bool:
     """Whether a ``scheme`` asks for one class per code, in any spelling of ``"categorical"``.
@@ -101,7 +105,8 @@ def _raster_categories(values: Any) -> List[int]:
 
     Raises:
         ValueError: when every cell is nodata, when a value is not a whole number (a magnitude, not a code),
-            or when there are more than :data:`MAX_RASTER_CATEGORIES` distinct codes.
+            when there are more than :data:`MAX_RASTER_CATEGORIES` distinct codes, or when a code reaches
+            ``2**52`` in magnitude, past which a float cannot place a class edge half a step from it.
 
     Examples:
         - Codes come back sorted and distinct; a NaN cell is no code:
@@ -140,6 +145,13 @@ def _raster_categories(values: Any) -> List[int]:
         raise ValueError(
             f"scheme='categorical' draws one swatch per distinct code, and this band has {codes.size} "
             f"(at most {MAX_RASTER_CATEGORIES}); classify it with a graduated scheme instead"
+        )
+    # Each class is bounded half a step either side of its code, in floats. From 2**52 on a float cannot hold
+    # that half step (and from 2**53 not even adjacent codes), so edges would merge classes; refused instead.
+    if np.abs(codes).max() >= _EXACT_CODE_LIMIT:
+        raise ValueError(
+            "scheme='categorical' bounds each class half a step either side of its code, which a float holds "
+            f"only below 2**52 in magnitude; this band has a code of {codes[np.abs(codes).argmax()]:.0f}"
         )
     return [int(code) for code in codes]
 
