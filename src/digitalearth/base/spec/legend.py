@@ -155,7 +155,7 @@ class LegendSpec:
                 limits is a second computation that *usually* agrees: ``numpy.linspace`` pins its final
                 element to ``stop`` exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For
                 ``lo=-3.7, hi=12.9`` the recomputed top stop is ``12.900000000000002`` while the drawn one is
-                ``12.9`` — so the top swatch is labelled with a value the layer never draws, which is the
+                ``12.9`` — so the top swatch carries a value the layer never draws, which is the
                 disagreement this type exists to remove.
 
         Returns:
@@ -274,14 +274,30 @@ class LegendSpec:
     def _number(value: float, spec: Optional[str]) -> str:
         """Format one number for a label.
 
+        Without a `spec` the number is shown as `str` gives it, after trimming the float noise past twelve
+        significant digits — so a quantile cut found as ``7.600000000000023`` is labelled ``7.6``, while an edge
+        with nothing to trim (``22.0``) reads exactly as `str` would. Only the label is trimmed; the entry's
+        value keeps the exact edge.
+
         Args:
             value: The number.
-            spec: A format spec, or ``None`` for `str`.
+            spec: A format spec, applied as given, or ``None`` for the trimmed `str` form.
 
         Returns:
             The formatted text.
+
+        Examples:
+            - Float noise is trimmed, a clean value is untouched:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec
+                >>> LegendSpec._number(7.600000000000023, None), LegendSpec._number(22.0, None)
+                ('7.6', '22.0')
+
+                ```
         """
-        return format(value, spec) if spec else str(value)
+        if spec:
+            return format(value, spec)
+        return str(float(f"{value:.12g}"))
 
     @classmethod
     def _range_label(cls, low: float, high: float, spec: Optional[str]) -> str:
