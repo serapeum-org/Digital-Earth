@@ -229,10 +229,10 @@ class TestAddRasterDrawsNorthFirst:
         captured = {}
         encoder = WebMap._rgba_png_datauri
 
-        def spy(values, cmap_name, vmin=None, vmax=None):
+        def spy(values, cmap_name, vmin=None, vmax=None, classes=None):
             """Record the array handed to the encoder, then encode it normally."""
             captured["values"] = np.array(values, copy=True)
-            return encoder(values, cmap_name, vmin=vmin, vmax=vmax)
+            return encoder(values, cmap_name, vmin=vmin, vmax=vmax, classes=classes)
 
         monkeypatch.setattr(WebMap, "_rgba_png_datauri", staticmethod(spy))
         WebMap().basemap().field(dataset, cmap="viridis")

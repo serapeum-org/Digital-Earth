@@ -59,6 +59,13 @@ from digitalearth.base.spec import (
     Scale,
     Symbology,
 )
+from digitalearth.base.raster_classes import (
+    BandClasses,
+    asks_categorical,
+    class_index,
+    classes_of,
+    classify_band,
+)
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
 from digitalearth.web.base import _require_layer_api, as_finite
 
@@ -537,6 +544,44 @@ def _coloured_png(
     data, valid, (lo, hi) = domain
     rgba = as_colormap(cmap)(Normalize(vmin=lo, vmax=hi)(np.where(valid, data, lo)))
     rgba[~valid, 3] = 0.0  # NoData → transparent
+    return _png_bytes(rgba)
+
+
+def _classed_png(values: Any, classes: BandClasses) -> Optional[bytes]:
+    """Colour a 2-D array class by class to an RGBA PNG, drawing what it has no value for transparent.
+
+    The classed counterpart of :func:`_coloured_png`: each cell takes its class's colour — binned by
+    :func:`~digitalearth.base.raster_classes.class_index`, the rule the other tiers bin by — rather than a
+    position along a ramp.
+
+    Args:
+        values: A 2-D (possibly masked) array of band values, already oriented north-up.
+        classes: The band's classes and their colours.
+
+    Returns:
+        The PNG bytes, or ``None`` when no cell has a value to colour.
+
+    Examples:
+        - Two classes; the NaN cell is transparent:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> from digitalearth.web.raster import _classed_png
+            >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
+            >>> _classed_png(np.array([[1.0, 2.0], [np.nan, 1.0]]), classes)[:8]
+            b'\\x89PNG\\r\\n\\x1a\\n'
+
+            ```
+    """
+    import numpy as np
+    from matplotlib.colors import to_rgba_array
+
+    index = class_index(values, classes.edges)
+    if not (index >= 0).any():
+        return None
+    table = to_rgba_array(list(classes.colors))
+    rgba = table[np.clip(index, 0, None)]
+    rgba[index < 0, 3] = 0.0  # NoData → transparent
     return _png_bytes(rgba)
 
 
@@ -1219,12 +1264,21 @@ def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     if y.size > 1 and y[0] < y[-1]:
         # Ascending y → flip so PNG row 0 is the northern edge.
         values = values[::-1]
+    scale = getattr(dict(layer.symbology.encodings).get("color"), "scale", None)
+    classes = classes_of(scale, props["cmap"])
     url = web_map._rgba_png_datauri(
-        values, props["cmap"], vmin=props["vmin"], vmax=props["vmax"]
+        values, props["cmap"], vmin=props["vmin"], vmax=props["vmax"], classes=classes
     )
     coordinates = _placed_corners(web_map, source, "field")
     if coordinates is None:
         return None
+    if layer.id not in web_map._legends and scale is not None:
+        # A layer this map's own `field()` built had its key filed as it was indexed. One drawn from a figure —
+        # another tier's, or this tier's read back — arrives with only its colour encoding, so the key is
+        # filed from that here, or `legend()` would find nothing to describe on a map with a coloured band.
+        web_map._legends[layer.id] = web_map._band_key(
+            str(layer.symbology.encoding("color").field), scale, props["cmap"], classes
+        )
     return _image_layer(web_map, layer, url, coordinates)
 
 
@@ -1332,6 +1386,7 @@ class RasterMixin(_MixinBase):
         band: int,
         cmap: str,
         limits: Optional[Tuple[float, float]],
+        classes: Optional[BandClasses] = None,
     ) -> dict:
         """Describe what a band's colour varies with, and record the key that would explain it.
 
@@ -1350,6 +1405,8 @@ class RasterMixin(_MixinBase):
             cmap: The colormap already resolved for it, sampled for the key's ramp.
             limits: The ``(lo, hi)`` its cells are coloured between, or ``None`` when the band has none —
                 nothing finite to colour, which the draw refuses on its own terms.
+            classes: The band's classes when ``scheme=`` classified it, or ``None`` for a ramp. A classified
+                band's scale is its classes' and its key one swatch per class.
 
         Returns:
             The ``{"color": Encoding}`` mapping for the layer's symbology, or ``{}`` when `limits` is
@@ -1368,23 +1425,58 @@ class RasterMixin(_MixinBase):
             ``last_units`` is only set when the band said what it is measured in, so a heading gains
             ``(mm)`` only when that is the band's own word for it and never a guess.
         """
-        if limits is None:
+        if classes is not None:
+            scale = classes.scale
+        elif limits is not None:
+            scale = Scale.from_limits(*limits)
+        else:
             return {}
+        column = _band_name(data, band)
+        self.last_legend = self._band_key(column, scale, cmap, classes)
+        # The values the key was built on, as every builder publishes them: the ramp's stops, a graduated
+        # band's class edges, a categorical band's codes.
+        self.last_breaks = list(self.last_legend["values"])
+        if self.last_units:
+            self.last_legend["units"] = self.last_units
+        return {"color": Encoding.by_field("color", column, scale=scale)}
+
+    def _band_key(
+        self, column: str, scale: Scale, cmap: Any, classes: Optional[BandClasses]
+    ) -> dict:
+        """Build the key a coloured band is explained by — a ramp, one swatch per class, or one per code.
+
+        Written once for the two ways a band reaches this tier: the builder, which files it as the layer is
+        indexed, and the drawer, which files it for a band drawn from a figure, carrying only its colour
+        encoding. One body, so a band keyed either way reads the same.
+
+        Args:
+            column: The band's name, the key's heading.
+            scale: The band's colour scale.
+            cmap: The colormap a ramp's stops are sampled from.
+            classes: The band's classes, or ``None`` for a ramp.
+
+        Returns:
+            The legend dict this tier stores per layer (:meth:`~digitalearth.web.base.WebMapBase._legend_dict`).
+        """
         import numpy as np
 
-        column = _band_name(data, band)
-        scale = Scale.from_limits(*limits)
+        if classes is not None and classes.is_categorical:
+            return self._legend_dict(LegendSpec.from_scale(scale, title=column), column)
+        if classes is not None:
+            edges = list(classes.edges)
+            return self._legend_dict(
+                LegendSpec.from_scale(scale, colors=list(classes.colors), title=column),
+                column,
+                values=edges,
+            )
         # `DEFAULT_RAMP_STOPS`, not a number of this module's own: the vector ramp
         # (:meth:`~digitalearth.web.vector.VectorMixin._ramp_color_expr`) samples at the same count, so a
         # continuous key reads the same whether the values came from a column or from a band — and that was
         # a coincidence between two spellings of `5` until both read the constant `LegendSpec` itself
         # defaults to (review N6).
-        stops = [
-            float(stop)
-            for stop in np.linspace(limits[0], limits[1], DEFAULT_RAMP_STOPS)
-        ]
-        self.last_breaks = stops
-        self.last_legend = self._legend_dict(
+        lo, hi = scale.as_limits()
+        stops = [float(stop) for stop in np.linspace(lo, hi, DEFAULT_RAMP_STOPS)]
+        return self._legend_dict(
             LegendSpec.from_scale(
                 scale,
                 colors=list(self._cmap_hex(cmap, len(stops))),
@@ -1393,9 +1485,6 @@ class RasterMixin(_MixinBase):
             ),
             column,
         )
-        if self.last_units:
-            self.last_legend["units"] = self.last_units
-        return {"color": Encoding.by_field("color", column, scale=scale)}
 
     def field(
         self,
@@ -1408,6 +1497,8 @@ class RasterMixin(_MixinBase):
         limits: Optional[Sequence[float]] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        scheme: Optional[Any] = None,
+        k: Optional[int] = None,
         visible: bool = True,
         name: Optional[str] = None,
         tiles: Optional[str] = None,
@@ -1445,6 +1536,16 @@ class RasterMixin(_MixinBase):
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
+            scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
+                classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,
+                coloured from the shared categorical palette (``cmap`` picks another). The classes are cut by
+                :mod:`digitalearth.base.raster_classes`, the classifier the static and interactive tiers use,
+                so one band is classed — and coloured — alike on all three; they are recorded in the layer's
+                colour encoding, and :meth:`~digitalearth.web.decoration.DecorationMixin.legend` keys them
+                one swatch per class. ``limits``/``vmin``/``vmax`` do not apply to a classified band. ``None``
+                (default) draws the continuous ramp. Not taken by a ``tiles`` route.
+            k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
                 :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
@@ -1479,7 +1580,10 @@ class RasterMixin(_MixinBase):
                 at this call because a figure holding NaN or infinity could not be written down; when the
                 band is too large to inline and no ``tiles`` route was named; and, for a tiled route, when
                 ``tiles`` names no route this tier writes, ``tiles_path`` is missing, ``zooms`` is not an
-                ordered pair of levels, or the range produced no tile with any value in it.
+                ordered pair of levels, or the range produced no tile with any value in it; when ``scheme``
+                is given with a ``tiles`` route, or cannot classify the band — an unknown name, ``k`` below
+                one, or, under ``"categorical"``, a band holding non-integer values, more than
+                :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` codes, or no valid cell.
             KeyError: when `cmap` names no registered colormap, or `dataset` is a URL with no resolver.
             TypeError: when `cmap` is neither a name, a ``Colormap``, nor a sequence of colours; and, for a
                 tiled route, when `data` is not a raster pyramids can read windows out of — a `Source` or a
@@ -1535,6 +1639,13 @@ class RasterMixin(_MixinBase):
             ask("opacity", opacity, RASTER_OPACITY), "opacity", _FIELD_CALLER
         )
         route = _tile_route(tiles, _FIELD_CALLER)
+        if scheme is not None and route is not None:
+            # A tile is coloured from pyramids' overviews, which average neighbouring cells — inventing codes
+            # no cell holds — and the route never reads the band whole, which a graduated scheme's edges need.
+            raise ValueError(
+                f"{_FIELD_CALLER} classifies a band with scheme= only on the inline route; a tiles= route "
+                "colours each tile from averaged overviews and never reads the whole band to cut classes from"
+            )
         _require_layer_api()
         if route is not None:
             return self._tiled_field(
@@ -1573,6 +1684,18 @@ class RasterMixin(_MixinBase):
         # resolution of an unset `vmin`/`vmax` is its business — the tiled route records its pair only
         # because one span has to hold a whole pyramid together.
         domain = _colour_domain(source.z.values, vmin=vmin, vmax=vmax)
+        classes = (
+            None
+            if scheme is None
+            else classify_band(
+                source.z.values,
+                scheme,
+                k,
+                # Codes take the categorical palette unless the caller names one; graduated classes the
+                # colormap the band resolved, the one a ramp would have used.
+                cmap if asks_categorical(scheme) else cmap_name,
+            )
+        )
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
@@ -1591,6 +1714,7 @@ class RasterMixin(_MixinBase):
                     band=band,
                     cmap=cmap_name,
                     limits=None if domain is None else domain[2],
+                    classes=classes,
                 ),
                 props={
                     "cmap": cmap_name,
@@ -1598,6 +1722,12 @@ class RasterMixin(_MixinBase):
                     "vmax": vmax,
                     "opacity": float(opacity),
                     "band": band,
+                    "scheme": (
+                        scheme
+                        if scheme is None or isinstance(scheme, str)
+                        else list(scheme)
+                    ),
+                    "k": k,
                     **ask.record,
                 },
             ),
@@ -2190,6 +2320,7 @@ class RasterMixin(_MixinBase):
         *,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        classes: Optional[BandClasses] = None,
     ) -> str:
         """Colour-map a 2-D array to an RGBA PNG and return it as a ``data:image/png;base64,`` URI.
 
@@ -2205,6 +2336,8 @@ class RasterMixin(_MixinBase):
                 ``Colormap``, which defines ``__eq__`` and so has no hash (#315, review H3).
             vmin: Lower colour limit; ``None`` uses the finite minimum.
             vmax: Upper colour limit; ``None`` uses the finite maximum.
+            classes: The band's classes, to colour it class by class; ``None`` colours it along `cmap`'s
+                ramp between `vmin` and `vmax`.
 
         Returns:
             The PNG data-URI string.
@@ -2218,7 +2351,11 @@ class RasterMixin(_MixinBase):
         """
         import base64
 
-        payload = _coloured_png(values, cmap, vmin=vmin, vmax=vmax)
+        payload = (
+            _coloured_png(values, cmap, vmin=vmin, vmax=vmax)
+            if classes is None
+            else _classed_png(values, classes)
+        )
         if payload is None:
             raise ValueError("field() got a band with no finite values to colour")
         return "data:image/png;base64," + base64.b64encode(payload).decode("ascii")

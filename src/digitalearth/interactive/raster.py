@@ -17,11 +17,18 @@ tier reads as HoloViews to its users); the static↔interactive mapping is docum
 feature-parity matrix.
 """
 
+import os
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.crs import reproject
 from digitalearth.base.levels import levels_every
+from digitalearth.base.raster_classes import (
+    BandClasses,
+    asks_categorical,
+    classes_of,
+    classify_band,
+)
 from digitalearth.base.sources.view import SourceView
 from digitalearth.base.spec import (
     DEFAULT_BAND,
@@ -171,6 +178,90 @@ def _engine_pair(pair: Any) -> Any:
     return pair
 
 
+#: The drawing options that classify a band rather than style its element. The static tier records them
+#: among its options; this tier records them beside the layer — either way they are read for the classes the
+#: colour encoding holds, never handed to HoloViews, which has no option of either name.
+_CLASS_KEYWORDS = frozenset({"scheme", "k"})
+
+
+def _class_options(classes: BandClasses) -> Dict[str, Any]:
+    """Return the HoloViews options that draw a band class by class.
+
+    One colour per class (``cmap``) and the edges between them (``color_levels``) — the same pair this tier
+    gives a graduated choropleth — over limits spanning the edges, so the bar steps exactly at them. A
+    categorical band's bar is ticked at its codes rather than at the half-steps between them, which are where
+    its classes meet but are no value a cell holds.
+
+    Args:
+        classes: The band's classes.
+
+    Returns:
+        The options, laid over the element's continuous ones.
+
+    Examples:
+        - Three graduated classes step at their edges:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.raster_classes import classify_band
+            >>> from digitalearth.interactive.raster import _class_options
+            >>> options = _class_options(classify_band(np.arange(10.0), "equal_interval", 3, "viridis"))
+            >>> options["color_levels"], options["clim"]
+            ([0.0, 3.0, 6.0, 9.0], (0.0, 9.0))
+
+            ```
+    """
+    edges = list(classes.edges)
+    options: Dict[str, Any] = {
+        "cmap": list(classes.colors),
+        "color_levels": edges,
+        "clim": (edges[0], edges[-1]),
+    }
+    if classes.is_categorical:
+        from bokeh.models import FixedTicker
+
+        codes = [int(code) for code in classes.scale.categories]
+        options["colorbar_opts"] = {"ticker": FixedTicker(ticks=sorted(codes))}
+    return options
+
+
+def _band_classes(
+    interactive_map: Any, data: Any, band: int, scheme: Any, k: Optional[int], cmap: Any
+) -> BandClasses:
+    """Classify a band at build time, so the layer's description carries its classes.
+
+    A colour key hangs on the layer's colour encoding, and the encoding is written when the layer is
+    *described* — before any drawer runs — so the classes have to be known here. The band is read through the
+    same display-CRS choke point the drawer reads it through, so the classes are cut on the cells that are
+    drawn; that is a second read of the band, paid only by a classified field.
+
+    Args:
+        interactive_map: The map the layer is added to.
+        data: The raster, or a path or URL naming one.
+        band: The 1-based band.
+        scheme: ``"categorical"``, a named graduated scheme, or explicit edges.
+        k: Classes for a named graduated scheme.
+        cmap: The caller's colormap — a categorical palette for codes, the colormap graduated classes are
+            sampled from otherwise — or ``None``.
+
+    Returns:
+        The band's classes.
+
+    Raises:
+        ValueError: as :func:`~digitalearth.base.raster_classes.classify_band` refuses.
+    """
+    if isinstance(data, (str, os.PathLike, DataRef)):
+        # A path or URL is what the figure records; the drawer is handed it already opened, the builder
+        # is not.
+        data = DataRef.of(data).open()
+    src = interactive_map._to_display_source(data, band=band)
+    # Codes take the categorical palette when no `cmap` is given; graduated classes the colormap the drawer
+    # will resolve for this variable, so the colours a key derives agree with the ones painted.
+    palette = (
+        cmap if asks_categorical(scheme) else interactive_map._auto_cmap(src, cmap)
+    )
+    return classify_band(src.z.values, scheme, k, palette)
+
+
 def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the colour-mapped raster a described image layer asks for.
 
@@ -186,14 +277,26 @@ def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     props = held_props(interactive_map, layer)
     src = interactive_map._to_display_source(data, band=props["band"])
+    # The static tier records `scheme`/`k` among its drawing options; they are cleopatra's words, not
+    # HoloViews', so a figure that tier described carries them here, where HoloViews refused the whole element
+    # ("Unexpected option 'scheme' for Image"). What they decided travels in the colour encoding, read below.
+    opts = {
+        key: value
+        for key, value in dict(props.get("opts") or {}).items()
+        if key not in _CLASS_KEYWORDS
+    }
     common = {
         "cmap": interactive_map._auto_cmap(src, props.get("cmap")),
         "clim": _engine_pair(props.get("clim")),
         "alpha": props.get("alpha"),
         "colorbar": props.get("colorbar"),
         "clabel": interactive_map._auto_clabel(src, props.get("clabel")),
-        **dict(props.get("opts") or {}),
+        **opts,
     }
+    described = dict(layer.symbology.encodings).get("color")
+    classes = classes_of(getattr(described, "scale", None), common["cmap"])
+    if classes is not None:
+        common.update(_class_options(classes))
     element = interactive_map._styled(
         interactive_map._image_from_source(src),
         common=common,
@@ -392,6 +495,8 @@ class RasterMixin(_MixinBase):
         band: int = DEFAULT_BAND,
         cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
+        scheme: Optional[Any] = None,
+        k: Optional[int] = None,
         alpha: Maybe[float] = UNSET,
         colorbar: bool = True,
         clabel: Optional[str] = None,
@@ -410,7 +515,17 @@ class RasterMixin(_MixinBase):
             clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. A list is taken too,
                 and is the spelling the figure records — a tuple is what the travel rule refuses, so the
                 documented pair used to be dropped from every saved figure (review R2-M13). The drawer
-                hands HoloViews the tuple its own option is declared with either way.
+                hands HoloViews the tuple its own option is declared with either way. Ignored when
+                ``scheme`` classifies the band, whose limits are its class edges.
+            scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
+                classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,
+                coloured from the shared categorical palette (``cmap`` picks another). The classes are cut by
+                :mod:`digitalearth.base.raster_classes`, the classifier the static and web tiers use, so one
+                band is classed — and coloured — alike on all three, and they are recorded in the layer's
+                colour encoding, so the colorbar steps at them and a figure drawn on another tier keeps them.
+                ``None`` (default) draws the continuous ramp.
+            k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.
             alpha: Layer opacity in ``[0, 1]``; not passed leaves :data:`FIELD_ALPHA`. The keyword is
                 recorded when it is passed, so a caller asking for exactly that value publishes it like any
                 other (#334).
@@ -439,7 +554,15 @@ class RasterMixin(_MixinBase):
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: for a ``scheme`` that cannot classify the band — an unknown name, ``k`` below one, or,
+                under ``"categorical"``, a band holding non-integer values, more than
+                :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` codes, or no valid cell.
         """
+        scale = limits_scale(clim)
+        if scheme is not None:
+            scale = _band_classes(self, data, band, scheme, k, cmap).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
         # into the description, and what has no JSON form — a colormap object, a callable — is held beside
         # the layer, because a figure is saved as JSON.
@@ -460,7 +583,7 @@ class RasterMixin(_MixinBase):
                 # with this one has a key that moves, hides and disappears with it.
                 encodings={
                     "color": Encoding.by_field(
-                        "color", coloured_by(data, band), scale=limits_scale(clim)
+                        "color", coloured_by(data, band), scale=scale
                     )
                 },
                 props={
@@ -468,6 +591,10 @@ class RasterMixin(_MixinBase):
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
                     "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "scheme": scheme
+                    if scheme is None or isinstance(scheme, str)
+                    else list(scheme),
+                    "k": k,
                     "alpha": ask("alpha", alpha, FIELD_ALPHA),
                     "colorbar": colorbar,
                     "clabel": clabel,
