@@ -18,7 +18,7 @@ from matplotlib.colors import BoundaryNorm
 
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static import Map
-from digitalearth.static.maps.raster import _raster_categories
+from digitalearth.base.raster_classes import raster_categories
 
 
 @pytest.fixture
@@ -380,6 +380,39 @@ class TestClassifiedRasterField:
             with pytest.raises(ValueError, match="nope"):
                 m.field(dataset, scheme="nope", k=4)
 
+    def test_a_short_qualitative_cmap_colours_every_class(self):
+        """Each graduated class takes its own sample of a short colormap, cell by cell and in the key.
+
+        Test scenario:
+            ``Set2`` has eight colours. cleopatra spread four classes over 256 colour slots, so every class
+            after the first landed past the map's end and took its last colour, grey ``#b3b3b3`` — three classes
+            painted alike. Each class must be ``sample_cmap("Set2", 4)``'s colour for it, the colours the other
+            tiers give the same classes.
+        """
+        from matplotlib.colors import to_hex
+
+        from digitalearth.base.symbology import sample_cmap
+
+        values = np.arange(25.0).reshape(5, 5)
+        expected = sample_cmap("Set2", 4)
+        with Map() as m:
+            m.field(values, scheme="equal_interval", k=4, cmap="Set2")
+            image = m.ax.images[-1]
+            edges = list(image.norm.boundaries)
+            m.legend()
+            key = [
+                to_hex(handle.get_facecolor())
+                for handle in m.ax.get_legend().legend_handles
+            ]
+            painted = _cell_colors(image)
+        index = np.clip(np.digitize(values, edges[1:-1]), 0, 3)
+        assert key == expected, (
+            f"the key shows {key}, Set2's four classes are {expected}"
+        )
+        assert (painted == np.asarray(expected)[index]).all(), (
+            f"cells painted {painted.tolist()}, expected each class's Set2 sample"
+        )
+
 
 #: A nominal raster: integer class codes 1, 2, 3 and 5 (no 4, so the edges cannot be a plain ``0.5`` grid).
 CODES = np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0], [5.0, 5.0, 1.0]])
@@ -663,7 +696,7 @@ class TestCategoricalRasterField:
         """
         values = np.array([base, base + 1], dtype=np.int64)
         with pytest.raises(ValueError, match=r"2\*\*52"):
-            _raster_categories(values)
+            raster_categories(values)
 
     @pytest.mark.parametrize(
         "codes, expected",
@@ -759,16 +792,16 @@ class TestCategoricalRasterField:
         Test scenario:
             The boundary of the limit, not just a band far over it.
         """
-        from digitalearth.static.maps.raster import MAX_RASTER_CATEGORIES
+        from digitalearth.base.raster_classes import MAX_RASTER_CATEGORIES
 
         assert MAX_RASTER_CATEGORIES == 24, (
             f"the limit moved to {MAX_RASTER_CATEGORIES}; update this boundary test"
         )
         codes = np.arange(count).reshape(1, count)
         if accepted:
-            assert _raster_categories(codes) == list(range(count)), (
+            assert raster_categories(codes) == list(range(count)), (
                 f"{count} codes should all be categories"
             )
         else:
             with pytest.raises(ValueError, match="at most 24"):
-                _raster_categories(codes)
+                raster_categories(codes)
