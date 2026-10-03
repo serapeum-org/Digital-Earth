@@ -192,6 +192,5 @@ def test_a_continuous_raster_is_keyed_after_replay(tmp_path, target):
     drawn = to_backend(spec, backend=target)
     keyed = drawn.legend() if target == "web" else drawn.colorbar()
     guide = keyed.get_layer("ramp").symbology.guide()
-    assert guide is not None and guide.show, (
-        f"the replayed ramp on {target} should carry a shown key"
-    )
+    assert guide is not None, f"the replayed ramp on {target} should carry a key"
+    assert guide.show, f"the replayed ramp's key on {target} should be shown"
