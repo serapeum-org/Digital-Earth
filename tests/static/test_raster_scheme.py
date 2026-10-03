@@ -107,6 +107,25 @@ class TestClassifiedRasterField:
             f"an unclassified raster should be continuous, got {norm!r}"
         )
 
+    def test_k_without_a_scheme_is_ignored(self, dataset):
+        """``k=`` alone leaves the field a continuous ramp: it counts a named scheme's classes, so needs one.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            ``k=4`` with no ``scheme`` must not classify — no ``BoundaryNorm``, no published breaks — matching
+            the documented contract rather than quietly defaulting to some scheme.
+        """
+        with Map(crs=dataset.epsg) as m:
+            m.field(dataset, k=4)
+            norm = _drawn_norm(m)
+            breaks = m.last_breaks
+        assert not isinstance(norm, BoundaryNorm), (
+            f"k alone should not classify, got {norm!r}"
+        )
+        assert breaks is None, f"k alone should publish no class edges, got {breaks}"
+
     def test_the_classes_are_published_as_breaks(self, dataset, values):
         """The cut edges reach ``last_breaks`` and the layer's colour encoding.
 

@@ -916,7 +916,8 @@ class RasterMixin(_MixinBase):
                 narrower than the data leave cells outside them, and those are painted the colormap's end
                 colours — the first and last classes' colours when there are two or more classes — while
                 the key lists only the given ranges, so span the data's range when that matters. Without
-                ``scheme`` the field is a continuous ramp. ``scheme="categorical"`` is for a band of
+                ``scheme`` the field is a continuous ramp, and ``k`` alone is ignored — it counts the classes
+                a named scheme cuts, so it does nothing without one. ``scheme="categorical"`` is for a band of
                 integer class codes (land cover, zone ids): each distinct code becomes its own class,
                 coloured from the same categorical palette the vector layers use (``cmap`` picks the
                 palette), keyed by :meth:`legend` with one swatch per code and published as the layer's
