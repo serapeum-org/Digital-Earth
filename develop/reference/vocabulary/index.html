@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -33544,7 +33544,23 @@ distinguish, kept because a ramp is drawn as a bar and the other two as swatches
 <span class="normal"><a href="#__codelineno-0-328">328</a></span>
 <span class="normal"><a href="#__codelineno-0-329">329</a></span>
 <span class="normal"><a href="#__codelineno-0-330">330</a></span>
-<span class="normal"><a href="#__codelineno-0-331">331</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="k">class</span><span class="w"> </span><span class="nc">LegendSpec</span><span class="p">:</span>
 <a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A legend as a value: what it is called, what its rows are, and how it is laid out.</span>
 <a id="__codelineno-0-67" name="__codelineno-0-67"></a>
@@ -33638,7 +33654,7 @@ distinguish, kept because a ramp is drawn as a bar and the other two as swatches
 <a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">                limits is a second computation that *usually* agrees: ``numpy.linspace`` pins its final</span>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">                element to ``stop`` exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For</span>
 <a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">                ``lo=-3.7, hi=12.9`` the recomputed top stop is ``12.900000000000002`` while the drawn one is</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">                ``12.9`` — so the top swatch is labelled with a value the layer never draws, which is the</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">                ``12.9`` — so the top swatch carries a value the layer never draws, which is the</span>
 <a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">                disagreement this type exists to remove.</span>
 <a id="__codelineno-0-160" name="__codelineno-0-160"></a>
 <a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">        Returns:</span>
@@ -33757,61 +33773,77 @@ distinguish, kept because a ramp is drawn as a bar and the other two as swatches
 <a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_number</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Format one number for a label.</span>
 <a id="__codelineno-0-276" name="__codelineno-0-276"></a>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">            value: The number.</span>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">            spec: A format spec, or ``None`` for `str`.</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">            The formatted text.</span>
-<a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="k">return</span> <span class="nb">format</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="k">if</span> <span class="n">spec</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">        Without a `spec` the number is shown as `str` gives it, after trimming the float noise past twelve</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">        significant digits — so a quantile cut found as ``7.600000000000023`` is labelled ``7.6``, while an edge</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">        with nothing to trim (``22.0``) reads exactly as `str` would. Only the label is trimmed; the entry&#39;s</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">        value keeps the exact edge.</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">            value: The number.</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">            spec: A format spec, applied as given, or ``None`` for the trimmed `str` form.</span>
 <a id="__codelineno-0-285" name="__codelineno-0-285"></a>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_range_label</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">low</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">high</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the ``low – high`` label a graduated class is shown with.</span>
-<a id="__codelineno-0-289" name="__codelineno-0-289"></a>
-<a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">            low: Lower edge.</span>
-<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">            high: Upper edge.</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">            spec: Format spec for the numbers.</span>
-<a id="__codelineno-0-294" name="__codelineno-0-294"></a>
-<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">            The label.</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">            The formatted text.</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">            - Float noise is trimmed, a clean value is untouched:</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import LegendSpec</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">                &gt;&gt;&gt; LegendSpec._number(7.600000000000023, None), LegendSpec._number(22.0, None)</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a><span class="sd">                (&#39;7.6&#39;, &#39;22.0&#39;)</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">                ```</span>
 <a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="n">_number</span><span class="p">(</span><span class="n">low</span><span class="p">,</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="si">}</span><span class="s2"> – </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="n">_number</span><span class="p">(</span><span class="n">high</span><span class="p">,</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a tier stores or serialises.</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">        Every field is included, so the result is complete rather than the subset a particular tier happens</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">        to read. It is not paired with a `from_dict`: a legend is *derived* from a `Scale`, and rebuilding one</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">        from a dict would be a second way to construct it — the one thing :meth:`from_scale` exists to</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        prevent. Round-tripping belongs to whatever holds the scale, not to the legend.</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">            The legend as ``kind`` / ``values`` / ``colors`` plus the labels — the shape the web tier already</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">            keeps in ``last_legend``, so it can derive that from this rather than assembling it three times.</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">            - The three keys a tier reads back:</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import LegendSpec, Scale</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">                &gt;&gt;&gt; payload = LegendSpec.from_scale(Scale.categorical([&quot;a&quot;], [&quot;#f00&quot;])).to_dict()</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">                &gt;&gt;&gt; payload[&quot;kind&quot;], payload[&quot;values&quot;], payload[&quot;colors&quot;]</span>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">                (&#39;categorical&#39;, [&#39;a&#39;], [&#39;#f00&#39;])</span>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a>        <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-323" name="__codelineno-0-323"></a>            <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a>            <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
-<a id="__codelineno-0-325" name="__codelineno-0-325"></a>            <span class="s2">&quot;units&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">,</span>
-<a id="__codelineno-0-326" name="__codelineno-0-326"></a>            <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
-<a id="__codelineno-0-327" name="__codelineno-0-327"></a>            <span class="s2">&quot;orientation&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span><span class="p">,</span>
-<a id="__codelineno-0-328" name="__codelineno-0-328"></a>            <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
-<a id="__codelineno-0-329" name="__codelineno-0-329"></a>            <span class="s2">&quot;values&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>            <span class="s2">&quot;colors&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">color</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
-<a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="p">}</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="k">if</span> <span class="n">spec</span><span class="p">:</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>            <span class="k">return</span> <span class="nb">format</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">value</span><span class="si">:</span><span class="s2">.12g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_range_label</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">low</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">high</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the ``low – high`` label a graduated class is shown with.</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">            low: Lower edge.</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">            high: Upper edge.</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">            spec: Format spec for the numbers.</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">            The label.</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="n">_number</span><span class="p">(</span><span class="n">low</span><span class="p">,</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="si">}</span><span class="s2"> – </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="n">_number</span><span class="p">(</span><span class="n">high</span><span class="p">,</span><span class="w"> </span><span class="n">spec</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a tier stores or serialises.</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">        Every field is included, so the result is complete rather than the subset a particular tier happens</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">        to read. It is not paired with a `from_dict`: a legend is *derived* from a `Scale`, and rebuilding one</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">        from a dict would be a second way to construct it — the one thing :meth:`from_scale` exists to</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">        prevent. Round-tripping belongs to whatever holds the scale, not to the legend.</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a><span class="sd">            The legend as ``kind`` / ``values`` / ``colors`` plus the labels — the shape the web tier already</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">            keeps in ``last_legend``, so it can derive that from this rather than assembling it three times.</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">            - The three keys a tier reads back:</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import LegendSpec, Scale</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">                &gt;&gt;&gt; payload = LegendSpec.from_scale(Scale.categorical([&quot;a&quot;], [&quot;#f00&quot;])).to_dict()</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a><span class="sd">                &gt;&gt;&gt; payload[&quot;kind&quot;], payload[&quot;values&quot;], payload[&quot;colors&quot;]</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">                (&#39;categorical&#39;, [&#39;a&#39;], [&#39;#f00&#39;])</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>        <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a>            <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a>            <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a>            <span class="s2">&quot;units&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">,</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a>            <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a>            <span class="s2">&quot;orientation&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span><span class="p">,</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a>            <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a>            <span class="s2">&quot;values&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a>            <span class="s2">&quot;colors&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">color</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>        <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -34072,7 +34104,7 @@ scale. Pass them whenever the caller already holds them. Recomputing them here f
 limits is a second computation that <em>usually</em> agrees: <code>numpy.linspace</code> pins its final
 element to <code>stop</code> exactly, and <code>lo + (hi - lo) * i / (stops - 1)</code> does not. For
 <code>lo=-3.7, hi=12.9</code> the recomputed top stop is <code>12.900000000000002</code> while the drawn one is
-<code>12.9</code> — so the top swatch is labelled with a value the layer never draws, which is the
+<code>12.9</code> — so the top swatch carries a value the layer never draws, which is the
 disagreement this type exists to remove.</p>
               </div>
             </td>
@@ -34324,7 +34356,7 @@ two <code>values</code> — which cannot describe a ramp.</p>
 <a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">            limits is a second computation that *usually* agrees: ``numpy.linspace`` pins its final</span>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">            element to ``stop`` exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For</span>
 <a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">            ``lo=-3.7, hi=12.9`` the recomputed top stop is ``12.900000000000002`` while the drawn one is</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">            ``12.9`` — so the top swatch is labelled with a value the layer never draws, which is the</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">            ``12.9`` — so the top swatch carries a value the layer never draws, which is the</span>
 <a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">            disagreement this type exists to remove.</span>
 <a id="__codelineno-0-160" name="__codelineno-0-160"></a>
 <a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">    Returns:</span>
@@ -34476,23 +34508,7 @@ prevent. Round-tripping belongs to whatever holds the scale, not to the legend.<
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/legend.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-300">300</a></span>
-<span class="normal"><a href="#__codelineno-0-301">301</a></span>
-<span class="normal"><a href="#__codelineno-0-302">302</a></span>
-<span class="normal"><a href="#__codelineno-0-303">303</a></span>
-<span class="normal"><a href="#__codelineno-0-304">304</a></span>
-<span class="normal"><a href="#__codelineno-0-305">305</a></span>
-<span class="normal"><a href="#__codelineno-0-306">306</a></span>
-<span class="normal"><a href="#__codelineno-0-307">307</a></span>
-<span class="normal"><a href="#__codelineno-0-308">308</a></span>
-<span class="normal"><a href="#__codelineno-0-309">309</a></span>
-<span class="normal"><a href="#__codelineno-0-310">310</a></span>
-<span class="normal"><a href="#__codelineno-0-311">311</a></span>
-<span class="normal"><a href="#__codelineno-0-312">312</a></span>
-<span class="normal"><a href="#__codelineno-0-313">313</a></span>
-<span class="normal"><a href="#__codelineno-0-314">314</a></span>
-<span class="normal"><a href="#__codelineno-0-315">315</a></span>
-<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-316">316</a></span>
 <span class="normal"><a href="#__codelineno-0-317">317</a></span>
 <span class="normal"><a href="#__codelineno-0-318">318</a></span>
 <span class="normal"><a href="#__codelineno-0-319">319</a></span>
@@ -34507,38 +34523,54 @@ prevent. Round-tripping belongs to whatever holds the scale, not to the legend.<
 <span class="normal"><a href="#__codelineno-0-328">328</a></span>
 <span class="normal"><a href="#__codelineno-0-329">329</a></span>
 <span class="normal"><a href="#__codelineno-0-330">330</a></span>
-<span class="normal"><a href="#__codelineno-0-331">331</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a tier stores or serialises.</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">    Every field is included, so the result is complete rather than the subset a particular tier happens</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">    to read. It is not paired with a `from_dict`: a legend is *derived* from a `Scale`, and rebuilding one</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">    from a dict would be a second way to construct it — the one thing :meth:`from_scale` exists to</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">    prevent. Round-tripping belongs to whatever holds the scale, not to the legend.</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">        The legend as ``kind`` / ``values`` / ``colors`` plus the labels — the shape the web tier already</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">        keeps in ``last_legend``, so it can derive that from this rather than assembling it three times.</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        - The three keys a tier reads back:</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import LegendSpec, Scale</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">            &gt;&gt;&gt; payload = LegendSpec.from_scale(Scale.categorical([&quot;a&quot;], [&quot;#f00&quot;])).to_dict()</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">            &gt;&gt;&gt; payload[&quot;kind&quot;], payload[&quot;values&quot;], payload[&quot;colors&quot;]</span>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">            (&#39;categorical&#39;, [&#39;a&#39;], [&#39;#f00&#39;])</span>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
-<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="s2">&quot;units&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">,</span>
-<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
-<a id="__codelineno-0-327" name="__codelineno-0-327"></a>        <span class="s2">&quot;orientation&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span><span class="p">,</span>
-<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
-<a id="__codelineno-0-329" name="__codelineno-0-329"></a>        <span class="s2">&quot;values&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="s2">&quot;colors&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">color</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
-<a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="p">}</span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a tier stores or serialises.</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">    Every field is included, so the result is complete rather than the subset a particular tier happens</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">    to read. It is not paired with a `from_dict`: a legend is *derived* from a `Scale`, and rebuilding one</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">    from a dict would be a second way to construct it — the one thing :meth:`from_scale` exists to</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">    prevent. Round-tripping belongs to whatever holds the scale, not to the legend.</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a><span class="sd">        The legend as ``kind`` / ``values`` / ``colors`` plus the labels — the shape the web tier already</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">        keeps in ``last_legend``, so it can derive that from this rather than assembling it three times.</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">        - The three keys a tier reads back:</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import LegendSpec, Scale</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">            &gt;&gt;&gt; payload = LegendSpec.from_scale(Scale.categorical([&quot;a&quot;], [&quot;#f00&quot;])).to_dict()</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a><span class="sd">            &gt;&gt;&gt; payload[&quot;kind&quot;], payload[&quot;values&quot;], payload[&quot;colors&quot;]</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">            (&#39;categorical&#39;, [&#39;a&#39;], [&#39;#f00&#39;])</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a>        <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a>        <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a>        <span class="s2">&quot;units&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">,</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a>        <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a>        <span class="s2">&quot;orientation&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientation</span><span class="p">,</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a>        <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">label</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a>        <span class="s2">&quot;values&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a>        <span class="s2">&quot;colors&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">entry</span><span class="o">.</span><span class="n">color</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">],</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>    <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
