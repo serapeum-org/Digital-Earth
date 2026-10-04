@@ -285,6 +285,27 @@ class TestNightshade:
             "the antisolar point is the deepest night there is"
         )
 
+    def test_a_globes_night_shade_honours_the_sample_count(self):
+        """``n`` must reach the globe path, which recorded it and then drew a fixed grid regardless.
+
+        Test scenario:
+            A globe does not shade a night polygon; it fills the region of a display grid where the sun is
+            below the terminator. That grid was a fixed 400 samples per side, so ``n`` was recorded in the
+            figure and then ignored: a figure drawn flat and re-drawn on a globe silently changed fidelity,
+            and the globe's resolution was not tunable at all. Resolution is observable in how finely the
+            terminator contour is traced, so a quarter of the samples must trace it with well under half
+            as many vertices.
+        """
+        fine, coarse = (
+            Map(crs=projections.orthographic(lon=180, lat=0), globe=True).nightshade(
+                EQUINOX_NOON, n=samples
+            )
+            for samples in (720, 180)
+        )
+        fine_vertices = sum(len(path.vertices) for path in fine.get_paths())
+        coarse_vertices = sum(len(path.vertices) for path in coarse.get_paths())
+        assert coarse_vertices < fine_vertices / 2, (coarse_vertices, fine_vertices)
+
     def test_a_globe_whose_visible_side_holds_no_night_draws_nothing(self):
         """A globe centred on the day side, asked for deep night, has none to shade — so no layer.
 

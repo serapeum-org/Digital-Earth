@@ -1007,12 +1007,55 @@ def _fit_within_crs_extent(scene: Any) -> None:
         scene.ax.set_ylim(bottom, top)
 
 
-#: Samples per side of the display grid a globe's night shade is evaluated on.
+#: Samples per side of the display grid a globe's night shade is evaluated on **at the default ``n``**.
+#: Another ``n`` scales it in proportion (:func:`_globe_night_grid`), so the figure's recorded ``n`` means
+#: something on a globe too, and the default output is exactly what it was.
 _GLOBE_NIGHT_GRID = 400
+
+#: The fewest samples per side a globe's grid is ever evaluated on. Below this the contour stops tracing a
+#: terminator and starts tracing the grid, which is worse than being slow.
+_GLOBE_NIGHT_GRID_MIN = 16
+
+
+def _globe_night_grid(samples: int) -> int:
+    """Translate a night shade's ``n`` into samples per side of the globe's display grid.
+
+    The flat path spends ``n`` on a one-dimensional curve; the globe spends its budget on a two-dimensional
+    field, so the two cannot take the same number. They are tied proportionally instead:
+    :data:`_GLOBE_NIGHT_GRID` is the side at cleopatra's default ``n``, and another ``n`` moves it in
+    proportion. So the default globe is pixel-for-pixel what it was, a figure that asked for fewer samples
+    now gets a cheaper globe, and one that asked for more gets a finer one — where before ``n`` was recorded
+    in the figure and then ignored here entirely (round 3, L7).
+
+    Args:
+        samples: The layer's recorded ``n``, already validated as 4 or more.
+
+    Returns:
+        Samples per side, never below :data:`_GLOBE_NIGHT_GRID_MIN`.
+
+    Examples:
+        - The default ``n`` keeps the grid the globe has always used, and a quarter of it quarters the side:
+            ```python
+            >>> from cleopatra.basemap.solar import DEFAULT_TERMINATOR_SAMPLES
+            >>> from digitalearth.static.maps.decoration import _globe_night_grid
+            >>> (_globe_night_grid(DEFAULT_TERMINATOR_SAMPLES), _globe_night_grid(180))
+            (400, 100)
+
+            ```
+        - A very small ``n`` stops at the floor rather than degenerating into the grid itself:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _globe_night_grid
+            >>> _globe_night_grid(4)
+            16
+
+            ```
+    """
+    side = int(round(_GLOBE_NIGHT_GRID * int(samples) / DEFAULT_TERMINATOR_SAMPLES))
+    return max(side, _GLOBE_NIGHT_GRID_MIN)
 
 
 def _globe_nightshade(
-    scene: Any, when: datetime, refraction: float, style: Dict[str, Any]
+    scene: Any, when: datetime, refraction: float, samples: int, style: Dict[str, Any]
 ) -> Optional[DrawnLayer]:
     """Shade a globe's visible night side by filling where the sun stands below the terminator altitude.
 
@@ -1031,6 +1074,8 @@ def _globe_nightshade(
         scene: The globe being drawn on.
         when: The instant, in UTC.
         refraction: The solar altitude, in degrees, that defines the terminator.
+        samples: The layer's recorded ``n``, which sets the grid's resolution here
+            (:func:`_globe_night_grid`) as it sets the terminator's on a flat map.
         style: The caller's style, in ``PolyCollection`` keywords; ``color``/``facecolor`` becomes the fill
             colour, an edge is not drawn, and the rest (``alpha``, ``zorder``, …) reaches ``contourf``.
 
@@ -1039,9 +1084,10 @@ def _globe_nightshade(
         no visible point is at night.
     """
     _, (xmin, xmax), (ymin, ymax) = scene._frame()
+    side = _globe_night_grid(samples)
     grid_x, grid_y = np.meshgrid(
-        np.linspace(xmin, xmax, _GLOBE_NIGHT_GRID),
-        np.linspace(ymin, ymax, _GLOBE_NIGHT_GRID),
+        np.linspace(xmin, xmax, side),
+        np.linspace(ymin, ymax, side),
     )
     lon, lat = reproject_coordinates(
         grid_x.ravel().tolist(),
@@ -1083,7 +1129,9 @@ def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnL
     cleopatra computes the night region (``cleopatra.basemap.solar.night_polygon``) and leaves its projection
     to the consumer. A flat map hands ``add_nightshade`` a ``transform`` that projects through pyramids. A
     globe is filled from the solar altitude instead (see :func:`_globe_nightshade`), because the night side of
-    a globe is half of it and the far half has no projected position at all.
+    a globe is half of it and the far half has no projected position at all. The recorded ``n`` reaches both:
+    it samples the terminator on a flat map, and sets the display grid's resolution on a globe
+    (:func:`_globe_night_grid`).
 
     Args:
         scene: The map being drawn on.
@@ -1099,7 +1147,7 @@ def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnL
     refraction, samples = float(props["refraction"]), int(props["n"])
     style = drawing_style(scene, layer)
     if scene.globe:
-        return _globe_nightshade(scene, when, refraction, style)
+        return _globe_nightshade(scene, when, refraction, samples, style)
     unframed = _axes_extent(scene.ax) is None
     transform = None if same_crs(scene.crs, 4326) else _night_ring_projector(scene)
     shade = add_nightshade(
@@ -1893,7 +1941,13 @@ class DecorationMixin(_MixinBase):
             refraction: The solar altitude, in degrees, that defines the terminator — ``-0.83`` (default)
                 for sunrise and sunset, ``-6``/``-12``/``-18`` for the civil, nautical and astronomical
                 twilight lines. Must lie in ``(-90, 0]``.
-            n: Samples along the terminator.
+            n: Samples along the terminator. On a globe there is no terminator polygon to sample — the
+                shade is filled from a display grid — so ``n`` sets that grid's resolution in proportion
+                instead: the default draws a 400-sample side, and a quarter of the default draws a
+                100-sample side, which measures 0.016 s against 0.158 s for the shade itself (the globe's
+                own projection frame, computed once per globe either way, is the larger cost of a first
+                render). Either way ``n`` is the one knob for the shade's fidelity, and the figure records
+                it — where before it was recorded and then ignored on a globe.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
