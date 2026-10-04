@@ -22,6 +22,7 @@ belongs in that issue, not in this module (round 3, M7).
 import contextlib
 import logging
 import math
+from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import (
@@ -31,12 +32,14 @@ from typing import (
     FrozenSet,
     Iterator,
     List,
+    Mapping,
     Optional,
     Sequence,
     Tuple,
 )
 
 import numpy as np
+from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
 from cleopatra.basemap.reference import add_features, natural_earth
 from cleopatra.basemap.solar import (
     DEFAULT_REFRACTION,
@@ -457,8 +460,73 @@ def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> An
     )
 
 
+#: cleopatra's OGC provider classes, under the ``"ogc"`` tag a figure records each one by. The tag is what
+#: a figure carries, so it is spelled here and not derived from the class name, which is free to change.
+_OGC_PROVIDERS: Dict[str, type] = {"wms": WMSProvider, "wmts": WMTSProvider}
+
+#: The OGC provider field a figure never records. ``extra_params`` is documented as where a service's token
+#: goes, so it is held beside the layer with the object itself — the same rule that keeps an ``xyzservices``
+#: ``apikey`` out of a figure. Every other field names the service rather than authenticating to it.
+_OGC_SECRET_FIELDS: FrozenSet[str] = frozenset({"extra_params"})
+
+
+def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
+    """Describe a cleopatra OGC provider as the plain values a figure can carry, minus its credential.
+
+    An OGC provider is the one source kind with no ``name`` to record, so recording it by name wrote
+    ``None`` — the shared default's spelling — and a figure read back elsewhere silently drew CartoDB
+    Positron in place of the service, with nothing marking what was lost (round 3, M10). Both providers are
+    dataclasses of plain values, so the description is simply their fields, which is also why it needs no
+    per-class spelling: a field added upstream travels without a change here.
+
+    Args:
+        source: A basemap source that is not a name.
+
+    Returns:
+        ``{"ogc": <tag>, <field>: <value>, …}``, or ``None`` when ``source`` is not an OGC provider.
+    """
+    tag = next(
+        (name for name, kind in _OGC_PROVIDERS.items() if isinstance(source, kind)),
+        None,
+    )
+    if tag is None:
+        return None
+    described: Dict[str, Any] = {"ogc": tag}
+    for spec in dataclass_fields(source):
+        if spec.name not in _OGC_SECRET_FIELDS:
+            described[spec.name] = getattr(source, spec.name)
+    return described
+
+
+def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
+    """Rebuild a cleopatra OGC provider from what a figure recorded of it.
+
+    The credential the original carried is **not** rebuilt: :data:`_OGC_SECRET_FIELDS` never travels, so a
+    figure replayed elsewhere asks the same service with no token. A service that needs one answers with its
+    own error, which is the honest outcome — the alternative was drawing a different basemap in silence.
+
+    Args:
+        described: What :func:`_describe_ogc_provider` recorded.
+
+    Returns:
+        The rebuilt provider, which ``add_tiles`` tiles from.
+
+    Raises:
+        ValueError: when the recorded ``ogc`` tag is not one this version knows — a figure written by a
+            newer release, which is worth naming rather than drawing the default for.
+    """
+    tag = str(described.get("ogc", ""))
+    provider = _OGC_PROVIDERS.get(tag)
+    if provider is None:
+        raise ValueError(
+            f"this figure records an OGC basemap of kind {tag!r}, which this version of digitalearth "
+            f"cannot rebuild; it knows {sorted(_OGC_PROVIDERS)}"
+        )
+    return provider(**{key: value for key, value in described.items() if key != "ogc"})
+
+
 def _described_tile_source(source: Any) -> Tuple[Any, Any]:
-    """Split a basemap source into the name a description records and the object held beside the layer.
+    """Split a basemap source into what a description records and the object held beside the layer.
 
     An ``xyzservices.TileProvider`` is a ``dict`` subclass whose fields include the caller's ``apikey``, so
     recording it wrote that credential into every figure the map produced — and rebuilding it from the
@@ -466,16 +534,25 @@ def _described_tile_source(source: Any) -> Tuple[Any, Any]:
     **name** is what a description carries: it names the same tiles wherever the figure is read, and it
     carries no secret.
 
+    An OGC provider has no name, so it is recorded field by field instead
+    (:func:`_describe_ogc_provider`) — everything but the ``extra_params`` a token goes in. The object is
+    still held beside the layer, because the map drawing now is the one that may legitimately use that
+    token; the description is for the figure read somewhere else.
+
     Args:
         source: The ``source`` a caller passed to :meth:`DecorationMixin.basemap`.
 
     Returns:
-        ``(recorded, held)``. A name or ``None`` passes through and is held nowhere. A provider object is
-        recorded by its own ``name`` — or as ``None``, the shared default, when it has none — and held beside
-        the layer, which is what this map tiles from.
+        ``(recorded, held)``. A name or ``None`` passes through and is held nowhere. An OGC provider is
+        recorded as a field mapping, any other provider object by its own ``name`` — or as ``None``, the
+        shared default, when it has none — and either is held beside the layer, which is what this map
+        tiles from.
     """
     if source is None or isinstance(source, str):
         return source, None
+    described = _describe_ogc_provider(source)
+    if described is not None:
+        return described, source
     name = getattr(source, "name", None)
     return (name if isinstance(name, str) else None), source
 
@@ -483,19 +560,24 @@ def _described_tile_source(source: Any) -> Tuple[Any, Any]:
 def _resolve_tile_source(source: Any) -> Any:
     """Resolve an unnamed or cross-tier-named basemap into the provider ``add_tiles`` understands.
 
-    Two translations, both of them the static tier's side of the one-basemap-per-name contract (#247).
-    ``None`` means "the caller named none", which is
-    :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` and not cleopatra's own fallback. And a
+    Three translations, the first two of them the static tier's side of the one-basemap-per-name contract
+    (#247). ``None`` means "the caller named none", which is
+    :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` and not cleopatra's own fallback. A
     shared name such as ``"CartoLight"`` is spelled as the ``xyzservices`` path that resolves to the very
-    tiles the other tiers request for it. Anything else — an ``xyzservices`` path, a ``TileProvider``, a
-    URL — is handed on untouched.
+    tiles the other tiers request for it. And a recorded OGC provider — a mapping carrying an ``"ogc"``
+    tag, which is what a stored figure holds in place of a name — is rebuilt into the provider object it
+    describes (:func:`_ogc_provider_from_description`). Anything else — an ``xyzservices`` path, a
+    ``TileProvider``, an OGC provider the caller built, a URL — is handed on untouched.
 
     Args:
-        source: The ``source`` a caller passed to :meth:`DecorationMixin.basemap`, already known not to be a
-            keyed preset.
+        source: The ``source`` a caller passed to :meth:`DecorationMixin.basemap`, or what a figure
+            recorded in its place, already known not to be a keyed preset.
 
     Returns:
         The provider name or object to hand ``cleopatra.basemap.tiles.add_tiles``.
+
+    Raises:
+        ValueError: when a recorded OGC provider names a kind this version cannot rebuild.
 
     Examples:
         - No source at all resolves to the shared default, in this engine's spelling:
@@ -512,7 +594,17 @@ def _resolve_tile_source(source: Any) -> Any:
             ('CartoDB.DarkMatter', 'Esri.WorldImagery')
 
             ```
+        - A figure's record of a WMS service is rebuilt into the provider that tiles it:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _resolve_tile_source
+            >>> stored = {"ogc": "wms", "url": "https://example.test/wms", "layers": "topp:states"}
+            >>> _resolve_tile_source(stored).layers
+            'topp:states'
+
+            ```
     """
+    if isinstance(source, Mapping) and "ogc" in source:
+        return _ogc_provider_from_description(source)
     name = DEFAULT_BASEMAP_PROVIDER if source is None else source
     if isinstance(name, str):
         return _SHARED_PROVIDERS.get(name.lower(), name)
@@ -1990,10 +2082,14 @@ class DecorationMixin(_MixinBase):
         there, rather than cleopatra's own ``OpenStreetMap.Mapnik`` (#247).
 
         Args:
-            source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, one of the
-                cross-tier names (``"CartoLight"``/``"CartoDark"``/``"CartoVoyager"``/``"OSM"``), a keyed
-                preset name such as ``"Planet.NICFI"``, or ``None`` for
-                :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`.
+            source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a
+                ``cleopatra.basemap.ogc`` ``WMSProvider``/``WMTSProvider``, one of the cross-tier names
+                (``"CartoLight"``/``"CartoDark"``/``"CartoVoyager"``/``"OSM"``), a keyed preset name such as
+                ``"Planet.NICFI"``, or ``None`` for
+                :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`. An OGC provider is recorded in
+                the figure field by field, minus its ``extra_params``, so a figure read back elsewhere asks
+                the same service — unauthenticated, since the credential does not travel (see
+                ``docs/reference/basemaps.md``).
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
                 ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to
@@ -2071,6 +2167,11 @@ class DecorationMixin(_MixinBase):
         travels with the scene instead, under this layer's id, and is forgotten with the layer. A provider
         **object** travels the same way, and for both reasons at once (see :func:`_described_tile_source`):
         it is an engine object, and an ``xyzservices.TileProvider`` holds the caller's key among its fields.
+
+        What a provider object is recorded *as* is its name, except for an OGC provider, which has none: that
+        one is recorded field by field, minus the ``extra_params`` its credential goes in, because recording
+        it by a name it does not have made a figure read back draw the shared default in its place (round 3,
+        M10).
 
         The **extent is** recorded, as four plain numbers in the display CRS. It is not styling: a tile
         mosaic *is* the frame it was fetched for, at the zoom that frame implies, so a figure that did not

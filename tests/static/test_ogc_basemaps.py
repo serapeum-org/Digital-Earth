@@ -10,6 +10,7 @@ that records each request and answers with one PNG, so the real fetch, stitch an
 """
 
 import io
+import json
 from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
@@ -17,6 +18,8 @@ import pytest
 from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
 from PIL import Image
 
+from digitalearth.api import to_backend
+from digitalearth.base.spec import FigureSpec
 from digitalearth.static import Map
 
 WMS_URL = "https://example.test/geoserver/wms"
@@ -208,3 +211,75 @@ class TestWmts:
         _framed_map().basemap(WMTSProvider(template, "basemap"))
         assert requested, "no tile was requested"
         assert not any("{" in url for url in requested), requested
+
+
+class TestRoundTrip:
+    """A figure that recorded an OGC provider draws the same service when it is read back (M10)."""
+
+    def test_a_wms_figure_read_back_asks_the_same_service(self, requested):
+        """A stored WMS figure redrawn elsewhere must reach the service, not the shared default.
+
+        Args:
+            requested: The recorded tile requests.
+
+        Test scenario:
+            A provider object is held beside the layer and never written into the figure, because it is an
+            engine object and an ``xyzservices.TileProvider`` carries the caller's key. ``WMSProvider`` has
+            no ``name``, so the description recorded ``source: None`` — the shared default's spelling — and
+            a figure read back silently drew CartoDB Positron instead of the service, with no warning and
+            no marker that anything was lost. The description must carry enough to rebuild the provider.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMSProvider(WMS_URL, "topp:states"), name="bm")
+        stored = canvas.figure_spec.to_dict()
+        requested.clear()
+        to_backend(FigureSpec.from_dict(stored), "matplotlib")
+        assert requested, "the replayed figure requested no tile at all"
+        assert {urlsplit(url).netloc for url in requested} == {"example.test"}, (
+            requested
+        )
+        assert {_query(url)["LAYERS"] for url in requested} == {"topp:states"}, (
+            requested
+        )
+
+    def test_a_wmts_figure_read_back_asks_the_same_service(self, requested):
+        """The same for WMTS, whose recorded fields name a layer rather than a layer list.
+
+        Args:
+            requested: The recorded tile requests.
+
+        Test scenario:
+            ``WMSProvider`` and ``WMTSProvider`` are separate dataclasses with different fields
+            (``layers``/``styles``/``transparent`` against ``layer``/``tile_matrix_set``/``style``), so a
+            description that round-trips one need not round-trip the other.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMTSProvider(WMTS_URL, "basemap"), name="bm")
+        stored = canvas.figure_spec.to_dict()
+        requested.clear()
+        to_backend(FigureSpec.from_dict(stored), "matplotlib")
+        assert requested, "the replayed figure requested no tile at all"
+        assert {_query(url)["REQUEST"] for url in requested} == {"GetTile"}, requested
+        assert {_query(url)["LAYER"] for url in requested} == {"basemap"}, requested
+
+    def test_a_providers_extra_params_stay_out_of_the_stored_figure(self, requested):
+        """A service credential lives in ``extra_params``, and that field is never recorded.
+
+        Args:
+            requested: The recorded tile requests, so drawing the basemap reaches no network.
+
+        Test scenario:
+            Recording the provider is what makes the round trip faithful, and a figure is written to JSON
+            and read back, so whatever is recorded travels with it. ``extra_params`` is where a service's
+            token goes, so it is the one field held beside the layer and left out of the description — the
+            same rule that keeps an ``xyzservices`` ``apikey`` out of a figure.
+        """
+        canvas = _framed_map()
+        canvas.basemap(
+            WMSProvider(WMS_URL, "topp:states", extra_params={"token": "s3cr3t"}),
+            name="bm",
+        )
+        stored = json.dumps(canvas.figure_spec.to_dict())
+        assert WMS_URL in stored, "the service URL is what makes the figure faithful"
+        assert "s3cr3t" not in stored, "a credential must never reach a stored figure"
+        assert "token" not in stored, "nor the name of the parameter carrying it"

@@ -81,9 +81,29 @@ m.basemap(WMSProvider("https://example.org/geoserver/wms", "topp:states"))
 m.basemap(WMTSProvider("https://example.org/wmts/{TileMatrix}/{TileRow}/{TileCol}.png", "basemap"))
 ```
 
-A credential the service needs goes in the provider's `extra_params`. The provider object is held beside the
-layer and is **not** written into the figure's description, so a figure saved to JSON and drawn again
-elsewhere has no record of which service it was — it names the shared default basemap in its place.
+A credential the service needs goes in the provider's `extra_params`.
+
+### What a figure records of an OGC basemap
+
+The provider **object** is held beside the layer — it is an engine object, and it carries whatever is in
+`extra_params`. What the figure's description carries is the provider's own fields, every one of them except
+`extra_params`:
+
+```python
+m.figure_spec.layers.get("bm").symbology.props["source"]
+# {'ogc': 'wms', 'url': 'https://example.org/geoserver/wms', 'layers': 'topp:states',
+#  'styles': '', 'version': '1.3.0', 'image_format': 'image/png', 'transparent': True,
+#  'tile_size': 256, 'attribution': ''}
+```
+
+That is enough to rebuild the provider, so a figure saved to JSON and drawn again elsewhere — through
+`to_backend`, or any tier's `from_figure` — asks the **same service** for the same layer. Before this was
+recorded, such a figure named no service at all and quietly drew the shared default basemap in its place.
+
+`extra_params` deliberately does not travel, for the same reason an `xyzservices` `apikey` does not: a figure
+is written to JSON and read back, and a token written into one leaks with it. So a replayed figure asks the
+service **without** a credential. If the service needs one, it answers with its own error — which is the
+honest outcome; pass the provider again, with its `extra_params`, to draw it authenticated.
 
 ## Adding a preset
 
