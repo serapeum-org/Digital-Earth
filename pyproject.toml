@@ -34,7 +34,12 @@ dependencies = [
     # base/ imports both directly (pandas in symbology, matplotlib's colour registry in
     # categorical_colors), so they are declared rather than inherited from geopandas'/cleopatra's
     # closures -- an engine-neutral layer cannot source its imports from one backend's engine.
-    "matplotlib >=3.8",
+    # 3.11 is a floor, not a preference: static/guides.py calls the per-artist hatch-colour API directly
+    # (Collection.get_hatchcolor to read a contour set's stroke colour, Patch.set_hatchcolor to paint the
+    # swatch's), which matplotlib added in 3.11. cleopatra 0.40 pins matplotlib>=3.11 for the same API, so
+    # the resolver already lands there -- but a declaration this package's own imports outrun is exactly
+    # what the note above exists to prevent.
+    "matplotlib >=3.11",
     "geopandas >=1.1.3",
     # 0.39.0 is a floor, not a preference: it made the watermark stamps glyph methods on
     # WatermarkMixin and took the free stamp_mark() function private, so static/scene.py and
