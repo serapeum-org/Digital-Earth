@@ -154,6 +154,46 @@ def placement_of(record: "LayerRecord") -> Optional[str]:
     return AT_INDICES if isinstance(record.source, np.ndarray) else IN_DISPLAY_CRS
 
 
+def recorded_title(title: Any) -> Optional[str]:
+    """Return the heading a figure records for what was handed to ``Axes.set_title``.
+
+    The record has to agree with the drawing, and the two vocabularies are not the same:
+    :class:`~digitalearth.base.spec.PanelSpec` holds a non-empty string or ``None``, while ``Axes.set_title``
+    takes anything it can render and spells "no title" three ways. Measured on a bare axes:
+    ``set_title(123)`` draws ``'123'``, ``set_title(4.5)`` draws ``'4.5'``, ``set_title(None)`` draws ``''``
+    and ``set_title("   ")`` draws the spaces. So the record follows matplotlib rather than refusing a call
+    that has always worked, and a title with nothing readable in it is recorded as no title.
+
+    Args:
+        title: What the caller passed to :meth:`Scene.set_title`.
+
+    Returns:
+        The text the axes draws, or ``None`` when the caller asked for no title — which is ``None`` itself,
+        ``""``, or whitespace. Blank rather than merely empty, for the reason :meth:`Scene._title_for` gives
+        about a guide's title: ``"   "`` is the same request as ``""`` and reads as one.
+
+    Examples:
+        - The three ways of asking for no title all record one answer:
+            ```python
+            >>> from digitalearth.static.scene import recorded_title
+            >>> [recorded_title(asked) for asked in (None, "", "   ")]
+            [None, None, None]
+
+            ```
+        - Anything else is recorded as the text matplotlib draws for it:
+            ```python
+            >>> from digitalearth.static.scene import recorded_title
+            >>> recorded_title("Discharge, 2020"), recorded_title(123)
+            ('Discharge, 2020', '123')
+
+            ```
+    """
+    if title is None:
+        return None
+    text = title if isinstance(title, str) else str(title)
+    return text if text.strip() else None
+
+
 def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Return the half of a caller's engine keywords that a figure carries.
 
@@ -452,6 +492,10 @@ class Scene(WatermarkMixin):
         #: so reporting them as class edges would be reporting a wrong answer. A categorical key is the
         #: swatch legend the glyph draws on this tier.
         self.last_breaks: Optional[List[float]] = None
+        # The figure's heading, as the description carries it (see `set_title`). Held on the scene rather
+        # than read back off `ax.title`, because matplotlib keeps three titles on an axes — centre, left and
+        # right — and a figure has one heading whichever of them it was drawn at.
+        self._title: Optional[str] = None
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
 
@@ -851,7 +895,7 @@ class Scene(WatermarkMixin):
         The panel is **derived** rather than maintained beside the tree: this tier draws one axes, so its one
         panel shows every layer, and a figure whose panel named a layer the tree does not hold is refused by
         `FigureSpec` — correctly. Writing that derivation once is what lets :meth:`_change` take a tree and
-        keep the panel in step with it.
+        keep the panel — and the figure's heading, which rides on it (:meth:`set_title`) — in step with it.
 
         Args:
             tree: The layers the figure describes.
@@ -859,7 +903,9 @@ class Scene(WatermarkMixin):
         Returns:
             The figure, with the sources of exactly those layers.
         """
-        panel = PanelSpec(PANEL_ID, self.viewport, layers=tuple(tree.ids))
+        panel = PanelSpec(
+            PANEL_ID, self.viewport, layers=tuple(tree.ids), title=self._title
+        )
         return FigureSpec(
             panels=(panel,),
             layers=tree,
@@ -1920,15 +1966,54 @@ class Scene(WatermarkMixin):
         )
         return self
 
-    def set_title(self, title: str, **kwargs: Any) -> Self:
-        """Set the axes title.
+    @property
+    def title(self) -> Optional[str]:
+        """The figure's heading, as its description carries it.
 
-        Figure-level decoration rather than a layer: it draws straight onto :attr:`ax` and is not described,
-        so :attr:`figure_spec` neither carries it nor loses it when a layer is removed.
+        Returns:
+            What :meth:`set_title` last recorded — the text it drew, normalised by :func:`recorded_title` —
+            or ``None`` for a scene nobody has titled and one whose title was cleared.
+
+            It is **one** value, where the axes has three: matplotlib keeps a centre, a left and a right
+            title, so ``ax.get_title(loc=...)`` answers per position while the figure has one heading
+            whichever position it was drawn at. A caller who wants the drawn text back should ask the axes.
+
+        Examples:
+            - A titled scene reads its heading back, and clearing it reads back as none:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> scene = Scene()
+                >>> scene.set_title("Discharge, 2020").title
+                'Discharge, 2020'
+                >>> print(scene.set_title("").title)
+                None
+                >>> scene.close()
+
+                ```
+        """
+        return self._title
+
+    def set_title(self, title: str, **kwargs: Any) -> Self:
+        """Set the figure's heading: draw it above the axes, and record it on the figure.
+
+        Figure-level decoration rather than a layer — it draws straight onto :attr:`ax`, so removing every
+        layer does not remove it — but **described** all the same, on this tier's one
+        :class:`~digitalearth.base.spec.PanelSpec`, the way the 3-D tier has always described its own
+        (ST-18). Until then it reached matplotlib and nothing else: a titled map answered
+        ``figure_spec.panels[0].title is None``, so a figure written down lost its heading and
+        :meth:`~digitalearth.static.map.Map.draw_figure` — which already restores
+        ``figure.title or figure.panels[0].title`` — had nothing to restore on a round trip through this
+        tier's own description.
 
         Args:
-            title: The text to place above the axes.
-            **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …).
+            title: The text to place above the axes. Recorded as the text matplotlib draws for it
+                (:func:`recorded_title`), so ``None``, ``""`` and ``"   "`` are the one request "no title"
+                and are recorded as none.
+            **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …). Styling for the
+                drawing only: ``loc="left"`` moves where the text is painted and the figure still records
+                the heading, because where a tier paints it is not what travels.
 
         Returns:
             This scene, so figure decoration reads as one expression. The Core declares
@@ -1936,7 +2021,7 @@ class Scene(WatermarkMixin):
             here meant the same line chained on one tier and raised on the other (order 27a, #265).
 
         Examples:
-            - Set a title and read it back off the axes:
+            - Set a title and read it back off the axes — and off the figure, which now carries it:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1944,10 +2029,13 @@ class Scene(WatermarkMixin):
                 >>> scene = Scene()
                 >>> scene.set_title("Discharge, 2020").ax.get_title()
                 'Discharge, 2020'
+                >>> scene.figure_spec.panels[0].title
+                'Discharge, 2020'
+                >>> scene.close()
 
                 ```
             - ``loc`` reaches ``Axes.set_title`` through ``**kwargs``, so the text lands on the left title
-              and the centre one stays empty:
+              and the centre one stays empty — while the figure records the heading either way:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1955,6 +2043,9 @@ class Scene(WatermarkMixin):
                 >>> scene = Scene().set_title("Left-aligned", loc="left")
                 >>> scene.ax.get_title(loc="left"), scene.ax.get_title()
                 ('Left-aligned', '')
+                >>> scene.title
+                'Left-aligned'
+                >>> scene.close()
 
                 ```
             - The title is not a layer, so removing every layer leaves it on the figure:
@@ -1975,10 +2066,27 @@ class Scene(WatermarkMixin):
                 []
                 >>> m.ax.get_title()
                 'Depth, m'
+                >>> m.close()
+
+                ```
+            - Because the heading is described, a map rebuilt from its own figure comes back titled:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> first = Map(crs=4326).set_title("Depth, m")
+                >>> second = Map.from_figure(first.figure_spec)
+                >>> second.ax.get_title()
+                'Depth, m'
+                >>> first.close()
+                >>> second.close()
 
                 ```
         """
         self.ax.set_title(title, **kwargs)
+        # After the draw, not before it: matplotlib owns what a title may be, and a record written first
+        # would outlive a `set_title` the axes refused.
+        self._title = recorded_title(title)
         return self
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:

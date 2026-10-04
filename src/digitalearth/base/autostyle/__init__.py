@@ -236,7 +236,7 @@ def auto_style(source: Source) -> Dict[str, Any]:
     magics = magics_style(variable_raw, source.metadata("standard_name"), source.units)
     if magics is not None:
         style.update(magics)
-        return style
+        return _with_source_units(style, source)
 
     # Otherwise fall back to the lighter variables.yml substring library (case-insensitive, first match wins).
     variable = variable_raw.lower()
@@ -249,4 +249,57 @@ def auto_style(source: Source) -> Dict[str, Any]:
         if any(p.lower() in variable for p in patterns):
             style.update({k: v for k, v in params.items() if k != "match"})
             break
+    return _with_source_units(style, source)
+
+
+def _with_source_units(style: Dict[str, Any], source: Source) -> Dict[str, Any]:
+    """Fill a resolved style's ``units`` from the source itself when the library named none (ST-18).
+
+    The library's answer is **canonical** and wins where it has one: a field matched as mean sea-level
+    pressure is styled in hPa, with contour levels to match, and a file saying ``Pa`` is the very case that
+    canonical answer exists for. But the library has an opinion about a few hundred variables and none at
+    all about the rest, and "no opinion" is not the same as "no units" — a GeoTIFF band carrying
+    ``widgets/s`` was styled with the default colormap and *no* units, so every reader of this dict (a
+    colorbar's label, an animation's label, a swatch legend's heading) had nothing to say about a quantity
+    the data had named itself.
+
+    Args:
+        style: The style resolved from the library, modified in place and returned.
+        source: The source the style was resolved for.
+
+    Returns:
+        The same dict. It gains a ``units`` key only when the library left one out *and* the source carries
+        one: a source naming no units adds no key at all, so ``"units" in style`` stays the question "does
+        anything know what these values are measured in".
+
+    Examples:
+        - A variable the library does not recognise keeps the units its source declared:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import DimensionInfo, Source
+            >>> from digitalearth.base.autostyle import auto_style
+            >>> def src(variable, units):
+            ...     return Source(
+            ...         DimensionInfo(np.zeros((2, 2)), "z"),
+            ...         DimensionInfo(np.array([0.0, 1.0]), "x"),
+            ...         DimensionInfo(np.array([0.0, 1.0]), "y"),
+            ...         metadata={"variable": variable},
+            ...         units=units,
+            ...     )
+            >>> auto_style(src("widget_flux", "widgets/s"))["units"]
+            'widgets/s'
+
+            ```
+        - A recognised variable keeps the library's canonical units instead, and an unlabelled source
+          leaves the key out:
+            ```python
+            >>> auto_style(src("msl", "Pa"))["units"]
+            'hPa'
+            >>> "units" in auto_style(src("widget_flux", None))
+            False
+
+            ```
+    """
+    if style.get("units") is None and source.units:
+        style["units"] = source.units
     return style
