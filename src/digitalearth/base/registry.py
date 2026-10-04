@@ -1305,6 +1305,18 @@ _BUILT_IN_KINDS = (
         "data",
     ),
     (
+        "nightshade",
+        "none",
+        "the night side of the day/night terminator at one instant — static nightshade",
+        "overlay",
+    ),
+    (
+        "tissot",
+        "none",
+        "Tissot indicatrices, circles of one ground radius through the projection — static tissot",
+        "overlay",
+    ),
+    (
         "custom:matplotlib",
         "none",
         "an artist the caller built with matplotlib and handed to the scene — static _add_layer",

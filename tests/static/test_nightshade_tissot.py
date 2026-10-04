@@ -1,0 +1,258 @@
+"""Night shading and Tissot indicatrices on a static map (ST-27).
+
+cleopatra 0.38 ships both artists (``cleopatra.basemap.solar``): ``add_nightshade`` shades the night side of the
+day/night terminator, and ``add_tissot`` draws rings a caller has already projected. Neither resolves a CRS —
+that is the consumer's job, and here pyramids does it — so these tests check the two things the static tier
+adds: the geometry lands where the display CRS puts it, and each overlay is a described, addressable layer.
+
+Expected positions are computed from first principles in the test (spherical Mercator, the mean Earth
+radius), never through the code under test.
+"""
+
+import math
+from datetime import datetime, timezone
+
+import numpy as np
+import pytest
+from matplotlib.collections import PolyCollection
+
+from digitalearth.static import Map, projections
+
+#: The equinox at noon UTC: the sun stands over (about) lon 0, so lon 180 is at midnight.
+EQUINOX_NOON = datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc)
+
+#: The June solstice at noon UTC: the south pole is in polar night.
+JUNE_NOON = datetime(2026, 6, 21, 12, 0, tzinfo=timezone.utc)
+
+#: Web Mercator's sphere radius, in metres (EPSG:3857).
+MERCATOR_R = 6378137.0
+
+#: The mean Earth radius cleopatra's geodesic circles are drawn on, in metres (IUGG).
+MEAN_EARTH_R = 6371008.8
+
+
+def _mercator(lon: float, lat: float):
+    """Project one lon/lat onto spherical Web Mercator, written out from the formula.
+
+    Args:
+        lon: Longitude in degrees.
+        lat: Latitude in degrees.
+
+    Returns:
+        The ``(x, y)`` in metres.
+    """
+    x = MERCATOR_R * math.radians(lon)
+    y = MERCATOR_R * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+    return x, y
+
+
+def _covered(artist, xy) -> bool:
+    """Whether any polygon of a collection contains one point, in data coordinates.
+
+    Args:
+        artist: The ``PolyCollection``.
+        xy: The point.
+
+    Returns:
+        ``True`` when a path contains it.
+    """
+    return any(path.contains_point(xy) for path in artist.get_paths())
+
+
+def _world_4326() -> Map:
+    """Return a lon/lat map framed on the whole world.
+
+    Returns:
+        The map.
+    """
+    canvas = Map(crs=4326)
+    canvas.ax.set_xlim(-180, 180)
+    canvas.ax.set_ylim(-90, 90)
+    return canvas
+
+
+class TestNightshade:
+    """The night side of the terminator, shaded in the display CRS."""
+
+    def test_it_draws_a_polygon_collection_on_the_axes(self):
+        """The public return is cleopatra's artist, and it is on the map's axes."""
+        canvas = _world_4326()
+        artist = canvas.nightshade(EQUINOX_NOON)
+        assert isinstance(artist, PolyCollection), type(artist)
+        assert artist in canvas.ax.collections, "the shade must be on the map's axes"
+
+    def test_midnight_is_shaded_and_noon_is_not_on_a_lonlat_map(self):
+        """At the equinox at noon UTC the antimeridian is at midnight and Greenwich at noon."""
+        artist = _world_4326().nightshade(EQUINOX_NOON)
+        assert _covered(artist, (170.0, 0.0)), "lon 170 at noon UTC is night"
+        assert not _covered(artist, (0.0, 0.0)), "lon 0 at noon UTC is day"
+
+    def test_the_shade_is_reprojected_into_the_display_crs(self):
+        """On Web Mercator the shade sits at the Mercator position of the night side, not at lon/lat."""
+        canvas = Map(crs=3857)
+        canvas.ax.set_xlim(-2.0e7, 2.0e7)
+        canvas.ax.set_ylim(-2.0e7, 2.0e7)
+        artist = canvas.nightshade(EQUINOX_NOON)
+        assert _covered(artist, _mercator(170.0, 10.0)), "lon 170 is night"
+        assert not _covered(artist, _mercator(0.0, 10.0)), "lon 0 is day"
+
+    def test_a_polar_night_survives_a_projection_that_cannot_reach_the_pole(self):
+        """Web Mercator sends lat -90 to infinity, and the polar night must still be shaded.
+
+        Test scenario:
+            cleopatra drops non-finite vertices. Dropping the two pole corners of the night ring would
+            close it straight along the terminator and leave the polar cap unshaded, so the static tier
+            must hand cleopatra a ring Mercator can project.
+        """
+        canvas = Map(crs=3857)
+        canvas.ax.set_xlim(-2.0e7, 2.0e7)
+        canvas.ax.set_ylim(-2.0e7, 2.0e7)
+        artist = canvas.nightshade(JUNE_NOON)
+        assert _covered(artist, _mercator(0.0, -80.0)), (
+            "the south pole is in polar night in June"
+        )
+        assert not _covered(artist, _mercator(0.0, 80.0)), (
+            "the north pole is in polar day in June"
+        )
+
+    def test_an_empty_axes_is_framed_on_the_shade(self):
+        """A map with nothing on it yet is fitted to the overlay, as a reference layer on a bare map is."""
+        canvas = Map(crs=4326)
+        canvas.nightshade(EQUINOX_NOON)
+        assert canvas.ax.get_xlim() != (0.0, 1.0), canvas.ax.get_xlim()
+
+    def test_a_framed_view_is_kept(self):
+        """A shade over a regional view does not zoom the map out to the globe."""
+        canvas = Map(crs=4326)
+        canvas.ax.set_xlim(0, 20)
+        canvas.ax.set_ylim(40, 60)
+        canvas.nightshade(EQUINOX_NOON)
+        assert canvas.ax.get_xlim() == (0.0, 20.0), canvas.ax.get_xlim()
+
+    def test_style_reaches_the_artist(self):
+        """Style keywords are cleopatra's, forwarded to the collection."""
+        artist = _world_4326().nightshade(EQUINOX_NOON, alpha=0.6, zorder=7)
+        assert artist.get_alpha() == pytest.approx(0.6), artist.get_alpha()
+        assert artist.get_zorder() == 7, artist.get_zorder()
+
+    def test_the_layer_is_described_with_its_moment(self):
+        """The figure records the kind, the instant as ISO 8601 text and the refraction."""
+        canvas = _world_4326()
+        canvas.nightshade(EQUINOX_NOON, refraction=-6.0)
+        layer = canvas.figure_spec.layers.get(canvas.layer_ids[-1])
+        assert layer.kind == "nightshade", layer.kind
+        assert layer.symbology.props["when"] == "2026-03-20T12:00:00+00:00", (
+            layer.symbology.props
+        )
+        assert layer.symbology.props["refraction"] == -6.0, layer.symbology.props
+
+    def test_a_naive_moment_is_read_as_utc(self):
+        """A datetime with no zone is UTC, which is what cleopatra assumes too."""
+        canvas = _world_4326()
+        canvas.nightshade(datetime(2026, 3, 20, 12, 0))
+        layer = canvas.figure_spec.layers.get(canvas.layer_ids[-1])
+        assert layer.symbology.props["when"] == "2026-03-20T12:00:00+00:00", (
+            layer.symbology.props
+        )
+
+    def test_an_iso_string_is_a_moment_too(self):
+        """A figure read back carries the instant as text, so the builder takes text."""
+        artist = _world_4326().nightshade("2026-03-20T12:00:00+00:00")
+        assert _covered(artist, (170.0, 0.0)), "lon 170 at noon UTC is night"
+
+    def test_a_refraction_out_of_range_is_refused_and_not_described(self):
+        """A positive refraction is not a terminator; the refusal leaves no layer behind."""
+        canvas = _world_4326()
+        with pytest.raises(ValueError, match="refraction"):
+            canvas.nightshade(EQUINOX_NOON, refraction=5.0)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_hiding_the_layer_hides_the_shade(self):
+        """The shade is addressable by its id, like every other layer."""
+        canvas = _world_4326()
+        artist = canvas.nightshade(EQUINOX_NOON, name="night")
+        canvas.set_visible("night", False)
+        assert artist.get_visible() is False, "hiding the layer must hide its artist"
+
+    def test_on_a_globe_the_near_side_night_is_shaded(self):
+        """On an orthographic globe centred on the antimeridian at noon UTC, the disc centre is night."""
+        canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
+        artist = canvas.nightshade(EQUINOX_NOON)
+        assert artist is not None, "the night side faces the viewer"
+        assert _covered(artist, (0.0, 0.0)), "the centre of the disc is at midnight"
+
+
+class TestTissot:
+    """Geodesic circles of one ground radius, drawn through the display projection."""
+
+    def test_it_draws_one_ring_per_centre(self):
+        """Three centres, three rings."""
+        canvas = _world_4326()
+        artist = canvas.tissot([-90.0, 0.0, 90.0], [0.0, 0.0, 0.0])
+        assert isinstance(artist, PolyCollection), type(artist)
+        assert len(artist.get_paths()) == 3, len(artist.get_paths())
+
+    def test_the_default_is_a_world_grid(self):
+        """With no centres given, a grid covers the world so the distortion can be read everywhere."""
+        artist = _world_4326().tissot()
+        assert len(artist.get_paths()) > 10, len(artist.get_paths())
+
+    def test_a_ring_has_the_angular_radius_of_its_ground_radius(self):
+        """On lon/lat axes a 500 km ring at the equator spans 500 km / R in latitude each way."""
+        artist = _world_4326().tissot([0.0], [0.0], radius_m=500_000.0)
+        lat = artist.get_paths()[0].vertices[:, 1]
+        expected = math.degrees(500_000.0 / MEAN_EARTH_R)
+        assert lat.max() == pytest.approx(expected, rel=1e-3), lat.max()
+
+    def test_mercator_inflates_a_ring_at_sixty_degrees_twice_over(self):
+        """Mercator's scale factor is sec(lat), which is 2 at 60 degrees — the point of an indicatrix."""
+        canvas = Map(crs=3857)
+        canvas.ax.set_xlim(-2.0e7, 2.0e7)
+        canvas.ax.set_ylim(-2.0e7, 2.0e7)
+        artist = canvas.tissot([0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)
+        equator, sixty = (np.ptp(path.vertices[:, 0]) for path in artist.get_paths())
+        assert sixty / equator == pytest.approx(2.0, rel=0.02), sixty / equator
+
+    def test_a_ring_across_the_antimeridian_stays_one_ring(self):
+        """A circle centred on lon 180 must not smear across the whole map.
+
+        Test scenario:
+            Wrapped longitudes put half the ring at +179 and half at -179; drawn as is, its outline would
+            cross the whole world. Its width in lon/lat must stay that of a 500 km circle.
+        """
+        artist = _world_4326().tissot([180.0], [0.0], radius_m=500_000.0)
+        width = np.ptp(artist.get_paths()[0].vertices[:, 0])
+        expected = 2 * math.degrees(500_000.0 / MEAN_EARTH_R)
+        assert width == pytest.approx(expected, rel=1e-2), width
+
+    def test_a_far_side_ring_on_a_globe_is_left_out(self):
+        """A circle behind the globe has no near-side outline; only the visible one is drawn."""
+        canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
+        artist = canvas.tissot([0.0, 180.0], [0.0, 0.0])
+        assert len(artist.get_paths()) == 1, len(artist.get_paths())
+
+    def test_style_reaches_the_artist(self):
+        """``edgecolor`` and friends are cleopatra's, forwarded to the collection."""
+        artist = _world_4326().tissot([0.0], [0.0], edgecolor="crimson")
+        assert tuple(artist.get_edgecolor()[0]) == pytest.approx(
+            (220 / 255, 20 / 255, 60 / 255, 1.0)
+        )
+
+    def test_the_layer_is_described_with_its_centres(self):
+        """The figure records the kind, the centres and the radius as plain values."""
+        canvas = _world_4326()
+        canvas.tissot([10.0, 20.0], [0.0, 30.0], radius_m=250_000.0)
+        layer = canvas.figure_spec.layers.get(canvas.layer_ids[-1])
+        props = layer.symbology.props
+        assert layer.kind == "tissot", layer.kind
+        assert (list(props["lons"]), list(props["lats"])) == (
+            [10.0, 20.0],
+            [0.0, 30.0],
+        ), props
+        assert props["radius_m"] == 250_000.0, props
+
+    def test_centres_of_two_lengths_are_refused(self):
+        """``lons`` and ``lats`` pair up; two lengths is a caller error, not a silent truncation."""
+        canvas = _world_4326()
+        with pytest.raises(ValueError, match="same shape"):
+            canvas.tissot([0.0, 10.0], [0.0])

@@ -11,6 +11,7 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 import contextlib
 import logging
 import math
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import (
     TYPE_CHECKING,
@@ -26,6 +27,15 @@ from typing import (
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
+from cleopatra.basemap.solar import (
+    DEFAULT_REFRACTION,
+    DEFAULT_TERMINATOR_SAMPLES,
+    DEFAULT_TISSOT_SAMPLES,
+    add_nightshade,
+    add_tissot,
+    subsolar_point,
+    tissot_circles,
+)
 from cleopatra.basemap.tiles import add_tiles
 from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
@@ -730,6 +740,249 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
     return DrawnLayer(artist=tiles, artists=tuple(drawn_tiles))
 
 
+#: The latitude a night-shade vertex is pulled back to before it is projected. A night region that holds a
+#: pole runs along that pole's map edge, and a cylindrical projection such as Web Mercator sends latitude 90 to
+#: infinity — where cleopatra drops the vertex, closing the ring straight along the terminator and leaving the
+#: polar night unshaded. A tenth of a degree short of the pole projects to a finite point far outside any view.
+_NIGHT_POLE_LATITUDE = 89.9
+
+#: The centres ``tissot()`` draws when it is given none: every 30 degrees of longitude, offset from the
+#: antimeridian, and every 30 degrees of latitude from 60 S to 60 N — enough to read the distortion anywhere a
+#: world map is read, and clear of the poles, where every projection's indicatrix degenerates.
+_TISSOT_LONS: Tuple[float, ...] = tuple(float(lon) for lon in range(-165, 180, 30))
+_TISSOT_LATS: Tuple[float, ...] = (-60.0, -30.0, 0.0, 30.0, 60.0)
+
+#: The ground radius of a Tissot circle when none is given, in metres.
+DEFAULT_TISSOT_RADIUS_M = 500_000.0
+
+#: How a night shade looks when the caller asks for nothing else — cleopatra's own ``add_nightshade``
+#: defaults, spelled out for the globe path, which fills the limb-clipped rings itself.
+_NIGHT_STYLE: Dict[str, Any] = {
+    "facecolor": "black",
+    "edgecolor": "none",
+    "alpha": 0.35,
+}
+
+
+def _utc_moment(when: Any) -> datetime:
+    """Read the instant a night shade is drawn for, as an aware UTC ``datetime``.
+
+    Args:
+        when: A ``datetime`` or ISO 8601 text. One with no zone is UTC, which is what cleopatra assumes too.
+
+    Returns:
+        The same instant, in UTC.
+
+    Raises:
+        TypeError: when ``when`` is neither a ``datetime`` nor text.
+        ValueError: when the text is not ISO 8601.
+    """
+    if isinstance(when, str):
+        when = datetime.fromisoformat(when)
+    if not isinstance(when, datetime):
+        raise TypeError(
+            f"nightshade(when=) takes a datetime or ISO 8601 text; got {type(when).__name__}"
+        )
+    if when.tzinfo is None:
+        return when.replace(tzinfo=timezone.utc)
+    return when.astimezone(timezone.utc)
+
+
+def _lonlat_to_display(scene: Any, ring: np.ndarray) -> np.ndarray:
+    """Project one lon/lat ring into the display CRS through pyramids.
+
+    Args:
+        scene: The map whose display CRS the ring is projected into.
+        ring: An ``(m, 2)`` lon/lat array.
+
+    Returns:
+        The ``(m, 2)`` projected array; a vertex the projection cannot place is non-finite.
+    """
+    x, y = reproject_coordinates(
+        ring[:, 0].tolist(), ring[:, 1].tolist(), from_crs=4326, to_crs=scene.crs
+    )
+    return np.column_stack([np.asarray(x, float), np.asarray(y, float)])
+
+
+def _night_ring_projector(scene: Any) -> Any:
+    """Return the ``transform`` cleopatra's ``add_nightshade`` maps each lon/lat night ring through.
+
+    Each ring is densified first, so its straight lon/lat edges — the run along a pole's map edge above all —
+    bend with the projection, and its pole vertices are pulled back to :data:`_NIGHT_POLE_LATITUDE` so a
+    projection that cannot reach the pole still places them.
+
+    Args:
+        scene: The map being drawn on.
+
+    Returns:
+        A callable ``(m, 2) lon/lat -> (k, 2) display`` array.
+    """
+
+    def project(ring: np.ndarray) -> np.ndarray:
+        """Densify, pull back from the poles, and project one ring.
+
+        Args:
+            ring: An ``(m, 2)`` lon/lat ring.
+
+        Returns:
+            The projected ring.
+        """
+        dense = projections.densify_lonlat(np.asarray(ring, dtype=float), step_deg=1.0)
+        dense[:, 1] = np.clip(dense[:, 1], -_NIGHT_POLE_LATITUDE, _NIGHT_POLE_LATITUDE)
+        return _lonlat_to_display(scene, dense)
+
+    return project
+
+
+#: Samples per side of the display grid a globe's night shade is evaluated on.
+_GLOBE_NIGHT_GRID = 400
+
+
+def _globe_nightshade(
+    scene: Any, when: datetime, refraction: float, style: Dict[str, Any]
+) -> Optional[DrawnLayer]:
+    """Shade a globe's visible night side by filling where the sun stands below the terminator altitude.
+
+    A globe cannot take the night *polygon*: half of it is on the far side, where the projection has no
+    position at all, and re-closing what is left along the limb by the shorter arc — the rule the
+    Natural-Earth fills use — closes the wrong way whenever the visible night spans more than half the limb,
+    which is every view of the night side. So the globe asks the opposite question: each point of a display
+    grid is taken back to lon/lat through pyramids, and the solar altitude there is read off cleopatra's
+    subsolar point. The fill is the region where it is below ``refraction`` — exact at the terminator (the
+    contour interpolates the crossing) and empty off the disc, where the inverse projection has no answer.
+
+    Args:
+        scene: The globe being drawn on.
+        when: The instant, in UTC.
+        refraction: The solar altitude, in degrees, that defines the terminator.
+        style: The caller's style, in ``PolyCollection`` keywords; ``color``/``facecolor`` becomes the fill
+            colour, an edge is not drawn, and the rest (``alpha``, ``zorder``, …) reaches ``contourf``.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the filled contour set, or ``None`` when
+        no visible point is at night.
+    """
+    _, (xmin, xmax), (ymin, ymax) = scene._frame()
+    grid_x, grid_y = np.meshgrid(
+        np.linspace(xmin, xmax, _GLOBE_NIGHT_GRID),
+        np.linspace(ymin, ymax, _GLOBE_NIGHT_GRID),
+    )
+    lon, lat = reproject_coordinates(
+        grid_x.ravel().tolist(),
+        grid_y.ravel().tolist(),
+        from_crs=scene.crs,
+        to_crs=4326,
+    )
+    lon_r = np.radians(np.asarray(lon, dtype=float)).reshape(grid_x.shape)
+    lat_r = np.radians(np.asarray(lat, dtype=float)).reshape(grid_x.shape)
+    sun_lon, sun_lat = (math.radians(value) for value in subsolar_point(when))
+    with np.errstate(
+        invalid="ignore"
+    ):  # off the disc the inverse is inf, and its sine and cosine NaN
+        sin_altitude = np.sin(lat_r) * math.sin(sun_lat) + np.cos(lat_r) * math.cos(
+            sun_lat
+        ) * np.cos(lon_r - sun_lon)
+    # Below zero at night; non-finite off the disc, which contourf leaves unfilled.
+    depth = np.where(
+        np.isfinite(sin_altitude),
+        sin_altitude - math.sin(math.radians(refraction)),
+        np.nan,
+    )
+    if not np.any(depth < 0):
+        return None
+    opts = {**_NIGHT_STYLE, **style}
+    fill = opts.pop("color", None) or opts.pop("facecolor")
+    opts.pop("facecolor", None)
+    opts.pop("edgecolor", None)
+    with scene._preserve_view():
+        shade = scene.ax.contourf(
+            grid_x, grid_y, depth, levels=[-2.0, 0.0], colors=[fill], **opts
+        )
+    return DrawnLayer(artist=shade, artists=(shade,))
+
+
+def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Shade the night side of the terminator at the instant a described layer recorded.
+
+    cleopatra computes the night region (``cleopatra.basemap.solar.night_polygon``) and leaves its projection
+    to the consumer. A flat map hands ``add_nightshade`` a ``transform`` that projects through pyramids. A
+    globe is filled from the solar altitude instead (see :func:`_globe_nightshade`), because the night side of
+    a globe is half of it and the far half has no projected position at all.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — the shade is computed from a clock.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``, or ``None`` on a
+        globe whose visible hemisphere holds no night — a layer that was not drawn rather than an empty one.
+    """
+    props = dict(layer.symbology.props)
+    when = _utc_moment(props["when"])
+    refraction, samples = float(props["refraction"]), int(props["n"])
+    style = drawing_style(scene, layer)
+    if scene.globe:
+        return _globe_nightshade(scene, when, refraction, style)
+    unframed = _axes_extent(scene.ax) is None
+    transform = None if same_crs(scene.crs, 4326) else _night_ring_projector(scene)
+    shade = add_nightshade(
+        scene.ax, when, refraction=refraction, n=samples, transform=transform, **style
+    )
+    if unframed:
+        # cleopatra keeps the view it found, and a bare axes' view is matplotlib's unit square.
+        scene.ax.autoscale()
+    return DrawnLayer(artist=shade, artists=(shade,))
+
+
+def _continuous_ring(ring: np.ndarray, centre_lon: float) -> np.ndarray:
+    """Unwrap a lon/lat ring's longitudes around its centre, so a ring across the antimeridian stays whole.
+
+    Args:
+        ring: An ``(m, 2)`` lon/lat ring whose longitudes are wrapped to ``(-180, 180]``.
+        centre_lon: The longitude the ring is drawn around.
+
+    Returns:
+        A copy whose longitudes run continuously around ``centre_lon`` — past 180 where the ring crosses it.
+    """
+    out = np.array(ring, dtype=float)
+    out[:, 0] = centre_lon + (out[:, 0] - centre_lon + 180.0) % 360.0 - 180.0
+    return out
+
+
+def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Draw the Tissot indicatrices a described layer recorded, through the display projection.
+
+    cleopatra builds the geodesic circles (``tissot_circles``) and draws rings it is handed (``add_tissot``);
+    what a circle becomes on the map is the projection's doing, so the rings are projected here through
+    pyramids. A ring the projection cannot place whole — one on the far side of a globe — is left out rather
+    than drawn as a fragment, since half an indicatrix reads as a different distortion.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — the circles are computed from the centres.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``, or ``None`` when
+        no ring could be placed — a layer that was not drawn rather than an empty one.
+    """
+    props = dict(layer.symbology.props)
+    lons, lats = list(props["lons"]), list(props["lats"])
+    circles = tissot_circles(lons, lats, float(props["radius_m"]), n=int(props["n"]))
+    rings = [_continuous_ring(circle, float(lon)) for circle, lon in zip(circles, lons)]
+    if not same_crs(scene.crs, 4326):
+        rings = [_lonlat_to_display(scene, ring) for ring in rings]
+    rings = [ring for ring in rings if np.isfinite(ring).all()]
+    if not rings:
+        return None
+    unframed = _axes_extent(scene.ax) is None
+    indicatrix = add_tissot(scene.ax, rings, **drawing_style(scene, layer))
+    if unframed:
+        scene.ax.autoscale()
+    return DrawnLayer(artist=indicatrix, artists=(indicatrix,))
+
+
 class DecorationMixin(_MixinBase):
     """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.static.map.Map`.
 
@@ -1330,6 +1583,196 @@ class DecorationMixin(_MixinBase):
         """
         return self._natural_earth(
             "rivers", resolution, zorder=2.4, name=name, visible=visible, **kwargs
+        )
+
+    def nightshade(
+        self,
+        when: Any,
+        *,
+        refraction: float = DEFAULT_REFRACTION,
+        n: int = DEFAULT_TERMINATOR_SAMPLES,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **style: Any,
+    ) -> Any:
+        """Shade the night side of the day/night terminator at one instant.
+
+        The terminator is computed by cleopatra (``cleopatra.basemap.solar``, a low-precision solar position
+        good to well under a degree) and projected into the display CRS through pyramids. A night region that
+        holds a pole is shaded to the pole on a flat map, and a globe shades only its visible hemisphere. On
+        an axes nothing has framed yet, the map is fitted to the shade; a framed view is kept.
+
+        Args:
+            when: The instant, as a ``datetime`` or ISO 8601 text. One with no time zone is UTC. The figure
+                records it as UTC ISO text, so a figure read back draws the same shade.
+            refraction: The solar altitude, in degrees, that defines the terminator — ``-0.83`` (default)
+                for sunrise and sunset, ``-6``/``-12``/``-18`` for the civil, nautical and astronomical
+                twilight lines. Must lie in ``(-90, 0]``.
+            n: Samples along the terminator.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **style: Forwarded to the ``PolyCollection`` (``facecolor``/``color``, ``alpha``, ``zorder``,
+                …). The default is black at ``alpha=0.35``.
+
+        Returns:
+            The night shade's ``PolyCollection`` — on a globe, the filled ``ContourSet`` it is drawn as there
+            — or ``None`` on a globe whose visible side holds no night.
+
+        Raises:
+            ValueError: when ``refraction`` is outside ``(-90, 0]``, ``n`` is below 4, or ``when`` is text
+                that is not ISO 8601. The layer is not described.
+            TypeError: when ``when`` is neither a ``datetime`` nor text.
+
+        Examples:
+            - At the March equinox at noon UTC the antimeridian is at midnight and Greenwich at noon:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from datetime import datetime, timezone
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> night = m.nightshade(datetime(2026, 3, 20, 12, tzinfo=timezone.utc))
+                >>> [any(p.contains_point(xy) for p in night.get_paths()) for xy in ((170, 0), (0, 0))]
+                [True, False]
+                >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
+                'nightshade'
+
+                ```
+            - The twilight lines are the same call with another refraction; the figure records it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=3857)
+                >>> _ = m.nightshade("2026-06-21T12:00:00", refraction=-6.0, alpha=0.2)
+                >>> props = m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props
+                >>> props["when"], props["refraction"]
+                ('2026-06-21T12:00:00+00:00', -6.0)
+
+                ```
+
+        See Also:
+            tissot: the other overlay cleopatra's ``solar`` module draws.
+        """
+        moment = _utc_moment(when)
+        return self._draw(
+            LayerRecord(
+                "nightshade",
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "nightshade",
+                        "when": moment.isoformat(),
+                        "refraction": float(refraction),
+                        "n": int(n),
+                    }
+                ),
+                opts=style,
+            )
+        )
+
+    def tissot(
+        self,
+        lons: Optional[Sequence[float]] = None,
+        lats: Optional[Sequence[float]] = None,
+        *,
+        radius_m: float = DEFAULT_TISSOT_RADIUS_M,
+        n: int = DEFAULT_TISSOT_SAMPLES,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **style: Any,
+    ) -> Any:
+        """Draw Tissot's indicatrices: circles of one ground radius, shown as the projection distorts them.
+
+        Each circle is the set of points ``radius_m`` from its centre on the sphere (cleopatra's
+        ``tissot_circles``), projected into the display CRS through pyramids — so a Web Mercator map shows
+        them swelling toward the poles, and an equal-area one shows them keeping their area. A circle the
+        projection cannot place whole, such as one on the far side of a globe, is left out. On an axes
+        nothing has framed yet, the map is fitted to the circles; a framed view is kept.
+
+        Args:
+            lons: Circle-centre longitudes, in degrees. ``None`` (default, with ``lats`` also ``None``) draws
+                a world grid every 30 degrees of longitude and latitude, from 60 S to 60 N.
+            lats: Circle-centre latitudes, in degrees, pairing with ``lons``.
+            radius_m: The ground radius of every circle, in metres (default 500 km).
+            n: Vertices per circle.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **style: Forwarded to the ``PolyCollection`` (``edgecolor``, ``facecolor``, ``linewidth``, …).
+                The default is an unfilled black outline.
+
+        Returns:
+            The circles' ``PolyCollection``, or ``None`` when no circle could be placed.
+
+        Raises:
+            ValueError: when only one of ``lons``/``lats`` is given, when they differ in length, when
+                ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n`` is below 4.
+                The layer is not described.
+
+        Examples:
+            - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth import Map
+                >>> m = Map(crs=3857)
+                >>> rings = m.tissot([0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)
+                >>> equator, sixty = (np.ptp(p.vertices[:, 0]) for p in rings.get_paths())
+                >>> round(float(sixty / equator), 1)
+                2.0
+
+                ```
+            - With no centres, a world grid is drawn and described as one layer:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> len(m.tissot(edgecolor="crimson").get_paths())
+                60
+                >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
+                'tissot'
+
+                ```
+
+        See Also:
+            nightshade: the other overlay cleopatra's ``solar`` module draws.
+        """
+        if (lons is None) != (lats is None):
+            raise ValueError(
+                "tissot() takes lons= and lats= together, or neither for the world grid"
+            )
+        if lons is None or lats is None:
+            grid_lon, grid_lat = np.meshgrid(_TISSOT_LONS, _TISSOT_LATS)
+            lon_list = [float(v) for v in grid_lon.ravel()]
+            lat_list = [float(v) for v in grid_lat.ravel()]
+        else:
+            lon_list = [float(v) for v in np.atleast_1d(np.asarray(lons, dtype=float))]
+            lat_list = [float(v) for v in np.atleast_1d(np.asarray(lats, dtype=float))]
+        return self._draw(
+            LayerRecord(
+                "tissot",
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "tissot",
+                        "lons": lon_list,
+                        "lats": lat_list,
+                        "radius_m": float(radius_m),
+                        "n": int(n),
+                    }
+                ),
+                opts=style,
+            )
         )
 
     def basemap(

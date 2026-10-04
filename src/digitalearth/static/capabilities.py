@@ -66,6 +66,8 @@ CAPABILITIES = Capabilities(
             "ocean",
             "lakes",
             "rivers",
+            "nightshade",
+            "tissot",
             "custom:matplotlib",
         }
     ),

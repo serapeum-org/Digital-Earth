@@ -247,6 +247,8 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "ocean",
     "lakes",
     "rivers",
+    "nightshade",
+    "tissot",
     # The caller's own artist. Declared and drawn like any other kind, as each other tier declares
     # its engine's custom layers — what it cannot do is be *rebuilt*, which is why the object is held.
     "custom:matplotlib",
@@ -327,6 +329,8 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
         "lakes": {"lakes": decoration.draw_natural_earth},
         "rivers": {"rivers": decoration.draw_natural_earth},
         "basemap": {"basemap": decoration.draw_basemap},
+        "nightshade": {"nightshade": decoration.draw_nightshade},
+        "tissot": {"tissot": decoration.draw_tissot},
         "custom:matplotlib": {"custom": draw_custom},
     }
 

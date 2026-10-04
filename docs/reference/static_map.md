@@ -53,6 +53,23 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## Overlays computed from the globe itself
+
+`nightshade(when)` shades the night side of the day/night terminator at one instant, and `tissot()` draws
+Tissot's indicatrices — circles of one ground radius, shown as the projection distorts them. cleopatra computes
+both in lon/lat (`cleopatra.basemap.solar`) and they are projected into the display CRS through pyramids, so a
+Web Mercator map shows the polar night reaching the pole and the indicatrices swelling toward it. On a globe
+the night side is filled only where it faces the viewer, and a circle on the far side is left out.
+
+```python
+from datetime import datetime, timezone
+
+m = Map(crs=3857)
+m.nightshade(datetime(2026, 6, 21, 12, tzinfo=timezone.utc), alpha=0.3)
+m.nightshade("2026-06-21T12:00:00", refraction=-6.0, alpha=0.15)  # civil twilight
+m.tissot(edgecolor="crimson")                                      # a world grid of 500 km circles
+```
+
 ::: digitalearth.static.map.Map
     options:
       inherited_members: true
@@ -75,6 +92,8 @@ by name, saying what the call takes.
         - graticule
         - basemap
         - coastlines
+        - nightshade
+        - tissot
         - colorbar
         - legend
         - layer_ids

@@ -192,6 +192,11 @@ DECORATION_BUILDERS = {
     "ocean": ("ocean", lambda canvas: canvas.ocean()),
     "lakes": ("lakes", lambda canvas: canvas.lakes()),
     "rivers": ("rivers", lambda canvas: canvas.rivers()),
+    "nightshade": (
+        "nightshade",
+        lambda canvas: canvas.nightshade("2026-03-20T12:00:00"),
+    ),
+    "tissot": ("tissot", lambda canvas: canvas.tissot()),
 }
 
 

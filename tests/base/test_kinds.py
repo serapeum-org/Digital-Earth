@@ -55,6 +55,8 @@ class TestTheBuiltInVocabulary:
             "lakes",
             "rivers",
             "model",
+            "nightshade",
+            "tissot",
         ],
     )
     def test_each_built_in_kind_is_registered(self, name):

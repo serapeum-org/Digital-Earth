@@ -33,6 +33,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `lines` | — | ✓ | ✓ | — |
 | `mesh` | ✓ | — | ✓ | — |
 | `model` | — | ✓ | — | — |
+| `nightshade` | ✓ | — | — | — |
 | `ocean` | ✓ | — | ✓ | — |
 | `point_cloud` | — | ✓ | — | ✓ |
 | `points` | ✓ | ✓ | ✓ | — |
@@ -43,6 +44,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `streamlines` | ✓ | — | ✓ | — |
 | `terrain` | — | ✓ | — | ✓ |
 | `text` | ✓ | ✓ | ✓ | ✓ |
+| `tissot` | ✓ | — | — | — |
 | `unstructured` | ✓ | — | ✓ | — |
 | `vectors` | ✓ | — | ✓ | ✓ |
 | `volume` | — | — | — | ✓ |
