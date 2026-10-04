@@ -21,11 +21,8 @@ from matplotlib import colormaps
 from matplotlib.colors import to_rgba
 
 from digitalearth.static import Map
-from digitalearth.static.render_compat import (
-    EXTREME_KEYS,
-    STATIC_STYLE_SCHEMA,
-    pop_extreme_colors,
-)
+from digitalearth.static.maps.raster import FieldColors
+from digitalearth.static.render_compat import EXTREME_KEYS, STATIC_STYLE_SCHEMA
 
 MISSING = "#cccccc"
 OVER = "#ff0000"
@@ -80,22 +77,35 @@ class TestTheExtremeColoursAreDeclared:
             STATIC_STYLE_SCHEMA.suggest("mising")
         )
 
+    def test_the_colours_are_read_off_the_drawing_options(self):
+        """`FieldColors` is what the stated colours become, in one value rather than three keywords.
+
+        Test scenario:
+            The decision is asked at two points of one draw — the keywords must leave `opts` before the
+            glyph is built, and the colours can only be applied once the artist exists. A value read at the
+            first and asked at the second is what keeps those from drifting.
+        """
+        assert FieldColors.stated_on({"missing": MISSING}).missing == MISSING, (
+            "the stated colour must be read onto the value object"
+        )
+
     def test_the_colours_are_taken_out_of_the_drawing_options(self):
         """They are the tier's own keywords, so they must not travel on to the glyph.
 
         Test scenario:
             cleopatra validates its keyword list and refuses anything outside it, so a key left in `opts`
-            fails the whole render with "The given keyword argument:missing is not correct". The pop is what
-            makes them the tier's.
+            fails the whole render with "The given keyword argument:missing is not correct". Reading them
+            off `opts` removes them, which is what makes them the tier's.
         """
         opts = {"missing": MISSING, "cmap": "viridis"}
-        assert pop_extreme_colors(opts) == {"missing": MISSING}, opts
-
-    def test_the_other_options_are_left_alone(self):
-        """Only the three are popped."""
-        opts = {"missing": MISSING, "cmap": "viridis"}
-        pop_extreme_colors(opts)
+        FieldColors.stated_on(opts)
         assert opts == {"cmap": "viridis"}, opts
+
+    def test_a_call_that_states_nothing_says_so(self):
+        """Which is the signal to leave the resolved colormap exactly as it is."""
+        assert not FieldColors.stated_on({"cmap": "viridis"}).states_extremes, (
+            "a call with no stated colour must report none"
+        )
 
 
 class TestNothingShiftsWhenNothingIsStated:

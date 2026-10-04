@@ -13,7 +13,7 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
@@ -50,7 +50,7 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static.guides import drawn_scale, source_field
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import pop_extreme_colors, relocate_flat_style
+from digitalearth.static.render_compat import EXTREME_KEYS, relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord, drawing_style
 
@@ -416,46 +416,111 @@ def _class_plan(
     return recorded, asks_categorical(scheme) or from_record
 
 
-def _recolor_extremes(drawn: DrawnLayer, stated: Dict[str, str]) -> DrawnLayer:
-    """Fold the caller's stated extreme colours onto a drawn layer's colormap, through its scale.
+@dataclass(frozen=True)
+class FieldColors:
+    """The colour decisions a field render makes that its colormap cannot carry on its own.
 
-    The tier used to state **one** extreme colour, in one place, as a literal:
+    The tier used to state **one** of them, in one place, as a literal:
     ``artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))`` on a classified vector layer.
     A field stated none, so a nodata cell took matplotlib's transparent default and a clipped value took the
     ramp's own end colour — a field clipped at ``vmax`` drew exactly like one that peaks there.
 
-    The route is through :class:`~digitalearth.base.spec.scale.Scale` rather than straight onto the colormap,
-    because the scale is what the layer *publishes*: the colours end up in the figure's description, so
-    another tier reading it back colours the same values the same way.
+    They travel as one value rather than as three keywords because they are **one decision** asked at two
+    points of the same draw: the keywords have to leave the drawing options before the glyph is built (a
+    cleopatra glyph refuses a keyword outside its own list), while the colours can only be applied once the
+    artist and its limits exist. A value read at the first point and asked at the second is what keeps those
+    two from drifting apart, and what stops the drawer carrying a loose dict between them.
 
-    An extreme the caller did not state is passed as ``None``, which is how
-    ``matplotlib.colors.Colormap.with_extremes`` says "keep this one" — so a colormap the caller built
-    themselves keeps the extremes it already carried, and only the ones named here are restated.
+    Attributes:
+        missing: Colour for a cell with no value, or ``None`` to leave the colormap's own treatment alone.
+        over: Colour for a value above the upper limit, likewise.
+        under: Colour for a value below the lower limit, likewise.
 
-    Args:
-        drawn: What the glyph produced. Returned unchanged when it has no artist, when its artist colours
-            through no colormap, or when the artist's norm has no limits a scale could be published over.
-        stated: The colours the caller stated, as :func:`~digitalearth.static.render_compat.pop_extreme_colors`
-            returns them.
+    Examples:
+        - Read off a drawing-options dict, which is also how the keywords leave it:
+            ```python
+            >>> from digitalearth.static.maps.raster import FieldColors
+            >>> opts = {"missing": "#cccccc", "cmap": "viridis"}
+            >>> colors = FieldColors.stated_on(opts)
+            >>> colors.missing, opts
+            ('#cccccc', {'cmap': 'viridis'})
 
-    Returns:
-        The layer, with its artist's colormap recoloured and the stated colours on the scale it publishes.
+            ```
+        - A call that states nothing says so, which is the signal to leave the colormap untouched:
+            ```python
+            >>> from digitalearth.static.maps.raster import FieldColors
+            >>> FieldColors.stated_on({"cmap": "viridis"}).states_extremes
+            False
+
+            ```
     """
-    artist = drawn.artist
-    if artist is None or not hasattr(artist, "set_cmap"):
-        return drawn
-    # A categorical field already states its scale — its codes are the one scale a norm cannot express — so
-    # the colours are added to *that* rather than to a second reading of the same artist.
-    scale = drawn.scale if drawn.scale is not None else drawn_scale(artist)
-    if scale is None:
-        return drawn
-    scale = scale.with_extremes(**stated)
-    artist.set_cmap(
-        artist.get_cmap().with_extremes(
-            bad=scale.missing, over=scale.over, under=scale.under
+
+    missing: Optional[str] = None
+    over: Optional[str] = None
+    under: Optional[str] = None
+
+    @classmethod
+    def stated_on(cls, opts: Dict[str, Any]) -> "FieldColors":
+        """Take this tier's own colour keywords out of a drawing-options dict.
+
+        The :data:`~digitalearth.static.render_compat.EXTREME_KEYS` never reach a cleopatra glyph: a glyph
+        carries its extremes on the **colormap** it is handed, not as keywords, and refuses by name anything
+        outside its own keyword list. Removing them here is what makes them the tier's.
+
+        Args:
+            opts: The drawing options; mutated in place (the stated keys are removed).
+
+        Returns:
+            The colours the caller stated, with ``None`` for each one they did not.
+        """
+        return cls(**{key: opts.pop(key) for key in EXTREME_KEYS if key in opts})
+
+    @property
+    def states_extremes(self) -> bool:
+        """Whether the caller stated any extreme colour at all.
+
+        Returns:
+            ``False`` when none was stated, which is the signal to leave the resolved colormap exactly as it
+            is — the reason this capability changes nothing for a figure that does not ask for it.
+        """
+        return any((self.missing, self.over, self.under))
+
+    def applied_to(self, drawn: DrawnLayer) -> DrawnLayer:
+        """Return a drawn layer with the stated colours on its colormap *and* on the scale it publishes.
+
+        The route is through :class:`~digitalearth.base.spec.scale.Scale` rather than straight onto the
+        colormap, because the scale is what the layer publishes: the colours end up in the figure's
+        description, so another tier reading it back colours the same values the same way.
+
+        An extreme that was not stated is passed as ``None``, which is how
+        ``matplotlib.colors.Colormap.with_extremes`` says "keep this one" — so a colormap the caller built
+        themselves keeps the extremes it already carried, and only the stated ones are restated.
+
+        Args:
+            drawn: What the glyph produced. Returned unchanged when it has no artist, when its artist
+                colours through no colormap, or when the artist's norm has no limits a scale could be
+                published over.
+
+        Returns:
+            The layer, with its artist's colormap recoloured and the stated colours on its published scale.
+        """
+        artist = drawn.artist
+        if artist is None or not hasattr(artist, "set_cmap"):
+            return drawn
+        # A categorical field already states its scale — its codes are the one scale a norm cannot express —
+        # so the colours are added to *that* rather than to a second reading of the same artist.
+        stated = drawn.scale if drawn.scale is not None else drawn_scale(artist)
+        if stated is None:
+            return drawn
+        scale = stated.with_extremes(
+            missing=self.missing, over=self.over, under=self.under
         )
-    )
-    return replace(drawn, scale=scale)
+        artist.set_cmap(
+            artist.get_cmap().with_extremes(
+                bad=scale.missing, over=scale.over, under=scale.under
+            )
+        )
+        return replace(drawn, scale=scale)
 
 
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -485,7 +550,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     opts = drawing_style(scene, layer)
     # The tier's own keywords, taken out before anything cleopatra sees: a glyph carries its extremes on the
     # colormap, not as keywords, so these are folded there once the artist exists and its limits are known.
-    stated_extremes = pop_extreme_colors(opts)
+    colors = FieldColors.stated_on(opts)
     recorded, codes = _class_plan(layer, kind, opts.get("scheme"))
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
@@ -569,8 +634,8 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # A categorical scale is the one a norm cannot state — its edges look like any graduated cut — so the
         # drawer says it outright; a graduated one is read off the norm as it always was.
         drawn = replace(drawn, scale=classes.scale)
-    if stated_extremes:
-        drawn = _recolor_extremes(drawn, stated_extremes)
+    if colors.states_extremes:
+        drawn = colors.applied_to(drawn)
     # The band's own name, which only the drawer can answer: the builder records a band *number* and never
     # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
     return drawn.colored_by(source_field(identity, props["band"]))

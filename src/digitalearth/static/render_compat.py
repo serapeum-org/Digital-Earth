@@ -61,7 +61,6 @@ __all__ = [
     "fold_symbology",
     "group_render_kwargs",
     "plot_takes",
-    "pop_extreme_colors",
     "prepare_plot_kwargs",
     "relocate_flat_style",
     "route_flat_style",
@@ -161,7 +160,8 @@ NORM_KEY = "norm"
 #: The colours a field gives the values its ramp cannot place: a nodata cell (``missing``), a value below
 #: ``vmin`` (``under``) and one above ``vmax`` (``over``). They are **this tier's own** keywords rather than
 #: cleopatra's — the glyphs take their extremes on the colormap, not as keywords — so they are popped out of
-#: the drawing options by :func:`pop_extreme_colors` and folded onto the colormap through
+#: the drawing options by :class:`~digitalearth.static.maps.raster.FieldColors`, which owns the decision and
+#: folds it onto the colormap through
 #: :meth:`~digitalearth.base.spec.scale.Scale.with_extremes`. The spellings are matplotlib's own, minus
 #: ``bad``: a nodata cell is ``missing`` everywhere else in this package (``Scale.missing``,
 #: :data:`~digitalearth.base.symbology.MISSING_COLOR`), and that is the name the four tiers share.
@@ -437,45 +437,6 @@ def relocate_flat_style(
     if folds_marker_size:
         _fold_marker_size(opts)
     return moved
-
-
-def pop_extreme_colors(opts: Dict[str, Any]) -> Dict[str, str]:
-    """Take the :data:`EXTREME_KEYS` out of a drawing-options dict, returning the ones the caller stated.
-
-    These three never reach a cleopatra glyph: a glyph takes its extremes on the **colormap** it is handed,
-    so the drawer folds them there instead (through
-    :meth:`~digitalearth.base.spec.scale.Scale.with_extremes`). Popping them is what makes them the tier's
-    own keywords rather than a stray keyword cleopatra refuses by name.
-
-    Args:
-        opts: The drawing options; mutated in place (the stated keys are removed).
-
-    Returns:
-        The stated colours, keyed as :meth:`~digitalearth.base.spec.scale.Scale.extremes` keys them — so the
-        result goes straight to ``Scale.with_extremes(**result)``. Empty when the caller stated none, which
-        is the signal to leave the resolved colormap exactly as it is.
-
-    Examples:
-        - The stated colours come out and the rest of the options stay:
-            ```python
-            >>> from digitalearth.static.render_compat import pop_extreme_colors
-            >>> opts = {"missing": "#cccccc", "over": "#ff0000", "cmap": "viridis"}
-            >>> pop_extreme_colors(opts)
-            {'missing': '#cccccc', 'over': '#ff0000'}
-            >>> opts
-            {'cmap': 'viridis'}
-
-            ```
-        - Nothing stated, nothing taken — and the empty answer is what says "leave the colormap alone":
-            ```python
-            >>> from digitalearth.static.render_compat import pop_extreme_colors
-            >>> opts = {"cmap": "viridis"}
-            >>> pop_extreme_colors(opts)
-            {}
-
-            ```
-    """
-    return {key: opts.pop(key) for key in EXTREME_KEYS if key in opts}
 
 
 #: Flat member kwargs per group parameter (used to spot styling a target glyph cannot accept).
