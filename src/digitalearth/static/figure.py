@@ -10,7 +10,8 @@ rendering stays in each ``Map`` (pyramids + cleopatra).
 import logging
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from numbers import Integral
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -206,6 +207,156 @@ def _panels_of(stack: Any, band: int) -> Tuple[List[Any], List[int], str]:
         return [stack] * count, list(range(1, count + 1)), "band"
     frames = _frames_of(stack)
     return frames, [band] * len(frames), "frame"
+
+
+@dataclass(frozen=True, eq=False)
+class _PanelPlan:
+    """What a facet's panels are, how they are laid out, and what each one is titled.
+
+    Everything a caller says about the *panels* — ``stack``, ``band``, ``col``, ``col_wrap``, ``labels`` —
+    is answered here, in one place, before any axes exist: the frames and the band each reads, the grid
+    shape they are laid out on, and one title per panel. These values are born together, travel together
+    into :func:`grid` and the draw loop, and die when the panels are drawn, which is what makes them one
+    object rather than seven locals threaded through :func:`facet`. The colour scale is the other half of
+    a facet and is resolved separately, by :func:`_shared_style`.
+
+    Attributes:
+        frames: One frame per panel, in panel order. A multi-band dataset is the *same* dataset repeated,
+            which is why :meth:`panels` hands the band over alongside it.
+        bands: The band each frame is read at, index-aligned with :attr:`frames`.
+        labels: One label per panel, index-aligned with :attr:`frames` — the caller's own, or the band
+            numbers (1-based) for a multi-band dataset and the positions (0-based) otherwise.
+        name: What the panels are, as each title names it: the caller's ``col``, else ``"band"`` or
+            ``"frame"``.
+        nrows: Rows of panels.
+        ncols: Panels per row.
+
+    Examples:
+        - Four frames wrapped onto rows of three, titled by position:
+            ```python
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static.figure import _PanelPlan
+            >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+            >>> frames = [
+            ...     Dataset.from_array(arr=np.full((2, 2), float(i)), geo_ref=geo, no_data_value=-9999.0)
+            ...     for i in range(4)
+            ... ]
+            >>> plan = _PanelPlan.resolve(frames, 1, col=None, col_wrap=3, labels=None)
+            >>> plan.count, (plan.nrows, plan.ncols)
+            (4, (2, 3))
+            >>> plan.titles()
+            ['frame = 0', 'frame = 1', 'frame = 2', 'frame = 3']
+
+            ```
+        - A label per panel and a name for what they are:
+            ```python
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static.figure import _PanelPlan
+            >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+            >>> frames = [
+            ...     Dataset.from_array(arr=np.full((2, 2), float(i)), geo_ref=geo, no_data_value=-9999.0)
+            ...     for i in range(2)
+            ... ]
+            >>> plan = _PanelPlan.resolve(
+            ...     frames, 1, col="month", col_wrap=None, labels=["Jan", "Feb"]
+            ... )
+            >>> plan.titles()
+            ['month = Jan', 'month = Feb']
+
+            ```
+    """
+
+    frames: List[Any]
+    bands: List[int]
+    labels: List[Any]
+    name: str
+    nrows: int
+    ncols: int
+
+    @property
+    def count(self) -> int:
+        """How many panels the facet draws.
+
+        Returns:
+            The number of frames, which is the number of panels.
+        """
+        return len(self.frames)
+
+    @classmethod
+    def resolve(
+        cls,
+        stack: Any,
+        band: int,
+        *,
+        col: Optional[str],
+        col_wrap: Optional[int],
+        labels: Optional[Sequence[Any]],
+    ) -> "_PanelPlan":
+        """Read a caller's panel arguments into one plan, refusing what cannot be laid out.
+
+        Args:
+            stack: What the panels are, as :func:`_panels_of` takes it.
+            band: The band each frame of a collection or sequence is read at.
+            col: What the panels are, as each title names it, or ``None`` for ``"band"``/``"frame"``.
+            col_wrap: Panels per row, or ``None`` to put them all on one row.
+            labels: One label per panel, or ``None`` to number them. Any iterable, a generator included —
+                spent into a list before the panels are counted, so a generator is counted rather than
+                crashing ``len()``.
+
+        Returns:
+            The plan, with the grid shape and one label per panel already resolved.
+
+        Raises:
+            ValueError: for a ``stack`` that is none of the shapes :func:`_frames_of` takes, or that has no
+                frames; for a ``col_wrap`` below 1; and for a ``labels`` that does not number the panels.
+                All three are raised before :func:`facet` makes a figure, so a refused call leaves none
+                open.
+        """
+        frames, bands, default_col = _panels_of(stack, band)
+        count = len(frames)
+        if count == 0:
+            raise ValueError("facet() was given no frames to draw")
+        if col_wrap is not None and col_wrap < 1:
+            raise ValueError(
+                f"facet(col_wrap=) is panels per row and must be at least 1; got {col_wrap}"
+            )
+        spent = None if labels is None else list(labels)
+        if spent is not None and len(spent) != count:
+            raise ValueError(
+                f"facet() draws {count} panels, so labels= needs {count} labels; got {len(spent)}"
+            )
+        if spent is None:
+            spent = bands if default_col == "band" else list(range(count))
+        ncols = count if col_wrap is None else min(col_wrap, count)
+        return cls(
+            frames=frames,
+            bands=bands,
+            labels=spent,
+            name=default_col if col is None else col,
+            nrows=math.ceil(count / ncols),
+            ncols=ncols,
+        )
+
+    def titles(self) -> List[str]:
+        """Return the title of each panel, in panel order.
+
+        Returns:
+            One ``"<name> = <label>"`` string per panel.
+        """
+        return [f"{self.name} = {label}" for label in self.labels]
+
+    def panels(self, maps: Sequence[Any]) -> Iterator[Tuple[Any, Any, int, str]]:
+        """Pair each panel's ``Map`` with what it draws.
+
+        Args:
+            maps: The panels, from :func:`grid`, in panel order — as many as :attr:`count`.
+
+        Returns:
+            An iterator of ``(panel, frame, band, title)``, one per panel.
+        """
+        return zip(maps, self.frames, self.bands, self.titles())
 
 
 def _stack_values(
@@ -608,40 +759,23 @@ def facet(
             f"facet(kind={kind!r}) is not a render; use one of {sorted(_FACET_KINDS)}"
         )
     style = _checked_classes(style)
-    frames, bands, default_col = _panels_of(stack, band)
-    count = len(frames)
-    if count == 0:
-        raise ValueError("facet() was given no frames to draw")
-    if col_wrap is not None and col_wrap < 1:
-        raise ValueError(
-            f"facet(col_wrap=) is panels per row and must be at least 1; got {col_wrap}"
-        )
-    # Spent into a list before it is counted, so a generator of labels is counted rather than crashing
-    # `len()` — the refusal below is the one a wrong number of labels is meant to get.
-    labels = None if labels is None else list(labels)
-    if labels is not None and len(labels) != count:
-        raise ValueError(
-            f"facet() draws {count} panels, so labels= needs {count} labels; got {len(labels)}"
-        )
-    ncols = count if col_wrap is None else min(col_wrap, count)
-    nrows = math.ceil(count / ncols)
-    fig, slots = grid(nrows, ncols, crs=crs, globe=globe, figsize=figsize)
-    maps, spare = slots[:count], slots[count:]
+    # Every panel argument — the frames, the grid shape, the titles — is answered here, before any axes
+    # exist, so a refused call leaves no figure open.
+    plan = _PanelPlan.resolve(stack, band, col=col, col_wrap=col_wrap, labels=labels)
+    fig, slots = grid(plan.nrows, plan.ncols, crs=crs, globe=globe, figsize=figsize)
+    maps, spare = slots[: plan.count], slots[plan.count :]
     for empty in spare:
         empty.ax.set_visible(False)
-    values = _stack_values(maps[0], frames, bands)
+    values = _stack_values(maps[0], plan.frames, plan.bands)
     # The one reduction of the stack: it fills the shared vmin/vmax below and decides the colorbar.
     measured = measure_clim(values)
     shared = _shared_style(values, style, kind, measured)
     method, fixed = _FACET_KINDS[kind]
-    name = default_col if col is None else col
-    if labels is None:
-        labels = bands if default_col == "band" else list(range(count))
     drawn = None
-    for panel, frame, frame_band, label in zip(maps, frames, bands, labels):
+    for panel, frame, frame_band, title in plan.panels(maps):
         artist = getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
         drawn = artist if drawn is None else drawn
-        panel.set_title(f"{name} = {label}")
+        panel.set_title(title)
     if colorbar and drawn is not None and measured is None:
         # The shared scale fell back to the (0, 1) a `Scale` uses for an unmeasurable domain, so a bar here
         # would label the figure 0-1 while no cell on it holds a value at all. The panels are legitimate —

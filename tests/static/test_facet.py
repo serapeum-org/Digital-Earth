@@ -8,6 +8,7 @@ from the arrays the test builds, never through the code under test.
 
 import logging
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
@@ -764,3 +765,99 @@ class TestAStackASchemeCannotCut:
         frames = [_dataset(np.full((4, 4), -9999.0))]
         with pytest.raises(ValueError, match="every cell is nodata"):
             facet(frames, crs=4326, scheme="categorical")
+
+
+class TestThePanelPlan:
+    """``_PanelPlan`` answers every panel argument on its own, before any axes exist."""
+
+    def test_it_wraps_the_panels_onto_the_rows_the_count_needs(self, stack):
+        """The grid shape is the caller's ``col_wrap`` and the rows that many panels need.
+
+        Args:
+            stack: Four frames.
+
+        Test scenario:
+            Four panels, three per row: three columns and two rows, the second holding one panel and two
+            hidden slots. The numbers are written out here rather than read back through the plan.
+        """
+        plan = figure._PanelPlan.resolve(stack, 1, col=None, col_wrap=3, labels=None)
+        assert plan.count == 4, plan.count
+        assert (plan.nrows, plan.ncols) == (2, 3), (plan.nrows, plan.ncols)
+
+    def test_every_panel_on_one_row_without_a_wrap(self, stack):
+        """``col_wrap=None`` is one row of however many panels there are.
+
+        Args:
+            stack: Four frames.
+        """
+        plan = figure._PanelPlan.resolve(stack, 1, col=None, col_wrap=None, labels=None)
+        assert (plan.nrows, plan.ncols) == (1, 4), (plan.nrows, plan.ncols)
+
+    def test_a_multi_band_dataset_is_titled_by_its_band_numbers(self):
+        """A cube's panels are its bands, numbered from 1, and named ``band`` when no ``col`` says otherwise.
+
+        Test scenario:
+            The four frames stacked into one dataset: four panels reading bands 1-4 of the *same* dataset,
+            titled ``band = 1`` … ``band = 4``.
+        """
+        plan = figure._PanelPlan.resolve(
+            _dataset(np.stack(FRAMES)), 1, col=None, col_wrap=None, labels=None
+        )
+        assert plan.bands == [1, 2, 3, 4], plan.bands
+        assert plan.titles() == ["band = 1", "band = 2", "band = 3", "band = 4"], (
+            plan.titles()
+        )
+
+    def test_the_callers_labels_and_column_name_the_titles(self, stack):
+        """``col`` names what the panels are and ``labels`` says which one each is.
+
+        Args:
+            stack: Four frames.
+        """
+        plan = figure._PanelPlan.resolve(
+            stack,
+            1,
+            col="month",
+            col_wrap=None,
+            labels=iter(["Jan", "Feb", "Mar", "Apr"]),
+        )
+        assert plan.name == "month", plan.name
+        expected = ["month = Jan", "month = Feb", "month = Mar", "month = Apr"]
+        assert plan.titles() == expected, plan.titles()
+
+    def test_each_panel_is_paired_with_its_frame_band_and_title(self, stack):
+        """``panels`` is what the draw loop reads: one tuple per panel, in panel order.
+
+        Args:
+            stack: Four frames.
+
+        Test scenario:
+            The panels are stand-ins here — ``panels`` only pairs them up, so the test does not need a
+            figure to check the pairing.
+        """
+        plan = figure._PanelPlan.resolve(
+            stack, 2, col="t", col_wrap=None, labels=["a", "b", "c", "d"]
+        )
+        paired = list(plan.panels(["p0", "p1", "p2", "p3"]))
+        assert [entry[0] for entry in paired] == ["p0", "p1", "p2", "p3"], paired
+        assert [entry[1] for entry in paired] == stack, paired
+        assert [entry[2] for entry in paired] == [2, 2, 2, 2], paired
+        assert [entry[3] for entry in paired] == ["t = a", "t = b", "t = c", "t = d"], (
+            paired
+        )
+
+    def test_a_label_count_that_does_not_number_the_panels_opens_no_figure(self, stack):
+        """The panel refusals all come before ``facet`` makes a figure, so a refused call leaks none.
+
+        Args:
+            stack: Four frames.
+
+        Test scenario:
+            One label for four panels. The count of open matplotlib figures is read before and after the
+            refusal; the refusal must not have left one behind.
+        """
+        before = len(plt.get_fignums())
+        one_label = ["Jan"]
+        with pytest.raises(ValueError, match="labels"):
+            facet(stack, crs=4326, labels=one_label)
+        assert len(plt.get_fignums()) == before, plt.get_fignums()
