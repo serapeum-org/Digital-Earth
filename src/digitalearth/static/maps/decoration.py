@@ -2311,6 +2311,12 @@ class DecorationMixin(_MixinBase):
         Returns:
             The backdrop ``AxesImage`` (raster path), the tile artist, or ``None`` if a tile backdrop is
             unavailable offline or the raster lies outside what the display CRS shows.
+
+            **Unchanged by ST-20**, deliberately. The data builders return ``Self`` now, and this does not:
+            a backdrop is one artist a caller styles afterwards — a uniform fill, an alpha, a zorder — and
+            handing that artist back is the whole point of the method. It is read off the layer the
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` call below drew, through
+            :meth:`~digitalearth.static.scene.Scene.artist`, rather than off that call's return value.
         """
         if dataset is None:
             try:
@@ -2318,11 +2324,12 @@ class DecorationMixin(_MixinBase):
             except Exception as exc:  # tile servers unavailable — best-effort backdrop
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
+        before = set(self.layer_ids)
         with self._preserve_view():
             # `draw_band="underlay"` is the description's half of `zorder`: one says where the
             # backdrop sits among the figure's layers, the other where it sits on the axes. Both are
             # recorded, so a backdrop drawn again from its description comes back behind the data.
-            im = self.field(
+            self.field(
                 dataset,
                 cmap=cmap,
                 name=name,
@@ -2332,7 +2339,12 @@ class DecorationMixin(_MixinBase):
                 zorder=zorder,
                 **kwargs,
             )
-        return im
+        # `field` hands back the map since ST-20, so the artist comes from the layer it drew — identified by
+        # the id that appeared, not by "the last one", because a backdrop is drawn into the `underlay` band
+        # and need not sit at the end of the figure's draw order. A raster the display CRS could not place
+        # drew nothing and added no id, which is the `None` this method has always answered for that case.
+        added = [layer_id for layer_id in self.layer_ids if layer_id not in before]
+        return self.artist(added[-1]) if added else None
 
     def _project_line_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
         """Project lon/lat line parts to the display CRS, split at the projection limb.
