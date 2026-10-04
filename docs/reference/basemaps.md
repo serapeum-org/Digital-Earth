@@ -65,6 +65,26 @@ rather than a bug — but it has consequences:
   image. It also silences the one cleopatra log record that would carry the URL.
 - **Do not run tile fetches at `DEBUG` into shared logs.**
 
+## OGC services: WMS and WMTS
+
+The static tier tiles an OGC service through cleopatra's provider objects, passed to `basemap()` as they are.
+`WMSProvider` requests one `GetMap` per Web Mercator tile; `WMTSProvider` requests `GetTile` on the service's
+tile matrix set, by key-value parameters or by filling a RESTful URL template.
+
+```python
+from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
+from digitalearth import Map
+
+m = Map(crs=3857)
+m.set_domain((3.3, 50.7, 7.3, 53.6))       # tiles cover what the axes shows
+m.basemap(WMSProvider("https://example.org/geoserver/wms", "topp:states"))
+m.basemap(WMTSProvider("https://example.org/wmts/{TileMatrix}/{TileRow}/{TileCol}.png", "basemap"))
+```
+
+A credential the service needs goes in the provider's `extra_params`. The provider object is held beside the
+layer and is **not** written into the figure's description, so a figure saved to JSON and drawn again
+elsewhere has no record of which service it was — it names the shared default basemap in its place.
+
 ## Adding a preset
 
 Presets live in [`digitalearth.base.basemaps`][digitalearth.base.basemaps] — engine-neutral definitions (URL

@@ -1,0 +1,210 @@
+"""OGC WMS and WMTS basemaps through ``Map.basemap`` (ST-24).
+
+cleopatra 0.38 added ``cleopatra.basemap.ogc.WMSProvider`` and ``WMTSProvider``: provider objects that build a
+``GetMap``/``GetTile`` URL per tile, which ``add_tiles`` accepts beside an ``xyzservices`` provider. These pin
+that both pass straight through the static tier's ``basemap()``, and that the URLs actually requested are the
+OGC requests the provider describes.
+
+Nothing here reaches the network: the HTTP call underneath cleopatra's tile fetch is replaced by a stand-in
+that records each request and answers with one PNG, so the real fetch, stitch and draw all run.
+"""
+
+import io
+from urllib.parse import parse_qs, urlsplit
+
+import numpy as np
+import pytest
+from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
+from PIL import Image
+
+from digitalearth.static import Map
+
+WMS_URL = "https://example.test/geoserver/wms"
+WMTS_URL = "https://example.test/wmts"
+
+#: The Netherlands in Web Mercator, (xmin, xmax, ymin, ymax).
+NETHERLANDS_3857 = (350_000.0, 800_000.0, 6_550_000.0, 7_100_000.0)
+
+
+class _Response:
+    """The one method of an HTTP response cleopatra's tile fetch reads."""
+
+    def __init__(self, payload: bytes):
+        """Hold the body to hand back.
+
+        Args:
+            payload: The response body.
+        """
+        self._payload = payload
+
+    def read(self) -> bytes:
+        """Return the body.
+
+        Returns:
+            The bytes given at construction.
+        """
+        return self._payload
+
+
+@pytest.fixture
+def requested(monkeypatch):
+    """Answer every tile request from memory and record the URL asked for.
+
+    Args:
+        monkeypatch: pytest's patcher, which restores the real HTTP call afterwards.
+
+    Returns:
+        The list of URLs requested, one per tile.
+    """
+    from cleopatra.basemap import tiles as cleo_tiles
+
+    buffer = io.BytesIO()
+    Image.fromarray(np.full((256, 256, 4), 180, "uint8")).save(buffer, format="PNG")
+    payload = buffer.getvalue()
+    urls = []
+
+    def answer(request, timeout=None):
+        """Record the request and answer with the PNG.
+
+        Args:
+            request: The ``urllib.request.Request`` cleopatra built.
+            timeout: Ignored.
+
+        Returns:
+            A response whose body is the PNG.
+        """
+        urls.append(request.full_url)
+        return _Response(payload)
+
+    monkeypatch.setattr(cleo_tiles, "urlopen_http", answer)
+    return urls
+
+
+def _framed_map() -> Map:
+    """Return a Web Mercator map framed on the Netherlands, ready to tile.
+
+    Returns:
+        The map.
+    """
+    canvas = Map(crs=3857)
+    xmin, xmax, ymin, ymax = NETHERLANDS_3857
+    canvas.ax.set_xlim(xmin, xmax)
+    canvas.ax.set_ylim(ymin, ymax)
+    return canvas
+
+
+def _query(url: str) -> dict:
+    """Return a URL's query as upper-cased keys mapped to single values.
+
+    Args:
+        url: The requested URL.
+
+    Returns:
+        The query parameters.
+    """
+    return {
+        key.upper(): values[0] for key, values in parse_qs(urlsplit(url).query).items()
+    }
+
+
+class TestWms:
+    """A WMS service is tiled as ``GetMap`` requests, one per tile."""
+
+    def test_a_wms_provider_draws_tiles(self, requested):
+        """The provider object reaches ``add_tiles`` and an image lands on the axes.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMSProvider(WMS_URL, "topp:states"))
+        assert requested, "no tile was requested"
+        assert canvas.ax.images, "no tile image was drawn"
+
+    def test_every_request_is_a_getmap_for_the_layer(self, requested):
+        """Each tile is a WMS ``GetMap`` for the layer the provider names.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        _framed_map().basemap(WMSProvider(WMS_URL, "topp:states"))
+        queries = [_query(url) for url in requested]
+        assert {q["SERVICE"] for q in queries} == {"WMS"}, queries
+        assert {q["REQUEST"] for q in queries} == {"GetMap"}, queries
+        assert {q["LAYERS"] for q in queries} == {"topp:states"}, queries
+
+    def test_every_request_goes_to_the_service(self, requested):
+        """The host and path are the service's own.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        _framed_map().basemap(WMSProvider(WMS_URL, "topp:states"))
+        bases = {url.split("?")[0] for url in requested}
+        assert bases == {WMS_URL}, bases
+
+    def test_each_request_is_a_box_inside_the_web_mercator_world(self, requested):
+        """A tile's BBOX is a Web Mercator box, so it spans no more than the world's width.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        _framed_map().basemap(WMSProvider(WMS_URL, "topp:states"))
+        world = 2 * 20037508.342789244
+        for url in requested:
+            west, south, east, north = (
+                float(v) for v in _query(url)["BBOX"].split(",")
+            )
+            assert 0 < east - west <= world, url
+            assert 0 < north - south <= world, url
+
+    def test_the_layer_is_hidden_by_its_id(self, requested):
+        """A WMS basemap is an addressable layer like a named one.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMSProvider(WMS_URL, "topp:states"), name="states")
+        canvas.set_visible("states", False)
+        assert not any(image.get_visible() for image in canvas.ax.images), (
+            "hiding the basemap must hide its tiles"
+        )
+
+
+class TestWmts:
+    """A WMTS service is tiled as ``GetTile`` requests on its tile matrix set."""
+
+    def test_a_wmts_provider_draws_tiles(self, requested):
+        """The provider object reaches ``add_tiles`` and an image lands on the axes.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMTSProvider(WMTS_URL, "basemap"))
+        assert requested, "no tile was requested"
+        assert canvas.ax.images, "no tile image was drawn"
+
+    def test_every_request_is_a_gettile_for_the_layer(self, requested):
+        """Each tile is a KVP ``GetTile`` naming the layer and a tile column and row.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        _framed_map().basemap(WMTSProvider(WMTS_URL, "basemap"))
+        queries = [_query(url) for url in requested]
+        assert {q["REQUEST"] for q in queries} == {"GetTile"}, queries
+        assert {q["LAYER"] for q in queries} == {"basemap"}, queries
+        assert all("TILECOL" in q and "TILEROW" in q for q in queries), queries
+
+    def test_a_restful_template_is_filled_per_tile(self, requested):
+        """A RESTful WMTS template gets each tile's matrix, row and column substituted.
+
+        Args:
+            requested: The recorded tile requests.
+        """
+        template = WMTS_URL + "/{TileMatrix}/{TileRow}/{TileCol}.png"
+        _framed_map().basemap(WMTSProvider(template, "basemap"))
+        assert requested, "no tile was requested"
+        assert not any("{" in url for url in requested), requested
