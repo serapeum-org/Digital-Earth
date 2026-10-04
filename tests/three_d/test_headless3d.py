@@ -115,6 +115,15 @@ class _StubbornServer(_FakeServer):
         self.exit_code = -9
 
 
+class _UnreapableServer(_StubbornServer):
+    """A server that survives both signals, so every wait the reaper makes times out."""
+
+    def kill(self):
+        """Log the kill and keep running, which is what leaves the second wait nothing to collect."""
+        self.calls.append(("kill", None))
+        self.killed = True
+
+
 @pytest.fixture
 def linux_without_display(monkeypatch):
     """Make the helper see a Linux host with ``Xvfb`` installed and no display, and record launches.
@@ -451,6 +460,47 @@ class TestStoppingTheServer:
             "wait",
         ], server.calls
         assert server.killed is True
+
+    def test_a_child_that_outlives_the_kill_does_not_break_the_shutdown(
+        self, linux_without_display, registered_hooks, monkeypatch
+    ):
+        """A child still running after ``SIGKILL`` and both waits is given up on, not raised over.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            - The fake refuses ``terminate()`` *and* ``kill()``, so both of the reaper's bounded waits
+              raise ``TimeoutExpired`` — the one case where nothing further can be done.
+            - This runs as an :mod:`atexit` hook, so the second timeout is swallowed: an exception out of
+              one only prints a traceback over the interpreter's shutdown, and the hook has no way to
+              stop a process that ignored ``SIGKILL``.
+            - The display is still given back, which is how the test proves the hook ran to the end
+              rather than unwinding at the second wait.
+        """
+        import os
+
+        monkeypatch.setattr(
+            headless.subprocess, "Popen", lambda args, **kwargs: _UnreapableServer(args)
+        )
+        server = start_xvfb(display=":42", wait=0.01)
+        hook, args, kwargs = registered_hooks[0]
+        hook(*args, **kwargs)
+        assert [name for name, _ in server.calls] == [
+            "wait",
+            "terminate",
+            "wait",
+            "kill",
+            "wait",
+        ], server.calls
+        assert server.poll() is None, (
+            "the fake must still be running, or it is not the unreapable case"
+        )
+        assert "DISPLAY" not in os.environ, (
+            "the hook must give the display back even when the child cannot be reaped"
+        )
 
     def test_a_reaped_child_warns_nothing_when_its_last_reference_goes(self):
         """The one measurable symptom: a real child, reaped, then dropped, and no ``ResourceWarning``.

@@ -822,6 +822,28 @@ class TestTheProjectedRingSeam:
             f"a Mercator world is over 4.0e7 m wide; the Pacific-centred one measured {shifted[0]}"
         )
 
+    @pytest.mark.parametrize(
+        "crs", [None, "not a crs", 3.5], ids=["none", "text", "number"]
+    )
+    def test_a_crs_that_declares_no_projection_cuts_at_the_antimeridian(self, crs):
+        """A CRS pyproj cannot read has no central meridian, so the seam stays where lon/lat wraps.
+
+        Args:
+            crs: Something pyproj refuses to interpret as a CRS.
+
+        Test scenario:
+            The seam is half a turn from the projection's central meridian, read off pyproj's own
+            parameter list. Nothing readable means nothing to read it from, and the answer has to be the
+            lon 180 a lon/lat axes wraps at — the same answer EPSG:4326 gives, which declares a datum and
+            no projection. Letting the ``CRSError`` out instead would have turned an unreadable CRS on a
+            *scene* into a failed ``tissot`` rather than an unreconnected ring. The expected value is half
+            a turn from the prime meridian, written out rather than read from the module.
+        """
+        seam = decoration._crs_seam_longitude(crs)
+        assert seam == pytest.approx(180.0), (
+            f"an unreadable CRS must cut at lon 180, got {seam}"
+        )
+
     def test_no_circles_is_no_projected_rings(self):
         """No rings in, no rings out — and no reprojection attempted on the way.
 
@@ -947,6 +969,36 @@ class TestTheTerminatorAltitudeIsRefusedTheSameWayOnEveryFrame:
             f"refraction={refraction} should draw, got {canvas.layer_ids}"
         )
 
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize(
+        "refraction",
+        [True, "-18", None, [-18.0]],
+        ids=["bool", "text", "none", "list"],
+    )
+    def test_a_refraction_that_is_not_a_real_number_is_refused_by_name(
+        self, globe, refraction
+    ):
+        """An altitude that is not a number at all is refused by the same message the range is.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            refraction: Something that is not a solar altitude.
+
+        Test scenario:
+            A non-number has no altitude to compare against the range, so the check reads it as a
+            ``nan`` — which fails both comparisons and lands in the one refusal the keyword has. Without
+            that reading, ``refraction="-18"`` raised ``TypeError`` from inside the comparison on a flat
+            map and from ``math.radians`` on a globe, neither naming the keyword; ``True`` is excluded
+            although it is an ``int``, because an altitude of one degree is a mistake rather than a
+            terminator. The layer list is read afterwards to pin that a refused shade is not half-recorded.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        with pytest.raises(ValueError, match=r"nightshade\(\) needs refraction="):
+            canvas.nightshade(JUNE_NOON, refraction=refraction)
+        assert canvas.layer_ids == [], (
+            f"a refused shade must add no layer, got {canvas.layer_ids}"
+        )
+
     def test_the_open_end_of_the_range_is_accepted_right_up_to_the_nadir(self):
         """An altitude a thousandth of a degree above the nadir is in range; the nadir itself is not.
 
@@ -1022,6 +1074,30 @@ class TestTheNightShadeColourAnswersAlikeOnEveryFrame:
         canvas = Map(crs=3857, globe=globe)
         with pytest.raises(ValueError, match="(?i)rgba|valid color"):
             canvas.nightshade(JUNE_NOON, **{keyword: ""})
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    def test_an_unset_edge_colour_is_drawn_rather_than_resolved(self, globe):
+        """``edgecolor=None`` is matplotlib's "unset", and neither frame refuses it.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+
+        Test scenario:
+            The edge channel is the sibling of the fill, and the two spellings of "nothing" have to part
+            company: ``edgecolor=""`` is a typo and is refused on both frames (above), while
+            ``edgecolor=None`` is matplotlib's own way of leaving the keyword unset and must draw. Only
+            the fill is read back, because a globe's filled contour has no edge to read — which is the
+            whole reason the keyword is dropped there, and why dropping it had to stop swallowing an
+            invalid colour without starting to refuse a legitimate ``None``.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        artist = canvas.nightshade(JUNE_NOON, edgecolor=None, name="ns")
+        assert canvas.layer_ids == ["ns"], (
+            f"edgecolor=None must draw, got {canvas.layer_ids}"
+        )
+        assert _fill_rgba(artist) == pytest.approx(NIGHT_DEFAULT_RGBA), (
+            f"an unset edge must leave the night fill alone, got {_fill_rgba(artist)}"
+        )
 
     @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
     @pytest.mark.parametrize("alpha", [0, 0.0], ids=["int-zero", "float-zero"])
