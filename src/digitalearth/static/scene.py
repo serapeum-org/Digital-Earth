@@ -33,6 +33,7 @@ from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterator,
     List,
@@ -231,6 +232,48 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
     """
     described = thawed_value(dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {}))
     return {**described, **drawing_opts(scene, layer)}
+
+
+@dataclass(frozen=True)
+class Pick:
+    """Where a click on the figure landed, and which layer it landed on (ST-25).
+
+    What :meth:`Scene.on_pick` hands a callback. It is a **layer id** and a pair of data coordinates
+    rather than a matplotlib artist, because the id is the name the caller gave the layer and the one
+    every other call on this tier takes: :meth:`Scene.get_layer` describes it, :meth:`Scene.set_visible`
+    hides it, :meth:`Scene.remove_layer` takes it off. An artist is the engine's object and says nothing
+    about which layer put it there — which is the lookup
+    :meth:`~digitalearth.static.renderer.Renderer.layer_of` exists to do.
+
+    Attributes:
+        layer_id: The layer the pick reports: the **topmost** of the layers under the pointer, which is
+            the one the reader sees. Always the first of :attr:`hits`.
+        x: The click's x in the axes' data coordinates — the display CRS for a
+            :class:`~digitalearth.static.map.Map`, and the array's own column index for a figure drawn
+            from a bare numpy array (:data:`AT_INDICES`).
+        y: The click's y, in the same coordinates.
+        hits: Every layer under the pointer, topmost first — so a caller who wants what lies *under* the
+            top layer has it without hit-testing the figure again. One entry for the ordinary case.
+        event: The matplotlib ``MouseEvent`` itself, as the escape hatch for what this value does not
+            carry: which button, a double click, the pixel coordinates. Reading it ties the callback to
+            matplotlib, which a callback on this tier already is.
+
+    Examples:
+        - The value a callback is handed, built directly:
+            ```python
+            >>> from digitalearth.static.scene import Pick
+            >>> pick = Pick("depth", 4.9, 52.4, ("depth", "basemap-1"))
+            >>> pick.layer_id, pick.hits[1]
+            ('depth', 'basemap-1')
+
+            ```
+    """
+
+    layer_id: str
+    x: float
+    y: float
+    hits: Tuple[str, ...] = ()
+    event: Any = None
 
 
 @dataclass(frozen=True)
@@ -452,6 +495,11 @@ class Scene(WatermarkMixin):
         #: so reporting them as class edges would be reporting a wrong answer. A categorical key is the
         #: swatch legend the glyph draws on this tier.
         self.last_breaks: Optional[List[float]] = None
+        # The callbacks a click on this figure is delivered to, and the canvas connection that feeds them
+        # (see `on_pick`). The connection is made on the first registration rather than in the constructor,
+        # so a scene nobody picks on puts no handler on the canvas at all.
+        self._pick_handlers: List[Callable[[Pick], Any]] = []
+        self._pick_cid: Optional[int] = None
         # The figure's heading, as the description carries it (see `set_title`). Held on the scene rather
         # than read back off `ax.title`, because matplotlib keeps three titles on an axes — centre, left and
         # right — and a figure has one heading whichever of them it was drawn at.
@@ -2089,6 +2137,175 @@ class Scene(WatermarkMixin):
         self._title = self._recorded_title(title)
         return self
 
+    def on_pick(self, callback: Callable[[Pick], Any]) -> Self:
+        """Call `callback` with a :class:`Pick` whenever a layer on this figure is clicked (ST-25).
+
+        A matplotlib figure is a picture, and this tier says so — it draws no tooltip, no hover and no
+        layer switcher, because there is no pointer over a saved PNG. A figure on a **live canvas** is a
+        different thing: a notebook's ``%matplotlib widget``, a Qt or Tk window, or a test driving the
+        canvas directly. There the canvas does report clicks, and the only piece missing was the one this
+        repo owns — turning the artist matplotlib hands over back into the **layer id** the caller named
+        the layer by (:meth:`~digitalearth.static.renderer.Renderer.layer_of`).
+
+        It is a click rather than matplotlib's own ``pick_event``: that one fires only for artists whose
+        ``set_picker`` was set, and the artists here are built by cleopatra's glyphs and by this tier's
+        drawers, so opting each one in would be a per-kind decision where a tier-wide gesture is wanted.
+        Nothing is asked of the drawers, and a layer drawn before the callback was registered is pickable
+        too.
+
+        **Which layer a pick reports.** Layers overlap, so a click can land on several; the pick reports
+        the **topmost** — the one painted last, which is the one the reader sees — and lists the rest in
+        :attr:`Pick.hits`, topmost first. A layer that is **hidden** is not reported, and neither is one
+        that has been **removed**: the hit test is run against what the renderer holds at the moment of
+        the click, and a hidden layer is excluded explicitly, because ``Artist.contains`` ignores the
+        visibility flag (measured: a hidden ``AxesImage`` still answers ``True`` inside its extent).
+
+        A click that lands on **no** layer — the margin of the axes, or outside it altogether — calls
+        nothing: a pick is a pick *of a layer*, and there is no layer to name. A layer owning several
+        artists (a limb-split coastline, a graticule's lines) is reported once, by its one id.
+
+        Args:
+            callback: Called as ``callback(pick)`` with one :class:`Pick`. Several may be registered and
+                each is called, in the order they were registered. Registering the same callback twice
+                calls it twice, which is what a list of handlers means; :meth:`off_pick` takes one off.
+
+        Returns:
+            This scene (chainable), as every other figure-level call on this tier answers.
+
+        Raises:
+            TypeError: when `callback` is not callable — the refusal belongs at the registration, where
+                the caller is, rather than at the first click, where they are not.
+
+        Note:
+            This is the **matplotlib canvas only**. The interactive and web tiers have pointer events of
+            their own, delivered by Bokeh and MapLibre; nothing here is shared with them, and a saved
+            image carries no callback at all.
+
+        Examples:
+            - Register a callback and drive one click through the canvas, as a GUI backend would:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> picked = []
+                >>> _ = m.on_pick(lambda pick: picked.append((pick.layer_id, round(pick.x, 1))))
+                >>> m.fig.canvas.draw()
+                >>> px, py = m.ax.transData.transform((1.5, 2.0))
+                >>> click = MouseEvent("button_press_event", m.fig.canvas, px, py, button=1)
+                >>> m.fig.canvas.callbacks.process("button_press_event", click)
+                >>> picked
+                [('grid', 1.5)]
+                >>> m.close()
+
+                ```
+        """
+        if not callable(callback):
+            raise TypeError(
+                f"{type(self).__name__}.on_pick needs something to call with each pick; got "
+                f"{type(callback).__name__}"
+            )
+        self._pick_handlers.append(callback)
+        if self._pick_cid is None:
+            self._pick_cid = self.fig.canvas.mpl_connect(
+                "button_press_event", self._deliver_pick
+            )
+        return self
+
+    def off_pick(self, callback: Optional[Callable[[Pick], Any]] = None) -> Self:
+        """Stop delivering picks to one callback, or to all of them.
+
+        Args:
+            callback: The callback to take off — the very object that was registered. ``None`` (the
+                default) takes every one off, which is what a caller tearing a session down wants.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            ValueError: when `callback` was never registered, naming how many are. A silent no-op here
+                would look exactly like a callback that refused to go away — the reason
+                :meth:`remove_layer` refuses an unknown id rather than ignoring it.
+
+        Note:
+            The canvas connection is dropped with the **last** callback, so a scene nobody is listening to
+            no longer has a handler on its canvas; the next :meth:`on_pick` makes it again.
+
+        Examples:
+            - A callback taken off hears nothing more:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> picked = []
+                >>> _ = m.on_pick(picked.append).off_pick(picked.append)
+                >>> m.fig.canvas.draw()
+                >>> px, py = m.ax.transData.transform((1.5, 2.0))
+                >>> click = MouseEvent("button_press_event", m.fig.canvas, px, py, button=1)
+                >>> m.fig.canvas.callbacks.process("button_press_event", click)
+                >>> picked
+                []
+                >>> m.close()
+
+                ```
+        """
+        if callback is None:
+            self._pick_handlers = []
+        elif callback in self._pick_handlers:
+            self._pick_handlers.remove(callback)
+        else:
+            raise ValueError(
+                f"{callback!r} is not registered on this figure, so there is nothing to take off; "
+                f"{len(self._pick_handlers)} callback(s) are"
+            )
+        if not self._pick_handlers:
+            self._disconnect_picks()
+        return self
+
+    def _disconnect_picks(self) -> None:
+        """Take this scene's click handler off its canvas, if it has one.
+
+        Written once because three callers need it: :meth:`off_pick` when the last callback goes,
+        :meth:`close` so a closed figure delivers nothing, and itself a second time harmlessly — the
+        connection id is cleared, so disconnecting twice is a no-op rather than an error.
+        """
+        if self._pick_cid is not None:
+            self.fig.canvas.mpl_disconnect(self._pick_cid)
+            self._pick_cid = None
+
+    def _deliver_pick(self, event: Any) -> None:
+        """Turn one canvas click into a :class:`Pick` and hand it to every registered callback.
+
+        The scene's half of the gesture: it is what knows which axes is its own, and what builds the
+        public value out of the renderer's answer. The hit test itself is
+        :meth:`~digitalearth.static.renderer.Renderer.hits`, which holds the artist-to-layer mapping.
+
+        Args:
+            event: The matplotlib ``MouseEvent`` the canvas delivered.
+
+        Note:
+            Three clicks deliver nothing: one outside this scene's axes (``inaxes`` is another axes, or
+            none at all — the colorbar's axes is on this figure too and is not the map), one on no layer,
+            and one on a figure whose callbacks have all been taken off. The callbacks are iterated over a
+            **copy**, so a callback that calls :meth:`off_pick` — a "pick once" handler — does not change
+            the list being walked underneath it.
+        """
+        if getattr(event, "inaxes", None) is not self.ax:
+            return
+        hits = self._renderer.hits(event)
+        if not hits:
+            return
+        pick = Pick(hits[0], float(event.xdata), float(event.ydata), hits, event)
+        for callback in list(self._pick_handlers):
+            callback(pick)
+
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the figure (delegates to cleopatra's ``WatermarkMixin.stamp_mark``).
 
@@ -2209,6 +2426,11 @@ class Scene(WatermarkMixin):
         self._layer_keys = {}
         self._layer_opts = {}
         self._held_objects = {}
+        # A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives
+        # `plt.close` as a Python object, and a handler left connected would go on answering for a scene
+        # whose data has just been let go (see `on_pick`).
+        self._disconnect_picks()
+        self._pick_handlers = []
         plt.close(self.fig)
 
     def __enter__(self) -> "Scene":

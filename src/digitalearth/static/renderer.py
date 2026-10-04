@@ -1610,6 +1610,127 @@ class Renderer:
             return self._asked.get(layer_id, True)
         return all(_is_visible(artist) for artist in drawn.artists)
 
+    def layer_of(self, artist: Any) -> Optional[str]:
+        """Return the id of the layer that owns one matplotlib artist.
+
+        The lookup a pick needs (ST-25). matplotlib hands a canvas event an *artist*, and a caller asked
+        "what did I click on?" wants the **layer id** they named the thing by — the id
+        :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, :meth:`get_layer` describes and
+        :meth:`~digitalearth.static.scene.Scene.remove_layer` takes off. This is the only place that
+        mapping exists, because this is the only record of which artists a layer put on the axes.
+
+        **One layer can own several artists** — :attr:`DrawnLayer.artists` is a tuple, and a limb-split
+        coastline is one polyline per piece — so every one of them maps back to the same id rather than
+        only the first.
+
+        Args:
+            artist: The artist to look up, as matplotlib hands it over.
+
+        Returns:
+            The layer's id, or ``None`` for an artist no layer owns: one a caller drew straight onto
+            :attr:`~digitalearth.static.scene.Scene.ax` (the escape hatch, which is outside the description
+            by design), one left by a layer that has since been removed, or a figure-level artist such as
+            the axes' spines.
+
+            Matched by **identity**, never by equality: two artists of one class can compare equal while
+            belonging to different layers, and the question here is which layer put *this* object on the
+            axes.
+
+        Examples:
+            - The artist a field drew answers with that field's id, and an artist nothing drew answers
+              ``None``:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from matplotlib.text import Text
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m._renderer.layer_of(m._renderer.drawn["ams"].artist)
+                'ams'
+                >>> print(m._renderer.layer_of(Text(0.0, 0.0, "mine")))
+                None
+                >>> m.close()
+
+                ```
+        """
+        for layer_id, drawn in self._drawn.items():
+            if any(held is artist for held in drawn.artists):
+                return layer_id
+        return None
+
+    def hits(self, event: Any) -> Tuple[str, ...]:
+        """Return the ids of the drawn layers under one mouse event, topmost first.
+
+        The other half of what a pick needs, and the half that has to agree with what the reader sees:
+        layers overlap, so a click can land on several at once, and the one a pick *reports* is the one
+        painted last — matplotlib paints by z-order, and within one z-order in the order the artists were
+        added. So the ranking is ``(z-order, draw order)`` and the answer is read off the top of it, which
+        is the same rule :meth:`_repaint` and :func:`_rank_zorders` arrange the picture by.
+
+        Args:
+            event: A matplotlib mouse event, already known to be over the scene's axes — the caller
+                (:meth:`~digitalearth.static.scene.Scene._deliver_pick`) is what checks ``inaxes``, because
+                only the scene knows which axes is its own.
+
+        Returns:
+            One id per layer hit, **topmost first**, so ``hits[0]`` is the layer a pick reports and the
+            rest are what lies under it. Empty for a click on no layer at all.
+
+            Two kinds of layer are never in it. A **hidden** layer is excluded, and has to be asked about
+            rather than inferred: ``Artist.contains`` ignores the visibility flag — measured, an
+            ``AxesImage`` hidden with ``set_visible(False)`` still answers ``True`` for a point inside it —
+            so a pick that trusted it would report a layer the reader cannot see. A layer owning **no**
+            artist is excluded too: a graticule on a flat map has nothing on the axes to be under a
+            pointer, and :meth:`is_visible` answers for it from what was last asked instead.
+
+            A layer that has been **removed** is absent for the plainest reason: the ranking is built from
+            :attr:`drawn` at the moment of the click, and :meth:`remove` has already dropped it.
+        """
+        ranked: List[Tuple[float, int, str]] = []
+        for index, (layer_id, drawn) in enumerate(self._drawn.items()):
+            if not drawn.artists or not self.is_visible(layer_id):
+                continue
+            touched = [
+                artist for artist in drawn.artists if self._touches(artist, event)
+            ]
+            if touched:
+                ranked.append(
+                    (max(_zorder_of(artist) for artist in touched), index, layer_id)
+                )
+        ranked.sort()
+        return tuple(layer_id for _zorder, _index, layer_id in reversed(ranked))
+
+    @staticmethod
+    def _touches(artist: Any, event: Any) -> bool:
+        """Whether one artist is under a mouse event.
+
+        Args:
+            artist: The artist to hit-test.
+            event: The mouse event.
+
+        Returns:
+            ``True`` when the artist is drawn **and** matplotlib says the event is inside it. The
+            visibility flag is read here as well as per layer in :meth:`hits`, because the two answer
+            different questions: that one asks whether the *layer* is shown, this one whether this artist
+            is — and ``contains`` itself ignores the flag entirely.
+
+        Note:
+            ``contains`` is called and its failure answered, rather than probed for with ``hasattr``, for
+            the reason :func:`_set_visible` gives. It raises for an artist that cannot be hit-tested at the
+            moment it is asked — one that was never added to an axes, or a ``Text`` on a canvas that has
+            not been drawn and so has no renderer to measure it with — and a pick is a pointer gesture: it
+            must report what it can find rather than take the figure down over an artist it cannot measure.
+        """
+        if not _is_visible(artist):
+            return False
+        try:
+            hit, _details = artist.contains(event)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            logger.debug("%r cannot be hit-tested; treating it as not picked", artist)
+            return False
+        return bool(hit)
+
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.
 
