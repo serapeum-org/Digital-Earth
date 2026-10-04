@@ -24,6 +24,7 @@ import logging
 import math
 import numbers
 import warnings
+from collections import OrderedDict
 from dataclasses import MISSING
 from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
@@ -861,6 +862,220 @@ def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLay
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
+class _BatchedLonLat:
+    """A set of lon/lat parts projected into one CRS in a **single** PROJ call.
+
+    ``pyramids.base.crs.reproject_coordinates`` costs about 5 ms per *call*, nearly regardless of how many
+    points the call is given — so projecting a reference layer part by part pays that per part. Measured on
+    an orthographic globe with the 110m coastline (134 parts, 5128 vertices):
+
+    | how | cost |
+    |---|---|
+    | one call per part (134 calls) | 0.675 s |
+    | one call for all of them (5128 points) | 0.009 s |
+
+    The parts are stacked, projected once, and cut back apart at the offsets they went in at, so each part
+    comes back as its own array in the order it was given — which is what the limb-splitting and
+    ring-closing downstream need. Nothing about the geometry changes; only the number of calls does.
+
+    Attributes:
+        kept: The parts that had any vertices, densified if asked, in the order they were given.
+    """
+
+    def __init__(
+        self, crs: Any, parts: List[np.ndarray], step_deg: Optional[float] = None
+    ) -> None:
+        """Project every part of a reference layer into a display CRS.
+
+        Args:
+            crs: The display CRS to project into.
+            parts: The ``(N, 2)`` lon/lat arrays (EPSG:4326) ``natural_earth`` hands over. An empty one is
+                dropped, as it always was — a part with no vertices draws nothing.
+            step_deg: Densify each part to at most this spacing, in degrees, before projecting — what the
+                fill path needs so a straight lon/lat edge bends with the projection. ``None`` leaves the
+                vertices as they came, which is what the line path does.
+        """
+        self.kept: List[np.ndarray] = []
+        for part in parts:
+            xy = np.asarray(part, dtype=float)
+            if xy.size == 0:
+                continue
+            self.kept.append(
+                xy if step_deg is None else projections.densify_lonlat(xy, step_deg)
+            )
+        self._x, self._y = self._projected(crs)
+
+    def _projected(self, crs: Any) -> Tuple[np.ndarray, np.ndarray]:
+        """Return every kept vertex's projected x and y, stacked in part order.
+
+        Args:
+            crs: The display CRS to project into.
+
+        Returns:
+            ``(x, y)`` over all parts at once; two empty arrays when there is nothing to project, which is
+            a layer PROJC is never asked about at all.
+        """
+        if not self.kept:
+            return np.empty(0), np.empty(0)
+        stacked = np.vstack(self.kept)
+        x, y = reproject_coordinates(
+            stacked[:, 0].tolist(), stacked[:, 1].tolist(), from_crs=4326, to_crs=crs
+        )
+        return np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+
+    def parts(self) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
+        """Yield each part's projected coordinates, in the order the parts were given.
+
+        Yields:
+            ``(x, y)`` for one part — a slice of the single projection, not a projection of its own.
+        """
+        start = 0
+        for part in self.kept:
+            stop = start + len(part)
+            yield self._x[start:stop], self._y[start:stop]
+            start = stop
+
+
+class _ProjectedReference:
+    """The reference geography, projected into a display CRS once and then kept.
+
+    Coastlines, borders, land, ocean, lakes and rivers are the same geometry on every draw, and their
+    projection is a pure function of ``(layer, resolution, polygon, display CRS)`` — the limb the lines are
+    split at and the boundary the rings are closed against both come from the CRS alone. So it is computed
+    once and held, which is what makes an animation's frames and a second figure in the same projection
+    free. Measured on an orthographic globe, per draw, before this existed: 0.73 s for the 110m coastline
+    and 0.75 s for 110m land.
+
+    **Keyed on the CRS as the map spells it** (through
+    :func:`~digitalearth.base.spec._serial.crs_to_json`, which turns a CRS object into its EPSG code or its
+    WKT and leaves an int or a string alone). Two spellings of one system — ``4326`` and ``"EPSG:4326"`` —
+    are therefore two entries: a *missed* hit, never a wrong one, and identifying a CRS against the PROJ
+    database to avoid it costs more than the miss.
+
+    **And keyed on the geometry it projected**, not only on the name of it. The read is still made on every
+    draw — it costs 5 ms, against the 730 ms this exists to remove — and :meth:`_fingerprint` of what came
+    back goes into the key. So a layer whose data is not what it was last time is a miss rather than a
+    stale hit: the case that forced this is a test stubbing ``natural_earth`` (``test_globe.py`` does, in
+    several tests), where a cache keyed on ``("land", "110m", …)`` alone would hand the stub's geometry to
+    the next real draw of land — one process-wide cache turning into cross-test contamination. It covers a
+    swapped Natural-Earth data directory for the same reason.
+
+    **What it hands out is read-only.** The arrays are shared by every layer and every map drawing that
+    geography, so an artist that wrote through one would corrupt what the next draw gets; the write flag
+    turns that into an error at the write rather than a wrong picture three draws later. matplotlib reads
+    vertices and does not write them, which the globe fill and line paths in this module are the proof of.
+
+    Attributes:
+        keep: How many entries it holds before the least recently used is dropped. A 10m layer is megabytes
+            of vertices, so this is bounded rather than a cache that only grows: eight covers the six
+            Natural-Earth layers in one projection with room for a second.
+    """
+
+    def __init__(self, keep: int = 8) -> None:
+        """Start with nothing held.
+
+        Args:
+            keep: How many projected layers to hold at once.
+        """
+        self.keep = keep
+        self._held: "OrderedDict[Tuple[Any, ...], List[np.ndarray]]" = OrderedDict()
+
+    def __len__(self) -> int:
+        """Return how many projected layers are held.
+
+        Returns:
+            The entry count, which never exceeds :attr:`keep`.
+        """
+        return len(self._held)
+
+    def clear(self) -> None:
+        """Forget every projected layer.
+
+        For a caller that has to reclaim the memory, and for a test that needs a cold cache — the entries
+        are process-wide by design, because two maps in one projection should share them.
+        """
+        self._held.clear()
+
+    def projected(
+        self, scene: Any, name: str, resolution: str, polygon: bool = False
+    ) -> List[np.ndarray]:
+        """Return a Natural-Earth layer projected into this map's display CRS.
+
+        Args:
+            scene: The map being drawn on, for its display CRS and the two projectors that do the work.
+            name: The Natural-Earth layer name cleopatra takes (``"coastline"``, ``"land"``, …).
+            resolution: The Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
+            polygon: Whether to project it as closed fill rings (``True``, land/lakes on a globe) or as
+                limb-split polylines (``False``). The same name under the two readings is two entries —
+                they are different geometry.
+
+        Returns:
+            The projected parts, as read-only arrays: closed fill rings for ``polygon=True``, finite
+            polyline segments otherwise. The **same list object** on a hit, which is what a test asserting
+            identity reads to tell a hit from a recomputation.
+        """
+        parts = natural_earth(name, resolution)
+        key = (
+            name,
+            resolution,
+            polygon,
+            crs_to_json(scene.crs, "Map.crs"),
+            self._fingerprint(parts),
+        )
+        held = self._held.get(key)
+        if held is not None:
+            self._held.move_to_end(key)
+            return held
+        # Annotated because both projectors are reached through an untyped `scene`, so what they answer is
+        # `Any` and the declared return would be inferred away.
+        built: List[np.ndarray] = (
+            scene._project_polygon_features(parts)
+            if polygon
+            else scene._project_line_features(parts)
+        )
+        for array in built:
+            array.setflags(write=False)
+        self._held[key] = built
+        while len(self._held) > self.keep:
+            self._held.popitem(last=False)
+        return built
+
+    @staticmethod
+    def _fingerprint(parts: Any) -> Tuple[Any, ...]:
+        """Identify a layer's raw geometry cheaply enough to check on every draw.
+
+        The part count, every part's vertex count, and the first and last vertex of the whole layer. Not a
+        hash of the coordinates — that is tens of thousands of floats per draw, which is the cost this
+        class exists to avoid — and not the parts' identity either, because ``natural_earth`` builds a new
+        list every call. What it has to separate is *different geometry under one name*: a stubbed read, a
+        swapped data directory, a Natural-Earth upgrade. It does that, and two layers differing only in
+        the interior coordinates of equally-long parts would collide — which no read of the same name
+        produces.
+
+        Args:
+            parts: The raw lon/lat arrays a read returned.
+
+        Returns:
+            A hashable summary. ``()`` for a layer with no vertices at all.
+        """
+        shaped = [np.asarray(part) for part in parts]
+        counts = tuple(len(part) for part in shaped)
+        drawn = [part for part in shaped if part.size]
+        if not drawn:
+            return ()
+        return (
+            counts,
+            tuple(np.asarray(drawn[0], dtype=float)[0].tolist()),
+            tuple(np.asarray(drawn[-1], dtype=float)[-1].tolist()),
+        )
+
+
+#: The one projected-reference cache the static tier draws from. Process-wide on purpose: the projection of
+#: a coastline into EPSG:3857 is the same geometry whichever map asked for it, so a second figure and an
+#: animation's next frame should both be free.
+PROJECTED_REFERENCE = _ProjectedReference()
+
+
 def draw_natural_earth(
     scene: Any, _data: Any, layer: LayerSpec
 ) -> Optional[DrawnLayer]:
@@ -895,10 +1110,11 @@ def draw_natural_earth(
                 **_to_feature_style("polygon", style),
             )
             return disc
-        parts = natural_earth(name, props["resolution"])
         if props["polygon"]:
             filled: Optional[DrawnLayer] = scene._fill_globe_polygons(
-                scene._project_polygon_features(parts),
+                PROJECTED_REFERENCE.projected(
+                    scene, name, props["resolution"], polygon=True
+                ),
                 zorder=zorder,
                 **_to_feature_style("polygon", style),
             )
@@ -907,7 +1123,7 @@ def draw_natural_earth(
         style.pop("facecolor", None)
         drawn = [
             scene.ax.plot(seg[:, 0], seg[:, 1], **style)[0]
-            for seg in scene._project_line_features(parts)
+            for seg in PROJECTED_REFERENCE.projected(scene, name, props["resolution"])
         ]
         # One layer, however many polylines the limb split it into — and none at all when the whole layer
         # is on the far side, which is a layer that was not drawn rather than an empty one.
@@ -2129,20 +2345,17 @@ class DecorationMixin(_MixinBase):
             parts: ``(N, 2)`` lon/lat arrays (EPSG:4326) as returned by
                 ``cleopatra.basemap.reference.natural_earth`` for a line layer.
 
+        Every part goes through PROJ in **one** call (:class:`_BatchedLonLat`), because the cost here is per
+        call and not per point: 134 calls for the 110m coastline cost 0.675 s and the one call costs
+        0.009 s. The splitting is unchanged and still per part, so the segments are the same ones in the
+        same order.
+
         Returns:
             A list of finite ``(M, 2)`` projected polyline segments.
         """
         segments: List[np.ndarray] = []
-        for part in parts:
-            xy = np.asarray(part, dtype=float)
-            if xy.size == 0:
-                continue
-            x, y = reproject_coordinates(
-                xy[:, 0].tolist(), xy[:, 1].tolist(), from_crs=4326, to_crs=self.crs
-            )
-            segments += projections._split_finite(
-                np.asarray(x, float), np.asarray(y, float)
-            )
+        for x, y in _BatchedLonLat(self.crs, parts).parts():
+            segments += projections._split_finite(x, y)
         return segments
 
     def _project_polygon_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
@@ -2158,22 +2371,17 @@ class DecorationMixin(_MixinBase):
             parts: ``(N, 2)`` lon/lat exterior-ring arrays (EPSG:4326) as returned by
                 ``cleopatra.basemap.reference.natural_earth`` for a polygon layer.
 
+        Densification and re-closing stay per ring; the projection itself is **one** PROJ call for the
+        whole layer (:class:`_BatchedLonLat`) — 127 calls for 110m land cost 0.787 s and the one call costs
+        0.014 s.
+
         Returns:
             A list of closed ``(M, 2)`` projected fill rings (empty when nothing is on the near side).
         """
         boundary = self._frame()[0]
         rings: List[np.ndarray] = []
-        for part in parts:
-            xy = np.asarray(part, dtype=float)
-            if xy.size == 0:
-                continue
-            xy = projections.densify_lonlat(xy, step_deg=1.0)
-            x, y = reproject_coordinates(
-                xy[:, 0].tolist(), xy[:, 1].tolist(), from_crs=4326, to_crs=self.crs
-            )
-            rings += projections.close_visible_runs(
-                np.asarray(x, float), np.asarray(y, float), boundary
-            )
+        for x, y in _BatchedLonLat(self.crs, parts, step_deg=1.0).parts():
+            rings += projections.close_visible_runs(x, y, boundary)
         return rings
 
     def _fill_globe_polygons(
