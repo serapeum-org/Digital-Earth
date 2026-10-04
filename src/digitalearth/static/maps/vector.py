@@ -3004,6 +3004,31 @@ class VectorMixin(_MixinBase):
                 'hexbin'
 
                 ```
+            - A lattice nothing could be binned onto is refused here, naming the argument, rather than
+              surfacing as matplotlib arithmetic several frames down:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0]},
+                ...     geometry=[Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> for lattice in ({"gridsize": 0}, {"gridsize": 4, "min_count": -1}):
+                ...     try:
+                ...         m.hexbin(wells, **lattice)
+                ...     except ValueError as error:
+                ...         print(error)
+                hexbin() needs gridsize= as a whole number >= 1; got 0
+                hexbin() needs min_count= as a whole number >= 0; got -1
+                >>> m.close()
+
+                ```
 
         See Also:
             kde: the smoothed density of the same points.
@@ -3195,6 +3220,33 @@ class VectorMixin(_MixinBase):
                 ...     widths = lc.get_linewidths()
                 >>> bool(widths[1] > widths[0])
                 True
+
+                ```
+            - A width a line cannot have, a column name under ``color=``, and a text column under
+              ``column=`` are each refused by name — and the colour refusal points at the keyword that does
+              take a column's name:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> roads = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"name": ["a", "b"], "lanes": [1.0, 4.0]},
+                ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> for wrong in ({"width": -2.0}, {"color": "lanes"}, {"column": "name"}):
+                ...     try:
+                ...         m.lines(roads, **wrong)
+                ...     except ValueError as error:
+                ...         print(str(error)[:63])
+                Map.lines() needs width= as a positive number of points, or the
+                Map.lines() needs color= as one matplotlib colour for every lin
+                Map.lines() needs column='name' to name a column of numbers, an
+                >>> m.close()
 
                 ```
 

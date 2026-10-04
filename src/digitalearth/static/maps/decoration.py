@@ -484,6 +484,29 @@ def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
 
     Returns:
         ``{"ogc": <tag>, <field>: <value>, …}``, or ``None`` when ``source`` is not an OGC provider.
+
+    Examples:
+        - A WMS service is described by its own fields, and the token it carries stays on the object:
+            ```python
+            >>> from cleopatra.basemap.ogc import WMSProvider
+            >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
+            >>> service = WMSProvider(
+            ...     "https://example.org/geoserver/wms", "topp:states", extra_params={"token": "s3cret"}
+            ... )
+            >>> described = _describe_ogc_provider(service)
+            >>> described["ogc"], described["layers"], described["version"]
+            ('wms', 'topp:states', '1.3.0')
+            >>> "extra_params" in described, dict(service.extra_params)
+            (False, {'token': 's3cret'})
+
+            ```
+        - Anything that is not an OGC provider is not this function's business, and says so:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
+            >>> print(_describe_ogc_provider("CartoLight"))
+            None
+
+            ```
     """
     tag = next(
         (name for name, kind in _OGC_PROVIDERS.items() if isinstance(source, kind)),
@@ -502,14 +525,15 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
     """Rebuild a cleopatra OGC provider from what a figure recorded of it.
 
     The credential the original carried is **not** rebuilt: :data:`_OGC_SECRET_FIELDS` never travels, so a
-    figure replayed elsewhere asks the same service with no token. A service that needs one answers with its
-    own error, which is the honest outcome — the alternative was drawing a different basemap in silence.
+    replayed figure asks the same service with ``extra_params`` empty. A service that needs a token answers
+    with its own error, which is the honest outcome — the alternative was drawing a different basemap in
+    silence.
 
     Args:
         described: What :func:`_describe_ogc_provider` recorded.
 
     Returns:
-        The rebuilt provider, which ``add_tiles`` tiles from.
+        The rebuilt provider, which ``add_tiles`` tiles from, with no credential on it.
 
     Raises:
         ValueError: when the recorded ``ogc`` tag is not one this version knows — a figure written by a
@@ -955,8 +979,27 @@ def _crs_display_extent(crs: Any) -> Optional[Tuple[float, float, float, float]]
 
     Returns:
         ``(west, south, east, north)`` in the CRS's own units, or ``None`` when it declares no area of use —
-        which a bare PROJ string such as ``+proj=robin`` does not (executed) — or when nothing in it
-        projects finitely. ``None`` means "unknown", and leaves the view alone.
+        which a bare PROJ string such as ``+proj=robin`` does not — or when nothing in it projects finitely.
+        ``None`` means "unknown", and leaves the view alone.
+
+    Examples:
+        - Antarctic Polar Stereographic declares a polar cap, which comes back as the square of metres its
+          own map occupies — 1/4223 of the ``1.4e10`` m out where it places latitude
+          :data:`_NIGHT_POLE_LATITUDE`, which is what makes this bound worth applying:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _crs_display_extent
+            >>> [round(value) for value in _crs_display_extent(3031)]
+            [-3333134, -3333134, 3333134, 3333134]
+
+            ```
+        - A bare PROJ string declares no area of use, so there is no bound to apply and the answer is
+          ``None`` rather than a guess:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _crs_display_extent
+            >>> print(_crs_display_extent("+proj=robin"))
+            None
+
+            ```
     """
     try:
         area = crs_from_user_input(crs).area_of_use
@@ -1028,10 +1071,15 @@ def _globe_night_grid(samples: int) -> int:
     in the figure and then ignored here entirely (round 3, L7).
 
     Args:
-        samples: The layer's recorded ``n``, already validated as 4 or more.
+        samples: The layer's recorded ``n``, as the caller gave it and the figure kept it. It is **not**
+            validated anywhere on this path: cleopatra's ``n`` must be 4 or more to form a terminator ring,
+            but that refusal lives in the terminator sampler, which only the flat path calls — a globe takes
+            any ``n`` and records it (``nightshade(when, n=-5)`` on a globe draws, and the figure says
+            ``n = -5``). So the floor below is not belt-and-braces; it is what makes this safe.
 
     Returns:
-        Samples per side, never below :data:`_GLOBE_NIGHT_GRID_MIN`.
+        Samples per side, never below :data:`_GLOBE_NIGHT_GRID_MIN` — which is what a zero, negative or
+        otherwise unusable ``n`` resolves to, rather than a grid with nothing in it.
 
     Examples:
         - The default ``n`` keeps the grid the globe has always used, and a quarter of it quarters the side:
@@ -1042,11 +1090,12 @@ def _globe_night_grid(samples: int) -> int:
             (400, 100)
 
             ```
-        - A very small ``n`` stops at the floor rather than degenerating into the grid itself:
+        - Anything the flat path would have refused stops at the floor rather than degenerating into the
+          grid itself:
             ```python
             >>> from digitalearth.static.maps.decoration import _globe_night_grid
-            >>> _globe_night_grid(4)
-            16
+            >>> (_globe_night_grid(4), _globe_night_grid(0), _globe_night_grid(-5))
+            (16, 16, 16)
 
             ```
     """
@@ -1197,6 +1246,35 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
 
     Returns:
         A ``(len(lats),)`` array of display-x widths, ``0`` wherever there is no usable seam.
+
+    Examples:
+        - Web Mercator cuts the antimeridian at the same x at every latitude, so every ring is carried the
+          same world width; Robinson does not, which is why a width is measured per ring:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.maps.decoration import _antimeridian_periods
+            >>> with Map(crs=3857) as flat:
+            ...     [round(float(width)) for width in _antimeridian_periods(flat, [0.0, 60.0])]
+            [40075017, 40075017]
+            >>> with Map(crs="+proj=robin") as curved:
+            ...     [round(float(width)) for width in _antimeridian_periods(curved, [0.0, 60.0])]
+            [34011667, 27161718]
+
+            ```
+        - A polar stereographic puts lon -180 and lon 180 at the same point, so it reports no seam and the
+          rings are left where PROJ put them:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.maps.decoration import _antimeridian_periods
+            >>> with Map(crs=3031) as polar:
+            ...     [round(float(width)) for width in _antimeridian_periods(polar, [-70.0, -80.0])]
+            [0, 0]
+
+            ```
     """
     if len(lats) == 0:
         return np.zeros(0, dtype=float)
@@ -1231,6 +1309,28 @@ def _continuous_display_ring(
     Returns:
         The ring, unchanged when there is no seam to cross or the ring is not wholly placeable, else a copy
         whose x runs continuously around ``centre_x``.
+
+    Examples:
+        - A ring centred just inside the eastern edge of a Web Mercator map: the vertex PROJ sent back to
+          the *western* edge is carried a world width east, so the ring runs continuously past the seam:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.decoration import _continuous_display_ring
+            >>> ring = np.array([[1.9e7, 0.0], [-1.9e7, 1.0], [2.0e7, 2.0]])
+            >>> whole = _continuous_display_ring(ring, 1.95e7, 4.0075e7)
+            >>> [round(float(x)) for x in whole[:, 0]]
+            [19000000, 21075000, 20000000]
+
+            ```
+        - A CRS with no usable seam reports a period of ``0``, and the ring is handed back as it was:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.decoration import _continuous_display_ring
+            >>> ring = np.array([[1.9e7, 0.0], [-1.9e7, 1.0], [2.0e7, 2.0]])
+            >>> _continuous_display_ring(ring, 1.95e7, 0.0) is ring
+            True
+
+            ```
     """
     if period <= 0.0 or not math.isfinite(centre_x) or not np.isfinite(ring).all():
         return ring
@@ -1944,10 +2044,11 @@ class DecorationMixin(_MixinBase):
             n: Samples along the terminator. On a globe there is no terminator polygon to sample — the
                 shade is filled from a display grid — so ``n`` sets that grid's resolution in proportion
                 instead: the default draws a 400-sample side, and a quarter of the default draws a
-                100-sample side, which measures 0.016 s against 0.158 s for the shade itself (the globe's
-                own projection frame, computed once per globe either way, is the larger cost of a first
-                render). Either way ``n`` is the one knob for the shade's fidelity, and the figure records
-                it — where before it was recorded and then ignored on a globe.
+                100-sample side, measured at about 0.01 s against about 0.16 s for the shade itself. Both
+                are small beside the globe's own projection frame, which costs about 1.7 s and is computed
+                once per globe whatever ``n`` is, so it dominates a first render either way. Either way
+                ``n`` is the one knob for the shade's fidelity, and the figure records it — where before it
+                was recorded and then ignored on a globe.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -1961,8 +2062,11 @@ class DecorationMixin(_MixinBase):
             — or ``None`` on a globe whose visible side holds no night.
 
         Raises:
-            ValueError: when ``refraction`` is outside ``(-90, 0]``, ``n`` is below 4, or ``when`` is text
-                that is not ISO 8601. The layer is not described.
+            ValueError: when ``refraction`` is outside ``(-90, 0]``, or ``when`` is text that is not
+                ISO 8601. The layer is not described. An ``n`` below 4 is refused on a **flat** map only —
+                the refusal is cleopatra's, from the terminator sampler that forms the ring — while a globe
+                takes any ``n`` and floors the grid it resolves to
+                (:func:`_globe_night_grid`), so ``n=3`` draws there.
             TypeError: when ``when`` is neither a ``datetime`` nor text.
 
         Examples:
@@ -2030,8 +2134,12 @@ class DecorationMixin(_MixinBase):
         Each circle is the set of points ``radius_m`` from its centre on the sphere (cleopatra's
         ``tissot_circles``), projected into the display CRS through pyramids — so a Web Mercator map shows
         them swelling toward the poles, and an equal-area one shows them keeping their area. A circle the
-        projection cannot place whole, such as one on the far side of a globe, is left out. On an axes
-        nothing has framed yet, the map is fitted to the circles; a framed view is kept.
+        projection cannot place whole, such as one on the far side of a globe, is left out. One straddling
+        the antimeridian is *not*: it is reconnected across the seam — in degrees on lon/lat axes, in display
+        coordinates once a projection is involved — so it reads as one ring running past the edge of the
+        world. Unreconnected it spanned the whole map instead, its vertices landing at both edges at once
+        (29 of 64 at one edge and the rest at the other, for a 500 km ring at lon 179.5 on Web Mercator).
+        On an axes nothing has framed yet, the map is fitted to the circles; a framed view is kept.
 
         Args:
             lons: Circle-centre longitudes, in degrees. ``None`` (default, with ``lats`` also ``None``) draws
@@ -2079,6 +2187,35 @@ class DecorationMixin(_MixinBase):
                 60
                 >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 'tissot'
+
+                ```
+            - A ring at lon 179.5 stays one 500 km circle on Web Mercator: it runs on past the world's own
+              eastern edge (``20037508`` m) instead of being torn in two across it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=3857) as m:
+                ...     xs = m.tissot(lons=[179.5], lats=[0.0], radius_m=500_000.0).get_paths()[0]
+                ...     span = xs.vertices[:, 0]
+                ...     (round(float(span.min())), round(float(span.max())))
+                ...     bool(span.max() > 20037508.0)
+                (19481444, 20482253)
+                True
+
+                ```
+            - An empty pair of centre lists is refused by name, because ``None`` already means "every ring
+              was off the map" and the two must not read alike:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     try:
+                ...         m.tissot(lons=[], lats=[])
+                ...     except ValueError as error:
+                ...         print(error)
+                tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid
 
                 ```
 
@@ -2149,9 +2286,10 @@ class DecorationMixin(_MixinBase):
                 (``"CartoLight"``/``"CartoDark"``/``"CartoVoyager"``/``"OSM"``), a keyed preset name such as
                 ``"Planet.NICFI"``, or ``None`` for
                 :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`. An OGC provider is recorded in
-                the figure field by field, minus its ``extra_params``, so a figure read back elsewhere asks
-                the same service — unauthenticated, since the credential does not travel (see
-                ``docs/reference/basemaps.md``).
+                the figure field by field, minus its ``extra_params``, so a figure read back through
+                ``Map.from_figure`` or ``to_backend(spec, "matplotlib")`` asks the same service —
+                unauthenticated, since the credential does not travel. Another *tier* cannot replay a
+                static basemap layer at all, OGC or named; see ``docs/reference/basemaps.md``.
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
                 ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to

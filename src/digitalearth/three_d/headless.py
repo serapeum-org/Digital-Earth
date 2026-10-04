@@ -141,8 +141,10 @@ def start_xvfb(
 def _reap(server: subprocess.Popen, display: str) -> None:
     """Stop a server :func:`start_xvfb` started, and give ``DISPLAY`` back if it is still ours.
 
-    Registered with :mod:`atexit` at the end of a successful start. Idempotent, so a caller who already
-    called ``server.terminate()`` themselves leaves this nothing to do.
+    Registered with :mod:`atexit` at the end of a successful start, and safe to run over an already-stopped
+    server: a caller who called ``server.terminate()`` themselves leaves the terminate here nothing to do,
+    and running it twice over raises nothing. The ``DISPLAY`` half still runs in that case, which is the
+    point — a stopped server's display number should not go on being advertised.
 
     Args:
         server: The X server that was started.

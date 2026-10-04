@@ -1135,6 +1135,30 @@ class RasterMixin(_MixinBase):
                 (['p < 0.05'], '///')
 
                 ```
+            - Each of the three band keywords is refused where it would have no effect, by name — a line
+              render has no bands to hatch, and the other two have nothing to hatch *with*:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> p = Dataset.from_array(
+                ...     arr=np.array([[0.01, 0.3], [0.02, 0.6]]),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> m = Map(crs=4326)
+                >>> for bands in ({"hatches": ["///", ""]}, {"filled": True, "hatch_color": "black"}):
+                ...     try:
+                ...         m.contours(p, levels=[0, 0.05, 1], **bands)
+                ...     except ValueError as error:
+                ...         print(str(error)[:67])
+                contours() hatches the bands between levels, which only a filled re
+                contours(hatch_color=) colours the hatch strokes and there are none
+                >>> m.close()
+
+                ```
         """
         if levels is not None and interval is not None:
             raise ValueError(

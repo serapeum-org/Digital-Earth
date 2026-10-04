@@ -272,13 +272,50 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> Dict[str, Any]:
             qualitative default a single categorical ``Map`` takes.
 
     Returns:
-        The ``scheme``/``cmap`` keywords every panel is drawn with: one class per pooled code, bounded half a
-        step either side of it, and one colour per class in code order.
+        The ``scheme``/``cmap`` keywords every panel is drawn with: one class per pooled code, cut by
+        :func:`~digitalearth.base.raster_classes.code_edges` — half a step below the first code, midway
+        between each pair of neighbours, half a step above the last, so a gap in the codes widens a class
+        rather than letting it swallow a code — and one colour per class in code order.
 
     Raises:
         ValueError: from :func:`~digitalearth.base.raster_classes.raster_categories` when the pooled values
             are not class codes — no finite cell at all, a non-integer value, or more distinct codes than a
-            key can show.
+            key can show (24).
+
+    Examples:
+        - Three codes, one class and one colour each; the gap between 2 and 5 widens the middle class:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.figure import _pooled_codes
+            >>> shared = _pooled_codes(np.array([1.0, 2.0, 2.0, 5.0]), None)
+            >>> shared["scheme"]
+            [0.5, 1.5, 3.5, 5.5]
+            >>> shared["cmap"]
+            ['#1f77b4', '#ff7f0e', '#2ca02c']
+
+            ```
+        - The codes of two frames pool into one scale, so the second frame's codes carry on the palette
+          instead of restarting it:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.figure import _pooled_codes
+            >>> low, high = np.array([1.0, 2.0]), np.array([3.0, 4.0])
+            >>> shared = _pooled_codes(np.concatenate([low, high]), None)
+            >>> len(shared["cmap"]), shared["cmap"][2:]
+            (4, ['#2ca02c', '#d62728'])
+
+            ```
+        - Values that are not class codes are refused, naming what to use instead:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.figure import _pooled_codes
+            >>> try:
+            ...     _pooled_codes(np.array([1.5, 2.5]), None)
+            ... except ValueError as error:
+            ...     print(str(error)[:59])
+            scheme='categorical' needs integer class codes (land cover,
+
+            ```
     """
     codes = raster_categories(pooled)
     _, colors = categorical_colors(codes, resolve_categorical_cmap(cmap))
@@ -438,6 +475,60 @@ def facet(
             >>> fig, maps = facet(frames, crs=4326, col_wrap=3, colorbar=False)
             >>> maps[0].ax.get_subplotspec().get_geometry()[:2], sum(not ax.get_visible() for ax in fig.axes)
             ((2, 3), 2)
+
+            ```
+        - A categorical stack cuts its classes over every frame, so the second frame's codes carry on the
+          palette rather than restarting it — code 1 is its first colour and code 3 its third:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from matplotlib.colors import to_hex
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import facet
+            >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+            >>> early = Dataset.from_array(
+            ...     arr=np.array([[1.0, 1.0], [2.0, 2.0]]), geo_ref=geo, no_data_value=-9999.0
+            ... )
+            >>> late = Dataset.from_array(
+            ...     arr=np.array([[3.0, 3.0], [4.0, 4.0]]), geo_ref=geo, no_data_value=-9999.0
+            ... )
+            >>> fig, maps = facet([early, late], crs=4326, scheme="categorical", colorbar=False)
+            >>> art = [m.layers[-1][1] for m in maps]
+            >>> [to_hex(art[0].cmap(art[0].norm(code))) for code in (1.0, 2.0)]
+            ['#1f77b4', '#ff7f0e']
+            >>> [to_hex(art[1].cmap(art[1].norm(code))) for code in (3.0, 4.0)]
+            ['#2ca02c', '#d62728']
+            >>> [m.layers[-1][1].get_clim() for m in maps]
+            [(0.5, 4.5), (0.5, 4.5)]
+
+            ```
+        - A stack where every cell is nodata still draws its panels, but no colorbar: the figure holds the
+          two panels and nothing else, where a measurable stack of the same shape holds a third axes for the
+          bar. ``k`` without a ``scheme`` is refused outright, since it would classify nothing:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import facet
+            >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+            >>> blank = [
+            ...     Dataset.from_array(
+            ...         arr=np.full((2, 2), -9999.0), geo_ref=geo, no_data_value=-9999.0
+            ...     )
+            ...     for _ in range(2)
+            ... ]
+            >>> fig, maps = facet(blank, crs=4326)
+            >>> len(maps), len(fig.axes)
+            (2, 2)
+            >>> maps[0].layers[-1][1].get_clim()
+            (0.0, 1.0)
+            >>> try:
+            ...     facet(blank, crs=4326, k=4)
+            ... except ValueError as error:
+            ...     print(str(error)[:69])
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing
 
             ```
 

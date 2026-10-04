@@ -96,9 +96,15 @@ m.figure_spec.layers.get("bm").symbology.props["source"]
 #  'tile_size': 256, 'attribution': ''}
 ```
 
-That is enough to rebuild the provider, so a figure saved to JSON and drawn again elsewhere — through
-`to_backend`, or any tier's `from_figure` — asks the **same service** for the same layer. Before this was
-recorded, such a figure named no service at all and quietly drew the shared default basemap in its place.
+That is enough to rebuild the provider, so a figure saved to JSON and drawn again on this tier — through
+`Map.from_figure`, or `to_backend(spec, "matplotlib")` — asks the **same service** for the same layer. Before
+this was recorded, such a figure named no service at all and quietly drew the shared default basemap in its
+place.
+
+Replaying it on *another* tier is a separate matter and does not work today: `WebMap.from_figure` refuses a
+static `basemap` layer outright — `layer <id> (basemap) cannot be drawn by the web tier: its symbology records
+none of ['opacity']` — and it does so whether the source was an OGC provider or a plain provider name. That is
+the cross-tier basemap gap, not an OGC one.
 
 `extra_params` deliberately does not travel, for the same reason an `xyzservices` `apikey` does not: a figure
 is written to JSON and read back, and a token written into one leaks with it. So a replayed figure asks the

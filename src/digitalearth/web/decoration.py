@@ -1798,6 +1798,21 @@ class DecorationMixin(_MixinBase):
                 (0, [])
 
                 ```
+            - A shape that carries an ``id`` property of its own keeps its other properties and still
+              reports the draw id, because the draw id is written last:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> widget = m.render()
+                >>> widget.draw_feature_collection_all = {"type": "FeatureCollection", "features": [{
+                ...     "id": "draw-1", "type": "Feature",
+                ...     "properties": {"id": "mine", "label": "plot A"},
+                ...     "geometry": {"type": "Point", "coordinates": [8.0, 51.0]}}]}
+                >>> drawn = m.drawn_features()
+                >>> list(drawn["id"]), list(drawn["label"])
+                (['draw-1'], ['plot A'])
+
+                ```
 
         See Also:
             measure: adds the draw control this reads from.

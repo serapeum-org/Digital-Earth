@@ -458,6 +458,43 @@ def _marked_bands(artist: Any, bands: int) -> List[bool]:
         One flag per band, ``True`` when the band holds at least one vertex. Every band is reported marked
         when the artist's paths do not number the bands, since dropping a row on a reading that no longer
         holds would be worse than keeping an empty one.
+
+    Examples:
+        - A p-value field that stops at 0.95, under levels that run to 10: the top two bands are drawn as
+          paths with no vertices, and only the two that hold data are reported marked:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> import numpy as np
+            >>> from digitalearth.static.guides import _marked_bands
+            >>> fig, ax = plt.subplots()
+            >>> contours = ax.contourf(
+            ...     np.linspace(0.0, 0.95, 16).reshape(4, 4), levels=[0.0, 0.05, 1.0, 5.0, 10.0]
+            ... )
+            >>> [len(path.vertices) > 0 for path in contours.get_paths()]
+            [True, True, False, False]
+            >>> _marked_bands(contours, 4)
+            [True, True, False, False]
+            >>> plt.close(fig)
+
+            ```
+        - A band count the artist's paths do not match is read as "cannot tell", and every band is kept:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> import numpy as np
+            >>> from digitalearth.static.guides import _marked_bands
+            >>> fig, ax = plt.subplots()
+            >>> contours = ax.contourf(
+            ...     np.linspace(0.0, 9.0, 16).reshape(4, 4), levels=[0.0, 3.0, 6.0, 9.0]
+            ... )
+            >>> _marked_bands(contours, 7)
+            [True, True, True, True, True, True, True]
+            >>> plt.close(fig)
+
+            ```
     """
     paths = list(artist.get_paths())
     if len(paths) != bands:
@@ -684,6 +721,25 @@ def _is_transparent(color: str) -> bool:
         ``True`` when the colour's alpha is zero. ``False`` for anything matplotlib cannot parse, so an
         unreadable colour still reaches the engine that will say so, rather than being taken for
         transparent here.
+
+    Examples:
+        - An uncoloured band's 8-digit hex and the scale's ``"None"`` both read as see-through:
+            ```python
+            >>> from digitalearth.static.guides import _is_transparent
+            >>> (_is_transparent("#aabbcc00"), _is_transparent("None"))
+            (True, True)
+
+            ```
+        - An opaque colour whose blue channel is zero does not, which is what reading the spelling got
+          wrong; nor does a colour matplotlib cannot parse at all:
+            ```python
+            >>> from digitalearth.static.guides import _is_transparent
+            >>> (_is_transparent("#aabb00"), _is_transparent("mauve-ish"))
+            (False, False)
+            >>> "#aabb00".endswith("00")  # the reading this replaced
+            True
+
+            ```
     """
     try:
         return bool(to_rgba(color)[3] == 0.0)
