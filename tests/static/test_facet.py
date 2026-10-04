@@ -616,3 +616,35 @@ class TestAStackWithNothingToMeasure:
         assert len(bars) == 1, len(bars)
         assert bars[0].get_ylim() == expected, bars[0].get_ylim()
         assert "no frame holds a finite value" not in caplog.text, caplog.text
+
+
+class TestAStackASchemeCannotCut:
+    """A named ``scheme`` classifies the pooled values, and says so when it cannot."""
+
+    def test_a_stack_with_no_spread_is_refused_by_the_classifier(self, stack):
+        """A constant stack has no class edges to cut, which `facet` now documents.
+
+        Args:
+            stack: Unused; the frames here are built constant.
+
+        Test scenario:
+            The refusal comes from the shared classifier rather than from `facet`'s own argument checks, so
+            it was missing from the documented ``Raises`` — a caller reading the docstring saw the five
+            caller-shape errors and nothing about the data. The message itself is the classifier's and is
+            already good; this pins that it is what a facet of a constant stack gets.
+        """
+        frames = [_dataset(np.full((4, 4), 7.0)), _dataset(np.full((4, 4), 7.0))]
+        with pytest.raises(ValueError, match="no spread"):
+            facet(frames, crs=4326, scheme="quantiles", k=4)
+
+    def test_an_all_nodata_stack_is_refused_by_the_classifier(self):
+        """With nothing finite to bin, a named scheme refuses rather than classifying the fallback."""
+        frames = [_dataset(np.full((4, 4), -9999.0))]
+        with pytest.raises(ValueError, match="no finite entries"):
+            facet(frames, crs=4326, scheme="quantiles", k=3)
+
+    def test_an_all_nodata_stack_is_refused_under_categorical_too(self):
+        """Pooled codes have the same nothing to classify, and the categorical classifier names it."""
+        frames = [_dataset(np.full((4, 4), -9999.0))]
+        with pytest.raises(ValueError, match="every cell is nodata"):
+            facet(frames, crs=4326, scheme="categorical")
