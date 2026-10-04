@@ -20,7 +20,7 @@ marks the parent's extent — the one call.
 import logging
 from dataclasses import dataclass
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Sequence, Tuple
 
 import numpy as np
 from matplotlib.patches import Polygon
@@ -356,7 +356,47 @@ class InsetMixin(_MixinBase):
     Composed into ``Map`` beside the other capability mixins; the methods here call sibling methods
     (``land``, ``coastlines``, ``set_global``, ``set_bounds``, ``add_layer``) through ``self``, so they only
     run inside a composed ``Map``.
+
+    :meth:`inset` returns ``self`` like every other builder on the tier, and the locator it builds is read
+    back from :attr:`locator`. The alternative — handing the locator back directly — reads well for one call
+    but breaks the chain every other method keeps, and `tests/test_mixin_contract.py` holds the tier to it.
     """
+
+    #: The locator :meth:`inset` built, or ``None`` before the first call. Set on the *main* map, so
+    #: ``m.inset().locator`` is the inset and ``m.inset()`` is still ``m``.
+    _locator: Optional["Map"] = None
+
+    @property
+    def locator(self) -> Optional["Map"]:
+        """The locator map :meth:`inset` built, or ``None`` if it has not been called.
+
+        Calling :meth:`inset` again replaces it: a second locator is a second axes on the figure, and the
+        attribute names the most recent one. The earlier locator keeps working — it is an ordinary `Map` —
+        it is simply no longer what this attribute returns.
+
+        Returns:
+            The inset `Map`, or ``None``.
+
+        Examples:
+            - Before and after one call:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> m.set_bounds([2.0, 3.0, 8.0, 9.0])  # doctest: +ELLIPSIS
+                <....Map object at ...>
+                >>> m.locator is None
+                True
+                >>> m.inset() is m
+                True
+                >>> type(m.locator).__name__
+                'Map'
+                >>> m.close()
+
+                ```
+        """
+        return self._locator
 
     def _mark(
         self, box: _ExtentBox, name: Optional[str] = None, **style: Any
@@ -467,7 +507,7 @@ class InsetMixin(_MixinBase):
         size: Any = _DEFAULT_SIZE,
         extent: Optional[Sequence[float]] = None,
         reference: Sequence[str] = _DEFAULT_REFERENCE,
-    ) -> "Map":
+    ) -> Self:
         """Add a locator map: a small inset showing where this map's extent sits on a wider area.
 
         One call does three things — creates the inset axes inside this map's own axes, draws reference
@@ -504,8 +544,9 @@ class InsetMixin(_MixinBase):
                 on the returned map.
 
         Returns:
-            The locator, as a :class:`~digitalearth.static.map.Map` bound to the inset axes and sharing
-            this map's figure.
+            This map, so the call chains like every other builder on the tier. The locator it built is
+            read back from :attr:`locator` — a :class:`~digitalearth.static.map.Map` bound to the inset
+            axes and sharing this map's figure.
 
         Raises:
             ValueError: for a ``size`` that is not a fraction in ``(0, 1]``, a ``position`` that is
@@ -523,7 +564,7 @@ class InsetMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> m = Map(crs=4326)
                 >>> _ = m.set_bounds([2.0, 3.0, 8.0, 9.0])
-                >>> locator = m.inset()
+                >>> locator = m.inset().locator
                 >>> locator.ax in m.ax.child_axes, locator.fig is m.fig
                 (True, True)
                 >>> [float(v) for v in locator.ax.get_xlim()]
@@ -546,7 +587,7 @@ class InsetMixin(_MixinBase):
                 ...     position="lower left",
                 ...     extent=[-20.0, -40.0, 60.0, 40.0],
                 ...     reference=("coastlines",),
-                ... )
+                ... ).locator
                 >>> [float(v) for v in locator.ax.get_ylim()]
                 [-40.0, 40.0]
                 >>> locator.layer_ids
@@ -588,11 +629,7 @@ class InsetMixin(_MixinBase):
                     f"layer; use any of {list(_REFERENCE_LAYERS)}"
                 )
         box = _ExtentBox.of(self)
-        # Imported here, not at module scope: `Map` is composed *from* this mixin, so the module-level
-        # import would be a cycle.
-        from digitalearth.static.map import Map
-
-        locator = Map(
+        locator = type(self)(
             crs=self.crs if crs is None else crs,
             ax=self.ax.inset_axes(frame.as_bounds()),
             fig=self.fig,
@@ -610,4 +647,5 @@ class InsetMixin(_MixinBase):
         else:
             locator.set_bounds(list(extent))
         locator._mark(box)
-        return locator
+        self._locator = locator
+        return self

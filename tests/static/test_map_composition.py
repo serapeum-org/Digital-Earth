@@ -17,8 +17,8 @@ from digitalearth.static.maps.vector import VectorMixin
 class TestMapComposition:
     """Tests for Map's class composition."""
 
-    def test_mro_is_base_plus_five_mixins(self):
-        """Map's MRO is the five mixins, then GeoLayerBase, then Scene and the watermark mixin it carries.
+    def test_mro_is_base_plus_six_mixins(self):
+        """Map's MRO is the six mixins, then GeoLayerBase, then Scene and the watermark mixin it carries.
 
         Test scenario:
             The class is assembled from exactly the documented bases in the documented order.
@@ -27,11 +27,12 @@ class TestMapComposition:
             where they are picked up. It sits last, below `Scene`, contributing no map behaviour.
         """
         names = [c.__name__ for c in Map.__mro__]
-        assert names[:10] == [
+        assert names[:11] == [
             "Map",
             "RasterMixin",
             "VectorMixin",
             "DecorationMixin",
+            "InsetMixin",
             "ProjectionMixin",
             "AnimationMixin",
             "GeoLayerBase",

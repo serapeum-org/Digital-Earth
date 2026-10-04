@@ -255,7 +255,7 @@ class TestInset:
             the locator moving with its map.
         """
         main = framed(4326)
-        assert main.inset().ax in main.ax.child_axes, (
+        assert main.inset().locator.ax in main.ax.child_axes, (
             "the locator's axes should be a child of the main axes"
         )
 
@@ -269,7 +269,7 @@ class TestInset:
             The locator is a borrowed-axes Scene, so a single ``savefig`` has to produce both.
         """
         main = framed(4326)
-        assert main.inset().fig is main.fig, (
+        assert main.inset().locator.fig is main.fig, (
             "the locator should draw into the parent's figure"
         )
 
@@ -284,7 +284,9 @@ class TestInset:
             true rectangle; a different locator CRS is opt-in.
         """
         main = framed(3857, (0.0, 0.0, 1113194.9, 1118889.97))
-        assert main.inset().crs == 3857, "the locator should inherit the display CRS"
+        assert main.inset().locator.crs == 3857, (
+            "the locator should inherit the display CRS"
+        )
 
     def test_an_asked_for_crs_is_used(self, framed):
         """``crs=`` puts the locator in a projection of its own.
@@ -297,7 +299,9 @@ class TestInset:
             path that reprojects the extent box.
         """
         main = framed(3857, (0.0, 0.0, 1113194.9, 1118889.97))
-        assert main.inset(crs=4326).crs == 4326, "the asked-for locator CRS should win"
+        assert main.inset(crs=4326).locator.crs == 4326, (
+            "the asked-for locator CRS should win"
+        )
 
     def test_the_default_locator_shows_the_whole_world(self, framed):
         """Without an ``extent`` the locator is framed on the projection's full domain.
@@ -309,7 +313,7 @@ class TestInset:
             A locator map answers "where on the wider area is this", so the wider area defaults to all of
             it. In EPSG:4326 that is the whole lon/lat rectangle.
         """
-        locator = framed(4326).inset()
+        locator = framed(4326).inset().locator
         limits = [float(v) for v in (*locator.ax.get_xlim(), *locator.ax.get_ylim())]
         assert limits == [-180.0, 180.0, -90.0, 90.0], (
             f"the default locator should be global; got {limits}"
@@ -324,7 +328,7 @@ class TestInset:
         Test scenario:
             A continent is more use than a globe for a city map, so the wider area is a caller's choice.
         """
-        locator = framed(4326).inset(extent=[-20.0, 30.0, 40.0, 70.0])
+        locator = framed(4326).inset(extent=[-20.0, 30.0, 40.0, 70.0]).locator
         limits = [float(v) for v in (*locator.ax.get_xlim(), *locator.ax.get_ylim())]
         assert limits == [-20.0, 40.0, 30.0, 70.0], (
             f"the locator should hold the asked-for extent; got {limits}"
@@ -340,7 +344,7 @@ class TestInset:
             A locator with no geography on it locates nothing, and one with no box does not say where.
             All three layers are described, so the figure names them.
         """
-        locator = framed(4326).inset()
+        locator = framed(4326).inset().locator
         kinds = [locator.get_layer(name).kind for name in locator.layer_ids]
         assert kinds == ["land", "coastlines", "custom:matplotlib"], (
             f"expected geography then the mark; got {kinds}"
@@ -355,7 +359,7 @@ class TestInset:
         Test scenario:
             An ocean-and-borders locator reads better over a dark basemap, so the list is not fixed.
         """
-        locator = framed(4326).inset(reference=("ocean",))
+        locator = framed(4326).inset(reference=("ocean",)).locator
         assert locator.layer_ids[0] == "ocean-1", (
             f"the asked-for layer should be the first drawn; got {locator.layer_ids}"
         )
@@ -370,7 +374,7 @@ class TestInset:
             The locator is returned so more can be drawn on it; asking for none of the defaults must be
             possible rather than something to undo afterwards.
         """
-        locator = framed(4326).inset(reference=())
+        locator = framed(4326).inset(reference=()).locator
         assert len(locator.layer_ids) == 1, (
             f"only the extent box should be on it; got {locator.layer_ids}"
         )
@@ -403,7 +407,7 @@ class TestInset:
             one's left edge is right of it.
         """
         main = framed(4326)
-        child = main.inset(position=corner).ax.get_position()
+        child = main.inset(position=corner).locator.ax.get_position()
         parent = main.ax.get_position()
         above = (child.y0 - parent.y0) / parent.height > 0.5
         right = (child.x0 - parent.x0) / parent.width > 0.5
@@ -422,7 +426,7 @@ class TestInset:
             back as a fraction of the parent axes, which is what was asked for.
         """
         main = framed(4326)
-        child = main.inset(position=(0.1, 0.2, 0.3, 0.4)).ax.get_position()
+        child = main.inset(position=(0.1, 0.2, 0.3, 0.4)).locator.ax.get_position()
         parent = main.ax.get_position()
         placed = (
             round((child.x0 - parent.x0) / parent.width, 3),
@@ -472,7 +476,7 @@ class TestInset:
             At a quarter of the map's size the tick labels overlap into illegibility, so they are off by
             construction.
         """
-        locator = framed(4326).inset()
+        locator = framed(4326).inset().locator
         ticks = (len(locator.ax.get_xticks()), len(locator.ax.get_yticks()))
         assert ticks == (0, 0), f"the locator should carry no ticks; got {ticks}"
 
@@ -519,7 +523,7 @@ class TestInset:
             must not be context-managed and why the docstring says so.
         """
         main = framed(4326)
-        main.inset().close()
+        main.inset().locator.close()
         assert main.fig.number not in plt.get_fignums(), (
             "closing the locator is expected to close the parent figure too (#371)"
         )
