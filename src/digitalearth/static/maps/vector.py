@@ -2938,6 +2938,7 @@ class VectorMixin(_MixinBase):
             )
         )
 
+    @_skips_off_limb
     def sankey(
         self,
         features: Any,

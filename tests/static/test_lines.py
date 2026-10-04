@@ -197,6 +197,25 @@ class TestWidthAndOpacity:
         )
 
 
+class TestOffTheLimb:
+    """Lines the display CRS cannot place are a skipped layer, as on every other vector builder."""
+
+    @pytest.mark.parametrize("builder", ["lines", "sankey"])
+    def test_lines_behind_the_globe_are_skipped(self, rivers, builder):
+        """A globe centred on the antimeridian cannot show reaches near (0, 0); nothing is drawn or described.
+
+        Args:
+            rivers: The reaches, all within a few degrees of the origin.
+            builder: The line builder under test.
+        """
+        from digitalearth.static import projections
+
+        canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
+        drawn = getattr(canvas, builder)(rivers)
+        assert drawn is None, drawn
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+
 class TestTheContract:
     """The Core ``lines`` name is no longer pending on the static tier."""
 
