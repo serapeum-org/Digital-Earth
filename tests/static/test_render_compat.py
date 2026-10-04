@@ -204,7 +204,7 @@ def test_points_alpha_applies_to_the_rendered_artist():
             crs="EPSG:4326",
         )
     )
-    artist = Map(crs=4326).points(fc, alpha=0.5)
+    artist = Map(crs=4326).points(fc, alpha=0.5).artist()
     assert artist.get_alpha() == 0.5
 
 

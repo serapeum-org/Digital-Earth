@@ -228,8 +228,10 @@ class TestMarkerSizeAndColumn:
         Test scenario:
             The parameter renamed from ``scale`` still drives per-point marker area.
         """
-        pc = Map(crs=points_fc.epsg).points(
-            points_fc, size_column="fid", size_limits=(20, 200)
+        pc = (
+            Map(crs=points_fc.epsg)
+            .points(points_fc, size_column="fid", size_limits=(20, 200))
+            .artist()
         )
         sizes = np.asarray(pc.get_sizes())
         assert sizes.min() == pytest.approx(20), (
@@ -249,7 +251,7 @@ class TestMarkerSizeAndColumn:
             ``size`` is what the other backends call a marker's visual size, so the static tier takes it
             too and folds it onto cleopatra's ``point_size``.
         """
-        pc = Map(crs=points_fc.epsg).points(points_fc, size=64)
+        pc = Map(crs=points_fc.epsg).points(points_fc, size=64).artist()
         assert set(np.asarray(pc.get_sizes()).tolist()) == {64.0}, (
             "size= did not reach the markers"
         )
@@ -280,7 +282,7 @@ class TestClassification:
         Test scenario:
             A continuous norm, not a class-boundary one, backs the default render.
         """
-        pc = Map(crs=polygons_fc.epsg).choropleth(polygons_fc, column="fid")
+        pc = Map(crs=polygons_fc.epsg).choropleth(polygons_fc, column="fid").artist()
         assert not isinstance(pc.norm, BoundaryNorm), (
             "the default render must not classify"
         )
@@ -296,8 +298,10 @@ class TestClassification:
         Test scenario:
             ``k`` reaches the classifier, so the boundary norm carries ``k + 1`` edges.
         """
-        pc = Map(crs=polygons_fc.epsg).choropleth(
-            polygons_fc, column="fid", scheme="quantiles", k=k
+        pc = (
+            Map(crs=polygons_fc.epsg)
+            .choropleth(polygons_fc, column="fid", scheme="quantiles", k=k)
+            .artist()
         )
         assert isinstance(pc.norm, BoundaryNorm), "a named scheme must classify"
         assert len(pc.norm.boundaries) == k + 1, (
@@ -317,7 +321,8 @@ class TestClassification:
             "urban"
         ] * (len(polygons_fc) % 2)
         m = Map(crs=polygons_fc.epsg)
-        pc = m.choropleth(polygons_fc, column="zone", scheme="categorical")
+        m.choropleth(polygons_fc, column="zone", scheme="categorical")
+        pc = m.artist()
         assert isinstance(pc.norm, BoundaryNorm), (
             "a categorical fill maps discrete class codes"
         )
@@ -356,7 +361,7 @@ class TestColormapResolution:
             The lookup's answer reaches the glyph rather than matplotlib's default.
         """
         _styled(monkeypatch, cmap="magma")
-        im = Map(crs=dataset.epsg).field(dataset)
+        im = Map(crs=dataset.epsg).field(dataset).artist()
         assert im.get_cmap().name == "magma", (
             "the resolved colormap did not reach the render"
         )
@@ -372,7 +377,7 @@ class TestColormapResolution:
             The lookup offers ``magma``; the caller asked for ``plasma`` and gets it.
         """
         _styled(monkeypatch, cmap="magma")
-        im = Map(crs=dataset.epsg).field(dataset, cmap="plasma")
+        im = Map(crs=dataset.epsg).field(dataset, cmap="plasma").artist()
         assert im.get_cmap().name == "plasma", "the lookup overrode an explicit cmap"
 
     def test_literal_sits_behind_the_lookup(self, dataset, monkeypatch):
@@ -386,7 +391,7 @@ class TestColormapResolution:
             The default is still deterministic — it just lives behind the lookup instead of in a signature.
         """
         _styled(monkeypatch)
-        im = Map(crs=dataset.epsg).field(dataset)
+        im = Map(crs=dataset.epsg).field(dataset).artist()
         assert im.get_cmap().name == DEFAULT_FIELD_CMAP, (
             "the fallback colormap was not applied"
         )
@@ -429,7 +434,7 @@ class TestAutoStyleLevelsAndUnits:
             The resolved edges are the ones the contour set is built on.
         """
         _styled(monkeypatch, cmap="viridis", levels=[0.0, 5.0, 10.0, 20.0])
-        cs = Map(crs=dataset.epsg).contours(dataset, filled=True)
+        cs = Map(crs=dataset.epsg).contours(dataset, filled=True).artist()
         assert np.allclose(cs.levels, [0.0, 5.0, 10.0, 20.0]), (
             f"the resolved levels were ignored: {cs.levels}"
         )
@@ -445,8 +450,10 @@ class TestAutoStyleLevelsAndUnits:
             The caller asks for four even bands over a range the lookup does not describe.
         """
         _styled(monkeypatch, cmap="viridis", levels=[0.0, 5.0, 10.0, 20.0])
-        cs = Map(crs=dataset.epsg).contours(
-            dataset, levels=[0.0, 1.0, 2.0], filled=True
+        cs = (
+            Map(crs=dataset.epsg)
+            .contours(dataset, levels=[0.0, 1.0, 2.0], filled=True)
+            .artist()
         )
         assert np.allclose(cs.levels, [0.0, 1.0, 2.0]), (
             "the lookup overrode explicit levels"
@@ -464,7 +471,7 @@ class TestAutoStyleLevelsAndUnits:
             caller asked to see.
         """
         _styled(monkeypatch, cmap="viridis", levels=[0.0, 5.0, 10.0, 20.0])
-        im = Map(crs=dataset.epsg).field(dataset)
+        im = Map(crs=dataset.epsg).field(dataset).artist()
         assert not isinstance(im.norm, BoundaryNorm), (
             "field was banded by the resolved levels"
         )
@@ -577,7 +584,8 @@ class TestStrictOffLimb:
         """
         m = Map(crs=projections.orthographic(lon=-175, lat=15))
         with caplog.at_level(logging.WARNING):
-            assert m.field(regional) is None, "an off-limb layer must draw nothing"
+            m.field(regional)
+            assert m.layer_ids == [], "an off-limb layer must draw nothing"
         assert "field" in caplog.text, f"the skip was not reported: {caplog.text!r}"
 
     def test_strict_raises_naming_the_layer(self, regional):

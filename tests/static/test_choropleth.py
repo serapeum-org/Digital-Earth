@@ -38,7 +38,8 @@ def test_polygons_outline(polygons):
 def test_choropleth_polygon_count(polygons):
     """choropleth draws at least one polygon per feature."""
     m = Map(crs=polygons.epsg)
-    pc = m.choropleth(polygons, column="fid")
+    m.choropleth(polygons, column="fid")
+    pc = m.artist()
     assert len(pc.get_paths()) >= len(polygons)
 
 

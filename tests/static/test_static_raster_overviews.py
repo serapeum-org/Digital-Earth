@@ -283,7 +283,8 @@ class TestTheOffLimbDecisionStaysWithTheFullRead:
         """
         dataset = _raster(1200, path=tmp_path / "big.tif")
         with Map(crs=self._hiding_crs(), globe=True, figsize=(4, 4)) as scene:
-            assert scene.field(dataset) is None, "an off-limb field must draw nothing"
+            scene.field(dataset)
+            assert scene.layer_ids == [], "an off-limb field must draw nothing"
             assert not scene.ax.images, "no raster should have been drawn"
 
     def test_strict_still_refuses_a_large_off_limb_raster(self, tmp_path):

@@ -16,7 +16,8 @@ def points_fc():
 def test_voronoi_filled(points_fc):
     """voronoi fills the cells coloured by the chosen column and registers one layer."""
     m = Map(crs=points_fc.epsg)
-    pc = m.voronoi(points_fc, column="fid")
+    m.voronoi(points_fc, column="fid")
+    pc = m.artist()
     assert len(m.layers) == 1
     assert m.ax.collections
     assert len(pc.get_paths()) >= 1
@@ -33,7 +34,8 @@ def test_voronoi_outline(points_fc):
 def test_voronoi_one_cell_per_point(points_fc):
     """ordered tessellation in a projected CRS yields exactly one finite cell per input point."""
     m = Map(crs=points_fc.epsg)
-    pc = m.voronoi(points_fc, column="fid")
+    m.voronoi(points_fc, column="fid")
+    pc = m.artist()
     assert len(pc.get_paths()) == len(points_fc)
 
 
@@ -55,8 +57,10 @@ def test_voronoi_clip_trims_cells(points_fc):
     from shapely.geometry import MultiPoint
 
     hull = points_fc.geometry.union_all().convex_hull
-    clipped = Map(crs=points_fc.epsg).voronoi(points_fc, column="fid", clip=hull)
-    unclipped = Map(crs=points_fc.epsg).voronoi(points_fc, column="fid")
+    clipped = (
+        Map(crs=points_fc.epsg).voronoi(points_fc, column="fid", clip=hull).artist()
+    )
+    unclipped = Map(crs=points_fc.epsg).voronoi(points_fc, column="fid").artist()
     assert _drawn_area(clipped) < _drawn_area(unclipped)
     # every clipped vertex lies within the hull (allowing a tiny numeric tolerance)
     verts = np.concatenate([p.vertices for p in clipped.get_paths()])
@@ -95,7 +99,8 @@ def test_voronoi_drops_nonfinite_on_globe():
         crs="EPSG:4326",
     )
     m = Map(crs="+proj=ortho +lat_0=0 +lon_0=0 +datum=WGS84")
-    pc = m.voronoi(FeatureCollection(gdf), column="v")
+    m.voronoi(FeatureCollection(gdf), column="v")
+    pc = m.artist()
     assert len(m.layers) == 1
     assert len(pc.get_paths()) >= 1
 

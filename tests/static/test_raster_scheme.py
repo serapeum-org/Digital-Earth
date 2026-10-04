@@ -133,8 +133,8 @@ class TestClassifiedRasterField:
         """
         expected = _equal_interval_edges(values, 4)
         with Map(crs=dataset.epsg) as m:
-            mappable = getattr(m, builder)(dataset, scheme="equal_interval", k=4)
-            norm = mappable.norm
+            getattr(m, builder)(dataset, scheme="equal_interval", k=4)
+            norm = m.artist().norm
         assert isinstance(norm, BoundaryNorm), (
             f"{builder} should classify, got {norm!r}"
         )

@@ -67,7 +67,8 @@ class TestOneMethodDrawsBothRenders:
         Args:
             drawn: The map under test.
         """
-        assert _filled(drawn.contours(_raster(), levels=LEVELS)) is False
+        drawn.contours(_raster(), levels=LEVELS)
+        assert _filled(drawn.artist()) is False
 
     def test_filled_draws_bands(self, drawn):
         """``filled=True`` draws the bands between the levels.
@@ -75,7 +76,8 @@ class TestOneMethodDrawsBothRenders:
         Args:
             drawn: The map under test.
         """
-        assert _filled(drawn.contours(_raster(), levels=LEVELS, filled=True)) is True
+        drawn.contours(_raster(), levels=LEVELS, filled=True)
+        assert _filled(drawn.artist()) is True
 
     def test_the_levels_asked_for_are_the_levels_drawn(self, drawn):
         """``levels=`` reaches the engine, which is the only place it can have an effect.
@@ -83,7 +85,8 @@ class TestOneMethodDrawsBothRenders:
         Args:
             drawn: The map under test.
         """
-        artist = drawn.contours(_raster(), levels=LEVELS)
+        drawn.contours(_raster(), levels=LEVELS)
+        artist = drawn.artist()
         assert [float(level) for level in artist.levels] == LEVELS, artist.levels
 
 
@@ -101,7 +104,8 @@ class TestAnIntervalIsSpacing:
             inside the data. Asserted as the gap between drawn levels rather than as a list, because which
             multiples fall inside is a property of the data and the gap is the property of the argument.
         """
-        artist = drawn.contours(_raster(), interval=100.0)
+        drawn.contours(_raster(), interval=100.0)
+        artist = drawn.artist()
         levels = [float(level) for level in artist.levels]
         gaps = {round(b - a, 9) for a, b in zip(levels, levels[1:])}
         assert gaps == {100.0}, levels
@@ -157,7 +161,8 @@ class TestAnIntervalTooFineToDrawIsRefused:
             The same fixture at `interval=100.0` traces three levels, far under the ceiling. This is the
             positive control for the refusal above — a guard that refused everything would pass without it.
         """
-        artist = drawn.contours(_raster(), interval=100.0)
+        drawn.contours(_raster(), interval=100.0)
+        artist = drawn.artist()
         assert len(artist.levels) >= 3, (
             f"an ordinary interval should still draw; got {artist.levels}"
         )

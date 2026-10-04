@@ -125,7 +125,8 @@ class TestAGraduatedLayerRecordsTheEdgesItWasDrawnWith:
             matplotlib colours the polygons through, so comparing the record against *it* asks whether the
             two agree — two different readings of one classification, not one value against itself.
         """
-        artist = drawn.choropleth(_polygons(VALUES), COLUMN, scheme=SCHEME, k=CLASSES)
+        drawn.choropleth(_polygons(VALUES), COLUMN, scheme=SCHEME, k=CLASSES)
+        artist = drawn.artist()
         coloured_through = tuple(float(edge) for edge in artist.norm.boundaries)
         assert tuple(drawn.last_breaks) == coloured_through, (
             f"the map records {drawn.last_breaks!r} and the polygons are coloured through "

@@ -56,7 +56,7 @@ class TestDrawingLeavesTheCallersDataAlone:
         drawn = FeatureCollection.read_file(str(POINTS))
         untouched = FeatureCollection.read_file(str(POINTS))
 
-        collection = Map(crs=DISPLAY_EPSG).points(drawn, size=40)
+        collection = Map(crs=DISPLAY_EPSG).points(drawn, size=40).artist()
 
         offsets = collection.get_offsets()
         assert abs(offsets).max() < DEGREE_LIMIT, (

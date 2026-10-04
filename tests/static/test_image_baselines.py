@@ -481,7 +481,7 @@ def test_grid_panels_with_shared_colorbar(dataset):
         Figure: the shared figure.
     """
     fig, maps = grid(1, 2, crs=dataset.epsg, figsize=(6.0, 3.0))
-    first = maps[0].field(dataset, cmap="viridis")
+    first = maps[0].field(dataset, cmap="viridis").artist()
     maps[1].contours(dataset, cmap="viridis", levels=6, filled=True)
     shared_colorbar(fig, first, maps, label="accumulation")
     return fig

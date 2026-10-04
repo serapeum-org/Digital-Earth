@@ -19,7 +19,8 @@ def polygons():
 def test_cartogram_filled(polygons):
     """cartogram fills the scaled polygons coloured by a column and registers one layer."""
     m = Map(crs=polygons.epsg)
-    pc = m.cartogram(polygons, scale="fid", column="fid")
+    m.cartogram(polygons, scale="fid", column="fid")
+    pc = m.artist()
     assert len(m.layers) == 1
     assert m.ax.collections
     assert len(pc.get_paths()) >= 1
@@ -36,7 +37,8 @@ def test_cartogram_outline(polygons):
 def test_cartogram_one_polygon_per_feature(polygons):
     """A simple-polygon layer yields one drawn polygon per feature."""
     m = Map(crs=polygons.epsg)
-    pc = m.cartogram(polygons, scale="fid", column="fid")
+    m.cartogram(polygons, scale="fid", column="fid")
+    pc = m.artist()
     assert len(pc.get_paths()) == len(polygons)
 
 

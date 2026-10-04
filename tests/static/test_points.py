@@ -43,7 +43,8 @@ def test_grid_cells_polygon_count(dataset):
     import numpy as np
 
     m = Map(crs=dataset.epsg)
-    pc = m.grid_cells(dataset)
+    m.grid_cells(dataset)
+    pc = m.artist()
     paths = pc.get_paths()
     assert len(paths) == dataset.rows * dataset.columns
 
@@ -65,7 +66,8 @@ def test_grid_cells_nulls_nodata_cells():
         no_data_value=-9999.0,
     )
     m = Map(crs=4326)
-    pc = m.grid_cells(ds)
+    m.grid_cells(ds)
+    pc = m.artist()
     values = np.ma.filled(np.asarray(pc.get_array(), dtype="float64"), np.nan)
     assert len(pc.get_paths()) == 4, (
         f"all four cells should be drawn, got {len(pc.get_paths())}"

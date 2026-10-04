@@ -14,8 +14,9 @@ def test_spaghetti_over_collection(dataset):
         ["examples/data/acc4000.tif", "examples/data/acc4000.tif"]
     )
     m = Map(crs=dataset.epsg)
-    artists = m.spaghetti(dc)
-    assert len(artists) == 2
+    m.spaghetti(dc)
+    drawn = [m.artist(layer_id) for layer_id in m.layer_ids]
+    assert len(drawn) == 2
     assert len(m.layers) == 2
 
 

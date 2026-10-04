@@ -329,7 +329,8 @@ def test_annotate_far_side_globe_skipped():
 def test_stock_img_dataset_backdrop(dataset):
     """stock_img(dataset) draws a backdrop AxesImage below data and keeps the data extent."""
     m = Map(crs=dataset.epsg)
-    data_im = m.field(dataset)
+    m.field(dataset)
+    data_im = m.artist()
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
     back = m.stock_img(dataset)
     assert back is not None

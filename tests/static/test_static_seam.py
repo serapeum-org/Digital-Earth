@@ -1326,11 +1326,13 @@ class TestAUvFieldTakesAPathLikeEveryOtherBuilder:
             dataset: The same raster, already open.
         """
         by_path = Map(crs=dataset.epsg)
-        from_path = by_path.quiver(RASTER_PATH, RASTER_PATH)
+        by_path.quiver(RASTER_PATH, RASTER_PATH)
+        from_path = by_path.artist()
         eastward = np.asarray(from_path.U)
         by_path.close()
         by_object = Map(crs=dataset.epsg)
-        expected = np.asarray(by_object.quiver(dataset, dataset).U)
+        by_object.quiver(dataset, dataset)
+        expected = np.asarray(by_object.artist().U)
         by_object.close()
         assert np.array_equal(eastward, expected), (eastward[:3], expected[:3])
 
@@ -1359,9 +1361,8 @@ class TestAQuadtreeRedrawsWithTheReducerItWasBuiltWith:
             the replay is a real JSON round trip onto a map that holds nothing of the first one's.
         """
         canvas = Map(crs=32618)
-        built = _cell_values(
-            canvas.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
-        )
+        canvas.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        built = _cell_values(canvas.artist())
         figure = _written_and_read_back(canvas.figure_spec)
         canvas.close()
         target = Map(crs=32618)
@@ -1378,31 +1379,29 @@ class TestAQuadtreeRedrawsWithTheReducerItWasBuiltWith:
             ``max`` and ``sum`` over the same points must disagree, or the round-trip check proves nothing.
         """
         by_max = Map(crs=32618)
-        highest = _cell_values(
-            by_max.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
-        )
+        by_max.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        highest = _cell_values(by_max.artist())
         by_max.close()
         by_sum = Map(crs=32618)
-        totals = _cell_values(
-            by_sum.quadtree(POINTS_PATH, column="fid", agg="sum", nmax=6)
-        )
+        by_sum.quadtree(POINTS_PATH, column="fid", agg="sum", nmax=6)
+        totals = _cell_values(by_sum.artist())
         by_sum.close()
         assert highest != totals, (highest, totals)
 
     def test_a_reducer_of_the_callers_own_is_held_and_still_colours_the_cells(self):
         """A callable has no JSON form, so it travels beside the layer — and the figure still writes."""
         canvas = Map(crs=32618)
-        drawn = canvas.quadtree(
+        canvas.quadtree(
             POINTS_PATH, column="fid", agg=lambda values: float(np.max(values)), nmax=6
         )
+        drawn = canvas.artist()
         by_callable = _cell_values(drawn)
         recorded = canvas.figure_spec.layers.get(canvas.layer_ids[0]).symbology.props
         written = json.dumps(canvas.figure_spec.to_dict(), allow_nan=False)
         canvas.close()
         by_name = Map(crs=32618)
-        expected = _cell_values(
-            by_name.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
-        )
+        by_name.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        expected = _cell_values(by_name.artist())
         by_name.close()
         assert recorded["agg"] is None, dict(recorded)
         assert by_callable == expected, (by_callable, expected)

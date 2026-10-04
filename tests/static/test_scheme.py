@@ -69,8 +69,10 @@ def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     LUT entries.
     """
     opts = {} if cmap is None else {"cmap": cmap}
-    pc = Map(crs=zoned.epsg).choropleth(
-        zoned, column="zone", scheme="categorical", **opts
+    pc = (
+        Map(crs=zoned.epsg)
+        .choropleth(zoned, column="zone", scheme="categorical", **opts)
+        .artist()
     )
     _, expected = categorical_colors(zoned["zone"], resolve_categorical_cmap(cmap))
     assert rendered_colors(pc, len(expected)) == [c.lower() for c in expected]
@@ -85,8 +87,10 @@ def test_categorical_cmap_cycles_in_step_with_the_sibling_tiers(polygons):
     """
     fc = polygons.copy()
     fc["zone"] = [f"c{i:02d}" for i in range(len(fc))]
-    pc = Map(crs=fc.epsg).choropleth(
-        fc, column="zone", scheme="categorical", cmap="Accent"
+    pc = (
+        Map(crs=fc.epsg)
+        .choropleth(fc, column="zone", scheme="categorical", cmap="Accent")
+        .artist()
     )
     categories, expected = categorical_colors(fc["zone"], "Accent")
     assert len(categories) > 8, (
@@ -108,7 +112,8 @@ def test_categorical_missing_values_are_drawn_neutral(polygons):
     zones[0] = None
     fc["zone"] = zones
     m = Map(crs=fc.epsg)
-    pc = m.choropleth(fc, column="zone", scheme="categorical")
+    m.choropleth(fc, column="zone", scheme="categorical")
+    pc = m.artist()
     pc.update_scalarmappable()  # resolve the value array into facecolors
     facecolors = pc.get_facecolors()
     assert to_hex(facecolors[0]) == MISSING_COLOR, (
@@ -138,7 +143,8 @@ def test_graduated_missing_values_are_drawn_neutral(polygons):
     values[0] = float("nan")
     fc["graded"] = values
     m = Map(crs=fc.epsg)
-    pc = m.choropleth(fc, column="graded", scheme="quantiles", k=3)
+    m.choropleth(fc, column="graded", scheme="quantiles", k=3)
+    pc = m.artist()
     pc.update_scalarmappable()  # resolve the value array into facecolors
     facecolors = pc.get_facecolors()
     assert to_hex(facecolors[0]) == MISSING_COLOR, (
@@ -163,7 +169,8 @@ def test_a_continuous_ramp_leaves_a_missing_value_to_the_renderer(polygons):
     values[0] = float("nan")
     fc["graded"] = values
     m = Map(crs=fc.epsg)
-    pc = m.choropleth(fc, column="graded")
+    m.choropleth(fc, column="graded")
+    pc = m.artist()
     pc.update_scalarmappable()
     assert pc.get_facecolors()[0][3] == 0.0, (
         "a continuous ramp keeps matplotlib's transparent 'bad' colour; only classes are repainted"
@@ -184,7 +191,8 @@ def test_categorical_nulls_never_become_a_category(polygons, dtype):
     zones[0] = None
     fc["zone"] = pd.array(zones, dtype=dtype)
     m = Map(crs=fc.epsg)
-    pc = m.choropleth(fc, column="zone", scheme="categorical")
+    m.choropleth(fc, column="zone", scheme="categorical")
+    pc = m.artist()
     labels = [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
     assert labels == ["rural", "urban"], (
         "a null must not become a category, whatever its dtype spelling"
@@ -204,7 +212,8 @@ def test_categorical_scheme_spelling_is_case_insensitive(zoned, spelling):
     string column.
     """
     m = Map(crs=zoned.epsg)
-    pc = m.choropleth(zoned, column="zone", scheme=spelling)
+    m.choropleth(zoned, column="zone", scheme=spelling)
+    pc = m.artist()
     assert isinstance(pc.norm, BoundaryNorm)
     assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == [
         "park",
@@ -219,8 +228,10 @@ def test_categorical_cmap_coolwarm_r_is_a_known_upstream_divergence(zoned):
     Pins the one divergence that cannot be resolved from this side (it needs an upstream change), so a future
     cleopatra release that changes the rule fails here loudly instead of drifting silently.
     """
-    pc = Map(crs=zoned.epsg).choropleth(
-        zoned, column="zone", scheme="categorical", cmap="coolwarm_r"
+    pc = (
+        Map(crs=zoned.epsg)
+        .choropleth(zoned, column="zone", scheme="categorical", cmap="coolwarm_r")
+        .artist()
     )
     _, web_colors = categorical_colors(
         zoned["zone"], resolve_categorical_cmap("coolwarm_r")
@@ -236,10 +247,12 @@ def test_categorical_cmap_coolwarm_r_is_a_known_upstream_divergence(zoned):
 
 def test_choropleth_scheme_is_discrete(polygons):
     """A scheme bins choropleth fills into discrete classes (BoundaryNorm); default is continuous."""
-    discrete = Map(crs=polygons.epsg).choropleth(
-        polygons, column="fid", scheme="quantiles", k=3
+    discrete = (
+        Map(crs=polygons.epsg)
+        .choropleth(polygons, column="fid", scheme="quantiles", k=3)
+        .artist()
     )
-    continuous = Map(crs=polygons.epsg).choropleth(polygons, column="fid")
+    continuous = Map(crs=polygons.epsg).choropleth(polygons, column="fid").artist()
     assert isinstance(discrete.norm, BoundaryNorm)
     assert not isinstance(continuous.norm, BoundaryNorm)
 
@@ -248,7 +261,7 @@ def test_choropleth_categorical_colors_each_distinct_value(polygons):
     """scheme='categorical' gives every distinct value its own class code (cleopatra >=0.26, CAT-5)."""
     fc = polygons.copy()
     fc["zone"] = ["urban", "rural", "park"] * (len(fc) // 3) + ["urban"] * (len(fc) % 3)
-    pc = Map(crs=fc.epsg).choropleth(fc, column="zone", scheme="categorical")
+    pc = Map(crs=fc.epsg).choropleth(fc, column="zone", scheme="categorical").artist()
     assert isinstance(pc.norm, BoundaryNorm)
     # the mappable carries integer class codes (one per distinct label), not the labels themselves
     assert sorted(set(pc.get_array().tolist())) == [0.0, 1.0, 2.0]
@@ -296,32 +309,40 @@ def test_graduated_choropleth_still_defers_its_key_to_the_scene(polygons):
 
 def test_voronoi_scheme_is_discrete(points_fc):
     """voronoi honours a categorical scheme on its filled cells."""
-    pc = Map(crs=points_fc.epsg).voronoi(
-        points_fc, column="fid", scheme="quantiles", k=3
+    pc = (
+        Map(crs=points_fc.epsg)
+        .voronoi(points_fc, column="fid", scheme="quantiles", k=3)
+        .artist()
     )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
 def test_cartogram_scheme_is_discrete(polygons):
     """cartogram honours a categorical scheme on its scaled polygons."""
-    pc = Map(crs=polygons.epsg).cartogram(
-        polygons, scale="fid", column="fid", scheme="quantiles", k=3
+    pc = (
+        Map(crs=polygons.epsg)
+        .cartogram(polygons, scale="fid", column="fid", scheme="quantiles", k=3)
+        .artist()
     )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
 def test_quadtree_scheme_is_discrete(points_fc):
     """quadtree honours a categorical scheme on its aggregate cells."""
-    pc = Map(crs=points_fc.epsg).quadtree(
-        points_fc, column="fid", nmax=1, scheme="quantiles", k=3
+    pc = (
+        Map(crs=points_fc.epsg)
+        .quadtree(points_fc, column="fid", nmax=1, scheme="quantiles", k=3)
+        .artist()
     )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
 def test_scheme_fisher_jenks(polygons):
     """The native Fisher-Jenks scheme is accepted (no mapclassify dependency)."""
-    pc = Map(crs=polygons.epsg).choropleth(
-        polygons, column="fid", scheme="fisher_jenks", k=3
+    pc = (
+        Map(crs=polygons.epsg)
+        .choropleth(polygons, column="fid", scheme="fisher_jenks", k=3)
+        .artist()
     )
     assert isinstance(pc.norm, BoundaryNorm)
 
@@ -333,7 +354,8 @@ def test_categorical_scheme_on_outline_only_is_inert(polygons):
     a no-op — the outlines still draw and nothing crashes on the absent values.
     """
     m = Map(crs=polygons.epsg)
-    pc = m.polygons(polygons, scheme="categorical")
+    m.polygons(polygons, scheme="categorical")
+    pc = m.artist()
     assert len(pc.get_paths()) == len(polygons), "outlines must still be drawn"
     assert m.layers[-1][0].category_legend is None, "no values means no category legend"
 
@@ -363,7 +385,8 @@ def test_sibling_polygon_methods_honour_categorical(request, fixture, call):
     """
     fc = request.getfixturevalue(fixture)
     m = Map(crs=fc.epsg)
-    pc = call(m, fc)
+    call(m, fc)
+    pc = m.artist()
     glyph = m.layers[-1][0]
     assert isinstance(pc.norm, BoundaryNorm)
     assert glyph.cbar is None
@@ -383,7 +406,8 @@ def test_categorical_cmap_accepts_a_colormap_object(zoned):
     """
     palette = ListedColormap(["#d7191c", "#2c7bb6", "#fdae61"])
     m = Map(crs=zoned.epsg)
-    pc = m.choropleth(zoned, column="zone", scheme="categorical", cmap=palette)
+    m.choropleth(zoned, column="zone", scheme="categorical", cmap=palette)
+    pc = m.artist()
     assert rendered_colors(pc, 3) == ["#d7191c", "#2c7bb6", "#fdae61"], (
         "the colormap object's own colours must survive to the artist"
     )

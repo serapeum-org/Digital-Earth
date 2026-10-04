@@ -51,7 +51,7 @@ class TestDrawingLines:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers)
+        artist = Map(crs=4326).lines(rivers).artist()
         assert isinstance(artist, LineCollection), type(artist)
 
     def test_a_multilinestring_draws_one_path_per_part(self, rivers):
@@ -60,7 +60,7 @@ class TestDrawingLines:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers)
+        artist = Map(crs=4326).lines(rivers).artist()
         assert len(artist.get_paths()) == 4, len(artist.get_paths())
 
     def test_the_lines_are_reprojected_into_the_display_crs(self, rivers):
@@ -69,7 +69,7 @@ class TestDrawingLines:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=3857).lines(rivers)
+        artist = Map(crs=3857).lines(rivers).artist()
         end = artist.get_paths()[0].vertices[-1]
         expected = (
             MERCATOR_R * math.radians(1.0),
@@ -113,7 +113,7 @@ class TestColour:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers, column="discharge")
+        artist = Map(crs=4326).lines(rivers, column="discharge").artist()
         assert list(artist.get_array()) == [10.0, 40.0, 40.0, 25.0], artist.get_array()
 
     def test_a_scheme_classifies_the_column(self, rivers):
@@ -122,8 +122,10 @@ class TestColour:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(
-            rivers, column="discharge", scheme="equal_interval", k=3
+        artist = (
+            Map(crs=4326)
+            .lines(rivers, column="discharge", scheme="equal_interval", k=3)
+            .artist()
         )
         assert isinstance(artist.norm, BoundaryNorm), type(artist.norm)
 
@@ -133,7 +135,7 @@ class TestColour:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers, color="steelblue")
+        artist = Map(crs=4326).lines(rivers, color="steelblue").artist()
         colours = {tuple(rgba) for rgba in artist.get_colors()}
         assert colours == {to_rgba("steelblue")}, colours
 
@@ -143,7 +145,7 @@ class TestColour:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers, column="discharge", cmap="plasma")
+        artist = Map(crs=4326).lines(rivers, column="discharge", cmap="plasma").artist()
         assert artist.get_cmap().name == "plasma", artist.get_cmap().name
 
     def test_a_built_norm_under_color_scales_the_column(self, rivers):
@@ -160,7 +162,9 @@ class TestColour:
             must arrive on the collection untouched rather than be rebuilt or read as a colour name.
         """
         caller_norm = LogNorm(vmin=10.0, vmax=40.0)
-        artist = Map(crs=4326).lines(rivers, column="discharge", color=caller_norm)
+        artist = (
+            Map(crs=4326).lines(rivers, column="discharge", color=caller_norm).artist()
+        )
         assert artist.norm is caller_norm, (
             f"the caller's own norm must reach the collection, got {artist.norm!r}"
         )
@@ -178,7 +182,7 @@ class TestWidthAndOpacity:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers, width=3.5)
+        artist = Map(crs=4326).lines(rivers, width=3.5).artist()
         assert set(np.round(artist.get_linewidths(), 6)) == {3.5}, (
             artist.get_linewidths()
         )
@@ -189,7 +193,7 @@ class TestWidthAndOpacity:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers, width="order")
+        artist = Map(crs=4326).lines(rivers, width="order").artist()
         widths = np.asarray(artist.get_linewidths())
         order = np.repeat([1, 3, 2], [1, 2, 1])
         assert list(np.argsort(widths, kind="stable")) == list(
@@ -202,7 +206,7 @@ class TestWidthAndOpacity:
         Args:
             rivers: The reaches.
         """
-        artist = Map(crs=4326).lines(rivers, opacity=0.4)
+        artist = Map(crs=4326).lines(rivers, opacity=0.4).artist()
         assert artist.get_alpha() == pytest.approx(0.4), artist.get_alpha()
 
     def test_a_layer_built_hidden_draws_hidden(self, rivers):
@@ -212,7 +216,8 @@ class TestWidthAndOpacity:
             rivers: The reaches.
         """
         canvas = Map(crs=4326)
-        artist = canvas.lines(rivers, name="r", visible=False)
+        canvas.lines(rivers, name="r", visible=False)
+        artist = canvas.artist()
         assert artist.get_visible() is False, "the artist must be hidden"
         assert canvas.figure_spec.layers.get("r").visible is False, (
             "and so must the description"
@@ -233,8 +238,8 @@ class TestOffTheLimb:
         from digitalearth.static import projections
 
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
-        drawn = getattr(canvas, builder)(rivers)
-        assert drawn is None, drawn
+        getattr(canvas, builder)(rivers)
+        assert dict(canvas._renderer.drawn) == {}, canvas._renderer.drawn
         assert canvas.layer_ids == [], canvas.layer_ids
 
 
