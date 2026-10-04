@@ -266,6 +266,49 @@ def test_categorical_legend(dataset):
 
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
+def test_classified_field_with_legend(dataset):
+    """A quantile-classified raster and its class legend — stepped colours, one swatch per class (ST-7, #222).
+
+    Test scenario:
+        ``scheme="quantiles", k=5`` on the skewed flow-accumulation raster merges tied cuts into three classes;
+        the picture must show three flat colours and the key three ranges in those colours.
+
+    Returns:
+        Figure: the rendered map.
+    """
+    m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
+    m.field(dataset, scheme="quantiles", k=5)
+    m.legend(title="flow accumulation")
+    return m.fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
+def test_categorical_field_with_legend():
+    """A raster of integer class codes drawn categorically, with one swatch per code (ST-7, #222).
+
+    Test scenario:
+        Four codes with a gap (1, 2, 3, 5) in a fixed pattern; each must be one flat colour from the shared
+        categorical palette, and the key must list the codes themselves in those colours.
+
+    Returns:
+        Figure: the rendered map.
+    """
+    codes = np.array(
+        [
+            [1, 1, 1, 2, 2, 2],
+            [1, 1, 2, 2, 2, 3],
+            [1, 5, 5, 2, 3, 3],
+            [5, 5, 5, 3, 3, 3],
+        ],
+        dtype=float,
+    )
+    m = Map(figsize=_FIGSIZE)
+    m.field(codes, scheme="categorical")
+    m.legend(title="land cover")
+    return m.fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
 def test_grid_cells(dataset):
     """Raster cells drawn as one polygon each keep their fill and outline.
 

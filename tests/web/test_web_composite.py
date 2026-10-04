@@ -22,7 +22,7 @@ from matplotlib import image as mpimage
 
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS
-from digitalearth.web import WebMap
+from digitalearth.web import TileRoute, WebMap
 from digitalearth.web import raster as web_raster
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -642,9 +642,7 @@ class TestTheTiledCompositeRoutes:
         m = WebMap().rgb_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "scene",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "scene", zooms=(9, 9)),
         )
         spec = m._renderer.drawn[m._last_layer_id].source_spec
         assert spec["tiles"] == ["scene/{z}/{x}/{y}.png"], spec
@@ -667,8 +665,7 @@ class TestTheTiledCompositeRoutes:
         m = WebMap().hsv_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="cog",
-            tiles_path=tmp_path / "scene.tif",
+            tiles=TileRoute("cog", tmp_path / "scene.tif"),
             limits=[(0.0, 90.0)] * 3,
         )
         spec = m._renderer.drawn[m._last_layer_id].source_spec
@@ -691,9 +688,7 @@ class TestTheTiledCompositeRoutes:
         m = WebMap().rgb_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "scene",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "scene", zooms=(9, 9)),
         )
         figure = m.figure_spec
         recorded = figure.layers.get(figure.layers.ids[0]).symbology.props["limits"]
@@ -744,17 +739,13 @@ class TestTheTiledCompositeRoutes:
         WebMap().rgb_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "whole",
-            zooms=(8, 9),
+            tiles=TileRoute("xyz", tmp_path / "whole", zooms=(8, 9)),
         )
         monkeypatch.setattr(raster_module, "_tile_stack", _the_first_window_misses)
         WebMap().rgb_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "holed",
-            zooms=(8, 9),
+            tiles=TileRoute("xyz", tmp_path / "holed", zooms=(8, 9)),
         )
         complete = sorted((tmp_path / "whole").rglob("*.png"))
         holed = sorted((tmp_path / "holed").rglob("*.png"))
@@ -781,9 +772,7 @@ class TestTheTiledCompositeRoutes:
         m = WebMap().rgb_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "scene",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "scene", zooms=(9, 9)),
             name="scene",
         )
         assert m.get_layer("scene").source_id is None, m.get_layer("scene")
@@ -805,9 +794,7 @@ class TestTheTiledCompositeRoutes:
         built = WebMap().hsv_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "scene",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "scene", zooms=(9, 9)),
             name="scene",
         )
         reloaded = FigureSpec.from_dict(
@@ -854,9 +841,7 @@ class TestTheTiledCompositeRoutes:
         m.hsv_composite(
             dataset,
             bands=(1, 1, 1),
-            tiles="xyz",
-            tiles_path=tmp_path / "scene",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "scene", zooms=(9, 9)),
             name="tiled",
         )
         assert m.layer_ids == ["inline"], m.layer_ids

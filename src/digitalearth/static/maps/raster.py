@@ -13,23 +13,32 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
+from dataclasses import replace
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 from matplotlib import colormaps
+from matplotlib.colors import BoundaryNorm, ListedColormap
 
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.levels import levels_every
 from digitalearth.base.preprocess import add_cyclic_column
+from digitalearth.base.raster_classes import (
+    BandClasses,
+    asks_categorical,
+    classes_of,
+    classify_band,
+)
 from digitalearth.base.sources import Source, get_stack, require_drawable
 from digitalearth.base.spec import (
     DEFAULT_BAND,
     Bounds,
     LayerSpec,
     RenderTarget,
+    Scale,
     Symbology,
 )
 from digitalearth.base.spec._serial import thawed_value
@@ -58,6 +67,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: kept *behind* the lookup rather than in a signature, so one variable-driven default decides the colour of
 #: every backend's render of the same data.
 DEFAULT_FIELD_CMAP = "viridis"
+
 
 #: cleopatra's render kind -> the registered layer kind that render *is* (#303). The two vocabularies are not
 #: the same word for the same thing: ``"contour"`` names a matplotlib call, ``"contours"`` names iso-value
@@ -240,13 +250,20 @@ def _band_identity(data: Any, band: int) -> Tuple[str, Optional[str]]:
     return str(variable or ""), str(unit) if unit else None
 
 
-def _field_source(scene: Any, data: Any, band: int) -> Tuple[Any, Any]:
+def _field_source(
+    scene: Any, data: Any, band: int, *, exact: bool = False
+) -> Tuple[Any, Any]:
     """Read one band for a field render, at the resolution the figure will draw it (ST-5).
 
     Args:
         scene: The map being drawn on, which carries the display CRS and the canvas.
         data: The raster the layer draws.
         band: The 1-based band.
+        exact: Read every cell, however far past the canvas the raster is. A decimated read *combines*
+            neighbouring cells, which is right for a magnitude and wrong for nominal class codes — averaging
+            codes ``1`` and ``9`` invents a ``5`` that no cell holds — so a categorical field asks for this,
+            whether ``scheme="categorical"`` was passed or a categorical colour scale was recorded. ``False``
+            (default) decimates a raster far past the canvas, as every other field is read.
 
     Returns:
         ``(values, identity)`` — the source the render reads its cells and coordinates from, and the source the
@@ -263,7 +280,7 @@ def _field_source(scene: Any, data: Any, band: int) -> Tuple[Any, Any]:
     # for a lazy warp it will not use, and the full read below is the path that owns the off-limb decision.
     view = (
         _windowed_field(scene, data, band, target)
-        if _worth_decimating(data, target)
+        if not exact and _worth_decimating(data, target)
         else None
     )
     if view is None:
@@ -346,6 +363,59 @@ def _drawing_limits(limits: Any) -> Any:
     ]
 
 
+def _class_plan(
+    layer: LayerSpec, kind: str, scheme: Any
+) -> Tuple[Optional[Scale], bool]:
+    """Decide, before the band is read, how a field layer is classified.
+
+    Args:
+        layer: The layer's description, for the colour scale it records.
+        kind: The render kind (``via``) — a contour is never drawn class by class from a recorded scale.
+        scheme: The ``scheme`` the drawing options carry, or ``None``.
+
+    Returns:
+        ``(recorded, codes)``: the recorded colour scale a scheme-less field is drawn by (``None`` for a contour,
+        which interpolates), and whether the band holds codes — which must then be read in full, since a
+        decimated read averages neighbouring codes into ones no cell holds.
+
+    Raises:
+        ValueError: for ``scheme="categorical"`` on a contour kind. Codes are labels, not a surface: filling
+            between codes 1 and 5 would paint bands of 2 and 3 where no cell holds them.
+
+    Examples:
+        - A contour refuses codes before anything is read:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.static.maps.raster import _class_plan
+            >>> _class_plan(LayerSpec("a", kind="contours"), "contour", "categorical")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: scheme='categorical' draws one class per cell, and a contour interpolates between codes; ...
+
+            ```
+        - An image asked for codes reads them in full; one with no scheme and no recorded scale does not:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.static.maps.raster import _class_plan
+            >>> _class_plan(LayerSpec("a", kind="raster"), "imshow", "categorical")
+            (None, True)
+            >>> _class_plan(LayerSpec("a", kind="raster"), "imshow", None)
+            (None, False)
+
+            ```
+    """
+    contour = kind in _CONTOUR_KINDS
+    if asks_categorical(scheme) and contour:
+        raise ValueError(
+            "scheme='categorical' draws one class per cell, and a contour interpolates between codes; draw "
+            "a categorical raster with field, pcolormesh or block instead"
+        )
+    described = getattr(dict(layer.symbology.encodings).get("color"), "scale", None)
+    recorded = None if contour else described
+    from_record = scheme is None and recorded is not None and recorded.is_categorical
+    return recorded, asks_categorical(scheme) or from_record
+
+
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -371,10 +441,11 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
+    recorded, codes = _class_plan(layer, kind, opts.get("scheme"))
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
     # (ST-5). For everything smaller the two are one object and the read is the one this always did.
-    src, identity = _field_source(scene, data, props["band"])
+    src, identity = _field_source(scene, data, props["band"], exact=codes)
     z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
     if opts.pop(
         "cyclic", False
@@ -421,6 +492,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         placement = {"extent": scene._extent_of(x_values, y_values)}
     else:
         placement = {"coords": (x_values, y_values)}
+    classes = _classified(opts, z_values, requested, recorded)
     # cleopatra's glyph constructors reject the regrouped styling keys (levels/style/color_scale/…);
     # relocate them onto the plot() call, where `_render_glyph` folds them into their group objects.
     plot_style = relocate_flat_style(opts)
@@ -448,9 +520,158 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # Recorded rather than set by the builder afterwards: a backdrop drawn again from its
         # description has to land behind the data again, and the builder is not there the second time.
         drawn.artist.set_zorder(zorder)
+    if classes is not None and classes.is_categorical:
+        # A categorical scale is the one a norm cannot state — its edges look like any graduated cut — so the
+        # drawer says it outright; a graduated one is read off the norm as it always was.
+        drawn = replace(drawn, scale=classes.scale)
     # The band's own name, which only the drawer can answer: the builder records a band *number* and never
     # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
     return drawn.colored_by(source_field(identity, props["band"]))
+
+
+def _classified(
+    opts: Dict[str, Any],
+    values: Any,
+    requested: Any,
+    described: Optional[Scale] = None,
+) -> Optional[BandClasses]:
+    """Turn a classified raster into what cleopatra draws, and return its classes.
+
+    The classes come from :mod:`digitalearth.base.raster_classes`, the one classifier the three 2-D tiers
+    share, so a band classed here is classed — and coloured — exactly as the interactive and web tiers class
+    it. cleopatra is then handed what its ``ArrayGlyph`` already supports: explicit class edges, and a
+    colormap that puts each class's colour on the slot its edges land on (:func:`_class_lookup`). That second
+    half is what makes a class colour the *shared* one: left to cleopatra, a graduated scheme took its colours
+    from a 256-slot spread of the colormap, which for a short qualitative map such as ``Set2`` painted every
+    class after the first in the map's last colour. ``opts`` is rewritten in place.
+
+    A categorical band is one cleopatra refuses outright — to it a raster value is a magnitude — so drawing it
+    as explicit edges, one code per class, is the only way it is drawn at all.
+
+    Args:
+        opts: The drawing options; read for ``scheme``, ``k`` and the resolved ``cmap``, and given the edges
+            and the class colormap in their place.
+        values: The band's cell values.
+        requested: The caller's ``cmap``, or ``None`` — for codes, ``None`` takes the shared default
+            categorical palette rather than the variable's continuous colormap.
+        described: The colour scale the layer's description already carries, if any. With no ``scheme`` a
+            categorical or classified one is drawn as recorded: a figure another tier described records its
+            classes there, not in ``scheme``. With ``scheme="categorical"`` and no ``cmap`` its colours are
+            reused when its categories are exactly this band's codes — a replay of a stored figure has lost a
+            caller's unregistered ``Colormap`` (only a name can be written down), but the encoding still holds
+            the colours that were drawn.
+
+    Returns:
+        The :class:`~digitalearth.base.raster_classes.BandClasses`, or ``None`` when the band is drawn along a
+        continuous ramp and ``opts`` is left alone.
+
+    Raises:
+        ValueError: from :func:`~digitalearth.base.raster_classes.classify_band` — a band that is not nominal
+            under ``"categorical"``, or an unknown scheme or ``k`` below one.
+
+    Examples:
+        - A graduated scheme is swapped for its edges and a class colormap, and ``k`` is consumed:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import _classified
+            >>> opts = {"scheme": "equal_interval", "k": 3, "cmap": "viridis"}
+            >>> classes = _classified(opts, np.arange(10.0), None)
+            >>> opts["scheme"], "k" in opts, opts["cmap"].N
+            ([0.0, 3.0, 6.0, 9.0], False, 256)
+            >>> classes.colors
+            ('#440154', '#21918c', '#fde725')
+
+            ```
+        - Codes take the categorical palette when no ``cmap`` was asked for, not the resolved ramp:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import _classified
+            >>> opts = {"scheme": "categorical", "cmap": "viridis"}
+            >>> classes = _classified(opts, np.array([1.0, 2.0, 2.0]), None)
+            >>> opts["scheme"], classes.colors
+            ([0.5, 1.5, 2.5], ('#1f77b4', '#ff7f0e'))
+
+            ```
+        - With no ``scheme`` and nothing recorded the band stays a ramp, and ``opts`` is untouched:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import _classified
+            >>> opts = {"cmap": "viridis"}
+            >>> _classified(opts, np.arange(10.0), None), opts
+            (None, {'cmap': 'viridis'})
+
+            ```
+    """
+    scheme = opts.get("scheme")
+    classes: Optional[BandClasses]
+    if scheme is None:
+        classes = classes_of(described, opts.get("cmap"))
+    elif asks_categorical(scheme):
+        classes = classify_band(values, scheme, None, requested)
+        reusable = (
+            requested is None
+            and described is not None
+            and described.is_categorical
+            and list(described.categories) == list(classes.scale.categories)
+        )
+        if reusable:
+            # `classes_of` reads the colours off the recorded scale — the ones the figure was drawn in.
+            classes = classes_of(described, None)
+    else:
+        classes = classify_band(values, scheme, opts.get("k"), opts.get("cmap"))
+    if classes is None:
+        return None
+    edges = list(classes.edges)
+    opts["scheme"] = edges
+    opts.pop("k", None)
+    middles = [(low + high) / 2 for low, high in zip(edges[:-1], edges[1:])]
+    opts["cmap"] = _class_lookup(classes.colors, edges, middles)
+    return classes
+
+
+#: How many slots cleopatra's classifying ``BoundaryNorm`` spreads the classes over (``ncolors=256``).
+_CLASS_SLOTS = 256
+
+
+def _class_lookup(
+    colors: Sequence[str], edges: Sequence[float], members: Sequence[float]
+) -> ListedColormap:
+    """Return a colormap that paints each class in that class's colour.
+
+    cleopatra classifies through ``BoundaryNorm(edges, ncolors=256)``, which spreads ``n`` classes over 256
+    colour slots rather than onto slots ``0..n-1`` — so a plain ``n``-colour map paints only the first and last
+    classes in their own colours, and every class between them in whatever colour its slot lands on (for four
+    codes, all the last one). This builds a 256-slot map and puts each colour on the slot a member of its
+    class lands in, read off that same norm rather than re-derived, filling forward so every slot is a class
+    colour.
+
+    Args:
+        colors: One colour per class, in class order.
+        edges: The ascending class edges.
+        members: One value inside each class, in class order — a code, or a class's midpoint.
+
+    Returns:
+        A ``ListedColormap`` of :data:`_CLASS_SLOTS` entries; its "bad" colour stays transparent, so nodata
+        cells are left blank.
+
+    Examples:
+        - Three codes land on the first, middle and last slots, each in its own colour:
+            ```python
+            >>> from matplotlib.colors import to_hex
+            >>> from digitalearth.static.maps.raster import _class_lookup
+            >>> lookup = _class_lookup(["#ff0000", "#00ff00", "#0000ff"], [0.5, 1.5, 2.5, 3.5], [1, 2, 3])
+            >>> lookup.N, [to_hex(lookup(slot)) for slot in (0, 127, 255)]
+            (256, ['#ff0000', '#00ff00', '#0000ff'])
+
+            ```
+    """
+    slots = np.asarray(
+        BoundaryNorm(edges, ncolors=_CLASS_SLOTS)(np.asarray(members, dtype=float))
+    )
+    lookup = [colors[0]] * _CLASS_SLOTS
+    for slot, color in zip(slots, colors):
+        lookup[int(slot) :] = [color] * (_CLASS_SLOTS - int(slot))
+    return ListedColormap(lookup)
 
 
 def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
@@ -737,7 +958,23 @@ class RasterMixin(_MixinBase):
             **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
                 ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
                 left over is the caller's own engine styling, split between the layer's description and
-                the scene (see the class docstring).
+                the scene (see the class docstring). ``scheme`` and ``k`` classify the band into discrete
+                classes, as on the vector layers: a named scheme (``"quantiles"``, ``"equal_interval"``,
+                ``"fisher_jenks"``, …) cut into ``k`` classes, or a list of explicit class edges. The
+                classes are drawn as steps, published as :attr:`last_breaks` and on the layer's colour
+                encoding, and keyed by :meth:`colorbar` (ticks on the edges) or :meth:`legend` (one swatch
+                per class). Cut points that coincide — tied values under ``"quantiles"`` — merge, so fewer
+                than ``k`` classes can be drawn; nodata cells fall in no class and stay blank. Explicit edges
+                narrower than the data leave cells outside them, and those are painted the colormap's end
+                colours — the first and last classes' colours when there are two or more classes — while
+                the key lists only the given ranges, so span the data's range when that matters. Without
+                ``scheme`` the field is a continuous ramp, and ``k`` alone is ignored — it counts the classes
+                a named scheme cuts, so it does nothing without one. ``scheme="categorical"`` is for a band of
+                integer class codes (land cover, zone ids): each distinct code becomes its own class,
+                coloured from the same categorical palette the vector layers use (``cmap`` picks the
+                palette), keyed by :meth:`legend` with one swatch per code and published as the layer's
+                categories rather than class edges — so :attr:`last_breaks` stays ``None`` and a
+                colorbar is refused in favour of the legend.
 
         Returns:
             The image mappable (registered as a Scene layer).
@@ -748,7 +985,11 @@ class RasterMixin(_MixinBase):
             TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
                 (see :meth:`_field`).
             ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an
-                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept.
+                array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept;
+                or for a ``scheme`` that cannot classify the band — an unknown
+                name, ``k`` below one, or, under ``scheme="categorical"``, a band holding non-integer values,
+                more than :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` distinct codes, or
+                no valid cell.
 
         Examples:
             - Draw a bare grid, and read back where its image was placed:
@@ -761,6 +1002,46 @@ class RasterMixin(_MixinBase):
                 ...     image = canvas.field(np.arange(12.0).reshape(3, 4))
                 ...     image.get_extent()
                 [-0.5, 3.5, -0.5, 2.5]
+
+                ```
+            - Classify a raster into four equal-interval classes, and read back the edges it was cut at:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> with Map(crs=ds.epsg) as m:
+                ...     _ = m.field(ds, scheme="equal_interval", k=4)
+                ...     m.last_breaks
+                [0.0, 22.0, 44.0, 66.0, 88.0]
+
+                ```
+            - Draw a band of class codes as categories, and read the key's labels — one per code:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> landcover = np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0]])
+                >>> with Map() as m:
+                ...     _ = m.field(landcover, scheme="categorical")
+                ...     _ = m.legend()
+                ...     [label.get_text() for label in m.ax.get_legend().get_texts()]
+                ['1', '2', '3']
+
+                ```
+            - A band of fractional values is a magnitude, so the categorical scheme refuses it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> with Map() as m:
+                ...     m.field(np.array([[0.5, 1.0]]), scheme="categorical")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: scheme='categorical' needs integer class codes ...
 
                 ```
         """
@@ -812,8 +1093,9 @@ class RasterMixin(_MixinBase):
         Raises:
             ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one
                 thing, so neither can be silently preferred; when ``interval`` is not a positive finite
-                spacing or crosses no level inside the band; or from ``ArrayGlyph`` for a styling keyword
-                it does not accept.
+                spacing or crosses no level inside the band; for ``scheme="categorical"``, because a contour
+                interpolates between class codes (draw categories with :meth:`field`, :meth:`pcolormesh` or
+                :meth:`block`); or from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
         if levels is not None and interval is not None:
             raise ValueError(

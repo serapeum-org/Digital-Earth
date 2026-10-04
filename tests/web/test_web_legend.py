@@ -1425,7 +1425,7 @@ class TestOneStopCountServesEveryRamp:
         from digitalearth.web.vector import VectorMixin
 
         method = (
-            RasterMixin._band_colour
+            RasterMixin._band_key
             if builder == "raster"
             else VectorMixin._ramp_color_expr
         )

@@ -12,7 +12,7 @@ import pytest
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import get_source
-from digitalearth.web import WebMap
+from digitalearth.web import TileRoute, WebMap
 from digitalearth.web.raster import _lonlat_bounds
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -229,10 +229,10 @@ class TestAddRasterDrawsNorthFirst:
         captured = {}
         encoder = WebMap._rgba_png_datauri
 
-        def spy(values, cmap_name, vmin=None, vmax=None):
+        def spy(values, cmap_name, vmin=None, vmax=None, classes=None):
             """Record the array handed to the encoder, then encode it normally."""
             captured["values"] = np.array(values, copy=True)
-            return encoder(values, cmap_name, vmin=vmin, vmax=vmax)
+            return encoder(values, cmap_name, vmin=vmin, vmax=vmax, classes=classes)
 
         monkeypatch.setattr(WebMap, "_rgba_png_datauri", staticmethod(spy))
         WebMap().basemap().field(dataset, cmap="viridis")
@@ -496,7 +496,7 @@ class TestTheInlineCeilingIsARefusal:
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         m = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9)
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9))
         )
         assert m.layer_ids, "a tiled raster must still register its layer"
 
@@ -517,8 +517,9 @@ class TestTheTiledRasterRoutes:
             tmp_path: pytest's temporary directory.
         """
         m = WebMap()
+        route = TileRoute("pmtiles", tmp_path / "out")
         with pytest.raises(ValueError, match="pmtiles"):
-            m.field(dataset, tiles="pmtiles", tiles_path=tmp_path / "out")
+            m.field(dataset, tiles=route)
 
     def test_a_route_with_no_destination_is_refused(self, dataset):
         """A tiled route writes files, so it has to be told where.
@@ -527,8 +528,25 @@ class TestTheTiledRasterRoutes:
             dataset: The shared pyramids raster fixture.
         """
         m = WebMap()
-        with pytest.raises(ValueError, match="tiles_path"):
-            m.field(dataset, tiles="xyz")
+        route = TileRoute("xyz", None)
+        with pytest.raises(ValueError, match="needs a path"):
+            m.field(dataset, tiles=route)
+
+    @pytest.mark.parametrize("builder", ["field", "rgb_composite", "hsv_composite"])
+    def test_a_bare_route_name_is_refused_toward_tile_route(self, dataset, builder):
+        """``tiles="xyz"`` — the spelling before the route became one argument — is refused, naming the new one.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            builder: Each builder that takes ``tiles=``.
+
+        Test scenario:
+            The route, its destination and its zoom range are one :class:`TileRoute`; a bare name on its own
+            never said where to write, so it is a ``TypeError`` showing the spelling that replaces it.
+        """
+        build = getattr(WebMap(), builder)
+        with pytest.raises(TypeError, match=r"tiles= takes a TileRoute"):
+            build(dataset, tiles="xyz")
 
     def test_xyz_writes_a_pyramid_the_widget_reads_as_a_raster_source(
         self, dataset, tmp_path
@@ -549,7 +567,7 @@ class TestTheTiledRasterRoutes:
         from matplotlib import image as mpimage
 
         m = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9)
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9))
         )
         spec = m._renderer.drawn[m._last_layer_id].source_spec
         assert spec["type"] == "raster", spec
@@ -569,7 +587,7 @@ class TestTheTiledRasterRoutes:
         out = tmp_path / "tiled.html"
         page = (
             WebMap()
-            .field(dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9))
+            .field(dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)))
             .save(str(out))
             .read_text("utf-8")
         )
@@ -591,7 +609,7 @@ class TestTheTiledRasterRoutes:
         """
         from pyramids.dataset import Dataset
 
-        m = WebMap().field(dataset, tiles="cog", tiles_path=tmp_path / "acc.tif")
+        m = WebMap().field(dataset, tiles=TileRoute("cog", tmp_path / "acc.tif"))
         spec = m._renderer.drawn[m._last_layer_id].source_spec
         assert spec["url"] == "cog://acc.tif", spec
         assert Dataset.read_file(str(tmp_path / "acc.tif")).is_cog, "must be a real COG"
@@ -635,7 +653,7 @@ class TestTheTiledRasterRoutes:
         # Twice: the builder reads the band to colour-limit and style it, and the drawer reads it again to
         # encode the image — both through the choke point, and both on the whole warped band.
         assert visits == ["field", "field"], visits
-        WebMap().field(dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9))
+        WebMap().field(dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)))
         assert visits == ["field", "field"], (
             f"the tiled route built a display source of the whole band: {visits}"
         )
@@ -678,7 +696,7 @@ class TestTheTiledRasterRoutes:
             return result
 
         monkeypatch.setattr(type(dataset), "read_part", counted)
-        WebMap().field(dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9))
+        WebMap().field(dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)))
         assert reads, "the scan has to reach the windowed reader"
         assert max(reads) <= 16, f"the scan read {max(reads)} cells for a budget of 16"
 
@@ -690,7 +708,7 @@ class TestTheTiledRasterRoutes:
             tmp_path: pytest's temporary directory.
         """
         m = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9)
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9))
         )
         assert m.set_bounds() is m, "the tiled route must leave an extent to frame on"
 
@@ -711,9 +729,7 @@ class TestTheTiledRasterRoutes:
 
         built = WebMap().field(
             "examples/data/acc4000.tif",
-            tiles="xyz",
-            tiles_path=tmp_path / "acc",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)),
             name="acc",
         )
         reloaded = FigureSpec.from_dict(
@@ -780,8 +796,9 @@ class TestTheTiledRasterRoutes:
         target = make(dataset)
         destination = tmp_path / "acc"
         m = WebMap()
+        route = TileRoute("xyz", destination, zooms=(9, 9))
         with pytest.raises(TypeError, match="needs a raster it can window"):
-            m.field(target, tiles="xyz", tiles_path=destination, zooms=(9, 9))
+            m.field(target, tiles=route)
         assert not destination.exists(), sorted(destination.rglob("*"))
 
     def test_the_inline_route_still_draws_the_input_the_tiled_one_refuses(
@@ -814,8 +831,9 @@ class TestTheTiledRasterRoutes:
         """
         destination = tmp_path / "acc"
         m = WebMap()
+        route = TileRoute("xyz", destination, zooms=(9, 3))
         with pytest.raises(ValueError, match="lowest to the highest"):
-            m.field(dataset, tiles="xyz", tiles_path=destination, zooms=(9, 3))
+            m.field(dataset, tiles=route)
         assert not destination.exists(), sorted(destination.rglob("*"))
 
     def test_a_range_that_writes_no_tile_leaves_nothing_on_disk(
@@ -850,8 +868,9 @@ class TestTheTiledRasterRoutes:
         monkeypatch.setattr(raster_module, "_tile_values", _misses)
         destination = tmp_path / "acc"
         m = WebMap()
+        route = TileRoute("xyz", destination, zooms=(9, 9))
         with pytest.raises(ValueError, match="produced no tile"):
-            m.field(dataset, tiles="xyz", tiles_path=destination, zooms=(9, 9))
+            m.field(dataset, tiles=route)
         assert not destination.exists(), sorted(destination.rglob("*"))
 
     def test_the_route_records_no_source_for_the_pixels_its_drawer_never_reads(
@@ -871,7 +890,7 @@ class TestTheTiledRasterRoutes:
             reason.
         """
         m = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9), name="acc"
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)), name="acc"
         )
         assert m.get_layer("acc").source_id is None, m.get_layer("acc")
         assert dict(m.figure_spec.sources) == {}, dict(m.figure_spec.sources)
@@ -896,7 +915,7 @@ class TestTheTiledRasterRoutes:
         from digitalearth.base.spec import FigureSpec
 
         built = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9), name="acc"
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)), name="acc"
         )
         reloaded = FigureSpec.from_dict(
             json.loads(json.dumps(built.figure_spec.to_dict()))
@@ -920,7 +939,7 @@ class TestTheTiledRasterRoutes:
         from dataclasses import replace as with_fields
 
         m = WebMap().field(
-            dataset, tiles="xyz", tiles_path=tmp_path / "acc", zooms=(9, 9), name="acc"
+            dataset, tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)), name="acc"
         )
         m.replace_layer(with_fields(m.get_layer("acc"), group="regrouped"))
         assert m.get_layer("acc").group == "regrouped", m.get_layer("acc")
@@ -962,9 +981,7 @@ class TestTheTiledRasterRoutes:
         monkeypatch.setattr(web_raster, "draw_field", _declines)
         m.field(
             dataset,
-            tiles="xyz",
-            tiles_path=tmp_path / "acc",
-            zooms=(9, 9),
+            tiles=TileRoute("xyz", tmp_path / "acc", zooms=(9, 9)),
             name="tiled",
         )
         assert m.layer_ids == ["inline"], m.layer_ids
