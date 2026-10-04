@@ -14,6 +14,7 @@ from digitalearth.base.spec import Encoding, Symbology
 from digitalearth.static.render_compat import (
     FLAT_STYLE_KEYS,
     MARKER_SIZE_KEY,
+    NORM_KEY,
     STATIC_STYLE_SCHEMA,
     fold_symbology,
     relocate_flat_style,
@@ -25,7 +26,7 @@ class TestTheDeclaredSchema:
     """The style keys that appeared in no signature anywhere, written down."""
 
     def test_every_key_cleopatra_rejects_is_declared(self):
-        """The declaration covers the whole flat surface, plus the marker-size spelling.
+        """The declaration covers the whole flat surface, plus the marker-size spelling and a caller's norm.
 
         Test scenario:
             This is what stops the keys going undeclared again. A key added upstream — a new `ColorScaling`
@@ -33,7 +34,8 @@ class TestTheDeclaredSchema:
             channel, so it has to fail here rather than quietly rejoin the soup.
         """
         assert set(STATIC_STYLE_SCHEMA.names()) == FLAT_STYLE_KEYS | {
-            MARKER_SIZE_KEY
+            MARKER_SIZE_KEY,
+            NORM_KEY,
         }, "every flat style key must be declared, and nothing else"
 
     def test_the_undeclared_count_is_the_one_the_plan_names(self):

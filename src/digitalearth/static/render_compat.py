@@ -143,9 +143,16 @@ MARKER_SIZE_KEY = "size"
 #: a keyword of that name, so they get the corrected diagnosis and no re-spelling.
 _MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
 
+#: A caller's own ``matplotlib.colors.Normalize``. Not one of the regrouped flat keys — cleopatra's ``plot``
+#: takes it as a keyword of its own, so it is never relocated — but it is how any norm matplotlib can build
+#: (``LogNorm``, ``BoundaryNorm``, a ``FuncNorm``) reaches the glyph without a ``color_scale`` variant, so it
+#: is declared beside them. The object is drawn with as given, not copied or rebuilt.
+NORM_KEY = "norm"
+
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
 #: where it drives one. That is the **27** flat members cleopatra's constructors reject, the 6 typed group
-#: parameters they fold into, and :data:`MARKER_SIZE_KEY` — 34 keywords that were in no signature anywhere.
+#: parameters they fold into, :data:`MARKER_SIZE_KEY` and :data:`NORM_KEY` — 35 keywords that were in no
+#: signature anywhere.
 #:
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
 #: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
@@ -218,6 +225,11 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     StyleKey("data_style", "A built DataStyle group object."),
     StyleKey("classify", "A built Classify group object."),
     StyleKey("cells", "A built CellValues group object."),
+    # -- a caller's own norm, handed to the glyph as given
+    StyleKey(
+        NORM_KEY,
+        "A built matplotlib Normalize the values are coloured through, used as given.",
+    ),
 )
 
 #: Channel -> the flat keyword that carries it, derived from the declaration so the two cannot disagree.
