@@ -411,10 +411,15 @@ class TestStoppingTheServer:
         assert server.waits == [0.01], server.waits
         hook, args, kwargs = registered_hooks[0]
         hook(*args, **kwargs)
-        assert server.terminated is True
+        assert server.terminated is True, (
+            "the hook must ask the server to stop before waiting for it"
+        )
         assert len(server.waits) == 2, server.waits
-        assert isinstance(server.waits[1], (int, float)) and server.waits[1] > 0, (
-            f"the reaper must wait with a positive bound, got {server.waits[1]!r}"
+        assert isinstance(server.waits[1], (int, float)), (
+            f"the reaper must wait with a numeric bound, got {server.waits[1]!r}"
+        )
+        assert server.waits[1] > 0, (
+            f"the reaper's wait must be bounded above zero, got {server.waits[1]!r}"
         )
 
     def test_a_server_that_ignores_terminate_is_killed(
