@@ -18,6 +18,7 @@ from cleopatra.basemap.solar import subsolar_point
 from matplotlib.collections import PolyCollection
 
 from digitalearth.static import Map, projections
+from digitalearth.static.maps import decoration
 
 #: The equinox at noon UTC: the sun stands over (about) lon 0, so lon 180 is at midnight.
 EQUINOX_NOON = datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc)
@@ -484,3 +485,192 @@ class TestTissot:
         assert canvas.layer_ids == [], (
             f"a refused pair must leave no layer behind, got {canvas.layer_ids}"
         )
+
+
+class TestTheExtentAFittedViewIsBoundedBy:
+    """``_crs_display_extent`` measures what a freshly autoscaled view is pulled back inside.
+
+    The sibling tests above pin the two outcomes a caller sees — a polar night fitted to EPSG:3031, and a
+    shade that stays in the fitted view. These pin the measurement itself, whose answers are "a box in
+    display coordinates" and "unknown": a CRS that declares nothing, one PROJ cannot read, and one whose
+    declared corners do not project are all "unknown", and an unknown bound must leave the view alone
+    rather than collapse it.
+    """
+
+    @pytest.mark.parametrize(
+        "crs", ["not-a-crs", None, 0], ids=["gibberish", "none", "zero"]
+    )
+    def test_a_crs_proj_cannot_read_measures_as_unknown(self, crs):
+        """Anything the PROJ database refuses is unknown, not an error on the way to a night shade.
+
+        Args:
+            crs: Something that is not a CRS at all.
+
+        Test scenario:
+            The extent is measured as a *bound* on a view matplotlib has already fitted to real geometry,
+            so the measurement is advisory: a display CRS the lookup chokes on is a reason to leave the
+            view as it is, not to fail a draw that has already succeeded. ``crs_from_user_input`` answers
+            these three with a ``CRSError``, a ``TypeError`` and a ``ValueError`` respectively.
+        """
+        measured = decoration._crs_display_extent(crs)
+        assert measured is None, (
+            f"a CRS PROJ cannot read must measure as unknown, got {measured}"
+        )
+
+    def test_a_crs_declaring_no_area_of_use_measures_as_unknown(self):
+        """A bare PROJ string carries no area of use, so there is no box to bound a view by.
+
+        Test scenario:
+            ``+proj=robin`` is a projection definition rather than a registered CRS: PROJ reads it, and the
+            ``CRS`` it builds declares no area of use at all. That is a different path from an unreadable
+            CRS — the lookup succeeds and answers ``None`` — and it has to end in the same "unknown", since
+            a projection with no declared domain is exactly the case where guessing a bound would crop a
+            view that is already correct.
+        """
+        measured = decoration._crs_display_extent("+proj=robin")
+        assert measured is None, (
+            f"a CRS with no area of use must measure as unknown, got {measured}"
+        )
+
+    def test_a_declared_area_that_will_not_project_measures_as_unknown(
+        self, monkeypatch
+    ):
+        """When the declared corners cannot be projected the extent is unknown, not half a box.
+
+        Args:
+            monkeypatch: pytest's patcher, which restores pyramids' reprojection afterwards.
+
+        Test scenario:
+            The lon/lat area of use is projected into display coordinates, because what bounds a view is a
+            box in the units the axes is drawn in. PROJ raises on some definitions rather than clamping,
+            and a partial answer would bound the view by a box built from whichever samples survived — so
+            the whole measurement is abandoned instead. EPSG:3031 is used because it *does* declare an area
+            of use, which is what gets the code as far as the projection step.
+        """
+
+        def refuse(*_args, **_kwargs):
+            """Stand in for a projection PROJ cannot carry out.
+
+            Raises:
+                RuntimeError: always; that is the point of the stand-in.
+            """
+            raise RuntimeError("proj_create: cannot build operation")
+
+        monkeypatch.setattr(decoration, "reproject_coordinates", refuse)
+        measured = decoration._crs_display_extent(3031)
+        assert measured is None, (
+            f"a declared area that will not project must measure as unknown, got {measured}"
+        )
+
+    def test_a_declared_area_that_projects_to_nothing_finite_measures_as_unknown(
+        self, monkeypatch
+    ):
+        """Samples that all come back non-finite are no box either, and their min is not a bound.
+
+        Args:
+            monkeypatch: pytest's patcher, which restores pyramids' reprojection afterwards.
+
+        Test scenario:
+            A clipped projection has no image of part of its own declared area, and PROJ marks those
+            samples ``inf``/``nan`` rather than raising. Taking ``min``/``max`` over them would hand the fit
+            a non-finite box, which collapses every view it touches, so an all-non-finite answer is
+            "unknown" too.
+        """
+
+        def nothing_finite(xs, ys, **_kwargs):
+            """Answer every sample as non-finite, the way a clipped projection does.
+
+            Args:
+                xs: The sample longitudes.
+                ys: The sample latitudes.
+
+            Returns:
+                Two lists of ``nan``, as long as the samples given.
+            """
+            return [math.nan] * len(list(xs)), [math.nan] * len(list(ys))
+
+        monkeypatch.setattr(decoration, "reproject_coordinates", nothing_finite)
+        measured = decoration._crs_display_extent(3031)
+        assert measured is None, (
+            f"an area that projects to nothing finite must measure as unknown, got {measured}"
+        )
+
+    def test_an_unknown_extent_leaves_a_fitted_view_whole(self):
+        """A shade on a CRS with no declared extent keeps the view matplotlib fitted to it.
+
+        Test scenario:
+            ``+proj=robin`` measures as unknown (pinned above), and an unknown bound must not move a view
+            that has just been fitted to real geometry. The whole night polygon therefore has to stay
+            inside the fitted view: the EPSG:3031 fit in the sibling class above is the case where the view
+            *is* pulled in, and this is the case where it must not be.
+        """
+        canvas = Map(crs="+proj=robin")
+        artist = canvas.nightshade(EQUINOX_NOON)
+        vertices = np.vstack([path.vertices for path in artist.get_paths()])
+        finite = vertices[np.isfinite(vertices).all(axis=1)]
+        xmin, xmax = canvas.ax.get_xlim()
+        ymin, ymax = canvas.ax.get_ylim()
+        assert finite.size, "the shade must have placeable vertices to begin with"
+        assert finite[:, 0].min() >= xmin and finite[:, 0].max() <= xmax, (
+            f"the fitted view {(xmin, xmax)} must hold every shaded x, got "
+            f"{(finite[:, 0].min(), finite[:, 0].max())}"
+        )
+        assert finite[:, 1].min() >= ymin and finite[:, 1].max() <= ymax, (
+            f"the fitted view {(ymin, ymax)} must hold every shaded y, got "
+            f"{(finite[:, 1].min(), finite[:, 1].max())}"
+        )
+
+    def test_a_view_that_does_not_meet_the_extent_is_left_alone(self):
+        """Intersecting a view with an extent it misses entirely would empty it, so it is not done.
+
+        Test scenario:
+            The fit keeps the overlap of the autoscaled view and the projection's own extent. A view with
+            no overlap at all — here a decade of metres past the ``+/- 3.3e6`` m EPSG:3031 declares for
+            itself, on both axes — intersects to a reversed interval, and setting that would flip the axes
+            and hide everything on it. Both axes must therefore be left exactly where they were found.
+        """
+        far_away = (1.0e9, 2.0e9)
+        canvas = Map(crs=3031)
+        canvas.ax.set_xlim(*far_away)
+        canvas.ax.set_ylim(*far_away)
+        decoration._fit_within_crs_extent(canvas)
+        assert canvas.ax.get_xlim() == far_away, (
+            f"a view past the extent must keep its x limits, got {canvas.ax.get_xlim()}"
+        )
+        assert canvas.ax.get_ylim() == far_away, (
+            f"a view past the extent must keep its y limits, got {canvas.ax.get_ylim()}"
+        )
+
+
+class TestTheProjectedRingSeam:
+    """The two helpers ``draw_tissot`` projects its rings through, asked for nothing.
+
+    ``Map.tissot`` refuses an empty centre pair by name, so these answers are the seam's own contract
+    rather than something a caller reaches: they are what keeps ``draw_tissot`` from measuring a seam at no
+    latitude at all, where the lon/lat edge pairs it builds would have no rows to project.
+    """
+
+    def test_no_latitudes_is_no_seam_widths(self):
+        """Nothing to measure is an empty width array, of the dtype a measured one has.
+
+        Test scenario:
+            The widths are consumed by ``zip`` against the rings, so the answer for no rings has to be an
+            empty float array rather than ``None`` or a scalar — one shape for both cases.
+        """
+        periods = decoration._antimeridian_periods(Map(crs=3857), [])
+        assert periods.shape == (0,), (
+            f"no latitudes must measure no widths, got shape {periods.shape}"
+        )
+        assert periods.dtype == np.dtype(float), (
+            f"an empty width array must still be float, got {periods.dtype}"
+        )
+
+    def test_no_circles_is_no_projected_rings(self):
+        """No rings in, no rings out — and no reprojection attempted on the way.
+
+        Test scenario:
+            The centres are projected in one call beside the rings, so an empty circle list has to short
+            out before that call rather than reproject an empty coordinate pair.
+        """
+        rings = decoration._projected_rings(Map(crs=3857), [], [], [])
+        assert rings == [], f"no circles must project to no rings, got {rings}"

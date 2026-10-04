@@ -283,3 +283,34 @@ class TestRoundTrip:
         assert WMS_URL in stored, "the service URL is what makes the figure faithful"
         assert "s3cr3t" not in stored, "a credential must never reach a stored figure"
         assert "token" not in stored, "nor the name of the parameter carrying it"
+
+    def test_a_recorded_kind_this_version_cannot_rebuild_is_refused_by_name(
+        self, requested
+    ):
+        """A figure naming an OGC kind this release has never heard of is refused, not quietly defaulted.
+
+        Args:
+            requested: The recorded tile requests, so nothing here reaches the network.
+
+        Test scenario:
+            A stored figure carries the provider's kind as an ``ogc`` tag, and a figure written by a newer
+            release may name one this version cannot build — here a ``"wcs"`` tag written over the
+            recorded ``"wms"`` one. Treating an unknown tag as "no name" would walk straight back into the
+            silent substitution the recording exists to end: CartoDB Positron drawn under a figure that
+            asked for a service. The refusal names the kind it was handed and the kinds it does know, and
+            no tile is requested.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMSProvider(WMS_URL, "topp:states"), name="bm")
+        stored = canvas.figure_spec.to_dict()
+        stored["layers"]["layers"][0]["symbology"]["props"]["source"]["ogc"] = "wcs"
+        spec = FigureSpec.from_dict(stored)
+        requested.clear()
+        with pytest.raises(ValueError, match="'wcs'") as refusal:
+            to_backend(spec, "matplotlib")
+        assert "'wms'" in str(refusal.value) and "'wmts'" in str(refusal.value), (
+            f"the refusal must name the kinds it does know, got {refusal.value}"
+        )
+        assert requested == [], (
+            f"a refused figure must request no tile, got {requested}"
+        )

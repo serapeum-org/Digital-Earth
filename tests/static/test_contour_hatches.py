@@ -11,10 +11,11 @@ import numpy as np
 import pytest
 from matplotlib.colors import to_rgba
 from matplotlib.patches import Patch
+from matplotlib.path import Path
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map
-from digitalearth.static.guides import GuidePlan, paint_guide
+from digitalearth.static.guides import GuidePlan, _marked_bands, paint_guide
 
 #: The p-value bands of a significance overlay: significant below 0.05, not above it.
 P_LEVELS = [0.0, 0.05, 1.0]
@@ -416,3 +417,82 @@ class TestTheHatchLegend:
         assert [tuple(handle.get_facecolor()) for handle in handles] == [
             to_rgba(color) for color in colors
         ], [tuple(handle.get_facecolor()) for handle in handles]
+
+    def test_a_colour_matplotlib_cannot_read_is_not_taken_for_transparent(self):
+        """An unreadable swatch colour reaches the engine that can name it, rather than being dropped.
+
+        Test scenario:
+            - The transparency check parses the colour, and a colour matplotlib cannot parse has no alpha
+              to read. Answering "transparent" for it would route a plan of unreadable colours into the
+              uncoloured ``hatch_legend`` form, which draws happily — so a typo in a hand-built plan drew
+              a legend that was merely wrong instead of saying so.
+            - ``paint_guide`` must therefore still hand the colour to the swatch legend, where matplotlib
+              refuses it by name. The one call in the block is the paint; the plan and the map are built
+              above it.
+        """
+        plan = GuidePlan(
+            "legend", colors=("nosuchcolour",), rows=("a",), hatches=("///",)
+        )
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="nosuchcolour") as refusal:
+            paint_guide(canvas, plan)
+        assert canvas.ax.get_legend() is None, (
+            "a refused colour must leave no legend on the axes"
+        )
+        assert "nosuchcolour" in str(refusal.value), (
+            f"the refusal must name the colour it could not read, got {refusal.value}"
+        )
+
+
+class TestTheBandsAMapActuallyMarks:
+    """``_marked_bands`` reads the geometry per band off the artist, and says so when it cannot.
+
+    The tests above drive the filter through a real ``contours`` call, which is how a caller meets it. This
+    one pins the answer for the shape those calls never produce: an artist whose path count does not number
+    its bands, which the matplotlib contract allows to change under us.
+    """
+
+    class _PathsOnly:
+        """The one method ``_marked_bands`` reads off a filled contour set."""
+
+        def __init__(self, paths):
+            """Hold the paths to hand back.
+
+            Args:
+                paths: The compound paths, one per band in a well-formed set.
+            """
+            self._paths = list(paths)
+
+        def get_paths(self):
+            """Return the paths, the way ``ContourSet.get_paths`` does.
+
+            Returns:
+                The list given at construction.
+            """
+            return list(self._paths)
+
+    @pytest.mark.parametrize(
+        "paths, bands",
+        [(1, 3), (4, 3), (0, 2)],
+        ids=["fewer", "more", "none"],
+    )
+    def test_paths_that_do_not_number_the_bands_keep_every_band(self, paths, bands):
+        """When the reading no longer holds, every band is reported marked rather than none.
+
+        Args:
+            paths: How many compound paths the stand-in artist reports.
+            bands: How many bands the set's levels declare.
+
+        Test scenario:
+            - The filter is a subtraction: a band reported unmarked loses its row in the key. If a future
+              matplotlib stopped publishing one path per band, reading the flags positionally would drop
+              rows that the map does draw — a key missing real classes, which is worse than one carrying
+              an empty band.
+            - So a path count that does not number the bands answers "all marked", for a count below, above
+              and at zero.
+        """
+        artist = self._PathsOnly([Path(np.zeros((0, 2)))] * paths)
+        assert _marked_bands(artist, bands) == [True] * bands, (
+            f"{paths} paths over {bands} bands must keep every band, got "
+            f"{_marked_bands(artist, bands)}"
+        )
