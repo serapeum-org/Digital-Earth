@@ -233,7 +233,10 @@ class TestStartXvfb:
             start_xvfb(display=":42", wait=0.01)
         assert "DISPLAY" not in os.environ
 
-    @pytest.mark.parametrize("window_size", [(0, 600), (800, -1), (800,)])
+    @pytest.mark.parametrize(
+        "window_size",
+        [(0, 600), (800, -1), (800,), (800.0, 600), ("800", 600), (True, 600)],
+    )
     def test_a_window_size_that_is_not_two_positive_ints_is_refused(
         self, linux_without_display, window_size
     ):
@@ -242,6 +245,11 @@ class TestStartXvfb:
         Args:
             linux_without_display: The fixture, recording launches.
             window_size: An invalid ``(width, height)``.
+
+        Test scenario:
+            - The last three pin that the refusal is what rejects a non-``int`` side, which is why the
+              launch line needs no ``int()`` coercion of its own: a float, a string and a bool never reach
+              it. ``800.0`` would otherwise be silently truncated to ``800`` rather than named.
         """
         with pytest.raises(ValueError, match="window_size"):
             start_xvfb(window_size=window_size, wait=0.01)

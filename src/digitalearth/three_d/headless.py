@@ -126,7 +126,9 @@ def start_xvfb(
             "Debian/Ubuntu, dnf install xorg-x11-server-Xvfb on Fedora/RHEL), run under `xvfb-run`, or use "
             "an EGL/OSMesa build of VTK, which needs no X server"
         )
-    width, height = (int(side) for side in window_size)
+    # Not `int(side)`: `_check_request` above has already refused anything that is not an `int`, so the
+    # coercion could only ever have been applied to an `int` (review N3).
+    width, height = window_size
     server = subprocess.Popen(
         [xvfb, display, "-screen", "0", f"{width}x{height}x24", "-nolisten", "tcp"],
         stdout=subprocess.DEVNULL,
