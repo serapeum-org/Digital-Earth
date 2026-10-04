@@ -7,6 +7,7 @@ lays a raster stack out as small multiples on one shared colour scale. This is o
 rendering stays in each ``Map`` (pyramids + cleopatra).
 """
 
+import logging
 import math
 import os
 from collections.abc import Mapping
@@ -28,6 +29,8 @@ from digitalearth.base.raster_classes import (
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["facet", "grid", "shared_colorbar"]
 
@@ -359,7 +362,10 @@ def facet(
         crs: Display CRS of every panel.
         globe: Draw every panel on a globe frame.
         figsize: Figure size in inches; ``None`` uses the matplotlib default.
-        colorbar: Draw one colorbar spanning the panels (default ``True``).
+        colorbar: Draw one colorbar spanning the panels (default ``True``). It is left off, with a logged
+            warning, when no frame holds a finite value: the shared scale is then the ``(0, 1)`` fallback a
+            colour domain takes for an unmeasurable stack, and a bar labelled 0-1 over a figure where no
+            cell holds a value reads as data that is not there.
         cbar_label: The colorbar's label.
         **style: Styling for every panel, forwarded to the render (``cmap``, ``vmin``, ``vmax``, ``scheme``,
             ``k``, ``levels``, …). A ``vmin``/``vmax`` given here is the shared scale instead of the stack's
@@ -447,7 +453,8 @@ def facet(
     maps, spare = slots[:count], slots[count:]
     for empty in spare:
         empty.ax.set_visible(False)
-    shared = _shared_style(_stack_values(maps[0], frames, bands), style, kind)
+    values = _stack_values(maps[0], frames, bands)
+    shared = _shared_style(values, style, kind)
     method, fixed = _FACET_KINDS[kind]
     name = default_col if col is None else col
     if labels is None:
@@ -457,6 +464,14 @@ def facet(
         artist = getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
         drawn = artist if drawn is None else drawn
         panel.set_title(f"{name} = {label}")
-    if colorbar:
+    if colorbar and drawn is not None and measure_clim(values) is None:
+        # The shared scale fell back to the (0, 1) a `Scale` uses for an unmeasurable domain, so a bar here
+        # would label the figure 0-1 while no cell on it holds a value at all. The panels are legitimate —
+        # an empty frame is a real datum — and `facet` has no `strict` to refuse under, so only the bar goes.
+        logger.warning(
+            "facet(): no frame holds a finite value, so the stack has no colour scale to key; the "
+            "colorbar is left off rather than drawn over the (0, 1) fallback limits"
+        )
+    elif colorbar:
         shared_colorbar(fig, drawn, maps, label=cbar_label)
     return fig, maps

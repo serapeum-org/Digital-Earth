@@ -6,6 +6,8 @@ the per-panel titles and the one colorbar spanning the panels. Expected limits a
 from the arrays the test builds, never through the code under test.
 """
 
+import logging
+
 import numpy as np
 import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
@@ -567,3 +569,50 @@ class TestWhatTheArgumentsTake:
         assert titles == ["month = Jan", "month = Feb", "month = Mar", "month = Apr"], (
             titles
         )
+
+
+class TestAStackWithNothingToMeasure:
+    """No frame holds a finite value, so there is no scale for a bar to describe."""
+
+    def test_an_all_nodata_stack_gets_no_colorbar(self, caplog):
+        """The panels are drawn, the bar is left off, and the reason is logged.
+
+        Args:
+            caplog: Captures the warning the missing bar logs.
+
+        Test scenario:
+            ``frozen_scale(measure_clim(...))`` falls back to ``(0.0, 1.0)`` for a pool with nothing in it,
+            and the spanning bar was drawn over that placeholder — a bar labelled 0-1 ("mm", here) on a
+            figure where no cell holds a value at all, which is the one reading a facet must never invite.
+            The panels themselves are legitimate (an empty frame is a real datum: nothing was observed),
+            and ``facet`` has no ``strict`` to refuse under, so only the bar goes — with a warning, which
+            is visible without any logging setup.
+        """
+        empty = np.full((4, 4), -9999.0)
+        nodata = [_dataset(empty), _dataset(empty)]
+        with caplog.at_level(logging.WARNING):
+            fig, maps = facet(nodata, crs=4326, cbar_label="mm")
+        assert _colorbars(fig) == [], _colorbars(fig)
+        assert [len(m.layers) for m in maps] == [1, 1], [len(m.layers) for m in maps]
+        assert "no frame holds a finite value" in caplog.text, (
+            f"the missing bar must say why, got {caplog.text!r}"
+        )
+
+    def test_one_measurable_frame_is_enough_for_the_bar(self, caplog):
+        """A stack with one readable frame still gets its bar, keyed to that frame.
+
+        Args:
+            caplog: Captures any warning, which there must not be.
+
+        Test scenario:
+            The bar goes only when *nothing* was measured. A stack that is mostly nodata still has a scale,
+            and dropping its bar would hide the one thing the figure does say.
+        """
+        frames = [_dataset(np.full((4, 4), -9999.0)), _dataset(FRAMES[0])]
+        with caplog.at_level(logging.WARNING):
+            fig, _ = facet(frames, crs=4326, cbar_label="mm")
+        expected = (float(FRAMES[0].min()), float(FRAMES[0].max()))
+        bars = _colorbars(fig)
+        assert len(bars) == 1, len(bars)
+        assert bars[0].get_ylim() == expected, bars[0].get_ylim()
+        assert "no frame holds a finite value" not in caplog.text, caplog.text
