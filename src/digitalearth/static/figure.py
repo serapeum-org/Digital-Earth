@@ -417,6 +417,12 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> Dict[str, Any]:
     plus the matching palette — the spelling a shared scale has to travel in, since the word ``"categorical"``
     carries no class list with it.
 
+    Explicit edges are a *graduated* scheme, so each panel's layer records a graduated scale and its key reads
+    the class ranges (``0.5 – 1.5``) rather than the codes (``1``). The drawn colours are right either way —
+    one code is one colour on every panel, and a replay of a panel paints the same hexes — so what is wrong is
+    the recorded scale's identity and the legend text it produces; #377 asks for a way to state the categories
+    outright and tracks the fix.
+
     Args:
         pooled: Every finite value of every frame that lands on the view, concatenated.
         cmap: The caller's ``cmap``, or ``None`` — resolved through
