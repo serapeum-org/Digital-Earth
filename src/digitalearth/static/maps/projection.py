@@ -1,17 +1,22 @@
 """ProjectionMixin — extent/domain, the globe projection frame, and render/save/show hooks.
 
 Sets the axes extent from a bbox or named domain, builds and caches the projection boundary/graticule for a
-globe map, and overrides ``save``/``show`` to apply that frame before output.
+globe map, draws that graticule (with its degree labels) on a flat map, and overrides ``save``/``show`` to
+apply the frame before output.
 """
 
 import os
 import warnings
+from dataclasses import dataclass
 from dataclasses import replace as with_fields
 from math import isfinite
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
+    Dict,
+    List,
+    Mapping,
     NamedTuple,
     Optional,
     Self,
@@ -20,20 +25,51 @@ from typing import (
     Union,
 )
 
+import numpy as np
 from cleopatra.basemap.projection import apply_projection_frame
+from matplotlib.collections import LineCollection
+from matplotlib.text import Text
+from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.base.domains import DomainLike, resolve_domain
 from digitalearth.base.spec import Bounds, LayerSpec, Symbology, Viewport
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
 from digitalearth.static.renderer import DrawnLayer, artists_added
-from digitalearth.static.scene import LayerRecord
+from digitalearth.static.scene import LayerRecord, drawing_style
 
 #: The meridian and parallel spacing a graticule is drawn at when the caller names neither, in degrees —
 #: the same default the interactive and web tiers take (#263). The two arguments default to ``None`` rather
 #: than to this so that a step the caller wrote can be told from one they did not, which is what lets
 #: :meth:`ProjectionMixin.graticule` say when ``spacing=`` has just discarded one (review R2-L3).
 DEFAULT_GRATICULE_STEP: float = 30.0
+
+#: How a flat map's grid looks when the caller asks for nothing else, in the **plural** keys a
+#: ``LineCollection`` takes. Deliberately quiet: a graticule is a reference the reader consults, not a layer
+#: they look at, and cleopatra's ``apply_projection_frame`` draws the globe's own grid in the same register.
+_GRATICULE_STYLE: Dict[str, Any] = {
+    "colors": "gray",
+    "linewidths": 0.5,
+    "linestyles": ":",
+}
+
+#: How a degree label looks. Small and grey for the same reason the lines are.
+_GRATICULE_LABEL_STYLE: Dict[str, Any] = {"fontsize": 8, "color": "gray"}
+
+#: The lon/lat window degree labels are placed in when nothing has framed the axes — the span the lines
+#: themselves cover (:func:`digitalearth.static.projections.graticule` runs its meridians from -89.5 to
+#: 89.5), so a label sits at the end of its own line rather than past it.
+_LABEL_WORLD_WINDOW: Tuple[float, float, float, float] = (-180.0, -89.5, 180.0, 89.5)
+
+#: How far into the window a label sits, as a fraction of the window's own span, measured from the lower
+#: edge for a meridian and the left edge for a parallel. Non-zero so the text is inside the axes rather
+#: than straddling its edge, and small enough to read as "at the edge".
+_LABEL_INSET: float = 0.02
+
+#: Samples per side of the grid the view's own lon/lat window is read from. A 5x5 grid over the *interior*
+#: rather than the border, because an oblique projection can place the extreme longitude of a rectangle
+#: inside it rather than on an edge.
+_WINDOW_SAMPLES: int = 5
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -219,6 +255,475 @@ class _Frame(NamedTuple):
         return xmin, xmax, ymin, ymax
 
 
+#: The axes limits matplotlib starts an unused axes at, read here as "nothing has framed this view yet".
+#: :data:`digitalearth.static.maps.decoration._UNFRAMED_LIMITS` is the same pair for the same reason — a
+#: replayed basemap meets the same unframed axes — and the two are spelled where they are read because
+#: neither mixin imports the other.
+_UNFRAMED_LIMITS: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
+
+
+@dataclass(frozen=True)
+class _DegreeAxis:
+    """One of the two directions a graticule runs in: the meridians, or the parallels.
+
+    The pair of them (:data:`_MERIDIANS` and :data:`_PARALLELS`) is everything that differs between
+    labelling a meridian and labelling a parallel — how far from zero its lines exist, the two hemisphere
+    letters, where a label hangs, and which half of a lon/lat pair its degree is. Holding that as a value
+    with its own behaviour is what keeps :class:`_Graticule` from asking "is this a meridian?" twice in
+    every method.
+
+    Attributes:
+        limit: How far from zero this axis has lines at all, in degrees — ``180`` for meridians, ``90`` for
+            parallels.
+        positive: Hemisphere letter for the positive side (``"E"`` / ``"N"``).
+        negative: Hemisphere letter for the negative side (``"W"`` / ``"S"``).
+        ha: Horizontal alignment of a label on one of its lines.
+        va: Vertical alignment of one.
+        along_longitude: Whether this axis's own degree is the **longitude** of a label's anchor, which is
+            true of a meridian (it runs along one longitude) and false of a parallel.
+    """
+
+    limit: float
+    positive: str
+    negative: str
+    ha: str
+    va: str
+    along_longitude: bool
+
+    def lines_within(self, step: float, low: float, high: float) -> List["_GridLine"]:
+        """Return this axis's lines inside ``[low, high]``, in ascending order.
+
+        Anchored on zero rather than on ``low``, so the equator and the prime meridian are always among
+        the lines — stepping up from an arbitrary edge misses them at any spacing that does not divide it.
+
+        Args:
+            step: Spacing between lines, in degrees; positive.
+            low: Lower edge of the window to keep, in degrees.
+            high: Upper edge of the window to keep.
+
+        Returns:
+            One :class:`_GridLine` per line the window holds; empty when it holds none.
+
+        Examples:
+            - A window 5 degrees clear of the next line either way holds three meridians:
+                ```python
+                >>> from digitalearth.static.maps.projection import _MERIDIANS
+                >>> [line.text for line in _MERIDIANS.lines_within(30.0, -35.0, 35.0)]
+                ['30°W', '0°', '30°E']
+
+                ```
+            - Nothing past ``limit`` is ever a line, however wide the window:
+                ```python
+                >>> from digitalearth.static.maps.projection import _PARALLELS
+                >>> [line.value for line in _PARALLELS.lines_within(60.0, -400.0, 400.0)]
+                [-60.0, 0.0, 60.0]
+
+                ```
+        """
+        reach = int(self.limit // step)
+        return [
+            _GridLine(index, index * step, self)
+            for index in range(-reach, reach + 1)
+            if low <= index * step <= high
+        ]
+
+    def anchor(self, value: float, across: float) -> Tuple[float, float]:
+        """Return the ``(lon, lat)`` a label sits at, from the line's degree and the across-line one.
+
+        Args:
+            value: The line's own degree.
+            across: Where along the line the label goes, in the other coordinate.
+
+        Returns:
+            The anchor as a lon/lat pair, the right way round for this axis.
+
+        Examples:
+            - A meridian's degree is the longitude of its anchor, and a parallel's the latitude:
+                ```python
+                >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS
+                >>> (_MERIDIANS.anchor(30.0, -80.0), _PARALLELS.anchor(30.0, -80.0))
+                ((30.0, -80.0), (-80.0, 30.0))
+
+                ```
+        """
+        return (value, across) if self.along_longitude else (across, value)
+
+
+#: The meridians of a graticule. A label on one hangs centred under it, so it reads as that meridian's
+#: degree rather than as the nearest parallel's.
+_MERIDIANS = _DegreeAxis(180.0, "E", "W", "center", "bottom", True)
+
+#: The parallels. A label on one hangs to the right of its anchor, centred on the line.
+_PARALLELS = _DegreeAxis(90.0, "N", "S", "left", "center", False)
+
+
+class _GridLine(NamedTuple):
+    """One meridian or parallel, named by the step index it sits at rather than by its degree.
+
+    The index is carried beside the value because every question asked of a line — which hemisphere is it
+    in, is it the zero line — is a question about *which* line it is, and asking that of a float would be
+    an equality test on a computed product.
+
+    Attributes:
+        steps: Step count from the equator / prime meridian; its sign is the hemisphere. Named ``steps``
+            and not ``index`` because a :class:`~typing.NamedTuple` already answers to ``index`` —
+            ``tuple.index`` — and a field of that name shadows the method.
+        value: The line's degree.
+        axis: Which direction it runs in.
+    """
+
+    steps: int
+    value: float
+    axis: _DegreeAxis
+
+    @property
+    def hemisphere(self) -> str:
+        """The hemisphere letter this line is in, or ``""`` for one that is in neither.
+
+        Returns:
+            The letter, empty for the zero line — the equator and the prime meridian belong to no
+            hemisphere — and empty for the antimeridian, which is the same line from either side.
+
+        Examples:
+            - East, nowhere, and west:
+                ```python
+                >>> from digitalearth.static.maps.projection import _MERIDIANS, _GridLine
+                >>> [
+                ...     _GridLine(steps, steps * 30.0, _MERIDIANS).hemisphere
+                ...     for steps in (2, 0, -2, -6)
+                ... ]
+                ['E', '', 'W', '']
+
+                ```
+        """
+        if self.steps == 0 or abs(self.value) >= self.axis.limit:
+            return ""
+        return self.axis.positive if self.steps > 0 else self.axis.negative
+
+    @property
+    def text(self) -> str:
+        """The degree label this line carries, e.g. ``"30°E"``.
+
+        The format is the web tier's own (``digitalearth.web.decoration._graticule_line``), to the
+        character, so one spacing reads the same way on both tiers.
+
+        Returns:
+            The degree with no trailing zeros, a degree sign, and the hemisphere letter where there is one.
+
+        Examples:
+            - A whole degree, a fractional one, and the prime meridian:
+                ```python
+                >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS, _GridLine
+                >>> (
+                ...     _GridLine(1, 30.0, _MERIDIANS).text,
+                ...     _GridLine(-1, -7.5, _PARALLELS).text,
+                ...     _GridLine(0, 0.0, _MERIDIANS).text,
+                ... )
+                ('30°E', '7.5°S', '0°')
+
+                ```
+        """
+        return f"{abs(self.value):g}°{self.hemisphere}"
+
+
+class _DegreeLabel(NamedTuple):
+    """One degree label, placed: where it goes in the display CRS, what it reads, and how it hangs.
+
+    Placed before anything reaches the axes and drawn afterwards, because placing a label can *fail* — a
+    projection need not have a finite image of the point one is anchored at — and a drawer that has already
+    added artists when it finds that out is a drawer that has to take them off again.
+
+    Attributes:
+        x: Position in the display CRS.
+        y: Position in the display CRS.
+        line: The meridian or parallel it labels, which is what it reads and how it hangs.
+    """
+
+    x: float
+    y: float
+    line: _GridLine
+
+    def draw(self, axes: Any) -> Text:
+        """Put this label on an axes.
+
+        Args:
+            axes: The axes to draw on.
+
+        Returns:
+            The :class:`~matplotlib.text.Text` it added, which the layer then owns — so hiding or removing
+            the graticule reaches its degrees as well as its lines.
+        """
+        return axes.text(
+            self.x,
+            self.y,
+            self.line.text,
+            ha=self.line.axis.ha,
+            va=self.line.axis.va,
+            **_GRATICULE_LABEL_STYLE,
+        )
+
+
+class _Graticule:
+    """The grid one described graticule layer asks for, and how it goes on the axes.
+
+    Built per draw from the scene and the layer's description and thrown away after, so it holds no state
+    the map carries between draws — the one thing that outlives it is the projected lines, which the map
+    keeps because a globe's projection frame draws them later.
+
+    Two frames, two ways of putting the one grid on the axes:
+
+    - a **globe** is clipped at its limb, and cleopatra's ``apply_projection_frame`` draws its grid after
+      every data layer — so :meth:`draw` hands the lines over and leaves the axes alone;
+    - a **flat** map has no such pass, so :meth:`draw` puts the grid on now, as one ``LineCollection``
+      plus one :class:`~matplotlib.text.Text` per labelled line.
+
+    Until #221 the flat map had no pass at all: the lines were computed, stored, and nothing ever read
+    them, so ``Map(crs=4326).graticule()`` — the default frame — registered a layer and drew nothing while
+    the figure described the layer as drawn.
+    """
+
+    def __init__(self, scene: Any, props: Mapping[str, Any]) -> None:
+        """Compute the grid a description asks for.
+
+        Args:
+            scene: The map being drawn on.
+            props: The layer's symbology props, as :meth:`_GraticuleSteps.symbology` wrote them —
+                ``lon_step``, ``lat_step`` and ``labels``. A figure stored before the labels existed
+                carries no ``labels`` key and is read as asking for them, which is this tier's default.
+
+        Raises:
+            ZeroDivisionError: from the projection, for a step of zero. Raised here, before anything is
+                drawn or recorded, which is what lets a refused *replacement* leave the grid the map is
+                still drawing exactly as it was (round 2, M1).
+        """
+        self._scene = scene
+        self._lon_step = props["lon_step"]
+        self._lat_step = props["lat_step"]
+        self._labelled = bool(props.get("labels", True))
+        #: The projected polylines, meridians then parallels, split at the projection limb.
+        self.lines: List[Any] = projections.graticule(
+            scene.crs, lon_step=self._lon_step, lat_step=self._lat_step
+        )
+
+    def draw(self, layer: LayerSpec) -> DrawnLayer:
+        """Put this grid where its frame draws it, and say what it left behind.
+
+        Args:
+            layer: The layer being drawn, for its style and for the id its previous drawing is under.
+
+        Returns:
+            A :class:`~digitalearth.static.renderer.DrawnLayer` whose ``artist`` is the projected lines —
+            this builder's own value, the same on both frames — and whose ``artists`` are what is on the
+            axes to hide and remove: the collection and its labels on a flat map, and **nothing yet** on a
+            globe, where :meth:`ProjectionMixin._apply_frame` attaches them when the frame goes on.
+
+        Warns:
+            UserWarning: from :meth:`labels`, naming any degree this frame cannot place.
+        """
+        if self._scene.globe:
+            self._scene._graticule_lines = self.lines
+            return DrawnLayer(artist=self.lines)
+        # Everything that can raise or warn runs before the first artist reaches the axes: the style the
+        # description carries, and the label placement, which refuses rather than drawing half a grid.
+        style = {**_GRATICULE_STYLE, **drawing_style(self._scene, layer)}
+        labels = self.labels() if self._labelled else ()
+        self._scene._graticule_lines = self.lines
+        return self._on_flat_axes(layer, style, labels)
+
+    def labels(self) -> Tuple[_DegreeLabel, ...]:
+        """Place a degree label on every line the view holds.
+
+        **Where they go, and why there.** Each label sits on its own line, just inside the lower edge of
+        the view for a meridian and just inside the left edge for a parallel (:data:`_LABEL_INSET` of the
+        window's span). That is one anchor per line rather than a tick on an axis, which is what lets the
+        same rule serve a projected frame: the anchor is a lon/lat point, projected through pyramids like
+        everything else here, so on a curved graticule the label follows its own line instead of sitting
+        where a straight axis would have put it. The whole set is projected in **one** call, because a
+        per-label call costs more in PROJ overhead than the projection itself.
+
+        Returns:
+            One :class:`_DegreeLabel` per line that could be placed, meridians first.
+
+        Warns:
+            UserWarning: naming every degree the display CRS or the view would not take. A graticule that
+                quietly came back with fewer labels than lines is the defect this row exists to end, so
+                the one case left — a line the frame genuinely cannot label — states itself.
+        """
+        window = self.window()
+        if window is None:
+            warnings.warn(
+                f"graticule() drew no degree labels: no sample of this view has a longitude/latitude in "
+                f"{self._scene.crs!r}, so there is no window to place them in.",
+                UserWarning,
+            )
+            return ()
+        lon_min, lat_min, lon_max, lat_max = window
+        across = {
+            _MERIDIANS: lat_min + _LABEL_INSET * (lat_max - lat_min),
+            _PARALLELS: lon_min + _LABEL_INSET * (lon_max - lon_min),
+        }
+        asked = _MERIDIANS.lines_within(
+            self._lon_step, lon_min, lon_max
+        ) + _PARALLELS.lines_within(self._lat_step, lat_min, lat_max)
+        if not asked:
+            return ()
+        anchors = [line.axis.anchor(line.value, across[line.axis]) for line in asked]
+        x, y = reproject_coordinates(
+            [lon for lon, _ in anchors],
+            [lat for _, lat in anchors],
+            from_crs=4326,
+            to_crs=self._scene.crs,
+        )
+        return self._placed(asked, np.asarray(x, float), np.asarray(y, float))
+
+    def window(self) -> Optional[Tuple[float, float, float, float]]:
+        """Return the lon/lat window the view covers, as ``(lon_min, lat_min, lon_max, lat_max)``.
+
+        What the labels are placed in: the lines span the world whatever the map is looking at, so the
+        degrees worth drawing are the ones the *view* holds. The view is in the display CRS, so it is
+        converted back to lon/lat through pyramids — over a grid of its interior rather than its border,
+        because an oblique projection can place a rectangle's extreme longitude inside it.
+
+        Returns:
+            The window, clipped to the span the lines themselves cover; :data:`_LABEL_WORLD_WINDOW` when
+            nothing has framed the axes yet, which is a view of the whole world once the grid autoscales
+            it; or ``None`` when no sample of the view has a lon/lat at all, which is a view the display
+            CRS cannot place and so a window nothing can be labelled in.
+        """
+        xmin, xmax = (float(value) for value in self._scene.ax.get_xlim())
+        ymin, ymax = (float(value) for value in self._scene.ax.get_ylim())
+        if (xmin, xmax, ymin, ymax) == _UNFRAMED_LIMITS:
+            return _LABEL_WORLD_WINDOW
+        xs, ys = np.meshgrid(
+            np.linspace(min(xmin, xmax), max(xmin, xmax), _WINDOW_SAMPLES),
+            np.linspace(min(ymin, ymax), max(ymin, ymax), _WINDOW_SAMPLES),
+        )
+        lon, lat = reproject_coordinates(
+            xs.ravel().tolist(),
+            ys.ravel().tolist(),
+            from_crs=self._scene.crs,
+            to_crs=4326,
+        )
+        lon, lat = np.asarray(lon, dtype=float), np.asarray(lat, dtype=float)
+        seen = np.isfinite(lon) & np.isfinite(lat)
+        if not seen.any():
+            return None
+        west, south, east, north = _LABEL_WORLD_WINDOW
+        return (
+            max(float(lon[seen].min()), west),
+            max(float(lat[seen].min()), south),
+            min(float(lon[seen].max()), east),
+            min(float(lat[seen].max()), north),
+        )
+
+    def _placed(
+        self, asked: List[_GridLine], x: np.ndarray, y: np.ndarray
+    ) -> Tuple[_DegreeLabel, ...]:
+        """Keep the labels whose projected anchor the view can show, and name the ones it cannot.
+
+        Split from :meth:`labels` because the two answer different questions: that one is *which degrees,
+        and where in lon/lat*, this one is *which of them the display CRS and the axes will take*.
+
+        Args:
+            asked: The lines a label was placed for, in order.
+            x: The projected x of each anchor, parallel to ``asked``; non-finite where the projection has
+                no image of it.
+            y: The projected y of each anchor.
+
+        Returns:
+            The labels that can be drawn, in the order they were asked for.
+
+        Warns:
+            UserWarning: naming the degrees that were dropped.
+        """
+        xmin, xmax = sorted(float(value) for value in self._scene.ax.get_xlim())
+        ymin, ymax = sorted(float(value) for value in self._scene.ax.get_ylim())
+        # An unframed axes is about to be autoscaled to the grid itself, so its limits say nothing about
+        # what will be visible and a label is not dropped for falling outside the unit square.
+        framed = (xmin, xmax, ymin, ymax) != _UNFRAMED_LIMITS
+        placed: List[_DegreeLabel] = []
+        dropped: List[str] = []
+        for line, px, py in zip(asked, x, y):
+            outside = framed and not (xmin <= px <= xmax and ymin <= py <= ymax)
+            if not (isfinite(px) and isfinite(py)) or outside:
+                dropped.append(line.text)
+            else:
+                placed.append(_DegreeLabel(float(px), float(py), line))
+        if dropped:
+            warnings.warn(
+                f"graticule() could not place {len(dropped)} degree label(s): {', '.join(dropped)}. The "
+                f"display CRS {self._scene.crs!r} gives their anchor no position inside the view the "
+                "figure is framed on; frame the map on a region that holds them, or pass labels=False.",
+                UserWarning,
+            )
+        return tuple(placed)
+
+    def _on_flat_axes(
+        self,
+        layer: LayerSpec,
+        style: Dict[str, Any],
+        labels: Tuple[_DegreeLabel, ...],
+    ) -> DrawnLayer:
+        """Put the grid on a flat axes, replacing whatever this layer drew before.
+
+        A flat map **replaces** its own previous drawing rather than adding a second one beside it:
+        ``graticule()`` describes one layer however often it is called, and ``Renderer.draw_layer`` does
+        not take a previous drawing off. The collection is reused where it can be — it is then still the
+        artist the previous record names, so a draw refused further downstream (a key this tier cannot
+        draw) rolls that record back onto an artist the axes is still holding — and rebuilt when it cannot,
+        which is any drawing an ``ax.clear()`` between animation frames has already detached.
+
+        Args:
+            layer: The layer being drawn, for the id its previous drawing is recorded under.
+            style: The collection's keywords.
+            labels: The labels, already placed.
+
+        Returns:
+            The record of what is now on the axes.
+
+        Note:
+            The view is held across the draw (``_preserve_view``) because the grid spans the world whatever
+            the map is looking at — the same guard every global decoration here takes. On an axes nothing
+            has framed yet the block is free to set the extent, so a bare ``Map().graticule()`` ends up
+            looking at the world the grid covers.
+        """
+        held = self._previous_artists(layer)
+        reused = next(
+            (artist for artist in held if isinstance(artist, LineCollection)), None
+        )
+        for artist in held:
+            if isinstance(artist, Text):
+                artist.remove()
+        with self._scene._preserve_view():
+            if reused is None:
+                collection = LineCollection(self.lines, **style)
+                self._scene.ax.add_collection(collection)
+            else:
+                collection = reused
+                collection.set_segments(self.lines)
+                collection.update(style)
+            drawn = tuple(label.draw(self._scene.ax) for label in labels)
+        return DrawnLayer(artist=self.lines, artists=(collection, *drawn))
+
+    def _previous_artists(self, layer: LayerSpec) -> Tuple[Any, ...]:
+        """Return the artists this layer's previous drawing still has on *this* axes.
+
+        Args:
+            layer: The layer being drawn.
+
+        Returns:
+            Its previously drawn artists, filtered to the ones still attached to this scene's axes — an
+            animation's ``ax.clear()`` detaches them while the record survives, and a detached collection
+            reused as this grid would be a grid on no figure.
+        """
+        drawn = self._scene._renderer.drawn.get(layer.id)
+        if drawn is None:
+            return ()
+        return tuple(
+            artist for artist in drawn.artists if artist.axes is self._scene.ax
+        )
+
+
 class _GraticuleSteps(NamedTuple):
     """The meridian and parallel spacing one :meth:`ProjectionMixin.graticule` call settles on, in degrees.
 
@@ -229,15 +734,19 @@ class _GraticuleSteps(NamedTuple):
     the rule testable without a map: the collapse is a pure function of what the caller wrote.
 
     :meth:`symbology` is here for the same reason — the props a graticule layer is described by are these two
-    steps and nothing else, and `draw_graticule` reads exactly the keys this writes.
+    steps and whether it is labelled, and `draw_graticule` reads exactly the keys this writes.
 
     Attributes:
         lon: Meridian spacing in degrees.
         lat: Parallel spacing in degrees.
+        labels: Whether each line carries its degree. Settled by
+            :meth:`ProjectionMixin._labels_asked` before this value is built, because it is the one of the
+            three that depends on the *frame* rather than on what the caller wrote.
     """
 
     lon: float
     lat: float
+    labels: bool = True
 
     @classmethod
     def asked(
@@ -245,6 +754,7 @@ class _GraticuleSteps(NamedTuple):
         lon_step: Optional[float],
         lat_step: Optional[float],
         spacing: Optional[float],
+        labels: bool = True,
     ) -> "_GraticuleSteps":
         """Collapse what a caller wrote into the two steps a graticule is drawn at.
 
@@ -252,9 +762,10 @@ class _GraticuleSteps(NamedTuple):
             lon_step: Meridian spacing the caller named, or ``None``.
             lat_step: Parallel spacing the caller named, or ``None``.
             spacing: One step for both, which outranks the other two.
+            labels: Whether the lines are labelled, already settled against the frame.
 
         Returns:
-            The two steps, each falling back to :data:`DEFAULT_GRATICULE_STEP`.
+            The two steps, each falling back to :data:`DEFAULT_GRATICULE_STEP`, and the label choice.
 
         Warns:
             UserWarning: when ``spacing`` is given beside either step, because the call has then had two of
@@ -270,20 +781,27 @@ class _GraticuleSteps(NamedTuple):
                     UserWarning,
                     stacklevel=3,
                 )
-            return cls(spacing, spacing)
+            return cls(spacing, spacing, labels)
         lon = DEFAULT_GRATICULE_STEP if lon_step is None else lon_step
         lat = DEFAULT_GRATICULE_STEP if lat_step is None else lat_step
-        return cls(lon, lat)
+        return cls(lon, lat, labels)
 
     def symbology(self) -> Symbology:
         """Return the symbology a graticule layer is described by.
 
         Returns:
-            A :class:`~digitalearth.base.spec.Symbology` carrying the drawer key and the two steps — the
-            props :func:`draw_graticule` reads back.
+            A :class:`~digitalearth.base.spec.Symbology` carrying the drawer key, the two steps and the
+            label choice — the props :func:`draw_graticule` reads back. ``labels`` travels because the
+            labels are drawn *from* the description: a stored figure read back elsewhere would otherwise
+            come back labelled when it was not.
         """
         return Symbology(
-            props={"via": "graticule", "lon_step": self.lon, "lat_step": self.lat}
+            props={
+                "via": "graticule",
+                "lon_step": self.lon,
+                "lat_step": self.lat,
+                "labels": self.labels,
+            }
         )
 
 
@@ -321,11 +839,10 @@ class _GraticuleEdit(NamedTuple):
 
 
 def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
-    """Build the lon/lat graticule a described layer asks for, at the spacing it recorded.
+    """Draw the lon/lat graticule a described layer asks for, at the spacing it recorded.
 
-    The one drawer here that leaves no artist behind. A graticule's lines are drawn by
-    ``apply_projection_frame`` when the globe frame goes on, which is after every data layer — so what
-    "drawing" it means is computing the lines and handing them to the map, and the frame picks them up.
+    The drawer the kind registry dispatches to; :class:`_Graticule` is what it is, and holds both frames'
+    behaviour and the label placement.
 
     Args:
         scene: The map being drawn on.
@@ -334,16 +851,16 @@ def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` carrying the projected lines, with no artists
-        **yet**: there is nothing on the axes to hide or remove until the frame goes on. It is
-        :meth:`ProjectionMixin._apply_frame` that then hands the layer the line artists it drew, so hiding
-        or removing the graticule reaches them like any other decoration layer's.
+        What :meth:`_Graticule.draw` left behind: the collection and its degree labels on a flat map, and
+        the lines alone on a globe, whose artists the projection frame attaches later.
+
+    Raises:
+        ZeroDivisionError: from the projection, for a spacing of zero — before anything is drawn.
+
+    Warns:
+        UserWarning: naming any degree the frame cannot place.
     """
-    props = layer.symbology.props
-    scene._graticule_lines = projections.graticule(
-        scene.crs, lon_step=props["lon_step"], lat_step=props["lat_step"]
-    )
-    return DrawnLayer(artist=scene._graticule_lines)
+    return _Graticule(scene, layer.symbology.props).draw(layer)
 
 
 class ProjectionMixin(_MixinBase):
@@ -698,10 +1215,11 @@ class ProjectionMixin(_MixinBase):
         lat_step: Optional[float] = None,
         *,
         spacing: Optional[float] = None,
+        labels: Optional[bool] = None,
         name: Optional[str] = None,
         visible: Optional[bool] = None,
     ) -> None:
-        """Add a lon/lat graticule to a projected map (drawn when the frame is applied).
+        """Add a lon/lat graticule to the map, with its degrees labelled.
 
         A second call **replaces** the first — the map holds one set of graticule lines, so it draws one
         graticule — and the description follows: the layer keeps its id and its place in the tree and only
@@ -710,6 +1228,12 @@ class ProjectionMixin(_MixinBase):
         names nothing: the layer already has its id, and taking a new one would break every caller holding
         the old one. ``visible`` is the same story from the other side: a call that does not name it is
         asking for a different spacing, not for a hidden grid to come back (review R-L5).
+
+        **Which frame draws it, and when.** On a flat map — the default — the lines and their labels go on
+        the axes as this call runs. On a ``globe=True`` map they are drawn later, by the projection frame
+        (``render()``/``save()``/``show()``), because a globe's grid has to be clipped at the limb with
+        everything else. Before #221 the *flat* map had no such pass, so this call computed a grid, stored
+        it, and drew nothing at all while the figure described a layer that was drawn.
 
         Args:
             lon_step: Meridian spacing in degrees; ``None`` (default) means
@@ -724,6 +1248,13 @@ class ProjectionMixin(_MixinBase):
                 so any positive step draws, and so does the web tier — while the interactive tier draws
                 Natural Earth's pre-cut layers and honours only ``1``, ``5``, ``10``, ``15``, ``20`` and
                 ``30``. ``spacing=7.5`` draws here and raises there (review R-L10).
+            labels: Whether each line carries its degree — ``"30°E"``, ``"60°N"``, the web tier's own
+                spelling. ``None`` (the default) labels the frames that can be labelled, which is every
+                flat map and no globe; ``True`` asks for them and **raises** on a globe, where there is no
+                edge to hang a degree on (see *Raises*); ``False`` draws the lines bare. Each label sits on
+                its own line, just inside the lower edge of the view for a meridian and the left edge for a
+                parallel, and a degree the display CRS cannot place there is **named in a warning** rather
+                than dropped in silence.
             name: The caller's own name for the layer, used as its id and its label on the call that
                 **creates** it; ``None`` (default) generates one from the kind (#321). A *replacing*
                 call cannot rename the layer, so one that names a different name **warns** rather than
@@ -735,17 +1266,51 @@ class ProjectionMixin(_MixinBase):
                 does not put it back on screen (review R-L5).
 
         Warns:
-            UserWarning: when ``spacing`` is given beside either step, which discards the step; and when a
+            UserWarning: when ``spacing`` is given beside either step, which discards the step; when a
                 *replacing* call names a ``name`` the layer does not already carry, which is discarded
-                because the id is the one thing a replacement cannot change (review R2-L3).
+                because the id is the one thing a replacement cannot change (review R2-L3); and when a
+                degree label cannot be placed, which names it.
 
         Raises:
+            ValueError: for ``labels=True`` on a ``globe=True`` map, which cannot carry them — see
+                :meth:`_labels_asked`. Raised before anything is described, so the refusal costs the figure
+                nothing.
             Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
                 projection — after the description has been put back as it was. A figure must not name a
                 layer that was not drawn, and a refused *replacement* must not restyle the graticule the
                 map is still drawing (round 2, M1).
+
+        Examples:
+            - A flat map's grid is one collection, and every line in view carries its degree:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS
+                <digitalearth.static.map.Map object at ...>
+                >>> m.graticule(spacing=30.0)
+                >>> sorted({text.get_text() for text in m.ax.texts})
+                ['0°', '30°E', '30°N', '30°W', '60°N']
+                >>> m.close()
+
+                ```
+            - The lines can be drawn bare:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> m.graticule(spacing=60.0, labels=False)
+                >>> len(m.ax.texts)
+                0
+                >>> m.close()
+
+                ```
         """
-        steps = _GraticuleSteps.asked(lon_step, lat_step, spacing)
+        steps = _GraticuleSteps.asked(
+            lon_step, lat_step, spacing, self._labels_asked(labels)
+        )
         edit = self._describe_graticule(steps.symbology(), name=name, visible=visible)
         # Described first, then drawn — but through the renderer directly rather than through
         # `Scene._draw`, because a second call replaces the layer it already has rather than adding one,
@@ -756,6 +1321,44 @@ class ProjectionMixin(_MixinBase):
         except BaseException:
             edit.undo(self)
             raise
+
+    def _labels_asked(self, labels: Optional[bool]) -> bool:
+        """Settle whether this graticule is labelled, refusing the frame that cannot carry labels.
+
+        The one of :meth:`graticule`'s arguments that depends on the **frame** rather than on what the
+        caller wrote, which is why it is settled here and not in :meth:`_GraticuleSteps.asked`.
+
+        **Why a globe is refused rather than quietly left bare.** A globe's grid is drawn by cleopatra's
+        ``apply_projection_frame``, which turns the axes off (``set_axis_off``) and gives a figure with no
+        edge to hang a degree on: every meridian converges at the limb, where a label would sit on top of
+        its neighbours, and the near side has no outer boundary a reader reads coordinates off. Placing a
+        degree on a projected frame is generic matplotlib artistry and cleopatra already owns both the
+        frame and the degree formatters it uses on its flat path, so that placement is the upstream ask
+        recorded in #221 — not something to reimplement here. Until it lands, a call that asks for labels
+        on a globe is told so by name; drawing the lines and dropping the labels in silence is the shape of
+        defect this row exists to end.
+
+        Args:
+            labels: What the caller wrote — ``True``, ``False``, or ``None`` for "wherever this frame can".
+
+        Returns:
+            Whether the lines are labelled: always ``False`` on a globe, and otherwise what the caller
+            asked for, defaulting to ``True``.
+
+        Raises:
+            ValueError: for ``labels=True`` on a ``globe=True`` map.
+        """
+        if not self.globe:
+            return True if labels is None else bool(labels)
+        if labels:
+            raise ValueError(
+                "graticule(labels=True) cannot place degree labels on a globe frame: the projection "
+                "frame turns the axes off and its meridians converge at the limb, so there is no edge to "
+                "place a degree on. Placing one there is cleopatra's to add (the upstream ask in "
+                "Digital-Earth#221). Draw the globe's grid unlabelled — graticule() with no labels= does "
+                "— or label a flat projected map instead (Map(crs=...) without globe=True)."
+            )
+        return False
 
     def _describe_graticule(
         self,

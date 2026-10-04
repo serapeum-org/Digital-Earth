@@ -1483,19 +1483,27 @@ class TestAskingWhetherALayerIsDrawn:
         """The half `all(())` got wrong: an empty aggregate answered `True` whatever was asked.
 
         Test scenario:
-            A **flat** graticule owns no artists at all — its lines reach the axes with a globe frame, and a
-            flat map has none — so `all(())` made `set_visible(id, False)` followed by `is_visible(id)`
-            answer `True` for the layer it had just hidden. No pixel was wrong either way, and that is the
-            point: what was wrong was the renderer's *answer*, which is what `Scene.set_visible`, the
-            behavioural conformance suite and any layer switcher read. Measured at the reviewed HEAD: `True`.
+            A graticule on an **unframed globe** owns no artists at all — its lines only reach the axes
+            when the projection frame goes on — so `all(())` made `set_visible(id, False)` followed by
+            `is_visible(id)` answer `True` for the layer it had just hidden. No pixel was wrong either way,
+            and that is the point: what was wrong was the renderer's *answer*, which is what
+            `Scene.set_visible`, the behavioural conformance suite and any layer switcher read. Measured at
+            the reviewed HEAD: `True`.
+
+            It was a *flat* graticule that owned nothing when this was written. #221 gave the flat frame a
+            drawer of its own, so the artist-less layer is the one the frame has not drawn yet — the same
+            scaffold `test_a_layer_with_no_addressable_artist_reads_back_drawn` above uses, and the claim
+            under test is unchanged.
         """
-        flat = Map(crs=4326)
+        flat = Map(crs=projections.orthographic(-9, 39), globe=True)
         flat.graticule(lon_step=30.0, lat_step=30.0)
         owned = flat._renderer.drawn["graticule-1"].artists
         flat.set_visible("graticule-1", False)
         answer = flat._renderer.is_visible("graticule-1")
         flat.close()
-        assert owned == (), f"a flat graticule owns no artists; got {owned}"
+        assert owned == (), (
+            f"an unframed globe's graticule owns no artists; got {owned}"
+        )
         assert answer is False, "a layer asked to hide must not read back drawn"
 
     def test_a_layer_with_no_artist_comes_back_on(self):
