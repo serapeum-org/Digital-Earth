@@ -240,11 +240,11 @@ def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
             "hexbin() needs gridsize= as one whole number, or a pair of them (nx, ny); "
             f"got {gridsize!r}"
         )
-    counts = [_as_count(side, "gridsize", "hexbin()") for side in sides]
+    counts = [_as_count(side, "gridsize", _HEXBIN_CALLER) for side in sides]
     floor = (
         None
         if min_count is None
-        else _as_count(min_count, "min_count", "hexbin()", minimum=0)
+        else _as_count(min_count, "min_count", _HEXBIN_CALLER, minimum=0)
     )
     return (counts[0] if len(counts) == 1 else tuple(counts)), floor
 
