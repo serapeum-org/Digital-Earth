@@ -247,6 +247,47 @@ class TestStartXvfb:
             start_xvfb(window_size=window_size, wait=0.01)
         assert linux_without_display == []
 
+    @pytest.mark.parametrize(
+        "wait",
+        [0, -5, 0.0, -0.5, float("nan"), float("inf"), True, "x", None],
+        ids=[
+            "zero",
+            "negative",
+            "zero-float",
+            "negative-float",
+            "nan",
+            "inf",
+            "bool",
+            "str",
+            "none",
+        ],
+    )
+    def test_a_wait_that_is_not_a_positive_finite_number_is_refused(
+        self, linux_without_display, wait
+    ):
+        """``wait`` is the startup check's whole length, so a value that disables it is refused by name.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            wait: An invalid number of seconds to wait.
+
+        Test scenario:
+            - ``display`` and ``window_size`` are both refused by name and ``wait`` was not, so every one
+              of these was accepted: measured against a fake that never exits, ``wait=-5``, ``wait=0``,
+              ``wait='x'``, ``wait=None``, ``wait=nan`` and ``wait=inf`` all returned a started server
+              with ``DISPLAY`` set.
+            - It is not cosmetic for the non-positive ones. ``Popen.wait(timeout=0)`` and any negative
+              raise ``TimeoutExpired`` at once, which the code reads as "the server is up": measured
+              against a real child that exits with code 2, ``wait=0`` reported it as started and pointed
+              ``DISPLAY`` at the dead display, while ``wait=0.5`` on the same launch raised the startup
+              ``RuntimeError``. ``nan`` compares false against every bound, so it disables the check the
+              same way.
+            - Nothing is launched, since the check runs before the ``PATH`` lookup.
+        """
+        with pytest.raises(ValueError, match="wait"):
+            start_xvfb(display=":42", wait=wait)
+        assert linux_without_display == []
+
     def test_a_display_that_is_not_a_display_name_is_refused(
         self, linux_without_display
     ):

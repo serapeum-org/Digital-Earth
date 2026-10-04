@@ -27,6 +27,7 @@ import re
 import shutil
 import subprocess
 import sys
+from math import isfinite
 from typing import Optional, Sequence
 
 __all__ = ["start_xvfb"]
@@ -75,13 +76,16 @@ def start_xvfb(
             screenshot VTK can render, so make it at least the ``window_size`` of the scenes you draw.
         wait: Seconds to wait for the server to come up before declaring it started. A server that exits
             within that time (a display number already in use, for instance) is reported as an error.
+            A positive finite number: ``0`` or a negative makes the check pass instantly — which is the
+            same as not checking — and ``inf`` turns it into a hang, so both are refused by name.
 
     Returns:
         The ``subprocess.Popen`` of the server that was started — call ``.terminate()`` on it to stop it
         early, or leave it to the ``atexit`` hook — or ``None`` when no server was needed.
 
     Raises:
-        ValueError: when ``display`` is not an X display name, or ``window_size`` is not two positive ints.
+        ValueError: when ``display`` is not an X display name, ``window_size`` is not two positive ints,
+            or ``wait`` is not a positive finite number of seconds.
         FileNotFoundError: when ``Xvfb`` is not on ``PATH`` (``apt install xvfb`` on Debian/Ubuntu,
             ``dnf install xorg-x11-server-Xvfb`` on Fedora/RHEL).
         RuntimeError: when the server exits during the startup wait; ``DISPLAY`` is left unset.
@@ -112,7 +116,7 @@ def start_xvfb(
     See Also:
         digitalearth.three_d.base.Scene3DBase: ``off_screen=`` is the other half of rendering headless.
     """
-    _check_request(display, window_size)
+    _check_request(display, window_size, wait)
     if os.environ.get("DISPLAY") or not sys.platform.startswith("linux"):
         return None
     xvfb = shutil.which("Xvfb")
@@ -188,15 +192,25 @@ def _reap(server: subprocess.Popen, display: str) -> None:
         del os.environ["DISPLAY"]
 
 
-def _check_request(display: str, window_size: Sequence[int]) -> None:
-    """Refuse a display name or screen size Xvfb would reject, before anything is launched.
+def _check_request(display: str, window_size: Sequence[int], wait: float) -> None:
+    """Refuse a display name, screen size or startup wait Xvfb would reject, before anything is launched.
 
     Args:
         display: The requested X display name.
         window_size: The requested ``(width, height)``.
+        wait: The requested startup wait, in seconds.
 
     Raises:
         ValueError: naming the argument that is wrong and what was passed.
+
+    Note:
+        ``wait`` was the one argument not checked here, and it is the one that decides whether the startup
+        check happens at all: ``Popen.wait(timeout=0)`` and any negative raise ``TimeoutExpired`` at once,
+        which :func:`start_xvfb` reads as "the server is up", so a server that dies immediately was
+        reported as started and ``DISPLAY`` was pointed at a dead display — the one failure the argument
+        exists to catch. ``nan`` compares false against every bound and disables it the same way, ``inf``
+        turns the wait into a hang, and a non-number raised from inside :mod:`subprocess` instead of by
+        name (review L2).
     """
     if not isinstance(display, str) or not _DISPLAY_NAME.match(display):
         raise ValueError(
@@ -210,4 +224,14 @@ def _check_request(display: str, window_size: Sequence[int]) -> None:
     if not valid:
         raise ValueError(
             f"start_xvfb() needs window_size as two positive ints (width, height); got {sides}"
+        )
+    waited = (
+        isinstance(wait, (int, float))
+        and not isinstance(wait, bool)
+        and isfinite(wait)
+        and wait > 0
+    )
+    if not waited:
+        raise ValueError(
+            f"start_xvfb() needs wait as a positive finite number of seconds; got {wait!r}"
         )
