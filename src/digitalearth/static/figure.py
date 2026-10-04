@@ -151,6 +151,22 @@ def grid(
             [2.0, 8.0]
             >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
             [False, False, True, True]
+            >>> [m.ax.yaxis.get_tick_params(which="major")["labelleft"] for m in maps]
+            [True, False, True, False]
+            >>> maps[0].close()
+
+            ```
+        - Sharing per row and per column drops no labels at all, because neither makes a label redundant
+          along its own axis:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(2, 2, crs=4326, sharex="row", sharey="col")
+            >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
+            [True, True, True, True]
+            >>> [m.ax.yaxis.get_tick_params(which="major")["labelleft"] for m in maps]
+            [True, True, True, True]
             >>> maps[0].close()
 
             ```

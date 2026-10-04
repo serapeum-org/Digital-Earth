@@ -871,7 +871,7 @@ class _BatchedLonLat:
 
     | how | cost |
     |---|---|
-    | one call per part (134 calls) | 0.675 s |
+    | one call per part (134 calls) | 0.718 s |
     | one call for all of them (5128 points) | 0.009 s |
 
     The parts are stacked, projected once, and cut back apart at the offsets they went in at, so each part
@@ -880,6 +880,37 @@ class _BatchedLonLat:
 
     Attributes:
         kept: The parts that had any vertices, densified if asked, in the order they were given.
+
+    Examples:
+        - Each part comes back as its own projected array, at its own length and in the order it went in,
+          and a part with no vertices is dropped rather than carried as an empty one:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.decoration import _BatchedLonLat
+            >>> parts = [
+            ...     np.array([[0.0, 0.0], [10.0, 0.0], [20.0, 0.0]]),
+            ...     np.empty((0, 2)),
+            ...     np.array([[0.0, 50.0], [10.0, 50.0]]),
+            ... ]
+            >>> batched = _BatchedLonLat(3857, parts)
+            >>> [len(part) for part in batched.kept]
+            [3, 2]
+            >>> [(round(float(x[0])), round(float(y[0]))) for x, y in batched.parts()]
+            [(0, 0), (0, 6446276)]
+
+            ```
+        - `step_deg` densifies each part before projecting, which is what makes a straight lon/lat edge
+          bend with the projection — the geometry the fill path needs:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.decoration import _BatchedLonLat
+            >>> edge = [np.array([[0.0, 0.0], [20.0, 0.0]])]
+            >>> [len(part) for part in _BatchedLonLat(3857, edge).kept]
+            [2]
+            >>> [len(part) for part in _BatchedLonLat(3857, edge, step_deg=5.0).kept]
+            [5]
+
+            ```
     """
 
     def __init__(
@@ -940,11 +971,23 @@ class _ProjectedReference:
     """The reference geography, projected into a display CRS once and then kept.
 
     Coastlines, borders, land, ocean, lakes and rivers are the same geometry on every draw, and their
-    projection is a pure function of ``(layer, resolution, polygon, display CRS)`` — the limb the lines are
+    projection is a pure function of `(layer, resolution, polygon, display CRS)` — the limb the lines are
     split at and the boundary the rings are closed against both come from the CRS alone. So it is computed
     once and held, which is what makes an animation's frames and a second figure in the same projection
-    free. Measured on an orthographic globe, per draw, before this existed: 0.73 s for the 110m coastline
-    and 0.75 s for 110m land.
+    free.
+
+    **What it is worth is the polygon path.** It and :class:`_BatchedLonLat` landed together, and the
+    batching is what removed the per-part PROJ cost the lines were paying; measured here on an
+    orthographic globe, per draw, with the batching already in place:
+
+    | layer | first draw | every draw after |
+    |---|---|---|
+    | 110m coastline (lines) | 0.020 s | 0.005 s |
+    | 110m land (fill rings) | 1.30 s | 0.005 s |
+
+    The two differ by that much because a fill ring is densified to 1° and then closed against the
+    projection boundary, neither of which the line path does — so for `land`, `ocean` and `lakes` on a
+    globe this is the difference between an animation that can run and one that cannot.
 
     **Keyed on the CRS as the map spells it** (through
     :func:`~digitalearth.base.spec._serial.crs_to_json`, which turns a CRS object into its EPSG code or its
@@ -953,12 +996,13 @@ class _ProjectedReference:
     database to avoid it costs more than the miss.
 
     **And keyed on the geometry it projected**, not only on the name of it. The read is still made on every
-    draw — it costs 5 ms, against the 730 ms this exists to remove — and :meth:`_fingerprint` of what came
-    back goes into the key. So a layer whose data is not what it was last time is a miss rather than a
-    stale hit: the case that forced this is a test stubbing ``natural_earth`` (``test_globe.py`` does, in
-    several tests), where a cache keyed on ``("land", "110m", …)`` alone would hand the stub's geometry to
-    the next real draw of land — one process-wide cache turning into cross-test contamination. It covers a
-    swapped Natural-Earth data directory for the same reason.
+    draw — measured at about 6 ms, which is what a warm hit costs in the table above — and
+    :meth:`_fingerprint` of what came back goes into the key. So a layer whose data is not what it was
+    last time is a miss rather than a stale hit: the case that forced this is a test stubbing
+    `natural_earth` (`test_globe.py` does, in several tests), where a cache keyed on
+    `("land", "110m", …)` alone would hand the stub's geometry to the next real draw of land — one
+    process-wide cache turning into cross-test contamination. It covers a swapped Natural-Earth data
+    directory for the same reason.
 
     **What it hands out is read-only.** The arrays are shared by every layer and every map drawing that
     geography, so an artist that wrote through one would corrupt what the next draw gets; the write flag
@@ -969,6 +1013,49 @@ class _ProjectedReference:
         keep: How many entries it holds before the least recently used is dropped. A 10m layer is megabytes
             of vertices, so this is bounded rather than a cache that only grows: eight covers the six
             Natural-Earth layers in one projection with room for a second.
+
+    Examples:
+        - A second ask for the same geography in the same CRS hands back the **same** list, and what it
+          hands back cannot be written through:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map, projections
+            >>> from digitalearth.static.maps.decoration import _ProjectedReference
+            >>> cache = _ProjectedReference()
+            >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
+            >>> first = cache.projected(m, "coastline", "110m")
+            >>> cache.projected(m, "coastline", "110m") is first, len(cache)
+            (True, 1)
+            >>> try:
+            ...     first[0][0, 0] = 0.0
+            ... except ValueError as error:
+            ...     print(error)
+            assignment destination is read-only
+            >>> m.close()
+
+            ```
+        - The same layer read as lines and as fill rings is two entries, because it is two geometries;
+          and the hold is bounded, so nothing grows without limit:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map, projections
+            >>> from digitalearth.static.maps.decoration import _ProjectedReference
+            >>> cache = _ProjectedReference(keep=1)
+            >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
+            >>> lines = cache.projected(m, "land", "110m")
+            >>> rings = cache.projected(m, "land", "110m", polygon=True)
+            >>> len(cache)
+            1
+            >>> cache.projected(m, "land", "110m", polygon=True) is rings
+            True
+            >>> cache.clear()
+            >>> len(cache)
+            0
+            >>> m.close()
+
+            ```
     """
 
     def __init__(self, keep: int = 8) -> None:
@@ -1070,9 +1157,12 @@ class _ProjectedReference:
         )
 
 
-#: The one projected-reference cache the static tier draws from. Process-wide on purpose: the projection of
-#: a coastline into EPSG:3857 is the same geometry whichever map asked for it, so a second figure and an
-#: animation's next frame should both be free.
+#: The one projected-reference cache the static tier draws from — the module-level instance of
+#: :class:`_ProjectedReference`, whose docstring holds what it is keyed on, what a hit costs and the two
+#: refusals it makes. Process-wide on purpose: the projection of a coastline into EPSG:3857 is the same
+#: geometry whichever map asked for it, so a second figure and an animation's next frame should both be
+#: free. It holds at most :attr:`_ProjectedReference.keep` entries (8), and `PROJECTED_REFERENCE.clear()`
+#: is how a caller reclaims the memory or a test starts cold.
 PROJECTED_REFERENCE = _ProjectedReference()
 
 
@@ -2353,14 +2443,14 @@ class DecorationMixin(_MixinBase):
         non-finite coordinates; per-part splitting at those gaps keeps the visible arcs and avoids the
         ``NaN/Inf`` matplotlib would otherwise draw.
 
+        Every part goes through PROJ in **one** call (:class:`_BatchedLonLat`), because the cost is per
+        call and not per point: 134 calls for the 110m coastline cost 0.718 s and the one call costs
+        0.009 s. The splitting is unchanged and still per part, so the segments are the same ones in the
+        same order.
+
         Args:
             parts: ``(N, 2)`` lon/lat arrays (EPSG:4326) as returned by
                 ``cleopatra.basemap.reference.natural_earth`` for a line layer.
-
-        Every part goes through PROJ in **one** call (:class:`_BatchedLonLat`), because the cost here is per
-        call and not per point: 134 calls for the 110m coastline cost 0.675 s and the one call costs
-        0.009 s. The splitting is unchanged and still per part, so the segments are the same ones in the
-        same order.
 
         Returns:
             A list of finite ``(M, 2)`` projected polyline segments.
@@ -2379,13 +2469,14 @@ class DecorationMixin(_MixinBase):
         ``natural_earth`` returns exterior rings only, so interior rings (holes) are not represented on a
         globe — see Digital-Earth#43.
 
+        Densification and re-closing stay per ring; the projection itself is **one** PROJ call for the
+        whole layer (:class:`_BatchedLonLat`) — 127 calls for 110m land cost 0.688 s and the one call costs
+        0.012 s. The densification is what makes this path the expensive one even so, which is why
+        :data:`PROJECTED_REFERENCE` is worth most here.
+
         Args:
             parts: ``(N, 2)`` lon/lat exterior-ring arrays (EPSG:4326) as returned by
                 ``cleopatra.basemap.reference.natural_earth`` for a polygon layer.
-
-        Densification and re-closing stay per ring; the projection itself is **one** PROJ call for the
-        whole layer (:class:`_BatchedLonLat`) — 127 calls for 110m land cost 0.787 s and the one call costs
-        0.014 s.
 
         Returns:
             A list of closed ``(M, 2)`` projected fill rings (empty when nothing is on the near side).
