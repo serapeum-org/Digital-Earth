@@ -8,7 +8,7 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 import os
 from functools import wraps
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -17,6 +17,7 @@ from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
 from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
+from matplotlib.colors import is_color_like, to_hex
 from matplotlib.path import Path as MplPath
 from matplotlib.patheffects import withStroke
 from pyramids.dataset import Dataset
@@ -868,6 +869,82 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     return drawn.colored_by(DENSITY_FIELD)
 
 
+def _line_parts(gdf: Any) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Split a line GeoDataFrame into one vertex array per drawn path.
+
+    Args:
+        gdf: Line geometries, already in the display CRS.
+
+    Returns:
+        ``(paths, repeats)``: one ``(n, 2)`` array per ``LineString`` part, and how many parts each feature
+        contributed — so a per-feature column is repeated onto its parts with ``numpy.repeat``.
+    """
+    paths: List[np.ndarray] = []
+    repeats: List[int] = []
+    for geometry in gdf.geometry:
+        parts = (
+            list(geometry.geoms)
+            if geometry.geom_type == "MultiLineString"
+            else [geometry]
+        )
+        paths.extend(np.asarray(part.coords) for part in parts)
+        repeats.append(len(parts))
+    return paths, np.asarray(repeats)
+
+
+def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Draw the line features a described ``lines`` layer asks for (``cleopatra.FlowGlyph``).
+
+    The same glyph ``sankey`` draws with, held to line defaults: one width for every path unless a column
+    sizes them, one colour unless a column colours them. The description's props are read with defaults,
+    because a ``lines`` layer another tier described carries its own styling rather than these keys.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of lines the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``LineCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty or holds non-line geometry.
+        KeyError: when ``column`` or a column ``width`` names no feature attribute.
+    """
+    props = dict(layer.symbology.props)
+    opts = drawing_style(scene, layer)
+    gdf = scene._vector_input(
+        data,
+        geom_types=("LineString", "MultiLineString"),
+        name="lines",
+        geom_label="line",
+    )
+    paths, repeats = _line_parts(gdf)
+    column, width = props.get("column"), props.get("width")
+    values = np.repeat(gdf[column].to_numpy(), repeats) if column is not None else None
+    widths = None
+    if isinstance(width, str):
+        widths = np.repeat(gdf[width].to_numpy(), repeats)
+    elif width is not None:
+        opts["line_width"] = float(width)
+    if props.get("color") is not None:
+        opts["color_1"] = props["color"]
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+    glyph = FlowGlyph(
+        paths, values=values, widths=widths, ax=scene.ax, fig=scene.fig, **opts
+    )
+    drawn: Optional[DrawnLayer] = scene._render_glyph(
+        glyph, artist="plot", **plot_style
+    )
+    opacity = props.get("opacity")
+    if drawn is not None and opacity is not None:
+        # FlowGlyph takes no opacity of its own; the collection it drew does.
+        drawn.artist.set_alpha(float(opacity))
+    return drawn
+
+
 def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Draw the flow paths a described Sankey layer asks for (``cleopatra.FlowGlyph``).
 
@@ -891,17 +968,7 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         name="sankey",
         geom_label="line",
     )
-    paths: List[np.ndarray] = []
-    repeats: List[int] = []
-    for geometry in gdf.geometry:
-        parts = (
-            list(geometry.geoms)
-            if geometry.geom_type == "MultiLineString"
-            else [geometry]
-        )
-        paths.extend(np.asarray(part.coords) for part in parts)
-        repeats.append(len(parts))
-    rep = np.asarray(repeats)
+    paths, rep = _line_parts(gdf)
     column, scale = props["column"], props["scale"]
     values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
     widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
@@ -2742,6 +2809,135 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
+    def lines(
+        self,
+        features: Any,
+        *,
+        column: Optional[str] = None,
+        scheme: Optional[Any] = None,
+        k: int = 5,
+        cmap: Optional[Any] = None,
+        width: Optional[Union[float, str]] = None,
+        color: Optional[Any] = None,
+        opacity: Optional[float] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Any:
+        """Draw line features — rivers, roads, tracks, reach networks (pyramids lines → ``FlowGlyph``).
+
+        The Core contract's ``lines``, with the web tier's keywords: a constant colour, or a colour per
+        feature from ``column`` (classified by ``scheme``/``k``), and a width that is either one number or a
+        column. ``MultiLineString`` features draw one path per part, each carrying its feature's values.
+        :meth:`sankey` draws the same geometry as a flow map, with flow defaults.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries, or a
+                path or URL to one (reprojected to the display CRS). Only a path-backed layer can be written
+                down.
+            column: Numeric column whose value colours each line; ``None`` (default) draws one colour.
+            scheme: A classification scheme cutting ``column`` into ``k`` classes (``"quantiles"``,
+                ``"equal_interval"``, …); ``None`` (default) is a continuous ramp.
+            k: Number of classes for ``scheme``.
+            cmap: The colormap ``column`` is coloured through; ``None`` leaves cleopatra's default.
+            width: Line width in points, or the name of a numeric column whose values scale each line's
+                width (between ``width_limits``, a ``FlowGlyph`` option). ``None`` leaves cleopatra's width.
+            color: The colour of every line when ``column`` is ``None`` — any matplotlib colour. A built
+                ``ColorScaling`` or ``Normalize`` is instead the colour *scaling* of ``column``, as it is on
+                every other static builder.
+            opacity: Layer opacity, 0 transparent to 1 opaque.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **opts: Further ``FlowGlyph`` options (``width_limits``, ``width_scale``, ``draw_order``,
+                ``glow``, …).
+
+        Returns:
+            The ``LineCollection`` (registered as a Scene layer), or ``None`` when the data lies entirely
+            outside what the display CRS shows.
+
+        Raises:
+            ValueError: if ``features`` is empty or contains non-line geometry.
+            KeyError: if ``column`` or a column ``width`` names no feature attribute.
+
+        Examples:
+            - Colour reaches by discharge, classified into three classes, with one width:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> reaches = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"discharge": [10.0, 40.0, 25.0]},
+                ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 1)]),
+                ...               LineString([(2, 1), (3, 2)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> lc = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
+                >>> lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})
+                ([10.0, 40.0, 25.0], [2.0])
+                >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
+                'lines'
+
+                ```
+            - One colour, widths scaled by a column:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> roads = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"lanes": [1, 4]},
+                ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> lc = Map(crs=4326).lines(roads, width="lanes", color="dimgray")
+                >>> widths = lc.get_linewidths()
+                >>> bool(widths[1] > widths[0])
+                True
+
+                ```
+
+        See Also:
+            sankey: the same geometry drawn as a flow map.
+        """
+        if isinstance(color, str) or (color is not None and is_color_like(color)):
+            line_color: Optional[Any] = to_hex(color, keep_alpha=True)
+        else:
+            line_color = None
+            if color is not None:
+                opts["color"] = color
+        if cmap is not None:
+            opts["cmap"] = cmap
+        if scheme is not None:
+            opts["scheme"] = scheme
+            opts["k"] = k
+        return self._draw(
+            LayerRecord(
+                "lines",
+                source=features,
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "lines",
+                        "column": column,
+                        "width": width,
+                        "color": line_color,
+                        "opacity": None if opacity is None else float(opacity),
+                    }
+                ),
+                opts=opts,
+            )
+        )
+
     def sankey(
         self,
         features: Any,
@@ -2777,6 +2973,9 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: if ``features`` contains non-line geometry.
+
+        See Also:
+            lines: the same geometry as a plain line layer, with line defaults and the Core keywords.
 
         Examples:
             - Draw flow lines coloured and width-scaled by columns:

@@ -9,6 +9,7 @@ from digitalearth import Map
 m = Map(crs=3857)
 m.field(dataset, cmap="terrain")
 m.points(stations, name="obs")
+m.lines(rivers, column="discharge", width=1.5)
 m.coastlines()
 m.colorbar()
 m.save("map.png")
@@ -95,6 +96,7 @@ m.tissot(edgecolor="crimson")                                      # a world gri
         - points
         - grid_points
         - grid_cells
+        - lines
         - polygons
         - choropleth
         - quiver

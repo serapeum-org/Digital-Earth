@@ -173,6 +173,7 @@
         "labels",
         "lakes",
         "land",
+        "lines",
         "mesh",
         "nightshade",
         "ocean",
@@ -519,9 +520,7 @@
         "set_bounds"
       ],
       "interactive": [],
-      "matplotlib": [
-        "lines"
-      ],
+      "matplotlib": [],
       "web": []
     },
     "tier2": [

@@ -33,7 +33,8 @@ ISSUE_REFERENCE = re.compile(r"#(\d+)")
 KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
     {
         201: "The 3-D tier cannot draw line geometries — no rivers, roads, tracks or trajectories",
-        226: "feat(static): add Map.lines for plain line geometry, matching the web tier",
+        # `226` ("feat(static): add Map.lines for plain line geometry, matching the web tier") stood here
+        # against the static `lines` row of `PENDING`. `Map.lines` closed it, so nothing names it any more.
         # `261` ("legend() now has three incompatible shapes, and web still has no colorbar()") stood here
         # against the four `KEYWORD_SHORTFALLS` rows that named it. Order 24 settled it: all four tiers take
         # the one Core shape, so those rows are off and nothing names the issue any more. A row here that

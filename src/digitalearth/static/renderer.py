@@ -236,6 +236,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "streamlines",
     "unstructured",
     "heatmap",
+    "lines",
     "flow",
     "text",
     "labels",
@@ -312,6 +313,7 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "tripcolor": vector.draw_tri,
         },
         "heatmap": {"kde": vector.draw_kde},
+        "lines": {"lines": vector.draw_lines},
         "flow": {"sankey": vector.draw_sankey},
         "text": {
             "text": decoration.draw_text,

@@ -178,6 +178,10 @@ DATA_BUILDERS = {
         "flow",
         lambda canvas, given: canvas.sankey(given["lines"], column="flow"),
     ),
+    "lines": (
+        "lines",
+        lambda canvas, given: canvas.lines(given["lines"], column="flow"),
+    ),
 }
 
 #: What each decoration builder draws. These draw straight onto the axes and leave no mappable to register,

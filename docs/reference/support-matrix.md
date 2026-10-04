@@ -30,7 +30,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `labels` | ✓ | ✓ | ✓ | — |
 | `lakes` | ✓ | — | ✓ | — |
 | `land` | ✓ | — | ✓ | — |
-| `lines` | — | ✓ | ✓ | — |
+| `lines` | ✓ | ✓ | ✓ | — |
 | `mesh` | ✓ | — | ✓ | — |
 | `model` | — | ✓ | — | — |
 | `nightshade` | ✓ | — | — | — |

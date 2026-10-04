@@ -1211,7 +1211,7 @@ _BUILT_IN_KINDS = (
     (
         "lines",
         "lines",
-        "line features — interactive path, web lines",
+        "line features — static/web lines, interactive path",
         "data",
     ),
     (
