@@ -5,9 +5,11 @@ server: the platform, the ``PATH`` lookup and the process launch are replaced wi
 same on every OS and record exactly what would have been launched.
 """
 
+import atexit
 import gc
 import subprocess
 import sys
+import types
 import warnings
 
 import pytest
@@ -17,6 +19,10 @@ pytest.importorskip("pyvista")
 from digitalearth.three_d import headless, start_xvfb  # noqa: E402
 
 XVFB = "/usr/bin/Xvfb"
+
+#: The real ``atexit.register``, captured before any fixture runs, so a test can prove the shared stdlib
+#: module is left alone.
+REAL_REGISTER = atexit.register
 
 
 class _FakeServer:
@@ -138,18 +144,30 @@ def linux_without_display(monkeypatch):
     return launched
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def registered_hooks(monkeypatch):
     """Capture what the helper hands ``atexit.register`` instead of really registering it.
 
-    A hook left on the real ``atexit`` would run when pytest exits and terminate a fake, so the module's
-    own ``atexit`` is replaced for the duration of the test.
+    A hook left on the real :mod:`atexit` would run when pytest exits and terminate a fake, so the name
+    ``headless`` reaches ``atexit`` *through* is rebound to a stand-in carrying only ``register``.
+
+    Two details, both of which were wrong before (review L3):
+
+    - It is **autouse**, because the leak is silent. Two tests here reached a successful start without
+      asking for this fixture and each left one real hook behind, measured with an ``atexit._ncallbacks()``
+      probe at session end: 10 callbacks against the 9 a test that starts nothing leaves. Autouse is what
+      makes that impossible rather than remembered.
+    - It replaces ``headless.atexit`` itself, not ``headless.atexit.register``. ``headless.atexit`` **is**
+      the shared stdlib module object, so patching its attribute was a process-global change for the test's
+      duration — any ``atexit.register`` from anywhere else was silently dropped — and this fixture's own
+      claim to replace "the module's own ``atexit``" was false. Rebinding the module-level name makes it
+      true, and :meth:`TestStoppingTheServer.test_the_fixture_leaves_the_stdlib_atexit_alone` pins it.
 
     Args:
         monkeypatch: pytest's patcher.
 
     Returns:
-        A list of ``(function, args)`` pairs, one per registration.
+        A list of ``(function, args, kwargs)`` triples, one per registration.
     """
     hooks = []
 
@@ -157,7 +175,7 @@ def registered_hooks(monkeypatch):
         hooks.append((function, args, kwargs))
         return function
 
-    monkeypatch.setattr(headless.atexit, "register", register)
+    monkeypatch.setattr(headless, "atexit", types.SimpleNamespace(register=register))
     return hooks
 
 
@@ -474,6 +492,29 @@ class TestStoppingTheServer:
         hook, args, kwargs = registered_hooks[0]
         hook(*args, **kwargs)
         assert server.terminated is False
+
+    def test_the_fixture_leaves_the_stdlib_atexit_alone(
+        self, linux_without_display, registered_hooks
+    ):
+        """Capturing the hook must not reach into the shared :mod:`atexit` module.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+
+        Test scenario:
+            - ``headless.atexit`` is the stdlib module object itself, so patching its ``register``
+              attribute changed it for the whole process for the test's duration, dropping any
+              registration made from anywhere else.
+            - The fixture rebinds the ``headless.atexit`` *name* instead, so the helper's registration is
+              still captured while ``atexit.register`` is the function it was at import time.
+        """
+        start_xvfb(display=":42", wait=0.01)
+        assert len(registered_hooks) == 1, registered_hooks
+        assert atexit.register is REAL_REGISTER, (
+            "the fixture patched the shared stdlib atexit module, not the name headless reaches it "
+            "through"
+        )
 
     def test_a_server_that_never_started_registers_nothing(
         self, linux_without_display, registered_hooks, monkeypatch
