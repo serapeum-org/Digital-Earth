@@ -54,6 +54,28 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## The domain the ramp spans
+
+`robust=True` clips the colour limits to the 2nd and 98th percentile of the band, xarray-style, so a single
+outlier stops flattening the rest of the field.
+
+`center=` states the value a **diverging** scale is built around — zero for an anomaly, a difference or a
+trend, and whatever the reference is otherwise. The limits are symmetrised on it, so one unit of departure is
+one step of colour on either side, and the ramp becomes a diverging one centred there: its lightest colour
+lands on the centre and the two arms darken away from it. `color_scale="midpoint", midpoint=` is the other
+spelling, and a different request — it keeps the data's own asymmetric limits and moves the colour centre
+instead. Both get the diverging ramp.
+
+```python
+m.field(anomaly, center=0, robust=True)
+m.field(anomaly, color_scale="midpoint", midpoint=0)   # asymmetric limits, colour centred on zero
+```
+
+The ramp is only substituted where no colormap was named: `cmap=` is always what draws. And the centre has to
+be **inside** the data — a ramp centred outside it draws every value in one arm, which is worse than the
+sequential ramp it would replace — so a centre the band does not straddle is declined, the resolved colormap
+is kept, and the decline is logged at `WARNING` naming the centre and the range it measured.
+
 ## The colours a ramp cannot place
 
 Three values fall outside a colour ramp, and a field render takes a colour for each: `missing=` for a cell with

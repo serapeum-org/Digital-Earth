@@ -589,6 +589,51 @@ class Scale:
         """
         return bool(self.categories)
 
+    def straddles(self, center: float = 0.0) -> bool:
+        """Whether this domain runs on **both** sides of `center` — the test a diverging ramp has to pass.
+
+        A diverging colormap puts a neutral colour at `center` and an arm on either side of it. Centred
+        outside the domain it is worse than a sequential ramp rather than better: one arm is never drawn, so
+        the other carries every value and the picture loses the contrast the ramp was chosen for. Asking the
+        domain first is what lets a tier offer divergence and decline it on the same call.
+
+        The comparison is **strict**, deliberately: a centre sitting exactly on `vmin` or `vmax` leaves one
+        arm holding a single value, and it is also the comparison cleopatra validates a diverging ``center``
+        with (*"diverging 'center' must lie strictly between vmin and vmax"*) — so a centre this reader
+        called straddled but cleopatra refuses cannot happen.
+
+        Args:
+            center: The value a diverging ramp would be centred on. Zero by default, which is the centre of
+                every anomaly, difference and trend field. A non-finite centre straddles nothing — answered
+                rather than compared, since ``nan`` fails every comparison silently.
+
+        Returns:
+            ``True`` when ``vmin < center < vmax``.
+
+        Examples:
+            - An anomaly field with both signs straddles zero; a rainfall total does not:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_values([-2.0, -1.0, 3.0, 6.0]).straddles()
+                True
+                >>> Scale.from_values([12.0, 40.0, 88.0]).straddles()
+                False
+
+                ```
+            - A centre need not be zero — a departure from a long-term mean sits wherever that mean does:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(283.0, 293.0).straddles(288.0)
+                True
+                >>> Scale.from_limits(283.0, 293.0).straddles(273.15)
+                False
+
+                ```
+        """
+        if not isfinite(center):
+            return False
+        return self.vmin < center < self.vmax
+
     def as_limits(self) -> Tuple[float, float]:
         """Return the ``(vmin, vmax)`` pair a renderer's normaliser takes.
 

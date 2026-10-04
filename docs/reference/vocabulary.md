@@ -31,6 +31,11 @@ past either end of the domain. All three travel in the stored form, so the tier 
 that reads it back agree on the colour of a nodata cell and of a clipped value — see `with_extremes` to state
 them and `extremes` to read back only the ones that were stated.
 
+`straddles` answers the one question a diverging ramp has to pass: does the domain run on both sides of the
+value the ramp would be centred on? Centred outside it, one arm is never drawn and the other carries every
+value — so a backend offers divergence and declines it from the same reader, with the same strict comparison
+cleopatra validates a diverging `center` with.
+
 ::: digitalearth.base.spec.scale.Scale
 
 ## `Selection` — which slice of a dataset a layer draws

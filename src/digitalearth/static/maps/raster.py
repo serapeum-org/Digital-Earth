@@ -19,8 +19,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
+from cleopatra.styling.perceptual import make_diverging
+from cleopatra.styling.scaling import ColorScale
 from matplotlib import colormaps
-from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.colors import BoundaryNorm, ListedColormap, to_hex
 
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
@@ -50,9 +52,14 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static.guides import drawn_scale, source_field
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import EXTREME_KEYS, relocate_flat_style
+from digitalearth.static.render_compat import (
+    CENTER_KEY,
+    EXTREME_KEYS,
+    relocate_flat_style,
+)
 from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord, drawing_style
+from digitalearth.static.style_fold import coerce_color_scale
 
 #: The tier logs through the standard library, as `static/maps/base.py` does — not loguru, which is the web
 #: tier's choice. One logger per tier, so a skip and a fallback from the same draw land in the same place.
@@ -431,10 +438,18 @@ class FieldColors:
     artist and its limits exist. A value read at the first point and asked at the second is what keeps those
     two from drifting apart, and what stops the drawer carrying a loose dict between them.
 
+    The divergence centre is the same kind of decision and sits here for the same reason. cleopatra
+    symmetrises the limits around a ``center`` **and** swaps in its own diverging colormap when the caller
+    named none — but this tier resolves a colormap on every field render, through
+    :func:`~digitalearth.base.display.auto_cmap`, so from the glyph's point of view ``cmap`` is always
+    explicit and that swap never fires. The result was symmetric limits drawn through a *sequential* ramp:
+    the neutral centre the symmetry exists for was not there to land on.
+
     Attributes:
         missing: Colour for a cell with no value, or ``None`` to leave the colormap's own treatment alone.
         over: Colour for a value above the upper limit, likewise.
         under: Colour for a value below the lower limit, likewise.
+        center: The value a diverging scale is built around, or ``None`` when the call asked for none.
 
     Examples:
         - Read off a drawing-options dict, which is also how the keywords leave it:
@@ -453,27 +468,129 @@ class FieldColors:
             False
 
             ```
+        - Both spellings of a divergence centre are read, and the centre stays in the options because
+          cleopatra is the one that symmetrises the limits with it:
+            ```python
+            >>> from digitalearth.static.maps.raster import FieldColors
+            >>> FieldColors.stated_on({"center": 0.0}).center
+            0.0
+            >>> FieldColors.stated_on({"color_scale": "midpoint", "midpoint": 2.5}).center
+            2.5
+
+            ```
     """
 
     missing: Optional[str] = None
     over: Optional[str] = None
     under: Optional[str] = None
+    center: Optional[float] = None
 
     @classmethod
     def stated_on(cls, opts: Dict[str, Any]) -> "FieldColors":
-        """Take this tier's own colour keywords out of a drawing-options dict.
+        """Read this tier's own colour decisions off a drawing-options dict.
 
         The :data:`~digitalearth.static.render_compat.EXTREME_KEYS` never reach a cleopatra glyph: a glyph
         carries its extremes on the **colormap** it is handed, not as keywords, and refuses by name anything
-        outside its own keyword list. Removing them here is what makes them the tier's.
+        outside its own keyword list. Removing them here is what makes them the tier's. The centre is
+        *read and left in place* — it is cleopatra's keyword, and symmetrising the limits with it is
+        cleopatra's job; only the diverging ramp is this tier's to supply.
 
         Args:
-            opts: The drawing options; mutated in place (the stated keys are removed).
+            opts: The drawing options. The extreme-colour keys are removed from it; the centre is not.
 
         Returns:
-            The colours the caller stated, with ``None`` for each one they did not.
+            The decisions the call stated, with ``None`` for each one it did not.
+
+        Raises:
+            ValueError: when ``color_scale=`` names no colour scale — raised by
+                :func:`~digitalearth.static.style_fold.coerce_color_scale`, the same refusal the colour fold
+                gives a few lines later, with the same message.
         """
-        return cls(**{key: opts.pop(key) for key in EXTREME_KEYS if key in opts})
+        return cls(
+            center=cls._center_on(opts),
+            **{key: opts.pop(key) for key in EXTREME_KEYS if key in opts},
+        )
+
+    @staticmethod
+    def _center_on(opts: Dict[str, Any]) -> Optional[float]:
+        """Return the value a diverging scale was asked to be built around, or ``None``.
+
+        Two keywords state one thing, and both are cleopatra's rather than this tier's:
+
+        * ``center=`` symmetrises the limits to ``center ± max|data - center|``, so the ramp's middle lands
+          on the centre and one unit of departure is one step of colour on either side;
+        * ``color_scale="midpoint", midpoint=`` keeps the data's own asymmetric limits and moves the
+          *colour* centre instead, through cleopatra's ``MidpointNormalize``.
+
+        They are different requests and neither is turned into the other. What they share is that both want
+        a **diverging ramp**, which is the one part of the request this tier has to supply itself.
+
+        Args:
+            opts: The drawing options, read and not mutated. ``midpoint`` counts only together with
+                ``color_scale="midpoint"``: on its own it is a field of the colour group that nothing reads,
+                so treating it as a request would diverge a plainly-scaled layer.
+
+        Returns:
+            The centre as a float, or ``None`` when neither keyword states one.
+        """
+        center = opts.get(CENTER_KEY)
+        if center is not None:
+            return float(center)
+        midpoint, scale = opts.get("midpoint"), opts.get("color_scale")
+        if midpoint is None or scale is None:
+            return None
+        if coerce_color_scale(scale) is not ColorScale.MIDPOINT:
+            return None
+        return float(midpoint)
+
+    def ramp_over(self, cmap: Any, values: Any, requested: Any) -> Any:
+        """Return the colormap this field should draw with, diverging it when the data warrants that.
+
+        Opt-in on both counts. The ramp is replaced only when the call stated a centre *and* the caller named
+        no colormap of their own — the two notebooks that already draw a midpoint scale pass
+        ``cmap='RdBu_r'``, and restyling them would be a change they did not ask for.
+
+        The detection is :meth:`~digitalearth.base.spec.scale.Scale.straddles` over the band's own domain: a
+        ramp centred outside the data draws every value in one arm, which is worse than the sequential ramp
+        it would replace. That case keeps the resolved ramp and says so at ``WARNING``, because a silent
+        decline reads as the option not working. cleopatra still symmetrises the limits — that is its
+        keyword, not this decision.
+
+        Measuring the domain costs one pass over the band, which is why it is behind the centre check rather
+        than done for every field.
+
+        Args:
+            cmap: The colormap this layer resolved to — a registered name or a ``Colormap``.
+            values: The band being drawn, as the array the glyph will receive.
+            requested: The colormap the caller asked for, or ``None`` when the tier resolved one itself.
+
+        Returns:
+            A diverging colormap built from `cmap`'s two end colours, or `cmap` itself.
+        """
+        if self.center is None or requested is not None:
+            return cmap
+        scale = Scale.from_values(values)
+        if not scale.straddles(self.center):
+            low, high = scale.as_limits()
+            logger.warning(
+                "field(): a diverging scale centred at %s is not drawn — the band runs %s to %s, so one "
+                "arm of the ramp would hold every value; the sequential colormap is kept. Centre it inside "
+                "the data, or drop the centre.",
+                self.center,
+                low,
+                high,
+            )
+            return cmap
+        # The two ends of the resolved ramp become the two arms, which keeps a variable's own auto-styled
+        # colours meaningful instead of overriding them with one hard-coded pair. `make_diverging` builds the
+        # arms in Lab, equalises their lightness and puts a light neutral between them, so the centre is the
+        # lightest colour in the ramp — the property a diverging map is read by.
+        ramp = colormaps[cmap] if isinstance(cmap, str) else cmap
+        return make_diverging(
+            to_hex(ramp(0.0)),
+            to_hex(ramp(1.0)),
+            name=f"{getattr(ramp, 'name', 'ramp')}-diverging",
+        )
 
     @property
     def states_extremes(self) -> bool:
@@ -572,7 +689,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # `auto_cmap`'s lookup) or the tier default. A same-tier figure always carries them, so this changes nothing
     # for it.
     requested = opts.pop("cmap", props.get("cmap"))
-    opts["cmap"] = auto_cmap(
+    resolved = auto_cmap(
         src,
         requested,
         # `auto_cmap`'s fallback, reached only if the lookup answers no cmap. `auto_style` always answers one,
@@ -581,6 +698,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         props.get("default_cmap") or DEFAULT_FIELD_CMAP,
         lookup=lambda _: style,
     )
+    # A stated centre asks for a *diverging* ramp as well as symmetric limits, and the resolution above is
+    # exactly what stops cleopatra supplying one — so the colour decisions supply it, and only when the band
+    # straddles the centre (ST-3).
+    opts["cmap"] = colors.ramp_over(resolved, z_values, requested)
     levels = props.get("levels")
     if levels is None and kind in _CONTOUR_KINDS:
         # A caller's `interval=` wins over the variable's canonical levels, because it is the one the caller

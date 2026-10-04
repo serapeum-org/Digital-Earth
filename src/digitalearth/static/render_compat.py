@@ -53,8 +53,10 @@ from digitalearth.static.style_fold import (
 )
 
 __all__ = [
+    "CENTER_KEY",
     "COLOR_SCALE_ALIASES",
     "EXTREME_KEYS",
+    "ROBUST_KEY",
     "STATIC_STYLE_SCHEMA",
     "coerce_color_scale",
     "fold_color_scaling",
@@ -167,10 +169,24 @@ NORM_KEY = "norm"
 #: :data:`~digitalearth.base.symbology.MISSING_COLOR`), and that is the name the four tiers share.
 EXTREME_KEYS: Tuple[str, ...] = ("missing", "over", "under")
 
+#: Percentile colour limits, xarray's spelling. cleopatra reads it from its own keyword list and clips the
+#: limits to the 2nd/98th percentile of the band, so one outlier stops flattening the rest of the field. It
+#: is **not** one of the regrouped flat keys — it travels to the glyph's constructor beside ``vmin``/``vmax``
+#: and is never relocated — but it decided the colour domain of every field render while appearing in no
+#: signature and no schema, which is what ST-3 declares it for.
+ROBUST_KEY = "robust"
+
+#: The value a diverging scale is built around, also cleopatra's own keyword: it symmetrises the limits to
+#: ``center ± max|data - center|``. Declared here beside ``robust`` for the same reason, and honoured one
+#: step further — :class:`~digitalearth.static.maps.raster.FieldColors` supplies the diverging *ramp*
+#: cleopatra would have defaulted to, which this tier's own colormap resolution suppresses.
+CENTER_KEY = "center"
+
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
 #: where it drives one. That is the **30** flat members cleopatra's constructors reject, the 6 typed group
-#: parameters they fold into, :data:`MARKER_SIZE_KEY`, :data:`NORM_KEY` and the three :data:`EXTREME_KEYS` —
-#: 41 keywords that were in no signature anywhere.
+#: parameters they fold into, :data:`MARKER_SIZE_KEY`, :data:`NORM_KEY`, the three :data:`EXTREME_KEYS` and
+#: the colour domain's own :data:`ROBUST_KEY`/:data:`CENTER_KEY` — 43 keywords that were in no signature
+#: anywhere.
 #:
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
 #: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
@@ -259,6 +275,16 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     StyleKey(
         NORM_KEY,
         "A built matplotlib Normalize the values are coloured through, used as given.",
+    ),
+    # -- the colour domain itself (ST-3)
+    StyleKey(
+        ROBUST_KEY,
+        "Clip the colour limits to the 2nd/98th percentile of the data, so an outlier does not set them.",
+    ),
+    StyleKey(
+        CENTER_KEY,
+        "The value a diverging scale is built around: the limits are symmetrised on it and, unless a "
+        "colormap was named, the ramp becomes a diverging one centred there.",
     ),
     # -- the colours for what the ramp cannot place (ST-10)
     StyleKey("missing", "Colour of a cell with no value, on a field render."),
