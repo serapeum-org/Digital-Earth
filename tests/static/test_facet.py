@@ -101,7 +101,8 @@ class TestOneSharedScale:
         """
         fig, maps = facet(stack, crs=4326)
         assert len(maps) == 4, len(maps)
-        assert all(isinstance(m, Map) and m.fig is fig for m in maps), maps
+        assert [type(m) for m in maps] == [Map] * 4, [type(m) for m in maps]
+        assert [m.fig for m in maps] == [fig] * 4, [m.fig for m in maps]
 
     def test_every_panel_shares_the_stack_s_limits(self, stack):
         """Each panel's colour limits are the whole stack's minimum and maximum.
