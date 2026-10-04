@@ -32,7 +32,7 @@ by maintenance (#185).
 import logging
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Tuple
 
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend, hatch_legend
 from matplotlib.colors import to_hex, to_rgba
@@ -516,64 +516,6 @@ def _marked_bands(artist: Any, bands: int) -> List[bool]:
     return [len(path.vertices) > 0 for path in paths]
 
 
-def _hatch_rows(
-    layer: LayerSpec, artist: Any, hatches: Sequence[str], title: Optional[str]
-) -> Tuple[LegendSpec, List[int], List[str]]:
-    """Derive the rows of a hatched layer's key: one per band the map actually marks.
-
-    The layer's published scale cannot answer this. A filled contour set publishes the continuous range its
-    norm spans, so the colour key reads five evenly spaced stops — and an overlay drawn with ``fill=False``
-    has no colour for a stop to show at all. The bands are the set's own ``levels``, read off the artist as
-    a graduated scale so the row labels are written exactly as a classified layer's are.
-
-    Args:
-        layer: The layer's description, which records the caller's labels if they gave any.
-        artist: The filled ``ContourSet``.
-        hatches: Its pattern per band, from :func:`_hatches_of`.
-        title: The key's heading, or ``None``.
-
-    Returns:
-        ``(spec, kept, rows)``: the legend over every band, the indices of the bands keyed, and one label per
-        kept band. A band is kept only when the map actually marks it, which takes both: something to mark
-        it *with* — a pattern, or a face that is not fully transparent — and some geometry to mark, which
-        :func:`_marked_bands` reads off the artist. Levels that run past the data satisfy the first and not
-        the second, and keying them invented classes nothing on the figure showed (review M1).
-
-    Raises:
-        ValueError: when the recorded labels do not number the bands the layer's ``levels=`` **declares**.
-
-    Note:
-        ``labels=`` is counted against the declared bands, not the kept ones, and the labels of the bands
-        that are not kept are dropped alongside their rows. Counting the kept rows made the accepted
-        spelling a property of the *raster*: a four-band call was told "the key has 2 rows", and a
-        ``labels=`` recorded against one reading of the field started raising as soon as the data reached a
-        third band (review M3). One label per band between the levels — equivalently, one per ``hatches=``
-        entry — is derivable from the call alone, so it keeps working as the data moves.
-    """
-    levels = tuple(float(level) for level in artist.levels)
-    faces = [tuple(face) for face in artist.get_facecolor()]
-    faces = [faces[index % len(faces)] for index in range(len(hatches))]
-    colors = [to_hex(face, keep_alpha=True) for face in faces]
-    scale = Scale(levels[0], levels[-1], scheme=levels, breaks=levels)
-    spec = LegendSpec.from_scale(scale, colors=colors, title=title)
-    marked = _marked_bands(artist, len(hatches))
-    kept = [
-        index
-        for index, (face, pattern) in enumerate(zip(faces, hatches))
-        if marked[index] and (pattern or face[3] > 0.0)
-    ]
-    labels = layer.symbology.props.get(GUIDE_LABELS_KEY)
-    if labels is None:
-        return spec, kept, [spec.entries[index].label for index in kept]
-    rows = [str(label) for label in labels]
-    if len(rows) != len(hatches):
-        raise ValueError(
-            f"layer {layer.id!r} declares {len(hatches)} bands between its levels, so labels= needs "
-            f"{len(hatches)} labels, one per band; got {len(rows)}"
-        )
-    return spec, kept, [rows[index] for index in kept]
-
-
 @dataclass(frozen=True)
 class GuidePlan:
     """One layer's colour key, derived and checked but not yet on the figure.
@@ -609,13 +551,257 @@ class GuidePlan:
     hatch_color: Optional[str] = None
 
 
+@dataclass(frozen=True, eq=False)
+class _HatchedKey:
+    """The rows of a hatched layer's key: the bands it declares, the ones the map marks, their labels.
+
+    The layer's published scale cannot answer any of this. A filled contour set publishes the continuous
+    range its norm spans, so the colour key reads five evenly spaced stops — and an overlay drawn with
+    ``fill=False`` has no colour for a stop to show at all. The bands are the set's own ``levels``, read off
+    the artist as a graduated scale so the row labels are written exactly as a classified layer's are.
+
+    These five values are born together out of one artist, are read only ever as a set — which rows are
+    kept decides which colours, which labels and which patterns the key carries — and nothing outside this
+    class reads any of them. That is what makes them one object rather than a three-tuple and a pair of
+    locals threaded through :func:`plan_guide`, which is where they used to live.
+
+    Attributes:
+        layer_id: The layer these rows belong to, for the refusal and the warning to name.
+        artist: The filled ``ContourSet``, kept because the hatch stroke colour is read off it when the key
+            is actually built and not before.
+        spec: The legend over **every** declared band, so a kept band's colour and derived label are read
+            at the band's own index.
+        kept: The indices of the bands the key draws. A band is kept only when the map actually marks it,
+            which takes both: something to mark it *with* — a pattern, or a face that is not fully
+            transparent — and some geometry to mark, which :func:`_marked_bands` reads off the artist.
+            Levels that run past the data satisfy the first and not the second, and keying them invented
+            classes nothing on the figure showed (review M1).
+        rows: One label per **kept** band, in row order — the caller's recorded labels where there are
+            some, else the ones :attr:`spec` derived.
+        hatches: One pattern per declared band, from :func:`_hatches_of`.
+
+    Examples:
+        - A hatched overlay whose levels run past the data: four bands are declared, the top two hold no
+          geometry, and only the hatched band that does is keyed:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.guides import _HatchedKey
+            >>> p = Dataset.from_array(
+            ...     arr=np.linspace(0.0, 0.95, 16).reshape(4, 4),
+            ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+            ...     no_data_value=-9999.0,
+            ... )
+            >>> with Map(crs=4326) as m:
+            ...     sig = m.contours(
+            ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
+            ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
+            ...     )
+            ...     key = _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p")
+            ...     key.hatches
+            ...     key.kept
+            ...     key.rows
+            ('///', '', 'xx', '..')
+            (0,)
+            ('0.0 – 0.05',)
+
+            ```
+        - Recorded labels are counted against the bands ``levels=`` declares, and the labels of the bands
+          that are not kept are dropped alongside their rows:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.guides import _HatchedKey
+            >>> p = Dataset.from_array(
+            ...     arr=np.linspace(0.0, 0.95, 16).reshape(4, 4),
+            ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+            ...     no_data_value=-9999.0,
+            ... )
+            >>> with Map(crs=4326) as m:
+            ...     sig = m.contours(
+            ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
+            ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
+            ...     )
+            ...     _ = m.legend("sig", labels=["a", "b", "c", "d"])
+            ...     _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p").rows
+            ...     try:
+            ...         m.legend("sig", labels=["a", "b"])
+            ...     except ValueError as error:
+            ...         print(error)
+            ('a',)
+            layer 'sig' declares 4 bands between its levels, so labels= needs 4 labels, one per band; got 2
+
+            ```
+    """
+
+    layer_id: str
+    artist: Any
+    spec: LegendSpec
+    kept: Tuple[int, ...]
+    rows: Tuple[str, ...]
+    hatches: Tuple[str, ...]
+
+    @classmethod
+    def of(
+        cls, layer: LayerSpec, artist: Any, title: Optional[str]
+    ) -> Optional["_HatchedKey"]:
+        """Read a drawn layer's hatched bands, or answer ``None`` when it has none.
+
+        Args:
+            layer: The layer's description, which records the caller's labels if they gave any.
+            artist: The layer's drawn artist.
+            title: The key's heading, or ``None``.
+
+        Returns:
+            The rows of the key, or ``None`` for an artist that is not a filled ``ContourSet`` carrying at
+            least one pattern (:func:`_hatches_of`) — which is every layer the swatch key already describes
+            by colour.
+
+        Raises:
+            ValueError: when the recorded labels do not number the bands the layer's ``levels=``
+                **declares**.
+
+        Note:
+            ``labels=`` is counted against the declared bands, not the kept ones, and the labels of the
+            bands that are not kept are dropped alongside their rows. Counting the kept rows made the
+            accepted spelling a property of the *raster*: a four-band call was told "the key has 2 rows",
+            and a ``labels=`` recorded against one reading of the field started raising as soon as the data
+            reached a third band (review M3). One label per band between the levels — equivalently, one per
+            ``hatches=`` entry — is derivable from the call alone, so it keeps working as the data moves.
+        """
+        hatches = _hatches_of(artist)
+        if hatches is None:
+            return None
+        levels = tuple(float(level) for level in artist.levels)
+        faces = [tuple(face) for face in artist.get_facecolor()]
+        faces = [faces[index % len(faces)] for index in range(len(hatches))]
+        colors = [to_hex(face, keep_alpha=True) for face in faces]
+        scale = Scale(levels[0], levels[-1], scheme=levels, breaks=levels)
+        spec = LegendSpec.from_scale(scale, colors=colors, title=title)
+        marked = _marked_bands(artist, len(hatches))
+        kept = tuple(
+            index
+            for index, (face, pattern) in enumerate(zip(faces, hatches))
+            if marked[index] and (pattern or face[3] > 0.0)
+        )
+        labels = layer.symbology.props.get(GUIDE_LABELS_KEY)
+        if labels is None:
+            rows = tuple(spec.entries[index].label for index in kept)
+        else:
+            recorded = [str(label) for label in labels]
+            if len(recorded) != len(hatches):
+                raise ValueError(
+                    f"layer {layer.id!r} declares {len(hatches)} bands between its levels, so labels= "
+                    f"needs {len(hatches)} labels, one per band; got {len(recorded)}"
+                )
+            rows = tuple(recorded[index] for index in kept)
+        return cls(
+            layer_id=layer.id,
+            artist=artist,
+            spec=spec,
+            kept=kept,
+            rows=rows,
+            hatches=hatches,
+        )
+
+    def plan(self, guide: Any) -> Optional[GuidePlan]:
+        """Build the swatch key these rows describe, or answer ``None`` when there are no rows.
+
+        Args:
+            guide: The layer's recorded guide, read for its ``anchor`` and its ``show`` flag.
+
+        Returns:
+            The plan :func:`paint_guide` draws, or ``None`` when the map marks none of the declared bands
+            — logged at ``WARNING`` — or when the guide is switched off. The two are answered in that
+            order, so the warning is emitted for a key that is described but not shown.
+        """
+        if not self.kept:
+            # Every band is unmarked, so there is not one row to draw — and a swatch legend with no
+            # swatches is an empty framed box carrying only its title, which is itself the class a
+            # reader looks for and does not find that `_marked_bands` drops rows to avoid (review L5).
+            # Logged rather than left silent, as `facet` logs the bar it leaves off an unmeasurable
+            # stack: the layer is on the figure, only its key is not.
+            logger.warning(
+                "legend(): layer %r marks none of its %d hatched bands, so there are no rows to key "
+                "it with; no legend is drawn rather than an empty box",
+                self.layer_id,
+                len(self.hatches),
+            )
+            return None
+        if not guide.show:
+            return None
+        return GuidePlan(
+            "legend",
+            title=self.spec.title,
+            anchor=guide.anchor,
+            colors=tuple(self.spec.entries[index].color for index in self.kept),
+            rows=self.rows,
+            hatches=tuple(self.hatches[index] for index in self.kept),
+            hatch_color=to_hex(self.artist.get_hatchcolor()[0], keep_alpha=True),
+        )
+
+
+def _legend_plan(
+    layer: LayerSpec, artist: Any, scale: Optional[Scale], guide: Any
+) -> Optional[GuidePlan]:
+    """Derive the swatch key a layer's recorded legend asks for.
+
+    The two ways a swatch key's rows are derived, in the order they are tried: off the drawn artist for a
+    hatched layer (:class:`_HatchedKey`), and off the scale the layer publishes for every other. ``scale``
+    is read only here, which is why it is this function's argument rather than :func:`plan_guide`'s local.
+
+    Args:
+        layer: The layer's description, which carries the recorded labels.
+        artist: What its drawer produced.
+        scale: The colour encoding's scale, or ``None`` when it publishes none.
+        guide: The layer's recorded guide.
+
+    Returns:
+        The plan :func:`paint_guide` draws, or ``None`` when the guide is switched off or the layer marks
+        none of its hatched bands.
+
+    Raises:
+        ValueError: when the layer publishes no scale for the rows to be derived from, and from
+            :func:`_rows` or :meth:`_HatchedKey.of` when recorded labels do not number those rows.
+    """
+    hatched = _HatchedKey.of(layer, artist, guide.title)
+    if hatched is not None:
+        return hatched.plan(guide)
+    if scale is None:
+        raise ValueError(
+            f"layer {layer.id!r} publishes no colour scale, so there are no rows to key it with; "
+            "colorbar() draws the bar its mappable can still carry"
+        )
+    spec = _legend_spec(scale, artist, guide.title)
+    # Derived before the `show` gate below, not after it: these two lines are what refuses a key the
+    # description asks for and this tier cannot draw, and behind the gate they were skipped by
+    # `visible=False` — so one spelling of `legend(labels=…)` raised and the other recorded a
+    # description that could never be drawn (review M1).
+    rows = _rows(layer, spec)
+    if not guide.show:
+        return None
+    return GuidePlan(
+        "legend",
+        title=spec.title,
+        anchor=guide.anchor,
+        colors=tuple(entry.color for entry in spec.entries),
+        rows=tuple(rows),
+    )
+
+
 def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
     """Derive the key one layer's recorded guide asks for, refusing one this tier cannot draw.
 
-    A swatch key normally takes its rows from the layer's published scale. The one exception is a filled
-    contour drawn with ``hatches=``: its rows are the bands the map actually marks, read off the artist by
-    :func:`_hatch_rows`, because the published scale is the continuous range the set's norm spans and says
-    nothing about which band carries which pattern.
+    The orchestrator of the two kinds this tier draws: a swatch key is :func:`_legend_plan`'s, read either
+    off the drawn artist (:class:`_HatchedKey`) or off the scale the layer publishes, and a bar is the tail
+    of this function, where there is no derived state to name — only the refusal the layer earns and the
+    ``show`` flag.
 
     Args:
         layer: The layer's description, which carries the guide.
@@ -643,55 +829,8 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
     encoding = layer.symbology.encoding("color")
     if guide is None or encoding is None or drawn.artist is None:
         return None
-    scale = encoding.scale
     if guide_kind(layer) == "legend":
-        hatches = _hatches_of(drawn.artist)
-        if hatches is not None:
-            spec, kept, rows = _hatch_rows(layer, drawn.artist, hatches, guide.title)
-            if not kept:
-                # Every band is unmarked, so there is not one row to draw — and a swatch legend with no
-                # swatches is an empty framed box carrying only its title, which is itself the class a
-                # reader looks for and does not find that `_marked_bands` drops rows to avoid (review L5).
-                # Logged rather than left silent, as `facet` logs the bar it leaves off an unmeasurable
-                # stack: the layer is on the figure, only its key is not.
-                logger.warning(
-                    "legend(): layer %r marks none of its %d hatched bands, so there are no rows to key "
-                    "it with; no legend is drawn rather than an empty box",
-                    layer.id,
-                    len(hatches),
-                )
-                return None
-            if not guide.show:
-                return None
-            return GuidePlan(
-                "legend",
-                title=spec.title,
-                anchor=guide.anchor,
-                colors=tuple(spec.entries[index].color for index in kept),
-                rows=tuple(rows),
-                hatches=tuple(hatches[index] for index in kept),
-                hatch_color=to_hex(drawn.artist.get_hatchcolor()[0], keep_alpha=True),
-            )
-        if scale is None:
-            raise ValueError(
-                f"layer {layer.id!r} publishes no colour scale, so there are no rows to key it with; "
-                "colorbar() draws the bar its mappable can still carry"
-            )
-        spec = _legend_spec(scale, drawn.artist, guide.title)
-        # Derived before the `show` gate below, not after it: these two lines are what refuses a key the
-        # description asks for and this tier cannot draw, and behind the gate they were skipped by
-        # `visible=False` — so one spelling of `legend(labels=…)` raised and the other recorded a
-        # description that could never be drawn (review M1).
-        rows = _rows(layer, spec)
-        if not guide.show:
-            return None
-        return GuidePlan(
-            "legend",
-            title=spec.title,
-            anchor=guide.anchor,
-            colors=tuple(entry.color for entry in spec.entries),
-            rows=tuple(rows),
-        )
+        return _legend_plan(layer, drawn.artist, encoding.scale, guide)
     refusal = bar_refusal(layer)
     if refusal is not None:
         raise ValueError(refusal)
