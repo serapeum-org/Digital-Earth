@@ -68,7 +68,8 @@ class TestOneLabelPerFeature:
         places: The ten-point fixture.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid")
+            canvas.labels(places, "fid")
+            drawn = canvas.artist()
         assert len(drawn) == len(places), (
             f"{len(places)} features should give {len(places)} labels; got {len(drawn)}"
         )
@@ -80,7 +81,8 @@ class TestOneLabelPerFeature:
             named: Points whose ``name`` column is letters, so a positional label could not pass.
         """
         with Map(crs=4326) as canvas:
-            drawn = canvas.labels(named, "name")
+            canvas.labels(named, "name")
+            drawn = canvas.artist()
         assert _texts(drawn) == ["A", "C"], f"the labels read {_texts(drawn)}"
 
     def test_a_missing_value_is_not_labelled(self, named):
@@ -90,7 +92,8 @@ class TestOneLabelPerFeature:
             named: Points whose middle value is `None`.
         """
         with Map(crs=4326) as canvas:
-            drawn = canvas.labels(named, "name")
+            canvas.labels(named, "name")
+            drawn = canvas.artist()
         assert len(drawn) == 2, (
             f"the null should draw no artist; got {len(drawn)} labels"
         )
@@ -102,7 +105,8 @@ class TestOneLabelPerFeature:
             named: Points in EPSG:4326, drawn on a map in the same CRS so the coordinates are comparable.
         """
         with Map(crs=4326) as canvas:
-            drawn = canvas.labels(named, "name")
+            canvas.labels(named, "name")
+            drawn = canvas.artist()
             anchored = [
                 tuple(round(value, 6) for value in artist.xy) for artist in drawn
             ]
@@ -115,7 +119,8 @@ class TestOneLabelPerFeature:
         square = Polygon([(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)])
         frame = gpd.GeoDataFrame({"name": ["block"]}, geometry=[square], crs=3857)
         with Map(crs=3857) as canvas:
-            drawn = canvas.labels(FeatureCollection(frame), "name")
+            canvas.labels(FeatureCollection(frame), "name")
+            drawn = canvas.artist()
             anchor = tuple(float(value) for value in drawn[0].xy)
         assert anchor == (1.0, 1.0), (
             f"a square's centroid is (1, 1); the label sat at {anchor}"
@@ -222,7 +227,8 @@ class TestTextSizeIsNotMarkerSize:
         places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid", text_size=17.0)
+            canvas.labels(places, "fid", text_size=17.0)
+            drawn = canvas.artist()
             sizes = {artist.get_fontsize() for artist in drawn}
         assert sizes == {17.0}, f"the labels were drawn at {sizes}"
 
@@ -250,7 +256,8 @@ class TestTheHaloIsAPathEffectsStroke:
         places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid")
+            canvas.labels(places, "fid")
+            drawn = canvas.artist()
             effects = drawn[0].get_path_effects()
         assert len(effects) == 1, f"one stroke should be applied; got {effects}"
 
@@ -261,7 +268,8 @@ class TestTheHaloIsAPathEffectsStroke:
             places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid", halo_width=0.0)
+            canvas.labels(places, "fid", halo_width=0.0)
+            drawn = canvas.artist()
             effects = drawn[0].get_path_effects()
         assert effects == [], f"no halo was asked for, yet {effects} was applied"
 
@@ -275,7 +283,8 @@ class TestTheHaloIsAPathEffectsStroke:
 
         own = [Normal(), Normal()]
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid", path_effects=own)
+            canvas.labels(places, "fid", path_effects=own)
+            drawn = canvas.artist()
             effects = drawn[0].get_path_effects()
         assert len(effects) == 2, (
             f"the caller's own two effects should be drawn; got {effects}"
@@ -301,7 +310,8 @@ class TestTheOffsetIsConvertedNotRenamed:
         places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid")
+            canvas.labels(places, "fid")
+            drawn = canvas.artist()
             shift = tuple(float(value) for value in drawn[0].get_position())
         assert shift == (0.0, 0.0), (
             f"an unoffset label should sit on its point; got {shift}"
@@ -314,12 +324,10 @@ class TestTheOffsetIsConvertedNotRenamed:
             places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            small = canvas.labels(
-                places, "fid", text_size=10.0, offset=(2.0, 0.0), name="a"
-            )
-            large = canvas.labels(
-                places, "fid", text_size=20.0, offset=(2.0, 0.0), name="b"
-            )
+            canvas.labels(places, "fid", text_size=10.0, offset=(2.0, 0.0), name="a")
+            small = canvas.artist()
+            canvas.labels(places, "fid", text_size=20.0, offset=(2.0, 0.0), name="b")
+            large = canvas.artist()
             shifts = (small[0].get_position()[0], large[0].get_position()[0])
         assert shifts == (20.0, 40.0), (
             f"two ems of 10 and of 20 points are 20 and 40; got {shifts}"
@@ -336,7 +344,8 @@ class TestTheOffsetIsConvertedNotRenamed:
             places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid", text_size=10.0, offset=(0.0, -1.2))
+            canvas.labels(places, "fid", text_size=10.0, offset=(0.0, -1.2))
+            drawn = canvas.artist()
             lift = float(drawn[0].get_position()[1])
         assert lift > 0.0, (
             f"a negative y offset must lift the label above its point; it moved {lift}"
@@ -380,7 +389,8 @@ class TestTheCrsKeywordHasAJobHere:
             {"name": ["A", "B"]}, geometry=[Point(4.0, 52.0), Point(5.0, 53.0)]
         )
         with Map(crs=3857) as canvas:
-            drawn = canvas.labels(FeatureCollection(naive), "name", crs=4326)
+            canvas.labels(FeatureCollection(naive), "name", crs=4326)
+            drawn = canvas.artist()
             eastings = [float(artist.xy[0]) for artist in drawn]
         assert eastings[0] > 100_000.0, (
             f"the labels should be in Web Mercator metres, not degrees; got {eastings}"
@@ -403,7 +413,8 @@ class TestTheCrsKeywordHasAJobHere:
             named: Points that declare EPSG:4326.
         """
         with Map(crs=4326) as canvas:
-            drawn = canvas.labels(named, "name", crs=4326)
+            canvas.labels(named, "name", crs=4326)
+            drawn = canvas.artist()
         assert len(drawn) == 2, (
             f"a restated CRS should change nothing; got {len(drawn)} labels"
         )
@@ -536,9 +547,10 @@ class TestWhatTheDrawerDeclines:
         """
         away = projections.orthographic(lon=-175.0, lat=15.0)
         with Map(crs=away, globe=True) as canvas:
-            drawn = canvas.labels(places, "fid")
+            canvas.labels(places, "fid")
+            held = dict(canvas._renderer.drawn)
             remaining = list(canvas.layer_ids)
-        assert drawn is None, f"an off-limb label layer draws nothing; got {drawn!r}"
+        assert held == {}, f"an off-limb label layer draws nothing; got {held!r}"
         assert remaining == [], (
             f"a layer that drew nothing must not be described: {remaining}"
         )
@@ -560,7 +572,8 @@ class TestWhatTheDrawerDeclines:
         )
         globe = projections.orthographic(lon=4.0, lat=52.0)
         with Map(crs=globe, globe=True) as canvas:
-            drawn = canvas.labels(FeatureCollection(frame), "name")
+            canvas.labels(FeatureCollection(frame), "name")
+            drawn = canvas.artist()
         assert _texts(drawn) == ["near"], (
             f"only the near-side feature is placeable, so only it is labelled; got {_texts(drawn)}"
         )
@@ -585,10 +598,11 @@ class TestWhatTheDrawerDeclines:
             crs=4326,
         )
         with Map(crs=4326) as canvas:
-            drawn = canvas.labels(FeatureCollection(frame), "name")
+            canvas.labels(FeatureCollection(frame), "name")
+            held = dict(canvas._renderer.drawn)
             remaining = list(canvas.layer_ids)
-        assert drawn is None, (
-            f"nothing was labellable, so nothing should be drawn; got {drawn!r}"
+        assert held == {}, (
+            f"nothing was labellable, so nothing should be drawn; got {held!r}"
         )
         assert remaining == [], (
             f"a layer that drew nothing must not be described: {remaining}"
@@ -605,7 +619,8 @@ class TestTheLayerIsManagedLikeAnyOther:
             places: The features labelled.
         """
         with Map(crs=places.epsg) as canvas:
-            drawn = canvas.labels(places, "fid", name="tags", visible=False)
+            canvas.labels(places, "fid", name="tags", visible=False)
+            drawn = canvas.artist()
             described = canvas.figure_spec.layers.get("tags")
             shown = {artist.get_visible() for artist in drawn}
         assert described.visible is False, "the figure describes the layer as visible"

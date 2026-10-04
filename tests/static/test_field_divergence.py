@@ -99,7 +99,8 @@ class TestRobustLimits:
             drawn limits rather than about a second render.
         """
         with Map(globe=False) as canvas:
-            drawn = canvas.field(OUTLIER_GRID).get_clim()
+            canvas.field(OUTLIER_GRID)
+            drawn = canvas.artist().get_clim()
         assert drawn == (float(OUTLIER_GRID.min()), float(OUTLIER_GRID.max())), (
             f"the default limits must be the data's own range; got {drawn}"
         )
@@ -111,7 +112,8 @@ class TestRobustLimits:
             float(np.nanpercentile(OUTLIER_GRID, 98.0)),
         )
         with Map(globe=False) as canvas:
-            drawn = canvas.field(OUTLIER_GRID, robust=True)
+            canvas.field(OUTLIER_GRID, robust=True)
+            drawn = canvas.artist()
             clim = drawn.get_clim()
         assert clim == pytest.approx(expected), (
             f"robust limits must be the 2nd/98th percentiles {expected}; got {clim}"
@@ -120,7 +122,8 @@ class TestRobustLimits:
     def test_the_outlier_is_then_above_the_limit(self):
         """Which is the point: the outlier is clipped rather than setting the scale."""
         with Map(globe=False) as canvas:
-            top = canvas.field(OUTLIER_GRID, robust=True).get_clim()[1]
+            canvas.field(OUTLIER_GRID, robust=True)
+            top = canvas.artist().get_clim()[1]
         assert top < float(OUTLIER_GRID.max()), (
             f"the robust top must sit below the outlier; got {top}"
         )
@@ -192,7 +195,8 @@ class TestADivergingFieldIsDrawnAroundItsCentre:
     def test_the_limits_are_symmetric_about_the_centre(self):
         """The arms are equal, so one unit of departure is one step of colour on either side."""
         with Map(globe=False) as canvas:
-            low, high = canvas.field(ANOMALY, center=0.0).get_clim()
+            canvas.field(ANOMALY, center=0.0)
+            low, high = canvas.artist().get_clim()
         assert low == -high, (
             f"the limits must be symmetric about zero; got {(low, high)}"
         )
@@ -200,7 +204,8 @@ class TestADivergingFieldIsDrawnAroundItsCentre:
     def test_the_limits_reach_the_furthest_value(self):
         """And they are as wide as the data's furthest departure, not wider."""
         with Map(globe=False) as canvas:
-            high = canvas.field(ANOMALY, center=0.0).get_clim()[1]
+            canvas.field(ANOMALY, center=0.0)
+            high = canvas.artist().get_clim()[1]
         assert high == float(np.abs(ANOMALY).max()), (
             f"the arms must reach the furthest departure; got {high}"
         )
@@ -214,7 +219,8 @@ class TestADivergingFieldIsDrawnAroundItsCentre:
             around was a mid-green indistinguishable from any other.
         """
         with Map(globe=False) as canvas:
-            artist = canvas.field(ANOMALY, center=0.0)
+            canvas.field(ANOMALY, center=0.0)
+            artist = canvas.artist()
             middle = _lightness(artist.to_rgba(0.0))
             top = _lightness(artist.to_rgba(artist.get_clim()[1]))
         assert middle > top, (
@@ -224,7 +230,8 @@ class TestADivergingFieldIsDrawnAroundItsCentre:
     def test_and_lighter_than_the_bottom_of_the_ramp_too(self):
         """Both arms darken away from the centre, which is what makes the two readable apart."""
         with Map(globe=False) as canvas:
-            artist = canvas.field(ANOMALY, center=0.0)
+            canvas.field(ANOMALY, center=0.0)
+            artist = canvas.artist()
             middle = _lightness(artist.to_rgba(0.0))
             bottom = _lightness(artist.to_rgba(artist.get_clim()[0]))
         assert middle > bottom, (
@@ -240,7 +247,8 @@ class TestADivergingFieldIsDrawnAroundItsCentre:
             same reason: without one there is no neutral colour for the midpoint to land on.
         """
         with Map(globe=False) as canvas:
-            artist = canvas.field(ANOMALY, color_scale="midpoint", midpoint=0.0)
+            canvas.field(ANOMALY, color_scale="midpoint", midpoint=0.0)
+            artist = canvas.artist()
             middle = _lightness(artist.to_rgba(0.0))
             top = _lightness(artist.to_rgba(artist.get_clim()[1]))
         assert middle > top, (
@@ -250,9 +258,8 @@ class TestADivergingFieldIsDrawnAroundItsCentre:
     def test_the_midpoint_scale_keeps_its_asymmetric_domain(self):
         """The two spellings are not the same request, and this one is not turned into the other."""
         with Map(globe=False) as canvas:
-            clim = canvas.field(
-                ANOMALY, color_scale="midpoint", midpoint=0.0
-            ).get_clim()
+            canvas.field(ANOMALY, color_scale="midpoint", midpoint=0.0)
+            clim = canvas.artist().get_clim()
         assert clim == (float(ANOMALY.min()), float(ANOMALY.max())), (
             f"a midpoint scale must keep the data's own limits; got {clim}"
         )
@@ -269,7 +276,8 @@ class TestACallersOwnColormapIsNeverReplaced:
             colormap would have restyled them, which is why the substitution is conditional.
         """
         with Map(globe=False) as canvas:
-            artist = canvas.field(ANOMALY, center=0.0, cmap="viridis")
+            canvas.field(ANOMALY, center=0.0, cmap="viridis")
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(0.0))
         assert drawn == tuple(colormaps["viridis"](0.5)), (
             f"the named colormap's own middle colour must be drawn; got {drawn}"
@@ -279,7 +287,8 @@ class TestACallersOwnColormapIsNeverReplaced:
         """And a colormap object the caller built themselves, likewise."""
         built = colormaps["plasma"]
         with Map(globe=False) as canvas:
-            artist = canvas.field(ANOMALY, center=0.0, cmap=built)
+            canvas.field(ANOMALY, center=0.0, cmap=built)
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(0.0))
         assert drawn == tuple(built(0.5)), (
             f"the caller's own colormap must be drawn; got {drawn}"
@@ -302,7 +311,8 @@ class TestACentreOutsideTheDataIsDeclined:
         """
         with caplog.at_level(logging.WARNING):
             with Map(globe=False) as canvas:
-                artist = canvas.field(POSITIVE, center=0.0)
+                canvas.field(POSITIVE, center=0.0)
+                artist = canvas.artist()
                 drawn = tuple(artist.to_rgba(artist.get_clim()[1]))
         assert drawn == tuple(colormaps["viridis"](1.0)), (
             f"a declined centre must leave the sequential ramp in place; got {drawn}"
@@ -341,7 +351,8 @@ class TestNothingShiftsWithoutACentre:
     def test_the_resolved_ramp_is_untouched(self):
         """No centre, no substitution: the tier's own default ramp draws the field."""
         with Map(globe=False) as canvas:
-            artist = canvas.field(ANOMALY)
+            canvas.field(ANOMALY)
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(artist.get_clim()[0]))
         assert drawn == tuple(colormaps["viridis"](0.0)), (
             f"an uncentred field must keep the default ramp; got {drawn}"
@@ -350,7 +361,8 @@ class TestNothingShiftsWithoutACentre:
     def test_the_limits_are_the_data_range(self):
         """And the limits are measured, not symmetrised."""
         with Map(globe=False) as canvas:
-            clim = canvas.field(ANOMALY).get_clim()
+            canvas.field(ANOMALY)
+            clim = canvas.artist().get_clim()
         assert clim == (float(ANOMALY.min()), float(ANOMALY.max())), (
             f"an uncentred field must keep the data's range; got {clim}"
         )

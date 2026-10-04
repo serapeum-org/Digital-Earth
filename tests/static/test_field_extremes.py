@@ -119,7 +119,8 @@ class TestNothingShiftsWhenNothingIsStated:
             figure's gaps, so the capability is opt-in and this is the pin that keeps it so.
         """
         with Map(globe=False) as canvas:
-            artist = canvas.field(GAPPY)
+            canvas.field(GAPPY)
+            artist = canvas.artist()
             drawn = artist.get_cmap().get_bad()
         assert tuple(drawn) == (0.0, 0.0, 0.0, 0.0), (
             f"an unstated nodata colour must stay fully transparent; got {tuple(drawn)}"
@@ -128,7 +129,8 @@ class TestNothingShiftsWhenNothingIsStated:
     def test_a_value_above_the_limit_still_takes_the_ramps_end(self):
         """Without `over=`, the top of the ramp is what an out-of-range value gets."""
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, vmin=2.0, vmax=6.0)
+            canvas.field(WIDE, vmin=2.0, vmax=6.0)
+            artist = canvas.artist()
             above = tuple(artist.to_rgba(9.0))
             top = tuple(artist.to_rgba(6.0))
         assert above == top, (
@@ -142,7 +144,8 @@ class TestTheStatedColoursAreDrawn:
     def test_missing_paints_the_nodata_cells(self):
         """`missing=` is the colour a cell with no value is drawn in."""
         with Map(globe=False) as canvas:
-            artist = canvas.field(GAPPY, missing=MISSING)
+            canvas.field(GAPPY, missing=MISSING)
+            artist = canvas.artist()
             drawn = tuple(artist.get_cmap().get_bad())
         assert drawn == to_rgba(MISSING), (
             f"the stated nodata colour must reach the colormap; got {drawn}"
@@ -151,7 +154,8 @@ class TestTheStatedColoursAreDrawn:
     def test_under_paints_a_value_below_the_lower_limit(self):
         """A value under `vmin` is drawn in the stated colour, not the ramp's bottom."""
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, vmin=2.0, vmax=6.0, under=UNDER)
+            canvas.field(WIDE, vmin=2.0, vmax=6.0, under=UNDER)
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(1.0))
         assert drawn == to_rgba(UNDER), (
             f"the stated under colour must reach the drawn artist; got {drawn}"
@@ -160,7 +164,8 @@ class TestTheStatedColoursAreDrawn:
     def test_over_paints_a_value_above_the_upper_limit(self):
         """And a value over `vmax` likewise."""
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, vmin=2.0, vmax=6.0, over=OVER)
+            canvas.field(WIDE, vmin=2.0, vmax=6.0, over=OVER)
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(9.0))
         assert drawn == to_rgba(OVER), (
             f"the stated over colour must reach the drawn artist; got {drawn}"
@@ -175,7 +180,8 @@ class TestTheStatedColoursAreDrawn:
             second render, so the two sides are not the same call twice.
         """
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, cmap="viridis", vmin=2.0, vmax=6.0, over=OVER)
+            canvas.field(WIDE, cmap="viridis", vmin=2.0, vmax=6.0, over=OVER)
+            artist = canvas.artist()
             middle = tuple(artist.to_rgba(4.0))
         assert middle == tuple(colormaps["viridis"](0.5)), (
             f"an in-range value must keep the colormap's own colour; got {middle}"
@@ -190,7 +196,8 @@ class TestTheStatedColoursAreDrawn:
             hard-coded `with_extremes(bad=...)` was written for.
         """
         with Map(globe=False) as canvas:
-            artist = canvas.field(GAPPY, scheme="equal_interval", k=3, missing=MISSING)
+            canvas.field(GAPPY, scheme="equal_interval", k=3, missing=MISSING)
+            artist = canvas.artist()
             drawn = tuple(artist.get_cmap().get_bad())
         assert drawn == to_rgba(MISSING), (
             f"a classified field must honour the stated nodata colour; got {drawn}"
@@ -210,7 +217,8 @@ class TestACallersOwnColormapKeepsItsExtremes:
         """
         built = colormaps["viridis"].with_extremes(over=OVER)
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, cmap=built, vmin=2.0, vmax=6.0, missing=MISSING)
+            canvas.field(WIDE, cmap=built, vmin=2.0, vmax=6.0, missing=MISSING)
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(9.0))
         assert drawn == to_rgba(OVER), (
             f"the colormap's own over colour must survive; got {drawn}"
@@ -220,7 +228,8 @@ class TestACallersOwnColormapKeepsItsExtremes:
         """The stated colour lands on the same colormap, so both are in force."""
         built = colormaps["viridis"].with_extremes(over=OVER)
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, cmap=built, vmin=2.0, vmax=6.0, missing=MISSING)
+            canvas.field(WIDE, cmap=built, vmin=2.0, vmax=6.0, missing=MISSING)
+            artist = canvas.artist()
             drawn = tuple(artist.get_cmap().get_bad())
         assert drawn == to_rgba(MISSING), (
             f"the stated nodata colour must apply beside the built-in one; got {drawn}"
@@ -230,7 +239,8 @@ class TestACallersOwnColormapKeepsItsExtremes:
         """When both name the same extreme, the keyword is the later statement."""
         built = colormaps["viridis"].with_extremes(over="#00ff00")
         with Map(globe=False) as canvas:
-            artist = canvas.field(WIDE, cmap=built, vmin=2.0, vmax=6.0, over=OVER)
+            canvas.field(WIDE, cmap=built, vmin=2.0, vmax=6.0, over=OVER)
+            artist = canvas.artist()
             drawn = tuple(artist.to_rgba(9.0))
         assert drawn == to_rgba(OVER), (
             f"the keyword must override the colormap's own over colour; got {drawn}"
