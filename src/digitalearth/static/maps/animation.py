@@ -1,14 +1,33 @@
 """AnimationMixin — animate a stack of rasters and rotate an orthographic globe.
 
-Drives per-frame redraws on the shared axes as a matplotlib ``FuncAnimation``, with one shared colour
-treatment so colours do not flicker between frames: a scalar field gets one ``vmin``/``vmax`` (and an
-optional single static colorbar), an RGB/HSV composite gets one frozen per-channel contrast stretch.
+Drives the frames on the shared axes as a matplotlib ``FuncAnimation``, with one shared colour treatment so
+colours do not flicker between frames: a scalar field gets one ``vmin``/``vmax`` (and an optional single
+static colorbar), an RGB/HSV composite gets one frozen per-channel contrast stretch.
+
+**What a frame costs is decided here (ST-9).** The first frame draws the scene; every frame after it gives the
+artist that frame drew the next frame's values — ``AxesImage.set_data``, ``QuadMesh.set_array`` — and leaves
+the decoration, the projection frame, the colorbar and the view exactly as they are. Clearing the axes per
+frame threw all of that away and rebuilt it, which is both the per-frame cost and the reason blitting was off:
+blitting repaints only what a frame hands back and needs the rest of the picture to stand still. Not every
+frame can be updated that way, so :class:`FrameUpdate` says which cannot and why, in words the refusal,
+the log line and the fallback all share.
 """
 
 import logging
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
+import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
@@ -33,7 +52,7 @@ from digitalearth.base.stretch import (
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP
+from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP, _field_source
 
 logger = logging.getLogger(__name__)
 
@@ -198,30 +217,325 @@ def _animated_band(opts: dict) -> int:
     return band
 
 
+class FrameUpdate:
+    """How an animation draws the frames after the first — ST-9's per-frame strategy, as an object.
+
+    One of these is built per :meth:`AnimationMixin.animate` call and answers three questions that have to
+    agree with each other:
+
+    - **Can one artist be updated?** :attr:`in_place`, and when it cannot, :attr:`blocker` — the reason as a
+      sentence, because every reader of it needs the words: ``update="in_place"`` refuses with them,
+      ``blit=True`` refuses with them, and the default ``update="auto"`` logs them as why it is redrawing.
+      "Unsupported" would have been none of the three.
+    - **May this call have what it asked for?** :meth:`settle`, which refuses a ``blit``/``update`` that
+      cannot be honoured and otherwise reports the strategy the frame loop should run.
+    - **What happens on frame i?** :meth:`apply`, which gives the kept artist that frame's values.
+
+    Holding the three on one object is the point: a refusal that said one thing while the frame loop quietly
+    did another is exactly how an animation comes out wrong with nothing to notice.
+
+    Attributes:
+        scene: The map being animated, read for the display CRS, the canvas and the strict flag.
+        frames: The animation's frames, indexed by :meth:`apply`.
+        kind: The renderer the frames are drawn with.
+        mode: The caller's ``update``, one of :attr:`MODES`.
+        titles: The per-frame titles, or ``None``.
+        blocker: Why the in-place path is unavailable, or ``None`` when it is available.
+        band: The 1-based band the frames draw; :data:`~digitalearth.base.spec.DEFAULT_BAND` and unread
+            when :attr:`blocker` says no frame will be updated in place.
+
+    Examples:
+        - An image field is the case the capability is for, so nothing blocks it:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.maps.animation import FrameUpdate
+            >>> scene = Map(crs=4326)
+            >>> FrameUpdate(scene, [], {}, kind="imshow").in_place
+            True
+
+            ```
+        - A kind with no array to refill says why, in the words the refusal and the log line share:
+            ```python
+            >>> FrameUpdate(scene, [], {}, kind="contourf").blocker
+            "kind='contourf' draws a contour set, which is cut from the values rather than handed new ones"
+
+            ```
+        - So does an option whose value belongs to the frame being drawn:
+            ```python
+            >>> FrameUpdate(scene, [], {"scheme": "quantiles"}, kind="imshow").blocker
+            "scheme='quantiles' is derived from the frame being drawn, which a kept artist cannot follow"
+            >>> scene.close()
+
+            ```
+    """
+
+    #: How each animation ``kind`` hands the next frame's values to the artist it already drew — the update
+    #: that makes clearing the axes unnecessary, as ``{kind: artist setter}``. ``field``/``imshow`` draw an
+    #: ``AxesImage``, whose ``set_data`` swaps the array; ``pcolormesh``/``block`` draw a ``QuadMesh``, whose
+    #: ``set_array`` swaps the cell values. A kind absent from here draws something no setter can refill and
+    #: is redrawn per frame instead (see :attr:`UNUPDATABLE`).
+    SETTERS = {
+        "field": "set_data",
+        "imshow": "set_data",
+        "pcolormesh": "set_array",
+        "block": "set_array",
+    }
+
+    #: Why each remaining :data:`_ANIMATION_KINDS` member cannot be updated in place. Said per kind rather
+    #: than as one "unsupported", because the two reasons are different facts a caller can act on: a contour
+    #: set has no array to refill, while a composite's pixels are a frozen three-channel stretch and so are
+    #: not the band values a frame carries at all.
+    UNUPDATABLE = {
+        "contour": "a contour set, which is cut from the values rather than handed new ones",
+        "contourf": "a contour set, which is cut from the values rather than handed new ones",
+        "rgb_composite": "a frozen three-channel stretch rather than a band's values",
+        "hsv_composite": "a frozen three-channel stretch rather than a band's values",
+    }
+
+    #: Render options derived from *the frame being drawn*, which an artist kept across frames cannot
+    #: follow: ``scheme`` cuts its class edges from that frame's own values, and ``cyclic`` adds a column,
+    #: so the array stops matching the grid the artist was built on. Either sends the animation down the
+    #: redrawing path.
+    PER_FRAME_OPTS = ("scheme", "cyclic")
+
+    #: The accepted spellings of :meth:`AnimationMixin.animate`'s ``update``: take the cheapest path that is
+    #: correct for the call (``"auto"``), insist on the in-place one (``"in_place"``, which refuses rather
+    #: than falls back), or always clear and rebuild (``"redraw"``, what every animation did before ST-9).
+    MODES = ("auto", "in_place", "redraw")
+
+    def __init__(
+        self,
+        scene: Any,
+        frames: Sequence[Any],
+        opts: Mapping[str, Any],
+        *,
+        kind: str,
+        mode: str = "auto",
+        titles: Optional[Sequence[str]] = None,
+    ):
+        """Resolve the strategy from what the call asks for and what the renderer can do.
+
+        Args:
+            scene: The map being animated.
+            frames: The animation's frames.
+            opts: The render options every frame is drawn with; read for the band and for the options that
+                block the in-place path.
+            kind: The renderer the frames are drawn with.
+            mode: The caller's ``update``, one of :attr:`MODES`.
+            titles: The per-frame titles, or ``None``.
+
+        Raises:
+            ValueError: when ``mode`` is not one of :attr:`MODES`, or when ``opts`` names a band that is not
+                a whole number of 1 or more (from :func:`_animated_band`, so the refusal is the same one a
+                still makes).
+        """
+        if mode not in self.MODES:
+            raise ValueError(
+                f"unknown update mode {mode!r}; choose one of {self.MODES}"
+            )
+        self.scene = scene
+        self.frames = frames
+        self.kind = kind
+        self.mode = mode
+        self.titles = titles
+        blocker = self._blocked_by(kind, opts)
+        if blocker is None and mode == "redraw":
+            blocker = "update='redraw' asks for the axes to be cleared and every layer rebuilt"
+        self.blocker: Optional[str] = blocker
+        # Read only on the in-place path, so a blocked strategy leaves it at the default rather than
+        # validating a band no frame of it will use: a composite names `bands`, not `band`, and a redrawn
+        # frame has its band checked where every still checks it (`_prime_animation`).
+        self.band: int = DEFAULT_BAND if blocker else _animated_band(dict(opts))
+
+    @classmethod
+    def _blocked_by(cls, kind: str, opts: Mapping[str, Any]) -> Optional[str]:
+        """Return why ``kind`` drawn with ``opts`` cannot update one artist, or ``None`` when it can.
+
+        Args:
+            kind: The renderer the frames are drawn with.
+            opts: The render options every frame is drawn with.
+
+        Returns:
+            A sentence naming the blocker, or ``None``.
+        """
+        if kind not in cls.SETTERS:
+            drawn = cls.UNUPDATABLE.get(kind, "no artist whose values can be replaced")
+            return f"kind={kind!r} draws {drawn}"
+        for name in cls.PER_FRAME_OPTS:
+            if opts.get(name):
+                return (
+                    f"{name}={opts[name]!r} is derived from the frame being drawn, which a kept artist "
+                    "cannot follow"
+                )
+        return None
+
+    @property
+    def in_place(self) -> bool:
+        """Whether the frames after the first update one artist instead of clearing the axes.
+
+        Returns:
+            ``True`` when nothing blocks the in-place path.
+        """
+        return self.blocker is None
+
+    def settle(self, *, blit: bool) -> Optional["FrameUpdate"]:
+        """Refuse what this call cannot have, and report the strategy its frame loop should run.
+
+        Args:
+            blit: Whether the caller asked for blitting.
+
+        Returns:
+            ``self`` when the frames update in place, or ``None`` when every frame must be redrawn — which
+            is what :meth:`AnimationMixin._animate_frames` takes as "clear and rebuild each time".
+
+        Raises:
+            ValueError: when ``blit=True`` or ``update="in_place"`` was asked for and this animation cannot
+                be drawn that way, with :attr:`blocker` as the reason; and when ``blit=True`` is combined
+                with per-frame ``titles``, which blitting cannot repaint.
+        """
+        if blit and self.blocker is not None:
+            raise ValueError(
+                f"blit=True needs frames that update one artist in place, and this animation cannot: "
+                f"{self.blocker}. Blitting leaves everything the frame function does not return standing, "
+                "so a rebuilt frame would stack on the one before it"
+            )
+        if blit and self.titles is not None:
+            raise ValueError(
+                "blit=True cannot be combined with titles=: matplotlib repaints only the axes box when it "
+                "blits, and the title is drawn above it, so every frame would show the first frame's "
+                "title. Drop one of the two"
+            )
+        if self.blocker is None:
+            return self
+        if self.mode == "in_place":
+            raise ValueError(
+                f"update='in_place' is not available for this animation: {self.blocker}. Leave update at "
+                "'auto' to redraw the frames instead"
+            )
+        logger.info(
+            "animate: clearing the axes and redrawing every frame — %s", self.blocker
+        )
+        return None
+
+    def apply(self, index: int, artist: Any) -> bool:
+        """Give ``artist`` frame ``index``'s values instead of drawing that frame's layer again.
+
+        The values are read through the field drawer's own reader
+        (:func:`~digitalearth.static.maps.raster._field_source`), not through a second pipeline of this
+        class's own: a frame must arrive decimated, warped and masked exactly as the drawer would have
+        delivered it, or the kept artist would show a different picture from the one a redraw puts up.
+
+        The title goes with it. A title is the one piece of per-frame *decoration*, so an updated frame has
+        to restate it just as a redrawn one does — leaving it to the first frame is how an in-place
+        animation came out with every frame titled "Jan".
+
+        Args:
+            index: Which frame to show.
+            artist: The artist the first frame drew — an ``AxesImage`` or a ``QuadMesh``, by :attr:`kind`.
+
+        Returns:
+            ``True`` when the artist now holds this frame, ``False`` when it cannot and the caller must
+            clear and redraw instead — a frame whose grid differs from the one the artist was built on,
+            which ``set_data`` would accept and then draw at the wrong resolution.
+
+        Raises:
+            OffLimbError: only under the scene's ``strict=True``, from
+                :meth:`~digitalearth.static.maps.base.GeoLayerBase._skipped_off_limb` — the same refusal a
+                strict still makes. Otherwise a frame the display CRS cannot show hides the artist for that
+                frame, because "draws nothing" has to mean nothing *is* drawn rather than the previous
+                frame staying up.
+        """
+        method = _KIND_METHODS.get(self.kind, (self.kind, {}))[0]
+        try:
+            src, _ = _field_source(self.scene, self.frames[index], self.band)
+        except OffLimbError:
+            artist.set_visible(False)
+            self.scene._skipped_off_limb(f"Map.{method}()")  # raises under strict
+            return True
+        values = src.z.values
+        held = artist.get_array()
+        if held is not None and np.shape(held) != np.shape(values):
+            logger.warning(
+                "animation: frame %s holds a %s grid where the first frame held %s, so the axes is cleared "
+                "and every layer redrawn from here on",
+                index,
+                np.shape(values),
+                np.shape(held),
+            )
+            return False
+        getattr(artist, self.SETTERS[self.kind])(values)
+        artist.set_visible(True)
+        if self.titles is not None:
+            self.scene.set_title(self.titles[index])
+        return True
+
+
 class AnimationMixin(_MixinBase):
     """Stack animation and globe rotation for :class:`~digitalearth.static.map.Map`."""
 
     def _animate_frames(
-        self, draw_one: Any, n_frames: int, fps: float
+        self,
+        draw_one: Callable[[int], Any],
+        n_frames: int,
+        fps: float,
+        *,
+        blit: bool = False,
+        updates: Optional[FrameUpdate] = None,
     ) -> FuncAnimation:
         """Drive ``n_frames`` of ``draw_one(i)`` on this Map's axes as a :class:`FuncAnimation`.
 
-        Each frame clears the axes and resets the per-frame layer/frame state, calls ``draw_one(i)`` to draw
-        frame ``i``, then (on a globe) sets the full-domain extent and applies the projection frame. No
-        colorbar is added per frame — pass a fixed ``vmin``/``vmax`` to keep colours stable instead.
-        """
+        The first frame clears the axes, resets the per-frame layer/frame state, calls ``draw_one(i)`` to
+        draw frame ``i``, then (on a globe) sets the full-domain extent and applies the projection frame.
 
-        def _f(i: int) -> None:
+        Every frame after it does the same **unless** an ``updates`` strategy was given, in which case the
+        artist the first frame drew is given the new frame's values and nothing else is touched (ST-9). That
+        is what keeps the decoration, the projection frame and the view from being thrown away and rebuilt
+        sixty times, and what lets the frame function hand matplotlib the one artist it changed — without
+        which ``blit=True`` has nothing to blit over.
+
+        No colorbar is added per frame — pass a fixed ``vmin``/``vmax`` to keep colours stable instead.
+
+        Args:
+            draw_one: Draws frame ``i`` from scratch, returning the data artist it drew (or ``None``).
+            n_frames: How many frames the animation runs for.
+            fps: Frames per second, as the inter-frame interval.
+            blit: Passed to :class:`FuncAnimation`. Only ever ``True`` alongside ``updates``;
+                :meth:`FrameUpdate.settle` refuses the combination that would blit a rebuilt frame.
+            updates: The :class:`FrameUpdate` to run for the frames after the first, or ``None`` to redraw
+                every frame. A ``False`` from :meth:`FrameUpdate.apply` degrades the rest of the animation
+                to redrawing, rather than letting one odd frame fail the run.
+
+        Returns:
+            The :class:`FuncAnimation`, also held on ``self._animation``.
+        """
+        kept: List[Any] = []
+        strategy = {"updates": updates}
+
+        def _redraw(i: int) -> List[Any]:
             self.ax.clear()
             self._reset_layers()
             self._framed = False
-            draw_one(i)
+            drawn = draw_one(i)
             if self.globe:
                 self.set_global()
                 self._apply_frame()
+            return [] if drawn is None else [drawn]
+
+        def _f(i: int) -> List[Any]:
+            # `kept` empty means the first frame drew no data artist at all — an off-limb frame on a globe —
+            # so there is nothing to update and each frame draws itself.
+            running = strategy["updates"]
+            if running is not None and kept:
+                if running.apply(i, kept[0]):
+                    return list(kept)
+                strategy["updates"] = None
+            kept[:] = _redraw(i)
+            return list(kept)
 
         anim = FuncAnimation(
-            self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False
+            self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=blit
         )
         self._animation = anim  # keep a strong reference so it isn't garbage-collected before save (L3)
         self._animation_fps = float(
@@ -756,17 +1070,22 @@ class AnimationMixin(_MixinBase):
         ocean: bool,
         coastlines: bool,
         title: Optional[str] = None,
-    ) -> None:
+    ) -> Any:
         """Draw one animation frame: optional ocean disc, the field, optional coastlines, optional title.
 
         The per-frame body shared by :meth:`animate` and :meth:`rotate`. Ocean fill and coastlines are
         decoration: the ocean disc is drawn only on a globe, and a coastline failure (no network/data) is
         swallowed so the animation still renders.
+
+        Returns:
+            The data layer's mappable — the artist a later frame updates in place rather than drawing again,
+            and the one a blitted frame repaints. ``None`` for a frame the display CRS cannot show, which
+            draws nothing.
         """
         if ocean and self.globe:
             self.ocean()
         method, picked = _KIND_METHODS.get(kind, (kind, {}))
-        getattr(self, method)(data, **picked, **opts)
+        drawn = getattr(self, method)(data, **picked, **opts)
         if coastlines:
             try:
                 self.coastlines()
@@ -774,6 +1093,7 @@ class AnimationMixin(_MixinBase):
                 pass
         if title is not None:
             self.set_title(title)
+        return drawn
 
     def animate(
         self,
@@ -786,6 +1106,8 @@ class AnimationMixin(_MixinBase):
         coastlines: bool = False,
         colorbar: bool = False,
         cbar_label: Optional[str] = None,
+        update: str = "auto",
+        blit: bool = False,
         **kwargs: Any,
     ) -> FuncAnimation:
         """Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.
@@ -805,6 +1127,16 @@ class AnimationMixin(_MixinBase):
         animation lands on the same scale as the equivalent still. On a globe that means the scale spans
         what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.
 
+        **Only what changes is redrawn (ST-9).** The first frame draws the whole scene; every frame after it
+        gives the artist that frame drew the new frame's values (``AxesImage.set_data`` /
+        ``QuadMesh.set_array``) and touches nothing else, so the ocean disc, the coastlines, the projection
+        frame, the colorbar and the view survive instead of being thrown away and rebuilt per frame. That is
+        a strategy, not a different picture: the frames are pixel-identical to the cleared-and-redrawn ones,
+        which ``tests/static/test_animate_in_place.py`` compares buffer by buffer. ``update=`` chooses the
+        path, and a ``kind`` or an option that cannot be updated this way (a contour set, a composite, a
+        per-frame ``scheme=``) is named rather than animated wrongly. A frame the display CRS cannot show
+        hides the artist for that frame, so an off-limb frame still draws nothing.
+
         Args:
             stack: An ordered collection of pyramids ``Dataset`` frames (e.g. a list, or a
                 ``DatasetCollection`` datacube) — one raster per animation frame.
@@ -820,6 +1152,15 @@ class AnimationMixin(_MixinBase):
             colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared
                 colour scale. Not available on a composite ``kind`` — an RGB image has no scalar mappable.
             cbar_label: Optional label for the colorbar.
+            update: How the frames after the first are drawn — one of :attr:`FrameUpdate.MODES`. ``"auto"``
+                (default) updates the artist the first frame drew when the ``kind`` and the options allow
+                it and clears the axes when they do not, logging which. ``"in_place"`` insists, and refuses
+                the call naming the blocker (:attr:`FrameUpdate.blocker`) rather than falling back.
+                ``"redraw"`` always clears, which is what every animation did before ST-9.
+            blit: When True, build the animation with matplotlib's blitting, which repaints only the artist
+                each frame returns. It requires the in-place path and is refused without it, and it is
+                refused alongside ``titles`` (see the note below). It changes **playback only**: saving a
+                clip draws every frame in full whatever this says.
             **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,
                 ``vmax`` and the rest of its styling — the shared colour scale is measured from that same
                 ``band`` (1 by default); a composite takes ``bands``, ``mask_nodata`` and ``limits``.
@@ -831,8 +1172,16 @@ class AnimationMixin(_MixinBase):
             ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``kind`` is not a known renderer, ``stack`` is empty, ``titles`` is given with a
-                mismatched length, or ``colorbar=True`` is combined with a composite ``kind``.
+            ValueError: if ``kind`` is not a known renderer, ``update`` is not one of
+                :attr:`FrameUpdate.MODES`, ``stack`` is empty, ``titles`` is given with a mismatched length,
+                ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` /
+                ``update="in_place"`` is asked for where the frames cannot update one artist.
+
+        Note:
+            ``blit=True`` repaints only what the frame function returns, which is the data artist and
+            nothing else. A per-frame **title** is therefore refused: matplotlib blits the axes bounding box
+            and the title is drawn above it, so it would hold the first frame's text. A colorbar is fine —
+            an animation's colorbar is static by construction, drawn once on its own axes.
 
         Examples:
             - Animate a two-frame scalar stack; the animation is lazy, so no frame is drawn yet:
@@ -885,6 +1234,35 @@ class AnimationMixin(_MixinBase):
                 ValueError: colorbar=True is not supported for a 'rgb_composite' animation: ...
 
                 ```
+            - A field animation can be blitted, because its frames update one image:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> fields = [Dataset.from_array(arr=np.full((60, 120), v, "float32"), geo_ref=geo)
+                ...           for v in (1.0, 2.0)]
+                >>> scene = Map(crs=4326)
+                >>> len(list(scene.animate(fields, fps=2, blit=True).new_frame_seq()))
+                2
+                >>> scene.close()
+
+                ```
+            - A contour animation cuts its lines from each frame, so blitting it is refused by name:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> refused = Map(crs=4326)
+                >>> refused.animate(fields, kind="contourf", blit=True)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: blit=True needs frames that update one artist in place, ...
+                >>> refused.close()
+
+                ```
 
         See Also:
             rotate: Spin one field on an orthographic globe instead of stepping through a stack.
@@ -903,17 +1281,22 @@ class AnimationMixin(_MixinBase):
             raise ValueError(
                 f"titles length ({len(titles)}) must match the stack length ({len(frames)})"
             )
+        updates = FrameUpdate(
+            self, frames, kwargs, kind=kind, mode=update, titles=titles
+        ).settle(blit=blit)
         self._prime_animation(
             frames, kwargs, kind=kind, colorbar=colorbar, cbar_label=cbar_label
         )
 
-        def draw_one(i: int) -> None:
+        def draw_one(i: int) -> Any:
             title = titles[i] if titles is not None else None
-            self._draw_animation_frame(
+            return self._draw_animation_frame(
                 frames[i], kind, kwargs, ocean=ocean, coastlines=coastlines, title=title
             )
 
-        return self._animate_frames(draw_one, len(frames), fps)
+        return self._animate_frames(
+            draw_one, len(frames), fps, blit=blit, updates=updates
+        )
 
     def rotate(
         self,
@@ -928,6 +1311,7 @@ class AnimationMixin(_MixinBase):
         coastlines: bool = False,
         colorbar: bool = False,
         cbar_label: Optional[str] = None,
+        blit: bool = False,
         **kwargs,
     ) -> FuncAnimation:
         """Spin an orthographic globe over a single field by sweeping the centre longitude.
@@ -961,6 +1345,11 @@ class AnimationMixin(_MixinBase):
             colorbar: When True, add one static colorbar (drawn once) using the shared colour scale. Not
                 available on a composite ``kind``.
             cbar_label: Optional label for the colorbar.
+            blit: Accepted only as ``False``. A rotation has no artist to blit over: it warps the data into
+                a new orthographic view every frame, so the image, its extent and the globe's limb all
+                change together and the axes is cleared and rebuilt each time. Declared rather than left to
+                ``**kwargs`` so ``blit=True`` is refused here instead of reaching the renderer as unknown
+                styling. :meth:`animate` is the method that blits.
             **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,
                 ``vmax`` and the rest of its styling — the shared colour scale is measured from that same
                 ``band`` (1 by default); a composite takes ``bands``, ``mask_nodata`` and ``limits``.
@@ -972,8 +1361,8 @@ class AnimationMixin(_MixinBase):
             ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``n_frames`` is less than 1, ``kind`` is not a known renderer, or
-                ``colorbar=True`` is combined with a composite ``kind``.
+            ValueError: if ``n_frames`` is less than 1, ``kind`` is not a known renderer,
+                ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` is asked for.
 
         Examples:
             - Spin one field over four frames; the map is forced into globe mode:
@@ -1015,6 +1404,13 @@ class AnimationMixin(_MixinBase):
         """
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
+        if blit:
+            raise ValueError(
+                "blit=True is not available for rotate(): every frame reprojects the data into a new "
+                "orthographic view, so the image, its extent and the globe's limb all change together and "
+                "no artist survives for blitting to leave standing. Use Map.animate(..., blit=True) for a "
+                "stack drawn in one projection"
+            )
         if kind not in _ANIMATION_KINDS:
             raise ValueError(
                 f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}"
@@ -1034,9 +1430,9 @@ class AnimationMixin(_MixinBase):
         )
         self.globe = True
 
-        def draw_one(i: int) -> None:
+        def draw_one(i: int) -> Any:
             self.crs = views[i]
-            self._draw_animation_frame(
+            return self._draw_animation_frame(
                 dataset, kind, kwargs, ocean=ocean, coastlines=coastlines
             )
 
