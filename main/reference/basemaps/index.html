@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/main/reference/basemaps/">
       
       
-        <link rel="prev" href="../web_map/">
+        <link rel="prev" href="../three_d/">
       
       
         <link rel="next" href="../textured_globe/">
@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3204,6 +3204,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../static_scene/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes & multi-panel figures (matplotlib)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../web_map/" class="md-nav__link">
         
   
@@ -3212,6 +3240,34 @@
     
   
     Web maps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../three_d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3-D scenes (PyVista)
   
 
     
@@ -3338,6 +3394,34 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ogc-services-wms-and-wmts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OGC services: WMS and WMTS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="OGC services: WMS and WMTS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-figure-records-of-an-ogc-basemap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a figure records of an OGC basemap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3498,6 +3582,34 @@
     
   
     TexturedGlobe (3-D globe)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../headless_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless 3-D rendering
   
 
     
@@ -3820,6 +3932,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ogc-services-wms-and-wmts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OGC services: WMS and WMTS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="OGC services: WMS and WMTS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-figure-records-of-an-ogc-basemap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a figure records of an OGC basemap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#adding-a-preset" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4036,6 +4176,54 @@ rather than a bug — but it has consequences:</p>
   image. It also silences the one cleopatra log record that would carry the URL.</li>
 <li><strong>Do not run tile fetches at <code>DEBUG</code> into shared logs.</strong></li>
 </ul>
+<h2 id="ogc-services-wms-and-wmts"><a class="toclink" href="#ogc-services-wms-and-wmts">OGC services: WMS and WMTS</a><a class="headerlink" href="#ogc-services-wms-and-wmts" title="Permanent link">#</a></h2>
+<p>The static tier tiles an OGC service through cleopatra's provider objects, passed to <code>basemap()</code> as they are.
+<code>WMSProvider</code> requests one <code>GetMap</code> per Web Mercator tile; <code>WMTSProvider</code> requests <code>GetTile</code> on the service's
+tile matrix set, by key-value parameters or by filling a RESTful URL template.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.basemap.ogc</span><span class="w"> </span><span class="kn">import</span> <span class="n">WMSProvider</span><span class="p">,</span> <span class="n">WMTSProvider</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">m</span><span class="o">.</span><span class="n">set_domain</span><span class="p">((</span><span class="mf">3.3</span><span class="p">,</span> <span class="mf">50.7</span><span class="p">,</span> <span class="mf">7.3</span><span class="p">,</span> <span class="mf">53.6</span><span class="p">))</span>       <span class="c1"># tiles cover what the axes shows</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/geoserver/wms&quot;</span><span class="p">,</span> <span class="s2">&quot;topp:states&quot;</span><span class="p">))</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMTSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/wmts/</span><span class="si">{TileMatrix}</span><span class="s2">/</span><span class="si">{TileRow}</span><span class="s2">/</span><span class="si">{TileCol}</span><span class="s2">.png&quot;</span><span class="p">,</span> <span class="s2">&quot;basemap&quot;</span><span class="p">))</span>
+</code></pre></div>
+<p>A credential the service needs goes in the provider's <code>extra_params</code> — <strong>not</strong> in the service URL's query
+string, which a figure does not record (see below).</p>
+<h3 id="what-a-figure-records-of-an-ogc-basemap"><a class="toclink" href="#what-a-figure-records-of-an-ogc-basemap">What a figure records of an OGC basemap</a><a class="headerlink" href="#what-a-figure-records-of-an-ogc-basemap" title="Permanent link">#</a></h3>
+<p>The provider <strong>object</strong> is held beside the layer — it is an engine object, and it carries whatever is in
+<code>extra_params</code>. What the figure's description carries is the provider's own fields, every one of them except
+<code>extra_params</code>, and <code>url</code> reduced to its scheme, host and path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">m</span><span class="o">.</span><span class="n">figure_spec</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;bm&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">symbology</span><span class="o">.</span><span class="n">props</span><span class="p">[</span><span class="s2">&quot;source&quot;</span><span class="p">]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># {&#39;ogc&#39;: &#39;wms&#39;, &#39;url&#39;: &#39;https://example.org/geoserver/wms&#39;, &#39;layers&#39;: &#39;topp:states&#39;,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">#  &#39;styles&#39;: &#39;&#39;, &#39;version&#39;: &#39;1.3.0&#39;, &#39;image_format&#39;: &#39;image/png&#39;, &#39;transparent&#39;: True,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">#  &#39;tile_size&#39;: 256, &#39;attribution&#39;: &#39;&#39;}</span>
+</code></pre></div>
+<p>That is enough to rebuild the provider, so a figure saved to JSON and drawn again on this tier — through
+<code>Map.from_figure</code>, or <code>to_backend(spec, "matplotlib")</code> — asks the <strong>same service</strong> for the same layer. Before
+this was recorded, such a figure named no service at all and quietly drew the shared default basemap in its
+place.</p>
+<p>Replaying it on <em>another</em> tier is a separate matter and does not work today: <code>WebMap.from_figure</code> refuses a
+static <code>basemap</code> layer outright — <code>layer &lt;id&gt; (basemap) cannot be drawn by the web tier: its symbology records
+none of ['opacity']</code> — and it does so whether the source was an OGC provider or a plain provider name. That is
+the cross-tier basemap gap, not an OGC one.</p>
+<p><code>extra_params</code> deliberately does not travel, for the same reason an <code>xyzservices</code> <code>apikey</code> does not: a figure
+is written to JSON and read back, and a token written into one leaks with it. So a replayed figure asks the
+service <strong>without</strong> a credential. If the service needs one, it answers with its own error — which is the
+honest outcome; pass the provider again, with its <code>extra_params</code>, to draw it authenticated.</p>
+<p><strong>A query string on the service URL does not travel either, whatever it holds.</strong> <code>?token=</code>, <code>?api_key=</code> and
+<code>?SERVICE_KEY=</code> are ordinary ways for an OGC service to authenticate, and nothing in this tier can tell such a
+parameter from a harmless one — so the whole query is dropped and only the base URL is recorded. The drop is
+warned about by name, because the replayed figure will not carry it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/geoserver/wms?token=s3cret&quot;</span><span class="p">,</span> <span class="s2">&quot;topp:states&quot;</span><span class="p">))</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># UserWarning: the figure records this OGC service as &#39;https://example.org/geoserver/wms&#39;: its query string</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># is dropped because a parameter there may be a credential, and a figure is written to JSON and read back.</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Dropped parameters: [&#39;token&#39;]. Pass what the service needs through extra_params=, which is held beside the</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># layer and never recorded.</span>
+</code></pre></div>
+<p>So the two paths a credential can take into a provider — <code>extra_params</code> and the URL's query — both stay on
+the object, and every field a figure records names the service. This is the same value <code>_quiet_tile_urls</code>
+keeps out of the logs for keyed XYZ tiles, and it is now treated as a secret in both places.</p>
 <h2 id="adding-a-preset"><a class="toclink" href="#adding-a-preset">Adding a preset</a><a class="headerlink" href="#adding-a-preset" title="Permanent link">#</a></h2>
 <p>Presets live in <a class="autorefs autorefs-internal" href="#digitalearth.base.basemaps"><code>digitalearth.base.basemaps</code></a> — engine-neutral definitions (URL
 template, credential variable, attribution, coverage) that every backend resolves by name. A new one is a
@@ -6684,7 +6872,7 @@ for and the keywords it takes, since the factory behind it is an implementation 
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../web_map/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Web maps">
+          <a href="../three_d/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 3-D scenes (PyVista)">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -6694,7 +6882,7 @@ for and the keywords it takes, since the factory behind it is an implementation 
                 Previous
               </span>
               <div class="md-ellipsis">
-                Web maps
+                3-D scenes (PyVista)
               </div>
             </div>
           </a>
