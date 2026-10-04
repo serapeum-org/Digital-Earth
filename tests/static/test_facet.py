@@ -13,7 +13,7 @@ import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.static import Map, facet, projections
+from digitalearth.static import Map, facet, figure, projections
 
 #: Four 4 x 4 frames whose values climb frame by frame, so a per-panel scale would differ on every panel.
 FRAMES = [np.arange(16, dtype="float64").reshape(4, 4) + 10.0 * i for i in range(4)]
@@ -492,6 +492,39 @@ class TestTheMeasurePass:
         facet(frames, crs=4326)
         expected = 2 * len(frames)  # one warp each to measure, then one each to draw
         assert len(warped) == expected, len(warped)
+
+    def test_the_stack_is_reduced_once_for_the_scale_and_the_bar(self, monkeypatch):
+        """The measurement the shared scale is built from is the one the colorbar decision reads.
+
+        Args:
+            monkeypatch: pytest's monkeypatch fixture.
+
+        Test scenario:
+            - ``_shared_style`` reduced the warped frames with ``measure_clim`` and ``facet`` then called
+              it a second time to decide whether a bar could be keyed — a full nanmin/nanmax pass over
+              every frame thrown away, in the function whose point is to read each frame once.
+            - One reduction now answers both, so a stack of four frames is reduced once, and the limits it
+              produced are still the stack's own (computed here from the frames, not read back through
+              ``facet``).
+        """
+        reductions: list = []
+        original = figure.measure_clim
+
+        def counting(values):
+            measured = original(values)
+            reductions.append(measured)
+            return measured
+
+        monkeypatch.setattr(figure, "measure_clim", counting)
+        _, maps = facet([_dataset(arr) for arr in FRAMES], crs=4326)
+        expected = (
+            float(min(a.min() for a in FRAMES)),
+            float(max(a.max() for a in FRAMES)),
+        )
+        assert len(reductions) == 1, reductions
+        assert reductions[0] == expected, reductions[0]
+        clims = {m.layers[-1][1].get_clim() for m in maps}
+        assert clims == {expected}, clims
 
 
 class TestWhatTheArgumentsTake:

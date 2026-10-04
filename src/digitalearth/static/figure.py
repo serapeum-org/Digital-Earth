@@ -376,7 +376,10 @@ def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _shared_style(
-    values: Sequence[np.ndarray], style: Dict[str, Any], kind: str
+    values: Sequence[np.ndarray],
+    style: Dict[str, Any],
+    kind: str,
+    measured: Optional[Tuple[float, float]],
 ) -> Dict[str, Any]:
     """Resolve the colour scale every panel shares, once, over the whole stack.
 
@@ -384,6 +387,10 @@ def _shared_style(
         values: Every panel's values, from :func:`_stack_values`.
         style: The caller's styling keywords. Not mutated.
         kind: The render, one of :data:`_FACET_KINDS`.
+        measured: What the stack measures — :func:`~digitalearth.base.clim.measure_clim` over `values`, or
+            ``None`` when no frame holds a finite value. Passed in rather than measured here because the
+            caller reads the same answer to decide whether a colorbar can be keyed, and reducing every
+            frame twice is the one thing this function exists to avoid.
 
     Returns:
         The keywords each panel is drawn with: a named ``scheme`` replaced by the class edges it cuts over
@@ -417,7 +424,7 @@ def _shared_style(
                 pooled, scheme=scheme, k=shared.pop("k", _DEFAULT_CLASSES)
             )
             shared["scheme"] = [float(edge) for edge in classes.breaks]
-    low, high = frozen_scale(measure_clim(values)).as_limits()
+    low, high = frozen_scale(measured).as_limits()
     shared.setdefault("vmin", low)
     shared.setdefault("vmax", high)
     if shared["vmin"] is None:
@@ -619,7 +626,9 @@ def facet(
     for empty in spare:
         empty.ax.set_visible(False)
     values = _stack_values(maps[0], frames, bands)
-    shared = _shared_style(values, style, kind)
+    # The one reduction of the stack: it fills the shared vmin/vmax below and decides the colorbar.
+    measured = measure_clim(values)
+    shared = _shared_style(values, style, kind, measured)
     method, fixed = _FACET_KINDS[kind]
     name = default_col if col is None else col
     if labels is None:
@@ -629,7 +638,7 @@ def facet(
         artist = getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
         drawn = artist if drawn is None else drawn
         panel.set_title(f"{name} = {label}")
-    if colorbar and drawn is not None and measure_clim(values) is None:
+    if colorbar and drawn is not None and measured is None:
         # The shared scale fell back to the (0, 1) a `Scale` uses for an unmeasurable domain, so a bar here
         # would label the figure 0-1 while no cell on it holds a value at all. The panels are legitimate —
         # an empty frame is a real datum — and `facet` has no `strict` to refuse under, so only the bar goes.
