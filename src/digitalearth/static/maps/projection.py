@@ -281,6 +281,27 @@ class _DegreeAxis:
         va: Vertical alignment of one.
         along_longitude: Whether this axis's own degree is the **longitude** of a label's anchor, which is
             true of a meridian (it runs along one longitude) and false of a parallel.
+
+    Examples:
+        - The two directions differ in how far they reach, which letters they use and where a label hangs
+          — everything :class:`_Graticule` would otherwise ask "is this a meridian?" to find out:
+            ```python
+            >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS
+            >>> (_MERIDIANS.limit, _MERIDIANS.positive, _MERIDIANS.negative, _MERIDIANS.va)
+            (180.0, 'E', 'W', 'bottom')
+            >>> (_PARALLELS.limit, _PARALLELS.positive, _PARALLELS.negative, _PARALLELS.ha)
+            (90.0, 'N', 'S', 'left')
+
+            ```
+        - So the same degree is read as a longitude on one and a latitude on the other:
+            ```python
+            >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS
+            >>> [line.text for line in _MERIDIANS.lines_within(45.0, -50.0, 50.0)]
+            ['45°W', '0°', '45°E']
+            >>> [line.text for line in _PARALLELS.lines_within(45.0, -50.0, 50.0)]
+            ['45°S', '0°', '45°N']
+
+            ```
     """
 
     limit: float
@@ -472,14 +493,47 @@ class _Graticule:
 
     Two frames, two ways of putting the one grid on the axes:
 
-    - a **globe** is clipped at its limb, and cleopatra's ``apply_projection_frame`` draws its grid after
+    - a **globe** is clipped at its limb, and cleopatra's `apply_projection_frame` draws its grid after
       every data layer — so :meth:`draw` hands the lines over and leaves the axes alone;
-    - a **flat** map has no such pass, so :meth:`draw` puts the grid on now, as one ``LineCollection``
+    - a **flat** map has no such pass, so :meth:`draw` puts the grid on now, as one `LineCollection`
       plus one :class:`~matplotlib.text.Text` per labelled line.
 
     Until #221 the flat map had no pass at all: the lines were computed, stored, and nothing ever read
-    them, so ``Map(crs=4326).graticule()`` — the default frame — registered a layer and drew nothing while
+    them, so `Map(crs=4326).graticule()` — the default frame — registered a layer and drew nothing while
     the figure described the layer as drawn.
+
+    Examples:
+        - The grid a framed flat map asks for: the lines span the world, and the labels are only the
+          degrees the *view* holds:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.maps.projection import _Graticule
+            >>> m = Map(crs=4326)
+            >>> _ = m.set_bounds([-35.0, -5.0, 35.0, 65.0])
+            >>> grid = _Graticule(m, {"lon_step": 30.0, "lat_step": 30.0, "labels": True})
+            >>> len(grid.lines), tuple(round(v, 1) for v in grid.window())
+            (18, (-35.0, -5.0, 35.0, 65.0))
+            >>> [label.line.text for label in grid.labels()]
+            ['30°W', '0°', '30°E', '0°', '30°N', '60°N']
+            >>> m.close()
+
+            ```
+        - On a globe the same spacing gives the same lines, and the window falls back to the span the
+          lines themselves cover, because nothing has framed the axes:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.maps.projection import _Graticule
+            >>> globe = Map(crs=4326, globe=True)
+            >>> grid = _Graticule(globe, {"lon_step": 30.0, "lat_step": 30.0, "labels": False})
+            >>> len(grid.lines), grid.window()
+            (18, (-180.0, -89.5, 180.0, 89.5))
+            >>> globe.close()
+
+            ```
     """
 
     def __init__(self, scene: Any, props: Mapping[str, Any]) -> None:
@@ -1304,6 +1358,45 @@ class ProjectionMixin(_MixinBase):
                 >>> m.graticule(spacing=60.0, labels=False)
                 >>> len(m.ax.texts)
                 0
+                >>> m.close()
+
+                ```
+            - A globe draws the grid unlabelled, and **refuses** `labels=True` rather than dropping them
+              quietly — the default `labels=None` is what lets one line serve both frames:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> globe = Map(crs=4326, globe=True)
+                >>> globe.graticule(spacing=30.0)
+                >>> len(globe.ax.texts)
+                0
+                >>> globe.graticule(spacing=30.0, labels=True)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: graticule(labels=True) cannot place degree labels on a globe frame...
+                >>> globe.close()
+
+                ```
+            - A degree the frame cannot place is **named in a warning**, not silently missing: a polar
+              projection framed on a square puts most meridians' anchors outside the view:
+                ```python
+                >>> import warnings
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=3413)
+                >>> _ = m.set_bounds([-3.0e6, -3.0e6, 3.0e6, 3.0e6])
+                >>> with warnings.catch_warnings(record=True) as caught:
+                ...     warnings.simplefilter("always")
+                ...     m.graticule(spacing=30.0)
+                >>> message = str(caught[0].message)
+                >>> message.split(":")[0]
+                'graticule() could not place 8 degree label(s)'
+                >>> "150°W" in message, "120°E" in message
+                (True, True)
+                >>> len(m.ax.texts)
+                5
                 >>> m.close()
 
                 ```

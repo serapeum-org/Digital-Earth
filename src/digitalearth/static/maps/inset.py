@@ -353,17 +353,20 @@ class _InsetFrame:
 class InsetMixin(_MixinBase):
     """Locator-map capability for :class:`~digitalearth.static.map.Map`: an inset, and an extent marked on it.
 
-    Composed into ``Map`` beside the other capability mixins; the methods here call sibling methods
-    (``land``, ``coastlines``, ``set_global``, ``set_bounds``, ``add_layer``) through ``self``, so they only
-    run inside a composed ``Map``.
+    The fourth of the six capability mixins `Map` is composed from; the methods here call sibling methods
+    (`land`, `coastlines`, `set_global`, `set_bounds`, `add_layer`) through `self`, so they only run
+    inside a composed `Map`.
 
-    :meth:`inset` returns ``self`` like every other builder on the tier, and the locator it builds is read
+    :meth:`inset` returns `self` like every other builder on the tier, and the locator it builds is read
     back from :attr:`locator`. The alternative — handing the locator back directly — reads well for one call
     but breaks the chain every other method keeps, and `tests/test_mixin_contract.py` holds the tier to it.
+    :meth:`mark_extent` is the exception, and for the reason
+    :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is: the one patch it draws is
+    what a caller restyles afterwards, so handing it back is the point of the call.
     """
 
-    #: The locator :meth:`inset` built, or ``None`` before the first call. Set on the *main* map, so
-    #: ``m.inset().locator`` is the inset and ``m.inset()`` is still ``m``.
+    #: The locator :meth:`inset` built, or `None` before the first call. Set on the *main* map, so
+    #: `m.inset().locator` is the inset and `m.inset()` is still `m`.
     _locator: Optional["Map"] = None
 
     @property
@@ -456,9 +459,17 @@ class InsetMixin(_MixinBase):
                 ``linewidth``, ``linestyle``, ``facecolor``, ``zorder``, …).
 
         Returns:
-            The :class:`~matplotlib.patches.Polygon` drawn, or ``None`` when this map's CRS has no finite
+            The :class:`~matplotlib.patches.Polygon` drawn, or `None` when this map's CRS has no finite
             image of the extent at all — the skip is logged and the figure is left without a box rather
             than given a wrong one.
+
+            **An artist rather than `self`**, unlike the data builders and unlike :meth:`inset`: the box
+            is one patch a caller restyles afterwards, so handing it back is the point of the call. It is
+            registered as a layer all the same — `custom-1` by default — so
+            :meth:`~digitalearth.static.scene.Scene.set_visible`,
+            :meth:`~digitalearth.static.scene.Scene.get_layer` and
+            :meth:`~digitalearth.static.scene.Scene.remove_layer` reach it, and
+            :meth:`~digitalearth.static.scene.Scene.artist` hands back this same patch by that id.
 
         Raises:
             TypeError: when ``other`` is not a map (nothing to read an extent off).
@@ -511,37 +522,38 @@ class InsetMixin(_MixinBase):
         """Add a locator map: a small inset showing where this map's extent sits on a wider area.
 
         One call does three things — creates the inset axes inside this map's own axes, draws reference
-        geography into it, and marks this map's extent on it with :meth:`mark_extent`. The locator is
-        returned as an ordinary :class:`~digitalearth.static.map.Map`, so anything else this package draws
-        can go on it afterwards (a point for the site, a second box, a basemap).
+        geography into it, and marks this map's extent on it with :meth:`mark_extent`. The call itself
+        hands back **this** map, so it chains; the locator it built is an ordinary
+        :class:`~digitalearth.static.map.Map` read back from :attr:`locator`, and anything else this
+        package draws can then go on it (a point for the site, a second box, a basemap).
 
-        It is a method on ``Map`` rather than a figure-level helper because both halves of it are this
+        It is a method on `Map` rather than a figure-level helper because both halves of it are this
         map's own business: the inset axes is a *child* of this map's axes, so it moves and scales with it,
         and the extent being marked is this map's extent in this map's CRS. A figure-level function would
         have to be handed both anyway, and would have no way to place the inset inside one panel of a
         :func:`~digitalearth.static.figure.grid`.
 
-        .. warning::
+        Warning:
             **The locator shares this map's figure, so do not close it or context-manage it.**
-            :meth:`~digitalearth.static.scene.Scene.close` calls ``pyplot.close`` on whatever figure a
+            :meth:`~digitalearth.static.scene.Scene.close` calls `pyplot.close` on whatever figure a
             scene holds, and a borrowed figure is not spared (#371) — measured: after
-            ``m.inset().close()``, ``m.fig.number`` is no longer in ``pyplot.get_fignums()``, i.e. closing
-            the locator closed the map. Close the *map* when you are done, which closes both.
+            `m.inset().locator.close()`, `m.fig.number` is no longer in `pyplot.get_fignums()`, i.e.
+            closing the locator closed the map. Close the *map* when you are done, which closes both.
 
         Args:
-            crs: Display CRS of the locator. ``None`` (default) uses **this map's own** display CRS, which
+            crs: Display CRS of the locator. `None` (default) uses **this map's own** display CRS, which
                 is the one case where the extent box needs no reprojection and so is a true rectangle. A
                 different CRS is honoured and the box is reprojected edge-wise into it; note a geographic
                 locator cannot draw an extent that straddles its antimeridian without the ring wrapping.
-            position: Where the inset sits — ``"upper right"`` (default), ``"upper left"``,
-                ``"lower right"``, ``"lower left"``, or four axes fractions
-                ``(x0, y0, width, height)`` used as given.
-            size: The inset's side as a fraction of this map, for the named corners. Default ``0.28``.
-            extent: The wider area the locator shows, as ``(west, south, east, north)`` in the locator's
-                CRS. ``None`` (default) shows the whole projection domain.
+            position: Where the inset sits — `"upper right"` (default), `"upper left"`,
+                `"lower right"`, `"lower left"`, or four axes fractions
+                `(x0, y0, width, height)` used as given.
+            size: The inset's side as a fraction of this map, for the named corners. Default `0.28`.
+            extent: The wider area the locator shows, as `(west, south, east, north)` in the locator's
+                CRS. `None` (default) shows the whole projection domain.
             reference: The Natural-Earth layers drawn into the locator, in order. Default
-                ``("land", "coastlines")``; ``()`` draws none, for a caller supplying their own geography
-                on the returned map.
+                `("land", "coastlines")`; `()` draws none, for a caller supplying their own geography
+                on the locator afterwards.
 
         Returns:
             This map, so the call chains like every other builder on the tier. The locator it built is
@@ -549,13 +561,29 @@ class InsetMixin(_MixinBase):
             axes and sharing this map's figure.
 
         Raises:
-            ValueError: for a ``size`` that is not a fraction in ``(0, 1]``, a ``position`` that is
-                neither a corner nor four numbers, a ``reference`` naming something that is not a
+            ValueError: for a `size` that is not a fraction in `(0, 1]`, a `position` that is
+                neither a corner nor four numbers, a `reference` naming something that is not a
                 Natural-Earth layer, or a map that has not been framed — there is then no extent to mark,
                 and the refusal happens **before** the inset axes is created, so nothing half-built is
                 left on the figure.
 
         Examples:
+            - It chains, because it hands back the map: the locator is a side effect read from
+              :attr:`locator` afterwards, never the call's value:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> m = Map(crs=4326)
+                >>> _ = m.set_bounds([2.0, 3.0, 8.0, 9.0])
+                >>> m.inset(size=0.2).set_title("Rhine delta").ax.get_title()
+                'Rhine delta'
+                >>> m.locator.layer_ids
+                ['land-1', 'coastlines-1', 'custom-1']
+                >>> m.close()
+
+                ```
             - A locator on a lon/lat map: the inset is a child of the map's axes, shows the whole world,
               and carries the geography plus the extent box:
                 ```python
