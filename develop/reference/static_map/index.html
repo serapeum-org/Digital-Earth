@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5561,9 +5561,13 @@ shared_colorbar: the spanning bar on its own.</p>
 leaves the bands uncoloured so only the hatching draws — the usual way to mark a significance or uncertainty
 mask over another field without spending its colours. <code>legend()</code> on such a layer keys the bands it marks by
 their pattern; <code>hatch_color=</code> colours the strokes on the map and in the key alike.</p>
+<p><code>labels=</code> names the bands <code>levels=</code> declares — one label per band, the same count as <code>hatches=</code> — and the
+labels of the bands the map does not mark are dropped alongside their rows. The count therefore comes from the
+call and not from the raster, so a <code>labels=</code> written against one reading of the field keeps working when the
+data stops reaching a band (or starts reaching another).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">m</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">trend</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;RdBu_r&quot;</span><span class="p">)</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">m</span><span class="o">.</span><span class="n">contours</span><span class="p">(</span><span class="n">p_value</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">hatches</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;///&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">],</span> <span class="n">fill</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;sig&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">m</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="s2">&quot;sig&quot;</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;p &lt; 0.05&quot;</span><span class="p">])</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">m</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="s2">&quot;sig&quot;</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;p &lt; 0.05&quot;</span><span class="p">,</span> <span class="s2">&quot;not significant&quot;</span><span class="p">])</span>  <span class="c1"># two declared bands; only the hatched one is keyed</span>
 </code></pre></div>
 <h2 id="overlays-computed-from-the-globe-itself"><a class="toclink" href="#overlays-computed-from-the-globe-itself">Overlays computed from the globe itself</a><a class="headerlink" href="#overlays-computed-from-the-globe-itself" title="Permanent link">#</a></h2>
 <p><code>nightshade(when)</code> shades the night side of the day/night terminator at one instant, and <code>tissot()</code> draws
@@ -14147,15 +14151,7 @@ is one, else the current axes limits — lies entirely outside the coverage.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2315">2315</a></span>
-<span class="normal"><a href="#__codelineno-0-2316">2316</a></span>
-<span class="normal"><a href="#__codelineno-0-2317">2317</a></span>
-<span class="normal"><a href="#__codelineno-0-2318">2318</a></span>
-<span class="normal"><a href="#__codelineno-0-2319">2319</a></span>
-<span class="normal"><a href="#__codelineno-0-2320">2320</a></span>
-<span class="normal"><a href="#__codelineno-0-2321">2321</a></span>
-<span class="normal"><a href="#__codelineno-0-2322">2322</a></span>
-<span class="normal"><a href="#__codelineno-0-2323">2323</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2323">2323</a></span>
 <span class="normal"><a href="#__codelineno-0-2324">2324</a></span>
 <span class="normal"><a href="#__codelineno-0-2325">2325</a></span>
 <span class="normal"><a href="#__codelineno-0-2326">2326</a></span>
@@ -14233,93 +14229,101 @@ is one, else the current axes limits — lies entirely outside the coverage.</p>
 <span class="normal"><a href="#__codelineno-0-2398">2398</a></span>
 <span class="normal"><a href="#__codelineno-0-2399">2399</a></span>
 <span class="normal"><a href="#__codelineno-0-2400">2400</a></span>
-<span class="normal"><a href="#__codelineno-0-2401">2401</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2315" name="__codelineno-0-2315"></a><span class="k">def</span><span class="w"> </span><span class="nf">basemap</span><span class="p">(</span>
-<a id="__codelineno-0-2316" name="__codelineno-0-2316"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2317" name="__codelineno-0-2317"></a>    <span class="n">source</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2318" name="__codelineno-0-2318"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2319" name="__codelineno-0-2319"></a>    <span class="n">api_key</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2320" name="__codelineno-0-2320"></a>    <span class="n">preset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2321" name="__codelineno-0-2321"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2322" name="__codelineno-0-2322"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2323" name="__codelineno-0-2323"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2324" name="__codelineno-0-2324"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.</span>
-<a id="__codelineno-0-2326" name="__codelineno-0-2326"></a>
-<a id="__codelineno-0-2327" name="__codelineno-0-2327"></a><span class="sd">    ``source`` is passed through to cleopatra unchanged — a provider name or an</span>
-<a id="__codelineno-0-2328" name="__codelineno-0-2328"></a><span class="sd">    ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see</span>
-<a id="__codelineno-0-2329" name="__codelineno-0-2329"></a><span class="sd">    :mod:`digitalearth.base.basemaps`) is resolved here into a configured provider, with its credential</span>
-<a id="__codelineno-0-2330" name="__codelineno-0-2330"></a><span class="sd">    read from the environment and its coverage checked against the map&#39;s domain first. And the four</span>
-<a id="__codelineno-0-2331" name="__codelineno-0-2331"></a><span class="sd">    cross-tier basemap names (:data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them)</span>
-<a id="__codelineno-0-2332" name="__codelineno-0-2332"></a><span class="sd">    are translated into the ``xyzservices`` paths that request the same tiles the interactive and web</span>
-<a id="__codelineno-0-2333" name="__codelineno-0-2333"></a><span class="sd">    tiers do — including when ``source`` is omitted, which means the shared default here just as it does</span>
-<a id="__codelineno-0-2334" name="__codelineno-0-2334"></a><span class="sd">    there, rather than cleopatra&#39;s own ``OpenStreetMap.Mapnik`` (#247).</span>
-<a id="__codelineno-0-2335" name="__codelineno-0-2335"></a>
-<a id="__codelineno-0-2336" name="__codelineno-0-2336"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2337" name="__codelineno-0-2337"></a><span class="sd">        source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a</span>
-<a id="__codelineno-0-2338" name="__codelineno-0-2338"></a><span class="sd">            ``cleopatra.basemap.ogc`` ``WMSProvider``/``WMTSProvider``, one of the cross-tier names</span>
-<a id="__codelineno-0-2339" name="__codelineno-0-2339"></a><span class="sd">            (``&quot;CartoLight&quot;``/``&quot;CartoDark&quot;``/``&quot;CartoVoyager&quot;``/``&quot;OSM&quot;``), a keyed preset name such as</span>
-<a id="__codelineno-0-2340" name="__codelineno-0-2340"></a><span class="sd">            ``&quot;Planet.NICFI&quot;``, or ``None`` for</span>
-<a id="__codelineno-0-2341" name="__codelineno-0-2341"></a><span class="sd">            :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`. An OGC provider is recorded in</span>
-<a id="__codelineno-0-2342" name="__codelineno-0-2342"></a><span class="sd">            the figure field by field, minus its ``extra_params``, so a figure read back through</span>
-<a id="__codelineno-0-2343" name="__codelineno-0-2343"></a><span class="sd">            ``Map.from_figure`` or ``to_backend(spec, &quot;matplotlib&quot;)`` asks the same service —</span>
-<a id="__codelineno-0-2344" name="__codelineno-0-2344"></a><span class="sd">            unauthenticated, since the credential does not travel. Another *tier* cannot replay a</span>
-<a id="__codelineno-0-2345" name="__codelineno-0-2345"></a><span class="sd">            static basemap layer at all, OGC or named; see ``docs/reference/basemaps.md``.</span>
-<a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">        api_key: Credential for a keyed preset; ``None`` reads the preset&#39;s environment variable.</span>
-<a id="__codelineno-0-2347" name="__codelineno-0-2347"></a><span class="sd">        preset: The keyed preset&#39;s own keywords, as a dict (for NICFI: ``date``, ``flavour``,</span>
-<a id="__codelineno-0-2348" name="__codelineno-0-2348"></a><span class="sd">            ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to</span>
-<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">            ``add_tiles``, and the three tiers take presets the same way.</span>
-<a id="__codelineno-0-2350" name="__codelineno-0-2350"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-2351" name="__codelineno-0-2351"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-2352" name="__codelineno-0-2352"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-2353" name="__codelineno-0-2353"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-2354" name="__codelineno-0-2354"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-2355" name="__codelineno-0-2355"></a><span class="sd">        **kwargs: Forwarded to ``add_tiles``.</span>
-<a id="__codelineno-0-2356" name="__codelineno-0-2356"></a>
-<a id="__codelineno-0-2357" name="__codelineno-0-2357"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2358" name="__codelineno-0-2358"></a><span class="sd">        The tile artist ``add_tiles`` added to the axes.</span>
-<a id="__codelineno-0-2359" name="__codelineno-0-2359"></a>
-<a id="__codelineno-0-2360" name="__codelineno-0-2360"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2361" name="__codelineno-0-2361"></a><span class="sd">        ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``</span>
-<a id="__codelineno-0-2362" name="__codelineno-0-2362"></a><span class="sd">            or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose</span>
-<a id="__codelineno-0-2363" name="__codelineno-0-2363"></a><span class="sd">            instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there</span>
-<a id="__codelineno-0-2364" name="__codelineno-0-2364"></a><span class="sd">            is one, else the current axes limits — lies entirely outside the coverage.</span>
-<a id="__codelineno-0-2365" name="__codelineno-0-2365"></a><span class="sd">        TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.</span>
-<a id="__codelineno-0-2366" name="__codelineno-0-2366"></a>
-<a id="__codelineno-0-2367" name="__codelineno-0-2367"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2368" name="__codelineno-0-2368"></a><span class="sd">        - A keyed preset resolves its own provider and credential:</span>
-<a id="__codelineno-0-2369" name="__codelineno-0-2369"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2370" name="__codelineno-0-2370"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map                       # doctest: +SKIP</span>
-<a id="__codelineno-0-2371" name="__codelineno-0-2371"></a><span class="sd">            &gt;&gt;&gt; Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP</span>
-<a id="__codelineno-0-2372" name="__codelineno-0-2372"></a><span class="sd">            ...     &quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;, &quot;flavour&quot;: &quot;visual&quot;}</span>
-<a id="__codelineno-0-2373" name="__codelineno-0-2373"></a><span class="sd">            ... )                                                  # doctest: +SKIP</span>
+<span class="normal"><a href="#__codelineno-0-2401">2401</a></span>
+<span class="normal"><a href="#__codelineno-0-2402">2402</a></span>
+<span class="normal"><a href="#__codelineno-0-2403">2403</a></span>
+<span class="normal"><a href="#__codelineno-0-2404">2404</a></span>
+<span class="normal"><a href="#__codelineno-0-2405">2405</a></span>
+<span class="normal"><a href="#__codelineno-0-2406">2406</a></span>
+<span class="normal"><a href="#__codelineno-0-2407">2407</a></span>
+<span class="normal"><a href="#__codelineno-0-2408">2408</a></span>
+<span class="normal"><a href="#__codelineno-0-2409">2409</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2323" name="__codelineno-0-2323"></a><span class="k">def</span><span class="w"> </span><span class="nf">basemap</span><span class="p">(</span>
+<a id="__codelineno-0-2324" name="__codelineno-0-2324"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a>    <span class="n">source</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2326" name="__codelineno-0-2326"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-2327" name="__codelineno-0-2327"></a>    <span class="n">api_key</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2328" name="__codelineno-0-2328"></a>    <span class="n">preset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2329" name="__codelineno-0-2329"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2330" name="__codelineno-0-2330"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-2331" name="__codelineno-0-2331"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2332" name="__codelineno-0-2332"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2333" name="__codelineno-0-2333"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.</span>
+<a id="__codelineno-0-2334" name="__codelineno-0-2334"></a>
+<a id="__codelineno-0-2335" name="__codelineno-0-2335"></a><span class="sd">    ``source`` is passed through to cleopatra unchanged — a provider name or an</span>
+<a id="__codelineno-0-2336" name="__codelineno-0-2336"></a><span class="sd">    ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see</span>
+<a id="__codelineno-0-2337" name="__codelineno-0-2337"></a><span class="sd">    :mod:`digitalearth.base.basemaps`) is resolved here into a configured provider, with its credential</span>
+<a id="__codelineno-0-2338" name="__codelineno-0-2338"></a><span class="sd">    read from the environment and its coverage checked against the map&#39;s domain first. And the four</span>
+<a id="__codelineno-0-2339" name="__codelineno-0-2339"></a><span class="sd">    cross-tier basemap names (:data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them)</span>
+<a id="__codelineno-0-2340" name="__codelineno-0-2340"></a><span class="sd">    are translated into the ``xyzservices`` paths that request the same tiles the interactive and web</span>
+<a id="__codelineno-0-2341" name="__codelineno-0-2341"></a><span class="sd">    tiers do — including when ``source`` is omitted, which means the shared default here just as it does</span>
+<a id="__codelineno-0-2342" name="__codelineno-0-2342"></a><span class="sd">    there, rather than cleopatra&#39;s own ``OpenStreetMap.Mapnik`` (#247).</span>
+<a id="__codelineno-0-2343" name="__codelineno-0-2343"></a>
+<a id="__codelineno-0-2344" name="__codelineno-0-2344"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2345" name="__codelineno-0-2345"></a><span class="sd">        source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a</span>
+<a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">            ``cleopatra.basemap.ogc`` ``WMSProvider``/``WMTSProvider``, one of the cross-tier names</span>
+<a id="__codelineno-0-2347" name="__codelineno-0-2347"></a><span class="sd">            (``&quot;CartoLight&quot;``/``&quot;CartoDark&quot;``/``&quot;CartoVoyager&quot;``/``&quot;OSM&quot;``), a keyed preset name such as</span>
+<a id="__codelineno-0-2348" name="__codelineno-0-2348"></a><span class="sd">            ``&quot;Planet.NICFI&quot;``, or ``None`` for</span>
+<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">            :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`. An OGC provider is recorded in</span>
+<a id="__codelineno-0-2350" name="__codelineno-0-2350"></a><span class="sd">            the figure field by field, minus its ``extra_params``, so a figure read back through</span>
+<a id="__codelineno-0-2351" name="__codelineno-0-2351"></a><span class="sd">            ``Map.from_figure`` or ``to_backend(spec, &quot;matplotlib&quot;)`` asks the same service —</span>
+<a id="__codelineno-0-2352" name="__codelineno-0-2352"></a><span class="sd">            unauthenticated, since the credential does not travel. Another *tier* cannot replay a</span>
+<a id="__codelineno-0-2353" name="__codelineno-0-2353"></a><span class="sd">            static basemap layer at all, OGC or named; see ``docs/reference/basemaps.md``.</span>
+<a id="__codelineno-0-2354" name="__codelineno-0-2354"></a><span class="sd">        api_key: Credential for a keyed preset; ``None`` reads the preset&#39;s environment variable.</span>
+<a id="__codelineno-0-2355" name="__codelineno-0-2355"></a><span class="sd">        preset: The keyed preset&#39;s own keywords, as a dict (for NICFI: ``date``, ``flavour``,</span>
+<a id="__codelineno-0-2356" name="__codelineno-0-2356"></a><span class="sd">            ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to</span>
+<a id="__codelineno-0-2357" name="__codelineno-0-2357"></a><span class="sd">            ``add_tiles``, and the three tiers take presets the same way.</span>
+<a id="__codelineno-0-2358" name="__codelineno-0-2358"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-2359" name="__codelineno-0-2359"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-2360" name="__codelineno-0-2360"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-2361" name="__codelineno-0-2361"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-2362" name="__codelineno-0-2362"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-2363" name="__codelineno-0-2363"></a><span class="sd">        **kwargs: Forwarded to ``add_tiles``.</span>
+<a id="__codelineno-0-2364" name="__codelineno-0-2364"></a>
+<a id="__codelineno-0-2365" name="__codelineno-0-2365"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2366" name="__codelineno-0-2366"></a><span class="sd">        The tile artist ``add_tiles`` added to the axes.</span>
+<a id="__codelineno-0-2367" name="__codelineno-0-2367"></a>
+<a id="__codelineno-0-2368" name="__codelineno-0-2368"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2369" name="__codelineno-0-2369"></a><span class="sd">        ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``</span>
+<a id="__codelineno-0-2370" name="__codelineno-0-2370"></a><span class="sd">            or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose</span>
+<a id="__codelineno-0-2371" name="__codelineno-0-2371"></a><span class="sd">            instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there</span>
+<a id="__codelineno-0-2372" name="__codelineno-0-2372"></a><span class="sd">            is one, else the current axes limits — lies entirely outside the coverage.</span>
+<a id="__codelineno-0-2373" name="__codelineno-0-2373"></a><span class="sd">        TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.</span>
 <a id="__codelineno-0-2374" name="__codelineno-0-2374"></a>
-<a id="__codelineno-0-2375" name="__codelineno-0-2375"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2376" name="__codelineno-0-2376"></a>
-<a id="__codelineno-0-2377" name="__codelineno-0-2377"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2378" name="__codelineno-0-2378"></a><span class="sd">        digitalearth.base.basemaps: the keyed-preset definitions this resolves.</span>
-<a id="__codelineno-0-2379" name="__codelineno-0-2379"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2380" name="__codelineno-0-2380"></a>    <span class="n">loose</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">PRESET_KEYWORDS</span><span class="p">)</span>
-<a id="__codelineno-0-2381" name="__codelineno-0-2381"></a>    <span class="k">if</span> <span class="n">loose</span><span class="p">:</span>
-<a id="__codelineno-0-2382" name="__codelineno-0-2382"></a>        <span class="c1"># These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.</span>
-<a id="__codelineno-0-2383" name="__codelineno-0-2383"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2384" name="__codelineno-0-2384"></a>            <span class="sa">f</span><span class="s2">&quot;basemap() takes preset keywords in preset=</span><span class="se">{{</span><span class="s2">...</span><span class="se">}}</span><span class="s2">, not loose; move </span><span class="si">{</span><span class="n">loose</span><span class="si">}</span><span class="s2"> into it — &quot;</span>
-<a id="__codelineno-0-2385" name="__codelineno-0-2385"></a>            <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, preset=</span><span class="se">{{</span><span class="si">{</span><span class="n">loose</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">: ...</span><span class="se">}}</span><span class="s2">)&quot;</span>
-<a id="__codelineno-0-2386" name="__codelineno-0-2386"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2387" name="__codelineno-0-2387"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_keyed_basemap</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
-<a id="__codelineno-0-2388" name="__codelineno-0-2388"></a>        <span class="k">if</span> <span class="n">preset</span><span class="p">:</span>
-<a id="__codelineno-0-2389" name="__codelineno-0-2389"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2390" name="__codelineno-0-2390"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no preset keywords; </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">preset</span><span class="p">)</span><span class="si">}</span><span class="s2"> apply only to a &quot;</span>
-<a id="__codelineno-0-2391" name="__codelineno-0-2391"></a>                <span class="sa">f</span><span class="s2">&quot;keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
-<a id="__codelineno-0-2392" name="__codelineno-0-2392"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2393" name="__codelineno-0-2393"></a>        <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2394" name="__codelineno-0-2394"></a>            <span class="c1"># Dropping it silently would leave a caller believing they had authenticated.</span>
-<a id="__codelineno-0-2395" name="__codelineno-0-2395"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2396" name="__codelineno-0-2396"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no api_key; it is a token-free source. Credentials apply &quot;</span>
-<a id="__codelineno-0-2397" name="__codelineno-0-2397"></a>                <span class="sa">f</span><span class="s2">&quot;only to a keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
-<a id="__codelineno-0-2398" name="__codelineno-0-2398"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2399" name="__codelineno-0-2399"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_basemap</span><span class="p">(</span>
-<a id="__codelineno-0-2400" name="__codelineno-0-2400"></a>        <span class="n">source</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span>
-<a id="__codelineno-0-2401" name="__codelineno-0-2401"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2375" name="__codelineno-0-2375"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2376" name="__codelineno-0-2376"></a><span class="sd">        - A keyed preset resolves its own provider and credential:</span>
+<a id="__codelineno-0-2377" name="__codelineno-0-2377"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2378" name="__codelineno-0-2378"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map                       # doctest: +SKIP</span>
+<a id="__codelineno-0-2379" name="__codelineno-0-2379"></a><span class="sd">            &gt;&gt;&gt; Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP</span>
+<a id="__codelineno-0-2380" name="__codelineno-0-2380"></a><span class="sd">            ...     &quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;, &quot;flavour&quot;: &quot;visual&quot;}</span>
+<a id="__codelineno-0-2381" name="__codelineno-0-2381"></a><span class="sd">            ... )                                                  # doctest: +SKIP</span>
+<a id="__codelineno-0-2382" name="__codelineno-0-2382"></a>
+<a id="__codelineno-0-2383" name="__codelineno-0-2383"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2384" name="__codelineno-0-2384"></a>
+<a id="__codelineno-0-2385" name="__codelineno-0-2385"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2386" name="__codelineno-0-2386"></a><span class="sd">        digitalearth.base.basemaps: the keyed-preset definitions this resolves.</span>
+<a id="__codelineno-0-2387" name="__codelineno-0-2387"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2388" name="__codelineno-0-2388"></a>    <span class="n">loose</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">PRESET_KEYWORDS</span><span class="p">)</span>
+<a id="__codelineno-0-2389" name="__codelineno-0-2389"></a>    <span class="k">if</span> <span class="n">loose</span><span class="p">:</span>
+<a id="__codelineno-0-2390" name="__codelineno-0-2390"></a>        <span class="c1"># These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.</span>
+<a id="__codelineno-0-2391" name="__codelineno-0-2391"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2392" name="__codelineno-0-2392"></a>            <span class="sa">f</span><span class="s2">&quot;basemap() takes preset keywords in preset=</span><span class="se">{{</span><span class="s2">...</span><span class="se">}}</span><span class="s2">, not loose; move </span><span class="si">{</span><span class="n">loose</span><span class="si">}</span><span class="s2"> into it — &quot;</span>
+<a id="__codelineno-0-2393" name="__codelineno-0-2393"></a>            <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, preset=</span><span class="se">{{</span><span class="si">{</span><span class="n">loose</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">: ...</span><span class="se">}}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-2394" name="__codelineno-0-2394"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2395" name="__codelineno-0-2395"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_keyed_basemap</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
+<a id="__codelineno-0-2396" name="__codelineno-0-2396"></a>        <span class="k">if</span> <span class="n">preset</span><span class="p">:</span>
+<a id="__codelineno-0-2397" name="__codelineno-0-2397"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2398" name="__codelineno-0-2398"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no preset keywords; </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">preset</span><span class="p">)</span><span class="si">}</span><span class="s2"> apply only to a &quot;</span>
+<a id="__codelineno-0-2399" name="__codelineno-0-2399"></a>                <span class="sa">f</span><span class="s2">&quot;keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
+<a id="__codelineno-0-2400" name="__codelineno-0-2400"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2401" name="__codelineno-0-2401"></a>        <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2402" name="__codelineno-0-2402"></a>            <span class="c1"># Dropping it silently would leave a caller believing they had authenticated.</span>
+<a id="__codelineno-0-2403" name="__codelineno-0-2403"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2404" name="__codelineno-0-2404"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no api_key; it is a token-free source. Credentials apply &quot;</span>
+<a id="__codelineno-0-2405" name="__codelineno-0-2405"></a>                <span class="sa">f</span><span class="s2">&quot;only to a keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
+<a id="__codelineno-0-2406" name="__codelineno-0-2406"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2407" name="__codelineno-0-2407"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_basemap</span><span class="p">(</span>
+<a id="__codelineno-0-2408" name="__codelineno-0-2408"></a>        <span class="n">source</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span>
+<a id="__codelineno-0-2409" name="__codelineno-0-2409"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -14461,15 +14465,7 @@ to the Natural-Earth default for it.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1847">1847</a></span>
-<span class="normal"><a href="#__codelineno-0-1848">1848</a></span>
-<span class="normal"><a href="#__codelineno-0-1849">1849</a></span>
-<span class="normal"><a href="#__codelineno-0-1850">1850</a></span>
-<span class="normal"><a href="#__codelineno-0-1851">1851</a></span>
-<span class="normal"><a href="#__codelineno-0-1852">1852</a></span>
-<span class="normal"><a href="#__codelineno-0-1853">1853</a></span>
-<span class="normal"><a href="#__codelineno-0-1854">1854</a></span>
-<span class="normal"><a href="#__codelineno-0-1855">1855</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1855">1855</a></span>
 <span class="normal"><a href="#__codelineno-0-1856">1856</a></span>
 <span class="normal"><a href="#__codelineno-0-1857">1857</a></span>
 <span class="normal"><a href="#__codelineno-0-1858">1858</a></span>
@@ -14490,36 +14486,44 @@ to the Natural-Earth default for it.</p>
 <span class="normal"><a href="#__codelineno-0-1873">1873</a></span>
 <span class="normal"><a href="#__codelineno-0-1874">1874</a></span>
 <span class="normal"><a href="#__codelineno-0-1875">1875</a></span>
-<span class="normal"><a href="#__codelineno-0-1876">1876</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1847" name="__codelineno-0-1847"></a><span class="k">def</span><span class="w"> </span><span class="nf">coastlines</span><span class="p">(</span>
-<a id="__codelineno-0-1848" name="__codelineno-0-1848"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1849" name="__codelineno-0-1849"></a>    <span class="n">resolution</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;110m&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1850" name="__codelineno-0-1850"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1851" name="__codelineno-0-1851"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1852" name="__codelineno-0-1852"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1853" name="__codelineno-0-1853"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1854" name="__codelineno-0-1854"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-1855" name="__codelineno-0-1855"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``&quot;coastline&quot;`` layer).</span>
-<a id="__codelineno-0-1856" name="__codelineno-0-1856"></a>
-<a id="__codelineno-0-1857" name="__codelineno-0-1857"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1858" name="__codelineno-0-1858"></a><span class="sd">        resolution: Natural-Earth resolution — ``&quot;110m&quot;`` (default), ``&quot;50m&quot;`` or ``&quot;10m&quot;``.</span>
-<a id="__codelineno-0-1859" name="__codelineno-0-1859"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-1860" name="__codelineno-0-1860"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-1861" name="__codelineno-0-1861"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-1862" name="__codelineno-0-1862"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-1863" name="__codelineno-0-1863"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
-<a id="__codelineno-0-1864" name="__codelineno-0-1864"></a><span class="sd">        **kwargs: Style overrides laid over this layer&#39;s Natural-Earth defaults</span>
-<a id="__codelineno-0-1865" name="__codelineno-0-1865"></a><span class="sd">            (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is</span>
-<a id="__codelineno-0-1866" name="__codelineno-0-1866"></a><span class="sd">            written into the layer&#39;s description as well, so a figure drawn on another scene keeps it;</span>
-<a id="__codelineno-0-1867" name="__codelineno-0-1867"></a><span class="sd">            a dash tuple or an engine object is held beside the layer alone, and that scene falls back</span>
-<a id="__codelineno-0-1868" name="__codelineno-0-1868"></a><span class="sd">            to the Natural-Earth default for it.</span>
-<a id="__codelineno-0-1869" name="__codelineno-0-1869"></a>
-<a id="__codelineno-0-1870" name="__codelineno-0-1870"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1871" name="__codelineno-0-1871"></a><span class="sd">        The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist</span>
-<a id="__codelineno-0-1872" name="__codelineno-0-1872"></a><span class="sd">        on a flat map).</span>
-<a id="__codelineno-0-1873" name="__codelineno-0-1873"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1874" name="__codelineno-0-1874"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_natural_earth</span><span class="p">(</span>
-<a id="__codelineno-0-1875" name="__codelineno-0-1875"></a>        <span class="s2">&quot;coastline&quot;</span><span class="p">,</span> <span class="n">resolution</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
-<a id="__codelineno-0-1876" name="__codelineno-0-1876"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-1876">1876</a></span>
+<span class="normal"><a href="#__codelineno-0-1877">1877</a></span>
+<span class="normal"><a href="#__codelineno-0-1878">1878</a></span>
+<span class="normal"><a href="#__codelineno-0-1879">1879</a></span>
+<span class="normal"><a href="#__codelineno-0-1880">1880</a></span>
+<span class="normal"><a href="#__codelineno-0-1881">1881</a></span>
+<span class="normal"><a href="#__codelineno-0-1882">1882</a></span>
+<span class="normal"><a href="#__codelineno-0-1883">1883</a></span>
+<span class="normal"><a href="#__codelineno-0-1884">1884</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1855" name="__codelineno-0-1855"></a><span class="k">def</span><span class="w"> </span><span class="nf">coastlines</span><span class="p">(</span>
+<a id="__codelineno-0-1856" name="__codelineno-0-1856"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1857" name="__codelineno-0-1857"></a>    <span class="n">resolution</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;110m&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1858" name="__codelineno-0-1858"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1859" name="__codelineno-0-1859"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1860" name="__codelineno-0-1860"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1861" name="__codelineno-0-1861"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1862" name="__codelineno-0-1862"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-1863" name="__codelineno-0-1863"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``&quot;coastline&quot;`` layer).</span>
+<a id="__codelineno-0-1864" name="__codelineno-0-1864"></a>
+<a id="__codelineno-0-1865" name="__codelineno-0-1865"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1866" name="__codelineno-0-1866"></a><span class="sd">        resolution: Natural-Earth resolution — ``&quot;110m&quot;`` (default), ``&quot;50m&quot;`` or ``&quot;10m&quot;``.</span>
+<a id="__codelineno-0-1867" name="__codelineno-0-1867"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-1868" name="__codelineno-0-1868"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-1869" name="__codelineno-0-1869"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-1870" name="__codelineno-0-1870"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-1871" name="__codelineno-0-1871"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
+<a id="__codelineno-0-1872" name="__codelineno-0-1872"></a><span class="sd">        **kwargs: Style overrides laid over this layer&#39;s Natural-Earth defaults</span>
+<a id="__codelineno-0-1873" name="__codelineno-0-1873"></a><span class="sd">            (:data:`_NATURAL_EARTH_STYLE`). A plain one — ``color``, ``linewidth``, ``alpha`` — is</span>
+<a id="__codelineno-0-1874" name="__codelineno-0-1874"></a><span class="sd">            written into the layer&#39;s description as well, so a figure drawn on another scene keeps it;</span>
+<a id="__codelineno-0-1875" name="__codelineno-0-1875"></a><span class="sd">            a dash tuple or an engine object is held beside the layer alone, and that scene falls back</span>
+<a id="__codelineno-0-1876" name="__codelineno-0-1876"></a><span class="sd">            to the Natural-Earth default for it.</span>
+<a id="__codelineno-0-1877" name="__codelineno-0-1877"></a>
+<a id="__codelineno-0-1878" name="__codelineno-0-1878"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1879" name="__codelineno-0-1879"></a><span class="sd">        The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist</span>
+<a id="__codelineno-0-1880" name="__codelineno-0-1880"></a><span class="sd">        on a flat map).</span>
+<a id="__codelineno-0-1881" name="__codelineno-0-1881"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1882" name="__codelineno-0-1882"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_natural_earth</span><span class="p">(</span>
+<a id="__codelineno-0-1883" name="__codelineno-0-1883"></a>        <span class="s2">&quot;coastline&quot;</span><span class="p">,</span> <span class="n">resolution</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+<a id="__codelineno-0-1884" name="__codelineno-0-1884"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -14775,15 +14779,7 @@ takes any <code>n</code> and floors the grid it resolves to
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2070">2070</a></span>
-<span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
-<span class="normal"><a href="#__codelineno-0-2072">2072</a></span>
-<span class="normal"><a href="#__codelineno-0-2073">2073</a></span>
-<span class="normal"><a href="#__codelineno-0-2074">2074</a></span>
-<span class="normal"><a href="#__codelineno-0-2075">2075</a></span>
-<span class="normal"><a href="#__codelineno-0-2076">2076</a></span>
-<span class="normal"><a href="#__codelineno-0-2077">2077</a></span>
-<span class="normal"><a href="#__codelineno-0-2078">2078</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2078">2078</a></span>
 <span class="normal"><a href="#__codelineno-0-2079">2079</a></span>
 <span class="normal"><a href="#__codelineno-0-2080">2080</a></span>
 <span class="normal"><a href="#__codelineno-0-2081">2081</a></span>
@@ -14876,108 +14872,116 @@ takes any <code>n</code> and floors the grid it resolves to
 <span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
 <span class="normal"><a href="#__codelineno-0-2169">2169</a></span>
 <span class="normal"><a href="#__codelineno-0-2170">2170</a></span>
-<span class="normal"><a href="#__codelineno-0-2171">2171</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2070" name="__codelineno-0-2070"></a><span class="k">def</span><span class="w"> </span><span class="nf">nightshade</span><span class="p">(</span>
-<a id="__codelineno-0-2071" name="__codelineno-0-2071"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2072" name="__codelineno-0-2072"></a>    <span class="n">when</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2073" name="__codelineno-0-2073"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2074" name="__codelineno-0-2074"></a>    <span class="n">refraction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_REFRACTION</span><span class="p">,</span>
-<a id="__codelineno-0-2075" name="__codelineno-0-2075"></a>    <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_TERMINATOR_SAMPLES</span><span class="p">,</span>
-<a id="__codelineno-0-2076" name="__codelineno-0-2076"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2077" name="__codelineno-0-2077"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2078" name="__codelineno-0-2078"></a>    <span class="o">**</span><span class="n">style</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Shade the night side of the day/night terminator at one instant.</span>
-<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a>
-<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a><span class="sd">    The terminator is computed by cleopatra (``cleopatra.basemap.solar``, a low-precision solar position</span>
-<a id="__codelineno-0-2083" name="__codelineno-0-2083"></a><span class="sd">    good to well under a degree) and projected into the display CRS through pyramids. A night region that</span>
-<a id="__codelineno-0-2084" name="__codelineno-0-2084"></a><span class="sd">    holds a pole is shaded to the pole on a flat map, and a globe shades only its visible hemisphere. On</span>
-<a id="__codelineno-0-2085" name="__codelineno-0-2085"></a><span class="sd">    an axes nothing has framed yet, the map is fitted to the shade and then pulled back inside the</span>
-<a id="__codelineno-0-2086" name="__codelineno-0-2086"></a><span class="sd">    display CRS&#39;s own extent, so a projection that places the pole far outside its map (EPSG:3031 puts</span>
-<a id="__codelineno-0-2087" name="__codelineno-0-2087"></a><span class="sd">    it ``1.4e10`` m out) still frames the region it covers; a framed view is kept.</span>
-<a id="__codelineno-0-2088" name="__codelineno-0-2088"></a>
-<a id="__codelineno-0-2089" name="__codelineno-0-2089"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="sd">        when: The instant, as a ``datetime`` or ISO 8601 text. One with no time zone is UTC. The figure</span>
-<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a><span class="sd">            records it as UTC ISO text, so a figure read back draws the same shade.</span>
-<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a><span class="sd">        refraction: The solar altitude, in degrees, that defines the terminator — ``-0.83`` (default)</span>
-<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">            for sunrise and sunset, ``-6``/``-12``/``-18`` for the civil, nautical and astronomical</span>
-<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">            twilight lines. Must lie in ``(-90, 0]``.</span>
-<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">        n: Samples along the terminator. On a globe there is no terminator polygon to sample — the</span>
-<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a><span class="sd">            shade is filled from a display grid — so ``n`` sets that grid&#39;s resolution in proportion</span>
-<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a><span class="sd">            instead: the default draws a 400-sample side, and a quarter of the default draws a</span>
-<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a><span class="sd">            100-sample side, measured at about 0.01 s against about 0.16 s for the shade itself. Both</span>
-<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">            are small beside the globe&#39;s own projection frame, which costs about 1.7 s and is computed</span>
-<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">            once per globe whatever ``n`` is, so it dominates a first render either way. Either way</span>
-<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">            ``n`` is the one knob for the shade&#39;s fidelity, and the figure records it — where before it</span>
-<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">            was recorded and then ignored on a globe.</span>
-<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">        **style: Forwarded to the ``PolyCollection`` (``facecolor``/``color``, ``alpha``, ``zorder``,</span>
-<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">            …). The default is black at ``alpha=0.35``.</span>
-<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a>
-<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">        The night shade&#39;s ``PolyCollection`` — on a globe, the filled ``ContourSet`` it is drawn as there</span>
-<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">        — or ``None`` on a globe whose visible side holds no night.</span>
-<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a>
-<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">        ValueError: when ``refraction`` is outside ``(-90, 0]``, or ``when`` is text that is not</span>
-<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a><span class="sd">            ISO 8601. The layer is not described. An ``n`` below 4 is refused on a **flat** map only —</span>
-<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a><span class="sd">            the refusal is cleopatra&#39;s, from the terminator sampler that forms the ring — while a globe</span>
-<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a><span class="sd">            takes any ``n`` and floors the grid it resolves to</span>
-<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="sd">            (:func:`_globe_night_grid`), so ``n=3`` draws there.</span>
-<a id="__codelineno-0-2121" name="__codelineno-0-2121"></a><span class="sd">        TypeError: when ``when`` is neither a ``datetime`` nor text.</span>
+<span class="normal"><a href="#__codelineno-0-2171">2171</a></span>
+<span class="normal"><a href="#__codelineno-0-2172">2172</a></span>
+<span class="normal"><a href="#__codelineno-0-2173">2173</a></span>
+<span class="normal"><a href="#__codelineno-0-2174">2174</a></span>
+<span class="normal"><a href="#__codelineno-0-2175">2175</a></span>
+<span class="normal"><a href="#__codelineno-0-2176">2176</a></span>
+<span class="normal"><a href="#__codelineno-0-2177">2177</a></span>
+<span class="normal"><a href="#__codelineno-0-2178">2178</a></span>
+<span class="normal"><a href="#__codelineno-0-2179">2179</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2078" name="__codelineno-0-2078"></a><span class="k">def</span><span class="w"> </span><span class="nf">nightshade</span><span class="p">(</span>
+<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a>    <span class="n">when</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a>    <span class="n">refraction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_REFRACTION</span><span class="p">,</span>
+<a id="__codelineno-0-2083" name="__codelineno-0-2083"></a>    <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_TERMINATOR_SAMPLES</span><span class="p">,</span>
+<a id="__codelineno-0-2084" name="__codelineno-0-2084"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2085" name="__codelineno-0-2085"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-2086" name="__codelineno-0-2086"></a>    <span class="o">**</span><span class="n">style</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2087" name="__codelineno-0-2087"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2088" name="__codelineno-0-2088"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Shade the night side of the day/night terminator at one instant.</span>
+<a id="__codelineno-0-2089" name="__codelineno-0-2089"></a>
+<a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="sd">    The terminator is computed by cleopatra (``cleopatra.basemap.solar``, a low-precision solar position</span>
+<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a><span class="sd">    good to well under a degree) and projected into the display CRS through pyramids. A night region that</span>
+<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a><span class="sd">    holds a pole is shaded to the pole on a flat map, and a globe shades only its visible hemisphere. On</span>
+<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">    an axes nothing has framed yet, the map is fitted to the shade and then pulled back inside the</span>
+<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">    display CRS&#39;s own extent, so a projection that places the pole far outside its map (EPSG:3031 puts</span>
+<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">    it ``1.4e10`` m out) still frames the region it covers; a framed view is kept.</span>
+<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a>
+<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a><span class="sd">        when: The instant, as a ``datetime`` or ISO 8601 text. One with no time zone is UTC. The figure</span>
+<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">            records it as UTC ISO text, so a figure read back draws the same shade.</span>
+<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">        refraction: The solar altitude, in degrees, that defines the terminator — ``-0.83`` (default)</span>
+<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">            for sunrise and sunset, ``-6``/``-12``/``-18`` for the civil, nautical and astronomical</span>
+<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">            twilight lines. Must lie in ``(-90, 0]``.</span>
+<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">        n: Samples along the terminator. On a globe there is no terminator polygon to sample — the</span>
+<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">            shade is filled from a display grid — so ``n`` sets that grid&#39;s resolution in proportion</span>
+<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a><span class="sd">            instead: the default draws a 400-sample side, and a quarter of the default draws a</span>
+<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a><span class="sd">            100-sample side, measured at about 0.01 s against about 0.16 s for the shade itself. Both</span>
+<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">            are small beside the globe&#39;s own projection frame, which costs about 1.7 s and is computed</span>
+<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">            once per globe whatever ``n`` is, so it dominates a first render either way. Either way</span>
+<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">            ``n`` is the one knob for the shade&#39;s fidelity, and the figure records it — where before it</span>
+<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a><span class="sd">            was recorded and then ignored on a globe.</span>
+<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">        **style: Forwarded to the ``PolyCollection`` (``facecolor``/``color``, ``alpha``, ``zorder``,</span>
+<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a><span class="sd">            …). The default is black at ``alpha=0.35``.</span>
+<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a>
+<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="sd">        The night shade&#39;s ``PolyCollection`` — on a globe, the filled ``ContourSet`` it is drawn as there</span>
+<a id="__codelineno-0-2121" name="__codelineno-0-2121"></a><span class="sd">        — or ``None`` on a globe whose visible side holds no night.</span>
 <a id="__codelineno-0-2122" name="__codelineno-0-2122"></a>
-<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2124" name="__codelineno-0-2124"></a><span class="sd">        - At the March equinox at noon UTC the antimeridian is at midnight and Greenwich at noon:</span>
-<a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">            &gt;&gt;&gt; from datetime import datetime, timezone</span>
-<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a><span class="sd">            &gt;&gt;&gt; night = m.nightshade(datetime(2026, 3, 20, 12, tzinfo=timezone.utc))</span>
-<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a><span class="sd">            &gt;&gt;&gt; [any(p.contains_point(xy) for p in night.get_paths()) for xy in ((170, 0), (0, 0))]</span>
-<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a><span class="sd">            [True, False]</span>
-<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a><span class="sd">            &gt;&gt;&gt; m.figure_spec.layers.get(m.layer_ids[-1]).kind</span>
-<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a><span class="sd">            &#39;nightshade&#39;</span>
-<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>
-<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a><span class="sd">        - The twilight lines are the same call with another refraction; the figure records it:</span>
-<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-2143" name="__codelineno-0-2143"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=3857)</span>
-<a id="__codelineno-0-2144" name="__codelineno-0-2144"></a><span class="sd">            &gt;&gt;&gt; _ = m.nightshade(&quot;2026-06-21T12:00:00&quot;, refraction=-6.0, alpha=0.2)</span>
-<a id="__codelineno-0-2145" name="__codelineno-0-2145"></a><span class="sd">            &gt;&gt;&gt; props = m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props</span>
-<a id="__codelineno-0-2146" name="__codelineno-0-2146"></a><span class="sd">            &gt;&gt;&gt; props[&quot;when&quot;], props[&quot;refraction&quot;]</span>
-<a id="__codelineno-0-2147" name="__codelineno-0-2147"></a><span class="sd">            (&#39;2026-06-21T12:00:00+00:00&#39;, -6.0)</span>
-<a id="__codelineno-0-2148" name="__codelineno-0-2148"></a>
-<a id="__codelineno-0-2149" name="__codelineno-0-2149"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2150" name="__codelineno-0-2150"></a>
-<a id="__codelineno-0-2151" name="__codelineno-0-2151"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2152" name="__codelineno-0-2152"></a><span class="sd">        tissot: the other overlay cleopatra&#39;s ``solar`` module draws.</span>
-<a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2154" name="__codelineno-0-2154"></a>    <span class="n">samples</span> <span class="o">=</span> <span class="n">_whole_samples</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="s2">&quot;nightshade()&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a>    <span class="n">moment</span> <span class="o">=</span> <span class="n">_utc_moment</span><span class="p">(</span><span class="n">when</span><span class="p">)</span>
-<a id="__codelineno-0-2156" name="__codelineno-0-2156"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-2157" name="__codelineno-0-2157"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-2158" name="__codelineno-0-2158"></a>            <span class="s2">&quot;nightshade&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2159" name="__codelineno-0-2159"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2160" name="__codelineno-0-2160"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2161" name="__codelineno-0-2161"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-2162" name="__codelineno-0-2162"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-2163" name="__codelineno-0-2163"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;nightshade&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2164" name="__codelineno-0-2164"></a>                    <span class="s2">&quot;when&quot;</span><span class="p">:</span> <span class="n">moment</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span>
-<a id="__codelineno-0-2165" name="__codelineno-0-2165"></a>                    <span class="s2">&quot;refraction&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">refraction</span><span class="p">),</span>
-<a id="__codelineno-0-2166" name="__codelineno-0-2166"></a>                    <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="n">samples</span><span class="p">,</span>
-<a id="__codelineno-0-2167" name="__codelineno-0-2167"></a>                <span class="p">}</span>
-<a id="__codelineno-0-2168" name="__codelineno-0-2168"></a>            <span class="p">),</span>
-<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">style</span><span class="p">,</span>
-<a id="__codelineno-0-2170" name="__codelineno-0-2170"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2124" name="__codelineno-0-2124"></a><span class="sd">        ValueError: when ``refraction`` is outside ``(-90, 0]``, or ``when`` is text that is not</span>
+<a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">            ISO 8601. The layer is not described. An ``n`` below 4 is refused on a **flat** map only —</span>
+<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">            the refusal is cleopatra&#39;s, from the terminator sampler that forms the ring — while a globe</span>
+<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">            takes any ``n`` and floors the grid it resolves to</span>
+<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">            (:func:`_globe_night_grid`), so ``n=3`` draws there.</span>
+<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a><span class="sd">        TypeError: when ``when`` is neither a ``datetime`` nor text.</span>
+<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a>
+<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a><span class="sd">        - At the March equinox at noon UTC the antimeridian is at midnight and Greenwich at noon:</span>
+<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a><span class="sd">            &gt;&gt;&gt; from datetime import datetime, timezone</span>
+<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a><span class="sd">            &gt;&gt;&gt; night = m.nightshade(datetime(2026, 3, 20, 12, tzinfo=timezone.utc))</span>
+<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a><span class="sd">            &gt;&gt;&gt; [any(p.contains_point(xy) for p in night.get_paths()) for xy in ((170, 0), (0, 0))]</span>
+<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a><span class="sd">            [True, False]</span>
+<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a><span class="sd">            &gt;&gt;&gt; m.figure_spec.layers.get(m.layer_ids[-1]).kind</span>
+<a id="__codelineno-0-2143" name="__codelineno-0-2143"></a><span class="sd">            &#39;nightshade&#39;</span>
+<a id="__codelineno-0-2144" name="__codelineno-0-2144"></a>
+<a id="__codelineno-0-2145" name="__codelineno-0-2145"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2146" name="__codelineno-0-2146"></a><span class="sd">        - The twilight lines are the same call with another refraction; the figure records it:</span>
+<a id="__codelineno-0-2147" name="__codelineno-0-2147"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2148" name="__codelineno-0-2148"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2149" name="__codelineno-0-2149"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2150" name="__codelineno-0-2150"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-2151" name="__codelineno-0-2151"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=3857)</span>
+<a id="__codelineno-0-2152" name="__codelineno-0-2152"></a><span class="sd">            &gt;&gt;&gt; _ = m.nightshade(&quot;2026-06-21T12:00:00&quot;, refraction=-6.0, alpha=0.2)</span>
+<a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="sd">            &gt;&gt;&gt; props = m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props</span>
+<a id="__codelineno-0-2154" name="__codelineno-0-2154"></a><span class="sd">            &gt;&gt;&gt; props[&quot;when&quot;], props[&quot;refraction&quot;]</span>
+<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">            (&#39;2026-06-21T12:00:00+00:00&#39;, -6.0)</span>
+<a id="__codelineno-0-2156" name="__codelineno-0-2156"></a>
+<a id="__codelineno-0-2157" name="__codelineno-0-2157"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2158" name="__codelineno-0-2158"></a>
+<a id="__codelineno-0-2159" name="__codelineno-0-2159"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2160" name="__codelineno-0-2160"></a><span class="sd">        tissot: the other overlay cleopatra&#39;s ``solar`` module draws.</span>
+<a id="__codelineno-0-2161" name="__codelineno-0-2161"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2162" name="__codelineno-0-2162"></a>    <span class="n">samples</span> <span class="o">=</span> <span class="n">_whole_samples</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="s2">&quot;nightshade()&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-2163" name="__codelineno-0-2163"></a>    <span class="n">moment</span> <span class="o">=</span> <span class="n">_utc_moment</span><span class="p">(</span><span class="n">when</span><span class="p">)</span>
+<a id="__codelineno-0-2164" name="__codelineno-0-2164"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-2165" name="__codelineno-0-2165"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-2166" name="__codelineno-0-2166"></a>            <span class="s2">&quot;nightshade&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2167" name="__codelineno-0-2167"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2168" name="__codelineno-0-2168"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-2170" name="__codelineno-0-2170"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;nightshade&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a>                    <span class="s2">&quot;when&quot;</span><span class="p">:</span> <span class="n">moment</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span>
+<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a>                    <span class="s2">&quot;refraction&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">refraction</span><span class="p">),</span>
+<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a>                    <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="n">samples</span><span class="p">,</span>
+<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a>                <span class="p">}</span>
+<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a>            <span class="p">),</span>
+<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">style</span><span class="p">,</span>
+<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2179" name="__codelineno-0-2179"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -15245,15 +15249,7 @@ is below 4. The layer is not described.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2173">2173</a></span>
-<span class="normal"><a href="#__codelineno-0-2174">2174</a></span>
-<span class="normal"><a href="#__codelineno-0-2175">2175</a></span>
-<span class="normal"><a href="#__codelineno-0-2176">2176</a></span>
-<span class="normal"><a href="#__codelineno-0-2177">2177</a></span>
-<span class="normal"><a href="#__codelineno-0-2178">2178</a></span>
-<span class="normal"><a href="#__codelineno-0-2179">2179</a></span>
-<span class="normal"><a href="#__codelineno-0-2180">2180</a></span>
-<span class="normal"><a href="#__codelineno-0-2181">2181</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2181">2181</a></span>
 <span class="normal"><a href="#__codelineno-0-2182">2182</a></span>
 <span class="normal"><a href="#__codelineno-0-2183">2183</a></span>
 <span class="normal"><a href="#__codelineno-0-2184">2184</a></span>
@@ -15385,147 +15381,155 @@ is below 4. The layer is not described.</p>
 <span class="normal"><a href="#__codelineno-0-2310">2310</a></span>
 <span class="normal"><a href="#__codelineno-0-2311">2311</a></span>
 <span class="normal"><a href="#__codelineno-0-2312">2312</a></span>
-<span class="normal"><a href="#__codelineno-0-2313">2313</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2173" name="__codelineno-0-2173"></a><span class="k">def</span><span class="w"> </span><span class="nf">tissot</span><span class="p">(</span>
-<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a>    <span class="n">lons</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a>    <span class="n">lats</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a>    <span class="n">radius_m</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_TISSOT_RADIUS_M</span><span class="p">,</span>
-<a id="__codelineno-0-2179" name="__codelineno-0-2179"></a>    <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_TISSOT_SAMPLES</span><span class="p">,</span>
-<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a>    <span class="o">**</span><span class="n">style</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw Tissot&#39;s indicatrices: circles of one ground radius, shown as the projection distorts them.</span>
-<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a>
-<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a><span class="sd">    Each circle is the set of points ``radius_m`` from its centre on the sphere (cleopatra&#39;s</span>
-<a id="__codelineno-0-2187" name="__codelineno-0-2187"></a><span class="sd">    ``tissot_circles``), projected into the display CRS through pyramids — so a Web Mercator map shows</span>
-<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="sd">    them swelling toward the poles, and an equal-area one shows them keeping their area. A circle the</span>
-<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a><span class="sd">    projection cannot place whole, such as one on the far side of a globe, is left out. One straddling</span>
-<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a><span class="sd">    the antimeridian is *not*: it is reconnected across the seam — in degrees on lon/lat axes, in display</span>
-<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="sd">    coordinates once a projection is involved — so it reads as one ring running past the edge of the</span>
-<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="sd">    world. Unreconnected it spanned the whole map instead, its vertices landing at both edges at once</span>
-<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a><span class="sd">    (29 of 64 at one edge and the rest at the other, for a 500 km ring at lon 179.5 on Web Mercator).</span>
-<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a><span class="sd">    On an axes nothing has framed yet, the map is fitted to the circles; a framed view is kept.</span>
-<a id="__codelineno-0-2195" name="__codelineno-0-2195"></a>
-<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">        lons: Circle-centre longitudes, in degrees. ``None`` (default, with ``lats`` also ``None``) draws</span>
-<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a><span class="sd">            a world grid every 30 degrees of longitude and latitude, from 60 S to 60 N.</span>
-<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a><span class="sd">        lats: Circle-centre latitudes, in degrees, pairing with ``lons``.</span>
-<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">        radius_m: The ground radius of every circle, in metres (default 500 km).</span>
-<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a><span class="sd">        n: Vertices per circle.</span>
-<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-2204" name="__codelineno-0-2204"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">        **style: Forwarded to the ``PolyCollection`` (``edgecolor``, ``facecolor``, ``linewidth``, …).</span>
-<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">            The default is an unfilled black outline.</span>
-<a id="__codelineno-0-2209" name="__codelineno-0-2209"></a>
-<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2211" name="__codelineno-0-2211"></a><span class="sd">        The circles&#39; ``PolyCollection``, or ``None`` when no circle could be placed.</span>
-<a id="__codelineno-0-2212" name="__codelineno-0-2212"></a>
-<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2214" name="__codelineno-0-2214"></a><span class="sd">        ValueError: when only one of ``lons``/``lats`` is given, when both are empty, when they differ</span>
-<a id="__codelineno-0-2215" name="__codelineno-0-2215"></a><span class="sd">            in length, when ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n``</span>
-<a id="__codelineno-0-2216" name="__codelineno-0-2216"></a><span class="sd">            is below 4. The layer is not described.</span>
+<span class="normal"><a href="#__codelineno-0-2313">2313</a></span>
+<span class="normal"><a href="#__codelineno-0-2314">2314</a></span>
+<span class="normal"><a href="#__codelineno-0-2315">2315</a></span>
+<span class="normal"><a href="#__codelineno-0-2316">2316</a></span>
+<span class="normal"><a href="#__codelineno-0-2317">2317</a></span>
+<span class="normal"><a href="#__codelineno-0-2318">2318</a></span>
+<span class="normal"><a href="#__codelineno-0-2319">2319</a></span>
+<span class="normal"><a href="#__codelineno-0-2320">2320</a></span>
+<span class="normal"><a href="#__codelineno-0-2321">2321</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2181" name="__codelineno-0-2181"></a><span class="k">def</span><span class="w"> </span><span class="nf">tissot</span><span class="p">(</span>
+<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a>    <span class="n">lons</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a>    <span class="n">lats</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a>    <span class="n">radius_m</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_TISSOT_RADIUS_M</span><span class="p">,</span>
+<a id="__codelineno-0-2187" name="__codelineno-0-2187"></a>    <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_TISSOT_SAMPLES</span><span class="p">,</span>
+<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a>    <span class="o">**</span><span class="n">style</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw Tissot&#39;s indicatrices: circles of one ground radius, shown as the projection distorts them.</span>
+<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a>
+<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a><span class="sd">    Each circle is the set of points ``radius_m`` from its centre on the sphere (cleopatra&#39;s</span>
+<a id="__codelineno-0-2195" name="__codelineno-0-2195"></a><span class="sd">    ``tissot_circles``), projected into the display CRS through pyramids — so a Web Mercator map shows</span>
+<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">    them swelling toward the poles, and an equal-area one shows them keeping their area. A circle the</span>
+<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">    projection cannot place whole, such as one on the far side of a globe, is left out. One straddling</span>
+<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a><span class="sd">    the antimeridian is *not*: it is reconnected across the seam — in degrees on lon/lat axes, in display</span>
+<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a><span class="sd">    coordinates once a projection is involved — so it reads as one ring running past the edge of the</span>
+<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">    world. Unreconnected it spanned the whole map instead, its vertices landing at both edges at once</span>
+<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a><span class="sd">    (29 of 64 at one edge and the rest at the other, for a 500 km ring at lon 179.5 on Web Mercator).</span>
+<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a><span class="sd">    On an axes nothing has framed yet, the map is fitted to the circles; a framed view is kept.</span>
+<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a>
+<a id="__codelineno-0-2204" name="__codelineno-0-2204"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">        lons: Circle-centre longitudes, in degrees. ``None`` (default, with ``lats`` also ``None``) draws</span>
+<a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">            a world grid every 30 degrees of longitude and latitude, from 60 S to 60 N.</span>
+<a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">        lats: Circle-centre latitudes, in degrees, pairing with ``lons``.</span>
+<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">        radius_m: The ground radius of every circle, in metres (default 500 km).</span>
+<a id="__codelineno-0-2209" name="__codelineno-0-2209"></a><span class="sd">        n: Vertices per circle.</span>
+<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-2211" name="__codelineno-0-2211"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-2212" name="__codelineno-0-2212"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-2214" name="__codelineno-0-2214"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-2215" name="__codelineno-0-2215"></a><span class="sd">        **style: Forwarded to the ``PolyCollection`` (``edgecolor``, ``facecolor``, ``linewidth``, …).</span>
+<a id="__codelineno-0-2216" name="__codelineno-0-2216"></a><span class="sd">            The default is an unfilled black outline.</span>
 <a id="__codelineno-0-2217" name="__codelineno-0-2217"></a>
-<a id="__codelineno-0-2218" name="__codelineno-0-2218"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2219" name="__codelineno-0-2219"></a><span class="sd">        - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:</span>
-<a id="__codelineno-0-2220" name="__codelineno-0-2220"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2221" name="__codelineno-0-2221"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2222" name="__codelineno-0-2222"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2223" name="__codelineno-0-2223"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-2224" name="__codelineno-0-2224"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=3857)</span>
-<a id="__codelineno-0-2226" name="__codelineno-0-2226"></a><span class="sd">            &gt;&gt;&gt; rings = m.tissot([0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)</span>
-<a id="__codelineno-0-2227" name="__codelineno-0-2227"></a><span class="sd">            &gt;&gt;&gt; equator, sixty = (np.ptp(p.vertices[:, 0]) for p in rings.get_paths())</span>
-<a id="__codelineno-0-2228" name="__codelineno-0-2228"></a><span class="sd">            &gt;&gt;&gt; round(float(sixty / equator), 1)</span>
-<a id="__codelineno-0-2229" name="__codelineno-0-2229"></a><span class="sd">            2.0</span>
-<a id="__codelineno-0-2230" name="__codelineno-0-2230"></a>
-<a id="__codelineno-0-2231" name="__codelineno-0-2231"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2232" name="__codelineno-0-2232"></a><span class="sd">        - With no centres, a world grid is drawn and described as one layer:</span>
-<a id="__codelineno-0-2233" name="__codelineno-0-2233"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2234" name="__codelineno-0-2234"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2235" name="__codelineno-0-2235"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2236" name="__codelineno-0-2236"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-2237" name="__codelineno-0-2237"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-2238" name="__codelineno-0-2238"></a><span class="sd">            &gt;&gt;&gt; len(m.tissot(edgecolor=&quot;crimson&quot;).get_paths())</span>
-<a id="__codelineno-0-2239" name="__codelineno-0-2239"></a><span class="sd">            60</span>
-<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a><span class="sd">            &gt;&gt;&gt; m.figure_spec.layers.get(m.layer_ids[-1]).kind</span>
-<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a><span class="sd">            &#39;tissot&#39;</span>
-<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a>
-<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a><span class="sd">        - A ring at lon 179.5 stays one 500 km circle on Web Mercator: it runs on past the world&#39;s own</span>
-<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a><span class="sd">          eastern edge (``20037508`` m) instead of being torn in two across it:</span>
-<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=3857) as m:</span>
-<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a><span class="sd">            ...     xs = m.tissot(lons=[179.5], lats=[0.0], radius_m=500_000.0).get_paths()[0]</span>
-<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a><span class="sd">            ...     span = xs.vertices[:, 0]</span>
-<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a><span class="sd">            ...     (round(float(span.min())), round(float(span.max())))</span>
-<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a><span class="sd">            ...     bool(span.max() &gt; 20037508.0)</span>
-<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a><span class="sd">            (19481444, 20482253)</span>
-<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a><span class="sd">            True</span>
-<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a>
-<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a><span class="sd">        - An empty pair of centre lists is refused by name, because ``None`` already means &quot;every ring</span>
-<a id="__codelineno-0-2260" name="__codelineno-0-2260"></a><span class="sd">          was off the map&quot; and the two must not read alike:</span>
-<a id="__codelineno-0-2261" name="__codelineno-0-2261"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=4326) as m:</span>
-<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a><span class="sd">            ...     try:</span>
-<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">            ...         m.tissot(lons=[], lats=[])</span>
-<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a><span class="sd">            ...     except ValueError as error:</span>
-<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a><span class="sd">            ...         print(error)</span>
-<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a><span class="sd">            tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid</span>
-<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a>
-<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a>
-<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a><span class="sd">        nightshade: the other overlay cleopatra&#39;s ``solar`` module draws.</span>
-<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a>    <span class="n">samples</span> <span class="o">=</span> <span class="n">_whole_samples</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="s2">&quot;tissot()&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a>    <span class="k">if</span> <span class="p">(</span><span class="n">lons</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="p">(</span><span class="n">lats</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
-<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a>            <span class="s2">&quot;tissot() takes lons= and lats= together, or neither for the world grid&quot;</span>
-<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a>    <span class="k">if</span> <span class="n">lons</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">lats</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a>        <span class="n">grid_lon</span><span class="p">,</span> <span class="n">grid_lat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">_TISSOT_LONS</span><span class="p">,</span> <span class="n">_TISSOT_LATS</span><span class="p">)</span>
-<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a>        <span class="n">lon_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid_lon</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
-<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a>        <span class="n">lat_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid_lat</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
-<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a>        <span class="n">lon_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lons</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))]</span>
-<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a>        <span class="n">lat_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lats</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))]</span>
-<a id="__codelineno-0-2289" name="__codelineno-0-2289"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">lon_list</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">lat_list</span><span class="p">:</span>
-<a id="__codelineno-0-2290" name="__codelineno-0-2290"></a>            <span class="c1"># `None` is this method&#39;s answer for &quot;every ring was off-limb&quot;, so an empty pair must not</span>
-<a id="__codelineno-0-2291" name="__codelineno-0-2291"></a>            <span class="c1"># share it: a caller whose centre list came out empty would read it as the projection&#39;s</span>
-<a id="__codelineno-0-2292" name="__codelineno-0-2292"></a>            <span class="c1"># doing. `facet` refuses an empty stack by name for the same reason (round 3, L5).</span>
-<a id="__codelineno-0-2293" name="__codelineno-0-2293"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2294" name="__codelineno-0-2294"></a>                <span class="s2">&quot;tissot() was given no centres to draw; pass lons= and lats=, or neither for the &quot;</span>
-<a id="__codelineno-0-2295" name="__codelineno-0-2295"></a>                <span class="s2">&quot;world grid&quot;</span>
-<a id="__codelineno-0-2296" name="__codelineno-0-2296"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2297" name="__codelineno-0-2297"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-2298" name="__codelineno-0-2298"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-2299" name="__codelineno-0-2299"></a>            <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2300" name="__codelineno-0-2300"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2301" name="__codelineno-0-2301"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2302" name="__codelineno-0-2302"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-2303" name="__codelineno-0-2303"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-2304" name="__codelineno-0-2304"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2305" name="__codelineno-0-2305"></a>                    <span class="s2">&quot;lons&quot;</span><span class="p">:</span> <span class="n">lon_list</span><span class="p">,</span>
-<a id="__codelineno-0-2306" name="__codelineno-0-2306"></a>                    <span class="s2">&quot;lats&quot;</span><span class="p">:</span> <span class="n">lat_list</span><span class="p">,</span>
-<a id="__codelineno-0-2307" name="__codelineno-0-2307"></a>                    <span class="s2">&quot;radius_m&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">radius_m</span><span class="p">),</span>
-<a id="__codelineno-0-2308" name="__codelineno-0-2308"></a>                    <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="n">samples</span><span class="p">,</span>
-<a id="__codelineno-0-2309" name="__codelineno-0-2309"></a>                <span class="p">}</span>
-<a id="__codelineno-0-2310" name="__codelineno-0-2310"></a>            <span class="p">),</span>
-<a id="__codelineno-0-2311" name="__codelineno-0-2311"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">style</span><span class="p">,</span>
-<a id="__codelineno-0-2312" name="__codelineno-0-2312"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2313" name="__codelineno-0-2313"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2218" name="__codelineno-0-2218"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2219" name="__codelineno-0-2219"></a><span class="sd">        The circles&#39; ``PolyCollection``, or ``None`` when no circle could be placed.</span>
+<a id="__codelineno-0-2220" name="__codelineno-0-2220"></a>
+<a id="__codelineno-0-2221" name="__codelineno-0-2221"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2222" name="__codelineno-0-2222"></a><span class="sd">        ValueError: when only one of ``lons``/``lats`` is given, when both are empty, when they differ</span>
+<a id="__codelineno-0-2223" name="__codelineno-0-2223"></a><span class="sd">            in length, when ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n``</span>
+<a id="__codelineno-0-2224" name="__codelineno-0-2224"></a><span class="sd">            is below 4. The layer is not described.</span>
+<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a>
+<a id="__codelineno-0-2226" name="__codelineno-0-2226"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2227" name="__codelineno-0-2227"></a><span class="sd">        - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:</span>
+<a id="__codelineno-0-2228" name="__codelineno-0-2228"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2229" name="__codelineno-0-2229"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2230" name="__codelineno-0-2230"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2231" name="__codelineno-0-2231"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-2232" name="__codelineno-0-2232"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-2233" name="__codelineno-0-2233"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=3857)</span>
+<a id="__codelineno-0-2234" name="__codelineno-0-2234"></a><span class="sd">            &gt;&gt;&gt; rings = m.tissot([0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)</span>
+<a id="__codelineno-0-2235" name="__codelineno-0-2235"></a><span class="sd">            &gt;&gt;&gt; equator, sixty = (np.ptp(p.vertices[:, 0]) for p in rings.get_paths())</span>
+<a id="__codelineno-0-2236" name="__codelineno-0-2236"></a><span class="sd">            &gt;&gt;&gt; round(float(sixty / equator), 1)</span>
+<a id="__codelineno-0-2237" name="__codelineno-0-2237"></a><span class="sd">            2.0</span>
+<a id="__codelineno-0-2238" name="__codelineno-0-2238"></a>
+<a id="__codelineno-0-2239" name="__codelineno-0-2239"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a><span class="sd">        - With no centres, a world grid is drawn and described as one layer:</span>
+<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a><span class="sd">            &gt;&gt;&gt; len(m.tissot(edgecolor=&quot;crimson&quot;).get_paths())</span>
+<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a><span class="sd">            60</span>
+<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a><span class="sd">            &gt;&gt;&gt; m.figure_spec.layers.get(m.layer_ids[-1]).kind</span>
+<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a><span class="sd">            &#39;tissot&#39;</span>
+<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a>
+<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a><span class="sd">        - A ring at lon 179.5 stays one 500 km circle on Web Mercator: it runs on past the world&#39;s own</span>
+<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a><span class="sd">          eastern edge (``20037508`` m) instead of being torn in two across it:</span>
+<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=3857) as m:</span>
+<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a><span class="sd">            ...     xs = m.tissot(lons=[179.5], lats=[0.0], radius_m=500_000.0).get_paths()[0]</span>
+<a id="__codelineno-0-2260" name="__codelineno-0-2260"></a><span class="sd">            ...     span = xs.vertices[:, 0]</span>
+<a id="__codelineno-0-2261" name="__codelineno-0-2261"></a><span class="sd">            ...     (round(float(span.min())), round(float(span.max())))</span>
+<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a><span class="sd">            ...     bool(span.max() &gt; 20037508.0)</span>
+<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a><span class="sd">            (19481444, 20482253)</span>
+<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="sd">            True</span>
+<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a>
+<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">        - An empty pair of centre lists is refused by name, because ``None`` already means &quot;every ring</span>
+<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a><span class="sd">          was off the map&quot; and the two must not read alike:</span>
+<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=4326) as m:</span>
+<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a><span class="sd">            ...     try:</span>
+<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a><span class="sd">            ...         m.tissot(lons=[], lats=[])</span>
+<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a><span class="sd">            ...     except ValueError as error:</span>
+<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a><span class="sd">            ...         print(error)</span>
+<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a><span class="sd">            tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid</span>
+<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a>
+<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a>
+<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a><span class="sd">        nightshade: the other overlay cleopatra&#39;s ``solar`` module draws.</span>
+<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a>    <span class="n">samples</span> <span class="o">=</span> <span class="n">_whole_samples</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="s2">&quot;tissot()&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a>    <span class="k">if</span> <span class="p">(</span><span class="n">lons</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="p">(</span><span class="n">lats</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a>            <span class="s2">&quot;tissot() takes lons= and lats= together, or neither for the world grid&quot;</span>
+<a id="__codelineno-0-2289" name="__codelineno-0-2289"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2290" name="__codelineno-0-2290"></a>    <span class="k">if</span> <span class="n">lons</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">lats</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2291" name="__codelineno-0-2291"></a>        <span class="n">grid_lon</span><span class="p">,</span> <span class="n">grid_lat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">_TISSOT_LONS</span><span class="p">,</span> <span class="n">_TISSOT_LATS</span><span class="p">)</span>
+<a id="__codelineno-0-2292" name="__codelineno-0-2292"></a>        <span class="n">lon_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid_lon</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
+<a id="__codelineno-0-2293" name="__codelineno-0-2293"></a>        <span class="n">lat_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid_lat</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
+<a id="__codelineno-0-2294" name="__codelineno-0-2294"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-2295" name="__codelineno-0-2295"></a>        <span class="n">lon_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lons</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))]</span>
+<a id="__codelineno-0-2296" name="__codelineno-0-2296"></a>        <span class="n">lat_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lats</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))]</span>
+<a id="__codelineno-0-2297" name="__codelineno-0-2297"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">lon_list</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">lat_list</span><span class="p">:</span>
+<a id="__codelineno-0-2298" name="__codelineno-0-2298"></a>            <span class="c1"># `None` is this method&#39;s answer for &quot;every ring was off-limb&quot;, so an empty pair must not</span>
+<a id="__codelineno-0-2299" name="__codelineno-0-2299"></a>            <span class="c1"># share it: a caller whose centre list came out empty would read it as the projection&#39;s</span>
+<a id="__codelineno-0-2300" name="__codelineno-0-2300"></a>            <span class="c1"># doing. `facet` refuses an empty stack by name for the same reason (round 3, L5).</span>
+<a id="__codelineno-0-2301" name="__codelineno-0-2301"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2302" name="__codelineno-0-2302"></a>                <span class="s2">&quot;tissot() was given no centres to draw; pass lons= and lats=, or neither for the &quot;</span>
+<a id="__codelineno-0-2303" name="__codelineno-0-2303"></a>                <span class="s2">&quot;world grid&quot;</span>
+<a id="__codelineno-0-2304" name="__codelineno-0-2304"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2305" name="__codelineno-0-2305"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-2306" name="__codelineno-0-2306"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-2307" name="__codelineno-0-2307"></a>            <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2308" name="__codelineno-0-2308"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2309" name="__codelineno-0-2309"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2310" name="__codelineno-0-2310"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-2311" name="__codelineno-0-2311"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-2312" name="__codelineno-0-2312"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2313" name="__codelineno-0-2313"></a>                    <span class="s2">&quot;lons&quot;</span><span class="p">:</span> <span class="n">lon_list</span><span class="p">,</span>
+<a id="__codelineno-0-2314" name="__codelineno-0-2314"></a>                    <span class="s2">&quot;lats&quot;</span><span class="p">:</span> <span class="n">lat_list</span><span class="p">,</span>
+<a id="__codelineno-0-2315" name="__codelineno-0-2315"></a>                    <span class="s2">&quot;radius_m&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">radius_m</span><span class="p">),</span>
+<a id="__codelineno-0-2316" name="__codelineno-0-2316"></a>                    <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="n">samples</span><span class="p">,</span>
+<a id="__codelineno-0-2317" name="__codelineno-0-2317"></a>                <span class="p">}</span>
+<a id="__codelineno-0-2318" name="__codelineno-0-2318"></a>            <span class="p">),</span>
+<a id="__codelineno-0-2319" name="__codelineno-0-2319"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">style</span><span class="p">,</span>
+<a id="__codelineno-0-2320" name="__codelineno-0-2320"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2321" name="__codelineno-0-2321"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
