@@ -1151,6 +1151,15 @@ _GLOBE_NIGHT_GRID_MIN = 16
 #: terminator; this is the same floor, stated here so the two frames answer alike (see :func:`_whole_samples`).
 _MIN_RING_SAMPLES = 4
 
+#: The open and closed ends of the solar altitude that can define a terminator, in degrees. ``0`` is the
+#: geometric terminator and is **in** range; ``-90`` is the nadir, which the sun cannot be below, so it is
+#: not. cleopatra refuses the same interval inside ``add_nightshade``, which only the flat path calls; this
+#: is the same interval, stated here so the two frames answer alike (see :func:`_terminator_altitude`).
+_MIN_TERMINATOR_ALTITUDE = -90.0
+
+#: The closed end of that interval — see :data:`_MIN_TERMINATOR_ALTITUDE`.
+_MAX_TERMINATOR_ALTITUDE = 0.0
+
 
 def _whole_samples(samples: Any, caller: str) -> int:
     """Return ``n`` as a sample count that can describe a ring, refusing anything that cannot.
@@ -1196,6 +1205,58 @@ def _whole_samples(samples: Any, caller: str) -> int:
             f"got {count}"
         )
     return count
+
+
+def _terminator_altitude(refraction: Any, caller: str) -> float:
+    """Return ``refraction`` as a solar altitude that can define a terminator, refusing anything that cannot.
+
+    The sibling of :func:`_whole_samples`, and it exists for the same reason. cleopatra refuses the range
+    inside ``add_nightshade``, which only the flat path calls: a globe fills by sun altitude over a display
+    grid and fed the value straight into ``sin(radians(refraction))``, so ``refraction=10`` painted a large
+    part of the **day** side as night, and a value past the nadir answered either a wrong shade or ``None``
+    — which the public API documents as "a globe whose visible side holds no night", making an out-of-range
+    argument indistinguishable from a legitimate empty result (round 4, M2). One keyword answers one way
+    now, whatever frame it is drawn on.
+
+    Args:
+        refraction: The caller's ``refraction``.
+        caller: The public method, named in the refusal the way every other refusal in this module names it.
+
+    Returns:
+        The altitude as a ``float``.
+
+    Raises:
+        ValueError: when ``refraction`` is not a real number in
+            ``(_MIN_TERMINATOR_ALTITUDE, _MAX_TERMINATOR_ALTITUDE]`` — above the horizon there is no night
+            to shade, and below the nadir there is no altitude the sun can stand at.
+
+    Examples:
+        - The twilight lines pass, and the geometric terminator at the closed end of the range with them;
+          an altitude above the horizon is refused by name:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _terminator_altitude
+            >>> (_terminator_altitude(0, "nightshade()"), _terminator_altitude(-18.0, "nightshade()"))
+            (0.0, -18.0)
+            >>> _terminator_altitude(10.0, "nightshade()")
+            Traceback (most recent call last):
+                ...
+            ValueError: nightshade() needs refraction= in (-90, 0] degrees, where 0 is the geometric terminator and -6/-12/-18 the civil, nautical and astronomical twilight lines; got 10.0
+
+            ```
+    """
+    if isinstance(refraction, bool) or not isinstance(refraction, numbers.Real):
+        altitude = math.nan
+    else:
+        altitude = float(refraction)
+    if not (
+        _MIN_TERMINATOR_ALTITUDE < altitude <= _MAX_TERMINATOR_ALTITUDE
+    ):  # a nan fails both comparisons, which is the answer for a non-number too
+        raise ValueError(
+            f"{caller} needs refraction= in ({_MIN_TERMINATOR_ALTITUDE:.0f}, "
+            f"{_MAX_TERMINATOR_ALTITUDE:.0f}] degrees, where 0 is the geometric terminator and "
+            f"-6/-12/-18 the civil, nautical and astronomical twilight lines; got {refraction!r}"
+        )
+    return altitude
 
 
 def _globe_night_grid(samples: int) -> int:
@@ -2335,10 +2396,11 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when ``refraction`` is outside ``(-90, 0]``, when ``n`` is not a whole number of at
                 least 4 — the fewest that describe a ring — or when ``when`` is text that is not ISO 8601.
-                The layer is not described. The ``n`` refusal is made here, in the builder, so it answers
-                the same way on a flat map and on a globe: cleopatra's own lives in the terminator sampler,
-                which only the flat path calls, and a globe used to take any ``n`` and record it
-                (round 3, L7).
+                The layer is not described. Both the ``refraction`` and the ``n`` refusal are made here, in
+                the builder, so they answer the same way on a flat map and on a globe: cleopatra's own live
+                in ``add_nightshade`` and the terminator sampler, which only the flat path calls, and a
+                globe used to take either value silently (round 3, L7 for ``n``; round 4, M2 for
+                ``refraction``).
             TypeError: when ``when`` is neither a ``datetime`` nor text.
 
         Examples:
@@ -2373,6 +2435,7 @@ class DecorationMixin(_MixinBase):
             tissot: the other overlay cleopatra's ``solar`` module draws.
         """
         samples = _whole_samples(n, "nightshade()")
+        altitude = _terminator_altitude(refraction, "nightshade()")
         moment = _utc_moment(when)
         return self._draw(
             LayerRecord(
@@ -2383,7 +2446,7 @@ class DecorationMixin(_MixinBase):
                     props={
                         "via": "nightshade",
                         "when": moment.isoformat(),
-                        "refraction": float(refraction),
+                        "refraction": altitude,
                         "n": samples,
                     }
                 ),

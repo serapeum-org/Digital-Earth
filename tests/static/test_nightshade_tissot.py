@@ -845,3 +845,75 @@ class TestTheSampleCountIsRefusedTheSameWayOnEveryFrame:
         canvas = Map(crs=3857, globe=globe)
         canvas.nightshade(JUNE_NOON, n=4, name="ns")
         assert canvas.layer_ids == ["ns"], f"n=4 should draw, got {canvas.layer_ids}"
+
+
+class TestTheTerminatorAltitudeIsRefusedTheSameWayOnEveryFrame:
+    """``refraction`` is the solar altitude that *defines* the terminator, so it has one valid range."""
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize(
+        "refraction",
+        [10.0, 0.001, -90.0, -120.0],
+        ids=["above-horizon", "just-above", "at-nadir", "below-nadir"],
+    )
+    def test_an_altitude_that_is_not_a_terminator_is_refused(self, globe, refraction):
+        """``nightshade(refraction=…)`` outside ``(-90, 0]`` is refused on a flat map and on a globe alike.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            refraction: A solar altitude that defines no terminator.
+
+        Test scenario:
+            cleopatra refuses the range inside ``add_nightshade``, which only the flat path calls — the
+            globe path fed ``refraction`` straight into ``sin(radians(refraction))``, so ``+10`` painted a
+            large part of the **day** side as night and a value past the nadir answered either a wrong
+            shade or ``None``, which the public API documents as "a globe whose visible side holds no
+            night". An out-of-range argument was therefore indistinguishable from a legitimate empty
+            result. This is the sibling of ``n``: one keyword, one answer, whatever frame it is drawn on.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        with pytest.raises(ValueError, match=r"nightshade\(\) needs refraction="):
+            canvas.nightshade(JUNE_NOON, refraction=refraction)
+        assert canvas.layer_ids == [], (
+            f"a refused shade must add no layer, got {canvas.layer_ids}"
+        )
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize(
+        "refraction",
+        [0.0, -0.83, -18.0],
+        ids=["geometric", "sunset", "astronomical"],
+    )
+    def test_an_altitude_inside_the_range_still_draws(self, globe, refraction):
+        """The documented terminator lines all draw, on a flat map and on a globe alike.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            refraction: A solar altitude inside ``(-90, 0]``.
+
+        Test scenario:
+            ``0`` is the geometric terminator and is **in** range while ``-90`` is out of it, so a refusal
+            that got the closed end wrong would reject the geometric line the default is measured from.
+            The sample count is pinned the same way by its sibling class above.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        canvas.nightshade(JUNE_NOON, refraction=refraction, name="ns")
+        assert canvas.layer_ids == ["ns"], (
+            f"refraction={refraction} should draw, got {canvas.layer_ids}"
+        )
+
+    def test_the_open_end_of_the_range_is_accepted_right_up_to_the_nadir(self):
+        """An altitude a thousandth of a degree above the nadir is in range; the nadir itself is not.
+
+        Test scenario:
+            The open end is pinned on the validator rather than through a drawing, because an altitude
+            that deep legitimately leaves a globe's visible side with no night at all — which is the
+            documented ``None``, not a refusal, so a drawn test could not tell the two apart. ``-90`` is
+            the nadir: the sun cannot be below it, so no terminator is defined there, and the refusal has
+            to fall between the two.
+        """
+        assert decoration._terminator_altitude(-89.999, "nightshade()") == -89.999, (
+            "an altitude just above the nadir defines a terminator and must be accepted"
+        )
+        with pytest.raises(ValueError, match=r"nightshade\(\) needs refraction="):
+            decoration._terminator_altitude(-90.0, "nightshade()")
