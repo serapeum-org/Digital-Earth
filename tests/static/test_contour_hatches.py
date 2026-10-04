@@ -395,3 +395,24 @@ class TestTheHatchLegend:
             f"a plan naming no hatch colour must leave the strokes at {default_stroke}, got "
             f"{[tuple(handle.get_hatchcolor()) for handle in handles]}"
         )
+
+    def test_an_opaque_colour_whose_hex_ends_in_00_still_fills_its_swatch(self):
+        """Transparency is a number, not a string suffix, so an opaque ``#…00`` keeps its colour.
+
+        Test scenario:
+            - ``GuidePlan`` + ``paint_guide`` is a public seam, and a plan built by hand may carry 6-digit
+              hex. ``#aabb00`` and ``#112200`` are fully opaque colours whose last two characters happen
+              to be the two the old check read as "alpha 00".
+            - Both swatches came back ``(0, 0, 0, 0)`` — the uncoloured ``hatch_legend`` form — so two
+              opaque colours were dropped. Each swatch must now carry its own colour, computed here from
+              the hex by matplotlib rather than read back out of the code under test.
+        """
+        colors = ("#aabb00", "#112200")
+        plan = GuidePlan(
+            "legend", colors=colors, rows=("a", "b"), hatches=("///", "..")
+        )
+        canvas = Map(crs=4326)
+        handles = paint_guide(canvas, plan).legend_handles
+        assert [tuple(handle.get_facecolor()) for handle in handles] == [
+            to_rgba(color) for color in colors
+        ], [tuple(handle.get_facecolor()) for handle in handles]

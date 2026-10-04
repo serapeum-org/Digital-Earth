@@ -34,7 +34,7 @@ from math import isfinite
 from typing import Any, List, Optional, Sequence, Tuple
 
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend, hatch_legend
-from matplotlib.colors import to_hex
+from matplotlib.colors import to_hex, to_rgba
 from matplotlib.contour import ContourSet
 
 from digitalearth.base.spec import (
@@ -668,6 +668,29 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
     return bar
 
 
+def _is_transparent(color: str) -> bool:
+    """Say whether a swatch colour is fully see-through, by its alpha rather than by its spelling.
+
+    The reading was ``face.endswith("00")``, which is true of every 8-digit hex :func:`plan_guide`
+    produces for an uncoloured band — and also of an *opaque* 6-digit one whose blue channel happens to be
+    zero, so ``#aabb00`` was dropped as transparent (review L3). ``GuidePlan`` + :func:`paint_guide` is a
+    public seam and a plan built by hand may spell its colours either way.
+
+    Args:
+        color: A matplotlib colour as the plan carries it, or the string ``"None"`` for a row the scale
+            gave no colour — which matplotlib itself reads as fully transparent.
+
+    Returns:
+        ``True`` when the colour's alpha is zero. ``False`` for anything matplotlib cannot parse, so an
+        unreadable colour still reaches the engine that will say so, rather than being taken for
+        transparent here.
+    """
+    try:
+        return bool(to_rgba(color)[3] == 0.0)
+    except ValueError:
+        return False
+
+
 def _paint_hatch_legend(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
     """Draw a hatched layer's key: each swatch the band's colour, if it has one, under the band's pattern.
 
@@ -684,7 +707,7 @@ def _paint_hatch_legend(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
         The ``Legend``.
     """
     faces = [str(color) for color in plan.colors]
-    if all(face.endswith("00") for face in faces):
+    if all(_is_transparent(face) for face in faces):
         return hatch_legend(
             scene.ax,
             list(plan.hatches),
