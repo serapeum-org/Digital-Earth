@@ -1209,11 +1209,14 @@ def _globe_night_grid(samples: int) -> int:
     in the figure and then ignored here entirely (round 3, L7).
 
     Args:
-        samples: The layer's recorded ``n``, as the caller gave it and the figure kept it. It is **not**
-            validated anywhere on this path: cleopatra's ``n`` must be 4 or more to form a terminator ring,
-            but that refusal lives in the terminator sampler, which only the flat path calls — a globe takes
-            any ``n`` and records it (``nightshade(when, n=-5)`` on a globe draws, and the figure says
-            ``n = -5``). So the floor below is not belt-and-braces; it is what makes this safe.
+        samples: The layer's recorded ``n``, as the caller gave it and the figure kept it. A count too
+            small to describe a ring never reaches here from the public API: :meth:`nightshade` refuses it
+            in the builder, on both frames (:func:`_whole_samples`), so ``nightshade(when, n=-5)`` on a
+            globe raises rather than drawing. That was not always so — cleopatra's refusal lives in the
+            terminator sampler, which only the flat path calls, so a globe used to take any ``n`` and
+            record it (round 3, L7) — which is why the floor below is now belt-and-braces rather than the
+            only guard. It still earns its place: this function is reached from a *stored* figure too, and
+            a figure can be hand-built or written by another tool.
 
     Returns:
         Samples per side, never below :data:`_GLOBE_NIGHT_GRID_MIN` — which is what a zero, negative or
@@ -1228,8 +1231,8 @@ def _globe_night_grid(samples: int) -> int:
             (400, 100)
 
             ```
-        - Anything the flat path would have refused stops at the floor rather than degenerating into the
-          grid itself:
+        - A count the public API refuses — reachable here only from a stored figure — stops at the floor
+          rather than degenerating into the grid itself:
             ```python
             >>> from digitalearth.static.maps.decoration import _globe_night_grid
             >>> (_globe_night_grid(4), _globe_night_grid(0), _globe_night_grid(-5))
@@ -2330,11 +2333,12 @@ class DecorationMixin(_MixinBase):
             — or ``None`` on a globe whose visible side holds no night.
 
         Raises:
-            ValueError: when ``refraction`` is outside ``(-90, 0]``, or ``when`` is text that is not
-                ISO 8601. The layer is not described. An ``n`` below 4 is refused on a **flat** map only —
-                the refusal is cleopatra's, from the terminator sampler that forms the ring — while a globe
-                takes any ``n`` and floors the grid it resolves to
-                (:func:`_globe_night_grid`), so ``n=3`` draws there.
+            ValueError: when ``refraction`` is outside ``(-90, 0]``, when ``n`` is not a whole number of at
+                least 4 — the fewest that describe a ring — or when ``when`` is text that is not ISO 8601.
+                The layer is not described. The ``n`` refusal is made here, in the builder, so it answers
+                the same way on a flat map and on a globe: cleopatra's own lives in the terminator sampler,
+                which only the flat path calls, and a globe used to take any ``n`` and record it
+                (round 3, L7).
             TypeError: when ``when`` is neither a ``datetime`` nor text.
 
         Examples:
