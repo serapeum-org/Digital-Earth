@@ -364,8 +364,11 @@ class TestRoundTrip:
         requested.clear()
         with pytest.raises(ValueError, match="'wcs'") as refusal:
             to_backend(spec, "matplotlib")
-        assert "'wms'" in str(refusal.value) and "'wmts'" in str(refusal.value), (
-            f"the refusal must name the kinds it does know, got {refusal.value}"
+        assert "'wms'" in str(refusal.value), (
+            f"the refusal must name WMS among the kinds it does know, got {refusal.value}"
+        )
+        assert "'wmts'" in str(refusal.value), (
+            f"the refusal must name WMTS among the kinds it does know, got {refusal.value}"
         )
         assert requested == [], (
             f"a refused figure must request no tile, got {requested}"

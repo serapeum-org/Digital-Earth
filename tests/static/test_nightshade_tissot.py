@@ -670,13 +670,21 @@ class TestTheExtentAFittedViewIsBoundedBy:
         xmin, xmax = canvas.ax.get_xlim()
         ymin, ymax = canvas.ax.get_ylim()
         assert finite.size, "the shade must have placeable vertices to begin with"
-        assert finite[:, 0].min() >= xmin and finite[:, 0].max() <= xmax, (
-            f"the fitted view {(xmin, xmax)} must hold every shaded x, got "
-            f"{(finite[:, 0].min(), finite[:, 0].max())}"
+        assert finite[:, 0].min() >= xmin, (
+            f"the fitted view starts at x {xmin} and must hold the westmost shaded vertex, got "
+            f"{finite[:, 0].min()}"
         )
-        assert finite[:, 1].min() >= ymin and finite[:, 1].max() <= ymax, (
-            f"the fitted view {(ymin, ymax)} must hold every shaded y, got "
-            f"{(finite[:, 1].min(), finite[:, 1].max())}"
+        assert finite[:, 0].max() <= xmax, (
+            f"the fitted view ends at x {xmax} and must hold the eastmost shaded vertex, got "
+            f"{finite[:, 0].max()}"
+        )
+        assert finite[:, 1].min() >= ymin, (
+            f"the fitted view starts at y {ymin} and must hold the southmost shaded vertex, got "
+            f"{finite[:, 1].min()}"
+        )
+        assert finite[:, 1].max() <= ymax, (
+            f"the fitted view ends at y {ymax} and must hold the northmost shaded vertex, got "
+            f"{finite[:, 1].max()}"
         )
 
     def test_a_view_that_does_not_meet_the_extent_is_left_alone(self):
@@ -718,8 +726,11 @@ class TestTheExtentAFittedViewIsBoundedBy:
         west, east = _POLAR_RASTER_WEST, _POLAR_RASTER_WEST + _POLAR_RASTER_WIDTH
         canvas.field(wide)
         xmin, xmax = sorted(canvas.ax.get_xlim())
-        assert xmin <= west and xmax >= east, (
-            f"the raster spans x {(west, east)} and must fit the view it framed, got {(xmin, xmax)}"
+        assert xmin <= west, (
+            f"the raster starts at x {west} and the view it framed must reach it, got {xmin}"
+        )
+        assert xmax >= east, (
+            f"the raster ends at x {east} and the view it framed must reach it, got {xmax}"
         )
 
 
