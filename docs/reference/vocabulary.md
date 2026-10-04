@@ -26,6 +26,11 @@ times, and three tiers each called cleopatra's classifier with their own error h
 luck and drifted where they did not. A `Scale` derived once and reused across frames is what stops an
 animation's colours flickering, and what lets a legend show the colours that were actually drawn.
 
+It also states what the ramp *cannot* colour: `missing` for a value it cannot place, and `over`/`under` for one
+past either end of the domain. All three travel in the stored form, so the tier that drew a figure and the tier
+that reads it back agree on the colour of a nodata cell and of a clipped value — see `with_extremes` to state
+them and `extremes` to read back only the ones that were stated.
+
 ::: digitalearth.base.spec.scale.Scale
 
 ## `Selection` — which slice of a dataset a layer draws

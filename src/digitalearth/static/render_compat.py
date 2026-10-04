@@ -54,12 +54,14 @@ from digitalearth.static.style_fold import (
 
 __all__ = [
     "COLOR_SCALE_ALIASES",
+    "EXTREME_KEYS",
     "STATIC_STYLE_SCHEMA",
     "coerce_color_scale",
     "fold_color_scaling",
     "fold_symbology",
     "group_render_kwargs",
     "plot_takes",
+    "pop_extreme_colors",
     "prepare_plot_kwargs",
     "relocate_flat_style",
     "route_flat_style",
@@ -156,16 +158,28 @@ _MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
 #: is declared beside them. The object is drawn with as given, not copied or rebuilt.
 NORM_KEY = "norm"
 
+#: The colours a field gives the values its ramp cannot place: a nodata cell (``missing``), a value below
+#: ``vmin`` (``under``) and one above ``vmax`` (``over``). They are **this tier's own** keywords rather than
+#: cleopatra's — the glyphs take their extremes on the colormap, not as keywords — so they are popped out of
+#: the drawing options by :func:`pop_extreme_colors` and folded onto the colormap through
+#: :meth:`~digitalearth.base.spec.scale.Scale.with_extremes`. The spellings are matplotlib's own, minus
+#: ``bad``: a nodata cell is ``missing`` everywhere else in this package (``Scale.missing``,
+#: :data:`~digitalearth.base.symbology.MISSING_COLOR`), and that is the name the four tiers share.
+EXTREME_KEYS: Tuple[str, ...] = ("missing", "over", "under")
+
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
 #: where it drives one. That is the **30** flat members cleopatra's constructors reject, the 6 typed group
-#: parameters they fold into, :data:`MARKER_SIZE_KEY` and :data:`NORM_KEY` — 38 keywords that were in no
-#: signature anywhere.
+#: parameters they fold into, :data:`MARKER_SIZE_KEY`, :data:`NORM_KEY` and the three :data:`EXTREME_KEYS` —
+#: 41 keywords that were in no signature anywhere.
 #:
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
 #: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
 #: through :class:`~digitalearth.base.spec.encoding.Encoding` rather than through a keyword of their own.
 #: ``tests/static/test_style_schema.py`` pins this table against :data:`FLAT_STYLE_KEYS`, so a key added
 #: upstream cannot quietly go undeclared again.
+#:
+#: Three of them — the :data:`EXTREME_KEYS` — are honoured on a **field** render, which is the one layer kind
+#: whose colormap this tier resolves and can therefore restate the extremes of.
 STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     # -- visual channels of the layer itself
     StyleKey("alpha", "Layer opacity, 0 transparent to 1 opaque.", channel="opacity"),
@@ -246,6 +260,10 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
         NORM_KEY,
         "A built matplotlib Normalize the values are coloured through, used as given.",
     ),
+    # -- the colours for what the ramp cannot place (ST-10)
+    StyleKey("missing", "Colour of a cell with no value, on a field render."),
+    StyleKey("over", "Colour of a value above vmax, on a field render."),
+    StyleKey("under", "Colour of a value below vmin, on a field render."),
 )
 
 #: Channel -> the flat keyword that carries it, derived from the declaration so the two cannot disagree.
@@ -419,6 +437,45 @@ def relocate_flat_style(
     if folds_marker_size:
         _fold_marker_size(opts)
     return moved
+
+
+def pop_extreme_colors(opts: Dict[str, Any]) -> Dict[str, str]:
+    """Take the :data:`EXTREME_KEYS` out of a drawing-options dict, returning the ones the caller stated.
+
+    These three never reach a cleopatra glyph: a glyph takes its extremes on the **colormap** it is handed,
+    so the drawer folds them there instead (through
+    :meth:`~digitalearth.base.spec.scale.Scale.with_extremes`). Popping them is what makes them the tier's
+    own keywords rather than a stray keyword cleopatra refuses by name.
+
+    Args:
+        opts: The drawing options; mutated in place (the stated keys are removed).
+
+    Returns:
+        The stated colours, keyed as :meth:`~digitalearth.base.spec.scale.Scale.extremes` keys them — so the
+        result goes straight to ``Scale.with_extremes(**result)``. Empty when the caller stated none, which
+        is the signal to leave the resolved colormap exactly as it is.
+
+    Examples:
+        - The stated colours come out and the rest of the options stay:
+            ```python
+            >>> from digitalearth.static.render_compat import pop_extreme_colors
+            >>> opts = {"missing": "#cccccc", "over": "#ff0000", "cmap": "viridis"}
+            >>> pop_extreme_colors(opts)
+            {'missing': '#cccccc', 'over': '#ff0000'}
+            >>> opts
+            {'cmap': 'viridis'}
+
+            ```
+        - Nothing stated, nothing taken — and the empty answer is what says "leave the colormap alone":
+            ```python
+            >>> from digitalearth.static.render_compat import pop_extreme_colors
+            >>> opts = {"cmap": "viridis"}
+            >>> pop_extreme_colors(opts)
+            {}
+
+            ```
+    """
+    return {key: opts.pop(key) for key in EXTREME_KEYS if key in opts}
 
 
 #: Flat member kwargs per group parameter (used to spot styling a target glyph cannot accept).

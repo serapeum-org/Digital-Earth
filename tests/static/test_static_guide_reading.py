@@ -5,7 +5,7 @@ away with it. This covers the layer underneath: the two readings the tier takes 
 decide whether a colour key is possible at all, and the three paths a key takes once it is.
 
 The readings matter because they are the only thing standing between "this layer can be keyed" and a bar
-labelled with numbers the picture never drew. :func:`~digitalearth.static.guides._scale_of` has **four**
+labelled with numbers the picture never drew. :func:`~digitalearth.static.guides.drawn_scale` has **four**
 separate ways to answer "no scale", and a wrong `None` from any of them silently downgrades a keyable layer
 to an unkeyable one, while a wrong `Scale` labels the key with invented limits. Neither shows up as an
 exception — both draw a picture.
@@ -26,8 +26,8 @@ from digitalearth.base.spec import Encoding, Scale, Symbology
 from digitalearth.static import Map
 from digitalearth.static.guides import (
     GUIDE_KIND_KEY,
-    _scale_of,
     _swatches,
+    drawn_scale,
     guide_kind,
 )
 
@@ -76,7 +76,7 @@ class _Legend:
 
 
 class TestScaleOf:
-    """`_scale_of` — the scale a layer publishes, read off the artist's own norm."""
+    """`drawn_scale` — the scale a layer publishes, read off the artist's own norm."""
 
     def test_a_classified_norm_publishes_its_edges(self):
         """A `BoundaryNorm`'s boundaries become a classified scale carrying those very edges.
@@ -85,7 +85,9 @@ class TestScaleOf:
             This is the reading that makes a graduated legend possible. The edges are taken from the norm the
             artist draws through, so the rows cannot disagree with the picture.
         """
-        scale = _scale_of(type("A", (), {"norm": BoundaryNorm([0.0, 5.0, 10.0], 2)})())
+        scale = drawn_scale(
+            type("A", (), {"norm": BoundaryNorm([0.0, 5.0, 10.0], 2)})()
+        )
         assert scale is not None, (
             "a BoundaryNorm carries class edges and must publish a scale"
         )
@@ -103,7 +105,7 @@ class TestScaleOf:
             The ordinary raster case — no classes, so the key is a ramp between the two limits the artist
             normalises through.
         """
-        scale = _scale_of(type("A", (), {"norm": Normalize(vmin=-3.0, vmax=7.0)})())
+        scale = drawn_scale(type("A", (), {"norm": Normalize(vmin=-3.0, vmax=7.0)})())
         assert scale is not None, (
             "a normalised artist must publish the limits it draws through"
         )
@@ -119,7 +121,7 @@ class TestScaleOf:
             An outline-only artist — the case `quickmap` already tolerates rather than raising on. Answering
             with a scale here would offer a colorbar over a layer with no colour to explain.
         """
-        assert _scale_of(object()) is None, (
+        assert drawn_scale(object()) is None, (
             "an artist with no norm must publish no scale"
         )
 
@@ -148,7 +150,7 @@ class TestScaleOf:
             than keying it wrongly.
         """
         norm = type("N", (), {"boundaries": boundaries})()
-        published = _scale_of(type("A", (), {"norm": norm})())
+        published = drawn_scale(type("A", (), {"norm": norm})())
         assert published is None, f"{why}; expected no scale, got {published}"
 
     @pytest.mark.parametrize(
@@ -174,7 +176,7 @@ class TestScaleOf:
             the key with them. Both are worse than no key.
         """
         norm = type("N", (), {"boundaries": None, "vmin": low, "vmax": high})()
-        published = _scale_of(type("A", (), {"norm": norm})())
+        published = drawn_scale(type("A", (), {"norm": norm})())
         assert published is None, f"{why} must publish no scale, got {published}"
 
 

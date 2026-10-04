@@ -48,9 +48,9 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
-from digitalearth.static.guides import source_field
+from digitalearth.static.guides import drawn_scale, source_field
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import relocate_flat_style
+from digitalearth.static.render_compat import pop_extreme_colors, relocate_flat_style
 from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord, drawing_style
 
@@ -416,6 +416,48 @@ def _class_plan(
     return recorded, asks_categorical(scheme) or from_record
 
 
+def _recolor_extremes(drawn: DrawnLayer, stated: Dict[str, str]) -> DrawnLayer:
+    """Fold the caller's stated extreme colours onto a drawn layer's colormap, through its scale.
+
+    The tier used to state **one** extreme colour, in one place, as a literal:
+    ``artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))`` on a classified vector layer.
+    A field stated none, so a nodata cell took matplotlib's transparent default and a clipped value took the
+    ramp's own end colour — a field clipped at ``vmax`` drew exactly like one that peaks there.
+
+    The route is through :class:`~digitalearth.base.spec.scale.Scale` rather than straight onto the colormap,
+    because the scale is what the layer *publishes*: the colours end up in the figure's description, so
+    another tier reading it back colours the same values the same way.
+
+    An extreme the caller did not state is passed as ``None``, which is how
+    ``matplotlib.colors.Colormap.with_extremes`` says "keep this one" — so a colormap the caller built
+    themselves keeps the extremes it already carried, and only the ones named here are restated.
+
+    Args:
+        drawn: What the glyph produced. Returned unchanged when it has no artist, when its artist colours
+            through no colormap, or when the artist's norm has no limits a scale could be published over.
+        stated: The colours the caller stated, as :func:`~digitalearth.static.render_compat.pop_extreme_colors`
+            returns them.
+
+    Returns:
+        The layer, with its artist's colormap recoloured and the stated colours on the scale it publishes.
+    """
+    artist = drawn.artist
+    if artist is None or not hasattr(artist, "set_cmap"):
+        return drawn
+    # A categorical field already states its scale — its codes are the one scale a norm cannot express — so
+    # the colours are added to *that* rather than to a second reading of the same artist.
+    scale = drawn.scale if drawn.scale is not None else drawn_scale(artist)
+    if scale is None:
+        return drawn
+    scale = scale.with_extremes(**stated)
+    artist.set_cmap(
+        artist.get_cmap().with_extremes(
+            bad=scale.missing, over=scale.over, under=scale.under
+        )
+    )
+    return replace(drawn, scale=scale)
+
+
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -441,6 +483,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
+    # The tier's own keywords, taken out before anything cleopatra sees: a glyph carries its extremes on the
+    # colormap, not as keywords, so these are folded there once the artist exists and its limits are known.
+    stated_extremes = pop_extreme_colors(opts)
     recorded, codes = _class_plan(layer, kind, opts.get("scheme"))
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
@@ -524,6 +569,8 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # A categorical scale is the one a norm cannot state — its edges look like any graduated cut — so the
         # drawer says it outright; a graduated one is read off the norm as it always was.
         drawn = replace(drawn, scale=classes.scale)
+    if stated_extremes:
+        drawn = _recolor_extremes(drawn, stated_extremes)
     # The band's own name, which only the drawer can answer: the builder records a band *number* and never
     # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
     return drawn.colored_by(source_field(identity, props["band"]))

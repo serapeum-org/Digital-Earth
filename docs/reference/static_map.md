@@ -54,6 +54,22 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## The colours a ramp cannot place
+
+Three values fall outside a colour ramp, and a field render takes a colour for each: `missing=` for a cell with
+no value, `under=` for a value below `vmin` and `over=` for one above `vmax`. They are stated on the call and
+folded onto the layer's colormap, so they also reach the figure's description — the layer's colour `Scale`
+carries them, which is what lets another backend colour the same values the same way.
+
+```python
+m.field(dataset, vmin=0, vmax=100, missing="#cccccc", under="#0000ff", over="#ff0000")
+```
+
+Stating one is **opt-in and leaves the rest alone**. Without `missing=` a nodata cell keeps matplotlib's default
+— fully transparent, so the gap shows through — and without `over=` a clipped value keeps the ramp's own end
+colour, which is why a field clipped at `vmax` reads the same as one that really peaks there. A colormap you
+built yourself keeps the extremes it already carried; only the ones named in the call are restated.
+
 ## Small multiples on one scale
 
 `facet(stack)` draws a raster stack — a multi-band `Dataset`, a `DatasetCollection` or a list of frames — as
