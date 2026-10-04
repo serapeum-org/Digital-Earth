@@ -9,7 +9,7 @@ import os
 from functools import wraps
 from math import isfinite
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -3178,7 +3178,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: Optional[Any] = None,
-        width: Optional[Union[float, str]] = None,
+        width: float | str | None = None,
         color: Optional[Any] = None,
         opacity: Optional[float] = None,
         name: Optional[str] = None,
