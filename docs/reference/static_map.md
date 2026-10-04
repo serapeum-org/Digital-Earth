@@ -54,6 +54,27 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## Small multiples on one scale
+
+`facet(stack)` draws a raster stack — a multi-band `Dataset`, a `DatasetCollection` or a list of frames — as
+one panel per frame, and resolves the colour scale **once over the whole stack**: the frames are warped into
+the display CRS and measured together, so every panel colours one value the same way, and a named `scheme` is
+cut into one set of class edges for all of them. `col_wrap` folds the row, `col`/`labels` title the panels, and
+one colorbar spans them. Each panel is an ordinary `Map`, returned for further drawing.
+
+```python
+from digitalearth.static import facet
+
+fig, maps = facet(monthly_rain, crs=4326, col="month", labels=months, col_wrap=4, cbar_label="mm")
+for m in maps:
+    m.coastlines()
+fig.savefig("rain.png")
+```
+
+::: digitalearth.static.figure.facet
+    options:
+      heading_level: 3
+
 ## Hatching a mask
 
 `contours(..., filled=True, hatches=[...])` gives each band between `levels` a hatch pattern, and `fill=False`

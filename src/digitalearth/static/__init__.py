@@ -21,7 +21,7 @@ package-root export (``from digitalearth import Map``). There is no lazily-resol
 has no PEP 562 ``__getattr__`` — an unknown attribute fails with Python's own message.
 """
 
-from digitalearth.static.figure import grid, shared_colorbar
+from digitalearth.static.figure import facet, grid, shared_colorbar
 from digitalearth.static.map import Map
 
 # Importable as ``from digitalearth.static import OffLimbError`` so a caller can catch it, but kept
@@ -32,4 +32,4 @@ from digitalearth.static.maps.base import OffLimbError  # noqa: F401
 from digitalearth.static.scene import Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 
-__all__ = ["Scene", "Map", "TexturedGlobe", "grid", "shared_colorbar"]
+__all__ = ["Scene", "Map", "TexturedGlobe", "facet", "grid", "shared_colorbar"]

@@ -2,19 +2,34 @@
 
 earthkit-plots models a figure as ``Figure → Subplot/Map → Layer``. Digital-Earth keeps the panel itself
 (``Map``) as the unit and adds a thin :func:`grid` that creates the matplotlib figure + axes grid and binds a
-``Map`` to each axes, plus :func:`shared_colorbar` for one colorbar spanning the panels. This is orchestration
-only — the rendering stays in each ``Map`` (pyramids + cleopatra).
+``Map`` to each axes, plus :func:`shared_colorbar` for one colorbar spanning the panels, and :func:`facet`, which
+lays a raster stack out as small multiples on one shared colour scale. This is orchestration only — the
+rendering stays in each ``Map`` (pyramids + cleopatra).
 """
 
-from typing import Any, List, Optional, Tuple
+import math
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
+from pyramids.dataset import Dataset
 
+from digitalearth.base.arrays import read_masked_band
+from digitalearth.base.clim import frozen_scale, measure_clim
+from digitalearth.base.crs import OffLimbError
+from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.static.map import Map
 
-__all__ = ["grid", "shared_colorbar"]
+__all__ = ["facet", "grid", "shared_colorbar"]
+
+#: The render each ``facet(kind=)`` names, as ``(Map method, keywords it is called with)``.
+_FACET_KINDS: Dict[str, Tuple[str, Dict[str, Any]]] = {
+    "field": ("field", {}),
+    "pcolormesh": ("pcolormesh", {}),
+    "contourf": ("contours", {"filled": True}),
+    "contour": ("contours", {"filled": False}),
+}
 
 
 def grid(
@@ -105,3 +120,218 @@ def shared_colorbar(
     if label is not None:
         cbar.set_label(label)
     return cbar
+
+
+def _panels_of(stack: Any, band: int) -> Tuple[List[Any], List[int], str]:
+    """Return what each panel of a facet draws: its frame, the band it reads, and the facet's default name.
+
+    Args:
+        stack: A multi-band ``Dataset`` (one panel per band), a ``DatasetCollection`` (one per member) or any
+            sequence of ``Dataset`` frames.
+        band: The band every frame of a collection or sequence is read at.
+
+    Returns:
+        ``(frames, bands, name)``: one frame and one band per panel, and ``"band"`` or ``"frame"`` — what the
+        panels are numbered by when the caller names no ``col``.
+    """
+    if isinstance(stack, Dataset):
+        count = int(stack.band_count)
+        return [stack] * count, list(range(1, count + 1)), "band"
+    frames = list(getattr(stack, "datasets", stack))
+    return frames, [band] * len(frames), "frame"
+
+
+def _stack_values(
+    panel: Map, frames: Sequence[Any], bands: Sequence[int]
+) -> List[np.ndarray]:
+    """Read every panel's values as they will be drawn: warped into the display CRS, nodata as ``NaN``.
+
+    Args:
+        panel: A map in the display CRS the panels share, used for its warp.
+        frames: One frame per panel.
+        bands: The band each frame is read at.
+
+    Returns:
+        One array per frame that lands on the view; a frame the display CRS cannot place contributes none.
+    """
+    values = []
+    for frame, frame_band in zip(frames, bands):
+        try:
+            warped = panel._reproject(frame)
+        except OffLimbError:
+            continue  # it draws nothing, so it bounds nothing
+        values.append(read_masked_band(warped, band=frame_band))
+    return values
+
+
+def _shared_style(
+    values: Sequence[np.ndarray], style: Dict[str, Any], kind: str
+) -> Dict[str, Any]:
+    """Resolve the colour scale every panel shares, once, over the whole stack.
+
+    Args:
+        values: Every panel's values, from :func:`_stack_values`.
+        style: The caller's styling keywords. Not mutated.
+        kind: The render, one of :data:`_FACET_KINDS`.
+
+    Returns:
+        The keywords each panel is drawn with: a named ``scheme`` replaced by the class edges it cuts over
+        the whole stack, and ``vmin``/``vmax`` filled from the stack's range wherever the caller left them
+        unset — so no panel picks a scale from its own frame.
+
+    Raises:
+        ValueError: for a contour render without explicit ``levels``, which each panel would otherwise pick
+            from its own frame.
+    """
+    shared = dict(style)
+    if kind in ("contourf", "contour") and shared.get("levels") is None:
+        raise ValueError(
+            f"facet(kind={kind!r}) needs explicit levels=: without them every panel picks its own from its "
+            "own frame, so the panels stop sharing one scale"
+        )
+    finite = [np.asarray(a, dtype=float)[np.isfinite(a)] for a in values]
+    pooled = np.concatenate(finite) if finite else np.array([], dtype=float)
+    scheme = shared.get("scheme")
+    if isinstance(scheme, str) and scheme != "categorical":
+        classes = Scale.from_values(pooled, scheme=scheme, k=int(shared.pop("k", 5)))
+        shared["scheme"] = [float(edge) for edge in classes.breaks]
+    low, high = frozen_scale(measure_clim(values)).as_limits()
+    shared.setdefault("vmin", low)
+    shared.setdefault("vmax", high)
+    if shared["vmin"] is None:
+        shared["vmin"] = low
+    if shared["vmax"] is None:
+        shared["vmax"] = high
+    return shared
+
+
+def facet(
+    stack: Any,
+    *,
+    col: Optional[str] = None,
+    col_wrap: Optional[int] = None,
+    labels: Optional[Sequence[Any]] = None,
+    kind: str = "field",
+    band: int = DEFAULT_BAND,
+    crs: Any = 3857,
+    globe: bool = False,
+    figsize: Optional[Tuple[float, float]] = None,
+    colorbar: bool = True,
+    cbar_label: Optional[str] = None,
+    **style: Any,
+) -> Tuple[Figure, List[Map]]:
+    """Draw a raster stack as small multiples — one panel per frame — on one shared colour scale.
+
+    Small multiples are read against each other, so the scale is resolved **once over the whole stack**
+    rather than per panel: the frames are warped into the display CRS and measured together, ``vmin``/``vmax``
+    become the stack's range, and a named ``scheme`` is cut into one set of class edges over every frame.
+    Each panel is an ordinary :class:`Map` from :func:`grid`, so its frame is a described layer and the
+    panel takes a basemap, coastlines or a graticule like any other map. One colorbar spans the panels.
+
+    Args:
+        stack: A multi-band ``Dataset`` (one panel per band), a ``DatasetCollection`` (one per member), or
+            a sequence of ``Dataset`` frames.
+        col: What the panels are, as each title names it — ``"time"`` titles them ``"time = 0"``,
+            ``"time = 1"``, … ``None`` (default) says ``"band"`` for a multi-band dataset and ``"frame"``
+            otherwise.
+        col_wrap: Panels per row; the rest wrap onto further rows, and the unused slots of the last row are
+            hidden. ``None`` (default) puts every panel on one row.
+        labels: One label per panel for its title, in place of the index (``1``-based band numbers for a
+            multi-band dataset, ``0``-based positions otherwise).
+        kind: The render — ``"field"`` (default), ``"pcolormesh"``, ``"contourf"`` or ``"contour"``. The two
+            contour renders need explicit ``levels=``.
+        band: The band each frame of a collection or sequence is drawn from. Ignored for a multi-band
+            dataset, whose bands are the panels.
+        crs: Display CRS of every panel.
+        globe: Draw every panel on a globe frame.
+        figsize: Figure size in inches; ``None`` uses the matplotlib default.
+        colorbar: Draw one colorbar spanning the panels (default ``True``).
+        cbar_label: The colorbar's label.
+        **style: Styling for every panel, forwarded to the render (``cmap``, ``vmin``, ``vmax``, ``scheme``,
+            ``k``, ``levels``, …). A ``vmin``/``vmax`` given here is the shared scale instead of the stack's
+            range.
+
+    Returns:
+        ``(fig, maps)`` — the figure and one ``Map`` per panel, in panel order.
+
+    Raises:
+        ValueError: when the stack has no frames, ``col_wrap`` is below 1, ``labels`` does not number the
+            panels, ``kind`` is not one of the four, or a contour ``kind`` has no ``levels``.
+
+    Examples:
+        - Four frames on one row, one scale, titled by month:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import facet
+            >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
+            >>> frames = [
+            ...     Dataset.from_array(arr=np.full((4, 4), 10.0 * i), geo_ref=geo, no_data_value=-9999.0)
+            ...     for i in range(4)
+            ... ]
+            >>> fig, maps = facet(frames, crs=4326, col="month", labels=["Jan", "Feb", "Mar", "Apr"])
+            >>> [m.ax.get_title() for m in maps]
+            ['month = Jan', 'month = Feb', 'month = Mar', 'month = Apr']
+            >>> {m.layers[-1][1].get_clim() for m in maps}
+            {(0.0, 30.0)}
+
+            ```
+        - Wrap onto rows of three; the last row's spare slots are hidden:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import facet
+            >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
+            >>> frames = [
+            ...     Dataset.from_array(arr=np.full((4, 4), float(i)), geo_ref=geo, no_data_value=-9999.0)
+            ...     for i in range(4)
+            ... ]
+            >>> fig, maps = facet(frames, crs=4326, col_wrap=3, colorbar=False)
+            >>> maps[0].ax.get_subplotspec().get_geometry()[:2], sum(not ax.get_visible() for ax in fig.axes)
+            ((2, 3), 2)
+
+            ```
+
+    See Also:
+        grid: the panels alone, for a layout that draws something different on each.
+        shared_colorbar: the spanning bar on its own.
+    """
+    if kind not in _FACET_KINDS:
+        raise ValueError(
+            f"facet(kind={kind!r}) is not a render; use one of {sorted(_FACET_KINDS)}"
+        )
+    frames, bands, default_col = _panels_of(stack, band)
+    count = len(frames)
+    if count == 0:
+        raise ValueError("facet() was given no frames to draw")
+    if col_wrap is not None and col_wrap < 1:
+        raise ValueError(
+            f"facet(col_wrap=) is panels per row and must be at least 1; got {col_wrap}"
+        )
+    if labels is not None and len(labels) != count:
+        raise ValueError(
+            f"facet() draws {count} panels, so labels= needs {count} labels; got {len(labels)}"
+        )
+    ncols = count if col_wrap is None else min(col_wrap, count)
+    nrows = math.ceil(count / ncols)
+    fig, slots = grid(nrows, ncols, crs=crs, globe=globe, figsize=figsize)
+    maps, spare = slots[:count], slots[count:]
+    for empty in spare:
+        empty.ax.set_visible(False)
+    shared = _shared_style(_stack_values(maps[0], frames, bands), style, kind)
+    method, fixed = _FACET_KINDS[kind]
+    name = default_col if col is None else col
+    if labels is None:
+        labels = bands if default_col == "band" else list(range(count))
+    drawn = None
+    for panel, frame, frame_band, label in zip(maps, frames, bands, labels):
+        artist = getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
+        drawn = artist if drawn is None else drawn
+        panel.set_title(f"{name} = {label}")
+    if colorbar:
+        shared_colorbar(fig, drawn, maps, label=cbar_label)
+    return fig, maps

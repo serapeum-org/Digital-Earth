@@ -646,6 +646,7 @@
     "bar_by",
     "boxplot",
     "envelope",
+    "facet",
     "gallery",
     "get_source",
     "grid",
