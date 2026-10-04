@@ -23,6 +23,7 @@ import contextlib
 import logging
 import math
 import numbers
+import warnings
 from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -38,6 +39,7 @@ from typing import (
     Sequence,
     Tuple,
 )
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import numpy as np
 from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
@@ -467,12 +469,76 @@ _OGC_PROVIDERS: Dict[str, type] = {"wms": WMSProvider, "wmts": WMTSProvider}
 
 #: The OGC provider field a figure never records. ``extra_params`` is documented as where a service's token
 #: goes, so it is held beside the layer with the object itself — the same rule that keeps an ``xyzservices``
-#: ``apikey`` out of a figure. Every other field names the service rather than authenticating to it.
+#: ``apikey`` out of a figure.
 _OGC_SECRET_FIELDS: FrozenSet[str] = frozenset({"extra_params"})
+
+#: The OGC provider field a figure records only the *base* of. A query string is the other ordinary way an
+#: OGC service is authenticated (``?token=``, ``?api_key=``, ``?SERVICE_KEY=``), and nothing here can tell
+#: such a parameter from a harmless one, so the whole query goes and :func:`_service_base_url` says which
+#: parameters it dropped (round 4, H2). Every remaining recorded field names the service.
+_OGC_URL_FIELD = "url"
+
+
+def _service_base_url(url: Any) -> str:
+    """Return an OGC service URL with its query string dropped, warning when there was one.
+
+    A query-string credential is normal for an OGC service, and the ``url`` field used to be copied into a
+    figure whole — so the same value :func:`_quiet_tile_urls` exists to keep out of the logs was written to
+    JSON two functions away (round 4, H2). The parameters are dropped rather than redacted because the
+    record has to stay a usable service URL, and dropped **whatever they hold**: a credential is not
+    distinguishable from a parameter here, so every query is treated as one. A service that genuinely needs
+    a parameter passes it through ``extra_params``, which is held beside the layer and never travels.
+
+    Args:
+        url: The provider's ``url`` field.
+
+    Returns:
+        Scheme, host and path, with query and fragment removed.
+
+    Warns:
+        UserWarning: when a query string was dropped, naming its parameters — the caller has to know to
+            pass them through ``extra_params`` instead, since the replayed figure will not carry them.
+
+    Examples:
+        - A plain service URL is handed back as it was given, with no warning to ignore:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _service_base_url
+            >>> _service_base_url("https://example.org/geoserver/wms")
+            'https://example.org/geoserver/wms'
+
+            ```
+        - One carrying a token keeps only its base, and the warning names every parameter it lost:
+            ```python
+            >>> import warnings
+            >>> from digitalearth.static.maps.decoration import _service_base_url
+            >>> with warnings.catch_warnings(record=True) as caught:
+            ...     warnings.simplefilter("always")
+            ...     _service_base_url("https://example.org/wms?token=s3cret&SERVICE=WMS")
+            'https://example.org/wms'
+            >>> "['SERVICE', 'token']" in str(caught[0].message)
+            True
+
+            ```
+    """
+    text = str(url)
+    parts = urlsplit(text)
+    if not parts.query and not parts.fragment:
+        return text
+    dropped = sorted(parse_qs(parts.query, keep_blank_values=True))
+    base = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    warnings.warn(
+        f"the figure records this OGC service as {base!r}: its query string is dropped because a "
+        f"parameter there may be a credential, and a figure is written to JSON and read back. Dropped "
+        f"parameters: {dropped}. Pass what the service needs through extra_params=, which is held beside "
+        f"the layer and never recorded.",
+        UserWarning,
+        stacklevel=3,
+    )
+    return base
 
 
 def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
-    """Describe a cleopatra OGC provider as the plain values a figure can carry, minus its credential.
+    """Describe a cleopatra OGC provider as the plain values a figure can carry, minus every credential path.
 
     An OGC provider is the one source kind with no ``name`` to record, so recording it by name wrote
     ``None`` — the shared default's spelling — and a figure read back elsewhere silently drew CartoDB
@@ -480,11 +546,20 @@ def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
     dataclasses of plain values, so the description is simply their fields, which is also why it needs no
     per-class spelling: a field added upstream travels without a change here.
 
+    **Exactly what travels**: every field of the dataclass except :data:`_OGC_SECRET_FIELDS`
+    (``extra_params``, dropped whole), and ``url`` as its scheme/host/path only — any query string on it is
+    dropped and named in a warning (:func:`_service_base_url`). So the two ways an OGC service is normally
+    authenticated both stay on the object, and what reaches a figure names the service.
+
     Args:
         source: A basemap source that is not a name.
 
     Returns:
         ``{"ogc": <tag>, <field>: <value>, …}``, or ``None`` when ``source`` is not an OGC provider.
+
+    Warns:
+        UserWarning: when the provider's ``url`` carried a query string, which is dropped
+            (:func:`_service_base_url`).
 
     Examples:
         - A WMS service is described by its own fields, and the token it carries stays on the object:
@@ -517,18 +592,22 @@ def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
         return None
     described: Dict[str, Any] = {"ogc": tag}
     for spec in dataclass_fields(source):
-        if spec.name not in _OGC_SECRET_FIELDS:
-            described[spec.name] = getattr(source, spec.name)
+        if spec.name in _OGC_SECRET_FIELDS:
+            continue
+        value = getattr(source, spec.name)
+        described[spec.name] = (
+            _service_base_url(value) if spec.name == _OGC_URL_FIELD else value
+        )
     return described
 
 
 def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
     """Rebuild a cleopatra OGC provider from what a figure recorded of it.
 
-    The credential the original carried is **not** rebuilt: :data:`_OGC_SECRET_FIELDS` never travels, so a
-    replayed figure asks the same service with ``extra_params`` empty. A service that needs a token answers
-    with its own error, which is the honest outcome — the alternative was drawing a different basemap in
-    silence.
+    The credential the original carried is **not** rebuilt: :data:`_OGC_SECRET_FIELDS` never travels, and
+    neither does the ``url``'s query string (:func:`_service_base_url`), so a replayed figure asks the same
+    service with ``extra_params`` empty and a bare base URL. A service that needs a token answers with its
+    own error, which is the honest outcome — the alternative was drawing a different basemap in silence.
 
     Args:
         described: What :func:`_describe_ogc_provider` recorded.

@@ -81,13 +81,14 @@ m.basemap(WMSProvider("https://example.org/geoserver/wms", "topp:states"))
 m.basemap(WMTSProvider("https://example.org/wmts/{TileMatrix}/{TileRow}/{TileCol}.png", "basemap"))
 ```
 
-A credential the service needs goes in the provider's `extra_params`.
+A credential the service needs goes in the provider's `extra_params` — **not** in the service URL's query
+string, which a figure does not record (see below).
 
 ### What a figure records of an OGC basemap
 
 The provider **object** is held beside the layer — it is an engine object, and it carries whatever is in
 `extra_params`. What the figure's description carries is the provider's own fields, every one of them except
-`extra_params`:
+`extra_params`, and `url` reduced to its scheme, host and path:
 
 ```python
 m.figure_spec.layers.get("bm").symbology.props["source"]
@@ -110,6 +111,23 @@ the cross-tier basemap gap, not an OGC one.
 is written to JSON and read back, and a token written into one leaks with it. So a replayed figure asks the
 service **without** a credential. If the service needs one, it answers with its own error — which is the
 honest outcome; pass the provider again, with its `extra_params`, to draw it authenticated.
+
+**A query string on the service URL does not travel either, whatever it holds.** `?token=`, `?api_key=` and
+`?SERVICE_KEY=` are ordinary ways for an OGC service to authenticate, and nothing in this tier can tell such a
+parameter from a harmless one — so the whole query is dropped and only the base URL is recorded. The drop is
+warned about by name, because the replayed figure will not carry it:
+
+```python
+m.basemap(WMSProvider("https://example.org/geoserver/wms?token=s3cret", "topp:states"))
+# UserWarning: the figure records this OGC service as 'https://example.org/geoserver/wms': its query string
+# is dropped because a parameter there may be a credential, and a figure is written to JSON and read back.
+# Dropped parameters: ['token']. Pass what the service needs through extra_params=, which is held beside the
+# layer and never recorded.
+```
+
+So the two paths a credential can take into a provider — `extra_params` and the URL's query — both stay on
+the object, and every field a figure records names the service. This is the same value `_quiet_tile_urls`
+keeps out of the logs for keyed XYZ tiles, and it is now treated as a secret in both places.
 
 ## Adding a preset
 

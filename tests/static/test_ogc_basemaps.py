@@ -11,6 +11,7 @@ that records each request and answers with one PNG, so the real fetch, stitch an
 
 import io
 import json
+import warnings
 from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
@@ -283,6 +284,61 @@ class TestRoundTrip:
         assert WMS_URL in stored, "the service URL is what makes the figure faithful"
         assert "s3cr3t" not in stored, "a credential must never reach a stored figure"
         assert "token" not in stored, "nor the name of the parameter carrying it"
+
+    def test_a_credential_in_the_service_url_stays_out_of_the_stored_figure(
+        self, requested
+    ):
+        """A token in the service URL's query string is dropped from the record, and the drop is named.
+
+        Args:
+            requested: The recorded tile requests, so drawing the basemap reaches no network.
+
+        Test scenario:
+            ``extra_params`` being the one field left out protected only a credential passed *that* way.
+            A query-string token is an ordinary way for an OGC service to authenticate (``token=``,
+            ``api_key=``, ``SERVICE_KEY=``), and the ``url`` field was copied into the figure whole — so
+            the same value this tier treats as a secret in ``_quiet_tile_urls`` was written to JSON two
+            functions away. Only the base URL is recorded now; the whole query string goes, whatever it
+            holds, because nothing here can tell a credential from a parameter. The warning has to name
+            the parameters it dropped, since a service that needs one has to be told to pass it through
+            ``extra_params`` instead.
+        """
+        canvas = _framed_map()
+        service = WMSProvider(f"{WMS_URL}?token=s3cr3t&api_key=k2", "topp:states")
+        with pytest.warns(UserWarning, match="token") as caught:
+            canvas.basemap(service, name="bm")
+        stored = json.dumps(canvas.figure_spec.to_dict())
+        assert "s3cr3t" not in stored, (
+            "a URL-borne credential must never reach a figure"
+        )
+        assert "k2" not in stored, "nor a second one beside it"
+        assert WMS_URL in stored, "the base URL still names the service"
+        assert "api_key" in str(caught[0].message), (
+            f"the warning must name every dropped parameter, got {caught[0].message}"
+        )
+
+    def test_a_service_url_with_no_query_is_recorded_unchanged_and_unremarked(
+        self, requested
+    ):
+        """Stripping the query string must not disturb the ordinary case or warn about it.
+
+        Args:
+            requested: The recorded tile requests, so drawing the basemap reaches no network.
+
+        Test scenario:
+            The sibling test above pins what is dropped; this pins that nothing else is. A plain service
+            URL has no query string to lose, so the recorded ``url`` must be the one given — byte for byte,
+            not a reassembled near-miss with a trailing ``?`` — and a warning about a credential that was
+            never there would train the reader to ignore the one that matters.
+        """
+        canvas = _framed_map()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            canvas.basemap(WMSProvider(WMS_URL, "topp:states"), name="bm")
+        recorded = canvas.figure_spec.layers.get("bm").symbology.props["source"]
+        assert recorded["url"] == WMS_URL, (
+            f"a query-free URL must be recorded as given, got {recorded['url']!r}"
+        )
 
     def test_a_recorded_kind_this_version_cannot_rebuild_is_refused_by_name(
         self, requested
