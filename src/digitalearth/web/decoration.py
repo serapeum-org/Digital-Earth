@@ -1751,14 +1751,17 @@ class DecorationMixin(_MixinBase):
 
         Each row keeps MapboxDraw's feature ``id`` in an ``id`` column, which is what the widget's
         ``draw_features_created``/``…_updated``/``…_deleted`` events name, so a row can be matched to them.
+        A feature carrying an ``id`` **property** of its own — one set through ``draw.setFeatureProperty``,
+        or imported with the shape — does not displace it: the draw id is written last and wins. The column
+        is there on the empty collection too, so ``drawn["id"]`` reads the same whether anything was drawn.
 
         Args:
             widget: The ``MapWidget`` to read, for a caller holding one from an earlier :meth:`render`.
                 ``None`` reads the last widget this map rendered.
 
         Returns:
-            A ``FeatureCollection`` with one row per drawn shape — empty (no rows, still EPSG:4326) when
-            nothing is drawn or everything drawn was deleted.
+            A ``FeatureCollection`` with one row per drawn shape — empty (no rows, still EPSG:4326, still
+            carrying ``id``) when nothing is drawn or everything drawn was deleted.
 
         Raises:
             RuntimeError: when ``widget`` is ``None`` and the map has never been rendered, so no widget
@@ -1784,13 +1787,15 @@ class DecorationMixin(_MixinBase):
                 (10.0, 50.0, 12.0, 52.0)
 
                 ```
-            - A map nobody drew on gives an empty collection, not an error:
+            - A map nobody drew on gives an empty collection, not an error — and one carrying the same
+              ``id`` column, so the matching code above needs no ``len()`` branch in front of it:
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> m = WebMap().measure()
                 >>> _ = m.render()
-                >>> len(m.drawn_features())
-                0
+                >>> empty = m.drawn_features()
+                >>> len(empty), list(empty["id"])
+                (0, [])
 
                 ```
 
@@ -1816,15 +1821,22 @@ class DecorationMixin(_MixinBase):
         features = [
             {
                 **feature,
+                # The draw id is written **last**, so a feature carrying an `id` property of its own — one
+                # set through `draw.setFeatureProperty`, or imported with the shape — cannot displace it.
+                # Written first it did, and the one column the method exists to preserve was lost exactly
+                # when a caller had set properties (review M4).
                 "properties": {
-                    "id": feature.get("id"),
                     **(feature.get("properties") or {}),
+                    "id": feature.get("id"),
                 },
             }
             for feature in collection.get("features") or []
         ]
         if not features:
-            return FeatureCollection(geometry=[], crs=_DRAWN_CRS)
+            # Declared with the `id` column rather than built as a bare geometry list: the documented
+            # `drawn["id"]` otherwise raised `KeyError` precisely on the "nobody drew anything" path this
+            # presents as the safe one, so every caller had to branch on `len()` first (review M5).
+            return FeatureCollection({"id": []}, geometry=[], crs=_DRAWN_CRS)
         return FeatureCollection.from_features(features, crs=_DRAWN_CRS)
 
     @staticmethod

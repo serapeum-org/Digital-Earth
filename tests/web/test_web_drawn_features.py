@@ -33,6 +33,13 @@ PATH = {
     "geometry": {"type": "LineString", "coordinates": [[0.0, 0.0], [3.0, 4.0]]},
 }
 
+#: The same triangle, carrying an ``id`` of its own in its properties — what ``draw.setFeatureProperty`` or an
+#: imported feature leaves behind, and what must not displace MapboxDraw's id.
+TRIANGLE_WITH_OWN_ID = {
+    **TRIANGLE,
+    "properties": {"id": "USER-SET"},
+}
+
 
 def _draw(widget, *features):
     """Set the widget's synced draw state the way the front-end does after a ``draw.create``.
@@ -68,6 +75,19 @@ class TestDrawnFeatures:
         drawn = m.drawn_features()
         assert list(drawn["id"]) == ["a1", "b2"]
 
+    def test_a_feature_s_own_id_property_does_not_displace_the_draw_id(self):
+        """The ``id`` column is MapboxDraw's id even when the feature carries an ``id`` property of its own.
+
+        Test scenario:
+            - Draw one triangle whose properties already hold ``id="USER-SET"`` while MapboxDraw's own id
+              for it is ``"a1"``.
+            - The ``id`` column is the draw id, which is what the create/update/delete events name; the
+              feature's own value is not what a caller matching an event would be handed.
+        """
+        m = WebMap().measure()
+        _draw(m.render(), TRIANGLE_WITH_OWN_ID)
+        assert list(m.drawn_features()["id"]) == [TRIANGLE["id"]]
+
     def test_feature_properties_become_columns(self):
         """Properties a feature carries reach the frame as columns."""
         m = WebMap().measure()
@@ -88,6 +108,24 @@ class TestDrawnFeatures:
         assert isinstance(drawn, FeatureCollection)
         assert len(drawn) == 0
         assert drawn.epsg == 4326
+
+    def test_the_empty_collection_carries_the_columns_the_drawn_one_does(self):
+        """``drawn["id"]`` is readable on the empty path too, so a caller need not branch on ``len()``.
+
+        Test scenario:
+            - Read one map nobody drew on and a second one holding a single triangle with no properties of
+              its own, so the only columns either can have are the geometry and the draw id.
+            - The two column sets are equal, and the empty collection's ``id`` column is an empty list
+              rather than a ``KeyError``.
+        """
+        empty = WebMap().measure()
+        empty.render()
+        drawn_on = WebMap().measure()
+        _draw(drawn_on.render(), TRIANGLE)
+        assert set(empty.drawn_features().columns) == set(
+            drawn_on.drawn_features().columns
+        )
+        assert list(empty.drawn_features()["id"]) == []
 
     def test_everything_deleted_is_an_empty_collection(self):
         """After a ``draw.delete`` of the last shape the front-end syncs an empty collection."""
