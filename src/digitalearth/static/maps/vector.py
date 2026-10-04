@@ -3030,6 +3030,7 @@ class VectorMixin(_MixinBase):
                 >>> m = Map(crs=4326)
                 >>> sorted(m.hexbin(wells, gridsize=4).get_array().tolist())
                 [1.0, 3.0]
+                >>> m.close()
 
                 ```
             - Aggregate a column instead; the origin cell is the mean of 2, 4 and 6:
@@ -3050,6 +3051,7 @@ class VectorMixin(_MixinBase):
                 [4.0, 100.0]
                 >>> m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props["via"]
                 'hexbin'
+                >>> m.close()
 
                 ```
             - A lattice nothing could be binned onto is refused here, naming the argument, rather than

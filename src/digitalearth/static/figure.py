@@ -521,6 +521,7 @@ def facet(
             ['month = Jan', 'month = Feb', 'month = Mar', 'month = Apr']
             >>> {m.layers[-1][1].get_clim() for m in maps}
             {(0.0, 30.0)}
+            >>> maps[0].close()  # one figure holds every panel, so one close is the whole facet
 
             ```
         - Wrap onto rows of three; the last row's spare slots are hidden:
@@ -538,6 +539,7 @@ def facet(
             >>> fig, maps = facet(frames, crs=4326, col_wrap=3, colorbar=False)
             >>> maps[0].ax.get_subplotspec().get_geometry()[:2], sum(not ax.get_visible() for ax in fig.axes)
             ((2, 3), 2)
+            >>> maps[0].close()
 
             ```
         - A categorical stack cuts its classes over every frame, so the second frame's codes carry on the
@@ -564,6 +566,7 @@ def facet(
             ['#2ca02c', '#d62728']
             >>> [m.layers[-1][1].get_clim() for m in maps]
             [(0.5, 4.5), (0.5, 4.5)]
+            >>> maps[0].close()
 
             ```
         - A stack where every cell is nodata still draws its panels, but no colorbar: the figure holds the
@@ -592,6 +595,7 @@ def facet(
             ... except ValueError as error:
             ...     print(str(error)[:69])
             facet(k=4) counts the classes a scheme cuts, so it classifies nothing
+            >>> maps[0].close()
 
             ```
 
