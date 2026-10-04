@@ -43,6 +43,12 @@ POLAR_TRUE_SCALE_LAT = 71.0
 #: The northern limit of EPSG:3031's declared area of use, in degrees.
 POLAR_AREA_OF_USE_LAT = -60.0
 
+#: EPSG:3832's central meridian, in degrees — PDC Mercator is centred on the Pacific.
+PDC_CENTRAL_LON = 150.0
+
+#: The longitude EPSG:3832 therefore cuts: half a turn from its central meridian, wrapped.
+PDC_SEAM_LON = PDC_CENTRAL_LON - 180.0
+
 #: Western edge, in EPSG:3031 metres, of the raster :func:`_wide_polar_raster` builds. It is twice as far
 #: out as the ``+/- 3.3e6`` m the CRS declares for itself, which is the whole point of it: the declared area
 #: of use is not the projection's domain, so a grid out here still projects.
@@ -421,6 +427,32 @@ class TestTissot:
         width = np.ptp(artist.get_paths()[0].vertices[:, 0])
         assert width == pytest.approx(expected, rel=1e-2), width
 
+    def test_a_ring_on_the_seam_of_a_pacific_centred_crs_stays_one_ring(self):
+        """A CRS whose central meridian is not 0 cuts elsewhere, and its own seam must be found.
+
+        Test scenario:
+            The seam used to be assumed to be at lon 180, so it was measured as the x-distance between
+            lon -180 and lon 180. On a Pacific-centred Mercator those two longitudes are the *same* point,
+            the measurement came out 0 — "no seam, leave the ring alone" — and a ring on the projection's
+            real cut at ``lon_0 - 180`` smeared across the whole map. EPSG:3832 is the published form of
+            it (PDC Mercator, ``lon_0 = 150``), so its cut is at lon -30, and a 500 km ring there must keep
+            the Mercator width of a 500 km circle rather than the width of the world. The expected width is
+            written out from the spherical Mercator formula about the same cut; EPSG:3832's own x is offset
+            by its central meridian, which a *difference* of two x values cancels.
+        """
+        canvas = Map(crs=3832)
+        canvas.ax.set_xlim(-2.0e7, 2.0e7)
+        canvas.ax.set_ylim(-2.0e7, 2.0e7)
+        artist = canvas.tissot([PDC_SEAM_LON], [0.0], radius_m=500_000.0)
+        assert len(artist.get_paths()) == 1, len(artist.get_paths())
+        offset = math.degrees(500_000.0 / MEAN_EARTH_R)
+        expected = (
+            _mercator(PDC_SEAM_LON + offset, 0.0)[0]
+            - _mercator(PDC_SEAM_LON - offset, 0.0)[0]
+        )
+        width = np.ptp(artist.get_paths()[0].vertices[:, 0])
+        assert width == pytest.approx(expected, rel=1e-2), width
+
     def test_a_far_side_ring_on_a_globe_is_left_out(self):
         """A circle behind the globe has no near-side outline; only the visible one is drawn."""
         canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
@@ -712,6 +744,26 @@ class TestTheProjectedRingSeam:
         )
         assert periods.dtype == np.dtype(float), (
             f"an empty width array must still be float, got {periods.dtype}"
+        )
+
+    def test_a_shifted_central_meridian_moves_the_seam_it_is_measured_at(self):
+        """The world width is measured at the projection's own cut, not at lon 180.
+
+        Test scenario:
+            The measurement pinned here is the one the ring test above consumes, read directly so a
+            regression names the cause rather than a ring width. EPSG:3832 and Web Mercator are the same
+            projection on the same ellipsoid with different central meridians, so the world is exactly as
+            wide on both — while the measurement that assumed the cut was at lon 180 answered ``0`` for the
+            Pacific-centred one, which means "no seam, leave the ring alone". Web Mercator is the control:
+            its own measurement must not move.
+        """
+        shifted = decoration._antimeridian_periods(Map(crs=3832), [0.0, 60.0])
+        greenwich = decoration._antimeridian_periods(Map(crs=3857), [0.0, 60.0])
+        assert shifted == pytest.approx(greenwich, rel=1e-9), (
+            f"the same projection must measure the same world width, got {shifted} against {greenwich}"
+        )
+        assert float(shifted[0]) > 4.0e7, (
+            f"a Mercator world is over 4.0e7 m wide; the Pacific-centred one measured {shifted[0]}"
         )
 
     def test_no_circles_is_no_projected_rings(self):

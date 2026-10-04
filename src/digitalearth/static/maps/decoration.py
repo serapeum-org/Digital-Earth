@@ -1367,27 +1367,131 @@ def _continuous_ring(ring: np.ndarray, centre_lon: float) -> np.ndarray:
     return out
 
 
+#: How far either side of the seam, in degrees, the two samples that measure its jump sit. About a
+#: millimetre of ground: small enough that the width lost between them is below the rounding of every
+#: measurement here (Web Mercator still measures ``40075017`` m), and large enough that PROJ places the two
+#: samples on opposite sides of the cut rather than at one point.
+_SEAM_PROBE_DEGREES = 1.0e-8
+
+#: How far either side of the *central meridian* the projection's local x-scale is measured, in degrees.
+#: A whole degree rather than :data:`_SEAM_PROBE_DEGREES`, because the scale is a ratio and measuring it
+#: over a millimetre would read mostly floating-point cancellation.
+_SEAM_SCALE_DEGREES = 1.0
+
+#: How much of the projection's own x-scale, in degrees of longitude, the jump at the seam must be worth
+#: before it counts as a cut. Half a world: a projection that cuts its seam puts the two sides a *whole*
+#: world apart, and one that is merely continuous there puts them :data:`_SEAM_PROBE_DEGREES` apart, so
+#: anything between the two is a margin of eight orders of magnitude.
+_SEAM_MIN_DEGREES = 180.0
+
+#: The prefix of the pyproj coordinate-operation parameter naming a projection's central meridian. The
+#: spelling differs by method — "Longitude of natural origin" for Mercator and Robinson, "Longitude of
+#: origin" for polar stereographic, "Longitude of projection centre" for oblique Mercator — and they are
+#: all the same quantity, so the prefix is matched rather than the dozen names enumerated.
+_CENTRAL_MERIDIAN_PREFIX = "Longitude of "
+
+
+def _wrapped_longitude(lon: float) -> float:
+    """Wrap a longitude into ``(-180, 180]``, the range PROJ and a lon/lat axes both place directly.
+
+    Args:
+        lon: A longitude in degrees, of any magnitude.
+
+    Returns:
+        The same meridian in ``(-180, 180]`` — so lon 180 stays 180 rather than becoming -180, which is the
+        half that matters on lon/lat axes, where no projection normalises the value afterwards.
+
+    Examples:
+        - The ends of the range are kept apart, and a longitude past either end comes back inside it:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _wrapped_longitude
+            >>> [_wrapped_longitude(value) for value in (0.0, 180.0, -180.0, 270.0, -190.0)]
+            [0.0, 180.0, 180.0, -90.0, 170.0]
+
+            ```
+    """
+    return 180.0 - (180.0 - lon) % 360.0
+
+
+def _crs_seam_longitude(crs: Any) -> float:
+    """Return the longitude a projection cuts: half a turn from the central meridian it declares.
+
+    A CRS centred on Greenwich cuts the antimeridian, which is why assuming lon 180 worked for Web
+    Mercator, Robinson and the polar stereographics. A Pacific-centred one does not: EPSG:3832 is centred
+    on lon 150 and cuts near lon -30, and probing lon 180 there measures no seam at all (round 4, H3).
+
+    Args:
+        crs: The display CRS, in any form :func:`~pyramids.base.crs.crs_from_user_input` takes.
+
+    Returns:
+        The seam longitude in ``(-180, 180]``. A CRS that declares no central meridian — a geographic one,
+        or anything PROJ cannot read — is treated as centred on Greenwich, which puts the seam at lon 180.
+
+    Examples:
+        - Web Mercator cuts the antimeridian; EPSG:3832, the same projection about lon 150, cuts at -30:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _crs_seam_longitude
+            >>> (_crs_seam_longitude(3857), _crs_seam_longitude(3832))
+            (180.0, -30.0)
+
+            ```
+        - A geographic CRS declares no projection to read a central meridian off, so the seam is lon 180 —
+          which is where a lon/lat axes does wrap:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _crs_seam_longitude
+            >>> _crs_seam_longitude(4326)
+            180.0
+
+            ```
+    """
+    try:
+        operation = crs_from_user_input(crs).coordinate_operation
+    except (CRSError, TypeError, ValueError):
+        operation = None
+    params = getattr(operation, "params", ()) or ()
+    centre = next(
+        (
+            float(param.value)
+            for param in params
+            if str(param.name).startswith(_CENTRAL_MERIDIAN_PREFIX)
+        ),
+        0.0,
+    )
+    return _wrapped_longitude(centre + 180.0)
+
+
 def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
     """Measure the display-x width of the world at each latitude, or ``0`` where the CRS has no seam.
 
-    A ring is reconnected across the antimeridian by adding that width to the vertices that fell on the far
-    side of it, so the width has to be measured in the display CRS rather than assumed. Only a projection
-    that *cuts* the antimeridian has one: Web Mercator puts lon -180 and lon 180 a whole world apart
-    (``4.008e7`` m), while a polar stereographic puts them at the same point (``0``) because its own
-    discontinuity is elsewhere, and a clipped projection has no image of either (non-finite). Both of those
-    answer ``0``, which means "leave the projected ring alone".
+    A ring is reconnected across the seam by adding that width to the vertices that fell on the far side of
+    it, so the width has to be measured in the display CRS rather than assumed. **Where the seam is has to
+    be read off the projection too.** It lies half a turn from the central meridian
+    (:func:`_crs_seam_longitude`) — at lon 180 only for a CRS centred on Greenwich. Measuring it as
+    ``x(180) - x(-180)`` therefore answered ``0`` — "no seam, leave the ring alone" — for every
+    Pacific-centred CRS, because those two longitudes are the *same* point there, while the real cut was 90
+    degrees away smearing rings 40 times over (``+proj=merc +lon_0=90``: ``4.007e7`` m against the
+    ``1.001e6`` m a 500 km ring should span; round 4, H3).
+
+    The jump is measured between two samples a hair either side of that seam, and it counts as a seam only
+    when it is worth at least :data:`_SEAM_MIN_DEGREES` of the projection's own x-scale at that latitude —
+    which is why the scale is measured too, over :data:`_SEAM_SCALE_DEGREES` either side of the central
+    meridian. That replaces the old two-way "a whole world apart, or the same point" split, which had no
+    slot for a projection that is merely *continuous* across the probed longitude: a polar stereographic
+    answers a sub-millimetre jump there rather than an exact ``0`` once the samples are no longer the same
+    point. A clipped projection has no image of the seam at all (non-finite). Both answer ``0``, which
+    means "leave the projected ring alone".
 
     Args:
         scene: The map whose display CRS is measured.
         lats: The ring-centre latitudes, measured one per ring because a non-cylindrical projection need not
-            cut the antimeridian at the same x everywhere.
+            cut its seam at the same x everywhere.
 
     Returns:
         A ``(len(lats),)`` array of display-x widths, ``0`` wherever there is no usable seam.
 
     Examples:
-        - Web Mercator cuts the antimeridian at the same x at every latitude, so every ring is carried the
-          same world width; Robinson does not, which is why a width is measured per ring:
+        - Web Mercator cuts at the same x at every latitude, so every ring is carried the same world width;
+          Robinson does not, which is why a width is measured per ring:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -1401,7 +1505,19 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
             [34011667, 27161718]
 
             ```
-        - A polar stereographic puts lon -180 and lon 180 at the same point, so it reports no seam and the
+        - EPSG:3832 is the same projection as Web Mercator about lon 150, so its world is exactly as wide —
+          measured at **its** cut, near lon -30, where the old probe at lon 180 found nothing:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.maps.decoration import _antimeridian_periods
+            >>> with Map(crs=3832) as pacific:
+            ...     [round(float(width)) for width in _antimeridian_periods(pacific, [0.0, 60.0])]
+            [40075017, 40075017]
+
+            ```
+        - A polar stereographic is continuous across its seam longitude, so it reports no seam and the
           rings are left where PROJ put them:
             ```python
             >>> import matplotlib
@@ -1416,16 +1532,30 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
     """
     if len(lats) == 0:
         return np.zeros(0, dtype=float)
+    seam = _crs_seam_longitude(scene.crs)
+    centre = _wrapped_longitude(seam + 180.0)
+    probe_lons = [
+        _wrapped_longitude(seam - _SEAM_PROBE_DEGREES),
+        _wrapped_longitude(seam + _SEAM_PROBE_DEGREES),
+        _wrapped_longitude(centre - _SEAM_SCALE_DEGREES),
+        _wrapped_longitude(centre + _SEAM_SCALE_DEGREES),
+    ]
     edges = np.column_stack(
         [
-            np.tile([-180.0, 180.0], len(lats)),
-            np.repeat(np.asarray(lats, dtype=float), 2),
+            np.tile(probe_lons, len(lats)),
+            np.repeat(np.asarray(lats, dtype=float), len(probe_lons)),
         ]
     )
-    x = _lonlat_to_display(scene, edges)[:, 0].reshape(-1, 2)
+    x = _lonlat_to_display(scene, edges)[:, 0].reshape(-1, len(probe_lons))
     with np.errstate(invalid="ignore"):  # inf - inf off a clipped projection's image
-        period = x[:, 1] - x[:, 0]
-    return np.where(np.isfinite(period) & (period > 0.0), period, 0.0)
+        period = x[:, 0] - x[:, 1]
+        # Half a world, in the projection's own x per degree at this latitude. A continuous projection's
+        # jump across the probe is 2e-8 degrees' worth of this; a cut projection's is a whole world.
+        half_world = (
+            _SEAM_MIN_DEGREES * np.abs(x[:, 3] - x[:, 2]) / (2.0 * _SEAM_SCALE_DEGREES)
+        )
+    usable = np.isfinite(period) & np.isfinite(half_world) & (period > half_world)
+    return np.where(usable, period, 0.0)
 
 
 def _continuous_display_ring(
