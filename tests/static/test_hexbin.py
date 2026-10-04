@@ -286,3 +286,50 @@ class TestTheLatticeArguments:
             4,
             3,
         )
+
+
+class TestTheColumnAggregated:
+    """``column=`` is checked against the features, by name, before any value is read."""
+
+    def test_a_column_that_is_not_there_names_the_call_and_the_columns_there_are(
+        self, wells
+    ):
+        """A typo is the commonest column mistake, and the one the engine explains worst.
+
+        Test scenario:
+            - ``hexbin(wells, "nope")`` came back as the bare ``KeyError: 'nope'`` pandas raises, naming
+              neither the method nor what the features carry.
+            - The refusal now names ``hexbin()``, the keyword, and lists the columns the wells have — the
+              fixture's one non-geometry column, ``depth``.
+            - Nothing is described: the figure is left as it was.
+
+        Args:
+            wells: The wells, carrying ``depth``.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(KeyError, match=r"hexbin\(\).*column='nope'.*\['depth'\]"):
+            canvas.hexbin(wells, "nope")
+        assert canvas.layer_ids == [], canvas.layer_ids
+        canvas.close()
+
+    def test_a_text_column_is_refused_by_name_rather_than_by_float(self):
+        """A reducer averages numbers, so a column of strings is refused in the method's own words.
+
+        Test scenario:
+            - ``hexbin(graded, "grade")`` over a text column came back as ``ValueError: could not convert
+              string to float: 'A'``, naming neither the method, the keyword nor the column.
+            - The refusal now names all three, as ``Map.lines()`` already did for the same read.
+
+        """
+        graded = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"grade": ["A", "B"]},
+                geometry=[Point(0.0, 0.0), Point(8.0, 8.0)],
+                crs="EPSG:4326",
+            )
+        )
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match=r"hexbin\(\).*column='grade'"):
+            canvas.hexbin(graded, "grade")
+        assert canvas.layer_ids == [], canvas.layer_ids
+        canvas.close()

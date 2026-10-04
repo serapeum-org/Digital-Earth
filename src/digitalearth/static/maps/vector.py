@@ -79,6 +79,10 @@ _LABELS_CALLER = "Map.labels()"
 #: when the features are read, so builder and drawer need the one spelling between them.
 _LINES_CALLER = "Map.lines()"
 
+#: The same, for the hexbin layer: its lattice is checked at the call and its ``column=`` when the features
+#: are read, and both say ``hexbin()``.
+_HEXBIN_CALLER = "hexbin()"
+
 #: Keywords :meth:`VectorMixin.labels` refuses in ``**opts``, each with what to write instead. Two of them are
 #: matplotlib's own spelling of something this builder already declares, and forwarding either would have the
 #: declared parameter silently win; the third is a capability this tier does not have. A keyword accepted and
@@ -236,6 +240,35 @@ def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
     return (counts[0] if len(counts) == 1 else tuple(counts)), floor
 
 
+def _require_column(features: Any, column: str, argument: str, caller: str) -> None:
+    """Refuse a column the features do not carry, naming the call and listing the ones they do.
+
+    A column name travels from the caller to ``features[column]`` untouched, so a typo surfaces as pandas'
+    own ``KeyError: 'nope'`` — the commonest column mistake getting the least helpful message, from the
+    frame several layers below the method the caller actually wrote. This is the check behind every such
+    read: ``labels``' text, and the numbers ``lines`` and ``hexbin`` colour and size by.
+
+    Args:
+        features: Anything carrying a ``columns`` listing — a pyramids ``FeatureCollection`` or the
+            ``GeoDataFrame`` a drawer already placed.
+        column: The column named by the caller.
+        argument: The keyword it was named under — ``column``, ``width``, …
+        caller: The public call, for the message.
+
+    Raises:
+        KeyError: naming the call, the keyword and the column, and listing the columns the features do
+            have — the geometry column left out, since it is not an attribute to read values from.
+    """
+    columns = list(getattr(features, "columns", []))
+    if column in columns:
+        return
+    geometry = getattr(getattr(features, "geometry", None), "name", "geometry")
+    raise KeyError(
+        f"{caller}: {argument}={column!r} is not a property of these features; available: "
+        f"{sorted(name for name in columns if name != geometry)}"
+    )
+
+
 def _numeric_column(gdf: Any, column: str, argument: str, caller: str) -> np.ndarray:
     """Read one feature column as floats, refusing one that holds something a ramp cannot read.
 
@@ -254,8 +287,11 @@ def _numeric_column(gdf: Any, column: str, argument: str, caller: str) -> np.nda
         The column's values as a float array.
 
     Raises:
+        KeyError: when the features carry no such column (see :func:`_require_column`). Checked first,
+            because a missing column is not a dtype the conversion below could report on.
         ValueError: when the column holds values that are not numbers, naming all three.
     """
+    _require_column(gdf, column, argument, caller)
     try:
         return gdf[column].to_numpy(dtype=float)
     except (TypeError, ValueError):
@@ -457,17 +493,11 @@ def _label_text(features: Any, column: str) -> np.ndarray:
         a missing property.
 
     Raises:
-        KeyError: naming the column and listing the ones the features do have — the message the web tier's
-            `labels` already gives, because an expression over a column nobody has renders an empty map with
-            nothing to explain it.
+        KeyError: from :func:`_require_column`, naming the column and listing the ones the features do have
+            — the message the web tier's `labels` already gives, because an expression over a column nobody
+            has renders an empty map with nothing to explain it.
     """
-    columns = list(getattr(features, "columns", []))
-    if column not in columns:
-        geometry = getattr(getattr(features, "geometry", None), "name", "geometry")
-        raise KeyError(
-            f"{_LABELS_CALLER}: labels(column={column!r}) is not a property of these features; available: "
-            f"{sorted(name for name in columns if name != geometry)}"
-        )
+    _require_column(features, column, "column", _LABELS_CALLER)
     return np.asarray(
         ["" if is_null(value) else str(value) for value in features[column]],
         dtype=object,
@@ -948,8 +978,10 @@ def draw_hexbin(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
-        ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
-        KeyError: when ``column`` names no feature attribute.
+        ValueError: when the collection is empty, holds non-point geometry, leaves no finite point, or
+            names a ``column`` that does not hold numbers, which the reducer needs.
+        KeyError: when ``column`` names no feature attribute — naming ``hexbin()`` and listing the columns
+            the features do have (see :func:`_require_column`).
     """
     props = dict(layer.symbology.props)
     column = props.get("column")
@@ -962,7 +994,11 @@ def draw_hexbin(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     gdf = scene._vector_input(
         data, geom_types=("Point",), name="hexbin", geom_label="point"
     )
-    values_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+    values_full = (
+        _numeric_column(gdf, column, "column", _HEXBIN_CALLER)
+        if column is not None
+        else None
+    )
     # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
     xs, ys, values = scene._finite_point_xy(gdf.geometry, values_full)
     if xs.size == 0:
@@ -1072,7 +1108,8 @@ def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
         ValueError: when the collection is empty or holds non-line geometry.
-        KeyError: when ``column`` or a column ``width`` names no feature attribute.
+        KeyError: when ``column`` or a column ``width`` names no feature attribute — naming
+            ``Map.lines()`` and listing the columns the features do have (see :func:`_require_column`).
     """
     props = dict(layer.symbology.props)
     opts = drawing_style(scene, layer)
@@ -2962,8 +2999,10 @@ class VectorMixin(_MixinBase):
             ValueError: if ``features`` is empty or holds non-point geometry; if ``gridsize`` is not a
                 positive whole number (or a pair of them), or ``min_count`` is not a non-negative whole
                 number — both are checked in the builder, since unchecked they reach matplotlib's
-                ``hexbin`` and come back as arithmetic naming neither the method nor the argument.
-            KeyError: if ``column`` names no feature attribute.
+                ``hexbin`` and come back as arithmetic naming neither the method nor the argument; or if
+                ``column`` names a column that does not hold numbers, which the reducer needs.
+            KeyError: if ``column`` names no feature attribute — the refusal names ``hexbin()``, the
+                keyword and the column, and lists the columns the features do have.
 
         Examples:
             - Count the points per cell; three coincident points are one cell holding 3:
@@ -3177,7 +3216,8 @@ class VectorMixin(_MixinBase):
                 is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a
                 column's name; or if ``column`` or a column ``width`` names a column that does not hold
                 numbers, which a ramp and a width scale both need.
-            KeyError: if ``column`` or a column ``width`` names no feature attribute.
+            KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names
+                ``Map.lines()``, the keyword and the column, and lists the columns there are.
 
         Examples:
             - Colour reaches by discharge, classified into three classes, with one width:

@@ -331,6 +331,47 @@ class TestRefusingWhatCannotBeDrawn:
         with pytest.raises(ValueError, match=r"width=.*'name'"):
             canvas.lines(labelled, width="name")
 
+    def test_a_column_that_is_not_there_names_the_call_and_the_columns_there_are(
+        self, rivers
+    ):
+        """A typo is the commonest column mistake, and the one the engine explains worst.
+
+        Test scenario:
+            - ``column="nope"`` came back as the bare ``KeyError: 'nope'`` pandas raises, naming neither
+              the method nor what the features actually carry, while the sibling check for a text column
+              named all three.
+            - The refusal now names ``Map.lines()``, the keyword, and lists the columns the reaches have
+              (``discharge`` and ``order``, the fixture's two non-geometry columns).
+
+        Args:
+            rivers: The reaches, carrying ``discharge`` and ``order``.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            KeyError, match=r"Map\.lines\(\).*column='nope'.*\['discharge', 'order'\]"
+        ):
+            canvas.lines(rivers, column="nope")
+        assert canvas.layer_ids == [], canvas.layer_ids
+        canvas.close()
+
+    def test_a_width_column_that_is_not_there_is_named_the_same_way(self, rivers):
+        """``width=`` reads a column too, so a missing one is refused in the same words.
+
+        Test scenario:
+            - ``width="nope"`` came back as ``KeyError: 'nope'``.
+            - The refusal now names the keyword as ``width=`` and lists the columns there are.
+
+        Args:
+            rivers: The reaches, carrying ``discharge`` and ``order``.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            KeyError, match=r"Map\.lines\(\).*width='nope'.*\['discharge', 'order'\]"
+        ):
+            canvas.lines(rivers, width="nope")
+        assert canvas.layer_ids == [], canvas.layer_ids
+        canvas.close()
+
 
 class TestTheContract:
     """The Core ``lines`` name is no longer pending on the static tier."""
