@@ -8,6 +8,7 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 import os
 from functools import wraps
 from math import isfinite
+from numbers import Integral
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -166,6 +167,69 @@ def _as_finite(value: Any, argument: str, caller: str) -> float:
             "written down: JSON has no spelling for NaN or infinity"
         )
     return number
+
+
+def _as_count(value: Any, argument: str, caller: str, *, minimum: int = 1) -> int:
+    """Return a builder's whole-number keyword as a plain int, refusing one the engine would fail on.
+
+    The counterpart of :func:`_as_finite` for an argument that counts things rather than measures them — a
+    lattice's cells across, a floor on the points in a cell. Left unchecked these reach matplotlib's
+    ``hexbin`` and come back as arithmetic: ``gridsize=0`` as ``ZeroDivisionError: float division by
+    zero``, ``gridsize=None`` as ``unsupported operand type(s) for /: 'NoneType' and 'float'``,
+    ``gridsize=-5`` as ``could not broadcast input array from shape (0,) into shape (4,)`` — none of which
+    names the method or the argument the caller actually wrote.
+
+    Args:
+        value: The keyword's value, as given.
+        argument: The keyword's name, as the caller spells it.
+        caller: The public call, for the message.
+        minimum: The smallest value the argument admits.
+
+    Returns:
+        The value as an `int`.
+
+    Raises:
+        ValueError: when `value` is not a whole number, or is below `minimum`. ``bool`` is excluded
+            although it is an `Integral`: ``gridsize=True`` is a mistake, not a lattice one cell across.
+    """
+    if (
+        not isinstance(value, Integral)
+        or isinstance(value, bool)
+        or int(value) < minimum
+    ):
+        raise ValueError(
+            f"{caller} needs {argument}= as a whole number >= {minimum}; got {value!r}"
+        )
+    return int(value)
+
+
+def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
+    """Refuse a lattice ``HexbinGlyph`` could not bin onto, before the figure is touched.
+
+    Args:
+        gridsize: Hexagons across the window — one count, or an ``(nx, ny)`` pair.
+        min_count: The floor on a cell's points, or ``None`` for the builder's own default.
+
+    Returns:
+        ``(gridsize, min_count)`` as whole numbers — ``gridsize`` an int for the one-count form and a
+        pair of ints for the other, so the layer's description carries the shape it was given.
+
+    Raises:
+        ValueError: naming ``hexbin()`` and the argument that is wrong, with the value passed.
+    """
+    sides = list(gridsize) if isinstance(gridsize, (tuple, list)) else [gridsize]
+    if len(sides) not in (1, 2):
+        raise ValueError(
+            "hexbin() needs gridsize= as one whole number, or a pair of them (nx, ny); "
+            f"got {gridsize!r}"
+        )
+    counts = [_as_count(side, "gridsize", "hexbin()") for side in sides]
+    floor = (
+        None
+        if min_count is None
+        else _as_count(min_count, "min_count", "hexbin()", minimum=0)
+    )
+    return (counts[0] if len(counts) == 1 else tuple(counts)), floor
 
 
 def _polygon_kind(fill: Any) -> str:
@@ -2839,10 +2903,12 @@ class VectorMixin(_MixinBase):
                 ``"std"``, ``"count"``, or a function of an array. A named reducer is written into the
                 figure; a function is held beside the layer, and a figure read back elsewhere falls back to
                 ``"mean"``. Ignored without a ``column``.
-            gridsize: Hexagons across the binned window — an int, or an ``(nx, ny)`` pair.
-            min_count: Leave out cells with fewer points than this. ``None`` (default) leaves out the empty
-                cells of a count map — which cleopatra would otherwise draw as zeros across the whole
-                window — and is cleopatra's own default with a ``column``.
+            gridsize: Hexagons across the binned window — a whole number, or an ``(nx, ny)`` pair of
+                them. One cell across is the smallest lattice there is, so the counts must be positive.
+            min_count: Leave out cells with fewer points than this, as a whole number of points.
+                ``None`` (default) leaves out the empty cells of a count map — which cleopatra would
+                otherwise draw as zeros across the whole window — and is cleopatra's own default with a
+                ``column``.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2856,7 +2922,10 @@ class VectorMixin(_MixinBase):
             entirely outside what the display CRS shows.
 
         Raises:
-            ValueError: if ``features`` is empty or holds non-point geometry.
+            ValueError: if ``features`` is empty or holds non-point geometry; if ``gridsize`` is not a
+                positive whole number (or a pair of them), or ``min_count`` is not a non-negative whole
+                number — both are checked in the builder, since unchecked they reach matplotlib's
+                ``hexbin`` and come back as arithmetic naming neither the method nor the argument.
             KeyError: if ``column`` names no feature attribute.
 
         Examples:
@@ -2903,6 +2972,7 @@ class VectorMixin(_MixinBase):
             kde: the smoothed density of the same points.
             quadtree: points aggregated into adaptive square cells.
         """
+        gridsize, min_count = _hexbin_lattice(gridsize, min_count)
         held_reduce = None if isinstance(reduce, str) else reduce
         return self._draw(
             LayerRecord(

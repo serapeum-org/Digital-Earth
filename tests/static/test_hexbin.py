@@ -220,3 +220,69 @@ class TestTheDescription:
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
         assert canvas.hexbin(wells) is None
         assert canvas.layer_ids == [], canvas.layer_ids
+
+
+class TestTheLatticeArguments:
+    """``gridsize`` and ``min_count`` are refused by name rather than inside the engine."""
+
+    @pytest.mark.parametrize("gridsize", [0, None, -5, 4.5, (4, 0), "4", (1, 2, 3), ()])
+    def test_a_gridsize_that_is_not_a_positive_count_is_refused(self, wells, gridsize):
+        """The lattice's own knob is checked in the builder, before anything is drawn.
+
+        Args:
+            wells: The wells.
+            gridsize: A value ``HexbinGlyph`` cannot lay a lattice from.
+
+        Test scenario:
+            - Each of these reached cleopatra unchecked and came back as a raw engine failure naming
+              neither ``hexbin`` nor ``gridsize`` — ``ZeroDivisionError: float division by zero`` for
+              ``0``, ``TypeError: unsupported operand type(s) for /: 'NoneType' and 'float'`` for ``None``,
+              ``ValueError: could not broadcast input array from shape (0,) into shape (4,)`` for ``-5``.
+            - The refusal now names the method and the argument, and the figure is left empty.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="gridsize"):
+            canvas.hexbin(wells, gridsize=gridsize)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    @pytest.mark.parametrize("min_count", [-1, 2.5, "x"])
+    def test_a_min_count_that_is_not_a_non_negative_count_is_refused(
+        self, wells, min_count
+    ):
+        """``min_count`` counts points, so a negative, a fraction and a string are all refused.
+
+        Args:
+            wells: The wells.
+            min_count: A value that is not a number of points.
+
+        Test scenario:
+            - ``-1`` was accepted and drew every empty lattice cell as a zero, which is exactly what the
+              ``None`` default exists to avoid; ``2.5`` was accepted and silently rounded somewhere inside
+              the engine; ``"x"`` surfaced as a numpy ``UFuncTypeError`` about ``ufunc 'less'``.
+            - All three are refused by name now, and the figure is left empty.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="min_count"):
+            canvas.hexbin(wells, gridsize=4, min_count=min_count)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_a_pair_of_counts_is_a_lattice(self, wells):
+        """``(nx, ny)`` is the documented second form, so it still draws and is still described.
+
+        Args:
+            wells: The wells.
+
+        Test scenario:
+            - Pass ``gridsize=(4, 3)`` — the pair form the docstring offers — and ``min_count=0``, the
+              lowest value the new guard admits.
+            - Both are accepted, cells are drawn, and the description keeps the pair.
+        """
+        canvas = Map(crs=4326)
+        cells = canvas.hexbin(wells, gridsize=(4, 3), min_count=0, name="h")
+        assert isinstance(cells, PolyCollection)
+        assert tuple(
+            canvas.figure_spec.layers.get("h").symbology.props["gridsize"]
+        ) == (
+            4,
+            3,
+        )
