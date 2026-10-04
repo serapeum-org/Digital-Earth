@@ -57,6 +57,7 @@ from cleopatra.basemap.solar import (
 from cleopatra.basemap.tiles import add_tiles
 from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
+from matplotlib.colors import to_rgba
 from matplotlib.font_manager import font_family_aliases, fontManager
 from matplotlib.text import Text
 from pyramids.base.crs import CRSError, crs_from_user_input, reproject_coordinates
@@ -1013,6 +1014,13 @@ _NIGHT_STYLE: Dict[str, Any] = {
     "alpha": 0.35,
 }
 
+#: The two spellings of a night shade's fill. ``None`` in either means "not given" — matplotlib's own
+#: reading of it — so :meth:`DecorationMixin.nightshade` drops it and the shade falls back to
+#: :data:`_NIGHT_STYLE`. Passing it through instead resolved to matplotlib's first *cycle* colour on a
+#: flat map, drawing a night shade in blue, and raised ``Invalid RGBA argument: None`` on a globe
+#: (round 4, L8).
+_NIGHT_FILL_KEYWORDS: FrozenSet[str] = frozenset({"color", "facecolor"})
+
 
 def _utc_moment(when: Any) -> datetime:
     """Read the instant a night shade is drawn for, as an aware UTC ``datetime``.
@@ -1401,9 +1409,19 @@ def _globe_nightshade(
     if not np.any(depth < 0):
         return None
     opts = {**_NIGHT_STYLE, **style}
-    fill = opts.pop("color", None) or opts.pop("facecolor")
+    # `in`, not truthiness: an `or` here read *any* falsy colour as "not given" and fell back to the night
+    # default, so `color=""` was refused on a flat map and silently drawn black here (round 4, L8).
+    # `None` never reaches this — `nightshade` drops it as the "unset" it means in matplotlib — so what is
+    # left is either a colour matplotlib accepts or one it refuses, on both frames alike.
+    fill = opts.pop("color") if "color" in opts else opts.pop("facecolor")
     opts.pop("facecolor", None)
-    opts.pop("edgecolor", None)
+    edge = opts.pop("edgecolor", None)
+    if edge is not None:
+        # A filled contour has no edge to draw, so the keyword is dropped — but dropping it unresolved
+        # swallowed an invalid colour that a flat map refused, which is the same disagreement in the edge
+        # channel. matplotlib still owns the spelling; this only asks it the question before discarding
+        # the answer (round 4, L8).
+        to_rgba(edge)
     with scene._preserve_view():
         shade = scene.ax.contourf(
             grid_x, grid_y, depth, levels=[-2.0, 0.0], colors=[fill], **opts
@@ -2424,7 +2442,13 @@ class DecorationMixin(_MixinBase):
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **style: Forwarded to the ``PolyCollection`` (``facecolor``/``color``, ``alpha``, ``zorder``,
-                …). The default is black at ``alpha=0.35``.
+                …). The default is black at ``alpha=0.35``. ``facecolor`` and ``color`` are the same
+                keyword here, and ``None`` in either means "not given", so the default is drawn — it is
+                **not** passed through to matplotlib's cycle colour, which drew a night shade in blue
+                (round 4, L8). ``alpha=0`` is honoured as the invisible shade it asks for, not read as
+                unset. A **globe** fills a ``contourf`` rather than a polygon, so it draws no outline:
+                ``edgecolor`` (and ``linewidth``/``linestyle`` with it) is resolved — an invalid colour is
+                refused on either frame — and then dropped there, where a flat map draws it.
 
         Returns:
             The night shade's ``PolyCollection`` — on a globe, the filled ``ContourSet`` it is drawn as there
@@ -2474,6 +2498,11 @@ class DecorationMixin(_MixinBase):
         samples = _whole_samples(n, "nightshade()")
         altitude = _terminator_altitude(refraction, "nightshade()")
         moment = _utc_moment(when)
+        fill = {
+            key: value
+            for key, value in style.items()
+            if value is not None or key not in _NIGHT_FILL_KEYWORDS
+        }
         return self._draw(
             LayerRecord(
                 "nightshade",
@@ -2487,7 +2516,7 @@ class DecorationMixin(_MixinBase):
                         "n": samples,
                     }
                 ),
-                opts=style,
+                opts=fill,
             )
         )
 

@@ -43,6 +43,15 @@ POLAR_TRUE_SCALE_LAT = 71.0
 #: The northern limit of EPSG:3031's declared area of use, in degrees.
 POLAR_AREA_OF_USE_LAT = -60.0
 
+#: The night style's own alpha, which every fill below is read at.
+NIGHT_ALPHA = 0.35
+
+#: What an unset night-shade colour must resolve to: the night style's opaque black at its alpha.
+NIGHT_DEFAULT_RGBA = (0.0, 0.0, 0.0, NIGHT_ALPHA)
+
+#: CSS4 crimson at the night style's alpha, written out from its bytes (220, 20, 60).
+CRIMSON_RGBA = (220 / 255, 20 / 255, 60 / 255, NIGHT_ALPHA)
+
 #: EPSG:3832's central meridian, in degrees — PDC Mercator is centred on the Pacific.
 PDC_CENTRAL_LON = 150.0
 
@@ -100,6 +109,21 @@ def _covered(artist, xy) -> bool:
         ``True`` when a path contains it.
     """
     return any(path.contains_point(xy) for path in artist.get_paths())
+
+
+def _fill_rgba(artist) -> tuple:
+    """Read one night shade's fill colour, whichever artist the frame drew it as.
+
+    A flat map draws a ``PolyCollection`` and a globe a filled ``ContourSet``; both are collections, so
+    both answer ``get_facecolor``, and this exists only to name that and take the first polygon.
+
+    Args:
+        artist: What ``nightshade`` returned.
+
+    Returns:
+        The first polygon's RGBA as four floats.
+    """
+    return tuple(float(value) for value in artist.get_facecolor()[0])
 
 
 def _wide_polar_raster() -> Dataset:
@@ -938,3 +962,105 @@ class TestTheTerminatorAltitudeIsRefusedTheSameWayOnEveryFrame:
         )
         with pytest.raises(ValueError, match=r"nightshade\(\) needs refraction="):
             decoration._terminator_altitude(-90.0, "nightshade()")
+
+
+class TestTheNightShadeColourAnswersAlikeOnEveryFrame:
+    """The fill colour has two spellings and two frames, and all four combinations must agree.
+
+    A flat map hands the style to cleopatra's ``add_nightshade``, which builds a ``PolyCollection``; a
+    globe fills a ``contourf`` and has to pick one colour out of the style to pass as ``colors=``. That
+    pick was ``opts.pop("color", None) or opts.pop("facecolor")``, and an ``or`` reads *any* falsy colour
+    as "not given" — so the two frames disagreed on both an unset colour and an invalid one.
+    """
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize(
+        "keyword", ["color", "facecolor"], ids=["color", "facecolor"]
+    )
+    def test_an_unset_colour_draws_the_night_default(self, globe, keyword):
+        """``None`` means "not given", so the shade is the night default on both frames.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            keyword: Which of the two colour spellings is passed.
+
+        Test scenario:
+            ``None`` is matplotlib's own spelling for "use the default", and the default for *this* layer
+            is the night style's opaque black. A flat map instead passed it through to the collection,
+            which resolved it to matplotlib's first cycle colour — so a night shade came out **blue** —
+            while a globe raised ``Invalid RGBA argument: None`` from ``contourf(colors=[None])``. The
+            expected colour is written out here as black at the night style's alpha, not read from the
+            module.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        artist = canvas.nightshade(JUNE_NOON, **{keyword: None})
+        assert _fill_rgba(artist) == pytest.approx(NIGHT_DEFAULT_RGBA), (
+            f"{keyword}=None must draw the night default, got {_fill_rgba(artist)}"
+        )
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize(
+        "keyword",
+        ["color", "facecolor", "edgecolor"],
+        ids=["color", "facecolor", "edgecolor"],
+    )
+    def test_an_invalid_colour_is_refused_on_both_frames(self, globe, keyword):
+        """An empty string is not a colour, and is refused rather than quietly replaced.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            keyword: Which colour spelling is passed.
+
+        Test scenario:
+            ``color=""`` was refused on a flat map and silently drawn black on a globe, because the ``or``
+            read it as "not given" and fell back to the night style — so the frame decided whether a
+            caller's typo was an error or a drawing. ``edgecolor=""`` was the same disagreement in the
+            edge channel, for a different reason: a filled contour has no edge, so the globe dropped the
+            keyword without ever resolving it. matplotlib owns the spelling of a colour, so the refusal is
+            still its own message; what this pins is that there *is* one, on both frames.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        with pytest.raises(ValueError, match="(?i)rgba|valid color"):
+            canvas.nightshade(JUNE_NOON, **{keyword: ""})
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize("alpha", [0, 0.0], ids=["int-zero", "float-zero"])
+    def test_a_fully_transparent_shade_is_drawn_not_read_as_unset(self, globe, alpha):
+        """``alpha=0`` is a request, not an omission, and both frames honour it.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            alpha: Zero, in both spellings a caller might reach for.
+
+        Test scenario:
+            The sibling of the colour channel: ``0`` is falsy too, so a guard written on truthiness rather
+            than presence would read a deliberately invisible shade as "no alpha given" and draw it at the
+            night style's 0.35. The fill must come back fully transparent on both frames, with the colour
+            itself untouched.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        artist = canvas.nightshade(JUNE_NOON, alpha=alpha)
+        assert _fill_rgba(artist) == pytest.approx((0.0, 0.0, 0.0, 0.0)), (
+            f"alpha={alpha} must draw a fully transparent shade, got {_fill_rgba(artist)}"
+        )
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize(
+        "keyword", ["color", "facecolor"], ids=["color", "facecolor"]
+    )
+    def test_a_named_colour_still_reaches_both_frames(self, globe, keyword):
+        """The control: an ordinary colour is unaffected by how the unset and invalid cases are handled.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            keyword: Which of the two colour spellings is passed.
+
+        Test scenario:
+            Both spellings already agreed here, and must keep agreeing — a fix that routed the colour
+            differently could easily drop the caller's own. Crimson is written out from its CSS4 bytes.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        artist = canvas.nightshade(JUNE_NOON, **{keyword: "crimson"})
+        assert _fill_rgba(artist) == pytest.approx(CRIMSON_RGBA), (
+            f"{keyword}='crimson' must draw crimson, got {_fill_rgba(artist)}"
+        )
