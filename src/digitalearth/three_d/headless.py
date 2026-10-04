@@ -21,6 +21,7 @@ calling :func:`start_xvfb` before the first scene is drawn costs nothing.
 
 from __future__ import annotations
 
+import atexit
 import os
 import re
 import shutil
@@ -48,8 +49,17 @@ def start_xvfb(
     unconditionally at the top of a script meant to run everywhere.
 
     On Linux with no display it launches ``Xvfb <display> -screen 0 <width>x<height>x24 -nolisten tcp``,
-    waits ``wait`` seconds to see that the server stays up, and only then sets ``DISPLAY``. The server runs
-    until the returned process is terminated or the Python process exits and the OS reaps it.
+    waits ``wait`` seconds to see that the server stays up, and only then sets ``DISPLAY``.
+
+    **Stopping it.** Call ``.terminate()`` on the returned process when you are done, or leave it: the
+    helper registers an :mod:`atexit` hook that terminates the server and unsets the ``DISPLAY`` it set,
+    so a script that forgets leaves no stray server behind. The OS does **not** do this for you — a
+    ``subprocess.Popen`` child outlives the interpreter that started it, and ``Popen.__del__``
+    deliberately does not terminate a running one (dropping the last reference to a live child only warns
+    ``subprocess <pid> is still running``). Until the hook existed, a forgotten server went on holding
+    ``:99``; the next run then found no ``DISPLAY``, asked for ``:99`` again, and failed with the
+    ``RuntimeError`` below — so "safe to call unconditionally" was false from the second run onward
+    (review M3).
 
     Args:
         display: The X display to create, such as ``":99"``. Pick another number if that one is taken.
@@ -59,8 +69,8 @@ def start_xvfb(
             within that time (a display number already in use, for instance) is reported as an error.
 
     Returns:
-        The ``subprocess.Popen`` of the server that was started — call ``.terminate()`` on it to stop it —
-        or ``None`` when no server was needed.
+        The ``subprocess.Popen`` of the server that was started — call ``.terminate()`` on it to stop it
+        early, or leave it to the ``atexit`` hook — or ``None`` when no server was needed.
 
     Raises:
         ValueError: when ``display`` is not an X display name, or ``window_size`` is not two positive ints.
@@ -115,11 +125,35 @@ def start_xvfb(
     except subprocess.TimeoutExpired:
         # Still running after the wait: the server is up, and VTK will find it through DISPLAY.
         os.environ["DISPLAY"] = display
+        # And it is stopped when the interpreter exits, because nothing else does: a `Popen` child
+        # outlives its parent, and `Popen.__del__` deliberately does not terminate a running one —
+        # dropping the last reference to a live child only warns `subprocess <pid> is still running`.
+        # Left behind, the server kept holding the display, and the next run found no DISPLAY, asked for
+        # the same number and raised the startup RuntimeError below (review M3).
+        atexit.register(_reap, server, display)
         return server
     raise RuntimeError(
         f"Xvfb on display {display} exited with code {code} while starting; the display may already be in "
         f"use — pass another one, e.g. start_xvfb(':100')"
     )
+
+
+def _reap(server: subprocess.Popen, display: str) -> None:
+    """Stop a server :func:`start_xvfb` started, and give ``DISPLAY`` back if it is still ours.
+
+    Registered with :mod:`atexit` at the end of a successful start. Idempotent, so a caller who already
+    called ``server.terminate()`` themselves leaves this nothing to do.
+
+    Args:
+        server: The X server that was started.
+        display: The display it was put on, which ``start_xvfb`` also wrote into ``DISPLAY``.
+    """
+    if server.poll() is None:
+        server.terminate()
+    if os.environ.get("DISPLAY") == display:
+        # Only when it still names *this* server: something else may have pointed DISPLAY elsewhere
+        # since, and that display is not ours to take away.
+        del os.environ["DISPLAY"]
 
 
 def _check_request(display: str, window_size: Sequence[int]) -> None:

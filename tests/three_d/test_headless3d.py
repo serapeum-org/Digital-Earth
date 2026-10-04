@@ -29,6 +29,7 @@ class _FakeServer:
         """
         self.args = args
         self.exit_code = exit_code
+        self.terminated = False
 
     def wait(self, timeout=None):
         """Return the exit code of a server that died, or time out on one that is still running.
@@ -45,6 +46,19 @@ class _FakeServer:
         if self.exit_code is None:
             raise subprocess.TimeoutExpired(self.args, timeout)
         return self.exit_code
+
+    def poll(self):
+        """Report whether the server has exited, the way ``Popen.poll`` does.
+
+        Returns:
+            ``None`` while it runs, else its exit code.
+        """
+        return self.exit_code
+
+    def terminate(self):
+        """Record that something asked the server to stop."""
+        self.terminated = True
+        self.exit_code = -15
 
 
 @pytest.fixture
@@ -74,6 +88,29 @@ def linux_without_display(monkeypatch):
 
     monkeypatch.setattr(headless.subprocess, "Popen", popen)
     return launched
+
+
+@pytest.fixture
+def registered_hooks(monkeypatch):
+    """Capture what the helper hands ``atexit.register`` instead of really registering it.
+
+    A hook left on the real ``atexit`` would run when pytest exits and terminate a fake, so the module's
+    own ``atexit`` is replaced for the duration of the test.
+
+    Args:
+        monkeypatch: pytest's patcher.
+
+    Returns:
+        A list of ``(function, args)`` pairs, one per registration.
+    """
+    hooks = []
+
+    def register(function, *args, **kwargs):
+        hooks.append((function, args, kwargs))
+        return function
+
+    monkeypatch.setattr(headless.atexit, "register", register)
+    return hooks
 
 
 class TestStartXvfb:
@@ -168,3 +205,106 @@ class TestStartXvfb:
         """``display`` is an X display name such as ``:99``; anything else is refused before a launch."""
         with pytest.raises(ValueError, match="display"):
             start_xvfb(display="99", wait=0.01)
+
+
+class TestStoppingTheServer:
+    """A server this module started is stopped when the interpreter exits, not left holding its display."""
+
+    def test_a_started_server_is_registered_for_cleanup(
+        self, linux_without_display, registered_hooks
+    ):
+        """The helper hands the server it started to ``atexit``, with the display it was put on.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+
+        Test scenario:
+            - Nothing was registered before: a ``subprocess.Popen`` child is not killed when the parent
+              interpreter exits, and ``Popen.__del__`` deliberately does not terminate a running child
+              (CPython says so itself — dropping the last reference to a live child warns ``subprocess
+              <pid> is still running``).
+            - A forgotten ``server.terminate()`` therefore left ``Xvfb`` holding ``:99``, and the next run
+              found no ``DISPLAY``, tried ``:99`` again and raised the startup ``RuntimeError``.
+        """
+        server = start_xvfb(display=":42", wait=0.01)
+        assert [(hook.__name__, args) for hook, args, _ in registered_hooks] == [
+            ("_reap", (server, ":42"))
+        ], registered_hooks
+
+    def test_the_cleanup_stops_the_server_and_puts_display_back(
+        self, linux_without_display, registered_hooks
+    ):
+        """Running the registered hook terminates the server and leaves ``DISPLAY`` as it was found.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+        """
+        import os
+
+        server = start_xvfb(display=":42", wait=0.01)
+        assert os.environ["DISPLAY"] == ":42"
+        hook, args, kwargs = registered_hooks[0]
+        hook(*args, **kwargs)
+        assert server.terminated is True
+        assert "DISPLAY" not in os.environ
+
+    def test_the_cleanup_leaves_a_display_someone_else_set(
+        self, linux_without_display, registered_hooks, monkeypatch
+    ):
+        """``DISPLAY`` is only unset when it still names the server being stopped.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+            monkeypatch: pytest's patcher, which restores ``DISPLAY`` afterwards.
+
+        Test scenario:
+            - Start a server on ``:42``, then have something else point ``DISPLAY`` at ``:7``.
+            - Stopping the server must still terminate it, but must not take away a display it does not
+              own.
+        """
+        import os
+
+        server = start_xvfb(display=":42", wait=0.01)
+        monkeypatch.setenv("DISPLAY", ":7")
+        hook, args, kwargs = registered_hooks[0]
+        hook(*args, **kwargs)
+        assert server.terminated is True
+        assert os.environ["DISPLAY"] == ":7"
+
+    def test_a_server_already_stopped_is_not_terminated_twice(
+        self, linux_without_display, registered_hooks
+    ):
+        """A caller who stopped the server themselves leaves the hook nothing to do.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+        """
+        server = start_xvfb(display=":42", wait=0.01)
+        server.terminated = False
+        server.exit_code = 0
+        hook, args, kwargs = registered_hooks[0]
+        hook(*args, **kwargs)
+        assert server.terminated is False
+
+    def test_a_server_that_never_started_registers_nothing(
+        self, linux_without_display, registered_hooks, monkeypatch
+    ):
+        """There is nothing to clean up when no server was launched.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+            monkeypatch: pytest's patcher.
+        """
+        monkeypatch.setattr(
+            headless.subprocess,
+            "Popen",
+            lambda args, **kwargs: _FakeServer(args, exit_code=1),
+        )
+        with pytest.raises(RuntimeError, match="exited with code 1"):
+            start_xvfb(display=":42", wait=0.01)
+        assert registered_hooks == []
