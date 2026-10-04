@@ -802,6 +802,10 @@ class WebMapBase:
         #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
         #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
         self._temporal: Optional[dict] = None
+        #: The bare ``MapWidget`` :meth:`render` built last — the one on screen after ``show()`` or a notebook
+        #: repr — kept so :meth:`~digitalearth.web.decoration.DecorationMixin.drawn_features` can read what the
+        #: user drew on it. ``None`` until the map is first rendered; :meth:`save` builds its own and leaves this.
+        self._widget: Any = None
 
     @staticmethod
     def _validate_display_crs(crs: Any) -> int:
@@ -3383,7 +3387,8 @@ class WebMapBase:
 
         When a time-slider has been added (:meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`), the
         map is wrapped in a slider composite so a notebook front-end renders both together; otherwise the bare
-        MapLibre ``MapWidget`` is returned.
+        MapLibre ``MapWidget`` is returned. Either way the bare widget is remembered, so
+        :meth:`~digitalearth.web.decoration.DecorationMixin.drawn_features` reads the one last put on screen.
 
         Returns:
             The ``maplibre.ipywidget.MapWidget``, or an ``ipywidgets`` container (slider + map) when temporal.
@@ -3392,6 +3397,7 @@ class WebMapBase:
             ImportError: when the ``web`` extra is not installed.
         """
         widget = self._build_map_widget()
+        self._widget = widget
         wrap = getattr(self, "_wrap_temporal", None)
         if wrap is not None and self._temporal is not None:
             return wrap(widget)

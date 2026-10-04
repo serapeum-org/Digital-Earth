@@ -11,8 +11,8 @@ their own out of band.
 
 Out of scope here (deferred): ``pmtiles`` (needs the optional ``pmtiles`` reader, intentionally not in the
 ``[web]`` extra); a **minimap** (py-maplibregl ships no such control, and it would need a custom HTML/JS one).
-The ``measure`` tool exposes the drawn geometry for pyramids to compute geodesic distance/area (the GIS
-part).
+The ``measure`` tool's drawn geometry comes back through ``drawn_features`` as a pyramids ``FeatureCollection``,
+for pyramids to compute geodesic distance/area (the GIS part).
 """
 
 import html
@@ -75,6 +75,10 @@ _SWITCHER_THEMES = frozenset({"default", "simple"})
 #: py-maplibregl's switcher control is. An opacity slider or a basemap picker would each need a control the
 #: library does not ship, so naming either is refused rather than accepted and dropped.
 _OFFERED_CONTROLS = ("visibility",)
+
+#: The CRS MapboxDraw reports drawn geometry in. GeoJSON coordinates are lon/lat by definition, whatever the
+#: map shows, so :meth:`DecorationMixin.drawn_features` stamps this rather than reading it off the map.
+_DRAWN_CRS = 4326
 
 
 #: Styling for the small floating panels this tier builds — the legend and the title — kept with the
@@ -1701,11 +1705,11 @@ class DecorationMixin(_MixinBase):
 
         Note this adds a **drawing** control, not a live on-map readout: it does not display the distance/area
         number on the map (that GIS computation is left to pyramids, below). It enables MapLibre's draw control
-        scoped to line and/or polygon geometries, so the user draws the shape to measure. The drawn GeoJSON is
-        available on the rendered widget
-        (``draw_feature_collection_all`` and the ``draw_features_created``/``…_updated`` events). Computing the
-        numeric distance/area from that geometry is a **GIS** operation — do it in pyramids (geodesic length /
-        area), keeping this tier to the (visualization) drawing control.
+        scoped to line and/or polygon geometries, so the user draws the shape to measure. Once the map is shown,
+        :meth:`drawn_features` returns what was drawn as a pyramids ``FeatureCollection`` (the widget's own
+        ``draw_features_created``/``…_updated`` events stay available for a caller who wants to observe them).
+        Computing the numeric distance/area from that geometry is a **GIS** operation — do it in pyramids
+        (geodesic length / area), keeping this tier to the (visualization) drawing control.
 
         Args:
             distance: Offer the line tool (measure distance along a path).
@@ -1735,6 +1739,93 @@ class DecorationMixin(_MixinBase):
 
         self._record_furniture("measure", anchor=position, distance=distance, area=area)
         return self._queue(apply)
+
+    def drawn_features(self, widget: Any = None) -> Any:
+        """Return the shapes drawn on the map, as a pyramids ``FeatureCollection`` in EPSG:4326.
+
+        The draw control :meth:`measure` adds runs in the browser, and py-maplibregl syncs everything it holds
+        back to the widget's ``draw_feature_collection_all`` trait on every create, update and delete. This
+        reads that trait — by default from the widget :meth:`render` built last, which is the one ``show()``
+        or a notebook cell put on screen — and hands it back as the tier's vector type, ready for a pyramids
+        clip, mask or zonal statistic. MapboxDraw always reports lon/lat, so the result is in EPSG:4326.
+
+        Each row keeps MapboxDraw's feature ``id`` in an ``id`` column, which is what the widget's
+        ``draw_features_created``/``…_updated``/``…_deleted`` events name, so a row can be matched to them.
+
+        Args:
+            widget: The ``MapWidget`` to read, for a caller holding one from an earlier :meth:`render`.
+                ``None`` reads the last widget this map rendered.
+
+        Returns:
+            A ``FeatureCollection`` with one row per drawn shape — empty (no rows, still EPSG:4326) when
+            nothing is drawn or everything drawn was deleted.
+
+        Raises:
+            RuntimeError: when ``widget`` is ``None`` and the map has never been rendered, so no widget
+                exists for anyone to have drawn on.
+            TypeError: when ``widget`` has no ``draw_feature_collection_all`` trait (for example the
+                time-slider composite :meth:`render` returns for a temporal map — pass nothing instead).
+
+        Examples:
+            - Stand in for the browser by setting the synced trait the way the front-end does after a user
+              draws one triangle:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> widget = m.render()
+                >>> widget.draw_feature_collection_all = {"type": "FeatureCollection", "features": [{
+                ...     "id": "a1", "type": "Feature", "properties": {},
+                ...     "geometry": {"type": "Polygon",
+                ...                  "coordinates": [[[10, 50], [12, 50], [11, 52], [10, 50]]]}}]}
+                >>> drawn = m.drawn_features()
+                >>> len(drawn), drawn.epsg, list(drawn["id"])
+                (1, 4326, ['a1'])
+                >>> tuple(float(v) for v in drawn.total_bounds)
+                (10.0, 50.0, 12.0, 52.0)
+
+                ```
+            - A map nobody drew on gives an empty collection, not an error:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> _ = m.render()
+                >>> len(m.drawn_features())
+                0
+
+                ```
+
+        See Also:
+            measure: adds the draw control this reads from.
+            digitalearth.web.base.WebMapBase.render: builds the widget that is read by default.
+        """
+        if widget is None:
+            widget = self._widget
+            if widget is None:
+                raise RuntimeError(
+                    "drawn_features() reads the widget the map was drawn on, and this map has not been "
+                    "rendered yet; call render() or show() (or display the map in a notebook) first"
+                )
+        if not hasattr(widget, "draw_feature_collection_all"):
+            raise TypeError(
+                f"drawn_features() needs a maplibre MapWidget carrying the draw_feature_collection_all trait; "
+                f"got {type(widget).__name__}"
+            )
+        from pyramids.feature import FeatureCollection
+
+        collection = widget.draw_feature_collection_all or {}
+        features = [
+            {
+                **feature,
+                "properties": {
+                    "id": feature.get("id"),
+                    **(feature.get("properties") or {}),
+                },
+            }
+            for feature in collection.get("features") or []
+        ]
+        if not features:
+            return FeatureCollection(geometry=[], crs=_DRAWN_CRS)
+        return FeatureCollection.from_features(features, crs=_DRAWN_CRS)
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:
