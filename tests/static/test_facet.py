@@ -490,3 +490,80 @@ class TestTheMeasurePass:
         facet(frames, crs=4326)
         expected = 2 * len(frames)  # one warp each to measure, then one each to draw
         assert len(warped) == expected, len(warped)
+
+
+class TestWhatTheArgumentsTake:
+    """A caller shape ``facet`` cannot draw is refused by name, before any axes are made."""
+
+    def test_a_path_is_refused_rather_than_iterated(self):
+        """A string is a sequence of characters, so iterating it is never what the caller meant.
+
+        Test scenario:
+            ``facet`` does not open a raster — every frame is already a ``Dataset`` by the time the scale is
+            measured. Handed a path, the old code iterated the string character by character and failed
+            four frames later with ``AttributeError: 'str' object has no attribute 'read_array'``, which
+            names neither the argument nor what it takes.
+        """
+        with pytest.raises(ValueError, match=r"facet\(stack=\)"):
+            facet("examples/data/acc4000.tif", crs=4326)
+
+    def test_a_mapping_is_refused_rather_than_iterated(self, stack):
+        """A dict iterates as its keys, which are labels and not frames.
+
+        Args:
+            stack: The frames.
+        """
+        keyed = {"Jan": stack[0], "Feb": stack[1]}
+        with pytest.raises(ValueError, match=r"facet\(stack=\)"):
+            facet(keyed, crs=4326)
+
+    def test_a_stack_that_is_not_iterable_is_refused(self):
+        """A single number is neither a dataset nor a sequence of them."""
+        with pytest.raises(ValueError, match=r"facet\(stack=\)"):
+            facet(7, crs=4326)
+
+    def test_a_frame_that_is_not_a_dataset_is_refused_by_position(self, stack):
+        """The refusal says which frame is wrong, since a long stack hides it otherwise.
+
+        Args:
+            stack: The frames.
+        """
+        mixed = [stack[0], np.zeros((4, 4))]
+        with pytest.raises(ValueError, match="frame 1"):
+            facet(mixed, crs=4326)
+
+    def test_k_without_a_scheme_is_refused(self, stack):
+        """``k`` counts the classes a scheme cuts, so on its own it does nothing.
+
+        Args:
+            stack: The frames.
+
+        Test scenario:
+            It used to be forwarded to every panel, where ``Map.field`` documents it as ignored — so a
+            caller asking for four classes and no scheme got an unclassified ramp and no word about it.
+        """
+        with pytest.raises(ValueError, match=r"facet\(k=4\)"):
+            facet(stack, crs=4326, k=4)
+
+    def test_labels_as_a_generator_are_counted_not_crashed_on(self, stack):
+        """A generator of the wrong length gets the named refusal, not ``len()``'s TypeError.
+
+        Args:
+            stack: The frames.
+        """
+        labels = (name for name in ["Jan", "Feb", "Mar"])
+        with pytest.raises(ValueError, match="labels"):
+            facet(stack, crs=4326, labels=labels)
+
+    def test_labels_as_a_generator_of_the_right_length_title_the_panels(self, stack):
+        """A generator that does number the panels is spent once and titles them.
+
+        Args:
+            stack: The frames.
+        """
+        labels = (name for name in ["Jan", "Feb", "Mar", "Apr"])
+        _, maps = facet(stack, crs=4326, col="month", labels=labels)
+        titles = [m.ax.get_title() for m in maps]
+        assert titles == ["month = Jan", "month = Feb", "month = Mar", "month = Apr"], (
+            titles
+        )

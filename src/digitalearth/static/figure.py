@@ -8,6 +8,8 @@ rendering stays in each ``Map`` (pyramids + cleopatra).
 """
 
 import math
+import os
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
@@ -36,6 +38,12 @@ _FACET_KINDS: Dict[str, Tuple[str, Dict[str, Any]]] = {
     "contourf": ("contours", {"filled": True}),
     "contour": ("contours", {"filled": False}),
 }
+
+#: What ``facet(stack=)`` takes, named in every refusal of something else.
+_STACK_FORMS = (
+    "a multi-band Dataset (its bands are the panels), a DatasetCollection (anything with a .datasets "
+    "sequence), or a sequence of Dataset"
+)
 
 
 def grid(
@@ -128,6 +136,52 @@ def shared_colorbar(
     return cbar
 
 
+def _frames_of(stack: Any) -> List[Any]:
+    """Return the frames of a stack that is not a single multi-band dataset, refusing anything else by name.
+
+    Every other input is refused *here*, before an axes exists, because each of the shapes a caller gets
+    wrong iterates into something: a path is a sequence of characters, a dict is a sequence of its keys, and
+    both used to fail four frames later with ``AttributeError: 'str' object has no attribute 'read_array'``
+    — naming neither the argument nor what it takes.
+
+    Args:
+        stack: What the caller passed as ``facet(stack=)``, already known not to be a ``Dataset``.
+
+    Returns:
+        One frame per panel.
+
+    Raises:
+        ValueError: for a path or URL (``facet`` opens nothing), a mapping (it iterates as its keys),
+            anything that is not iterable at all, and a sequence holding something that is not a
+            ``Dataset`` — named by its position in the stack.
+    """
+    if isinstance(stack, (str, bytes, os.PathLike)):
+        raise ValueError(
+            f"facet(stack=) takes {_STACK_FORMS}; got a path or URL. facet opens nothing — read it with "
+            "Dataset.read_file() (or DatasetCollection) and pass what that returns"
+        )
+    if isinstance(stack, Mapping):
+        raise ValueError(
+            f"facet(stack=) takes {_STACK_FORMS}; got {type(stack).__name__}, which iterates as its keys "
+            "rather than its frames. Pass its values, and title the panels with labels="
+        )
+    members = getattr(stack, "datasets", stack)
+    try:
+        frames = list(members)
+    except TypeError as error:
+        raise ValueError(
+            f"facet(stack=) takes {_STACK_FORMS}; got {type(stack).__name__}, which holds no frames"
+        ) from error
+    for position, frame in enumerate(frames):
+        if not isinstance(frame, Dataset):
+            raise ValueError(
+                f"facet(stack=) takes {_STACK_FORMS}; frame {position} is {type(frame).__name__}. Every "
+                "frame is read and warped as a dataset, so a bare array (which carries no CRS) cannot be "
+                "a panel of a facet — draw one with Map.field"
+            )
+    return frames
+
+
 def _panels_of(stack: Any, band: int) -> Tuple[List[Any], List[int], str]:
     """Return what each panel of a facet draws: its frame, the band it reads, and the facet's default name.
 
@@ -139,11 +193,14 @@ def _panels_of(stack: Any, band: int) -> Tuple[List[Any], List[int], str]:
     Returns:
         ``(frames, bands, name)``: one frame and one band per panel, and ``"band"`` or ``"frame"`` — what the
         panels are numbered by when the caller names no ``col``.
+
+    Raises:
+        ValueError: from :func:`_frames_of`, for a ``stack`` that is none of the three shapes it takes.
     """
     if isinstance(stack, Dataset):
         count = int(stack.band_count)
         return [stack] * count, list(range(1, count + 1)), "band"
-    frames = list(getattr(stack, "datasets", stack))
+    frames = _frames_of(stack)
     return frames, [band] * len(frames), "frame"
 
 
@@ -285,14 +342,16 @@ def facet(
 
     Args:
         stack: A multi-band ``Dataset`` (one panel per band), a ``DatasetCollection`` (one per member), or
-            a sequence of ``Dataset`` frames.
+            a sequence of ``Dataset`` frames. Anything else is refused by name — ``facet`` opens nothing, so
+            a path or URL is read with ``Dataset.read_file()`` first.
         col: What the panels are, as each title names it — ``"time"`` titles them ``"time = 0"``,
             ``"time = 1"``, … ``None`` (default) says ``"band"`` for a multi-band dataset and ``"frame"``
             otherwise.
         col_wrap: Panels per row; the rest wrap onto further rows, and the unused slots of the last row are
             hidden. ``None`` (default) puts every panel on one row.
         labels: One label per panel for its title, in place of the index (``1``-based band numbers for a
-            multi-band dataset, ``0``-based positions otherwise).
+            multi-band dataset, ``0``-based positions otherwise). Any iterable, a generator included — it is
+            spent into a list before the panels are counted.
         kind: The render — ``"field"`` (default), ``"pcolormesh"``, ``"contourf"`` or ``"contour"``. The two
             contour renders need explicit ``levels=``.
         band: The band each frame of a collection or sequence is drawn from. Ignored for a multi-band
@@ -304,14 +363,17 @@ def facet(
         cbar_label: The colorbar's label.
         **style: Styling for every panel, forwarded to the render (``cmap``, ``vmin``, ``vmax``, ``scheme``,
             ``k``, ``levels``, …). A ``vmin``/``vmax`` given here is the shared scale instead of the stack's
-            range.
+            range, and ``k`` counts the classes ``scheme`` cuts, so it is refused without one rather than
+            forwarded as a no-op.
 
     Returns:
         ``(fig, maps)`` — the figure and one ``Map`` per panel, in panel order.
 
     Raises:
-        ValueError: when the stack has no frames, ``col_wrap`` is below 1, ``labels`` does not number the
-            panels, ``kind`` is not one of the four, or a contour ``kind`` has no ``levels``.
+        ValueError: when ``stack`` is none of the three shapes it takes (a path, a mapping, a frame that is
+            not a ``Dataset``) or has no frames, ``col_wrap`` is below 1, ``labels`` does not number the
+            panels, ``kind`` is not one of the four, a contour ``kind`` has no ``levels``, or ``k`` is given
+            without ``scheme``.
 
     Examples:
         - Four frames on one row, one scale, titled by month:
@@ -359,6 +421,11 @@ def facet(
         raise ValueError(
             f"facet(kind={kind!r}) is not a render; use one of {sorted(_FACET_KINDS)}"
         )
+    if style.get("k") is not None and style.get("scheme") is None:
+        raise ValueError(
+            f"facet(k={style['k']!r}) counts the classes a scheme cuts, so it classifies nothing without "
+            "scheme=; pass scheme= ('quantiles', 'equal_interval', 'categorical', ...) or drop k="
+        )
     frames, bands, default_col = _panels_of(stack, band)
     count = len(frames)
     if count == 0:
@@ -367,6 +434,9 @@ def facet(
         raise ValueError(
             f"facet(col_wrap=) is panels per row and must be at least 1; got {col_wrap}"
         )
+    # Spent into a list before it is counted, so a generator of labels is counted rather than crashing
+    # `len()` — the refusal below is the one a wrong number of labels is meant to get.
+    labels = None if labels is None else list(labels)
     if labels is not None and len(labels) != count:
         raise ValueError(
             f"facet() draws {count} panels, so labels= needs {count} labels; got {len(labels)}"
