@@ -5,7 +5,10 @@ server: the platform, the ``PATH`` lookup and the process launch are replaced wi
 same on every OS and record exactly what would have been launched.
 """
 
+import gc
 import subprocess
+import sys
+import warnings
 
 import pytest
 
@@ -30,6 +33,9 @@ class _FakeServer:
         self.args = args
         self.exit_code = exit_code
         self.terminated = False
+        #: One entry per ``wait()``, holding the timeout it was given — the startup check's first, the
+        #: reaper's next.
+        self.waits = []
 
     def wait(self, timeout=None):
         """Return the exit code of a server that died, or time out on one that is still running.
@@ -43,6 +49,7 @@ class _FakeServer:
         Raises:
             subprocess.TimeoutExpired: when the server is still running.
         """
+        self.waits.append(timeout)
         if self.exit_code is None:
             raise subprocess.TimeoutExpired(self.args, timeout)
         return self.exit_code
@@ -59,6 +66,47 @@ class _FakeServer:
         """Record that something asked the server to stop."""
         self.terminated = True
         self.exit_code = -15
+
+
+class _StubbornServer(_FakeServer):
+    """A server that ignores ``terminate()`` and dies only on ``kill()``, as a hung X server would.
+
+    Every call is appended to :attr:`calls`, so the order the reaper makes them in can be pinned.
+    """
+
+    def __init__(self, args, **kwargs):
+        """Start out running, with an empty call log.
+
+        Args:
+            args: The argv the helper launched.
+            **kwargs: Forwarded to :class:`_FakeServer`.
+        """
+        super().__init__(args, **kwargs)
+        self.calls = []
+        self.killed = False
+
+    def wait(self, timeout=None):
+        """Log the wait, then behave as :class:`_FakeServer` does.
+
+        Args:
+            timeout: How long the caller is willing to wait.
+
+        Returns:
+            The exit code, when the server has exited.
+        """
+        self.calls.append(("wait", timeout))
+        return super().wait(timeout)
+
+    def terminate(self):
+        """Log the request and keep running: ``SIGTERM`` is what this server ignores."""
+        self.calls.append(("terminate", None))
+        self.terminated = True
+
+    def kill(self):
+        """Log the kill and die, the way ``SIGKILL`` cannot be refused."""
+        self.calls.append(("kill", None))
+        self.killed = True
+        self.exit_code = -9
 
 
 @pytest.fixture
@@ -273,6 +321,94 @@ class TestStoppingTheServer:
         hook(*args, **kwargs)
         assert server.terminated is True
         assert os.environ["DISPLAY"] == ":7"
+
+    def test_the_cleanup_waits_for_the_child_it_terminated(
+        self, linux_without_display, registered_hooks
+    ):
+        """``terminate()`` only asks; the hook waits for the child to actually go.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+
+        Test scenario:
+            - One ``wait`` has happened by the time the server is started: the startup check, with the
+              ``wait=`` the caller gave.
+            - Running the hook adds a second one, with a timeout of its own — bounded, so a server that
+              will not die cannot hang the interpreter's exit.
+            - Without it ``Popen.returncode`` stayed ``None`` and ``Popen.__del__`` warned
+              ``subprocess <pid> is still running`` at shutdown, which is the symptom the hook exists to
+              remove.
+        """
+        server = start_xvfb(display=":42", wait=0.01)
+        assert server.waits == [0.01], server.waits
+        hook, args, kwargs = registered_hooks[0]
+        hook(*args, **kwargs)
+        assert server.terminated is True
+        assert len(server.waits) == 2, server.waits
+        assert isinstance(server.waits[1], (int, float)) and server.waits[1] > 0, (
+            f"the reaper must wait with a positive bound, got {server.waits[1]!r}"
+        )
+
+    def test_a_server_that_ignores_terminate_is_killed(
+        self, linux_without_display, registered_hooks, monkeypatch
+    ):
+        """A child that survives ``SIGTERM`` is killed rather than waited for forever.
+
+        Args:
+            linux_without_display: The fixture, recording launches.
+            registered_hooks: What was handed to ``atexit.register``.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            - The fake ignores ``terminate()``, so the reaper's first wait times out.
+            - It then calls ``kill()``, which the fake cannot refuse, and waits once more to reap the
+              exit status — four calls in that order after the startup check.
+        """
+        monkeypatch.setattr(
+            headless.subprocess, "Popen", lambda args, **kwargs: _StubbornServer(args)
+        )
+        server = start_xvfb(display=":42", wait=0.01)
+        hook, args, kwargs = registered_hooks[0]
+        hook(*args, **kwargs)
+        assert [name for name, _ in server.calls] == [
+            "wait",
+            "terminate",
+            "wait",
+            "kill",
+            "wait",
+        ], server.calls
+        assert server.killed is True
+
+    def test_a_reaped_child_warns_nothing_when_its_last_reference_goes(self):
+        """The one measurable symptom: a real child, reaped, then dropped, and no ``ResourceWarning``.
+
+        Test scenario:
+            - A real ``subprocess.Popen`` of a sleeping interpreter, which the reaper is run over
+              directly — no X server and no ``DISPLAY`` of its own (``":nobody"`` is not the one set).
+            - ``returncode`` is set afterwards, which is what ``Popen.__del__`` reads: before the wait it
+              stayed ``None`` and dropping the last reference warned ``subprocess <pid> is still
+              running`` — measured, the exact warning the module's docstring cites.
+        """
+        server = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        headless._reap(server, ":nobody")
+        assert server.returncode is not None, (
+            "the reaper left the child unreaped, so Popen.__del__ will warn at shutdown"
+        )
+        with warnings.catch_warnings(record=True) as seen:
+            warnings.simplefilter("always")
+            del server
+            gc.collect()
+        leaked = [
+            str(entry.message)
+            for entry in seen
+            if "still running" in str(entry.message)
+        ]
+        assert leaked == [], leaked
 
     def test_a_server_already_stopped_is_not_terminated_twice(
         self, linux_without_display, registered_hooks

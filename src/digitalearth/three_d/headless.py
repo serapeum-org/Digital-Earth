@@ -34,6 +34,13 @@ __all__ = ["start_xvfb"]
 #: An X display name as ``DISPLAY`` spells it: an optional host, a colon, a display number and an optional screen.
 _DISPLAY_NAME = re.compile(r"^[\w.\-]*:\d+(\.\d+)?$")
 
+#: Seconds :func:`_reap` waits for a terminated server to go, and again for a killed one.
+#:
+#: Bounded because the reaper runs from an :mod:`atexit` hook, where an open-ended wait is a hung
+#: interpreter; generous because an X server that has not released its display is the failure the hook
+#: exists to prevent. Xvfb exits on ``SIGTERM`` in milliseconds, so this is a ceiling, not a cost.
+_REAP_TIMEOUT: float = 5.0
+
 
 def start_xvfb(
     display: str = ":99",
@@ -52,8 +59,9 @@ def start_xvfb(
     waits ``wait`` seconds to see that the server stays up, and only then sets ``DISPLAY``.
 
     **Stopping it.** Call ``.terminate()`` on the returned process when you are done, or leave it: the
-    helper registers an :mod:`atexit` hook that terminates the server and unsets the ``DISPLAY`` it set,
-    so a script that forgets leaves no stray server behind. The OS does **not** do this for you — a
+    helper registers an :mod:`atexit` hook that terminates the server, waits (briefly, and killing it if
+    it will not go) for it to actually exit, and unsets the ``DISPLAY`` it set, so a script that forgets
+    leaves no stray server behind. The OS does **not** do this for you — a
     ``subprocess.Popen`` child outlives the interpreter that started it, and ``Popen.__del__``
     deliberately does not terminate a running one (dropping the last reference to a live child only warns
     ``subprocess <pid> is still running``). Until the hook existed, a forgotten server went on holding
@@ -128,6 +136,7 @@ def start_xvfb(
         # And it is stopped when the interpreter exits, because nothing else does: a `Popen` child
         # outlives its parent, and `Popen.__del__` deliberately does not terminate a running one —
         # dropping the last reference to a live child only warns `subprocess <pid> is still running`.
+        # `_reap` waits for the child it terminates, which is what keeps that warning from firing here.
         # Left behind, the server kept holding the display, and the next run found no DISPLAY, asked for
         # the same number and raised the startup RuntimeError below (review M3).
         atexit.register(_reap, server, display)
@@ -146,12 +155,33 @@ def _reap(server: subprocess.Popen, display: str) -> None:
     and running it twice over raises nothing. The ``DISPLAY`` half still runs in that case, which is the
     point — a stopped server's display number should not go on being advertised.
 
+    ``terminate()`` only *asks*, so the child is then waited for — ``SIGKILL`` after
+    :data:`_REAP_TIMEOUT` seconds for one that will not go, and one more bounded wait to collect its
+    status. Both halves matter: until the wait existed, ``Popen.returncode`` stayed ``None``, so dropping
+    the hook's own reference at shutdown made ``Popen.__del__`` warn ``subprocess <pid> is still
+    running`` — the very warning this hook is here to remove (review L1) — and the hook returned before
+    Xvfb had released the display, so a wrapper that re-execed at once could still find it taken. The
+    waits are bounded rather than open-ended because this runs during interpreter shutdown, where a
+    blocked hook is a hung process.
+
     Args:
         server: The X server that was started.
         display: The display it was put on, which ``start_xvfb`` also wrote into ``DISPLAY``.
     """
     if server.poll() is None:
         server.terminate()
+        try:
+            server.wait(timeout=_REAP_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            # It ignored the polite request, so stop asking: `kill` is a signal the process cannot
+            # handle, and the second wait only collects the status `returncode` is read from.
+            server.kill()
+            try:
+                server.wait(timeout=_REAP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                # Unreapable within the bound. Nothing further can be done from an `atexit` hook, and
+                # raising out of one only prints a traceback over the interpreter's shutdown.
+                pass
     if os.environ.get("DISPLAY") == display:
         # Only when it still names *this* server: something else may have pointed DISPLAY elsewhere
         # since, and that display is not ours to take away.
