@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/develop/reference/basemaps/">
       
       
-        <link rel="prev" href="../web_map/">
+        <link rel="prev" href="../three_d/">
       
       
         <link rel="next" href="../textured_globe/">
@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3204,6 +3204,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../static_scene/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes & multi-panel figures (matplotlib)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../web_map/" class="md-nav__link">
         
   
@@ -3212,6 +3240,34 @@
     
   
     Web maps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../three_d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3-D scenes (PyVista)
   
 
     
@@ -3335,6 +3391,17 @@
     <span class="md-ellipsis">
       
         Treat a saved map as a secret
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ogc-services-wms-and-wmts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OGC services: WMS and WMTS
       
     </span>
   </a>
@@ -3498,6 +3565,34 @@
     
   
     TexturedGlobe (3-D globe)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../headless_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless 3-D rendering
   
 
     
@@ -3820,6 +3915,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ogc-services-wms-and-wmts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OGC services: WMS and WMTS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#adding-a-preset" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4036,6 +4142,21 @@ rather than a bug — but it has consequences:</p>
   image. It also silences the one cleopatra log record that would carry the URL.</li>
 <li><strong>Do not run tile fetches at <code>DEBUG</code> into shared logs.</strong></li>
 </ul>
+<h2 id="ogc-services-wms-and-wmts"><a class="toclink" href="#ogc-services-wms-and-wmts">OGC services: WMS and WMTS</a><a class="headerlink" href="#ogc-services-wms-and-wmts" title="Permanent link">#</a></h2>
+<p>The static tier tiles an OGC service through cleopatra's provider objects, passed to <code>basemap()</code> as they are.
+<code>WMSProvider</code> requests one <code>GetMap</code> per Web Mercator tile; <code>WMTSProvider</code> requests <code>GetTile</code> on the service's
+tile matrix set, by key-value parameters or by filling a RESTful URL template.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.basemap.ogc</span><span class="w"> </span><span class="kn">import</span> <span class="n">WMSProvider</span><span class="p">,</span> <span class="n">WMTSProvider</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">m</span><span class="o">.</span><span class="n">set_domain</span><span class="p">((</span><span class="mf">3.3</span><span class="p">,</span> <span class="mf">50.7</span><span class="p">,</span> <span class="mf">7.3</span><span class="p">,</span> <span class="mf">53.6</span><span class="p">))</span>       <span class="c1"># tiles cover what the axes shows</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/geoserver/wms&quot;</span><span class="p">,</span> <span class="s2">&quot;topp:states&quot;</span><span class="p">))</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMTSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/wmts/</span><span class="si">{TileMatrix}</span><span class="s2">/</span><span class="si">{TileRow}</span><span class="s2">/</span><span class="si">{TileCol}</span><span class="s2">.png&quot;</span><span class="p">,</span> <span class="s2">&quot;basemap&quot;</span><span class="p">))</span>
+</code></pre></div>
+<p>A credential the service needs goes in the provider's <code>extra_params</code>. The provider object is held beside the
+layer and is <strong>not</strong> written into the figure's description, so a figure saved to JSON and drawn again
+elsewhere has no record of which service it was — it names the shared default basemap in its place.</p>
 <h2 id="adding-a-preset"><a class="toclink" href="#adding-a-preset">Adding a preset</a><a class="headerlink" href="#adding-a-preset" title="Permanent link">#</a></h2>
 <p>Presets live in <a class="autorefs autorefs-internal" href="#digitalearth.base.basemaps"><code>digitalearth.base.basemaps</code></a> — engine-neutral definitions (URL
 template, credential variable, attribution, coverage) that every backend resolves by name. A new one is a
@@ -6684,7 +6805,7 @@ for and the keywords it takes, since the factory behind it is an implementation 
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../web_map/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Web maps">
+          <a href="../three_d/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 3-D scenes (PyVista)">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -6694,7 +6815,7 @@ for and the keywords it takes, since the factory behind it is an implementation 
                 Previous
               </span>
               <div class="md-ellipsis">
-                Web maps
+                3-D scenes (PyVista)
               </div>
             </div>
           </a>
