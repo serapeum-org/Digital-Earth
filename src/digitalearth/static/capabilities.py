@@ -100,8 +100,10 @@ CAPABILITIES = Capabilities(
     ),
     absent={
         "tooltip": (
-            "a matplotlib figure is a picture: there is no pointer over it to hover, so a value is read from "
-            "the colorbar or printed into the cell"
+            "nothing follows the pointer: a saved figure is a picture, and on a live canvas the gesture this "
+            "tier delivers is a click, not a hover — `Scene.on_pick` reports the layer a click landed on "
+            "and its data coordinates, which a caller prints or annotates themselves. A value is otherwise "
+            "read from the colorbar or printed into the cell"
         ),
         "label_collision": (
             "matplotlib draws every label it is given, wherever it lands; there is no collision index to ask "
@@ -116,8 +118,10 @@ CAPABILITIES = Capabilities(
             "the figure is written as an image, not as a page; an HTML export is the interactive or web tier's"
         ),
         "layer_switcher": (
-            "the figure is drawn once and does not respond to a pointer, so there is nothing for a switch to "
-            "toggle; layers are chosen before the figure is drawn"
+            "the tier draws no control onto the figure for a reader to toggle: visibility is set from code, "
+            "with `set_visible` before or between draws, and a live canvas can do that from a "
+            "`Scene.on_pick` callback — but the switch itself is a widget the other tiers' engines provide "
+            "and this one does not"
         ),
         "time_slider": (
             "a sequence over time is written out as an animation here rather than scrubbed, which is what "
