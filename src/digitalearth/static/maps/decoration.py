@@ -2477,6 +2477,7 @@ class DecorationMixin(_MixinBase):
                 [True, False]
                 >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 'nightshade'
+                >>> m.close()
 
                 ```
             - The twilight lines are the same call with another refraction; the figure records it:
@@ -2489,6 +2490,7 @@ class DecorationMixin(_MixinBase):
                 >>> props = m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props
                 >>> props["when"], props["refraction"]
                 ('2026-06-21T12:00:00+00:00', -6.0)
+                >>> m.close()
 
                 ```
 
@@ -2581,6 +2583,7 @@ class DecorationMixin(_MixinBase):
                 >>> equator, sixty = (np.ptp(p.vertices[:, 0]) for p in rings.get_paths())
                 >>> round(float(sixty / equator), 1)
                 2.0
+                >>> m.close()
 
                 ```
             - With no centres, a world grid is drawn and described as one layer:
@@ -2593,6 +2596,7 @@ class DecorationMixin(_MixinBase):
                 60
                 >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 'tissot'
+                >>> m.close()
 
                 ```
             - A ring at lon 179.5 stays one 500 km circle on Web Mercator: it runs on past the world's own
