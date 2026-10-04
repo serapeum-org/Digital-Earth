@@ -93,6 +93,11 @@ m.contours(p_value, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=
 m.legend("sig", labels=["p < 0.05", "not significant"])  # two declared bands; only the hatched one is keyed
 ```
 
+A layer that marks none of its bands — every pattern empty, or every hatched band past where the data reaches
+— has no rows to key, so `legend()` draws nothing rather than an empty framed box, and logs
+`legend(): layer 'sig' marks none of its 4 hatched bands, …` at `WARNING`. The guide is still recorded on the
+layer, so the figure says what was asked for.
+
 ## Overlays computed from the globe itself
 
 `nightshade(when)` shades the night side of the day/night terminator at one instant, and `tissot()` draws

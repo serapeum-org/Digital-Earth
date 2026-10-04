@@ -861,6 +861,41 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
 
     Returns:
         The one artist the key is — a ``Colorbar`` or a ``Legend``.
+
+    Examples:
+        - A swatch plan built by hand is painted as the rows it carries, titled by the plan:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Scene
+            >>> from digitalearth.static.guides import GuidePlan, paint_guide
+            >>> with Scene() as scene:
+            ...     key = paint_guide(
+            ...         scene,
+            ...         GuidePlan("legend", title="class", colors=("#1f77b4", "#d62728"),
+            ...                   rows=("low", "high")),
+            ...     )
+            ...     [text.get_text() for text in key.get_texts()]
+            ...     key.get_title().get_text()
+            ['low', 'high']
+            'class'
+
+            ```
+        - Nothing here refuses a plan: a legend plan with no rows is painted as the empty framed box it
+          describes, which is why :func:`plan_guide` returns ``None`` instead of handing one over:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Scene
+            >>> from digitalearth.static.guides import GuidePlan, paint_guide
+            >>> with Scene() as scene:
+            ...     empty = paint_guide(scene, GuidePlan("legend", title="class"))
+            ...     [text.get_text() for text in empty.get_texts()]
+            ...     empty.get_title().get_text()
+            []
+            'class'
+
+            ```
     """
     if plan.kind == "legend":
         # `setdefault` rather than a keyword beside `**kwargs`: the recorded title is this call's default,
@@ -916,6 +951,18 @@ def _is_transparent(color: str) -> bool:
             (False, False)
             >>> "#aabb00".endswith("00")  # the reading this replaced
             True
+
+            ```
+        - The tolerance admits what ``== 0.0`` admitted and nothing an 8-bit channel can show beyond it:
+          ``#00000001``, the faintest alpha an 8-digit hex can spell, is a whole 8-bit step and stays
+          opaque, while the bound itself is half a step:
+            ```python
+            >>> from matplotlib.colors import to_rgba
+            >>> from digitalearth.static.guides import _TRANSPARENT_ALPHA, _is_transparent
+            >>> round(to_rgba("#00000001")[3], 6), round(_TRANSPARENT_ALPHA, 6)
+            (0.003922, 0.001961)
+            >>> _is_transparent("#00000001"), _is_transparent("#00000000")
+            (False, True)
 
             ```
     """

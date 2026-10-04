@@ -267,6 +267,46 @@ def _require_column(features: Any, column: str, argument: str, caller: str) -> N
     Raises:
         KeyError: naming the call, the keyword and the column, and listing the columns the features do
             have — the geometry column left out, since it is not an attribute to read values from.
+
+    Examples:
+        - A column the features carry passes silently; one they do not is named along with the keyword it
+          was given under and the columns there are, with the geometry column left out of that list:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.maps.vector import _require_column
+            >>> wells = gpd.GeoDataFrame(
+            ...     {"depth": [2.0, 4.0], "label": ["a", "b"]},
+            ...     geometry=[Point(0, 0), Point(1, 1)],
+            ...     crs="EPSG:4326",
+            ... )
+            >>> print(_require_column(wells, "depth", "column", "hexbin()"))
+            None
+            >>> try:
+            ...     _require_column(wells, "dpeth", "column", "hexbin()")
+            ... except KeyError as error:
+            ...     print(error.args[0])
+            hexbin(): column='dpeth' is not a property of these features; available: ['depth', 'label']
+
+            ```
+        - The keyword is the caller's own spelling, so a column ``width`` is refused as ``width=`` rather
+          than as the method's first argument:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import LineString
+            >>> from digitalearth.static.maps.vector import _require_column
+            >>> reaches = gpd.GeoDataFrame(
+            ...     {"discharge": [12.0]},
+            ...     geometry=[LineString([(0, 0), (1, 1)])],
+            ...     crs="EPSG:4326",
+            ... )
+            >>> try:
+            ...     _require_column(reaches, "order", "width", "Map.lines()")
+            ... except KeyError as error:
+            ...     print(error.args[0])
+            Map.lines(): width='order' is not a property of these features; available: ['discharge']
+
+            ```
     """
     columns = list(getattr(features, "columns", []))
     if column in columns:
@@ -3079,6 +3119,34 @@ class VectorMixin(_MixinBase):
                 >>> m.close()
 
                 ```
+            - A ``column`` these features do not carry is named with the columns they do, and one that
+              holds text is refused for what the reducer cannot do with it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0], "site": ["north", "south"]},
+                ...     geometry=[Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> try:
+                ...     m.hexbin(wells, "dpeth", gridsize=4)
+                ... except KeyError as error:
+                ...     print(error.args[0])
+                hexbin(): column='dpeth' is not a property of these features; available: ['depth', 'site']
+                >>> try:
+                ...     m.hexbin(wells, "site", gridsize=4)
+                ... except ValueError as error:
+                ...     print(error)
+                hexbin() needs column='site' to name a column of numbers, and it holds str values that are not numbers
+                >>> m.close()
+
+                ```
 
         See Also:
             kde: the smoothed density of the same points.
@@ -3297,6 +3365,31 @@ class VectorMixin(_MixinBase):
                 Map.lines() needs width= as a positive number of points, or the
                 Map.lines() needs color= as one matplotlib colour for every lin
                 Map.lines() needs column='name' to name a column of numbers, an
+                >>> m.close()
+
+                ```
+            - A column name these features do not carry is named under the keyword it was given under,
+              with the columns they do carry listed:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> roads = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"name": ["a", "b"], "lanes": [1.0, 4.0]},
+                ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> for wrong in ({"column": "flow"}, {"width": "order"}):
+                ...     try:
+                ...         m.lines(roads, **wrong)
+                ...     except KeyError as error:
+                ...         print(error.args[0])
+                Map.lines(): column='flow' is not a property of these features; available: ['lanes', 'name']
+                Map.lines(): width='order' is not a property of these features; available: ['lanes', 'name']
                 >>> m.close()
 
                 ```

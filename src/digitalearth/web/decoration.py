@@ -1884,6 +1884,41 @@ class DecorationMixin(_MixinBase):
         Returns:
             Its ``properties``, copied, carrying an ``id`` key: the draw id when there is one, else the
             feature's own ``id`` property, else ``None``.
+
+        Examples:
+            - The draw id wins over a property of the same name, and the other properties come through
+              untouched:
+                ```python
+                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> DecorationMixin._drawn_properties({
+                ...     "id": "draw-1",
+                ...     "properties": {"id": "mine", "label": "plot A"},
+                ...     "geometry": {"type": "Point", "coordinates": [8.0, 51.0]},
+                ... })
+                {'id': 'draw-1', 'label': 'plot A'}
+
+                ```
+            - With no draw id — ``id`` absent, or present as ``None`` — the feature's own property stands
+              rather than being replaced by nothing:
+                ```python
+                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> own = {"properties": {"id": "mine", "label": "plot A"}}
+                >>> DecorationMixin._drawn_properties(own)
+                {'id': 'mine', 'label': 'plot A'}
+                >>> DecorationMixin._drawn_properties({**own, "id": None})
+                {'id': 'mine', 'label': 'plot A'}
+
+                ```
+            - A feature with no id of either kind still gets the column, so ``drawn["id"]`` reads the same
+              whatever was drawn:
+                ```python
+                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> DecorationMixin._drawn_properties({"properties": {"label": "plot B"}})
+                {'label': 'plot B', 'id': None}
+                >>> DecorationMixin._drawn_properties({})
+                {'id': None}
+
+                ```
         """
         properties = dict(feature.get("properties") or {})
         draw_id = feature.get("id")

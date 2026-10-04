@@ -1112,7 +1112,11 @@ class RasterMixin(_MixinBase):
                 :meth:`block`); or from ``ArrayGlyph`` for a styling keyword it does not accept.
 
         Examples:
-            - A significance overlay: hatch where p < 0.05, leave the rest of the map as it is, and key it:
+            - A significance overlay: hatch where p < 0.05, leave the rest of the map as it is, and key it.
+              ``labels=`` carries one label per band ``levels=`` declares — two here — while the key draws
+              only the bands the map actually marks and the data reaches, which is the first. The count
+              therefore comes from the call and not from the raster, so a recorded ``labels=`` keeps
+              working when the data stops reaching a band:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1135,11 +1139,9 @@ class RasterMixin(_MixinBase):
                 ... ).ax.get_legend()
                 >>> [t.get_text() for t in legend.get_texts()], legend.legend_handles[0].get_hatch()
                 (['p < 0.05'], '///')
+                >>> m.close()
 
                 ```
-              ``labels=`` carries one label per band ``levels=`` declares — two here — while the key draws only
-              the bands that are actually hatched and hold data, which is the first. A recorded ``labels=``
-              therefore keeps working when the data changes and a band empties.
             - Each of the three band keywords is refused where it would have no effect, by name — a line
               render has no bands to hatch, and the other two have nothing to hatch *with*:
                 ```python

@@ -578,6 +578,21 @@ def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
             (False, {'token': 's3cret'})
 
             ```
+        - A service URL carrying a query string is recorded as its base, and the warning names what went:
+            ```python
+            >>> import warnings
+            >>> from cleopatra.basemap.ogc import WMSProvider
+            >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
+            >>> service = WMSProvider("https://example.org/wms?token=s3cret", "topp:states")
+            >>> with warnings.catch_warnings(record=True) as caught:
+            ...     warnings.simplefilter("always")
+            ...     described = _describe_ogc_provider(service)
+            >>> described["url"], service.url
+            ('https://example.org/wms', 'https://example.org/wms?token=s3cret')
+            >>> "Dropped parameters: ['token']" in str(caught[0].message)
+            True
+
+            ```
         - Anything that is not an OGC provider is not this function's business, and says so:
             ```python
             >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
@@ -611,23 +626,18 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
     service with ``extra_params`` empty and a bare base URL. A service that needs a token answers with its
     own error, which is the honest outcome — the alternative was drawing a different basemap in silence.
 
-    Args:
-        described: What :func:`_describe_ogc_provider` recorded.
-
-    Returns:
-        The rebuilt provider, which ``add_tiles`` tiles from, with no credential on it.
-
     **A figure this version cannot rebuild is refused the same way, whichever part of it is unfamiliar.**
     :func:`_describe_ogc_provider` records field by field so that "a field added upstream travels without
     a change here" — which was true of writing and false of reading, because the description used to be
     splatted into the constructor: a figure carrying a field this release has never heard of came back as
-    ``TypeError: WMSProvider.__init__() got an unexpected keyword argument``, naming a dunder rather than
-    the figure, and one short of a required field came back as ``TypeError: … missing 2 required
-    positional arguments`` (round 4, M7). Both are now the ``ValueError`` the unknown-tag case already
-    gave, naming the field and the kind it was rebuilding. The unknown field is *refused* rather than
-    dropped with a warning: a provider field is what the service is asked with, so a figure drawn without
-    one is a different request, and silently drawing a different thing is the failure this whole record
-    exists to end (round 3, M10).
+    ``TypeError: WMSProvider.__init__() got an unexpected keyword argument 'newthing'``, naming a dunder
+    rather than the figure, and one short of a required field came back as ``TypeError:
+    WMSProvider.__init__() missing 1 required positional argument: 'layers'`` (executed; round 4, M7).
+    Both are now the ``ValueError`` the unknown-tag case already gave, naming the fields, what the kind
+    does take and which of those it requires. The unknown field is *refused* rather than dropped with a
+    warning: a provider field is what the service is asked with, so a figure drawn without one is a
+    different request, and silently drawing a different thing is the failure this whole record exists to
+    end (round 3, M10).
 
     Args:
         described: What :func:`_describe_ogc_provider` recorded.
@@ -640,6 +650,50 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
             carries a field the provider of that kind does not take, or when it is missing one that kind
             requires. All three are the same scenario — a figure written by another release — and are
             worth naming rather than drawing the default for.
+
+    Examples:
+        - What :func:`_describe_ogc_provider` wrote comes back as the same request, with ``extra_params``
+          empty because the description never carried it:
+            ```python
+            >>> from cleopatra.basemap.ogc import WMSProvider
+            >>> from digitalearth.static.maps.decoration import (
+            ...     _describe_ogc_provider, _ogc_provider_from_description,
+            ... )
+            >>> described = _describe_ogc_provider(
+            ...     WMSProvider("https://example.org/wms", "topp:states", extra_params={"token": "s3"})
+            ... )
+            >>> rebuilt = _ogc_provider_from_description(described)
+            >>> rebuilt.url, rebuilt.layers, dict(rebuilt.extra_params)
+            ('https://example.org/wms', 'topp:states', {})
+
+            ```
+        - A field this release does not take, and one it requires but the figure omits, are both named
+          rather than left to the constructor:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _ogc_provider_from_description
+            >>> base = {"ogc": "wms", "url": "https://example.org/wms", "layers": "topp:states"}
+            >>> try:
+            ...     _ogc_provider_from_description({**base, "newthing": 1})
+            ... except ValueError as error:
+            ...     print(str(error).split(". It takes")[0])
+            this figure records an OGC basemap of kind 'wms' that this version of digitalearth cannot rebuild: field(s) ['newthing'] are not ones it takes and field(s) [] are missing
+            >>> try:
+            ...     _ogc_provider_from_description({"ogc": "wms", "url": "https://example.org/wms"})
+            ... except ValueError as error:
+            ...     print(str(error).split("cannot rebuild: ")[1].split(". It takes")[0])
+            field(s) [] are not ones it takes and field(s) ['layers'] are missing
+
+            ```
+        - A kind this version has never heard of is named too, with the kinds it does know:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _ogc_provider_from_description
+            >>> try:
+            ...     _ogc_provider_from_description({"ogc": "wcs", "url": "https://example.org/wcs"})
+            ... except ValueError as error:
+            ...     print(error)
+            this figure records an OGC basemap of kind 'wcs', which this version of digitalearth cannot rebuild; it knows ['wms', 'wmts']
+
+            ```
     """
     tag = str(described.get("ogc", ""))
     provider = _OGC_PROVIDERS.get(tag)
@@ -1153,8 +1207,11 @@ def _fit_within_crs_extent(scene: Any) -> None:
     ``± 3.3e6`` m it declares for itself. Autoscaling a bare axes to it framed a December polar night at
     ``± 1.5e10`` m, roughly 4600 times the projection's extent, with Antarctica a sub-pixel dot (executed;
     round 3, M2). Intersecting the fitted view with the declared extent keeps the fit where the projection
-    has something to show, and loses nothing **of the shade**: what lies outside the declared area is where
-    the overlay's own pole vertex went, not where a map is.
+    has something to show. It is a real trade and not a free one: of the ``1346`` vertices a December polar
+    night's outline carries on EPSG:3031, ``1215`` lie outside the declared cap, so most of the overlay's
+    own outline is off the view (executed). What those vertices describe is the ring's run out toward the
+    pole the projection has no image of — out to ``1.4e10`` m from a cap that ends at ``3.3e6`` m — and the
+    night over the cap itself is framed and drawn exactly as it was.
 
     The narrowed view is set with ``auto=True``, so **autoscaling stays on**. The declared area of use is
     not the projection's domain — an EPSG:3031 grid out at ``± 7e6`` m projects perfectly well — and
@@ -1168,6 +1225,42 @@ def _fit_within_crs_extent(scene: Any) -> None:
 
     Args:
         scene: The map whose axes was just autoscaled.
+
+    Examples:
+        - A December night shade on a bare EPSG:3031 axes is framed at the cap the projection declares,
+          and the axes is still autoscaling afterwards:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth import Map
+            >>> with Map(crs=3031) as antarctic:
+            ...     _ = antarctic.nightshade("2026-12-21T12:00:00+00:00")
+            ...     [round(value) for value in antarctic.ax.get_xlim()]
+            ...     antarctic.ax.get_autoscalex_on()
+            [-3333134, 3333134]
+            True
+
+            ```
+        - Because autoscaling stayed on, a later layer out past that cap frames itself rather than being
+          cropped into the overlay's fit:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth import Map
+            >>> wide = Dataset.from_array(
+            ...     arr=np.arange(100.0).reshape(10, 10),
+            ...     geo_ref=GeoReference(geo=(-7.0e6, 1.4e6, 0.0, 7.0e6, 0.0, -1.4e6), epsg=3031),
+            ...     no_data_value=-9999.0,
+            ... )
+            >>> with Map(crs=3031) as antarctic:
+            ...     _ = antarctic.nightshade("2026-12-21T12:00:00+00:00")
+            ...     _ = antarctic.field(wide)
+            ...     [round(value) for value in antarctic.ax.get_xlim()]
+            [-7000000, 7000000]
+
+            ```
     """
     extent = _crs_display_extent(scene.crs)
     if extent is None:
@@ -1373,7 +1466,9 @@ def _globe_nightshade(
         samples: The layer's recorded ``n``, which sets the grid's resolution here
             (:func:`_globe_night_grid`) as it sets the terminator's on a flat map.
         style: The caller's style, in ``PolyCollection`` keywords; ``color``/``facecolor`` becomes the fill
-            colour, an edge is not drawn, and the rest (``alpha``, ``zorder``, …) reaches ``contourf``.
+            colour, and the rest (``alpha``, ``zorder``, …) reaches ``contourf``. An ``edgecolor`` is
+            resolved through ``to_rgba`` and then dropped, since a filled contour has no edge to draw: an
+            invalid one raises here, as it does on a flat map, instead of being swallowed with the keyword.
 
     Returns:
         A :class:`~digitalearth.static.renderer.DrawnLayer` holding the filled contour set, or ``None`` when
@@ -1595,10 +1690,10 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
     when it is worth at least :data:`_SEAM_MIN_DEGREES` of the projection's own x-scale at that latitude —
     which is why the scale is measured too, over :data:`_SEAM_SCALE_DEGREES` either side of the central
     meridian. That replaces the old two-way "a whole world apart, or the same point" split, which had no
-    slot for a projection that is merely *continuous* across the probed longitude: a polar stereographic
-    answers a sub-millimetre jump there rather than an exact ``0`` once the samples are no longer the same
-    point. A clipped projection has no image of the seam at all (non-finite). Both answer ``0``, which
-    means "leave the projected ring alone".
+    slot for a projection that is merely *continuous* across the probed longitude: EPSG:3031 answers a jump
+    of ``0.0043`` m across the probe rather than an exact ``0`` once the samples are no longer the same
+    point (executed), which is four millimetres of a ``4.008e7`` m world. A clipped projection has no image
+    of the seam at all (non-finite). Both answer ``0``, which means "leave the projected ring alone".
 
     Args:
         scene: The map whose display CRS is measured.
@@ -2493,6 +2588,37 @@ class DecorationMixin(_MixinBase):
                 >>> m.close()
 
                 ```
+            - ``color=None`` is the "not given" matplotlib reads it as, so the default black is drawn
+              rather than the first cycle colour; ``alpha=0`` is the invisible shade it asks for:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     shade = m.nightshade("2026-12-21T12:00:00+00:00", color=None)
+                ...     [tuple(round(float(c), 2) for c in face) for face in shade.get_facecolor()]
+                ...     faint = m.nightshade("2026-12-21T12:00:00+00:00", alpha=0)
+                ...     [tuple(round(float(c), 2) for c in face) for face in faint.get_facecolor()]
+                [(0.0, 0.0, 0.0, 0.35)]
+                [(0.0, 0.0, 0.0, 0.0)]
+
+                ```
+            - A refraction above the horizon is refused by name on a globe as on a flat map, so one
+              keyword answers one way whatever frame it is drawn on:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> for globe in (False, True):
+                ...     with Map(crs=4326, globe=globe) as m:
+                ...         try:
+                ...             m.nightshade("2026-12-21T12:00:00+00:00", refraction=10.0)
+                ...         except ValueError as error:
+                ...             print(str(error).split(" degrees")[0])
+                nightshade() needs refraction= in (-90, 0]
+                nightshade() needs refraction= in (-90, 0]
+
+                ```
 
         See Also:
             tissot: the other overlay cleopatra's ``solar`` module draws.
@@ -2645,6 +2771,24 @@ class DecorationMixin(_MixinBase):
                 ...     except ValueError as error:
                 ...         print(error)
                 tissot() takes one lat per lon; got 2 in lons= and 1 in lats=
+
+                ```
+            - ``n`` is refused here and ``radius_m`` by cleopatra from inside the drawer, so the two
+              messages read differently — but neither leaves a layer behind:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     for kwargs in ({"n": 3}, {"radius_m": -1.0}):
+                ...         try:
+                ...             m.tissot(lons=[0.0], lats=[0.0], **kwargs)
+                ...         except ValueError as error:
+                ...             print(error)
+                ...     m.layer_ids
+                tissot() needs n= as a whole number >= 4, the fewest that describe a ring; got 3
+                radius_m must be a positive, sub-antipodal ground radius in metres (0, 20015114); got -1.0.
+                []
 
                 ```
 

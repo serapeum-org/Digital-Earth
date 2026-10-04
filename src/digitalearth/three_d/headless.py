@@ -76,8 +76,9 @@ def start_xvfb(
             screenshot VTK can render, so make it at least the ``window_size`` of the scenes you draw.
         wait: Seconds to wait for the server to come up before declaring it started. A server that exits
             within that time (a display number already in use, for instance) is reported as an error.
-            A positive finite number: ``0`` or a negative makes the check pass instantly — which is the
-            same as not checking — and ``inf`` turns it into a hang, so both are refused by name.
+            It must be a positive finite number, and anything else is refused by name: ``0`` and any
+            negative make the check pass instantly — the same as not checking at all — ``nan`` disables it
+            the same way by comparing false against every bound, and ``inf`` turns it into a hang.
 
     Returns:
         The ``subprocess.Popen`` of the server that was started — call ``.terminate()`` on it to stop it
@@ -110,6 +111,21 @@ def start_xvfb(
             ... except ValueError as error:
             ...     print(error)
             start_xvfb() needs window_size as two positive ints (width, height); got (0, 768)
+
+            ```
+        - So is a startup wait that would not wait: the argument is checked before the platform is, so
+          these answer the same way on Linux, Windows and macOS:
+            ```python
+            >>> from digitalearth.three_d import start_xvfb
+            >>> for wait in (0, -1, float("inf"), float("nan")):
+            ...     try:
+            ...         start_xvfb(wait=wait)
+            ...     except ValueError as error:
+            ...         print(error)
+            start_xvfb() needs wait as a positive finite number of seconds; got 0
+            start_xvfb() needs wait as a positive finite number of seconds; got -1
+            start_xvfb() needs wait as a positive finite number of seconds; got inf
+            start_xvfb() needs wait as a positive finite number of seconds; got nan
 
             ```
 
@@ -173,6 +189,24 @@ def _reap(server: subprocess.Popen, display: str) -> None:
     Args:
         server: The X server that was started.
         display: The display it was put on, which ``start_xvfb`` also wrote into ``DISPLAY``.
+
+    Examples:
+        - The reaper does not return while the child is still running, which is what sets ``returncode``
+          and so keeps ``Popen.__del__`` from warning; running it again over the stopped child is a no-op
+          (a display nothing here set, so ``DISPLAY`` is left alone):
+            ```python
+            >>> import subprocess, sys
+            >>> from digitalearth.three_d.headless import _reap
+            >>> child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+            >>> _reap(child, ":4242")
+            >>> stopped = child.returncode
+            >>> stopped is None
+            False
+            >>> _reap(child, ":4242")
+            >>> child.returncode == stopped
+            True
+
+            ```
     """
     if server.poll() is None:
         server.terminate()

@@ -313,6 +313,61 @@ class _PanelPlan:
                 frames; for a ``col_wrap`` below 1; and for a ``labels`` that does not number the panels.
                 All three are raised before :func:`facet` makes a figure, so a refused call leaves none
                 open.
+
+        Examples:
+            - A multi-band dataset is one frame read at each band, and the bands are what the panels are
+              named by — numbered from 1, as a band is:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static.figure import _PanelPlan
+                >>> cube = Dataset.from_array(
+                ...     arr=np.arange(12.0).reshape(3, 2, 2),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> plan = _PanelPlan.resolve(cube, 1, col=None, col_wrap=None, labels=None)
+                >>> plan.name, plan.bands
+                ('band', [1, 2, 3])
+                >>> plan.titles()
+                ['band = 1', 'band = 2', 'band = 3']
+
+                ```
+            - A generator of labels is spent before the panels are counted, so a wrong number of them
+              gets the refusal that names both counts rather than a ``len()`` failure:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static.figure import _PanelPlan
+                >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+                >>> frames = [
+                ...     Dataset.from_array(arr=np.full((2, 2), 1.0), geo_ref=geo, no_data_value=-9999.0)
+                ...     for _ in range(3)
+                ... ]
+                >>> _PanelPlan.resolve(
+                ...     frames, 1, col=None, col_wrap=None, labels=(name for name in ("a", "b"))
+                ... )
+                Traceback (most recent call last):
+                    ...
+                ValueError: facet() draws 3 panels, so labels= needs 3 labels; got 2
+
+                ```
+            - An empty stack and a ``col_wrap`` that cannot be panels per row are each refused by name:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static.figure import _PanelPlan
+                >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+                >>> one = Dataset.from_array(arr=np.full((2, 2), 1.0), geo_ref=geo, no_data_value=-9999.0)
+                >>> for stack, wrap in (([], None), ([one], 0)):
+                ...     try:
+                ...         _PanelPlan.resolve(stack, 1, col=None, col_wrap=wrap, labels=None)
+                ...     except ValueError as error:
+                ...         print(error)
+                facet() was given no frames to draw
+                facet(col_wrap=) is panels per row and must be at least 1; got 0
+
+                ```
         """
         frames, bands, default_col = _panels_of(stack, band)
         count = len(frames)
@@ -355,6 +410,24 @@ class _PanelPlan:
 
         Returns:
             An iterator of ``(panel, frame, band, title)``, one per panel.
+
+        Examples:
+            - The draw loop's four values arrive together, so the panel, what it reads and what it is
+              called never drift apart:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static.figure import _PanelPlan
+                >>> cube = Dataset.from_array(
+                ...     arr=np.arange(8.0).reshape(2, 2, 2),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> plan = _PanelPlan.resolve(cube, 1, col="month", col_wrap=None, labels=["Jan", "Feb"])
+                >>> [(panel, band, title) for panel, _frame, band, title in plan.panels(["left", "right"])]
+                [('left', 1, 'month = Jan'), ('right', 2, 'month = Feb')]
+
+                ```
         """
         return zip(maps, self.frames, self.bands, self.titles())
 
@@ -503,6 +576,51 @@ def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
 
     Raises:
         ValueError: naming ``facet(k=)`` and why the value cannot count classes here.
+
+    Examples:
+        - Beside a named scheme ``k`` is kept as the plain count it is; unset or ``None`` it is dropped, so
+          :func:`_shared_style` falls back to :data:`_DEFAULT_CLASSES`:
+            ```python
+            >>> from digitalearth.static.figure import _checked_classes
+            >>> _checked_classes({"scheme": "quantiles", "k": 3})
+            {'scheme': 'quantiles', 'k': 3}
+            >>> _checked_classes({"scheme": "quantiles", "k": None})
+            {'scheme': 'quantiles'}
+            >>> _checked_classes({"cmap": "viridis"})
+            {'cmap': 'viridis'}
+
+            ```
+        - Each spelling ``k`` could not apply to is refused, naming what the value would have counted:
+            ```python
+            >>> from digitalearth.static.figure import _checked_classes
+            >>> for style in (
+            ...     {"k": 4},
+            ...     {"k": 4, "scheme": [0.0, 1.0, 2.0]},
+            ...     {"k": 4, "scheme": "categorical"},
+            ... ):
+            ...     try:
+            ...         _checked_classes(style)
+            ...     except ValueError as error:
+            ...         print(str(error).split("; ")[0])
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing without scheme=
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing beside scheme=[0.0, 1.0, 2.0], which gives the class edges outright
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing under scheme='categorical', where a class code is its own class
+
+            ```
+        - A value that is not a count is refused rather than truncated or coerced, ``True`` included:
+            ```python
+            >>> from digitalearth.static.figure import _checked_classes
+            >>> for value in (2.7, "4", True, 0):
+            ...     try:
+            ...         _checked_classes({"scheme": "quantiles", "k": value})
+            ...     except ValueError as error:
+            ...         print(error)
+            facet() needs k= as a whole number >= 1; got 2.7
+            facet() needs k= as a whole number >= 1; got '4'
+            facet() needs k= as a whole number >= 1; got True
+            facet() needs k= as a whole number >= 1; got 0
+
+            ```
     """
     checked = dict(style)
     k = checked.pop("k", None)
