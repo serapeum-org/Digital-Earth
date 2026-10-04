@@ -13766,15 +13766,7 @@ is one, else the current axes limits — lies entirely outside the coverage.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2063">2063</a></span>
-<span class="normal"><a href="#__codelineno-0-2064">2064</a></span>
-<span class="normal"><a href="#__codelineno-0-2065">2065</a></span>
-<span class="normal"><a href="#__codelineno-0-2066">2066</a></span>
-<span class="normal"><a href="#__codelineno-0-2067">2067</a></span>
-<span class="normal"><a href="#__codelineno-0-2068">2068</a></span>
-<span class="normal"><a href="#__codelineno-0-2069">2069</a></span>
-<span class="normal"><a href="#__codelineno-0-2070">2070</a></span>
-<span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
 <span class="normal"><a href="#__codelineno-0-2072">2072</a></span>
 <span class="normal"><a href="#__codelineno-0-2073">2073</a></span>
 <span class="normal"><a href="#__codelineno-0-2074">2074</a></span>
@@ -13851,92 +13843,100 @@ is one, else the current axes limits — lies entirely outside the coverage.</p>
 <span class="normal"><a href="#__codelineno-0-2145">2145</a></span>
 <span class="normal"><a href="#__codelineno-0-2146">2146</a></span>
 <span class="normal"><a href="#__codelineno-0-2147">2147</a></span>
-<span class="normal"><a href="#__codelineno-0-2148">2148</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2063" name="__codelineno-0-2063"></a><span class="k">def</span><span class="w"> </span><span class="nf">basemap</span><span class="p">(</span>
-<a id="__codelineno-0-2064" name="__codelineno-0-2064"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2065" name="__codelineno-0-2065"></a>    <span class="n">source</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2066" name="__codelineno-0-2066"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2067" name="__codelineno-0-2067"></a>    <span class="n">api_key</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2068" name="__codelineno-0-2068"></a>    <span class="n">preset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2069" name="__codelineno-0-2069"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2070" name="__codelineno-0-2070"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2071" name="__codelineno-0-2071"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2072" name="__codelineno-0-2072"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2073" name="__codelineno-0-2073"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.</span>
-<a id="__codelineno-0-2074" name="__codelineno-0-2074"></a>
-<a id="__codelineno-0-2075" name="__codelineno-0-2075"></a><span class="sd">    ``source`` is passed through to cleopatra unchanged — a provider name or an</span>
-<a id="__codelineno-0-2076" name="__codelineno-0-2076"></a><span class="sd">    ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see</span>
-<a id="__codelineno-0-2077" name="__codelineno-0-2077"></a><span class="sd">    :mod:`digitalearth.base.basemaps`) is resolved here into a configured provider, with its credential</span>
-<a id="__codelineno-0-2078" name="__codelineno-0-2078"></a><span class="sd">    read from the environment and its coverage checked against the map&#39;s domain first. And the four</span>
-<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a><span class="sd">    cross-tier basemap names (:data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them)</span>
-<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a><span class="sd">    are translated into the ``xyzservices`` paths that request the same tiles the interactive and web</span>
-<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a><span class="sd">    tiers do — including when ``source`` is omitted, which means the shared default here just as it does</span>
-<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a><span class="sd">    there, rather than cleopatra&#39;s own ``OpenStreetMap.Mapnik`` (#247).</span>
-<a id="__codelineno-0-2083" name="__codelineno-0-2083"></a>
-<a id="__codelineno-0-2084" name="__codelineno-0-2084"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2085" name="__codelineno-0-2085"></a><span class="sd">        source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a</span>
-<a id="__codelineno-0-2086" name="__codelineno-0-2086"></a><span class="sd">            ``cleopatra.basemap.ogc`` ``WMSProvider``/``WMTSProvider``, one of the cross-tier names</span>
-<a id="__codelineno-0-2087" name="__codelineno-0-2087"></a><span class="sd">            (``&quot;CartoLight&quot;``/``&quot;CartoDark&quot;``/``&quot;CartoVoyager&quot;``/``&quot;OSM&quot;``), a keyed preset name such as</span>
-<a id="__codelineno-0-2088" name="__codelineno-0-2088"></a><span class="sd">            ``&quot;Planet.NICFI&quot;``, or ``None`` for</span>
-<a id="__codelineno-0-2089" name="__codelineno-0-2089"></a><span class="sd">            :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`. An OGC provider is recorded in</span>
-<a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="sd">            the figure field by field, minus its ``extra_params``, so a figure read back elsewhere asks</span>
-<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a><span class="sd">            the same service — unauthenticated, since the credential does not travel (see</span>
-<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a><span class="sd">            ``docs/reference/basemaps.md``).</span>
-<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">        api_key: Credential for a keyed preset; ``None`` reads the preset&#39;s environment variable.</span>
-<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">        preset: The keyed preset&#39;s own keywords, as a dict (for NICFI: ``date``, ``flavour``,</span>
-<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">            ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to</span>
-<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a><span class="sd">            ``add_tiles``, and the three tiers take presets the same way.</span>
-<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">        **kwargs: Forwarded to ``add_tiles``.</span>
-<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a>
-<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a><span class="sd">        The tile artist ``add_tiles`` added to the axes.</span>
-<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a>
-<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">        ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``</span>
-<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">            or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose</span>
-<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a><span class="sd">            instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there</span>
-<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a><span class="sd">            is one, else the current axes limits — lies entirely outside the coverage.</span>
-<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">        TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.</span>
-<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a>
-<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">        - A keyed preset resolves its own provider and credential:</span>
-<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map                       # doctest: +SKIP</span>
-<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a><span class="sd">            &gt;&gt;&gt; Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP</span>
-<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a><span class="sd">            ...     &quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;, &quot;flavour&quot;: &quot;visual&quot;}</span>
-<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="sd">            ... )                                                  # doctest: +SKIP</span>
+<span class="normal"><a href="#__codelineno-0-2148">2148</a></span>
+<span class="normal"><a href="#__codelineno-0-2149">2149</a></span>
+<span class="normal"><a href="#__codelineno-0-2150">2150</a></span>
+<span class="normal"><a href="#__codelineno-0-2151">2151</a></span>
+<span class="normal"><a href="#__codelineno-0-2152">2152</a></span>
+<span class="normal"><a href="#__codelineno-0-2153">2153</a></span>
+<span class="normal"><a href="#__codelineno-0-2154">2154</a></span>
+<span class="normal"><a href="#__codelineno-0-2155">2155</a></span>
+<span class="normal"><a href="#__codelineno-0-2156">2156</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2071" name="__codelineno-0-2071"></a><span class="k">def</span><span class="w"> </span><span class="nf">basemap</span><span class="p">(</span>
+<a id="__codelineno-0-2072" name="__codelineno-0-2072"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-2073" name="__codelineno-0-2073"></a>    <span class="n">source</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2074" name="__codelineno-0-2074"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-2075" name="__codelineno-0-2075"></a>    <span class="n">api_key</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2076" name="__codelineno-0-2076"></a>    <span class="n">preset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2077" name="__codelineno-0-2077"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2078" name="__codelineno-0-2078"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.</span>
+<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a>
+<a id="__codelineno-0-2083" name="__codelineno-0-2083"></a><span class="sd">    ``source`` is passed through to cleopatra unchanged — a provider name or an</span>
+<a id="__codelineno-0-2084" name="__codelineno-0-2084"></a><span class="sd">    ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see</span>
+<a id="__codelineno-0-2085" name="__codelineno-0-2085"></a><span class="sd">    :mod:`digitalearth.base.basemaps`) is resolved here into a configured provider, with its credential</span>
+<a id="__codelineno-0-2086" name="__codelineno-0-2086"></a><span class="sd">    read from the environment and its coverage checked against the map&#39;s domain first. And the four</span>
+<a id="__codelineno-0-2087" name="__codelineno-0-2087"></a><span class="sd">    cross-tier basemap names (:data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them)</span>
+<a id="__codelineno-0-2088" name="__codelineno-0-2088"></a><span class="sd">    are translated into the ``xyzservices`` paths that request the same tiles the interactive and web</span>
+<a id="__codelineno-0-2089" name="__codelineno-0-2089"></a><span class="sd">    tiers do — including when ``source`` is omitted, which means the shared default here just as it does</span>
+<a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="sd">    there, rather than cleopatra&#39;s own ``OpenStreetMap.Mapnik`` (#247).</span>
+<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a>
+<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">        source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a</span>
+<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">            ``cleopatra.basemap.ogc`` ``WMSProvider``/``WMTSProvider``, one of the cross-tier names</span>
+<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">            (``&quot;CartoLight&quot;``/``&quot;CartoDark&quot;``/``&quot;CartoVoyager&quot;``/``&quot;OSM&quot;``), a keyed preset name such as</span>
+<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a><span class="sd">            ``&quot;Planet.NICFI&quot;``, or ``None`` for</span>
+<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a><span class="sd">            :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`. An OGC provider is recorded in</span>
+<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a><span class="sd">            the figure field by field, minus its ``extra_params``, so a figure read back elsewhere asks</span>
+<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">            the same service — unauthenticated, since the credential does not travel (see</span>
+<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">            ``docs/reference/basemaps.md``).</span>
+<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">        api_key: Credential for a keyed preset; ``None`` reads the preset&#39;s environment variable.</span>
+<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">        preset: The keyed preset&#39;s own keywords, as a dict (for NICFI: ``date``, ``flavour``,</span>
+<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">            ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to</span>
+<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">            ``add_tiles``, and the three tiers take presets the same way.</span>
+<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a><span class="sd">        **kwargs: Forwarded to ``add_tiles``.</span>
+<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a>
+<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">        The tile artist ``add_tiles`` added to the axes.</span>
+<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a>
+<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">        ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``</span>
+<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a><span class="sd">            or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose</span>
+<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a><span class="sd">            instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there</span>
+<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a><span class="sd">            is one, else the current axes limits — lies entirely outside the coverage.</span>
+<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="sd">        TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.</span>
 <a id="__codelineno-0-2121" name="__codelineno-0-2121"></a>
-<a id="__codelineno-0-2122" name="__codelineno-0-2122"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a>
-<a id="__codelineno-0-2124" name="__codelineno-0-2124"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">        digitalearth.base.basemaps: the keyed-preset definitions this resolves.</span>
-<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a>    <span class="n">loose</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">PRESET_KEYWORDS</span><span class="p">)</span>
-<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a>    <span class="k">if</span> <span class="n">loose</span><span class="p">:</span>
-<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a>        <span class="c1"># These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.</span>
-<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a>            <span class="sa">f</span><span class="s2">&quot;basemap() takes preset keywords in preset=</span><span class="se">{{</span><span class="s2">...</span><span class="se">}}</span><span class="s2">, not loose; move </span><span class="si">{</span><span class="n">loose</span><span class="si">}</span><span class="s2"> into it — &quot;</span>
-<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a>            <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, preset=</span><span class="se">{{</span><span class="si">{</span><span class="n">loose</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">: ...</span><span class="se">}}</span><span class="s2">)&quot;</span>
-<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_keyed_basemap</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
-<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a>        <span class="k">if</span> <span class="n">preset</span><span class="p">:</span>
-<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no preset keywords; </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">preset</span><span class="p">)</span><span class="si">}</span><span class="s2"> apply only to a &quot;</span>
-<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a>                <span class="sa">f</span><span class="s2">&quot;keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
-<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a>        <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a>            <span class="c1"># Dropping it silently would leave a caller believing they had authenticated.</span>
-<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2143" name="__codelineno-0-2143"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no api_key; it is a token-free source. Credentials apply &quot;</span>
-<a id="__codelineno-0-2144" name="__codelineno-0-2144"></a>                <span class="sa">f</span><span class="s2">&quot;only to a keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
-<a id="__codelineno-0-2145" name="__codelineno-0-2145"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2146" name="__codelineno-0-2146"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_basemap</span><span class="p">(</span>
-<a id="__codelineno-0-2147" name="__codelineno-0-2147"></a>        <span class="n">source</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span>
-<a id="__codelineno-0-2148" name="__codelineno-0-2148"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2122" name="__codelineno-0-2122"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a><span class="sd">        - A keyed preset resolves its own provider and credential:</span>
+<a id="__codelineno-0-2124" name="__codelineno-0-2124"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map                       # doctest: +SKIP</span>
+<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">            &gt;&gt;&gt; Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP</span>
+<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">            ...     &quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;, &quot;flavour&quot;: &quot;visual&quot;}</span>
+<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">            ... )                                                  # doctest: +SKIP</span>
+<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a>
+<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a>
+<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a><span class="sd">        digitalearth.base.basemaps: the keyed-preset definitions this resolves.</span>
+<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a>    <span class="n">loose</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">PRESET_KEYWORDS</span><span class="p">)</span>
+<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>    <span class="k">if</span> <span class="n">loose</span><span class="p">:</span>
+<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a>        <span class="c1"># These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.</span>
+<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a>            <span class="sa">f</span><span class="s2">&quot;basemap() takes preset keywords in preset=</span><span class="se">{{</span><span class="s2">...</span><span class="se">}}</span><span class="s2">, not loose; move </span><span class="si">{</span><span class="n">loose</span><span class="si">}</span><span class="s2"> into it — &quot;</span>
+<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a>            <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, preset=</span><span class="se">{{</span><span class="si">{</span><span class="n">loose</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">: ...</span><span class="se">}}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_keyed_basemap</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
+<a id="__codelineno-0-2143" name="__codelineno-0-2143"></a>        <span class="k">if</span> <span class="n">preset</span><span class="p">:</span>
+<a id="__codelineno-0-2144" name="__codelineno-0-2144"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2145" name="__codelineno-0-2145"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no preset keywords; </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">preset</span><span class="p">)</span><span class="si">}</span><span class="s2"> apply only to a &quot;</span>
+<a id="__codelineno-0-2146" name="__codelineno-0-2146"></a>                <span class="sa">f</span><span class="s2">&quot;keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
+<a id="__codelineno-0-2147" name="__codelineno-0-2147"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2148" name="__codelineno-0-2148"></a>        <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2149" name="__codelineno-0-2149"></a>            <span class="c1"># Dropping it silently would leave a caller believing they had authenticated.</span>
+<a id="__codelineno-0-2150" name="__codelineno-0-2150"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2151" name="__codelineno-0-2151"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no api_key; it is a token-free source. Credentials apply &quot;</span>
+<a id="__codelineno-0-2152" name="__codelineno-0-2152"></a>                <span class="sa">f</span><span class="s2">&quot;only to a keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
+<a id="__codelineno-0-2153" name="__codelineno-0-2153"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2154" name="__codelineno-0-2154"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_basemap</span><span class="p">(</span>
+<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a>        <span class="n">source</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span>
+<a id="__codelineno-0-2156" name="__codelineno-0-2156"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -14758,9 +14758,9 @@ The default is an unfilled black outline.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>when only one of <code>lons</code>/<code>lats</code> is given, when they differ in length, when
-<code>radius_m</code> is not a positive, less-than-antipodal distance, or when <code>n</code> is below 4.
-The layer is not described.</p>
+                <p>when only one of <code>lons</code>/<code>lats</code> is given, when both are empty, when they differ
+in length, when <code>radius_m</code> is not a positive, less-than-antipodal distance, or when <code>n</code>
+is below 4. The layer is not described.</p>
               </div>
             </td>
           </tr>
@@ -14899,7 +14899,15 @@ The layer is not described.</p>
 <span class="normal"><a href="#__codelineno-0-2058">2058</a></span>
 <span class="normal"><a href="#__codelineno-0-2059">2059</a></span>
 <span class="normal"><a href="#__codelineno-0-2060">2060</a></span>
-<span class="normal"><a href="#__codelineno-0-2061">2061</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1963" name="__codelineno-0-1963"></a><span class="k">def</span><span class="w"> </span><span class="nf">tissot</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-2061">2061</a></span>
+<span class="normal"><a href="#__codelineno-0-2062">2062</a></span>
+<span class="normal"><a href="#__codelineno-0-2063">2063</a></span>
+<span class="normal"><a href="#__codelineno-0-2064">2064</a></span>
+<span class="normal"><a href="#__codelineno-0-2065">2065</a></span>
+<span class="normal"><a href="#__codelineno-0-2066">2066</a></span>
+<span class="normal"><a href="#__codelineno-0-2067">2067</a></span>
+<span class="normal"><a href="#__codelineno-0-2068">2068</a></span>
+<span class="normal"><a href="#__codelineno-0-2069">2069</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1963" name="__codelineno-0-1963"></a><span class="k">def</span><span class="w"> </span><span class="nf">tissot</span><span class="p">(</span>
 <a id="__codelineno-0-1964" name="__codelineno-0-1964"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-1965" name="__codelineno-0-1965"></a>    <span class="n">lons</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1966" name="__codelineno-0-1966"></a>    <span class="n">lats</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -14936,9 +14944,9 @@ The layer is not described.</p>
 <a id="__codelineno-0-1997" name="__codelineno-0-1997"></a><span class="sd">        The circles&#39; ``PolyCollection``, or ``None`` when no circle could be placed.</span>
 <a id="__codelineno-0-1998" name="__codelineno-0-1998"></a>
 <a id="__codelineno-0-1999" name="__codelineno-0-1999"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2000" name="__codelineno-0-2000"></a><span class="sd">        ValueError: when only one of ``lons``/``lats`` is given, when they differ in length, when</span>
-<a id="__codelineno-0-2001" name="__codelineno-0-2001"></a><span class="sd">            ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n`` is below 4.</span>
-<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a><span class="sd">            The layer is not described.</span>
+<a id="__codelineno-0-2000" name="__codelineno-0-2000"></a><span class="sd">        ValueError: when only one of ``lons``/``lats`` is given, when both are empty, when they differ</span>
+<a id="__codelineno-0-2001" name="__codelineno-0-2001"></a><span class="sd">            in length, when ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n``</span>
+<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a><span class="sd">            is below 4. The layer is not described.</span>
 <a id="__codelineno-0-2003" name="__codelineno-0-2003"></a>
 <a id="__codelineno-0-2004" name="__codelineno-0-2004"></a><span class="sd">    Examples:</span>
 <a id="__codelineno-0-2005" name="__codelineno-0-2005"></a><span class="sd">        - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:</span>
@@ -14981,23 +14989,31 @@ The layer is not described.</p>
 <a id="__codelineno-0-2042" name="__codelineno-0-2042"></a>    <span class="k">else</span><span class="p">:</span>
 <a id="__codelineno-0-2043" name="__codelineno-0-2043"></a>        <span class="n">lon_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lons</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))]</span>
 <a id="__codelineno-0-2044" name="__codelineno-0-2044"></a>        <span class="n">lat_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lats</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))]</span>
-<a id="__codelineno-0-2045" name="__codelineno-0-2045"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-2046" name="__codelineno-0-2046"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-2047" name="__codelineno-0-2047"></a>            <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2048" name="__codelineno-0-2048"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2049" name="__codelineno-0-2049"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2050" name="__codelineno-0-2050"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-2051" name="__codelineno-0-2051"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-2052" name="__codelineno-0-2052"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2053" name="__codelineno-0-2053"></a>                    <span class="s2">&quot;lons&quot;</span><span class="p">:</span> <span class="n">lon_list</span><span class="p">,</span>
-<a id="__codelineno-0-2054" name="__codelineno-0-2054"></a>                    <span class="s2">&quot;lats&quot;</span><span class="p">:</span> <span class="n">lat_list</span><span class="p">,</span>
-<a id="__codelineno-0-2055" name="__codelineno-0-2055"></a>                    <span class="s2">&quot;radius_m&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">radius_m</span><span class="p">),</span>
-<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a>                    <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">),</span>
-<a id="__codelineno-0-2057" name="__codelineno-0-2057"></a>                <span class="p">}</span>
-<a id="__codelineno-0-2058" name="__codelineno-0-2058"></a>            <span class="p">),</span>
-<a id="__codelineno-0-2059" name="__codelineno-0-2059"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">style</span><span class="p">,</span>
-<a id="__codelineno-0-2060" name="__codelineno-0-2060"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2061" name="__codelineno-0-2061"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2045" name="__codelineno-0-2045"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">lon_list</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">lat_list</span><span class="p">:</span>
+<a id="__codelineno-0-2046" name="__codelineno-0-2046"></a>            <span class="c1"># `None` is this method&#39;s answer for &quot;every ring was off-limb&quot;, so an empty pair must not</span>
+<a id="__codelineno-0-2047" name="__codelineno-0-2047"></a>            <span class="c1"># share it: a caller whose centre list came out empty would read it as the projection&#39;s</span>
+<a id="__codelineno-0-2048" name="__codelineno-0-2048"></a>            <span class="c1"># doing. `facet` refuses an empty stack by name for the same reason (round 3, L5).</span>
+<a id="__codelineno-0-2049" name="__codelineno-0-2049"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2050" name="__codelineno-0-2050"></a>                <span class="s2">&quot;tissot() was given no centres to draw; pass lons= and lats=, or neither for the &quot;</span>
+<a id="__codelineno-0-2051" name="__codelineno-0-2051"></a>                <span class="s2">&quot;world grid&quot;</span>
+<a id="__codelineno-0-2052" name="__codelineno-0-2052"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2053" name="__codelineno-0-2053"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-2054" name="__codelineno-0-2054"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-2055" name="__codelineno-0-2055"></a>            <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2057" name="__codelineno-0-2057"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2058" name="__codelineno-0-2058"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-2059" name="__codelineno-0-2059"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-2060" name="__codelineno-0-2060"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;tissot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2061" name="__codelineno-0-2061"></a>                    <span class="s2">&quot;lons&quot;</span><span class="p">:</span> <span class="n">lon_list</span><span class="p">,</span>
+<a id="__codelineno-0-2062" name="__codelineno-0-2062"></a>                    <span class="s2">&quot;lats&quot;</span><span class="p">:</span> <span class="n">lat_list</span><span class="p">,</span>
+<a id="__codelineno-0-2063" name="__codelineno-0-2063"></a>                    <span class="s2">&quot;radius_m&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">radius_m</span><span class="p">),</span>
+<a id="__codelineno-0-2064" name="__codelineno-0-2064"></a>                    <span class="s2">&quot;n&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">),</span>
+<a id="__codelineno-0-2065" name="__codelineno-0-2065"></a>                <span class="p">}</span>
+<a id="__codelineno-0-2066" name="__codelineno-0-2066"></a>            <span class="p">),</span>
+<a id="__codelineno-0-2067" name="__codelineno-0-2067"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">style</span><span class="p">,</span>
+<a id="__codelineno-0-2068" name="__codelineno-0-2068"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2069" name="__codelineno-0-2069"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
