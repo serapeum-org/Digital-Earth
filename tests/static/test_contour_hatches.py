@@ -508,6 +508,46 @@ class TestTheHatchLegend:
             to_rgba(color) for color in colors
         ], [tuple(handle.get_facecolor()) for handle in handles]
 
+    def test_the_faintest_colour_an_8_bit_channel_can_carry_still_fills_its_swatch(
+        self,
+    ):
+        """``#00000001`` is alpha 1/255, the smallest non-zero an 8-digit hex can spell — and it fills.
+
+        Test scenario:
+            - The transparency check is a tolerance rather than an exact ``== 0.0`` comparison
+              (SonarCloud ``S1244``), and this is the boundary that says the tolerance is tight enough:
+              every colour the plan carries round-trips through 8-bit hex, so the smallest alpha above
+              zero it can hold is ``1/255 == 0.00392156862745098``.
+            - A tolerance at or above that would read this colour as see-through and route the key into
+              the uncoloured ``hatch_legend`` form, which is the same class of mistake as the
+              ``endswith("00")`` reading it replaced.
+            - The expected face is computed here by matplotlib from the hex, not read back out of the
+              code under test.
+        """
+        plan = GuidePlan("legend", colors=("#00000001",), rows=("a",), hatches=("///",))
+        canvas = Map(crs=4326)
+        (handle,) = paint_guide(canvas, plan).legend_handles
+        assert tuple(handle.get_facecolor()) == to_rgba("#00000001"), (
+            f"the faintest 8-bit alpha must still colour its swatch, got "
+            f"{tuple(handle.get_facecolor())}"
+        )
+
+    def test_a_fully_transparent_colour_leaves_its_swatch_unfilled(self):
+        """Alpha exactly zero is see-through, so the key is drawn in the uncoloured form.
+
+        Test scenario:
+            - The other side of the boundary above: ``#00000000`` has alpha ``0.0`` exactly, so the whole
+              plan is uncoloured and ``_paint_hatch_legend`` hands it to ``hatch_legend``, whose swatches
+              carry no face at all.
+        """
+        plan = GuidePlan("legend", colors=("#00000000",), rows=("a",), hatches=("///",))
+        canvas = Map(crs=4326)
+        (handle,) = paint_guide(canvas, plan).legend_handles
+        assert tuple(handle.get_facecolor()) == to_rgba("none"), (
+            f"a fully transparent colour must leave the swatch unfilled, got "
+            f"{tuple(handle.get_facecolor())}"
+        )
+
     def test_a_colour_matplotlib_cannot_read_is_not_taken_for_transparent(self):
         """An unreadable swatch colour reaches the engine that can name it, rather than being dropped.
 

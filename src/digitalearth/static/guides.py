@@ -75,6 +75,17 @@ GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
 
 logger = logging.getLogger(__name__)
 
+#: The alpha at or below which :func:`_is_transparent` calls a swatch colour fully see-through.
+#:
+#: A tolerance rather than an exact ``== 0.0``: testing a float for equality is a defect in its own right
+#: (SonarCloud ``python:S1244``), because the value is only ever as exact as the arithmetic that produced
+#: it. Half of the 8-bit quantum — ``to_rgba`` divides an 8-digit hex channel by 255, so ``1/255`` is the
+#: smallest alpha a colour the plan carries can hold above zero. The bound therefore admits exactly what
+#: ``== 0.0`` admitted among hex spellings, and in addition a computed alpha that no 8-bit channel could
+#: tell from zero; the faintest colour an 8-digit hex *can* spell, ``#00000001``, stays opaque enough to
+#: colour its swatch.
+_TRANSPARENT_ALPHA: float = 0.5 / 255.0
+
 #: The property a caller's own row labels for one layer's key are recorded under.
 #:
 #: Recorded rather than kept as a call argument, because the key is redrawn from the description whenever the
@@ -744,9 +755,11 @@ def _is_transparent(color: str) -> bool:
             gave no colour — which matplotlib itself reads as fully transparent.
 
     Returns:
-        ``True`` when the colour's alpha is zero. ``False`` for anything matplotlib cannot parse, so an
-        unreadable colour still reaches the engine that will say so, rather than being taken for
-        transparent here.
+        ``True`` when the colour's alpha is zero to within :data:`_TRANSPARENT_ALPHA` — half an 8-bit
+        step, so no alpha an 8-bit channel could show is admitted. **Fully** see-through, not merely
+        faint: ``#00000001``, the smallest non-zero alpha an 8-digit hex can spell, is ``False``.
+        ``False`` for anything matplotlib cannot parse too, so an unreadable colour still reaches the
+        engine that will say so, rather than being taken for transparent here.
 
     Examples:
         - An uncoloured band's 8-digit hex and the scale's ``"None"`` both read as see-through:
@@ -768,7 +781,7 @@ def _is_transparent(color: str) -> bool:
             ```
     """
     try:
-        return bool(to_rgba(color)[3] == 0.0)
+        return bool(to_rgba(color)[3] <= _TRANSPARENT_ALPHA)
     except ValueError:
         return False
 
