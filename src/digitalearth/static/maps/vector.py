@@ -75,6 +75,10 @@ _POINTS_CALLER = "Map.points()"
 #: call, the column and the CRS when the features are opened — and all of them name the one public method.
 _LABELS_CALLER = "Map.labels()"
 
+#: The same, for the line layer. Its ``width=`` and ``color=`` are checked at the call and its ``column=``
+#: when the features are read, so builder and drawer need the one spelling between them.
+_LINES_CALLER = "Map.lines()"
+
 #: Keywords :meth:`VectorMixin.labels` refuses in ``**opts``, each with what to write instead. Two of them are
 #: matplotlib's own spelling of something this builder already declares, and forwarding either would have the
 #: declared parameter silently win; the third is a capability this tier does not have. A keyword accepted and
@@ -230,6 +234,35 @@ def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
         else _as_count(min_count, "min_count", "hexbin()", minimum=0)
     )
     return (counts[0] if len(counts) == 1 else tuple(counts)), floor
+
+
+def _numeric_column(gdf: Any, column: str, argument: str, caller: str) -> np.ndarray:
+    """Read one feature column as floats, refusing one that holds something a ramp cannot read.
+
+    A colour ramp and a width scale both need numbers. Read untyped — ``gdf[column].to_numpy()``, which
+    ``sankey`` does and ``lines`` inherited — a text column travels as ``object`` and fails several frames
+    down in matplotlib as ``TypeError: ufunc 'isfinite' not supported for the input types``, naming neither
+    the method, the keyword, nor the column.
+
+    Args:
+        gdf: The features, already in the display CRS.
+        column: The column named by the caller.
+        argument: The keyword it was named under — ``column`` or ``width``.
+        caller: The public call, for the message.
+
+    Returns:
+        The column's values as a float array.
+
+    Raises:
+        ValueError: when the column holds values that are not numbers, naming all three.
+    """
+    try:
+        return gdf[column].to_numpy(dtype=float)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{caller} needs {argument}={column!r} to name a column of numbers, and it holds "
+            f"{gdf[column].dtype} values that are not numbers"
+        ) from None
 
 
 def _polygon_kind(fill: Any) -> str:
@@ -1051,10 +1084,14 @@ def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     )
     paths, repeats = _line_parts(gdf)
     column, width = props.get("column"), props.get("width")
-    values = np.repeat(gdf[column].to_numpy(), repeats) if column is not None else None
+    values = (
+        np.repeat(_numeric_column(gdf, column, "column", _LINES_CALLER), repeats)
+        if column is not None
+        else None
+    )
     widths = None
     if isinstance(width, str):
-        widths = np.repeat(gdf[width].to_numpy(), repeats)
+        widths = np.repeat(_numeric_column(gdf, width, "width", _LINES_CALLER), repeats)
     elif width is not None:
         opts["line_width"] = float(width)
     if props.get("color") is not None:
@@ -3089,11 +3126,13 @@ class VectorMixin(_MixinBase):
                 ``"equal_interval"``, …); ``None`` (default) is a continuous ramp.
             k: Number of classes for ``scheme``.
             cmap: The colormap ``column`` is coloured through; ``None`` leaves cleopatra's default.
-            width: Line width in points, or the name of a numeric column whose values scale each line's
-                width (between ``width_limits``, a ``FlowGlyph`` option). ``None`` leaves cleopatra's width.
+            width: Line width in points — a positive number — or the name of a numeric column whose values
+                scale each line's width (between ``width_limits``, a ``FlowGlyph`` option). ``None``
+                leaves cleopatra's width.
             color: The colour of every line when ``column`` is ``None`` — any matplotlib colour. A built
                 ``ColorScaling`` or ``Normalize`` is instead the colour *scaling* of ``column``, as it is on
-                every other static builder.
+                every other static builder. A string that is not a colour is refused rather than passed on,
+                with ``column=`` named as what takes a column's name.
             opacity: Layer opacity, 0 transparent to 1 opaque.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
@@ -3108,7 +3147,11 @@ class VectorMixin(_MixinBase):
             outside what the display CRS shows.
 
         Raises:
-            ValueError: if ``features`` is empty or contains non-line geometry.
+            ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a
+                positive finite number (a line has no negative thickness); if ``color`` is a string that
+                is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a
+                column's name; or if ``column`` or a column ``width`` names a column that does not hold
+                numbers, which a ramp and a width scale both need.
             KeyError: if ``column`` or a column ``width`` names no feature attribute.
 
         Examples:
@@ -3157,8 +3200,26 @@ class VectorMixin(_MixinBase):
         See Also:
             sankey: the same geometry drawn as a flow map.
         """
+        if width is not None and not isinstance(width, str):
+            # A scalar width reached the collection exactly as written, negatives included
+            # (`get_linewidths() == [-2.0]`), and zero drew lines of no width at all (review L4).
+            if _as_finite(width, "width", _LINES_CALLER) <= 0.0:
+                raise ValueError(
+                    f"{_LINES_CALLER} needs width= as a positive number of points, or the name of a "
+                    f"column to scale the widths by; got {width!r}"
+                )
         if isinstance(color, str) or (color is not None and is_color_like(color)):
-            line_color: Optional[Any] = to_hex(color, keep_alpha=True)
+            # `color=` and `column=` sit next to each other in the signature, so a column name under
+            # `color=` is a plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA
+            # argument", which names neither this method nor either keyword (review L4).
+            try:
+                line_color: Optional[Any] = to_hex(color, keep_alpha=True)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
+                    f"{color!r} is not one. To colour the lines by a column's values instead, pass "
+                    f"column={color!r}"
+                ) from None
         else:
             line_color = None
             if color is not None:

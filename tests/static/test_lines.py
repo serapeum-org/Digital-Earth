@@ -238,6 +238,100 @@ class TestOffTheLimb:
         assert canvas.layer_ids == [], canvas.layer_ids
 
 
+class TestRefusingWhatCannotBeDrawn:
+    """``width``, ``color`` and ``column`` are refused by name rather than inside the engine."""
+
+    @pytest.fixture
+    def labelled(self) -> FeatureCollection:
+        """Two reaches carrying a text column, which is not something a ramp or a width can read.
+
+        Returns:
+            A pyramids `FeatureCollection` with a ``name`` column of strings.
+        """
+        gdf = gpd.GeoDataFrame(
+            {"name": ["Rhine", "Meuse"]},
+            geometry=[
+                LineString([(0.0, 0.0), (1.0, 1.0)]),
+                LineString([(1.0, 1.0), (2.0, 1.0)]),
+            ],
+            crs="EPSG:4326",
+        )
+        return FeatureCollection(gdf)
+
+    @pytest.mark.parametrize("width", [-2.0, 0, 0.0, -1])
+    def test_a_width_that_is_not_a_positive_number_of_points_is_refused(
+        self, rivers, width
+    ):
+        """A line cannot be drawn thinner than nothing, so a non-positive scalar width is an error.
+
+        Args:
+            rivers: The reaches.
+            width: A scalar width no line can have.
+
+        Test scenario:
+            - ``width=-2.0`` was accepted and reached the collection as it was written:
+              ``get_linewidths() == [-2.0]``. ``width=0`` drew lines of no width at all.
+            - Both are refused at the call now, naming ``width``, and the figure is left empty.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="width"):
+            canvas.lines(rivers, width=width)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_a_non_finite_width_is_refused(self, rivers):
+        """NaN is not a width either, and a figure could not be written down holding it.
+
+        Args:
+            rivers: The reaches.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="width"):
+            canvas.lines(rivers, width=math.nan)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_a_column_named_under_color_says_to_use_column(self, rivers):
+        """``color=`` and ``column=`` sit side by side, so naming a column under ``color`` is a likely slip.
+
+        Test scenario:
+            - ``color="discharge"`` came back as matplotlib's ``ValueError: Invalid RGBA argument:
+              'discharge'``, which names neither the method nor the keyword, and says nothing about the
+              keyword next to it that does take a column name.
+            - The refusal now names ``lines(color=)`` and suggests ``column=``.
+
+        Args:
+            rivers: The reaches, whose ``discharge`` column is not a colour.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match=r"column='discharge'"):
+            canvas.lines(rivers, color="discharge")
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_a_non_numeric_column_is_refused_by_name(self, labelled):
+        """A ramp reads numbers, so a text column is refused in the builder's own words.
+
+        Test scenario:
+            - ``column="name"`` over a column of strings came back as ``TypeError: ufunc 'isfinite' not
+              supported for the input types …``, inherited from ``sankey``'s untyped ``to_numpy()``.
+            - The refusal now names ``Map.lines()``, the keyword and the column.
+
+        Args:
+            labelled: Two reaches with a text ``name`` column.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match=r"column=.*'name'"):
+            canvas.lines(labelled, column="name")
+
+    def test_a_non_numeric_width_column_is_refused_by_name(self, labelled):
+        """``width=`` a text column cannot scale anything, and is refused the same way ``column=`` is.
+
+        Args:
+            labelled: Two reaches with a text ``name`` column.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match=r"width=.*'name'"):
+            canvas.lines(labelled, width="name")
+
+
 class TestTheContract:
     """The Core ``lines`` name is no longer pending on the static tier."""
 
