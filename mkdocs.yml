@@ -195,6 +195,7 @@ nav:
     - Figure vocabulary: reference/vocabulary.md
     - Backend support matrix: reference/support-matrix.md
     - Maps (matplotlib): reference/static_map.md
+    - Scenes & multi-panel figures (matplotlib): reference/static_scene.md
     - Web maps: reference/web_map.md
     - Keyed basemaps: reference/basemaps.md
     - TexturedGlobe (3-D globe): reference/textured_globe.md
