@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Self
 from digitalearth.static.maps.animation import AnimationMixin
 from digitalearth.static.maps.base import GeoLayerBase
 from digitalearth.static.maps.decoration import DecorationMixin
+from digitalearth.static.maps.inset import InsetMixin
 from digitalearth.static.maps.projection import ProjectionMixin
 from digitalearth.static.maps.raster import RasterMixin
 from digitalearth.static.maps.vector import VectorMixin
@@ -30,6 +31,7 @@ class Map(
     RasterMixin,
     VectorMixin,
     DecorationMixin,
+    InsetMixin,
     ProjectionMixin,
     AnimationMixin,
     GeoLayerBase,
