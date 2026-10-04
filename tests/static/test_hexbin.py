@@ -287,6 +287,45 @@ class TestTheLatticeArguments:
             3,
         )
 
+    def test_a_numpy_pair_is_the_pair_form_too(self, wells):
+        """A computed lattice arrives as a numpy array, which is the same ``(nx, ny)`` the docstring takes.
+
+        Args:
+            wells: The wells.
+
+        Test scenario:
+            - The pair was detected with ``isinstance(gridsize, (tuple, list))``, so
+              ``gridsize=np.array([4, 3])`` — what a caller who computed the lattice from the window has in
+              hand — was wrapped as a single side and refused with ``hexbin() needs gridsize= as a whole
+              number >= 1; got array([4, 3])``, the message for the form it was not using.
+            - It is now read as the pair, drawn, and described as two plain ints, so the figure stays
+              writable (a numpy integer is not JSON).
+        """
+        canvas = Map(crs=4326)
+        cells = canvas.hexbin(wells, gridsize=np.array([4, 3]), min_count=0, name="h")
+        assert isinstance(cells, PolyCollection), type(cells)
+        described = canvas.figure_spec.layers.get("h").symbology.props["gridsize"]
+        assert tuple(described) == (4, 3), described
+        assert [type(side) for side in described] == [int, int], described
+
+    def test_a_numpy_array_of_three_counts_gets_the_pair_shape_refusal(self, wells):
+        """Three sides is not a lattice, and the refusal says which shapes are.
+
+        Args:
+            wells: The wells.
+
+        Test scenario:
+            - ``gridsize=np.array([4, 3, 2])`` was refused as one bad count, like the pair above; a
+              three-element *list* already got the pair-shape message.
+            - Both spellings now get the pair-shape message.
+        """
+        canvas = Map(crs=4326)
+        three = np.array([4, 3, 2])
+        with pytest.raises(ValueError, match="pair of them"):
+            canvas.hexbin(wells, gridsize=three)
+        assert canvas.layer_ids == [], canvas.layer_ids
+        canvas.close()
+
 
 class TestTheColumnAggregated:
     """``column=`` is checked against the features, by name, before any value is read."""

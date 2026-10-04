@@ -215,7 +215,9 @@ def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
     """Refuse a lattice ``HexbinGlyph`` could not bin onto, before the figure is touched.
 
     Args:
-        gridsize: Hexagons across the window — one count, or an ``(nx, ny)`` pair.
+        gridsize: Hexagons across the window — one count, or an ``(nx, ny)`` pair. The pair may be a
+            tuple, a list or a 1-D numpy array, which is what a caller who computed the lattice from the
+            window has in hand.
         min_count: The floor on a cell's points, or ``None`` for the builder's own default.
 
     Returns:
@@ -225,7 +227,14 @@ def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
     Raises:
         ValueError: naming ``hexbin()`` and the argument that is wrong, with the value passed.
     """
-    sides = list(gridsize) if isinstance(gridsize, (tuple, list)) else [gridsize]
+    # A numpy array of two is the pair form as much as a tuple is; detecting the pair on tuple/list alone
+    # wrapped `np.array([10, 20])` as one side and refused it with the single-count message, for a form it
+    # was not using. A 0-d array is one value rather than a sequence — and iterating it raises — so it
+    # stays a single side and is refused as the count it is not.
+    pair_shaped = isinstance(gridsize, (tuple, list)) or (
+        isinstance(gridsize, np.ndarray) and gridsize.ndim > 0
+    )
+    sides = list(gridsize) if pair_shaped else [gridsize]
     if len(sides) not in (1, 2):
         raise ValueError(
             "hexbin() needs gridsize= as one whole number, or a pair of them (nx, ny); "
