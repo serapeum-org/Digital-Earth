@@ -132,6 +132,58 @@ class TestTheHatchKeywords:
             canvas.contours(p_values, levels=P_LEVELS, hatches=["///", ""])
         assert canvas.layer_ids == [], canvas.layer_ids
 
+    def test_a_stroke_colour_with_no_patterns_to_stroke_is_refused(self, p_values):
+        """``hatch_color`` without ``hatches`` colours nothing, so it is refused rather than dropped.
+
+        Args:
+            p_values: The p-value field.
+
+        Test scenario:
+            - Ask for a filled render with a hatch colour and no patterns — the other half of the guard
+              that already refuses ``hatch_color`` on a line contour.
+            - cleopatra answers that spelling with a ``UserWarning`` and draws the bands plain, which is
+              the silent drop this builder refuses on the ``filled=`` axis; the error names
+              ``hatch_color``, and no layer is left on the figure.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="hatch_color"):
+            canvas.contours(p_values, levels=P_LEVELS, filled=True, hatch_color="red")
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_an_uncoloured_render_with_no_patterns_is_refused(self, p_values):
+        """``fill=False`` with no ``hatches`` draws an invisible layer, so it is refused by name.
+
+        Args:
+            p_values: The p-value field.
+
+        Test scenario:
+            - ``fill=False`` is the overlay form: it leaves every band transparent so only the hatching
+              marks the map. With no patterns there is nothing left to mark it with.
+            - cleopatra warns and draws the invisible set; the builder refuses it instead, naming
+              ``fill=False``, and leaves the figure empty.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="fill=False"):
+            canvas.contours(p_values, levels=P_LEVELS, filled=True, fill=False)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
+    def test_fill_on_contour_lines_is_refused(self, p_values):
+        """``fill`` is a band keyword, so a line render refuses it as it already refuses ``hatches``.
+
+        Args:
+            p_values: The p-value field.
+
+        Test scenario:
+            - Pass ``fill=False`` with the default ``filled=False``.
+            - cleopatra's answer is ``"hatches/fill/hatch_color are contourf-only and are ignored for
+              kind='contour'"`` — a warning and then the plain lines. The builder refuses it, so all three
+              band keywords are guarded on that axis rather than two of them.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(ValueError, match="filled=True"):
+            canvas.contours(p_values, levels=P_LEVELS, fill=False)
+        assert canvas.layer_ids == [], canvas.layer_ids
+
 
 class TestTheHatchLegend:
     """``legend()`` on a hatched layer keys its bands by pattern."""

@@ -1083,7 +1083,8 @@ class RasterMixin(_MixinBase):
                 render, so this needs ``filled=True``. Pass ``fill=False`` as well to leave the bands
                 uncoloured and draw only the hatching: the overlay form for a significance or uncertainty
                 mask over another field. :meth:`legend` on a hatched layer keys its bands by pattern.
-            hatch_color: The colour of the hatch strokes. ``None`` (default) leaves matplotlib's.
+            hatch_color: The colour of the hatch strokes. ``None`` (default) leaves matplotlib's. It needs
+                ``hatches`` too — there is nothing to colour without them.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -1099,8 +1100,11 @@ class RasterMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
-            ValueError: when ``hatches`` or ``hatch_color`` is given without ``filled=True`` — line
-                contours have no bands to hatch, and cleopatra would only warn and draw them plain; when
+            ValueError: when ``hatches``, ``hatch_color`` or ``fill`` is given without ``filled=True`` —
+                line contours have no bands to hatch, and cleopatra would only warn and draw them plain;
+                when ``hatch_color`` or ``fill=False`` is given without ``hatches`` — the first colours
+                strokes that do not exist, the second leaves a layer that marks the map with nothing, and
+                cleopatra warns and draws both anyway; when
                 both ``levels`` and ``interval`` are given — two ways of asking for one
                 thing, so neither can be silently preferred; when ``interval`` is not a positive finite
                 spacing or crosses no level inside the band; for ``scheme="categorical"``, because a contour
@@ -1137,10 +1141,27 @@ class RasterMixin(_MixinBase):
                 "contours() takes at most one of interval= or levels=; "
                 f"got interval={interval!r} and levels={levels!r}"
             )
-        if not filled and (hatches is not None or hatch_color is not None):
+        # The three band keywords are guarded together, on both axes. Each one cleopatra answers with a
+        # warning and then a render that drops the encoding, which is the silent drop this builder exists
+        # to refuse — and until now only two of the three were refused, and only on the `filled=` axis
+        # (review M8).
+        fill = kwargs.get("fill")
+        if not filled and (
+            hatches is not None or hatch_color is not None or fill is not None
+        ):
             raise ValueError(
                 "contours() hatches the bands between levels, which only a filled render has; "
                 "pass filled=True (and fill=False to draw the hatching alone)"
+            )
+        if hatches is None and hatch_color is not None:
+            raise ValueError(
+                "contours(hatch_color=) colours the hatch strokes and there are none to colour; "
+                f"pass hatches=[...] as well, or drop hatch_color={hatch_color!r}"
+            )
+        if hatches is None and fill is False:
+            raise ValueError(
+                "contours(fill=False) leaves every band uncoloured, so with no hatches= the layer marks "
+                "the map with nothing at all; pass hatches=[...] to draw the overlay, or drop fill=False"
             )
         if hatches is not None:
             kwargs["hatches"] = list(hatches)
