@@ -24,6 +24,7 @@ import logging
 import math
 import numbers
 import warnings
+from dataclasses import MISSING
 from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -615,9 +616,29 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
     Returns:
         The rebuilt provider, which ``add_tiles`` tiles from, with no credential on it.
 
+    **A figure this version cannot rebuild is refused the same way, whichever part of it is unfamiliar.**
+    :func:`_describe_ogc_provider` records field by field so that "a field added upstream travels without
+    a change here" — which was true of writing and false of reading, because the description used to be
+    splatted into the constructor: a figure carrying a field this release has never heard of came back as
+    ``TypeError: WMSProvider.__init__() got an unexpected keyword argument``, naming a dunder rather than
+    the figure, and one short of a required field came back as ``TypeError: … missing 2 required
+    positional arguments`` (round 4, M7). Both are now the ``ValueError`` the unknown-tag case already
+    gave, naming the field and the kind it was rebuilding. The unknown field is *refused* rather than
+    dropped with a warning: a provider field is what the service is asked with, so a figure drawn without
+    one is a different request, and silently drawing a different thing is the failure this whole record
+    exists to end (round 3, M10).
+
+    Args:
+        described: What :func:`_describe_ogc_provider` recorded.
+
+    Returns:
+        The rebuilt provider, which ``add_tiles`` tiles from, with no credential on it.
+
     Raises:
-        ValueError: when the recorded ``ogc`` tag is not one this version knows — a figure written by a
-            newer release, which is worth naming rather than drawing the default for.
+        ValueError: when the recorded ``ogc`` tag is not one this version knows, when the description
+            carries a field the provider of that kind does not take, or when it is missing one that kind
+            requires. All three are the same scenario — a figure written by another release — and are
+            worth naming rather than drawing the default for.
     """
     tag = str(described.get("ogc", ""))
     provider = _OGC_PROVIDERS.get(tag)
@@ -626,7 +647,23 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
             f"this figure records an OGC basemap of kind {tag!r}, which this version of digitalearth "
             f"cannot rebuild; it knows {sorted(_OGC_PROVIDERS)}"
         )
-    return provider(**{key: value for key, value in described.items() if key != "ogc"})
+    recorded = {key: value for key, value in described.items() if key != "ogc"}
+    specs = dataclass_fields(provider)
+    known = {spec.name for spec in specs}
+    required = {
+        spec.name
+        for spec in specs
+        if spec.default is MISSING and spec.default_factory is MISSING
+    }
+    unexpected = sorted(set(recorded) - known)
+    absent = sorted(required - set(recorded))
+    if unexpected or absent:
+        raise ValueError(
+            f"this figure records an OGC basemap of kind {tag!r} that this version of digitalearth "
+            f"cannot rebuild: field(s) {unexpected} are not ones it takes and field(s) {absent} are "
+            f"missing. It takes {sorted(known)}, of which it requires {sorted(required)}"
+        )
+    return provider(**recorded)
 
 
 def _described_tile_source(source: Any) -> Tuple[Any, Any]:

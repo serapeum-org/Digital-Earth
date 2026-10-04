@@ -373,3 +373,66 @@ class TestRoundTrip:
         assert requested == [], (
             f"a refused figure must request no tile, got {requested}"
         )
+
+    def test_a_recorded_field_this_version_cannot_rebuild_is_refused_by_name(
+        self, requested
+    ):
+        """A newer release that *adds* a provider field is the same scenario as a newer kind.
+
+        Args:
+            requested: The recorded tile requests, so nothing here reaches the network.
+
+        Test scenario:
+            The description is recorded field by field, which `_describe_ogc_provider` sells as forward
+            compatible — "a field added upstream travels without a change here". That is true of writing
+            and was false of reading: the description was splatted into the constructor, so a figure
+            carrying a field this release has never heard of came back as
+            ``TypeError: WMSProvider.__init__() got an unexpected keyword argument``, naming a private
+            dunder rather than the figure. The ``Raises`` section documented one answer for the
+            newer-release case, a ``ValueError``, and both directions give it now.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMSProvider(WMS_URL, "topp:states"), name="bm")
+        stored = canvas.figure_spec.to_dict()
+        source = stored["layers"]["layers"][0]["symbology"]["props"]["source"]
+        source["elevation_model"] = "egm2008"
+        spec = FigureSpec.from_dict(stored)
+        requested.clear()
+        with pytest.raises(ValueError, match="elevation_model") as refusal:
+            to_backend(spec, "matplotlib")
+        assert "'wms'" in str(refusal.value), (
+            f"the refusal must name the kind it was rebuilding, got {refusal.value}"
+        )
+        assert requested == [], (
+            f"a refused figure must request no tile, got {requested}"
+        )
+
+    def test_a_description_missing_a_field_the_provider_needs_is_refused_by_name(
+        self, requested
+    ):
+        """A description that lost a required field is refused the same way, not by a constructor TypeError.
+
+        Args:
+            requested: The recorded tile requests, so nothing here reaches the network.
+
+        Test scenario:
+            The mirror of the sibling above: a hand-built figure, or one an older writer produced before a
+            field became required, reached the constructor short and answered
+            ``TypeError: ... missing 2 required positional arguments``. One function, one answer — a
+            ``ValueError`` that names the field the figure does not carry.
+        """
+        canvas = _framed_map()
+        canvas.basemap(WMSProvider(WMS_URL, "topp:states"), name="bm")
+        stored = canvas.figure_spec.to_dict()
+        source = stored["layers"]["layers"][0]["symbology"]["props"]["source"]
+        del source["layers"]
+        spec = FigureSpec.from_dict(stored)
+        requested.clear()
+        with pytest.raises(ValueError, match="layers") as refusal:
+            to_backend(spec, "matplotlib")
+        assert "'wms'" in str(refusal.value), (
+            f"the refusal must name the kind it was rebuilding, got {refusal.value}"
+        )
+        assert requested == [], (
+            f"a refused figure must request no tile, got {requested}"
+        )
