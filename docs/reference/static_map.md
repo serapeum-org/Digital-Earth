@@ -53,6 +53,19 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## Hatching a mask
+
+`contours(..., filled=True, hatches=[...])` gives each band between `levels` a hatch pattern, and `fill=False`
+leaves the bands uncoloured so only the hatching draws — the usual way to mark a significance or uncertainty
+mask over another field without spending its colours. `legend()` on such a layer keys the bands it marks by
+their pattern; `hatch_color=` colours the strokes on the map and in the key alike.
+
+```python
+m.field(trend, cmap="RdBu_r")
+m.contours(p_value, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig")
+m.legend("sig", labels=["p < 0.05"])
+```
+
 ## Overlays computed from the globe itself
 
 `nightshade(when)` shades the night side of the day/night terminator at one instant, and `tissot()` draws

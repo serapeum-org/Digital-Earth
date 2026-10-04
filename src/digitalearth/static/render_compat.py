@@ -80,7 +80,14 @@ _GROUP_SPECS = (
     (
         "contour",
         Contour,
-        {"levels": "levels", "labels": "labels", "label_kw": "label_kw"},
+        {
+            "levels": "levels",
+            "labels": "labels",
+            "label_kw": "label_kw",
+            "hatches": "hatches",
+            "fill": "fill",
+            "hatch_color": "hatch_color",
+        },
     ),
     (
         "cells",
@@ -150,8 +157,8 @@ _MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
 NORM_KEY = "norm"
 
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
-#: where it drives one. That is the **27** flat members cleopatra's constructors reject, the 6 typed group
-#: parameters they fold into, :data:`MARKER_SIZE_KEY` and :data:`NORM_KEY` — 35 keywords that were in no
+#: where it drives one. That is the **30** flat members cleopatra's constructors reject, the 6 typed group
+#: parameters they fold into, :data:`MARKER_SIZE_KEY` and :data:`NORM_KEY` — 38 keywords that were in no
 #: signature anywhere.
 #:
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
@@ -180,6 +187,15 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     StyleKey("levels", "Contour levels: a count, or the explicit values to draw."),
     StyleKey("labels", "Whether to label the contour lines."),
     StyleKey("label_kw", "Extra keyword arguments for the contour labels."),
+    StyleKey(
+        "hatches",
+        "A hatch pattern per band between filled contour levels, e.g. ['', '///'].",
+    ),
+    StyleKey(
+        "fill",
+        "False leaves filled contour bands uncoloured, so only their hatching draws.",
+    ),
+    StyleKey("hatch_color", "Colour of the hatch strokes of filled contour bands."),
     # -- printed cell values
     StyleKey("display_cell_value", "Print each cell's value inside the cell."),
     StyleKey("num_size", "Font size of the printed cell values, in points."),

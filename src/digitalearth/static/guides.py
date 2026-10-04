@@ -31,10 +31,11 @@ by maintenance (#185).
 
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
-from cleopatra.styling.styles import colorbar_legend, disjoint_legend
+from cleopatra.styling.styles import colorbar_legend, disjoint_legend, hatch_legend
 from matplotlib.colors import to_hex
+from matplotlib.contour import ContourSet
 
 from digitalearth.base.spec import (
     DEFAULT_BAND,
@@ -420,6 +421,72 @@ def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
     return rows
 
 
+def _hatches_of(artist: Any) -> Optional[Tuple[str, ...]]:
+    """Return the hatch pattern of each band a filled contour set draws, or ``None`` when it hatches none.
+
+    Args:
+        artist: The layer's drawn artist.
+
+    Returns:
+        One pattern per band between the set's levels, cycled from its own list the way matplotlib cycles
+        it — ``""`` for a band drawn plain. ``None`` for anything but a filled ``ContourSet`` carrying at least
+        one pattern, which is every layer the swatch key already describes by colour.
+    """
+    if not isinstance(artist, ContourSet) or not artist.filled:
+        return None
+    patterns = list(artist.hatches or ())
+    if not any(patterns):
+        return None
+    bands = len(tuple(artist.levels)) - 1
+    return tuple(patterns[index % len(patterns)] or "" for index in range(bands))
+
+
+def _hatch_rows(
+    layer: LayerSpec, artist: Any, hatches: Sequence[str], title: Optional[str]
+) -> Tuple[LegendSpec, List[int], List[str]]:
+    """Derive the rows of a hatched layer's key: one per band the map actually marks.
+
+    The layer's published scale cannot answer this. A filled contour set publishes the continuous range its
+    norm spans, so the colour key reads five evenly spaced stops — and an overlay drawn with ``fill=False``
+    has no colour for a stop to show at all. The bands are the set's own ``levels``, read off the artist as
+    a graduated scale so the row labels are written exactly as a classified layer's are.
+
+    Args:
+        layer: The layer's description, which records the caller's labels if they gave any.
+        artist: The filled ``ContourSet``.
+        hatches: Its pattern per band, from :func:`_hatches_of`.
+        title: The key's heading, or ``None``.
+
+    Returns:
+        ``(spec, kept, rows)``: the legend over every band, the indices of the bands keyed, and one label per
+        kept band. A band that is neither coloured nor hatched draws nothing on the map, so it is not kept.
+
+    Raises:
+        ValueError: when the recorded labels do not number the kept rows.
+    """
+    levels = tuple(float(level) for level in artist.levels)
+    faces = [tuple(face) for face in artist.get_facecolor()]
+    faces = [faces[index % len(faces)] for index in range(len(hatches))]
+    colors = [to_hex(face, keep_alpha=True) for face in faces]
+    scale = Scale(levels[0], levels[-1], scheme=levels, breaks=levels)
+    spec = LegendSpec.from_scale(scale, colors=colors, title=title)
+    kept = [
+        index
+        for index, (face, pattern) in enumerate(zip(faces, hatches))
+        if pattern or face[3] > 0.0
+    ]
+    labels = layer.symbology.props.get(GUIDE_LABELS_KEY)
+    if labels is None:
+        return spec, kept, [spec.entries[index].label for index in kept]
+    rows = [str(label) for label in labels]
+    if len(rows) != len(kept):
+        raise ValueError(
+            f"the key of layer {layer.id!r} has {len(kept)} rows, so labels= needs {len(kept)} labels; "
+            f"got {len(rows)}"
+        )
+    return spec, kept, rows
+
+
 @dataclass(frozen=True)
 class GuidePlan:
     """One layer's colour key, derived and checked but not yet on the figure.
@@ -439,6 +506,10 @@ class GuidePlan:
         colors: One colour per swatch, in row order — `None` for a row the scale gave none, which is
             what `LegendEntry.color` allows and what the engine is handed either way. Empty for a bar.
         rows: One label per swatch, the same length as `colors`. Empty for a bar.
+        hatches: One hatch pattern per swatch, for a layer whose bands are told apart by pattern — a filled
+            contour drawn with ``hatches=``. Empty for every other key.
+        hatch_color: The colour of the layer's hatch strokes, so a swatch's pattern is drawn as the map's
+            is. ``None`` when there are no hatches.
     """
 
     kind: str
@@ -447,6 +518,8 @@ class GuidePlan:
     mappable: Any = None
     colors: Tuple[Optional[str], ...] = ()
     rows: Tuple[str, ...] = ()
+    hatches: Tuple[str, ...] = ()
+    hatch_color: Optional[str] = None
 
 
 def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
@@ -478,6 +551,20 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
         return None
     scale = encoding.scale
     if guide_kind(layer) == "legend":
+        hatches = _hatches_of(drawn.artist)
+        if hatches is not None:
+            spec, kept, rows = _hatch_rows(layer, drawn.artist, hatches, guide.title)
+            if not guide.show:
+                return None
+            return GuidePlan(
+                "legend",
+                title=spec.title,
+                anchor=guide.anchor,
+                colors=tuple(spec.entries[index].color for index in kept),
+                rows=tuple(rows),
+                hatches=tuple(hatches[index] for index in kept),
+                hatch_color=to_hex(drawn.artist.get_hatchcolor()[0], keep_alpha=True),
+            )
         if scale is None:
             raise ValueError(
                 f"layer {layer.id!r} publishes no colour scale, so there are no rows to key it with; "
@@ -535,6 +622,8 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
         kwargs.setdefault("title", plan.title)
         if plan.anchor is not None:
             kwargs.setdefault("loc", _LEGEND_LOCATIONS[plan.anchor])
+        if plan.hatches:
+            return _paint_hatch_legend(scene, plan, **kwargs)
         return disjoint_legend(scene.ax, list(plan.colors), list(plan.rows), **kwargs)
     if plan.anchor is not None:
         kwargs.setdefault("location", _COLORBAR_SIDES[plan.anchor])
@@ -542,6 +631,38 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
     if plan.title is not None:
         bar.set_label(plan.title)
     return bar
+
+
+def _paint_hatch_legend(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
+    """Draw a hatched layer's key: each swatch the band's colour, if it has one, under the band's pattern.
+
+    An uncoloured overlay — every band drawn with ``fill=False`` — is cleopatra's ``hatch_legend``: unfilled
+    swatches stroked in the hatch colour. A coloured one is the ordinary swatch list with each band's pattern
+    laid over its colour, since ``hatch_legend`` gives every swatch one face.
+
+    Args:
+        scene: The scene the layer is drawn on.
+        plan: The derived key, carrying :attr:`GuidePlan.hatches`.
+        **kwargs: Forwarded to ``Axes.legend`` through cleopatra.
+
+    Returns:
+        The ``Legend``.
+    """
+    faces = [str(color) for color in plan.colors]
+    if all(face.endswith("00") for face in faces):
+        return hatch_legend(
+            scene.ax,
+            list(plan.hatches),
+            list(plan.rows),
+            edgecolor=plan.hatch_color or "black",
+            **kwargs,
+        )
+    legend = disjoint_legend(scene.ax, faces, list(plan.rows), **kwargs)
+    for handle, pattern in zip(legend.legend_handles, plan.hatches):
+        handle.set_hatch(pattern or None)
+        if plan.hatch_color is not None:
+            handle.set_hatchcolor(plan.hatch_color)
+    return legend
 
 
 def draw_guide(

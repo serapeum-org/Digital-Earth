@@ -1054,6 +1054,8 @@ class RasterMixin(_MixinBase):
         levels: Any = None,
         interval: Optional[float] = None,
         filled: bool = False,
+        hatches: Optional[Sequence[Optional[str]]] = None,
+        hatch_color: Optional[str] = None,
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
@@ -1076,6 +1078,12 @@ class RasterMixin(_MixinBase):
                 traced. Give at most one of this or ``levels``.
             filled: ``False`` (default) draws the levels as lines; ``True`` fills the bands between them.
                 The two are different matplotlib renders, so this is the argument that picks one.
+            hatches: A hatch pattern per band between ``levels`` — ``["///", ""]`` marks the first band and
+                leaves the second plain; matplotlib cycles a short list. Bands only exist on a filled
+                render, so this needs ``filled=True``. Pass ``fill=False`` as well to leave the bands
+                uncoloured and draw only the hatching: the overlay form for a significance or uncertainty
+                mask over another field. :meth:`legend` on a hatched layer keys its bands by pattern.
+            hatch_color: The colour of the hatch strokes. ``None`` (default) leaves matplotlib's.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -1091,17 +1099,53 @@ class RasterMixin(_MixinBase):
             an off-limb draw renders an empty frame rather than raising.
 
         Raises:
-            ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one
+            ValueError: when ``hatches`` or ``hatch_color`` is given without ``filled=True`` — line
+                contours have no bands to hatch, and cleopatra would only warn and draw them plain; when
+                both ``levels`` and ``interval`` are given — two ways of asking for one
                 thing, so neither can be silently preferred; when ``interval`` is not a positive finite
                 spacing or crosses no level inside the band; for ``scheme="categorical"``, because a contour
                 interpolates between class codes (draw categories with :meth:`field`, :meth:`pcolormesh` or
                 :meth:`block`); or from ``ArrayGlyph`` for a styling keyword it does not accept.
+
+        Examples:
+            - A significance overlay: hatch where p < 0.05, leave the rest of the map as it is, and key it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> p = Dataset.from_array(
+                ...     arr=np.array([[0.01, 0.3], [0.02, 0.6]]),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> m = Map(crs=4326)
+                >>> sig = m.contours(
+                ...     p, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig"
+                ... )
+                >>> list(sig.hatches)
+                ['///', '']
+                >>> legend = m.legend("sig", labels=["p < 0.05"]).ax.get_legend()
+                >>> [t.get_text() for t in legend.get_texts()], legend.legend_handles[0].get_hatch()
+                (['p < 0.05'], '///')
+
+                ```
         """
         if levels is not None and interval is not None:
             raise ValueError(
                 "contours() takes at most one of interval= or levels=; "
                 f"got interval={interval!r} and levels={levels!r}"
             )
+        if not filled and (hatches is not None or hatch_color is not None):
+            raise ValueError(
+                "contours() hatches the bands between levels, which only a filled render has; "
+                "pass filled=True (and fill=False to draw the hatching alone)"
+            )
+        if hatches is not None:
+            kwargs["hatches"] = list(hatches)
+        if hatch_color is not None:
+            kwargs["hatch_color"] = hatch_color
         return self._field(
             dataset,
             kind="contourf" if filled else "contour",
