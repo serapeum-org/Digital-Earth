@@ -547,6 +547,89 @@ class TestWhatTheArgumentsTake:
         with pytest.raises(ValueError, match=r"facet\(k=4\)"):
             facet(stack, crs=4326, k=4)
 
+    def test_k_as_none_is_the_default_class_count_not_a_crash(self, stack):
+        """``k=None`` is the default spelt out, as ``vmin=None``/``vmax=None`` already are.
+
+        Args:
+            stack: The frames.
+
+        Test scenario:
+            - The round-1 guard tested ``k is not None``, so ``k=None`` — what a caller forwarding its own
+              optional arguments passes for "use the default" — was the one spelling that slipped past it
+              and reached ``int(None)``: ``TypeError: int() argument must be a string, a bytes-like object
+              or a real number, not 'NoneType'``, the raw engine-shaped error the guard existed to remove.
+            - ``None`` now means unset everywhere in the call, so an explicit ``k=None`` cuts the
+              documented five classes: six equal-interval edges over the pooled stack, computed here from
+              the frames rather than read back through ``facet``.
+        """
+        _, maps = facet(stack, crs=4326, scheme="equal_interval", k=None)
+        lo, hi = min(a.min() for a in FRAMES), max(a.max() for a in FRAMES)
+        expected = np.linspace(lo, hi, 6)
+        for m in maps:
+            norm = m.layers[-1][1].norm
+            assert isinstance(norm, BoundaryNorm), type(norm)
+            assert np.allclose(norm.boundaries, expected), norm.boundaries
+
+    def test_k_with_an_explicit_edge_list_is_refused(self, stack):
+        """Edges given outright are the classes, so a count of them classifies nothing.
+
+        Args:
+            stack: The frames.
+
+        Test scenario:
+            - ``scheme=[0.0, 10.0, 20.0, 50.0], k=4`` was accepted and ``k`` travelled to every panel's
+              render, which ignores it — the silent no-op the ``**style`` docstring promises is refused.
+            - It is now refused by name, like ``k`` without any scheme at all.
+        """
+        with pytest.raises(ValueError, match=r"facet\(k=4\)"):
+            facet(stack, crs=4326, scheme=[0.0, 10.0, 20.0, 50.0], k=4)
+
+    def test_an_edge_list_without_k_still_classifies(self, stack):
+        """The edge list itself is untouched by the refusal above — it is still the classification.
+
+        Args:
+            stack: The frames.
+        """
+        edges = [0.0, 10.0, 20.0, 50.0]
+        _, maps = facet(stack, crs=4326, scheme=edges)
+        for m in maps:
+            assert list(m.layers[-1][1].norm.boundaries) == edges, m.layers[-1][
+                1
+            ].norm.boundaries
+
+    def test_k_under_a_categorical_scheme_is_refused(self, code_stack):
+        """A class code is its own class, so there is no count of classes to ask for.
+
+        Args:
+            code_stack: Two frames of class codes.
+
+        Test scenario:
+            - ``scheme="categorical", k=4`` was accepted and ``k`` popped silently inside
+              ``_shared_style``, so a caller asking for four classes got one class per code and no word
+              about it.
+            - It is now refused by name.
+        """
+        with pytest.raises(ValueError, match=r"facet\(k=4\)"):
+            facet(code_stack, crs=4326, scheme="categorical", k=4)
+
+    @pytest.mark.parametrize(
+        "k", [2.7, "4", True, 0, -1], ids=["float", "str", "bool", "zero", "negative"]
+    )
+    def test_a_k_that_is_not_a_whole_number_of_classes_is_refused(self, stack, k):
+        """``k`` counts classes, and a count is a whole number of at least one.
+
+        Args:
+            stack: The frames.
+            k: A value that is not a number of classes.
+
+        Test scenario:
+            - ``k=2.7`` was truncated to two classes and ``k="4"`` coerced to four, both silently, against
+              the ``**style`` docstring's promise that ``k`` counts the classes a scheme cuts.
+            - Each is now refused by name, in the words ``hexbin``'s lattice counts are refused in.
+        """
+        with pytest.raises(ValueError, match=r"facet\(\) needs k="):
+            facet(stack, crs=4326, scheme="equal_interval", k=k)
+
     def test_labels_as_a_generator_are_counted_not_crashed_on(self, stack):
         """A generator of the wrong length gets the named refusal, not ``len()``'s TypeError.
 

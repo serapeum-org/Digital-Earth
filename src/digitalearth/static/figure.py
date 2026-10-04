@@ -11,6 +11,7 @@ import logging
 import math
 import os
 from collections.abc import Mapping
+from numbers import Integral
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
@@ -322,6 +323,58 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> Dict[str, Any]:
     return {"scheme": code_edges(codes), "cmap": colors}
 
 
+#: The classes a named ``facet(scheme=)`` cuts when the caller names no count — the classifier's own default.
+_DEFAULT_CLASSES = 5
+
+
+def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the caller's styling with ``k`` given one meaning: the classes a named scheme cuts.
+
+    ``k`` is forwarded to a render that ignores it, so every spelling it cannot apply to has to be refused
+    here or it is a silent no-op — the defect this package has now fixed several times. There are four:
+    no ``scheme`` at all, an explicit list of edges (which *is* the classification), ``"categorical"``
+    (where a code is its own class), and a value that is not a count. An unset ``k`` is dropped rather than
+    refused, so a caller forwarding its own optional arguments can pass ``k=None`` for "the default" — the
+    reading ``vmin=None``/``vmax=None`` already get a few lines below, and the one spelling the first
+    version of this guard let through to ``int(None)``.
+
+    Args:
+        style: The caller's styling keywords. Not mutated.
+
+    Returns:
+        A copy with ``k`` absent when it was unset, and a plain ``int`` otherwise.
+
+    Raises:
+        ValueError: naming ``facet(k=)`` and why the value cannot count classes here.
+    """
+    checked = dict(style)
+    k = checked.pop("k", None)
+    if k is None:
+        return checked
+    scheme = checked.get("scheme")
+    counts = f"facet(k={k!r}) counts the classes a scheme cuts, so it"
+    if scheme is None:
+        raise ValueError(
+            f"{counts} classifies nothing without scheme=; pass scheme= ('quantiles', "
+            "'equal_interval', 'categorical', ...) or drop k="
+        )
+    if not isinstance(scheme, str):
+        raise ValueError(
+            f"{counts} classifies nothing beside scheme={scheme!r}, which gives the class edges outright; "
+            "drop k=, or name a scheme ('quantiles', 'equal_interval', ...) for k= to cut"
+        )
+    if asks_categorical(scheme):
+        raise ValueError(
+            f"{counts} classifies nothing under scheme={scheme!r}, where a class code is its own class; "
+            "drop k=, or name a scheme that cuts classes ('quantiles', 'equal_interval', ...)"
+        )
+    if not isinstance(k, Integral) or isinstance(k, bool) or int(k) < 1:
+        # `bool` is an `Integral`, but `k=True` is a mistake rather than a request for one class.
+        raise ValueError(f"facet() needs k= as a whole number >= 1; got {k!r}")
+    checked["k"] = int(k)
+    return checked
+
+
 def _shared_style(
     values: Sequence[np.ndarray], style: Dict[str, Any], kind: str
 ) -> Dict[str, Any]:
@@ -356,12 +409,12 @@ def _shared_style(
     if isinstance(scheme, str):
         pooled = _pooled_values(values)
         if asks_categorical(scheme):
-            # A code is its own class, so there is no class count to cut and `k` says nothing.
-            shared.pop("k", None)
+            # A code is its own class, so there is no class count to cut — and `k` beside a categorical
+            # scheme never reaches here, `_checked_classes` having refused it by name.
             shared.update(_pooled_codes(pooled, shared.get("cmap")))
         else:
             classes = Scale.from_values(
-                pooled, scheme=scheme, k=int(shared.pop("k", 5))
+                pooled, scheme=scheme, k=shared.pop("k", _DEFAULT_CLASSES)
             )
             shared["scheme"] = [float(edge) for edge in classes.breaks]
     low, high = frozen_scale(measure_clim(values)).as_limits()
@@ -425,8 +478,11 @@ def facet(
         cbar_label: The colorbar's label.
         **style: Styling for every panel, forwarded to the render (``cmap``, ``vmin``, ``vmax``, ``scheme``,
             ``k``, ``levels``, …). A ``vmin``/``vmax`` given here is the shared scale instead of the stack's
-            range, and ``k`` counts the classes ``scheme`` cuts, so it is refused without one rather than
-            forwarded as a no-op.
+            range. ``k`` counts the classes a **named** ``scheme`` cuts — five when it is left unset or
+            passed as ``None`` — and is refused wherever it cannot do that rather than forwarded as a
+            no-op: with no ``scheme``, beside an explicit list of class edges, under
+            ``scheme="categorical"`` (a code is its own class), and when it is not a whole number of at
+            least one (``k=2.7`` and ``k="4"`` were silently truncated and coerced).
 
     Returns:
         ``(fig, maps)`` — the figure and one ``Map`` per panel, in panel order.
@@ -434,11 +490,11 @@ def facet(
     Raises:
         ValueError: when ``stack`` is none of the three shapes it takes (a path, a mapping, a frame that is
             not a ``Dataset``) or has no frames, ``col_wrap`` is below 1, ``labels`` does not number the
-            panels, ``kind`` is not one of the four, a contour ``kind`` has no ``levels``, or ``k`` is given
-            without ``scheme``. Also from the classifier, when a named ``scheme`` cannot cut the pooled
-            values: a stack with no spread (every cell the same), one with no finite cell at all, or —
-            under ``scheme="categorical"`` — pooled values that are not class codes (a non-integer value,
-            or more distinct codes than a key can show).
+            panels, ``kind`` is not one of the four, a contour ``kind`` has no ``levels``, or ``k`` cannot
+            count classes as given (see ``**style``). Also from the classifier, when a named ``scheme``
+            cannot cut the pooled values: a stack with no spread (every cell the same), one with no finite
+            cell at all, or — under ``scheme="categorical"`` — pooled values that are not class codes (a
+            non-integer value, or more distinct codes than a key can show).
 
     Examples:
         - Four frames on one row, one scale, titled by month:
@@ -540,11 +596,7 @@ def facet(
         raise ValueError(
             f"facet(kind={kind!r}) is not a render; use one of {sorted(_FACET_KINDS)}"
         )
-    if style.get("k") is not None and style.get("scheme") is None:
-        raise ValueError(
-            f"facet(k={style['k']!r}) counts the classes a scheme cuts, so it classifies nothing without "
-            "scheme=; pass scheme= ('quantiles', 'equal_interval', 'categorical', ...) or drop k="
-        )
+    style = _checked_classes(style)
     frames, bands, default_col = _panels_of(stack, band)
     count = len(frames)
     if count == 0:
