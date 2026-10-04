@@ -254,17 +254,35 @@ class Pick:
         y: The click's y, in the same coordinates.
         hits: Every layer under the pointer, topmost first — so a caller who wants what lies *under* the
             top layer has it without hit-testing the figure again. One entry for the ordinary case.
-        event: The matplotlib ``MouseEvent`` itself, as the escape hatch for what this value does not
+        event: The matplotlib `MouseEvent` itself, as the escape hatch for what this value does not
             carry: which button, a double click, the pixel coordinates. Reading it ties the callback to
             matplotlib, which a callback on this tier already is.
 
     Examples:
-        - The value a callback is handed, built directly:
+        - The value a callback is handed, built directly: the reported layer is the top of the stack and
+          `hits` says what lies under it, so a callback can look past the layer it was given:
             ```python
             >>> from digitalearth.static.scene import Pick
             >>> pick = Pick("depth", 4.9, 52.4, ("depth", "basemap-1"))
-            >>> pick.layer_id, pick.hits[1]
-            ('depth', 'basemap-1')
+            >>> pick.layer_id, pick.hits[1:]
+            ('depth', ('basemap-1',))
+            >>> f"{pick.layer_id} at {pick.x:.1f}, {pick.y:.1f}"
+            'depth at 4.9, 52.4'
+
+            ```
+        - It is frozen, so a callback cannot rewrite the pick it was handed; the two trailing fields
+          default, which is what makes one cheap to build in a test:
+            ```python
+            >>> from dataclasses import FrozenInstanceError
+            >>> from digitalearth.static.scene import Pick
+            >>> plain = Pick("depth", 0.0, 0.0)
+            >>> plain.hits, plain.event
+            ((), None)
+            >>> try:
+            ...     plain.layer_id = "other"
+            ... except FrozenInstanceError as error:
+            ...     print(error)
+            cannot assign to field 'layer_id'
 
             ```
     """
@@ -990,35 +1008,40 @@ class Scene(WatermarkMixin):
         return self._layer_tree.get(layer_id)
 
     def artist(self, layer_id: Optional[str] = None) -> Any:
-        """Return the matplotlib artist one layer drew.
+        """Return what one layer's drawer handed back — for most kinds, the matplotlib artist it drew.
 
-        The companion to the builders returning ``Self`` (ST-20): they hand back the map so a figure reads
+        The companion to the builders returning `Self` (ST-20): they hand back the map so a figure reads
         as one expression, and this is how the engine's object is reached when a caller genuinely wants it
         — to read a drawn colormap, a norm, the cells' paths, the limits a render settled on. It was the
         builders' return value until then, which made every chained call impossible; the artist was
-        reachable only as ``scene._renderer.drawn[layer_id].artist``, a private attribute this tier's own
+        reachable only as `scene._renderer.drawn[layer_id].artist`, a private attribute this tier's own
         docstrings had taken to pointing callers at.
 
         Args:
-            layer_id: Which layer's artist. ``None`` (the default) takes the layer **drawn last**, which is
-                the one the call before this drew — so ``m.field(ds); m.artist()`` is the old return value,
+            layer_id: Which layer's artist. `None` (the default) takes the layer **drawn last**, which is
+                the one the call before this drew — so `m.field(ds); m.artist()` is the old return value,
                 with no name needed.
 
         Returns:
             Whatever that layer's drawer produced, which is exactly what its builder used to return: the
-            mappable of a field render, the ``PolyCollection`` of a fill, the ``LineCollection`` of a line
-            layer, the **list** of ``Annotation`` of a :meth:`~digitalearth.static.maps.vector.VectorMixin.labels`
-            layer. A layer that owns several artists — a limb-split coastline, a graticule's lines — is
-            better asked through :attr:`~digitalearth.static.renderer.DrawnLayer.artists`, which this one
-            does not flatten.
+            mappable of a field render, the `PolyCollection` of a fill, the `LineCollection` of a line
+            layer, the **list** of `Annotation` of a
+            :meth:`~digitalearth.static.maps.vector.VectorMixin.labels` layer.
+
+            So it is not always a matplotlib artist, because not every drawer produces one object on the
+            axes. A **graticule** is the case to know: its drawer's value is the list of projected
+            polylines (18 of them at the default spacing), while what it put on the axes is a
+            `LineCollection` plus one `Text` per degree. A layer like that — a graticule, a limb-split
+            coastline — is asked through :attr:`~digitalearth.static.renderer.DrawnLayer.artists`, which
+            holds what is on the axes and is what :meth:`set_visible` and :meth:`remove_layer` act on.
 
         Raises:
             KeyError: when `layer_id` names no layer on this figure, naming the ids that do. A layer whose
                 data the display CRS could not place drew nothing and was dropped from the description, so
-                it is refused here too — which is the same answer its builder's ``None`` used to give, in
+                it is refused here too — which is the same answer its builder's `None` used to give, in
                 the tier's own words.
-            ValueError: when `layer_id` is ``None`` and nothing has been drawn yet: there is no "last" for
-                an empty figure, and ``None`` would read as "that layer drew nothing".
+            ValueError: when `layer_id` is `None` and nothing has been drawn yet: there is no "last" for
+                an empty figure, and `None` would read as "that layer drew nothing".
 
         Examples:
             - The old return value, by one more call:
@@ -1033,21 +1056,41 @@ class Scene(WatermarkMixin):
                 >>> m.close()
 
                 ```
-            - By id, which is what a figure of several layers wants:
+            - By id, which is what a figure of several layers wants, and an unknown id is refused by name:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
                 >>> from digitalearth.static import Map
                 >>> m = Map(globe=False)
-                >>> _ = m.field(np.arange(12.0).reshape(3, 4), name="grid")
-                >>> type(m.artist("grid")).__name__
-                'AxesImage'
-                >>> m.artist("nope")  # doctest: +ELLIPSIS
+                >>> _ = m.field(np.arange(12.0).reshape(3, 4), name="grid", cmap="magma")
+                >>> m.artist("grid").get_cmap().name, m.artist("grid").get_clim()
+                ('magma', (0.0, 11.0))
+                >>> m.artist("nope")
                 Traceback (most recent call last):
                     ...
                 KeyError: "no layer 'nope' on this figure; its layers are ['grid']"
                 >>> m.close()
+
+                ```
+            - A graticule's drawer hands back its projected lines rather than one artist, so what is on
+              the axes is read from the drawn record instead; and a figure with nothing drawn has no
+              "last" to hand back:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map(crs=4326)
+                >>> m.graticule(spacing=30.0)
+                >>> len(m.artist("graticule-1")), len(m._renderer.drawn["graticule-1"].artists)
+                (18, 19)
+                >>> m.close()
+                >>> bare = Map(globe=False)
+                >>> bare.artist()  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Map.artist() has nothing to hand back: no layer has been drawn...
+                >>> bare.close()
 
                 ```
         """
@@ -2275,6 +2318,30 @@ class Scene(WatermarkMixin):
                 >>> m.close()
 
                 ```
+            - A click on no layer calls nothing, and something that cannot be called is refused at the
+              registration rather than at the first click:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> picked = []
+                >>> _ = m.on_pick(picked.append)
+                >>> m.fig.canvas.draw()
+                >>> away = MouseEvent("button_press_event", m.fig.canvas, -50, -50, button=1)
+                >>> m.fig.canvas.callbacks.process("button_press_event", away)
+                >>> picked
+                []
+                >>> m.on_pick("not callable")
+                Traceback (most recent call last):
+                    ...
+                TypeError: Map.on_pick needs something to call with each pick; got str
+                >>> m.close()
+
+                ```
         """
         if not callable(callback):
             raise TypeError(
@@ -2325,6 +2392,27 @@ class Scene(WatermarkMixin):
                 >>> m.fig.canvas.callbacks.process("button_press_event", click)
                 >>> picked
                 []
+                >>> m.close()
+
+                ```
+            - No argument takes every callback off and drops the canvas connection with the last of them;
+              a callback that was never registered is refused rather than ignored:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> seen = []
+                >>> _ = m.on_pick(seen.append)
+                >>> m._pick_cid is None
+                False
+                >>> _ = m.off_pick()
+                >>> m._pick_cid is None
+                True
+                >>> m.off_pick(print)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: ...is not registered on this figure...0 callback(s) are
                 >>> m.close()
 
                 ```

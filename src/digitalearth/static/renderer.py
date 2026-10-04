@@ -1646,10 +1646,24 @@ class Renderer:
                 >>> from digitalearth.static import Map
                 >>> m = Map()
                 >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
-                >>> m._renderer.layer_of(m._renderer.drawn["ams"].artist)
+                >>> m._renderer.layer_of(m.artist("ams"))
                 'ams'
                 >>> print(m._renderer.layer_of(Text(0.0, 0.0, "mine")))
                 None
+                >>> m.close()
+
+                ```
+            - Every artist of a many-artist layer answers with the one id: a flat map's graticule is a
+              `LineCollection` plus one `Text` per labelled line, and all 19 map back to it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map(crs=4326)
+                >>> m.graticule(spacing=30.0)
+                >>> held = m._renderer.drawn["graticule-1"].artists
+                >>> len(held), sorted({m._renderer.layer_of(a) for a in held})
+                (19, ['graticule-1'])
                 >>> m.close()
 
                 ```
@@ -1678,14 +1692,82 @@ class Renderer:
             rest are what lies under it. Empty for a click on no layer at all.
 
             Two kinds of layer are never in it. A **hidden** layer is excluded, and has to be asked about
-            rather than inferred: ``Artist.contains`` ignores the visibility flag — measured, an
-            ``AxesImage`` hidden with ``set_visible(False)`` still answers ``True`` for a point inside it —
-            so a pick that trusted it would report a layer the reader cannot see. A layer owning **no**
-            artist is excluded too: a graticule on a flat map has nothing on the axes to be under a
-            pointer, and :meth:`is_visible` answers for it from what was last asked instead.
+            rather than inferred: `Artist.contains` ignores the visibility flag — measured, an
+            `AxesImage` hidden with `set_visible(False)` still answers `True` for a point inside it — so a
+            pick that trusted it would report a layer the reader cannot see. A layer owning **no** artist
+            is excluded too: a graticule on a **globe** is computed and handed to the projection frame, so
+            until that frame goes on it has nothing on the axes to be under a pointer, and
+            :meth:`is_visible` answers for it from what was last asked instead. On a *flat* map the same
+            graticule does own artists — one `LineCollection` plus its degree labels — and is picked like
+            any other layer.
 
             A layer that has been **removed** is absent for the plainest reason: the ranking is built from
             :attr:`drawn` at the moment of the click, and :meth:`remove` has already dropped it.
+
+        Examples:
+            - Two fields over one another: the click reports both, the one drawn last first, and hiding
+              that one drops it out of the answer:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="bottom")
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="top")
+                >>> m.fig.canvas.draw()
+                >>> px, py = m.ax.transData.transform((1.5, 2.0))
+                >>> click = MouseEvent("button_press_event", m.fig.canvas, px, py, button=1)
+                >>> m._renderer.hits(click)
+                ('top', 'bottom')
+                >>> _ = m.set_visible("top", False)
+                >>> m._renderer.hits(click)
+                ('bottom',)
+                >>> m.close()
+
+                ```
+            - A click on no layer — here far outside the axes — hits nothing, which is what stops a pick
+              being delivered at all:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> m.fig.canvas.draw()
+                >>> m._renderer.hits(MouseEvent("button_press_event", m.fig.canvas, -50, -50, button=1))
+                ()
+                >>> m.close()
+
+                ```
+            - A graticule is pickable on a flat map and not on a globe, because only the flat frame has
+              put anything on the axes yet:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> def hit_at_origin(scene):
+                ...     scene.fig.canvas.draw()
+                ...     px, py = scene.ax.transData.transform((0.0, 0.0))
+                ...     return scene._renderer.hits(
+                ...         MouseEvent("button_press_event", scene.fig.canvas, px, py, button=1)
+                ...     )
+                >>> flat = Map(crs=4326)
+                >>> flat.graticule(spacing=30.0)
+                >>> hit_at_origin(flat)
+                ('graticule-1',)
+                >>> flat.close()
+                >>> globe = Map(crs=4326, globe=True)
+                >>> globe.graticule(spacing=30.0)
+                >>> hit_at_origin(globe)
+                ()
+                >>> globe.close()
+
+                ```
         """
         ranked: List[Tuple[float, int, str]] = []
         for index, (layer_id, drawn) in enumerate(self._drawn.items()):
