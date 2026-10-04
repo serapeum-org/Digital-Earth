@@ -3169,11 +3169,11 @@ class VectorMixin(_MixinBase):
                 ...               LineString([(2, 1), (3, 2)])],
                 ...     crs="EPSG:4326",
                 ... ))
-                >>> m = Map(crs=4326)
-                >>> lc = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
-                >>> lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})
+                >>> with Map(crs=4326) as m:
+                ...     lc = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
+                ...     lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})
+                ...     m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 ([10.0, 40.0, 25.0], [2.0])
-                >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 'lines'
 
                 ```
@@ -3190,8 +3190,9 @@ class VectorMixin(_MixinBase):
                 ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
                 ...     crs="EPSG:4326",
                 ... ))
-                >>> lc = Map(crs=4326).lines(roads, width="lanes", color="dimgray")
-                >>> widths = lc.get_linewidths()
+                >>> with Map(crs=4326) as m:
+                ...     lc = m.lines(roads, width="lanes", color="dimgray")
+                ...     widths = lc.get_linewidths()
                 >>> bool(widths[1] > widths[0])
                 True
 
