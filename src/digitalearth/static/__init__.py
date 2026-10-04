@@ -11,6 +11,10 @@ adds geospatial behaviour (display CRS, reprojection, basemap/coastlines). ``Tex
 :mod:`digitalearth.static.textured_globe`) is the 3-D outlier: a pyramids raster or tile basemap draped over
 cleopatra's textured sphere on a matplotlib ``Axes3D``.
 
+Several hosts at once are laid out by :mod:`~digitalearth.static.figure`: ``grid`` builds the figure and
+axes grid and binds a ``Map`` to each axes, ``shared_colorbar`` puts one bar across the panels, and ``facet``
+draws a raster stack as small multiples resolving the colour scale once over the whole stack.
+
 Alongside the scene hosts this backend owns its charts (:mod:`~digitalearth.static.charts`), statistical
 series (:mod:`~digitalearth.static.series`), time-series products (:mod:`~digitalearth.static.temporal`) and
 animation (:mod:`~digitalearth.static.animation`) — the matplotlib-rendering counterparts of what the other

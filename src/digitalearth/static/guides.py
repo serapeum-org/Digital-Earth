@@ -525,6 +525,11 @@ class GuidePlan:
 def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
     """Derive the key one layer's recorded guide asks for, refusing one this tier cannot draw.
 
+    A swatch key normally takes its rows from the layer's published scale. The one exception is a filled
+    contour drawn with ``hatches=``: its rows are the bands the map actually marks, read off the artist by
+    :func:`_hatch_rows`, because the published scale is the continuous range the set's norm spans and says
+    nothing about which band carries which pattern.
+
     Args:
         layer: The layer's description, which carries the guide.
         drawn: What its drawer produced, as :class:`~digitalearth.static.renderer.DrawnLayer` describes it.
@@ -606,8 +611,10 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
         plan: What :func:`plan_guide` derived. Nothing here can refuse it — every check the description can
             earn has already been made, which is what lets the caller take the layer's previous key off in
             between.
-        **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` (a bar) or ``disjoint_legend``
-            (swatches). These are the call's own styling and are **not** part of the record, so a key
+        **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` (a bar), ``disjoint_legend``
+            (swatches) or ``hatch_legend`` (the unfilled swatches of a hatch-only overlay — see
+            :func:`_paint_hatch_legend`, which picks between the last two). These are the call's own
+            styling and are **not** part of the record, so a key
             redrawn from the description comes back with matplotlib's defaults in their place — the same
             trade :attr:`~digitalearth.static.scene.LayerRecord.opts` makes for a value no figure can carry.
 

@@ -741,9 +741,13 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 #: The latitude a night-shade vertex is pulled back to before it is projected. A night region that holds a
-#: pole runs along that pole's map edge, and a cylindrical projection such as Web Mercator sends latitude 90 to
-#: infinity — where cleopatra drops the vertex, closing the ring straight along the terminator and leaving the
-#: polar night unshaded. A tenth of a degree short of the pole projects to a finite point far outside any view.
+#: pole runs along that pole's map edge, and a projection with no finite image of the pole throws that run
+#: enormously far out: PROJ clamps rather than returning infinity, so Web Mercator places latitude 90 at
+#: ``y ≈ 2.4e8`` m — twelve times the map's own half-height — and Antarctic Polar Stereographic (EPSG:3031)
+#: places the *opposite* pole at ``y ≈ 4.0e23`` m. The shade still draws, but a bare axes fitted to it comes
+#: out that far out with it. A tenth of a degree short of the pole is a finite point just outside the map
+#: instead: the same Web Mercator vertex lands at ``y ≈ 4.5e7`` m, and the fitted view is four times tighter
+#: (a ``y`` span of ``6.0e7`` m against ``2.8e8`` m for a June-solstice shade).
 _NIGHT_POLE_LATITUDE = 89.9
 
 #: The centres ``tissot()`` draws when it is given none: every 30 degrees of longitude, offset from the
@@ -809,7 +813,7 @@ def _night_ring_projector(scene: Any) -> Any:
 
     Each ring is densified first, so its straight lon/lat edges — the run along a pole's map edge above all —
     bend with the projection, and its pole vertices are pulled back to :data:`_NIGHT_POLE_LATITUDE` so a
-    projection that cannot reach the pole still places them.
+    projection with no finite image of the pole does not throw them orders of magnitude off the map.
 
     Args:
         scene: The map being drawn on.
