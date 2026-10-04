@@ -8,13 +8,19 @@ from the arrays the test builds, never through the code under test.
 
 import numpy as np
 import pytest
-from matplotlib.colors import BoundaryNorm
+from matplotlib.colors import BoundaryNorm, to_hex
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map, facet, projections
 
 #: Four 4 x 4 frames whose values climb frame by frame, so a per-panel scale would differ on every panel.
 FRAMES = [np.arange(16, dtype="float64").reshape(4, 4) + 10.0 * i for i in range(4)]
+
+#: Two frames of class codes that share no code, so a per-panel categorical scale paints them the same way.
+CODE_FRAMES = [
+    np.array([[1, 2], [2, 1]], dtype="float64"),
+    np.array([[3, 4], [4, 3]], dtype="float64"),
+]
 
 #: The lon/lat placement every frame shares.
 GEO = GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
@@ -44,6 +50,29 @@ def stack():
         A list of pyramids `Dataset`.
     """
     return [_dataset(arr) for arr in FRAMES]
+
+
+@pytest.fixture
+def code_stack():
+    """Two single-band frames of class codes that share no code.
+
+    Returns:
+        A list of pyramids `Dataset`.
+    """
+    return [_dataset(arr) for arr in CODE_FRAMES]
+
+
+def _code_colors(artist, codes) -> dict:
+    """Return the colour one drawn panel paints each class code in.
+
+    Args:
+        artist: The panel's mappable.
+        codes: The class codes to look up.
+
+    Returns:
+        A ``{code: "#rrggbb"}`` mapping, read through the artist's own norm and colormap.
+    """
+    return {int(code): to_hex(artist.cmap(artist.norm(float(code)))) for code in codes}
 
 
 def _colorbars(fig) -> list:
@@ -313,3 +342,89 @@ class TestAFrameTheDisplayCrsCannotPlace:
         assert not maps[1].layers, (
             f"the far-side panel draws nothing, got {maps[1].layers}"
         )
+
+
+class TestAPooledCategoricalScale:
+    """``scheme="categorical"`` is pooled over the stack, so one code is one colour on every panel."""
+
+    def test_the_class_codes_are_pooled_over_every_frame(self, code_stack):
+        """Every panel is cut by the union of the stack's codes, not by its own frame's.
+
+        Args:
+            code_stack: Two frames of disjoint class codes.
+
+        Test scenario:
+            A categorical scheme used to be forwarded to each panel untouched, so each panel derived its
+            class codes from its own frame: the frames ``{1, 2}`` and ``{3, 4}`` gave panel 0 the boundaries
+            ``[0.5, 1.5, 2.5]`` and panel 1 ``[2.5, 3.5, 4.5]``. The codes are pooled instead, so both
+            panels carry the one set of edges the whole stack cuts.
+        """
+        codes = np.unique(np.concatenate([arr.ravel() for arr in CODE_FRAMES]))
+        expected = [*(code - 0.5 for code in codes), codes[-1] + 0.5]
+        _, maps = facet(code_stack, crs=4326, scheme="categorical")
+        for panel in maps:
+            norm = panel.layers[-1][1].norm
+            assert isinstance(norm, BoundaryNorm), type(norm)
+            assert np.allclose(norm.boundaries, expected), norm.boundaries
+
+    def test_one_code_is_one_colour_on_every_panel(self, code_stack):
+        """A code painted on two panels is painted the same colour, and two codes are told apart.
+
+        Args:
+            code_stack: Two frames of disjoint class codes.
+
+        Test scenario:
+            This is the failure a facet exists to prevent, and the one the per-panel categorical scale
+            produced: with disjoint codes, class 1 (panel 0's first code) and class 3 (panel 1's first
+            code) both came out as the palette's first colour, so two different classes read as one. The
+            pooled scale has to give the whole stack's codes distinct colours and agree on them panel by
+            panel.
+        """
+        codes = [
+            int(code)
+            for code in np.unique(np.concatenate([a.ravel() for a in CODE_FRAMES]))
+        ]
+        _, maps = facet(code_stack, crs=4326, scheme="categorical")
+        painted = [_code_colors(panel.layers[-1][1], codes) for panel in maps]
+        assert painted[0] == painted[1], painted
+        assert len(set(painted[0].values())) == len(codes), painted[0]
+
+    def test_the_spanning_bar_describes_every_panel(self, code_stack):
+        """The one bar is keyed by the pooled edges, so it labels panel 1 as truly as panel 0.
+
+        Args:
+            code_stack: Two frames of disjoint class codes.
+
+        Test scenario:
+            ``facet`` keys the spanning bar off the *first* panel's artist, which is only a fair
+            representative once every panel shares one norm. With a per-panel categorical scale the bar ran
+            0.5-2.5 — panel 0's range — and mislabelled panel 1 entirely.
+        """
+        codes = np.unique(np.concatenate([arr.ravel() for arr in CODE_FRAMES]))
+        expected = [*(code - 0.5 for code in codes), codes[-1] + 0.5]
+        fig, _ = facet(code_stack, crs=4326, scheme="categorical")
+        bars = _colorbars(fig)
+        assert len(bars) == 1, len(bars)
+        assert np.allclose(bars[0].get_ylim(), (expected[0], expected[-1])), bars[
+            0
+        ].get_ylim()
+
+    def test_a_palette_given_outright_colours_the_pooled_codes(self, code_stack):
+        """``cmap=`` as a list of colours is spread over the pooled codes, one colour per code.
+
+        Args:
+            code_stack: Two frames of disjoint class codes.
+
+        Test scenario:
+            The pooled palette has to be built from the caller's ``cmap`` rather than the categorical
+            default, and it has to be as long as the *pooled* code list — a palette sized to one frame's
+            codes would recycle colours across the stack.
+        """
+        palette = ["#111111", "#222222", "#333333", "#444444"]
+        codes = [
+            int(code)
+            for code in np.unique(np.concatenate([a.ravel() for a in CODE_FRAMES]))
+        ]
+        _, maps = facet(code_stack, crs=4326, scheme="categorical", cmap=palette)
+        painted = _code_colors(maps[1].layers[-1][1], codes)
+        assert painted == dict(zip(codes, palette)), painted

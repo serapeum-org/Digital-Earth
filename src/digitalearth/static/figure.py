@@ -18,7 +18,13 @@ from pyramids.dataset import Dataset
 from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.clim import frozen_scale, measure_clim
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.raster_classes import (
+    asks_categorical,
+    code_edges,
+    raster_categories,
+)
 from digitalearth.base.spec import DEFAULT_BAND, Scale
+from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
 
 __all__ = ["facet", "grid", "shared_colorbar"]
@@ -164,6 +170,36 @@ def _stack_values(
     return values
 
 
+def _pooled_codes(pooled: np.ndarray, cmap: Any) -> Dict[str, Any]:
+    """Cut one categorical scale over the whole stack: every code the frames hold, each with its own colour.
+
+    ``scheme="categorical"`` classifies a band by the codes *that band* holds, so forwarding the word to each
+    panel gives each one a different class list — two frames holding ``{1, 2}`` and ``{3, 4}`` both paint
+    their lowest code in the palette's first colour, and the two classes read as one. The codes are therefore
+    pooled here, the way a graduated scheme's edges are, and handed to every panel as explicit class edges
+    plus the matching palette — the spelling a shared scale has to travel in, since the word ``"categorical"``
+    carries no class list with it.
+
+    Args:
+        pooled: Every finite value of every frame that lands on the view, concatenated.
+        cmap: The caller's ``cmap``, or ``None`` — resolved through
+            :func:`~digitalearth.base.symbology.resolve_categorical_cmap`, so a facet takes the same
+            qualitative default a single categorical ``Map`` takes.
+
+    Returns:
+        The ``scheme``/``cmap`` keywords every panel is drawn with: one class per pooled code, bounded half a
+        step either side of it, and one colour per class in code order.
+
+    Raises:
+        ValueError: from :func:`~digitalearth.base.raster_classes.raster_categories` when the pooled values
+            are not class codes — no finite cell at all, a non-integer value, or more distinct codes than a
+            key can show.
+    """
+    codes = raster_categories(pooled)
+    _, colors = categorical_colors(codes, resolve_categorical_cmap(cmap))
+    return {"scheme": code_edges(codes), "cmap": colors}
+
+
 def _shared_style(
     values: Sequence[np.ndarray], style: Dict[str, Any], kind: str
 ) -> Dict[str, Any]:
@@ -176,12 +212,13 @@ def _shared_style(
 
     Returns:
         The keywords each panel is drawn with: a named ``scheme`` replaced by the class edges it cuts over
-        the whole stack, and ``vmin``/``vmax`` filled from the stack's range wherever the caller left them
-        unset — so no panel picks a scale from its own frame.
+        the whole stack (``"categorical"`` by the pooled codes, see :func:`_pooled_codes`), and
+        ``vmin``/``vmax`` filled from the stack's range wherever the caller left them unset — so no panel
+        picks a scale from its own frame.
 
     Raises:
         ValueError: for a contour render without explicit ``levels``, which each panel would otherwise pick
-            from its own frame.
+            from its own frame; or from the classifier, when a named ``scheme`` cannot cut the pooled values.
     """
     shared = dict(style)
     if kind in ("contourf", "contour") and shared.get("levels") is None:
@@ -192,7 +229,11 @@ def _shared_style(
     finite = [np.asarray(a, dtype=float)[np.isfinite(a)] for a in values]
     pooled = np.concatenate(finite) if finite else np.array([], dtype=float)
     scheme = shared.get("scheme")
-    if isinstance(scheme, str) and scheme != "categorical":
+    if asks_categorical(scheme):
+        # A code is its own class, so there is no class count to cut and `k` says nothing.
+        shared.pop("k", None)
+        shared.update(_pooled_codes(pooled, shared.get("cmap")))
+    elif isinstance(scheme, str):
         classes = Scale.from_values(pooled, scheme=scheme, k=int(shared.pop("k", 5)))
         shared["scheme"] = [float(edge) for edge in classes.breaks]
     low, high = frozen_scale(measure_clim(values)).as_limits()
@@ -224,9 +265,11 @@ def facet(
 
     Small multiples are read against each other, so the scale is resolved **once over the whole stack**
     rather than per panel: the frames are warped into the display CRS and measured together, ``vmin``/``vmax``
-    become the stack's range, and a named ``scheme`` is cut into one set of class edges over every frame.
-    Each panel is an ordinary :class:`Map` from :func:`grid`, so its frame is a described layer and the
-    panel takes a basemap, coastlines or a graticule like any other map. One colorbar spans the panels.
+    become the stack's range, and a named ``scheme`` is cut into one set of class edges over every frame —
+    ``scheme="categorical"`` included, whose class codes are pooled over the stack so one code is one colour
+    on every panel. Each panel is an ordinary :class:`Map` from :func:`grid`, so its frame is a described
+    layer and the panel takes a basemap, coastlines or a graticule like any other map. One colorbar spans the
+    panels.
 
     Args:
         stack: A multi-band ``Dataset`` (one panel per band), a ``DatasetCollection`` (one per member), or
