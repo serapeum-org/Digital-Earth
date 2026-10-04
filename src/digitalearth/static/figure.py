@@ -152,6 +152,13 @@ def _stack_values(
 ) -> List[np.ndarray]:
     """Read every panel's values as they will be drawn: warped into the display CRS, nodata as ``NaN``.
 
+    **Each frame is warped once, not once per panel.** A multi-band dataset is one panel per band, and
+    :func:`_panels_of` hands the *same* dataset over once per band, so warping per panel warped the whole
+    cube ``n`` times to read one band out of each — quadratic in the band count, and the cost of a warp is
+    the whole cube, not the band. The warps are therefore kept by frame identity, which is what tells the
+    repeated cube apart from a sequence of separate frames (each of those is still read once, as it was).
+    A frame the display CRS cannot place is remembered as ``None`` so the refusal is not re-run either.
+
     Args:
         panel: A map in the display CRS the panels share, used for its warp.
         frames: One frame per panel.
@@ -161,12 +168,17 @@ def _stack_values(
         One array per frame that lands on the view; a frame the display CRS cannot place contributes none.
     """
     values = []
+    # frame identity -> its warp, or None when the display CRS places none of it
+    warps: Dict[int, Any] = {}
     for frame, frame_band in zip(frames, bands):
-        try:
-            warped = panel._reproject(frame)
-        except OffLimbError:
-            continue  # it draws nothing, so it bounds nothing
-        values.append(read_masked_band(warped, band=frame_band))
+        key = id(frame)
+        if key not in warps:
+            try:
+                warps[key] = panel._reproject(frame)
+            except OffLimbError:
+                warps[key] = None  # it draws nothing, so it bounds nothing
+        if warps[key] is not None:
+            values.append(read_masked_band(warps[key], band=frame_band))
     return values
 
 

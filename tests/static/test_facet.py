@@ -428,3 +428,65 @@ class TestAPooledCategoricalScale:
         _, maps = facet(code_stack, crs=4326, scheme="categorical", cmap=palette)
         painted = _code_colors(maps[1].layers[-1][1], codes)
         assert painted == dict(zip(codes, palette)), painted
+
+
+class TestTheMeasurePass:
+    """The scale is measured by reading each frame once, not once per panel."""
+
+    @staticmethod
+    def _count_warps(monkeypatch) -> list:
+        """Record every dataset handed to a panel's warp.
+
+        Args:
+            monkeypatch: pytest's monkeypatch fixture.
+
+        Returns:
+            The list the recorder appends to, one entry per ``_reproject`` call.
+        """
+        warped: list = []
+        original = Map._reproject
+
+        def counting(self, dataset):
+            warped.append(dataset)
+            return original(self, dataset)
+
+        monkeypatch.setattr(Map, "_reproject", counting)
+        return warped
+
+    def test_a_multi_band_cube_is_warped_once_to_measure_it(self, monkeypatch):
+        """One warp measures the whole cube, however many bands it has.
+
+        Args:
+            monkeypatch: pytest's monkeypatch fixture.
+
+        Test scenario:
+            A multi-band dataset is one panel per band, and the stack is the *same* dataset handed over
+            once per band. Warping it per band made the measure pass ``n`` warps of ``n`` bands — quadratic
+            — so a 32-band cube took 1.3 s to measure what one warp answers. The cube is read once here, so
+            the only warps left are the one measurement plus the one each panel makes to draw.
+        """
+        cube = np.stack(FRAMES)
+        warped = self._count_warps(monkeypatch)
+        facet(_dataset(cube), crs=4326)
+        expected = 1 + len(
+            FRAMES
+        )  # one warp to measure the cube, then one per panel to draw it
+        assert len(warped) == expected, len(warped)
+
+    def test_separate_frames_are_each_measured(self, monkeypatch):
+        """Distinct frames are not collapsed: each is still read for the shared scale.
+
+        Args:
+            monkeypatch: pytest's monkeypatch fixture.
+
+        Test scenario:
+            The measure pass reads one warp per *frame*, which for a sequence of separate datasets is one
+            each — the saving is only in not re-reading a frame already read. Were the frames deduplicated
+            by anything coarser than identity, a stack of equal-valued frames would be measured off one of
+            them and the shared scale would stop covering the others.
+        """
+        frames = [_dataset(arr) for arr in FRAMES]
+        warped = self._count_warps(monkeypatch)
+        facet(frames, crs=4326)
+        expected = 2 * len(frames)  # one warp each to measure, then one each to draw
+        assert len(warped) == expected, len(warped)
