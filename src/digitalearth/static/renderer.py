@@ -293,6 +293,7 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "voronoi": vector.draw_voronoi,
             "cartogram": vector.draw_cartogram,
             "quadtree": vector.draw_quadtree,
+            "hexbin": vector.draw_hexbin,
         },
         # The same three builders again, drawn without values: an outline-only layer is `polygons`.
         "polygons": {

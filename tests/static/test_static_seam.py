@@ -170,6 +170,10 @@ DATA_BUILDERS = {
         lambda canvas, given: canvas.quadtree(given["points"], nmax=1),
     ),
     "kde": ("heatmap", lambda canvas, given: canvas.kde(given["points"])),
+    "hexbin": (
+        "choropleth",
+        lambda canvas, given: canvas.hexbin(given["points"], "fid", gridsize=5),
+    ),
     "labels": (
         "labels",
         lambda canvas, given: canvas.labels(given["points"], "fid"),

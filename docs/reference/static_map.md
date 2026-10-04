@@ -99,6 +99,7 @@ m.tissot(edgecolor="crimson")                                      # a world gri
         - lines
         - polygons
         - choropleth
+        - hexbin
         - quiver
         - streamplot
         - labels

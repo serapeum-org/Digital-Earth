@@ -1229,7 +1229,7 @@ _BUILT_IN_KINDS = (
     (
         "choropleth",
         "polygons",
-        "polygons coloured by a column — choropleth, static grid_cells/cartogram",
+        "polygons coloured by a column — choropleth, static grid_cells/cartogram/quadtree/hexbin",
         "data",
     ),
     (

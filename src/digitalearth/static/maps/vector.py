@@ -16,6 +16,7 @@ from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
 from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+from cleopatra.glyphs.stats.hexbin_glyph import HexbinGlyph
 from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
 from matplotlib.colors import is_color_like, to_hex
 from matplotlib.path import Path as MplPath
@@ -827,6 +828,70 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # Without a column the reducer counts the points in each cell, whatever `agg` names, so the cells are
     # coloured by a count rather than by any attribute (see :func:`_quadtree_reducer`).
     return drawn.colored_by(column or COUNT_FIELD)
+
+
+#: The per-cell reducer ``hexbin`` aggregates a column with when none is named — cleopatra's own default.
+DEFAULT_HEXBIN_REDUCE = "mean"
+
+
+def draw_hexbin(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Bin the points a described hexbin layer names onto a hexagonal lattice and draw the cells.
+
+    The lattice is laid in the display CRS, after pyramids has reprojected the points, so the cells are
+    regular hexagons on the map — not equal-area on the ground, which is a property of the projection.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of points the layer draws.
+        layer: The layer's description. A reducer the caller wrote themselves — a function, which a figure
+            cannot carry — is held on the scene under the layer's id; a named one is described.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the cells' ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
+        KeyError: when ``column`` names no feature attribute.
+    """
+    props = dict(layer.symbology.props)
+    column = props.get("column")
+    held_reduce = scene._layer_keys.get(layer.id)
+    reduce = (
+        held_reduce
+        if held_reduce is not None
+        else props.get("reduce") or DEFAULT_HEXBIN_REDUCE
+    )
+    gdf = scene._vector_input(
+        data, geom_types=("Point",), name="hexbin", geom_label="point"
+    )
+    values_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+    # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
+    xs, ys, values = scene._finite_point_xy(gdf.geometry, values_full)
+    if xs.size == 0:
+        raise ValueError("hexbin: no finite points in the display CRS")
+    opts = drawing_style(scene, layer)
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    min_count = props.get("min_count")
+    if min_count is None and column is None:
+        # cleopatra's counts mode draws every lattice cell in the window, empty ones as 0, which tints the
+        # whole map; a map of counts shows only the cells a point fell in.
+        min_count = 1
+    plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+    glyph = HexbinGlyph(
+        xs,
+        ys,
+        values,
+        ax=scene.ax,
+        fig=scene.fig,
+        gridsize=props.get("gridsize", 50),
+        reduce=reduce,
+        min_count=min_count,
+        **opts,
+    )
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    counted = column is None or reduce == "count"
+    return drawn.colored_by(COUNT_FIELD if counted else column)
 
 
 def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -2746,6 +2811,120 @@ class VectorMixin(_MixinBase):
         return MplPath(np.asarray(verts), codes)
 
     @_skips_off_limb
+    @_skips_off_limb
+    def hexbin(
+        self,
+        features: Any,
+        column: Optional[str] = None,
+        *,
+        reduce: Any = DEFAULT_HEXBIN_REDUCE,
+        gridsize: Any = 50,
+        min_count: Optional[int] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Any:
+        """Aggregate points onto a hexagonal lattice and colour each cell (pyramids points → ``HexbinGlyph``).
+
+        The discrete counterpart of :meth:`kde`: with no ``column`` each cell is coloured by how many points
+        fell in it, and with one by the ``reduce`` of their values — a number read straight off the colour
+        key, with none of the over-plotting a dense scatter has. The points are reprojected to the display
+        CRS first and the lattice is laid there, so the cells are regular on the map rather than equal-area
+        on the ground. The layer is a ``choropleth`` of the aggregate, as :meth:`quadtree`'s is.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
+            column: Numeric column aggregated per cell, or ``None`` (default) to count the points.
+            reduce: How a cell's values aggregate: ``"mean"`` (default), ``"sum"``, ``"min"``, ``"max"``,
+                ``"std"``, ``"count"``, or a function of an array. A named reducer is written into the
+                figure; a function is held beside the layer, and a figure read back elsewhere falls back to
+                ``"mean"``. Ignored without a ``column``.
+            gridsize: Hexagons across the binned window — an int, or an ``(nx, ny)`` pair.
+            min_count: Leave out cells with fewer points than this. ``None`` (default) leaves out the empty
+                cells of a count map — which cleopatra would otherwise draw as zeros across the whole
+                window — and is cleopatra's own default with a ``column``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **opts: Further ``HexbinGlyph`` options and the shared styling (``cmap``, ``vmin``, ``vmax``,
+                ``scheme``, ``k``, ``color_scale``, ``edge_color``, ``line_width``, ``extent``, …).
+
+        Returns:
+            The cells' ``PolyCollection`` (registered as a Scene layer), or ``None`` when the data lies
+            entirely outside what the display CRS shows.
+
+        Raises:
+            ValueError: if ``features`` is empty or holds non-point geometry.
+            KeyError: if ``column`` names no feature attribute.
+
+        Examples:
+            - Count the points per cell; three coincident points are one cell holding 3:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0, 6.0, 100.0]},
+                ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> sorted(m.hexbin(wells, gridsize=4).get_array().tolist())
+                [1.0, 3.0]
+
+                ```
+            - Aggregate a column instead; the origin cell is the mean of 2, 4 and 6:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0, 6.0, 100.0]},
+                ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> sorted(m.hexbin(wells, "depth", reduce="mean", gridsize=4).get_array().tolist())
+                [4.0, 100.0]
+                >>> m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props["via"]
+                'hexbin'
+
+                ```
+
+        See Also:
+            kde: the smoothed density of the same points.
+            quadtree: points aggregated into adaptive square cells.
+        """
+        held_reduce = None if isinstance(reduce, str) else reduce
+        return self._draw(
+            LayerRecord(
+                "choropleth",
+                source=features,
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "hexbin",
+                        "column": column,
+                        "reduce": reduce if isinstance(reduce, str) else None,
+                        "gridsize": gridsize,
+                        "min_count": min_count,
+                    }
+                ),
+                opts=opts,
+                key=held_reduce,
+            )
+        )
+
     def kde(
         self,
         features: Any,
