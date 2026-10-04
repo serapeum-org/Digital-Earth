@@ -674,3 +674,56 @@ class TestTheProjectedRingSeam:
         """
         rings = decoration._projected_rings(Map(crs=3857), [], [], [])
         assert rings == [], f"no circles must project to no rings, got {rings}"
+
+
+class TestTheSampleCountIsRefusedTheSameWayOnEveryFrame:
+    """``n`` counts the samples a ring is drawn from, so a count that cannot form one is refused everywhere."""
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    @pytest.mark.parametrize("samples", [-5, 0, 3], ids=["negative", "zero", "below-four"])
+    def test_a_sample_count_too_small_for_a_ring_is_refused(self, globe, samples):
+        """``nightshade(n=…)`` below four is refused on a flat map and on a globe alike.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+            samples: A count too small to form a ring.
+
+        Test scenario:
+            cleopatra refuses the count while sampling the flat terminator, but a globe never calls that
+            sampler — it fills by sun altitude over its own grid — so the same keyword used to draw happily
+            there and record itself (``props['n'] == -5``). The builder refuses it, so one keyword has one
+            answer on both frames.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        with pytest.raises(ValueError, match=r"nightshade\(\) needs n="):
+            canvas.nightshade(JUNE_NOON, n=samples)
+        assert canvas.layer_ids == [], f"a refused shade must add no layer, got {canvas.layer_ids}"
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    def test_a_tissot_sample_count_too_small_for_a_ring_is_refused(self, globe):
+        """``tissot(n=…)`` below four is refused before any ring is placed.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+
+        Test scenario:
+            The same keyword on the other overlay that samples a ring.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        with pytest.raises(ValueError, match=r"tissot\(\) needs n="):
+            canvas.tissot([0.0], [0.0], radius_m=5.0e5, n=3)
+        assert canvas.layer_ids == [], f"a refused indicatrix must add no layer, got {canvas.layer_ids}"
+
+    @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
+    def test_the_smallest_count_that_forms_a_ring_still_draws(self, globe):
+        """Four samples is the smallest ring, and it is accepted on both frames.
+
+        Args:
+            globe: Whether the map is drawn as a globe.
+
+        Test scenario:
+            The refusal must sit immediately below the documented floor, not above it.
+        """
+        canvas = Map(crs=3857, globe=globe)
+        canvas.nightshade(JUNE_NOON, n=4, name="ns")
+        assert canvas.layer_ids == ["ns"], f"n=4 should draw, got {canvas.layer_ids}"

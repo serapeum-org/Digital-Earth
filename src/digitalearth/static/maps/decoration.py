@@ -22,6 +22,7 @@ belongs in that issue, not in this module (round 3, M7).
 import contextlib
 import logging
 import math
+import numbers
 from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -1058,6 +1059,56 @@ _GLOBE_NIGHT_GRID = 400
 #: The fewest samples per side a globe's grid is ever evaluated on. Below this the contour stops tracing a
 #: terminator and starts tracing the grid, which is worse than being slow.
 _GLOBE_NIGHT_GRID_MIN = 16
+
+#: The fewest samples that can describe a ring. cleopatra refuses anything smaller while sampling a flat
+#: terminator; this is the same floor, stated here so the two frames answer alike (see :func:`_whole_samples`).
+_MIN_RING_SAMPLES = 4
+
+
+def _whole_samples(samples: Any, caller: str) -> int:
+    """Return ``n`` as a sample count that can describe a ring, refusing anything that cannot.
+
+    cleopatra refuses a count below four while sampling a flat terminator, and it names the keyword. A globe
+    never reaches that sampler — it fills by sun altitude over a display grid — so the same keyword used to be
+    refused on one frame and silently accepted on the other, drawing from a grid scaled off a negative ``n``
+    and recording it in the figure. One keyword answers one way now, whatever frame it is drawn on.
+
+    Args:
+        samples: The caller's ``n``.
+        caller: The public method, named in the refusal the way every other refusal in this module names it.
+
+    Returns:
+        The count as an ``int``.
+
+    Raises:
+        ValueError: when ``n`` is not a whole number of at least :data:`_MIN_RING_SAMPLES`. A bool is refused
+            too: ``True`` is an integer to Python, and one sample is not a ring.
+
+    Examples:
+        - A usable count comes back as an ``int``; a count too small to form a ring is refused by name:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _whole_samples
+            >>> _whole_samples(180, "nightshade()")
+            180
+            >>> _whole_samples(3, "nightshade()")
+            Traceback (most recent call last):
+                ...
+            ValueError: nightshade() needs n= as a whole number >= 4, the fewest that describe a ring; got 3
+
+            ```
+    """
+    if isinstance(samples, bool) or not isinstance(samples, numbers.Integral):
+        raise ValueError(
+            f"{caller} needs n= as a whole number >= {_MIN_RING_SAMPLES}, the fewest that describe a ring; "
+            f"got {samples!r}"
+        )
+    count = int(samples)
+    if count < _MIN_RING_SAMPLES:
+        raise ValueError(
+            f"{caller} needs n= as a whole number >= {_MIN_RING_SAMPLES}, the fewest that describe a ring; "
+            f"got {count}"
+        )
+    return count
 
 
 def _globe_night_grid(samples: int) -> int:
@@ -2100,6 +2151,7 @@ class DecorationMixin(_MixinBase):
         See Also:
             tissot: the other overlay cleopatra's ``solar`` module draws.
         """
+        samples = _whole_samples(n, "nightshade()")
         moment = _utc_moment(when)
         return self._draw(
             LayerRecord(
@@ -2111,7 +2163,7 @@ class DecorationMixin(_MixinBase):
                         "via": "nightshade",
                         "when": moment.isoformat(),
                         "refraction": float(refraction),
-                        "n": int(n),
+                        "n": samples,
                     }
                 ),
                 opts=style,
@@ -2222,6 +2274,7 @@ class DecorationMixin(_MixinBase):
         See Also:
             nightshade: the other overlay cleopatra's ``solar`` module draws.
         """
+        samples = _whole_samples(n, "tissot()")
         if (lons is None) != (lats is None):
             raise ValueError(
                 "tissot() takes lons= and lats= together, or neither for the world grid"
@@ -2252,7 +2305,7 @@ class DecorationMixin(_MixinBase):
                         "lons": lon_list,
                         "lats": lat_list,
                         "radius_m": float(radius_m),
-                        "n": int(n),
+                        "n": samples,
                     }
                 ),
                 opts=style,
