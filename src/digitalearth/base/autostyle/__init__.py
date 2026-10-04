@@ -181,11 +181,21 @@ def auto_style(source: Source) -> Dict[str, Any]:
     match overriding the ``default`` group. The returned dict is suitable to pass as ``ArrayGlyph`` options
     (e.g. ``cmap``, ``levels``), plus an optional ``units`` hint.
 
+    **Units fall back to the source's own** when neither library named any (ST-18, through
+    :func:`_with_source_units`). The library's answer is canonical and still wins where it has one — mean
+    sea-level pressure is styled in hPa whatever the file says — but it has an opinion about a few hundred
+    variables and none about the rest, and a band carrying its own units was previously styled with no
+    units at all, leaving every reader of this dict (a colorbar's label, an animation's label, a swatch
+    legend's heading) nothing to say about a quantity the data had named itself.
+
     Args:
         source: The data source whose ``metadata("variable")`` / ``units`` drive the lookup.
 
     Returns:
-        A style-parameter dict (always includes ``cmap``); ``match`` keys are stripped.
+        A style-parameter dict (always includes ``cmap``); ``match`` keys are stripped. ``units`` is
+        present when the library named one *or* the source carries one — and absent altogether when
+        neither does, so ``"units" in style`` stays the question "does anything know what these values are
+        measured in".
 
     Examples:
         - A temperature-like variable selects the temperature colormap:
@@ -220,6 +230,26 @@ def auto_style(source: Source) -> Dict[str, Any]:
             >>> style = auto_style(src)
             >>> style["units"], style["levels"][0]
             ('hPa', 960)
+
+            ```
+        - A variable the libraries do not recognise keeps the units its source declared, and one that
+          declares none leaves the key out:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import Source, DimensionInfo
+            >>> from digitalearth.base.autostyle import auto_style
+            >>> def source_of(units):
+            ...     return Source(
+            ...         DimensionInfo(np.zeros((2, 2)), "z"),
+            ...         DimensionInfo(np.array([0.0]), "x"),
+            ...         DimensionInfo(np.array([0.0]), "y"),
+            ...         metadata={"variable": "widget_flux"},
+            ...         units=units,
+            ...     )
+            >>> auto_style(source_of("widgets/s"))["units"]
+            'widgets/s'
+            >>> "units" in auto_style(source_of(None))
+            False
 
             ```
 

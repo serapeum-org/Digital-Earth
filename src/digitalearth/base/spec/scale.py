@@ -68,7 +68,7 @@ class Scale:
             edges, so a legend can label each class by the range it covers.
         categories: The distinct values a categorical scale colours, in the order their colours were assigned.
         missing: Colour for a value the scale cannot place — nodata, or a category it never saw.
-        over: Colour for a value above `vmax`, or ``None`` to leave the renderer's own treatment of it alone.
+        over: Colour for a value above `vmax`, or `None` to leave the renderer's own treatment of it alone.
         under: Colour for a value below `vmin`, likewise. The pair is what tells a clipped field apart from
             one that really peaks at its limit: see :meth:`with_extremes` for how a tier states them and
             :meth:`extremes` for how one reads them back.
@@ -598,17 +598,18 @@ class Scale:
         domain first is what lets a tier offer divergence and decline it on the same call.
 
         The comparison is **strict**, deliberately: a centre sitting exactly on `vmin` or `vmax` leaves one
-        arm holding a single value, and it is also the comparison cleopatra validates a diverging ``center``
-        with (*"diverging 'center' must lie strictly between vmin and vmax"*) — so a centre this reader
-        called straddled but cleopatra refuses cannot happen.
+        arm holding a single value, and it is also the comparison cleopatra validates a diverging `center`
+        with — `not (vmin < center < vmax)` raises
+        *"diverging 'center' (0.0) must lie strictly between vmin (...) and vmax (...)"* there — so a
+        centre this reader called straddled but cleopatra refuses cannot happen.
 
         Args:
             center: The value a diverging ramp would be centred on. Zero by default, which is the centre of
                 every anomaly, difference and trend field. A non-finite centre straddles nothing — answered
-                rather than compared, since ``nan`` fails every comparison silently.
+                rather than compared, since `nan` fails every comparison silently.
 
         Returns:
-            ``True`` when ``vmin < center < vmax``.
+            `True` when `vmin < center < vmax`.
 
         Examples:
             - An anomaly field with both signs straddles zero; a rainfall total does not:
@@ -627,6 +628,18 @@ class Scale:
                 True
                 >>> Scale.from_limits(283.0, 293.0).straddles(273.15)
                 False
+
+                ```
+            - The ends are **not** straddled, which is the comparison cleopatra makes too; and a
+              non-finite centre is answered rather than compared:
+                ```python
+                >>> from math import inf, nan
+                >>> from digitalearth.base.spec import Scale
+                >>> domain = Scale.from_limits(0.0, 10.0)
+                >>> domain.straddles(0.0), domain.straddles(10.0)
+                (False, False)
+                >>> domain.straddles(nan), domain.straddles(inf)
+                (False, False)
 
                 ```
         """
@@ -674,15 +687,15 @@ class Scale:
         colours for what falls outside it are the caller's styling and arrive separately. So stating them is
         a step on an existing scale rather than three more arguments on every builder.
 
-        ``None`` means "leave this one alone", which is what lets two calls compose and matches
-        ``matplotlib.colors.Colormap.with_extremes``, the method a renderer ends up handing these to. The
+        `None` means "leave this one alone", which is what lets two calls compose and matches
+        `matplotlib.colors.Colormap.with_extremes`, the method a renderer ends up handing these to. The
         scale itself is immutable, so the stated colours come back on a **new** scale: a domain derived once
         and shared across an animation's frames must not pick up one frame's styling.
 
         Args:
-            missing: Colour for a value the scale cannot place, or ``None`` to keep :attr:`missing`.
-            over: Colour for a value above :attr:`vmax`, or ``None`` to keep :attr:`over`.
-            under: Colour for a value below :attr:`vmin`, or ``None`` to keep :attr:`under`.
+            missing: Colour for a value the scale cannot place, or `None` to keep :attr:`missing`.
+            over: Colour for a value above :attr:`vmax`, or `None` to keep :attr:`over`.
+            under: Colour for a value below :attr:`vmin`, or `None` to keep :attr:`under`.
 
         Returns:
             A scale with the same domain, scheme, classes and categories, carrying the stated colours.
@@ -732,7 +745,7 @@ class Scale:
         colormap the caller built themselves.
 
         Returns:
-            A mapping over ``"missing"``, ``"over"`` and ``"under"``, holding only the ones that are set —
+            A mapping over `"missing"`, `"over"` and `"under"`, holding only the ones that are set —
             empty when the scale states none.
 
         Examples:
