@@ -21,6 +21,7 @@ EXPECTED = [
     "Map",
     "Scene",
     "TexturedGlobe",
+    "facet",
     "grid",
     "shared_colorbar",
     "projections",

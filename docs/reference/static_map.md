@@ -9,6 +9,7 @@ from digitalearth import Map
 m = Map(crs=3857)
 m.field(dataset, cmap="terrain")
 m.points(stations, name="obs")
+m.lines(rivers, column="discharge", width=1.5)
 m.coastlines()
 m.colorbar()
 m.save("map.png")
@@ -53,6 +54,67 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## Small multiples on one scale
+
+`facet(stack)` draws a raster stack — a multi-band `Dataset`, a `DatasetCollection` or a list of frames — as
+one panel per frame, and resolves the colour scale **once over the whole stack**: the frames are warped into
+the display CRS and measured together, so every panel colours one value the same way, and a named `scheme` is
+cut into one set of class edges for all of them. `col_wrap` folds the row, `col`/`labels` title the panels, and
+one colorbar spans them. Each panel is an ordinary `Map`, returned for further drawing.
+
+```python
+from digitalearth.static import facet
+
+fig, maps = facet(monthly_rain, crs=4326, col="month", labels=months, col_wrap=4, cbar_label="mm")
+for m in maps:
+    m.coastlines()
+fig.savefig("rain.png")
+```
+
+::: digitalearth.static.figure.facet
+    options:
+      heading_level: 3
+
+## Hatching a mask
+
+`contours(..., filled=True, hatches=[...])` gives each band between `levels` a hatch pattern, and `fill=False`
+leaves the bands uncoloured so only the hatching draws — the usual way to mark a significance or uncertainty
+mask over another field without spending its colours. `legend()` on such a layer keys the bands it marks by
+their pattern; `hatch_color=` colours the strokes on the map and in the key alike.
+
+`labels=` names the bands `levels=` declares — one label per band, the same count as `hatches=` — and the
+labels of the bands the map does not mark are dropped alongside their rows. The count therefore comes from the
+call and not from the raster, so a `labels=` written against one reading of the field keeps working when the
+data stops reaching a band (or starts reaching another).
+
+```python
+m.field(trend, cmap="RdBu_r")
+m.contours(p_value, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig")
+m.legend("sig", labels=["p < 0.05", "not significant"])  # two declared bands; only the hatched one is keyed
+```
+
+A layer that marks none of its bands — every pattern empty, or every hatched band past where the data reaches
+— has no rows to key, so `legend()` draws nothing rather than an empty framed box, and logs
+`legend(): layer 'sig' marks none of its 4 hatched bands, …` at `WARNING`. The guide is still recorded on the
+layer, so the figure says what was asked for.
+
+## Overlays computed from the globe itself
+
+`nightshade(when)` shades the night side of the day/night terminator at one instant, and `tissot()` draws
+Tissot's indicatrices — circles of one ground radius, shown as the projection distorts them. cleopatra computes
+both in lon/lat (`cleopatra.basemap.solar`) and they are projected into the display CRS through pyramids, so a
+Web Mercator map shows the polar night reaching the pole and the indicatrices swelling toward it. On a globe
+the night side is filled only where it faces the viewer, and a circle on the far side is left out.
+
+```python
+from datetime import datetime, timezone
+
+m = Map(crs=3857)
+m.nightshade(datetime(2026, 6, 21, 12, tzinfo=timezone.utc), alpha=0.3)
+m.nightshade("2026-06-21T12:00:00", refraction=-6.0, alpha=0.15)  # civil twilight
+m.tissot(edgecolor="crimson")                                      # a world grid of 500 km circles
+```
+
 ::: digitalearth.static.map.Map
     options:
       inherited_members: true
@@ -65,8 +127,10 @@ by name, saying what the call takes.
         - points
         - grid_points
         - grid_cells
+        - lines
         - polygons
         - choropleth
+        - hexbin
         - quiver
         - streamplot
         - labels
@@ -75,6 +139,8 @@ by name, saying what the call takes.
         - graticule
         - basemap
         - coastlines
+        - nightshade
+        - tissot
         - colorbar
         - legend
         - layer_ids

@@ -420,7 +420,7 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
             {
                 # `field`, `points` and `polygons` were listed here, each against the tier's own older
                 # spelling. All three are adopted at order 27a, so none is pending any more.
-                "lines": "line features on the static tier — #226",
+                # `lines` was listed here against #226, which built `Map.lines` with the Core keywords.
                 # `add_layer`, `get_layer`, `remove_layer`, `set_visible`, `move_layer` and `replace_layer`
                 # were listed here against order 23, which has now built all six: the tier answers to each
                 # over its own renderer, through `Scene._change`.

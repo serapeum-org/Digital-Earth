@@ -382,10 +382,14 @@ class Scene(WatermarkMixin):
         """Build the shared figure/axes host that layers render onto.
 
         Args:
-            ax: An existing axes to draw on. When given, the scene does **not** own the figure and will not
-                close it on exit — pass one to compose a Digital-Earth layer into a figure you are laying out
-                yourself. Give each scene an axes of its own: a second scene on the same axes clears what the
-                first drew on its opening render, and the first still describes it (see the class docstring).
+            ax: An existing axes to draw on — pass one to compose a Digital-Earth layer into a figure you are
+                laying out yourself. **The figure is still closed on exit**, borrowed or not:
+                :meth:`close` calls ``pyplot.close`` on whatever figure the scene holds, so a ``with`` block
+                around a borrowed axes closes the caller's figure too. Keep the scene out of ``with`` (and do
+                not call :meth:`close`) when the figure has to outlive it; #371 asks whether a borrowed figure
+                should instead be spared. Give each scene an axes of its own: a second scene on the same axes
+                clears what the first drew on its opening render, and the first still describes it (see the
+                class docstring).
             fig: The figure `ax` belongs to; taken from `ax` when omitted.
             figsize: Size of the figure created when `ax` is None, in inches.
             strict: What to do with a layer that has nothing to draw — data entirely outside the view, or a
@@ -1916,7 +1920,7 @@ class Scene(WatermarkMixin):
         )
         return self
 
-    def set_title(self, title: str, **kwargs) -> Self:
+    def set_title(self, title: str, **kwargs: Any) -> Self:
         """Set the axes title.
 
         Figure-level decoration rather than a layer: it draws straight onto :attr:`ax` and is not described,
@@ -1930,6 +1934,49 @@ class Scene(WatermarkMixin):
             This scene, so figure decoration reads as one expression. The Core declares
             ``returns="self"`` for this name and the web tier already answers that way; returning ``None``
             here meant the same line chained on one tier and raised on the other (order 27a, #265).
+
+        Examples:
+            - Set a title and read it back off the axes:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> scene = Scene()
+                >>> scene.set_title("Discharge, 2020").ax.get_title()
+                'Discharge, 2020'
+
+                ```
+            - ``loc`` reaches ``Axes.set_title`` through ``**kwargs``, so the text lands on the left title
+              and the centre one stays empty:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> scene = Scene().set_title("Left-aligned", loc="left")
+                >>> scene.ax.get_title(loc="left"), scene.ax.get_title()
+                ('Left-aligned', '')
+
+                ```
+            - The title is not a layer, so removing every layer leaves it on the figure:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> depth = Dataset.from_array(
+                ...     arr=np.array([[1.0, 2.0], [3.0, 4.0]]),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.field(depth, name="depth")
+                >>> m.set_title("Depth, m").remove_layer("depth").layer_ids
+                []
+                >>> m.ax.get_title()
+                'Depth, m'
+
+                ```
         """
         self.ax.set_title(title, **kwargs)
         return self
@@ -1982,7 +2029,7 @@ class Scene(WatermarkMixin):
         """
         return self.stamp_mark(mark, **kwargs)
 
-    def save(self, path: str | os.PathLike[str], **kwargs) -> Path:
+    def save(self, path: str | os.PathLike[str], **kwargs: Any) -> Path:
         """Save the figure to ``path`` (``bbox_inches="tight"`` by default).
 
         Args:

@@ -65,6 +65,70 @@ rather than a bug — but it has consequences:
   image. It also silences the one cleopatra log record that would carry the URL.
 - **Do not run tile fetches at `DEBUG` into shared logs.**
 
+## OGC services: WMS and WMTS
+
+The static tier tiles an OGC service through cleopatra's provider objects, passed to `basemap()` as they are.
+`WMSProvider` requests one `GetMap` per Web Mercator tile; `WMTSProvider` requests `GetTile` on the service's
+tile matrix set, by key-value parameters or by filling a RESTful URL template.
+
+```python
+from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
+from digitalearth import Map
+
+m = Map(crs=3857)
+m.set_domain((3.3, 50.7, 7.3, 53.6))       # tiles cover what the axes shows
+m.basemap(WMSProvider("https://example.org/geoserver/wms", "topp:states"))
+m.basemap(WMTSProvider("https://example.org/wmts/{TileMatrix}/{TileRow}/{TileCol}.png", "basemap"))
+```
+
+A credential the service needs goes in the provider's `extra_params` — **not** in the service URL's query
+string, which a figure does not record (see below).
+
+### What a figure records of an OGC basemap
+
+The provider **object** is held beside the layer — it is an engine object, and it carries whatever is in
+`extra_params`. What the figure's description carries is the provider's own fields, every one of them except
+`extra_params`, and `url` reduced to its scheme, host and path:
+
+```python
+m.figure_spec.layers.get("bm").symbology.props["source"]
+# {'ogc': 'wms', 'url': 'https://example.org/geoserver/wms', 'layers': 'topp:states',
+#  'styles': '', 'version': '1.3.0', 'image_format': 'image/png', 'transparent': True,
+#  'tile_size': 256, 'attribution': ''}
+```
+
+That is enough to rebuild the provider, so a figure saved to JSON and drawn again on this tier — through
+`Map.from_figure`, or `to_backend(spec, "matplotlib")` — asks the **same service** for the same layer. Before
+this was recorded, such a figure named no service at all and quietly drew the shared default basemap in its
+place.
+
+Replaying it on *another* tier is a separate matter and does not work today: `WebMap.from_figure` refuses a
+static `basemap` layer outright — `layer <id> (basemap) cannot be drawn by the web tier: its symbology records
+none of ['opacity']` — and it does so whether the source was an OGC provider or a plain provider name. That is
+the cross-tier basemap gap, not an OGC one.
+
+`extra_params` deliberately does not travel, for the same reason an `xyzservices` `apikey` does not: a figure
+is written to JSON and read back, and a token written into one leaks with it. So a replayed figure asks the
+service **without** a credential. If the service needs one, it answers with its own error — which is the
+honest outcome; pass the provider again, with its `extra_params`, to draw it authenticated.
+
+**A query string on the service URL does not travel either, whatever it holds.** `?token=`, `?api_key=` and
+`?SERVICE_KEY=` are ordinary ways for an OGC service to authenticate, and nothing in this tier can tell such a
+parameter from a harmless one — so the whole query is dropped and only the base URL is recorded. The drop is
+warned about by name, because the replayed figure will not carry it:
+
+```python
+m.basemap(WMSProvider("https://example.org/geoserver/wms?token=s3cret", "topp:states"))
+# UserWarning: the figure records this OGC service as 'https://example.org/geoserver/wms': its query string
+# is dropped because a parameter there may be a credential, and a figure is written to JSON and read back.
+# Dropped parameters: ['token']. Pass what the service needs through extra_params=, which is held beside the
+# layer and never recorded.
+```
+
+So the two paths a credential can take into a provider — `extra_params` and the URL's query — both stay on
+the object, and every field a figure records names the service. This is the same value `_quiet_tile_urls`
+keeps out of the logs for keyed XYZ tiles, and it is now treated as a secret in both places.
+
 ## Adding a preset
 
 Presets live in [`digitalearth.base.basemaps`][digitalearth.base.basemaps] — engine-neutral definitions (URL

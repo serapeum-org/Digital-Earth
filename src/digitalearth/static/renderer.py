@@ -236,6 +236,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "streamlines",
     "unstructured",
     "heatmap",
+    "lines",
     "flow",
     "text",
     "labels",
@@ -247,6 +248,8 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "ocean",
     "lakes",
     "rivers",
+    "nightshade",
+    "tissot",
     # The caller's own artist. Declared and drawn like any other kind, as each other tier declares
     # its engine's custom layers — what it cannot do is be *rebuilt*, which is why the object is held.
     "custom:matplotlib",
@@ -290,6 +293,7 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "voronoi": vector.draw_voronoi,
             "cartogram": vector.draw_cartogram,
             "quadtree": vector.draw_quadtree,
+            "hexbin": vector.draw_hexbin,
         },
         # The same three builders again, drawn without values: an outline-only layer is `polygons`.
         "polygons": {
@@ -310,6 +314,7 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "tripcolor": vector.draw_tri,
         },
         "heatmap": {"kde": vector.draw_kde},
+        "lines": {"lines": vector.draw_lines},
         "flow": {"sankey": vector.draw_sankey},
         "text": {
             "text": decoration.draw_text,
@@ -327,6 +332,8 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
         "lakes": {"lakes": decoration.draw_natural_earth},
         "rivers": {"rivers": decoration.draw_natural_earth},
         "basemap": {"basemap": decoration.draw_basemap},
+        "nightshade": {"nightshade": decoration.draw_nightshade},
+        "tissot": {"tissot": decoration.draw_tissot},
         "custom:matplotlib": {"custom": draw_custom},
     }
 

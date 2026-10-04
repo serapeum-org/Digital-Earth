@@ -5,7 +5,8 @@ builder accepts, and a typo was a silently ignored keyword rather than an error.
 that replaces that, and the route/fold pair that is now the only translation between a declared style and the
 flat form the glyphs take.
 
-There are 27 today: `samples` joined them with #302, which is the count below and the reason for it.
+There are 30 today: `samples` joined them with #302, and the contour hatch encoding's `hatches`, `fill` and
+`hatch_color` with ST-23 — the count below and the reason for it.
 """
 
 import pytest
@@ -14,6 +15,7 @@ from digitalearth.base.spec import Encoding, Symbology
 from digitalearth.static.render_compat import (
     FLAT_STYLE_KEYS,
     MARKER_SIZE_KEY,
+    NORM_KEY,
     STATIC_STYLE_SCHEMA,
     fold_symbology,
     relocate_flat_style,
@@ -25,7 +27,7 @@ class TestTheDeclaredSchema:
     """The style keys that appeared in no signature anywhere, written down."""
 
     def test_every_key_cleopatra_rejects_is_declared(self):
-        """The declaration covers the whole flat surface, plus the marker-size spelling.
+        """The declaration covers the whole flat surface, plus the marker-size spelling and a caller's norm.
 
         Test scenario:
             This is what stops the keys going undeclared again. A key added upstream — a new `ColorScaling`
@@ -33,21 +35,24 @@ class TestTheDeclaredSchema:
             channel, so it has to fail here rather than quietly rejoin the soup.
         """
         assert set(STATIC_STYLE_SCHEMA.names()) == FLAT_STYLE_KEYS | {
-            MARKER_SIZE_KEY
+            MARKER_SIZE_KEY,
+            NORM_KEY,
         }, "every flat style key must be declared, and nothing else"
 
     def test_the_undeclared_count_is_the_one_the_plan_names(self):
-        """27 flat members, beside the 6 typed group parameters they fold into.
+        """30 flat members, beside the 6 typed group parameters they fold into.
 
         Test scenario:
             The number the refactor plan and #274 are written against was 26. `samples` — the `equalize`
             scale's resolution — is the 27th: it was a `ColorScaling` field with no flat key here, so
             `color_scale="equalize", samples=64` reached cleopatra as a stray keyword and raised. #302
-            declared it. Pinning the count lets a later reader check the claim rather than take it on trust.
+            declared it. ST-23 added the three hatch-encoding fields of cleopatra's `Contour` group. Pinning
+            the count lets a later reader check the claim rather than take it on trust.
         """
         group_params = {"color", "contour", "data_style", "classify", "cells", "points"}
-        assert len(FLAT_STYLE_KEYS - group_params) == 27, (
-            "the flat members are the 26 keys DE-15 exists to declare, plus #302's `samples`"
+        assert len(FLAT_STYLE_KEYS - group_params) == 30, (
+            "the flat members are the 26 keys DE-15 exists to declare, #302's `samples` and ST-23's three "
+            "hatch keys"
         )
 
     def test_every_key_says_what_it_controls(self):

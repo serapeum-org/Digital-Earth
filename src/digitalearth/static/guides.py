@@ -29,12 +29,14 @@ same `Scale` the layer publishes, so a swatch equals the colour that was drawn b
 by maintenance (#185).
 """
 
+import logging
 from dataclasses import dataclass
 from math import isfinite
 from typing import Any, List, Optional, Tuple
 
-from cleopatra.styling.styles import colorbar_legend, disjoint_legend
-from matplotlib.colors import to_hex
+from cleopatra.styling.styles import colorbar_legend, disjoint_legend, hatch_legend
+from matplotlib.colors import to_hex, to_rgba
+from matplotlib.contour import ContourSet
 
 from digitalearth.base.spec import (
     DEFAULT_BAND,
@@ -70,6 +72,19 @@ GUIDE_KIND_KEY: str = "guide_kind"
 
 #: The two kinds of colour key this tier draws: a colorbar strip, or a list of labelled swatches.
 GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
+
+logger = logging.getLogger(__name__)
+
+#: The alpha at or below which :func:`_is_transparent` calls a swatch colour fully see-through.
+#:
+#: A tolerance rather than an exact ``== 0.0``: testing a float for equality is a defect in its own right
+#: (SonarCloud ``python:S1244``), because the value is only ever as exact as the arithmetic that produced
+#: it. Half of the 8-bit quantum — ``to_rgba`` divides an 8-digit hex channel by 255, so ``1/255`` is the
+#: smallest alpha a colour the plan carries can hold above zero. The bound therefore admits exactly what
+#: ``== 0.0`` admitted among hex spellings, and in addition a computed alpha that no 8-bit channel could
+#: tell from zero; the faintest colour an 8-digit hex *can* spell, ``#00000001``, stays opaque enough to
+#: colour its swatch.
+_TRANSPARENT_ALPHA: float = 0.5 / 255.0
 
 #: The property a caller's own row labels for one layer's key are recorded under.
 #:
@@ -420,6 +435,87 @@ def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
     return rows
 
 
+def _hatches_of(artist: Any) -> Optional[Tuple[str, ...]]:
+    """Return the hatch pattern of each band a filled contour set draws, or ``None`` when it hatches none.
+
+    Args:
+        artist: The layer's drawn artist.
+
+    Returns:
+        One pattern per band between the set's levels, cycled from its own list the way matplotlib cycles
+        it — ``""`` for a band drawn plain. ``None`` for anything but a filled ``ContourSet`` carrying at least
+        one pattern, which is every layer the swatch key already describes by colour.
+    """
+    if not isinstance(artist, ContourSet) or not artist.filled:
+        return None
+    patterns = list(artist.hatches or ())
+    if not any(patterns):
+        return None
+    bands = len(tuple(artist.levels)) - 1
+    return tuple(patterns[index % len(patterns)] or "" for index in range(bands))
+
+
+def _marked_bands(artist: Any, bands: int) -> List[bool]:
+    """Say, band by band, whether a filled contour set put any geometry on the axes for it.
+
+    Levels may run past the data — ``levels=[0, 0.05, 1, 5, 10]`` over a p-value field that stops at 0.95
+    — and the bands beyond it are drawn as empty paths. They carry the set's colour and pattern all the
+    same, so a key filtered on those two alone invents classes a reader will look for and not find
+    (review M1). A filled ``ContourSet`` holds one compound path per band, in level order, and an empty
+    band's path has no vertices.
+
+    Args:
+        artist: The filled ``ContourSet``.
+        bands: How many bands the set's levels declare.
+
+    Returns:
+        One flag per band, ``True`` when the band holds at least one vertex. Every band is reported marked
+        when the artist's paths do not number the bands, since dropping a row on a reading that no longer
+        holds would be worse than keeping an empty one.
+
+    Examples:
+        - A p-value field that stops at 0.95, under levels that run to 10: the top two bands are drawn as
+          paths with no vertices, and only the two that hold data are reported marked:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> import numpy as np
+            >>> from digitalearth.static.guides import _marked_bands
+            >>> fig, ax = plt.subplots()
+            >>> contours = ax.contourf(
+            ...     np.linspace(0.0, 0.95, 16).reshape(4, 4), levels=[0.0, 0.05, 1.0, 5.0, 10.0]
+            ... )
+            >>> [len(path.vertices) > 0 for path in contours.get_paths()]
+            [True, True, False, False]
+            >>> _marked_bands(contours, 4)
+            [True, True, False, False]
+            >>> plt.close(fig)
+
+            ```
+        - A band count the artist's paths do not match is read as "cannot tell", and every band is kept:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> import numpy as np
+            >>> from digitalearth.static.guides import _marked_bands
+            >>> fig, ax = plt.subplots()
+            >>> contours = ax.contourf(
+            ...     np.linspace(0.0, 9.0, 16).reshape(4, 4), levels=[0.0, 3.0, 6.0, 9.0]
+            ... )
+            >>> _marked_bands(contours, 7)
+            [True, True, True, True, True, True, True]
+            >>> plt.close(fig)
+
+            ```
+    """
+    paths = list(artist.get_paths())
+    if len(paths) != bands:
+        return [True] * bands
+    return [len(path.vertices) > 0 for path in paths]
+
+
 @dataclass(frozen=True)
 class GuidePlan:
     """One layer's colour key, derived and checked but not yet on the figure.
@@ -439,6 +535,10 @@ class GuidePlan:
         colors: One colour per swatch, in row order — `None` for a row the scale gave none, which is
             what `LegendEntry.color` allows and what the engine is handed either way. Empty for a bar.
         rows: One label per swatch, the same length as `colors`. Empty for a bar.
+        hatches: One hatch pattern per swatch, for a layer whose bands are told apart by pattern — a filled
+            contour drawn with ``hatches=``. Empty for every other key.
+        hatch_color: The colour of the layer's hatch strokes, so a swatch's pattern is drawn as the map's
+            is. ``None`` when there are no hatches.
     """
 
     kind: str
@@ -447,10 +547,261 @@ class GuidePlan:
     mappable: Any = None
     colors: Tuple[Optional[str], ...] = ()
     rows: Tuple[str, ...] = ()
+    hatches: Tuple[str, ...] = ()
+    hatch_color: Optional[str] = None
+
+
+@dataclass(frozen=True, eq=False)
+class _HatchedKey:
+    """The rows of a hatched layer's key: the bands it declares, the ones the map marks, their labels.
+
+    The layer's published scale cannot answer any of this. A filled contour set publishes the continuous
+    range its norm spans, so the colour key reads five evenly spaced stops — and an overlay drawn with
+    ``fill=False`` has no colour for a stop to show at all. The bands are the set's own ``levels``, read off
+    the artist as a graduated scale so the row labels are written exactly as a classified layer's are.
+
+    These five values are born together out of one artist, are read only ever as a set — which rows are
+    kept decides which colours, which labels and which patterns the key carries — and nothing outside this
+    class reads any of them. That is what makes them one object rather than a three-tuple and a pair of
+    locals threaded through :func:`plan_guide`, which is where they used to live.
+
+    Attributes:
+        layer_id: The layer these rows belong to, for the refusal and the warning to name.
+        artist: The filled ``ContourSet``, kept because the hatch stroke colour is read off it when the key
+            is actually built and not before.
+        spec: The legend over **every** declared band, so a kept band's colour and derived label are read
+            at the band's own index.
+        kept: The indices of the bands the key draws. A band is kept only when the map actually marks it,
+            which takes both: something to mark it *with* — a pattern, or a face that is not fully
+            transparent — and some geometry to mark, which :func:`_marked_bands` reads off the artist.
+            Levels that run past the data satisfy the first and not the second, and keying them invented
+            classes nothing on the figure showed (review M1).
+        rows: One label per **kept** band, in row order — the caller's recorded labels where there are
+            some, else the ones :attr:`spec` derived.
+        hatches: One pattern per declared band, from :func:`_hatches_of`.
+
+    Examples:
+        - A hatched overlay whose levels run past the data: four bands are declared, the top two hold no
+          geometry, and only the hatched band that does is keyed:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.guides import _HatchedKey
+            >>> p = Dataset.from_array(
+            ...     arr=np.linspace(0.0, 0.95, 16).reshape(4, 4),
+            ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+            ...     no_data_value=-9999.0,
+            ... )
+            >>> with Map(crs=4326) as m:
+            ...     sig = m.contours(
+            ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
+            ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
+            ...     )
+            ...     key = _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p")
+            ...     key.hatches
+            ...     key.kept
+            ...     key.rows
+            ('///', '', 'xx', '..')
+            (0,)
+            ('0.0 – 0.05',)
+
+            ```
+        - Recorded labels are counted against the bands ``levels=`` declares, and the labels of the bands
+          that are not kept are dropped alongside their rows:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.guides import _HatchedKey
+            >>> p = Dataset.from_array(
+            ...     arr=np.linspace(0.0, 0.95, 16).reshape(4, 4),
+            ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+            ...     no_data_value=-9999.0,
+            ... )
+            >>> with Map(crs=4326) as m:
+            ...     sig = m.contours(
+            ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
+            ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
+            ...     )
+            ...     _ = m.legend("sig", labels=["a", "b", "c", "d"])
+            ...     _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p").rows
+            ...     try:
+            ...         m.legend("sig", labels=["a", "b"])
+            ...     except ValueError as error:
+            ...         print(error)
+            ('a',)
+            layer 'sig' declares 4 bands between its levels, so labels= needs 4 labels, one per band; got 2
+
+            ```
+    """
+
+    layer_id: str
+    artist: Any
+    spec: LegendSpec
+    kept: Tuple[int, ...]
+    rows: Tuple[str, ...]
+    hatches: Tuple[str, ...]
+
+    @classmethod
+    def of(
+        cls, layer: LayerSpec, artist: Any, title: Optional[str]
+    ) -> Optional["_HatchedKey"]:
+        """Read a drawn layer's hatched bands, or answer ``None`` when it has none.
+
+        Args:
+            layer: The layer's description, which records the caller's labels if they gave any.
+            artist: The layer's drawn artist.
+            title: The key's heading, or ``None``.
+
+        Returns:
+            The rows of the key, or ``None`` for an artist that is not a filled ``ContourSet`` carrying at
+            least one pattern (:func:`_hatches_of`) — which is every layer the swatch key already describes
+            by colour.
+
+        Raises:
+            ValueError: when the recorded labels do not number the bands the layer's ``levels=``
+                **declares**.
+
+        Note:
+            ``labels=`` is counted against the declared bands, not the kept ones, and the labels of the
+            bands that are not kept are dropped alongside their rows. Counting the kept rows made the
+            accepted spelling a property of the *raster*: a four-band call was told "the key has 2 rows",
+            and a ``labels=`` recorded against one reading of the field started raising as soon as the data
+            reached a third band (review M3). One label per band between the levels — equivalently, one per
+            ``hatches=`` entry — is derivable from the call alone, so it keeps working as the data moves.
+        """
+        hatches = _hatches_of(artist)
+        if hatches is None:
+            return None
+        levels = tuple(float(level) for level in artist.levels)
+        faces = [tuple(face) for face in artist.get_facecolor()]
+        faces = [faces[index % len(faces)] for index in range(len(hatches))]
+        colors = [to_hex(face, keep_alpha=True) for face in faces]
+        scale = Scale(levels[0], levels[-1], scheme=levels, breaks=levels)
+        spec = LegendSpec.from_scale(scale, colors=colors, title=title)
+        marked = _marked_bands(artist, len(hatches))
+        kept = tuple(
+            index
+            for index, (face, pattern) in enumerate(zip(faces, hatches))
+            if marked[index] and (pattern or face[3] > 0.0)
+        )
+        labels = layer.symbology.props.get(GUIDE_LABELS_KEY)
+        if labels is None:
+            rows = tuple(spec.entries[index].label for index in kept)
+        else:
+            recorded = [str(label) for label in labels]
+            if len(recorded) != len(hatches):
+                raise ValueError(
+                    f"layer {layer.id!r} declares {len(hatches)} bands between its levels, so labels= "
+                    f"needs {len(hatches)} labels, one per band; got {len(recorded)}"
+                )
+            rows = tuple(recorded[index] for index in kept)
+        return cls(
+            layer_id=layer.id,
+            artist=artist,
+            spec=spec,
+            kept=kept,
+            rows=rows,
+            hatches=hatches,
+        )
+
+    def plan(self, guide: Any) -> Optional[GuidePlan]:
+        """Build the swatch key these rows describe, or answer ``None`` when there are no rows.
+
+        Args:
+            guide: The layer's recorded guide, read for its ``anchor`` and its ``show`` flag.
+
+        Returns:
+            The plan :func:`paint_guide` draws, or ``None`` when the map marks none of the declared bands
+            — logged at ``WARNING`` — or when the guide is switched off. The two are answered in that
+            order, so the warning is emitted for a key that is described but not shown.
+        """
+        if not self.kept:
+            # Every band is unmarked, so there is not one row to draw — and a swatch legend with no
+            # swatches is an empty framed box carrying only its title, which is itself the class a
+            # reader looks for and does not find that `_marked_bands` drops rows to avoid (review L5).
+            # Logged rather than left silent, as `facet` logs the bar it leaves off an unmeasurable
+            # stack: the layer is on the figure, only its key is not.
+            logger.warning(
+                "legend(): layer %r marks none of its %d hatched bands, so there are no rows to key "
+                "it with; no legend is drawn rather than an empty box",
+                self.layer_id,
+                len(self.hatches),
+            )
+            return None
+        if not guide.show:
+            return None
+        return GuidePlan(
+            "legend",
+            title=self.spec.title,
+            anchor=guide.anchor,
+            colors=tuple(self.spec.entries[index].color for index in self.kept),
+            rows=self.rows,
+            hatches=tuple(self.hatches[index] for index in self.kept),
+            hatch_color=to_hex(self.artist.get_hatchcolor()[0], keep_alpha=True),
+        )
+
+
+def _legend_plan(
+    layer: LayerSpec, artist: Any, scale: Optional[Scale], guide: Any
+) -> Optional[GuidePlan]:
+    """Derive the swatch key a layer's recorded legend asks for.
+
+    The two ways a swatch key's rows are derived, in the order they are tried: off the drawn artist for a
+    hatched layer (:class:`_HatchedKey`), and off the scale the layer publishes for every other. ``scale``
+    is read only here, which is why it is this function's argument rather than :func:`plan_guide`'s local.
+
+    Args:
+        layer: The layer's description, which carries the recorded labels.
+        artist: What its drawer produced.
+        scale: The colour encoding's scale, or ``None`` when it publishes none.
+        guide: The layer's recorded guide.
+
+    Returns:
+        The plan :func:`paint_guide` draws, or ``None`` when the guide is switched off or the layer marks
+        none of its hatched bands.
+
+    Raises:
+        ValueError: when the layer publishes no scale for the rows to be derived from, and from
+            :func:`_rows` or :meth:`_HatchedKey.of` when recorded labels do not number those rows.
+    """
+    hatched = _HatchedKey.of(layer, artist, guide.title)
+    if hatched is not None:
+        return hatched.plan(guide)
+    if scale is None:
+        raise ValueError(
+            f"layer {layer.id!r} publishes no colour scale, so there are no rows to key it with; "
+            "colorbar() draws the bar its mappable can still carry"
+        )
+    spec = _legend_spec(scale, artist, guide.title)
+    # Derived before the `show` gate below, not after it: these two lines are what refuses a key the
+    # description asks for and this tier cannot draw, and behind the gate they were skipped by
+    # `visible=False` — so one spelling of `legend(labels=…)` raised and the other recorded a
+    # description that could never be drawn (review M1).
+    rows = _rows(layer, spec)
+    if not guide.show:
+        return None
+    return GuidePlan(
+        "legend",
+        title=spec.title,
+        anchor=guide.anchor,
+        colors=tuple(entry.color for entry in spec.entries),
+        rows=tuple(rows),
+    )
 
 
 def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
     """Derive the key one layer's recorded guide asks for, refusing one this tier cannot draw.
+
+    The orchestrator of the two kinds this tier draws: a swatch key is :func:`_legend_plan`'s, read either
+    off the drawn artist (:class:`_HatchedKey`) or off the scale the layer publishes, and a bar is the tail
+    of this function, where there is no derived state to name — only the refusal the layer earns and the
+    ``show`` flag.
 
     Args:
         layer: The layer's description, which carries the guide.
@@ -458,13 +809,15 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
 
     Returns:
         The plan :func:`paint_guide` draws, or ``None`` when there is nothing to draw — the guide is
-        switched off or absent, the layer carries no colour encoding, or nothing was drawn for it.
+        switched off or absent, the layer carries no colour encoding, nothing was drawn for it, or it is a
+        hatched layer whose bands the map marks none of (logged at ``WARNING``).
 
     Raises:
         ValueError: when a colorbar is asked for over a **categorical** scale, naming the swatch legend
             instead: a categorical fill's norm bins the class codes cleopatra assigned, so a bar over them
             reads ``0, 1, 2 …`` where the category labels belong. Also when the layer publishes no scale for
-            a swatch key's rows to be derived from, and when recorded row labels do not number those rows.
+            a swatch key's rows to be derived from, and when recorded row labels do not number those rows —
+            for a hatched layer, the bands its ``levels=`` declares rather than the rows the data leaves.
 
             **Every one of the three is raised whether or not the guide is shown.** A guide switched off is
             a key the caller asked not to be drawn *yet*, not one that has stopped being described — so a
@@ -476,28 +829,8 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
     encoding = layer.symbology.encoding("color")
     if guide is None or encoding is None or drawn.artist is None:
         return None
-    scale = encoding.scale
     if guide_kind(layer) == "legend":
-        if scale is None:
-            raise ValueError(
-                f"layer {layer.id!r} publishes no colour scale, so there are no rows to key it with; "
-                "colorbar() draws the bar its mappable can still carry"
-            )
-        spec = _legend_spec(scale, drawn.artist, guide.title)
-        # Derived before the `show` gate below, not after it: these two lines are what refuses a key the
-        # description asks for and this tier cannot draw, and behind the gate they were skipped by
-        # `visible=False` — so one spelling of `legend(labels=…)` raised and the other recorded a
-        # description that could never be drawn (review M1).
-        rows = _rows(layer, spec)
-        if not guide.show:
-            return None
-        return GuidePlan(
-            "legend",
-            title=spec.title,
-            anchor=guide.anchor,
-            colors=tuple(entry.color for entry in spec.entries),
-            rows=tuple(rows),
-        )
+        return _legend_plan(layer, drawn.artist, encoding.scale, guide)
     refusal = bar_refusal(layer)
     if refusal is not None:
         raise ValueError(refusal)
@@ -519,13 +852,50 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
         plan: What :func:`plan_guide` derived. Nothing here can refuse it — every check the description can
             earn has already been made, which is what lets the caller take the layer's previous key off in
             between.
-        **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` (a bar) or ``disjoint_legend``
-            (swatches). These are the call's own styling and are **not** part of the record, so a key
+        **kwargs: Forwarded to ``cleopatra.styling.styles.colorbar_legend`` (a bar), ``disjoint_legend``
+            (swatches) or ``hatch_legend`` (the unfilled swatches of a hatch-only overlay — see
+            :func:`_paint_hatch_legend`, which picks between the last two). These are the call's own
+            styling and are **not** part of the record, so a key
             redrawn from the description comes back with matplotlib's defaults in their place — the same
             trade :attr:`~digitalearth.static.scene.LayerRecord.opts` makes for a value no figure can carry.
 
     Returns:
         The one artist the key is — a ``Colorbar`` or a ``Legend``.
+
+    Examples:
+        - A swatch plan built by hand is painted as the rows it carries, titled by the plan:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Scene
+            >>> from digitalearth.static.guides import GuidePlan, paint_guide
+            >>> with Scene() as scene:
+            ...     key = paint_guide(
+            ...         scene,
+            ...         GuidePlan("legend", title="class", colors=("#1f77b4", "#d62728"),
+            ...                   rows=("low", "high")),
+            ...     )
+            ...     [text.get_text() for text in key.get_texts()]
+            ...     key.get_title().get_text()
+            ['low', 'high']
+            'class'
+
+            ```
+        - Nothing here refuses a plan: a legend plan with no rows is painted as the empty framed box it
+          describes, which is why :func:`plan_guide` returns ``None`` instead of handing one over:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Scene
+            >>> from digitalearth.static.guides import GuidePlan, paint_guide
+            >>> with Scene() as scene:
+            ...     empty = paint_guide(scene, GuidePlan("legend", title="class"))
+            ...     [text.get_text() for text in empty.get_texts()]
+            ...     empty.get_title().get_text()
+            []
+            'class'
+
+            ```
     """
     if plan.kind == "legend":
         # `setdefault` rather than a keyword beside `**kwargs`: the recorded title is this call's default,
@@ -535,6 +905,8 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
         kwargs.setdefault("title", plan.title)
         if plan.anchor is not None:
             kwargs.setdefault("loc", _LEGEND_LOCATIONS[plan.anchor])
+        if plan.hatches:
+            return _paint_hatch_legend(scene, plan, **kwargs)
         return disjoint_legend(scene.ax, list(plan.colors), list(plan.rows), **kwargs)
     if plan.anchor is not None:
         kwargs.setdefault("location", _COLORBAR_SIDES[plan.anchor])
@@ -542,6 +914,94 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
     if plan.title is not None:
         bar.set_label(plan.title)
     return bar
+
+
+def _is_transparent(color: str) -> bool:
+    """Say whether a swatch colour is fully see-through, by its alpha rather than by its spelling.
+
+    The reading was ``face.endswith("00")``, which is true of every 8-digit hex :func:`plan_guide`
+    produces for an uncoloured band — and also of an *opaque* 6-digit one whose blue channel happens to be
+    zero, so ``#aabb00`` was dropped as transparent (review L3). ``GuidePlan`` + :func:`paint_guide` is a
+    public seam and a plan built by hand may spell its colours either way.
+
+    Args:
+        color: A matplotlib colour as the plan carries it, or the string ``"None"`` for a row the scale
+            gave no colour — which matplotlib itself reads as fully transparent.
+
+    Returns:
+        ``True`` when the colour's alpha is zero to within :data:`_TRANSPARENT_ALPHA` — half an 8-bit
+        step, so no alpha an 8-bit channel could show is admitted. **Fully** see-through, not merely
+        faint: ``#00000001``, the smallest non-zero alpha an 8-digit hex can spell, is ``False``.
+        ``False`` for anything matplotlib cannot parse too, so an unreadable colour still reaches the
+        engine that will say so, rather than being taken for transparent here.
+
+    Examples:
+        - An uncoloured band's 8-digit hex and the scale's ``"None"`` both read as see-through:
+            ```python
+            >>> from digitalearth.static.guides import _is_transparent
+            >>> (_is_transparent("#aabbcc00"), _is_transparent("None"))
+            (True, True)
+
+            ```
+        - An opaque colour whose blue channel is zero does not, which is what reading the spelling got
+          wrong; nor does a colour matplotlib cannot parse at all:
+            ```python
+            >>> from digitalearth.static.guides import _is_transparent
+            >>> (_is_transparent("#aabb00"), _is_transparent("mauve-ish"))
+            (False, False)
+            >>> "#aabb00".endswith("00")  # the reading this replaced
+            True
+
+            ```
+        - The tolerance admits what ``== 0.0`` admitted and nothing an 8-bit channel can show beyond it:
+          ``#00000001``, the faintest alpha an 8-digit hex can spell, is a whole 8-bit step and stays
+          opaque, while the bound itself is half a step:
+            ```python
+            >>> from matplotlib.colors import to_rgba
+            >>> from digitalearth.static.guides import _TRANSPARENT_ALPHA, _is_transparent
+            >>> round(to_rgba("#00000001")[3], 6), round(_TRANSPARENT_ALPHA, 6)
+            (0.003922, 0.001961)
+            >>> _is_transparent("#00000001"), _is_transparent("#00000000")
+            (False, True)
+
+            ```
+    """
+    try:
+        return bool(to_rgba(color)[3] <= _TRANSPARENT_ALPHA)
+    except ValueError:
+        return False
+
+
+def _paint_hatch_legend(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
+    """Draw a hatched layer's key: each swatch the band's colour, if it has one, under the band's pattern.
+
+    An uncoloured overlay — every band drawn with ``fill=False`` — is cleopatra's ``hatch_legend``: unfilled
+    swatches stroked in the hatch colour. A coloured one is the ordinary swatch list with each band's pattern
+    laid over its colour, since ``hatch_legend`` gives every swatch one face.
+
+    Args:
+        scene: The scene the layer is drawn on.
+        plan: The derived key, carrying :attr:`GuidePlan.hatches`.
+        **kwargs: Forwarded to ``Axes.legend`` through cleopatra.
+
+    Returns:
+        The ``Legend``.
+    """
+    faces = [str(color) for color in plan.colors]
+    if all(_is_transparent(face) for face in faces):
+        return hatch_legend(
+            scene.ax,
+            list(plan.hatches),
+            list(plan.rows),
+            edgecolor=plan.hatch_color or "black",
+            **kwargs,
+        )
+    legend = disjoint_legend(scene.ax, faces, list(plan.rows), **kwargs)
+    for handle, pattern in zip(legend.legend_handles, plan.hatches):
+        handle.set_hatch(pattern or None)
+        if plan.hatch_color is not None:
+            handle.set_hatchcolor(plan.hatch_color)
+    return legend
 
 
 def draw_guide(

@@ -8,6 +8,7 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 import os
 from functools import wraps
 from math import isfinite
+from numbers import Integral
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -16,7 +17,9 @@ from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
 from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+from cleopatra.glyphs.stats.hexbin_glyph import HexbinGlyph
 from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
+from matplotlib.colors import is_color_like, to_hex
 from matplotlib.path import Path as MplPath
 from matplotlib.patheffects import withStroke
 from pyramids.dataset import Dataset
@@ -71,6 +74,14 @@ _POINTS_CALLER = "Map.points()"
 #: The same, for the label layer. Its refusals come from both sides of the seam — the finite checks at the
 #: call, the column and the CRS when the features are opened — and all of them name the one public method.
 _LABELS_CALLER = "Map.labels()"
+
+#: The same, for the line layer. Its ``width=`` and ``color=`` are checked at the call and its ``column=``
+#: when the features are read, so builder and drawer need the one spelling between them.
+_LINES_CALLER = "Map.lines()"
+
+#: The same, for the hexbin layer: its lattice is checked at the call and its ``column=`` when the features
+#: are read, and both say ``hexbin()``.
+_HEXBIN_CALLER = "hexbin()"
 
 #: Keywords :meth:`VectorMixin.labels` refuses in ``**opts``, each with what to write instead. Two of them are
 #: matplotlib's own spelling of something this builder already declares, and forwarding either would have the
@@ -164,6 +175,179 @@ def _as_finite(value: Any, argument: str, caller: str) -> float:
             "written down: JSON has no spelling for NaN or infinity"
         )
     return number
+
+
+def _as_count(value: Any, argument: str, caller: str, *, minimum: int = 1) -> int:
+    """Return a builder's whole-number keyword as a plain int, refusing one the engine would fail on.
+
+    The counterpart of :func:`_as_finite` for an argument that counts things rather than measures them — a
+    lattice's cells across, a floor on the points in a cell. Left unchecked these reach matplotlib's
+    ``hexbin`` and come back as arithmetic: ``gridsize=0`` as ``ZeroDivisionError: float division by
+    zero``, ``gridsize=None`` as ``unsupported operand type(s) for /: 'NoneType' and 'float'``,
+    ``gridsize=-5`` as ``could not broadcast input array from shape (0,) into shape (4,)`` — none of which
+    names the method or the argument the caller actually wrote.
+
+    Args:
+        value: The keyword's value, as given.
+        argument: The keyword's name, as the caller spells it.
+        caller: The public call, for the message.
+        minimum: The smallest value the argument admits.
+
+    Returns:
+        The value as an `int`.
+
+    Raises:
+        ValueError: when `value` is not a whole number, or is below `minimum`. ``bool`` is excluded
+            although it is an `Integral`: ``gridsize=True`` is a mistake, not a lattice one cell across.
+    """
+    if (
+        not isinstance(value, Integral)
+        or isinstance(value, bool)
+        or int(value) < minimum
+    ):
+        raise ValueError(
+            f"{caller} needs {argument}= as a whole number >= {minimum}; got {value!r}"
+        )
+    return int(value)
+
+
+def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
+    """Refuse a lattice ``HexbinGlyph`` could not bin onto, before the figure is touched.
+
+    Args:
+        gridsize: Hexagons across the window — one count, or an ``(nx, ny)`` pair. The pair may be a
+            tuple, a list or a 1-D numpy array, which is what a caller who computed the lattice from the
+            window has in hand.
+        min_count: The floor on a cell's points, or ``None`` for the builder's own default.
+
+    Returns:
+        ``(gridsize, min_count)`` as whole numbers — ``gridsize`` an int for the one-count form and a
+        pair of ints for the other, so the layer's description carries the shape it was given.
+
+    Raises:
+        ValueError: naming ``hexbin()`` and the argument that is wrong, with the value passed.
+    """
+    # A numpy array of two is the pair form as much as a tuple is; detecting the pair on tuple/list alone
+    # wrapped `np.array([10, 20])` as one side and refused it with the single-count message, for a form it
+    # was not using. A 0-d array is one value rather than a sequence — and iterating it raises — so it
+    # stays a single side and is refused as the count it is not.
+    pair_shaped = isinstance(gridsize, (tuple, list)) or (
+        isinstance(gridsize, np.ndarray) and gridsize.ndim > 0
+    )
+    sides = list(gridsize) if pair_shaped else [gridsize]
+    if len(sides) not in (1, 2):
+        raise ValueError(
+            "hexbin() needs gridsize= as one whole number, or a pair of them (nx, ny); "
+            f"got {gridsize!r}"
+        )
+    counts = [_as_count(side, "gridsize", _HEXBIN_CALLER) for side in sides]
+    floor = (
+        None
+        if min_count is None
+        else _as_count(min_count, "min_count", _HEXBIN_CALLER, minimum=0)
+    )
+    return (counts[0] if len(counts) == 1 else tuple(counts)), floor
+
+
+def _require_column(features: Any, column: str, argument: str, caller: str) -> None:
+    """Refuse a column the features do not carry, naming the call and listing the ones they do.
+
+    A column name travels from the caller to ``features[column]`` untouched, so a typo surfaces as pandas'
+    own ``KeyError: 'nope'`` — the commonest column mistake getting the least helpful message, from the
+    frame several layers below the method the caller actually wrote. This is the check behind every such
+    read: ``labels``' text, and the numbers ``lines`` and ``hexbin`` colour and size by.
+
+    Args:
+        features: Anything carrying a ``columns`` listing — a pyramids ``FeatureCollection`` or the
+            ``GeoDataFrame`` a drawer already placed.
+        column: The column named by the caller.
+        argument: The keyword it was named under — ``column``, ``width``, …
+        caller: The public call, for the message.
+
+    Raises:
+        KeyError: naming the call, the keyword and the column, and listing the columns the features do
+            have — the geometry column left out, since it is not an attribute to read values from.
+
+    Examples:
+        - A column the features carry passes silently; one they do not is named along with the keyword it
+          was given under and the columns there are, with the geometry column left out of that list:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.maps.vector import _require_column
+            >>> wells = gpd.GeoDataFrame(
+            ...     {"depth": [2.0, 4.0], "label": ["a", "b"]},
+            ...     geometry=[Point(0, 0), Point(1, 1)],
+            ...     crs="EPSG:4326",
+            ... )
+            >>> print(_require_column(wells, "depth", "column", "hexbin()"))
+            None
+            >>> try:
+            ...     _require_column(wells, "dpeth", "column", "hexbin()")
+            ... except KeyError as error:
+            ...     print(error.args[0])
+            hexbin(): column='dpeth' is not a property of these features; available: ['depth', 'label']
+
+            ```
+        - The keyword is the caller's own spelling, so a column ``width`` is refused as ``width=`` rather
+          than as the method's first argument:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import LineString
+            >>> from digitalearth.static.maps.vector import _require_column
+            >>> reaches = gpd.GeoDataFrame(
+            ...     {"discharge": [12.0]},
+            ...     geometry=[LineString([(0, 0), (1, 1)])],
+            ...     crs="EPSG:4326",
+            ... )
+            >>> try:
+            ...     _require_column(reaches, "order", "width", "Map.lines()")
+            ... except KeyError as error:
+            ...     print(error.args[0])
+            Map.lines(): width='order' is not a property of these features; available: ['discharge']
+
+            ```
+    """
+    columns = list(getattr(features, "columns", []))
+    if column in columns:
+        return
+    geometry = getattr(getattr(features, "geometry", None), "name", "geometry")
+    raise KeyError(
+        f"{caller}: {argument}={column!r} is not a property of these features; available: "
+        f"{sorted(name for name in columns if name != geometry)}"
+    )
+
+
+def _numeric_column(gdf: Any, column: str, argument: str, caller: str) -> np.ndarray:
+    """Read one feature column as floats, refusing one that holds something a ramp cannot read.
+
+    A colour ramp and a width scale both need numbers. Read untyped — ``gdf[column].to_numpy()``, which
+    ``sankey`` does and ``lines`` inherited — a text column travels as ``object`` and fails several frames
+    down in matplotlib as ``TypeError: ufunc 'isfinite' not supported for the input types``, naming neither
+    the method, the keyword, nor the column.
+
+    Args:
+        gdf: The features, already in the display CRS.
+        column: The column named by the caller.
+        argument: The keyword it was named under — ``column`` or ``width``.
+        caller: The public call, for the message.
+
+    Returns:
+        The column's values as a float array.
+
+    Raises:
+        KeyError: when the features carry no such column (see :func:`_require_column`). Checked first,
+            because a missing column is not a dtype the conversion below could report on.
+        ValueError: when the column holds values that are not numbers, naming all three.
+    """
+    _require_column(gdf, column, argument, caller)
+    try:
+        return gdf[column].to_numpy(dtype=float)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{caller} needs {argument}={column!r} to name a column of numbers, and it holds "
+            f"{gdf[column].dtype} values that are not numbers"
+        ) from None
 
 
 def _polygon_kind(fill: Any) -> str:
@@ -358,17 +542,11 @@ def _label_text(features: Any, column: str) -> np.ndarray:
         a missing property.
 
     Raises:
-        KeyError: naming the column and listing the ones the features do have — the message the web tier's
-            `labels` already gives, because an expression over a column nobody has renders an empty map with
-            nothing to explain it.
+        KeyError: from :func:`_require_column`, naming the column and listing the ones the features do have
+            — the message the web tier's `labels` already gives, because an expression over a column nobody
+            has renders an empty map with nothing to explain it.
     """
-    columns = list(getattr(features, "columns", []))
-    if column not in columns:
-        geometry = getattr(getattr(features, "geometry", None), "name", "geometry")
-        raise KeyError(
-            f"{_LABELS_CALLER}: labels(column={column!r}) is not a property of these features; available: "
-            f"{sorted(name for name in columns if name != geometry)}"
-        )
+    _require_column(features, column, "column", _LABELS_CALLER)
     return np.asarray(
         ["" if is_null(value) else str(value) for value in features[column]],
         dtype=object,
@@ -828,6 +1006,76 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     return drawn.colored_by(column or COUNT_FIELD)
 
 
+#: The per-cell reducer ``hexbin`` aggregates a column with when none is named — cleopatra's own default.
+DEFAULT_HEXBIN_REDUCE = "mean"
+
+
+def draw_hexbin(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Bin the points a described hexbin layer names onto a hexagonal lattice and draw the cells.
+
+    The lattice is laid in the display CRS, after pyramids has reprojected the points, so the cells are
+    regular hexagons on the map — not equal-area on the ground, which is a property of the projection.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of points the layer draws.
+        layer: The layer's description. A reducer the caller wrote themselves — a function, which a figure
+            cannot carry — is held on the scene under the layer's id; a named one is described.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the cells' ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty, holds non-point geometry, leaves no finite point, or
+            names a ``column`` that does not hold numbers, which the reducer needs.
+        KeyError: when ``column`` names no feature attribute — naming ``hexbin()`` and listing the columns
+            the features do have (see :func:`_require_column`).
+    """
+    props = dict(layer.symbology.props)
+    column = props.get("column")
+    held_reduce = scene._layer_keys.get(layer.id)
+    reduce = (
+        held_reduce
+        if held_reduce is not None
+        else props.get("reduce") or DEFAULT_HEXBIN_REDUCE
+    )
+    gdf = scene._vector_input(
+        data, geom_types=("Point",), name="hexbin", geom_label="point"
+    )
+    values_full = (
+        _numeric_column(gdf, column, "column", _HEXBIN_CALLER)
+        if column is not None
+        else None
+    )
+    # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
+    xs, ys, values = scene._finite_point_xy(gdf.geometry, values_full)
+    if xs.size == 0:
+        raise ValueError("hexbin: no finite points in the display CRS")
+    opts = drawing_style(scene, layer)
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    min_count = props.get("min_count")
+    if min_count is None and column is None:
+        # cleopatra's counts mode draws every lattice cell in the window, empty ones as 0, which tints the
+        # whole map; a map of counts shows only the cells a point fell in.
+        min_count = 1
+    plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+    glyph = HexbinGlyph(
+        xs,
+        ys,
+        values,
+        ax=scene.ax,
+        fig=scene.fig,
+        gridsize=props.get("gridsize", 50),
+        reduce=reduce,
+        min_count=min_count,
+        **opts,
+    )
+    drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
+    counted = column is None or reduce == "count"
+    return drawn.colored_by(COUNT_FIELD if counted else column)
+
+
 def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Estimate the point density a described heatmap asks for and draw it (``cleopatra.KDEGlyph``).
 
@@ -868,6 +1116,87 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     return drawn.colored_by(DENSITY_FIELD)
 
 
+def _line_parts(gdf: Any) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Split a line GeoDataFrame into one vertex array per drawn path.
+
+    Args:
+        gdf: Line geometries, already in the display CRS.
+
+    Returns:
+        ``(paths, repeats)``: one ``(n, 2)`` array per ``LineString`` part, and how many parts each feature
+        contributed — so a per-feature column is repeated onto its parts with ``numpy.repeat``.
+    """
+    paths: List[np.ndarray] = []
+    repeats: List[int] = []
+    for geometry in gdf.geometry:
+        parts = (
+            list(geometry.geoms)
+            if geometry.geom_type == "MultiLineString"
+            else [geometry]
+        )
+        paths.extend(np.asarray(part.coords) for part in parts)
+        repeats.append(len(parts))
+    return paths, np.asarray(repeats)
+
+
+def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    """Draw the line features a described ``lines`` layer asks for (``cleopatra.FlowGlyph``).
+
+    The same glyph ``sankey`` draws with, held to line defaults: one width for every path unless a column
+    sizes them, one colour unless a column colours them. The description's props are read with defaults,
+    because a ``lines`` layer another tier described carries its own styling rather than these keys.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of lines the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``LineCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty or holds non-line geometry.
+        KeyError: when ``column`` or a column ``width`` names no feature attribute — naming
+            ``Map.lines()`` and listing the columns the features do have (see :func:`_require_column`).
+    """
+    props = dict(layer.symbology.props)
+    opts = drawing_style(scene, layer)
+    gdf = scene._vector_input(
+        data,
+        geom_types=("LineString", "MultiLineString"),
+        name="lines",
+        geom_label="line",
+    )
+    paths, repeats = _line_parts(gdf)
+    column, width = props.get("column"), props.get("width")
+    values = (
+        np.repeat(_numeric_column(gdf, column, "column", _LINES_CALLER), repeats)
+        if column is not None
+        else None
+    )
+    widths = None
+    if isinstance(width, str):
+        widths = np.repeat(_numeric_column(gdf, width, "width", _LINES_CALLER), repeats)
+    elif width is not None:
+        opts["line_width"] = float(width)
+    if props.get("color") is not None:
+        opts["color_1"] = props["color"]
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+    glyph = FlowGlyph(
+        paths, values=values, widths=widths, ax=scene.ax, fig=scene.fig, **opts
+    )
+    drawn: Optional[DrawnLayer] = scene._render_glyph(
+        glyph, artist="plot", **plot_style
+    )
+    opacity = props.get("opacity")
+    if drawn is not None and opacity is not None:
+        # FlowGlyph takes no opacity of its own; the collection it drew does.
+        drawn.artist.set_alpha(float(opacity))
+    return drawn
+
+
 def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Draw the flow paths a described Sankey layer asks for (``cleopatra.FlowGlyph``).
 
@@ -891,17 +1220,7 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         name="sankey",
         geom_label="line",
     )
-    paths: List[np.ndarray] = []
-    repeats: List[int] = []
-    for geometry in gdf.geometry:
-        parts = (
-            list(geometry.geoms)
-            if geometry.geom_type == "MultiLineString"
-            else [geometry]
-        )
-        paths.extend(np.asarray(part.coords) for part in parts)
-        repeats.append(len(parts))
-    rep = np.asarray(repeats)
+    paths, rep = _line_parts(gdf)
     column, scale = props["column"], props["scale"]
     values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
     widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
@@ -2679,6 +2998,183 @@ class VectorMixin(_MixinBase):
         return MplPath(np.asarray(verts), codes)
 
     @_skips_off_limb
+    def hexbin(
+        self,
+        features: Any,
+        column: Optional[str] = None,
+        *,
+        reduce: Any = DEFAULT_HEXBIN_REDUCE,
+        gridsize: Any = 50,
+        min_count: Optional[int] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Any:
+        """Aggregate points onto a hexagonal lattice and colour each cell (pyramids points → ``HexbinGlyph``).
+
+        The discrete counterpart of :meth:`kde`: with no ``column`` each cell is coloured by how many points
+        fell in it, and with one by the ``reduce`` of their values — a number read straight off the colour
+        key, with none of the over-plotting a dense scatter has. The points are reprojected to the display
+        CRS first and the lattice is laid there, so the cells are regular on the map rather than equal-area
+        on the ground. The layer is a ``choropleth`` of the aggregate, as :meth:`quadtree`'s is.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one
+                (reprojected to the display CRS). Only a path-backed layer can be written down.
+            column: Numeric column aggregated per cell, or ``None`` (default) to count the points.
+            reduce: How a cell's values aggregate: ``"mean"`` (default), ``"sum"``, ``"min"``, ``"max"``,
+                ``"std"``, ``"count"``, or a function of an array. A named reducer is written into the
+                figure; a function is held beside the layer, and a figure read back elsewhere falls back to
+                ``"mean"``. Ignored without a ``column``.
+            gridsize: Hexagons across the binned window — a whole number, or an ``(nx, ny)`` pair of
+                them. One cell across is the smallest lattice there is, so the counts must be positive.
+            min_count: Leave out cells with fewer points than this, as a whole number of points.
+                ``None`` (default) leaves out the empty cells of a count map — which cleopatra would
+                otherwise draw as zeros across the whole window — and is cleopatra's own default with a
+                ``column``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **opts: Further ``HexbinGlyph`` options and the shared styling (``cmap``, ``vmin``, ``vmax``,
+                ``scheme``, ``k``, ``color_scale``, ``edge_color``, ``line_width``, ``extent``, …).
+
+        Returns:
+            The cells' ``PolyCollection`` (registered as a Scene layer), or ``None`` when the data lies
+            entirely outside what the display CRS shows.
+
+        Raises:
+            ValueError: if ``features`` is empty or holds non-point geometry; if ``gridsize`` is not a
+                positive whole number (or a pair of them), or ``min_count`` is not a non-negative whole
+                number — both are checked in the builder, since unchecked they reach matplotlib's
+                ``hexbin`` and come back as arithmetic naming neither the method nor the argument; or if
+                ``column`` names a column that does not hold numbers, which the reducer needs.
+            KeyError: if ``column`` names no feature attribute — the refusal names ``hexbin()``, the
+                keyword and the column, and lists the columns the features do have.
+
+        Examples:
+            - Count the points per cell; three coincident points are one cell holding 3:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0, 6.0, 100.0]},
+                ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> sorted(m.hexbin(wells, gridsize=4).get_array().tolist())
+                [1.0, 3.0]
+                >>> m.close()
+
+                ```
+            - Aggregate a column instead; the origin cell is the mean of 2, 4 and 6:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0, 6.0, 100.0]},
+                ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> sorted(m.hexbin(wells, "depth", reduce="mean", gridsize=4).get_array().tolist())
+                [4.0, 100.0]
+                >>> m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props["via"]
+                'hexbin'
+                >>> m.close()
+
+                ```
+            - A lattice nothing could be binned onto is refused here, naming the argument, rather than
+              surfacing as matplotlib arithmetic several frames down:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0]},
+                ...     geometry=[Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> for lattice in ({"gridsize": 0}, {"gridsize": 4, "min_count": -1}):
+                ...     try:
+                ...         m.hexbin(wells, **lattice)
+                ...     except ValueError as error:
+                ...         print(error)
+                hexbin() needs gridsize= as a whole number >= 1; got 0
+                hexbin() needs min_count= as a whole number >= 0; got -1
+                >>> m.close()
+
+                ```
+            - A ``column`` these features do not carry is named with the columns they do, and one that
+              holds text is refused for what the reducer cannot do with it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> wells = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"depth": [2.0, 4.0], "site": ["north", "south"]},
+                ...     geometry=[Point(0, 0), Point(8, 8)],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> try:
+                ...     m.hexbin(wells, "dpeth", gridsize=4)
+                ... except KeyError as error:
+                ...     print(error.args[0])
+                hexbin(): column='dpeth' is not a property of these features; available: ['depth', 'site']
+                >>> try:
+                ...     m.hexbin(wells, "site", gridsize=4)
+                ... except ValueError as error:
+                ...     print(error)
+                hexbin() needs column='site' to name a column of numbers, and it holds str values that are not numbers
+                >>> m.close()
+
+                ```
+
+        See Also:
+            kde: the smoothed density of the same points.
+            quadtree: points aggregated into adaptive square cells.
+        """
+        gridsize, min_count = _hexbin_lattice(gridsize, min_count)
+        held_reduce = None if isinstance(reduce, str) else reduce
+        return self._draw(
+            LayerRecord(
+                "choropleth",
+                source=features,
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "hexbin",
+                        "column": column,
+                        "reduce": reduce if isinstance(reduce, str) else None,
+                        "gridsize": gridsize,
+                        "min_count": min_count,
+                    }
+                ),
+                opts=opts,
+                key=held_reduce,
+            )
+        )
+
+    @_skips_off_limb
     def kde(
         self,
         features: Any,
@@ -2742,6 +3238,214 @@ class VectorMixin(_MixinBase):
         )
 
     @_skips_off_limb
+    def lines(
+        self,
+        features: Any,
+        *,
+        column: Optional[str] = None,
+        scheme: Optional[Any] = None,
+        k: int = 5,
+        cmap: Optional[Any] = None,
+        width: float | str | None = None,
+        color: Optional[Any] = None,
+        opacity: Optional[float] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Any:
+        """Draw line features — rivers, roads, tracks, reach networks (pyramids lines → ``FlowGlyph``).
+
+        The Core contract's ``lines``, with the web tier's keywords: a constant colour, or a colour per
+        feature from ``column`` (classified by ``scheme``/``k``), and a width that is either one number or a
+        column. ``MultiLineString`` features draw one path per part, each carrying its feature's values.
+        :meth:`sankey` draws the same geometry as a flow map, with flow defaults.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries, or a
+                path or URL to one (reprojected to the display CRS). Only a path-backed layer can be written
+                down.
+            column: Numeric column whose value colours each line; ``None`` (default) draws one colour.
+            scheme: A classification scheme cutting ``column`` into ``k`` classes (``"quantiles"``,
+                ``"equal_interval"``, …); ``None`` (default) is a continuous ramp.
+            k: Number of classes for ``scheme``.
+            cmap: The colormap ``column`` is coloured through; ``None`` leaves cleopatra's default.
+            width: Line width in points — a positive number — or the name of a numeric column whose values
+                scale each line's width (between ``width_limits``, a ``FlowGlyph`` option). ``None``
+                leaves cleopatra's width.
+            color: The colour of every line when ``column`` is ``None`` — any matplotlib colour. A built
+                ``ColorScaling`` or ``Normalize`` is instead the colour *scaling* of ``column``, as it is on
+                every other static builder. A string that is not a colour is refused rather than passed on,
+                with ``column=`` named as what takes a column's name.
+            opacity: Layer opacity, 0 transparent to 1 opaque.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the axes (#327).
+            **opts: Further ``FlowGlyph`` options (``width_limits``, ``width_scale``, ``draw_order``,
+                ``glow``, …).
+
+        Returns:
+            The ``LineCollection`` (registered as a Scene layer), or ``None`` when the data lies entirely
+            outside what the display CRS shows.
+
+        Raises:
+            ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a
+                positive finite number (a line has no negative thickness); if ``color`` is a string that
+                is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a
+                column's name; or if ``column`` or a column ``width`` names a column that does not hold
+                numbers, which a ramp and a width scale both need.
+            KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names
+                ``Map.lines()``, the keyword and the column, and lists the columns there are.
+
+        Examples:
+            - Colour reaches by discharge, classified into three classes, with one width:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> reaches = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"discharge": [10.0, 40.0, 25.0]},
+                ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 1)]),
+                ...               LineString([(2, 1), (3, 2)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> with Map(crs=4326) as m:
+                ...     lc = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
+                ...     lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})
+                ...     m.figure_spec.layers.get(m.layer_ids[-1]).kind
+                ([10.0, 40.0, 25.0], [2.0])
+                'lines'
+
+                ```
+            - One colour, widths scaled by a column:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> roads = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"lanes": [1, 4]},
+                ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> with Map(crs=4326) as m:
+                ...     lc = m.lines(roads, width="lanes", color="dimgray")
+                ...     widths = lc.get_linewidths()
+                >>> bool(widths[1] > widths[0])
+                True
+
+                ```
+            - A width a line cannot have, a column name under ``color=``, and a text column under
+              ``column=`` are each refused by name — and the colour refusal points at the keyword that does
+              take a column's name:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> roads = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"name": ["a", "b"], "lanes": [1.0, 4.0]},
+                ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> for wrong in ({"width": -2.0}, {"color": "lanes"}, {"column": "name"}):
+                ...     try:
+                ...         m.lines(roads, **wrong)
+                ...     except ValueError as error:
+                ...         print(str(error)[:63])
+                Map.lines() needs width= as a positive number of points, or the
+                Map.lines() needs color= as one matplotlib colour for every lin
+                Map.lines() needs column='name' to name a column of numbers, an
+                >>> m.close()
+
+                ```
+            - A column name these features do not carry is named under the keyword it was given under,
+              with the columns they do carry listed:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth import Map
+                >>> roads = FeatureCollection(gpd.GeoDataFrame(
+                ...     {"name": ["a", "b"], "lanes": [1.0, 4.0]},
+                ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],
+                ...     crs="EPSG:4326",
+                ... ))
+                >>> m = Map(crs=4326)
+                >>> for wrong in ({"column": "flow"}, {"width": "order"}):
+                ...     try:
+                ...         m.lines(roads, **wrong)
+                ...     except KeyError as error:
+                ...         print(error.args[0])
+                Map.lines(): column='flow' is not a property of these features; available: ['lanes', 'name']
+                Map.lines(): width='order' is not a property of these features; available: ['lanes', 'name']
+                >>> m.close()
+
+                ```
+
+        See Also:
+            sankey: the same geometry drawn as a flow map.
+        """
+        if width is not None and not isinstance(width, str):
+            # A scalar width reached the collection exactly as written, negatives included
+            # (`get_linewidths() == [-2.0]`), and zero drew lines of no width at all (review L4).
+            if _as_finite(width, "width", _LINES_CALLER) <= 0.0:
+                raise ValueError(
+                    f"{_LINES_CALLER} needs width= as a positive number of points, or the name of a "
+                    f"column to scale the widths by; got {width!r}"
+                )
+        if isinstance(color, str) or (color is not None and is_color_like(color)):
+            # `color=` and `column=` sit next to each other in the signature, so a column name under
+            # `color=` is a plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA
+            # argument", which names neither this method nor either keyword (review L4).
+            try:
+                line_color: Optional[Any] = to_hex(color, keep_alpha=True)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
+                    f"{color!r} is not one. To colour the lines by a column's values instead, pass "
+                    f"column={color!r}"
+                ) from None
+        else:
+            line_color = None
+            if color is not None:
+                opts["color"] = color
+        if cmap is not None:
+            opts["cmap"] = cmap
+        if scheme is not None:
+            opts["scheme"] = scheme
+            opts["k"] = k
+        return self._draw(
+            LayerRecord(
+                "lines",
+                source=features,
+                name=name,
+                visible=visible,
+                symbology=Symbology(
+                    props={
+                        "via": "lines",
+                        "column": column,
+                        "width": width,
+                        "color": line_color,
+                        "opacity": None if opacity is None else float(opacity),
+                    }
+                ),
+                opts=opts,
+            )
+        )
+
+    @_skips_off_limb
     def sankey(
         self,
         features: Any,
@@ -2777,6 +3481,9 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: if ``features`` contains non-line geometry.
+
+        See Also:
+            lines: the same geometry as a plain line layer, with line defaults and the Core keywords.
 
         Examples:
             - Draw flow lines coloured and width-scaled by columns:

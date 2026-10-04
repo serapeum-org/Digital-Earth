@@ -173,7 +173,9 @@
         "labels",
         "lakes",
         "land",
+        "lines",
         "mesh",
+        "nightshade",
         "ocean",
         "points",
         "polygons",
@@ -182,6 +184,7 @@
         "rivers",
         "streamlines",
         "text",
+        "tissot",
         "unstructured",
         "vectors"
       ],
@@ -517,9 +520,7 @@
         "set_bounds"
       ],
       "interactive": [],
-      "matplotlib": [
-        "lines"
-      ],
+      "matplotlib": [],
       "web": []
     },
     "tier2": [
@@ -645,6 +646,7 @@
     "bar_by",
     "boxplot",
     "envelope",
+    "facet",
     "gallery",
     "get_source",
     "grid",

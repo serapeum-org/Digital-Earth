@@ -11,8 +11,8 @@ their own out of band.
 
 Out of scope here (deferred): ``pmtiles`` (needs the optional ``pmtiles`` reader, intentionally not in the
 ``[web]`` extra); a **minimap** (py-maplibregl ships no such control, and it would need a custom HTML/JS one).
-The ``measure`` tool exposes the drawn geometry for pyramids to compute geodesic distance/area (the GIS
-part).
+The ``measure`` tool's drawn geometry comes back through ``drawn_features`` as a pyramids ``FeatureCollection``,
+for pyramids to compute geodesic distance/area (the GIS part).
 """
 
 import html
@@ -75,6 +75,10 @@ _SWITCHER_THEMES = frozenset({"default", "simple"})
 #: py-maplibregl's switcher control is. An opacity slider or a basemap picker would each need a control the
 #: library does not ship, so naming either is refused rather than accepted and dropped.
 _OFFERED_CONTROLS = ("visibility",)
+
+#: The CRS MapboxDraw reports drawn geometry in. GeoJSON coordinates are lon/lat by definition, whatever the
+#: map shows, so :meth:`DecorationMixin.drawn_features` stamps this rather than reading it off the map.
+_DRAWN_CRS = 4326
 
 
 #: Styling for the small floating panels this tier builds — the legend and the title — kept with the
@@ -1701,11 +1705,11 @@ class DecorationMixin(_MixinBase):
 
         Note this adds a **drawing** control, not a live on-map readout: it does not display the distance/area
         number on the map (that GIS computation is left to pyramids, below). It enables MapLibre's draw control
-        scoped to line and/or polygon geometries, so the user draws the shape to measure. The drawn GeoJSON is
-        available on the rendered widget
-        (``draw_feature_collection_all`` and the ``draw_features_created``/``…_updated`` events). Computing the
-        numeric distance/area from that geometry is a **GIS** operation — do it in pyramids (geodesic length /
-        area), keeping this tier to the (visualization) drawing control.
+        scoped to line and/or polygon geometries, so the user draws the shape to measure. Once the map is shown,
+        :meth:`drawn_features` returns what was drawn as a pyramids ``FeatureCollection`` (the widget's own
+        ``draw_features_created``/``…_updated`` events stay available for a caller who wants to observe them).
+        Computing the numeric distance/area from that geometry is a **GIS** operation — do it in pyramids
+        (geodesic length / area), keeping this tier to the (visualization) drawing control.
 
         Args:
             distance: Offer the line tool (measure distance along a path).
@@ -1735,6 +1739,193 @@ class DecorationMixin(_MixinBase):
 
         self._record_furniture("measure", anchor=position, distance=distance, area=area)
         return self._queue(apply)
+
+    def drawn_features(self, widget: Any = None) -> Any:
+        """Return the shapes drawn on the map, as a pyramids ``FeatureCollection`` in EPSG:4326.
+
+        The draw control :meth:`measure` adds runs in the browser, and py-maplibregl syncs everything it holds
+        back to the widget's ``draw_feature_collection_all`` trait on every create, update and delete. This
+        reads that trait — by default from the widget :meth:`render` built last, which is the one ``show()``
+        or a notebook cell put on screen — and hands it back as the tier's vector type, ready for a pyramids
+        clip, mask or zonal statistic. MapboxDraw always reports lon/lat, so the result is in EPSG:4326.
+
+        Each row keeps MapboxDraw's feature ``id`` in an ``id`` column, which is what the widget's
+        ``draw_features_created``/``…_updated``/``…_deleted`` events name, so a row can be matched to them.
+        A feature carrying an ``id`` **property** of its own — one set through ``draw.setFeatureProperty``,
+        or imported with the shape — does not displace it: the draw id wins wherever there is one. Where
+        there is none (``id`` absent or ``None`` beside the geometry, which MapboxDraw never leaves but a
+        caller-supplied widget or a trait set from Python can) the feature's own property stands, and a
+        feature with no ``id`` of either kind reads ``None``. The column is there on the empty collection
+        too, so ``drawn["id"]`` reads the same whether anything was drawn.
+
+        Args:
+            widget: The ``MapWidget`` to read, for a caller holding one from an earlier :meth:`render`.
+                ``None`` reads the last widget this map rendered.
+
+        Returns:
+            A ``FeatureCollection`` with one row per drawn shape — empty (no rows, still EPSG:4326, still
+            carrying ``id``) when nothing is drawn or everything drawn was deleted.
+
+        Raises:
+            RuntimeError: when ``widget`` is ``None`` and the map has never been rendered, so no widget
+                exists for anyone to have drawn on.
+            TypeError: when ``widget`` has no ``draw_feature_collection_all`` trait (for example the
+                time-slider composite :meth:`render` returns for a temporal map — pass nothing instead).
+
+        Examples:
+            - Stand in for the browser by setting the synced trait the way the front-end does after a user
+              draws one triangle:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> widget = m.render()
+                >>> widget.draw_feature_collection_all = {"type": "FeatureCollection", "features": [{
+                ...     "id": "a1", "type": "Feature", "properties": {},
+                ...     "geometry": {"type": "Polygon",
+                ...                  "coordinates": [[[10, 50], [12, 50], [11, 52], [10, 50]]]}}]}
+                >>> drawn = m.drawn_features()
+                >>> len(drawn), drawn.epsg, list(drawn["id"])
+                (1, 4326, ['a1'])
+                >>> tuple(float(v) for v in drawn.total_bounds)
+                (10.0, 50.0, 12.0, 52.0)
+
+                ```
+            - A map nobody drew on gives an empty collection, not an error — and one carrying the same
+              ``id`` column, so the matching code above needs no ``len()`` branch in front of it:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> _ = m.render()
+                >>> empty = m.drawn_features()
+                >>> len(empty), list(empty["id"])
+                (0, [])
+
+                ```
+            - A shape that carries an ``id`` property of its own keeps its other properties and still
+              reports the draw id, because the draw id wins wherever there is one:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> widget = m.render()
+                >>> widget.draw_feature_collection_all = {"type": "FeatureCollection", "features": [{
+                ...     "id": "draw-1", "type": "Feature",
+                ...     "properties": {"id": "mine", "label": "plot A"},
+                ...     "geometry": {"type": "Point", "coordinates": [8.0, 51.0]}}]}
+                >>> drawn = m.drawn_features()
+                >>> list(drawn["id"]), list(drawn["label"])
+                (['draw-1'], ['plot A'])
+
+                ```
+            - The same shape with **no** draw id keeps its own ``id`` instead of losing it to ``None``:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> widget = m.render()
+                >>> widget.draw_feature_collection_all = {"type": "FeatureCollection", "features": [{
+                ...     "type": "Feature",
+                ...     "properties": {"id": "mine", "label": "plot A"},
+                ...     "geometry": {"type": "Point", "coordinates": [8.0, 51.0]}}]}
+                >>> drawn = m.drawn_features()
+                >>> list(drawn["id"]), list(drawn["label"])
+                (['mine'], ['plot A'])
+
+                ```
+
+        See Also:
+            measure: adds the draw control this reads from.
+            digitalearth.web.base.WebMapBase.render: builds the widget that is read by default.
+        """
+        if widget is None:
+            widget = self._widget
+            if widget is None:
+                raise RuntimeError(
+                    "drawn_features() reads the widget the map was drawn on, and this map has not been "
+                    "rendered yet; call render() or show() (or display the map in a notebook) first"
+                )
+        if not hasattr(widget, "draw_feature_collection_all"):
+            raise TypeError(
+                f"drawn_features() needs a maplibre MapWidget carrying the draw_feature_collection_all trait; "
+                f"got {type(widget).__name__}"
+            )
+        from pyramids.feature import FeatureCollection
+
+        collection = widget.draw_feature_collection_all or {}
+        features = [
+            {**feature, "properties": self._drawn_properties(feature)}
+            for feature in collection.get("features") or []
+        ]
+        if not features:
+            # Declared with the `id` column rather than built as a bare geometry list: the documented
+            # `drawn["id"]` otherwise raised `KeyError` precisely on the "nobody drew anything" path this
+            # presents as the safe one, so every caller had to branch on `len()` first (review M5).
+            return FeatureCollection({"id": []}, geometry=[], crs=_DRAWN_CRS)
+        return FeatureCollection.from_features(features, crs=_DRAWN_CRS)
+
+    @staticmethod
+    def _drawn_properties(feature: dict) -> dict:
+        """Return one drawn feature's properties with its ``id`` column settled.
+
+        Three readings have to hold at once, and the first two pulled against each other:
+
+        - A feature carrying an ``id`` **property** of its own — set through ``draw.setFeatureProperty``,
+          or imported with the shape — must not displace MapboxDraw's draw id, because the draw id is what
+          the create/update/delete events name (review M4). So the draw id is written over it.
+        - It must not be displaced *by nothing*. The write was unconditional, so a feature with no draw id
+          had its own property replaced with ``None`` — measured ``id column: [None]`` for properties
+          ``{"id": "mine", "label": "plot A"}`` — which the property survived before the M4 fix. That is a
+          regression, so the draw id is written only when there is one (review L4).
+        - The column must exist whatever the feature holds, so ``drawn["id"]`` never raises on a path
+          presented as the safe one (review M5). Dropping the key altogether would have taken that back,
+          so a feature with no id of either kind gets an explicit ``None``.
+
+        Args:
+            feature: One GeoJSON feature as the widget's ``draw_feature_collection_all`` holds it.
+
+        Returns:
+            Its ``properties``, copied, carrying an ``id`` key: the draw id when there is one, else the
+            feature's own ``id`` property, else ``None``.
+
+        Examples:
+            - The draw id wins over a property of the same name, and the other properties come through
+              untouched:
+                ```python
+                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> DecorationMixin._drawn_properties({
+                ...     "id": "draw-1",
+                ...     "properties": {"id": "mine", "label": "plot A"},
+                ...     "geometry": {"type": "Point", "coordinates": [8.0, 51.0]},
+                ... })
+                {'id': 'draw-1', 'label': 'plot A'}
+
+                ```
+            - With no draw id — ``id`` absent, or present as ``None`` — the feature's own property stands
+              rather than being replaced by nothing:
+                ```python
+                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> own = {"properties": {"id": "mine", "label": "plot A"}}
+                >>> DecorationMixin._drawn_properties(own)
+                {'id': 'mine', 'label': 'plot A'}
+                >>> DecorationMixin._drawn_properties({**own, "id": None})
+                {'id': 'mine', 'label': 'plot A'}
+
+                ```
+            - A feature with no id of either kind still gets the column, so ``drawn["id"]`` reads the same
+              whatever was drawn:
+                ```python
+                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> DecorationMixin._drawn_properties({"properties": {"label": "plot B"}})
+                {'label': 'plot B', 'id': None}
+                >>> DecorationMixin._drawn_properties({})
+                {'id': None}
+
+                ```
+        """
+        properties = dict(feature.get("properties") or {})
+        draw_id = feature.get("id")
+        if draw_id is not None:
+            properties["id"] = draw_id
+        properties.setdefault("id", None)
+        return properties
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:

@@ -1211,7 +1211,7 @@ _BUILT_IN_KINDS = (
     (
         "lines",
         "lines",
-        "line features — interactive path, web lines",
+        "line features — static/interactive/web lines",
         "data",
     ),
     (
@@ -1229,7 +1229,7 @@ _BUILT_IN_KINDS = (
     (
         "choropleth",
         "polygons",
-        "polygons coloured by a column — choropleth, static grid_cells/cartogram",
+        "polygons coloured by a column — choropleth, static grid_cells/cartogram/quadtree/hexbin",
         "data",
     ),
     (
@@ -1303,6 +1303,18 @@ _BUILT_IN_KINDS = (
         "none",
         "a 3-D model placed on the map — web gltf",
         "data",
+    ),
+    (
+        "nightshade",
+        "none",
+        "the night side of the day/night terminator at one instant — static nightshade",
+        "overlay",
+    ),
+    (
+        "tissot",
+        "none",
+        "Tissot indicatrices, circles of one ground radius through the projection — static tissot",
+        "overlay",
     ),
     (
         "custom:matplotlib",

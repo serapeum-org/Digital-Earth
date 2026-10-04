@@ -18,6 +18,7 @@ STATIC_EXPORTS = {
     "Scene": "digitalearth.static.scene",
     "Map": "digitalearth.static.map",
     "TexturedGlobe": "digitalearth.static.textured_globe",
+    "facet": "digitalearth.static.figure",
     "grid": "digitalearth.static.figure",
     "shared_colorbar": "digitalearth.static.figure",
 }

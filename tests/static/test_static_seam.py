@@ -170,6 +170,10 @@ DATA_BUILDERS = {
         lambda canvas, given: canvas.quadtree(given["points"], nmax=1),
     ),
     "kde": ("heatmap", lambda canvas, given: canvas.kde(given["points"])),
+    "hexbin": (
+        "choropleth",
+        lambda canvas, given: canvas.hexbin(given["points"], "fid", gridsize=5),
+    ),
     "labels": (
         "labels",
         lambda canvas, given: canvas.labels(given["points"], "fid"),
@@ -177,6 +181,10 @@ DATA_BUILDERS = {
     "sankey": (
         "flow",
         lambda canvas, given: canvas.sankey(given["lines"], column="flow"),
+    ),
+    "lines": (
+        "lines",
+        lambda canvas, given: canvas.lines(given["lines"], column="flow"),
     ),
 }
 
@@ -192,6 +200,11 @@ DECORATION_BUILDERS = {
     "ocean": ("ocean", lambda canvas: canvas.ocean()),
     "lakes": ("lakes", lambda canvas: canvas.lakes()),
     "rivers": ("rivers", lambda canvas: canvas.rivers()),
+    "nightshade": (
+        "nightshade",
+        lambda canvas: canvas.nightshade("2026-03-20T12:00:00"),
+    ),
+    "tissot": ("tissot", lambda canvas: canvas.tissot()),
 }
 
 
