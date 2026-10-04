@@ -1130,11 +1130,16 @@ class RasterMixin(_MixinBase):
                 ... )
                 >>> list(sig.hatches)
                 ['///', '']
-                >>> legend = m.legend("sig", labels=["p < 0.05"]).ax.get_legend()
+                >>> legend = m.legend(
+                ...     "sig", labels=["p < 0.05", "p >= 0.05"]
+                ... ).ax.get_legend()
                 >>> [t.get_text() for t in legend.get_texts()], legend.legend_handles[0].get_hatch()
                 (['p < 0.05'], '///')
 
                 ```
+              ``labels=`` carries one label per band ``levels=`` declares — two here — while the key draws only
+              the bands that are actually hatched and hold data, which is the first. A recorded ``labels=``
+              therefore keeps working when the data changes and a band empties.
             - Each of the three band keywords is refused where it would have no effect, by name — a line
               render has no bands to hatch, and the other two have nothing to hatch *with*:
                 ```python
