@@ -154,46 +154,6 @@ def placement_of(record: "LayerRecord") -> Optional[str]:
     return AT_INDICES if isinstance(record.source, np.ndarray) else IN_DISPLAY_CRS
 
 
-def recorded_title(title: Any) -> Optional[str]:
-    """Return the heading a figure records for what was handed to ``Axes.set_title``.
-
-    The record has to agree with the drawing, and the two vocabularies are not the same:
-    :class:`~digitalearth.base.spec.PanelSpec` holds a non-empty string or ``None``, while ``Axes.set_title``
-    takes anything it can render and spells "no title" three ways. Measured on a bare axes:
-    ``set_title(123)`` draws ``'123'``, ``set_title(4.5)`` draws ``'4.5'``, ``set_title(None)`` draws ``''``
-    and ``set_title("   ")`` draws the spaces. So the record follows matplotlib rather than refusing a call
-    that has always worked, and a title with nothing readable in it is recorded as no title.
-
-    Args:
-        title: What the caller passed to :meth:`Scene.set_title`.
-
-    Returns:
-        The text the axes draws, or ``None`` when the caller asked for no title — which is ``None`` itself,
-        ``""``, or whitespace. Blank rather than merely empty, for the reason :meth:`Scene._title_for` gives
-        about a guide's title: ``"   "`` is the same request as ``""`` and reads as one.
-
-    Examples:
-        - The three ways of asking for no title all record one answer:
-            ```python
-            >>> from digitalearth.static.scene import recorded_title
-            >>> [recorded_title(asked) for asked in (None, "", "   ")]
-            [None, None, None]
-
-            ```
-        - Anything else is recorded as the text matplotlib draws for it:
-            ```python
-            >>> from digitalearth.static.scene import recorded_title
-            >>> recorded_title("Discharge, 2020"), recorded_title(123)
-            ('Discharge, 2020', '123')
-
-            ```
-    """
-    if title is None:
-        return None
-    text = title if isinstance(title, str) else str(title)
-    return text if text.strip() else None
-
-
 def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Return the half of a caller's engine keywords that a figure carries.
 
@@ -1966,12 +1926,52 @@ class Scene(WatermarkMixin):
         )
         return self
 
+    @staticmethod
+    def _recorded_title(title: Any) -> Optional[str]:
+        """Return the heading a figure records for what was handed to ``Axes.set_title``.
+
+        The record has to agree with the drawing, and the two vocabularies are not the same:
+        :class:`~digitalearth.base.spec.PanelSpec` holds a non-empty string or ``None``, while
+        ``Axes.set_title`` takes anything it can render and spells "no title" three ways. Measured on a bare
+        axes: ``set_title(123)`` draws ``'123'``, ``set_title(4.5)`` draws ``'4.5'``, ``set_title(None)``
+        draws ``''`` and ``set_title("   ")`` draws the spaces. So the record follows matplotlib rather than
+        refusing a call that has always worked, and a title with nothing readable in it is recorded as no
+        title.
+
+        Args:
+            title: What the caller passed to :meth:`set_title`.
+
+        Returns:
+            The text the axes draws, or ``None`` when the caller asked for no title — which is ``None``
+            itself, ``""``, or whitespace. Blank rather than merely empty, for the reason
+            :meth:`_title_for` gives about a guide's title: ``"   "`` is the same request as ``""`` and
+            reads as one.
+
+        Examples:
+            - The three ways of asking for no title all record one answer, and everything else is recorded
+              as the text matplotlib draws for it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> [Scene._recorded_title(asked) for asked in (None, "", "   ")]
+                [None, None, None]
+                >>> Scene._recorded_title("Discharge, 2020"), Scene._recorded_title(123)
+                ('Discharge, 2020', '123')
+
+                ```
+        """
+        if title is None:
+            return None
+        text = title if isinstance(title, str) else str(title)
+        return text if text.strip() else None
+
     @property
     def title(self) -> Optional[str]:
         """The figure's heading, as its description carries it.
 
         Returns:
-            What :meth:`set_title` last recorded — the text it drew, normalised by :func:`recorded_title` —
+            What :meth:`set_title` last recorded — the text it drew, normalised by :meth:`_recorded_title` —
             or ``None`` for a scene nobody has titled and one whose title was cleared.
 
             It is **one** value, where the axes has three: matplotlib keeps a centre, a left and a right
@@ -2009,7 +2009,7 @@ class Scene(WatermarkMixin):
 
         Args:
             title: The text to place above the axes. Recorded as the text matplotlib draws for it
-                (:func:`recorded_title`), so ``None``, ``""`` and ``"   "`` are the one request "no title"
+                (:meth:`_recorded_title`), so ``None``, ``""`` and ``"   "`` are the one request "no title"
                 and are recorded as none.
             **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …). Styling for the
                 drawing only: ``loc="left"`` moves where the text is painted and the figure still records
@@ -2086,7 +2086,7 @@ class Scene(WatermarkMixin):
         self.ax.set_title(title, **kwargs)
         # After the draw, not before it: matplotlib owns what a title may be, and a record written first
         # would outlive a `set_title` the axes refused.
-        self._title = recorded_title(title)
+        self._title = self._recorded_title(title)
         return self
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
