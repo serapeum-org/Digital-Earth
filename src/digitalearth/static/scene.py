@@ -382,9 +382,12 @@ class Scene(WatermarkMixin):
         """Build the shared figure/axes host that layers render onto.
 
         Args:
-            ax: An existing axes to draw on. When given, the scene does **not** own the figure and will not
-                close it on exit — pass one to compose a Digital-Earth layer into a figure you are laying out
-                yourself. Give each scene an axes of its own: a second scene on the same axes clears what the
+            ax: An existing axes to draw on — pass one to compose a Digital-Earth layer into a figure you are
+                laying out yourself. **The figure is still closed on exit**, borrowed or not:
+                :meth:`close` calls ``pyplot.close`` on whatever figure the scene holds, so a ``with`` block
+                around a borrowed axes closes the caller's figure too. Keep the scene out of ``with`` (and do
+                not call :meth:`close`) when the figure has to outlive it; #371 asks whether a borrowed figure
+                should instead be spared. Give each scene an axes of its own: a second scene on the same axes clears what the
                 first drew on its opening render, and the first still describes it (see the class docstring).
             fig: The figure `ax` belongs to; taken from `ax` when omitted.
             figsize: Size of the figure created when `ax` is None, in inches.
@@ -1916,7 +1919,7 @@ class Scene(WatermarkMixin):
         )
         return self
 
-    def set_title(self, title: str, **kwargs) -> Self:
+    def set_title(self, title: str, **kwargs: Any) -> Self:
         """Set the axes title.
 
         Figure-level decoration rather than a layer: it draws straight onto :attr:`ax` and is not described,
@@ -1982,7 +1985,7 @@ class Scene(WatermarkMixin):
         """
         return self.stamp_mark(mark, **kwargs)
 
-    def save(self, path: str | os.PathLike[str], **kwargs) -> Path:
+    def save(self, path: str | os.PathLike[str], **kwargs: Any) -> Path:
         """Save the figure to ``path`` (``bbox_inches="tight"`` by default).
 
         Args:

@@ -64,24 +64,10 @@ band with no finite values — and logs a warning naming it, so one bad frame do
         - colorbars
         - legend
         - stamp
+        - set_title
+        - save
         - show
         - close
-
-<!-- set_title and save are rendered as their own blocks: their `**kwargs` carry no annotation, and only an
-     object's own block reliably applies `warn_missing_types: false`, so listing them as class members fails
-     `mkdocs build --strict`. Annotating `**kwargs: Any` in static/scene.py would let them rejoin the list. -->
-
-::: digitalearth.static.scene.Scene.set_title
-    options:
-      heading_level: 3
-      docstring_options:
-        warn_missing_types: false
-
-::: digitalearth.static.scene.Scene.save
-    options:
-      heading_level: 3
-      docstring_options:
-        warn_missing_types: false
 
 ::: digitalearth.static.figure.grid
     options:
