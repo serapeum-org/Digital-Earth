@@ -29,6 +29,7 @@ same `Scale` the layer publishes, so a swatch equals the colour that was drawn b
 by maintenance (#185).
 """
 
+import logging
 from dataclasses import dataclass
 from math import isfinite
 from typing import Any, List, Optional, Sequence, Tuple
@@ -71,6 +72,8 @@ GUIDE_KIND_KEY: str = "guide_kind"
 
 #: The two kinds of colour key this tier draws: a colorbar strip, or a list of labelled swatches.
 GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
+
+logger = logging.getLogger(__name__)
 
 #: The property a caller's own row labels for one layer's key are recorded under.
 #:
@@ -609,7 +612,8 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
 
     Returns:
         The plan :func:`paint_guide` draws, or ``None`` when there is nothing to draw — the guide is
-        switched off or absent, the layer carries no colour encoding, or nothing was drawn for it.
+        switched off or absent, the layer carries no colour encoding, nothing was drawn for it, or it is a
+        hatched layer whose bands the map marks none of (logged at ``WARNING``).
 
     Raises:
         ValueError: when a colorbar is asked for over a **categorical** scale, naming the swatch legend
@@ -633,6 +637,19 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
         hatches = _hatches_of(drawn.artist)
         if hatches is not None:
             spec, kept, rows = _hatch_rows(layer, drawn.artist, hatches, guide.title)
+            if not kept:
+                # Every band is unmarked, so there is not one row to draw — and a swatch legend with no
+                # swatches is an empty framed box carrying only its title, which is itself the class a
+                # reader looks for and does not find that `_marked_bands` drops rows to avoid (review L5).
+                # Logged rather than left silent, as `facet` logs the bar it leaves off an unmeasurable
+                # stack: the layer is on the figure, only its key is not.
+                logger.warning(
+                    "legend(): layer %r marks none of its %d hatched bands, so there are no rows to key "
+                    "it with; no legend is drawn rather than an empty box",
+                    layer.id,
+                    len(hatches),
+                )
+                return None
             if not guide.show:
                 return None
             return GuidePlan(

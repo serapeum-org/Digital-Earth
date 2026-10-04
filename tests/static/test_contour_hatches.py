@@ -387,6 +387,38 @@ class TestTheHatchLegend:
         with pytest.raises(ValueError, match="4 bands"):
             canvas.legend("declared", labels=["a", "b"])
 
+    def test_a_layer_that_marks_no_band_gets_no_legend_box(self, p_values, caplog):
+        """With nothing keyed there is nothing to key, so no box goes on the axes at all.
+
+        Args:
+            p_values: The p-value field, whose values lie in [0.01, 0.95].
+            caplog: pytest's log capture.
+
+        Test scenario:
+            - Levels that sit entirely above the data — ``[5, 6, 7]`` over p-values that stop at 0.95 — so
+              both declared bands are drawn as paths with no vertices and no band is keyed.
+            - An empty framed box carrying only its title used to go on the axes: measured
+              ``legend present: True  texts: []  title: Significance``. That heading is itself the class a
+              reader looks for and does not find, which is what round 1's M1 fix removed rows for.
+            - Nothing is drawn now, and the skipped key is logged rather than left silent.
+        """
+        canvas = Map(crs=4326)
+        canvas.contours(
+            p_values,
+            levels=[5.0, 6.0, 7.0],
+            filled=True,
+            hatches=["///", ".."],
+            fill=False,
+            name="none",
+        )
+        with caplog.at_level("WARNING", logger="digitalearth.static.guides"):
+            canvas.legend("none", title="Significance")
+        assert canvas.ax.get_legend() is None, (
+            "a layer that marks no band must get no legend box, got "
+            f"{canvas.ax.get_legend()}"
+        )
+        assert "marks none of its" in caplog.text, caplog.text
+
     def test_an_unhatched_filled_layer_is_keyed_as_before(self, p_values):
         """Hatching changes nothing for a layer that has none.
 
