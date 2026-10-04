@@ -198,6 +198,7 @@ nav:
     - Web maps: reference/web_map.md
     - Keyed basemaps: reference/basemaps.md
     - TexturedGlobe (3-D globe): reference/textured_globe.md
+    - Headless 3-D rendering: reference/headless_3d.md
     - Saving animations: reference/animation.md
     - Composite stretch: reference/stretch.md
   - About:
