@@ -41,7 +41,7 @@ from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
 from matplotlib.font_manager import font_family_aliases, fontManager
 from matplotlib.text import Text
-from pyramids.base.crs import reproject_coordinates
+from pyramids.base.crs import CRSError, crs_from_user_input, reproject_coordinates
 
 from digitalearth.base.basemaps import (
     DEFAULT_BASEMAP_PROVIDER,
@@ -741,13 +741,15 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 #: The latitude a night-shade vertex is pulled back to before it is projected. A night region that holds a
-#: pole runs along that pole's map edge, and a projection with no finite image of the pole throws that run
-#: enormously far out: PROJ clamps rather than returning infinity, so Web Mercator places latitude 90 at
-#: ``y ≈ 2.4e8`` m — twelve times the map's own half-height — and Antarctic Polar Stereographic (EPSG:3031)
-#: places the *opposite* pole at ``y ≈ 4.0e23`` m. The shade still draws, but a bare axes fitted to it comes
-#: out that far out with it. A tenth of a degree short of the pole is a finite point just outside the map
-#: instead: the same Web Mercator vertex lands at ``y ≈ 4.5e7`` m, and the fitted view is four times tighter
-#: (a ``y`` span of ``6.0e7`` m against ``2.8e8`` m for a June-solstice shade).
+#: pole runs along that pole's map edge; cleopatra drops a non-finite vertex, so a projection with no image
+#: of the pole would lose that run and close the shade straight along the terminator, leaving the polar cap
+#: unshaded. PROJ clamps rather than returning infinity, but it clamps enormously far out: Web Mercator
+#: places latitude 90 at ``y ≈ 2.4e8`` m — twelve times the map's own half-height — and Antarctic Polar
+#: Stereographic (EPSG:3031) places the *opposite* pole at ``y ≈ 4.0e23`` m. A tenth of a degree short of the
+#: pole is a point every projection places finitely, and a much closer one — the same Web Mercator vertex
+#: lands at ``y ≈ 4.5e7`` m — but it is still outside the map, and in EPSG:3031 it is still ``y ≈ 1.4e10`` m
+#: out. So this clamp is what keeps the *shade* whole, and not what keeps the *view* usable: that is
+#: :func:`_fit_within_crs_extent`'s job (round 3, M2).
 _NIGHT_POLE_LATITUDE = 89.9
 
 #: The centres ``tissot()`` draws when it is given none: every 30 degrees of longitude, offset from the
@@ -836,6 +838,70 @@ def _night_ring_projector(scene: Any) -> Any:
         return _lonlat_to_display(scene, dense)
 
     return project
+
+
+def _crs_display_extent(crs: Any) -> Optional[Tuple[float, float, float, float]]:
+    """Measure a display CRS's own extent, in its own coordinates, from the area of use it declares.
+
+    The lon/lat area of use is pyproj's, read from the CRS definition; it is projected here rather than
+    looked up, because what a view has to be bounded by is a box in *display* coordinates. The edges are
+    sampled rather than the four corners, for the reason :meth:`_axes_lonlat_extent` samples them.
+
+    Args:
+        crs: The display CRS.
+
+    Returns:
+        ``(west, south, east, north)`` in the CRS's own units, or ``None`` when it declares no area of use —
+        which a bare PROJ string such as ``+proj=robin`` does not (executed) — or when nothing in it
+        projects finitely. ``None`` means "unknown", and leaves the view alone.
+    """
+    try:
+        area = crs_from_user_input(crs).area_of_use
+    except (CRSError, TypeError, ValueError):
+        return None
+    if area is None:
+        return None
+    west, south, east, north = (float(value) for value in area.bounds)
+    xs, ys = _edge_samples(west, south, east, north)
+    try:
+        x, y = reproject_coordinates(xs, ys, from_crs=4326, to_crs=crs)
+    except (ValueError, RuntimeError):
+        return None
+    finite_x = [value for value in x if math.isfinite(value)]
+    finite_y = [value for value in y if math.isfinite(value)]
+    if not finite_x or not finite_y:
+        return None
+    return min(finite_x), min(finite_y), max(finite_x), max(finite_y)
+
+
+def _fit_within_crs_extent(scene: Any) -> None:
+    """Pull a freshly autoscaled view back inside the display CRS's own extent.
+
+    A night region that holds a pole is shaded to :data:`_NIGHT_POLE_LATITUDE`, and a projection with no
+    image of the pole places that vertex far outside its own map — ``y ≈ 1.4e10`` m in EPSG:3031 against the
+    ``± 3.3e6`` m it declares for itself. Autoscaling a bare axes to it framed a December polar night at
+    ``± 1.5e10`` m, roughly 4600 times the projection's extent, with Antarctica a sub-pixel dot (executed;
+    round 3, M2). Intersecting the fitted view with the declared extent keeps the fit where the projection
+    has something to show, and loses nothing: what lies outside is off the map by definition.
+
+    A CRS that declares no area of use is left alone, as is a view that does not meet the extent at all —
+    an unknown bound is not a reason to move a view that matplotlib has just fitted to real geometry.
+
+    Args:
+        scene: The map whose axes was just autoscaled.
+    """
+    extent = _crs_display_extent(scene.crs)
+    if extent is None:
+        return
+    west, south, east, north = extent
+    xmin, xmax = (float(value) for value in scene.ax.get_xlim())
+    ymin, ymax = (float(value) for value in scene.ax.get_ylim())
+    left, right = max(xmin, west), min(xmax, east)
+    bottom, top = max(ymin, south), min(ymax, north)
+    if right > left:
+        scene.ax.set_xlim(left, right)
+    if top > bottom:
+        scene.ax.set_ylim(bottom, top)
 
 
 #: Samples per side of the display grid a globe's night shade is evaluated on.
@@ -936,6 +1002,7 @@ def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnL
     if unframed:
         # cleopatra keeps the view it found, and a bare axes' view is matplotlib's unit square.
         scene.ax.autoscale()
+        _fit_within_crs_extent(scene)
     return DrawnLayer(artist=shade, artists=(shade,))
 
 
@@ -1710,7 +1777,9 @@ class DecorationMixin(_MixinBase):
         The terminator is computed by cleopatra (``cleopatra.basemap.solar``, a low-precision solar position
         good to well under a degree) and projected into the display CRS through pyramids. A night region that
         holds a pole is shaded to the pole on a flat map, and a globe shades only its visible hemisphere. On
-        an axes nothing has framed yet, the map is fitted to the shade; a framed view is kept.
+        an axes nothing has framed yet, the map is fitted to the shade and then pulled back inside the
+        display CRS's own extent, so a projection that places the pole far outside its map (EPSG:3031 puts
+        it ``1.4e10`` m out) still frames the region it covers; a framed view is kept.
 
         Args:
             when: The instant, as a ``datetime`` or ISO 8601 text. One with no time zone is UTC. The figure

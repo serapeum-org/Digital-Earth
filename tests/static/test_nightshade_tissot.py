@@ -24,11 +24,20 @@ EQUINOX_NOON = datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc)
 #: The June solstice at noon UTC: the south pole is in polar night.
 JUNE_NOON = datetime(2026, 6, 21, 12, 0, tzinfo=timezone.utc)
 
+#: The December solstice at noon UTC: the *north* pole is in polar night.
+DECEMBER_NOON = datetime(2026, 12, 21, 12, 0, tzinfo=timezone.utc)
+
 #: Web Mercator's sphere radius, in metres (EPSG:3857).
 MERCATOR_R = 6378137.0
 
 #: The mean Earth radius cleopatra's geodesic circles are drawn on, in metres (IUGG).
 MEAN_EARTH_R = 6371008.8
+
+#: EPSG:3031's latitude of true scale, in degrees south — its standard parallel.
+POLAR_TRUE_SCALE_LAT = 71.0
+
+#: The northern limit of EPSG:3031's declared area of use, in degrees.
+POLAR_AREA_OF_USE_LAT = -60.0
 
 
 def _mercator(lon: float, lat: float):
@@ -44,6 +53,22 @@ def _mercator(lon: float, lat: float):
     x = MERCATOR_R * math.radians(lon)
     y = MERCATOR_R * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
     return x, y
+
+
+def _polar_stereographic_south(lat: float) -> float:
+    """Distance from the south pole on spherical Antarctic Polar Stereographic, from the formula.
+
+    EPSG:3031 is ellipsoidal, so this runs about 0.4% short of what PROJ answers — far inside the
+    tolerance the tests that use it ask for, and independent of the code under test.
+
+    Args:
+        lat: Latitude in degrees, negative in the southern hemisphere.
+
+    Returns:
+        The radial distance from the pole, in metres.
+    """
+    scale = (1.0 + math.sin(math.radians(POLAR_TRUE_SCALE_LAT))) / 2.0
+    return 2.0 * MEAN_EARTH_R * scale * math.tan(math.radians(45.0 + lat / 2.0))
 
 
 def _covered(artist, xy) -> bool:
@@ -113,6 +138,39 @@ class TestNightshade:
         )
         assert not _covered(artist, _mercator(0.0, 80.0)), (
             "the north pole is in polar day in June"
+        )
+
+    def test_a_polar_night_fits_the_polar_projection_it_is_drawn_in(self):
+        """A bare EPSG:3031 axes is fitted to Antarctica, not to a view a thousand times its extent.
+
+        Test scenario:
+            A night region that holds a pole runs along that pole's map edge, and EPSG:3031 has no useful
+            image of the *north* pole: PROJ puts lat 90 at ``y = 4.0e23`` m, and even lat 89.9 — the
+            latitude the ring's vertices are pulled back to — at ``y = 1.4e10`` m. Autoscaling a bare axes
+            to that vertex framed the December solstice at ``+/- 1.5e10`` m, about 4600 times the
+            ``+/- 3.3e6`` m EPSG:3031 declares for itself, leaving Antarctica a sub-pixel dot. The fitted
+            view must stay inside that declared extent, whose radius is written out here from the
+            spherical polar stereographic formula.
+        """
+        canvas = Map(crs=3031)
+        canvas.nightshade(DECEMBER_NOON)
+        limit = 2.0 * _polar_stereographic_south(POLAR_AREA_OF_USE_LAT)
+        span = max(np.ptp(canvas.ax.get_xlim()), np.ptp(canvas.ax.get_ylim()))
+        assert span == pytest.approx(limit, rel=0.02), span
+
+    def test_the_south_polar_night_still_covers_the_pole_on_a_polar_projection(self):
+        """Fitting the view to the projection must not crop away the polar night it was drawn for.
+
+        Test scenario:
+            The sibling test above pins the view; this one pins that the shade is still in it. At the June
+            solstice everything south of about 66.6 S is in polar night, so a point at 80 S — placed here
+            from the spherical polar stereographic formula, on the lon 0 meridian, which EPSG:3031 puts on
+            the positive ``y`` axis — must fall inside the shade.
+        """
+        canvas = Map(crs=3031)
+        artist = canvas.nightshade(JUNE_NOON)
+        assert _covered(artist, (0.0, _polar_stereographic_south(-80.0))), (
+            "80 S is in polar night at the June solstice"
         )
 
     def test_an_empty_axes_is_framed_on_the_shade(self):
