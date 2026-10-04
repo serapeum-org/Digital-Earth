@@ -2811,7 +2811,6 @@ class VectorMixin(_MixinBase):
         return MplPath(np.asarray(verts), codes)
 
     @_skips_off_limb
-    @_skips_off_limb
     def hexbin(
         self,
         features: Any,
@@ -2925,6 +2924,7 @@ class VectorMixin(_MixinBase):
             )
         )
 
+    @_skips_off_limb
     def kde(
         self,
         features: Any,
