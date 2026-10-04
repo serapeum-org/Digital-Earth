@@ -245,27 +245,47 @@ class FrameUpdate:
             when :attr:`blocker` says no frame will be updated in place.
 
     Examples:
-        - An image field is the case the capability is for, so nothing blocks it:
+        - An image field is the case the capability is for, so nothing blocks it and there is no reason
+          to report:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
             >>> from digitalearth.static.maps.animation import FrameUpdate
             >>> scene = Map(crs=4326)
-            >>> FrameUpdate(scene, [], {}, kind="imshow").in_place
-            True
+            >>> plan = FrameUpdate(scene, [], {}, kind="imshow")
+            >>> plan.in_place, plan.blocker
+            (True, None)
+            >>> scene.close()
 
             ```
-        - A kind with no array to refill says why, in the words the refusal and the log line share:
+        - A kind with no array to refill says why, in the words the refusal and the log line share; so
+          does an option whose value belongs to the frame being drawn:
             ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.maps.animation import FrameUpdate
+            >>> scene = Map(crs=4326)
             >>> FrameUpdate(scene, [], {}, kind="contourf").blocker
             "kind='contourf' draws a contour set, which is cut from the values rather than handed new ones"
-
-            ```
-        - So does an option whose value belongs to the frame being drawn:
-            ```python
             >>> FrameUpdate(scene, [], {"scheme": "quantiles"}, kind="imshow").blocker
             "scheme='quantiles' is derived from the frame being drawn, which a kept artist cannot follow"
+            >>> scene.close()
+
+            ```
+        - An `update=` outside :attr:`MODES` is refused where the caller is, rather than at the first
+          frame:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.maps.animation import FrameUpdate
+            >>> scene = Map(crs=4326)
+            >>> FrameUpdate(scene, [], {}, kind="imshow", mode="inplace")
+            Traceback (most recent call last):
+                ...
+            ValueError: unknown update mode 'inplace'; choose one of ('auto', 'in_place', 'redraw')
             >>> scene.close()
 
             ```
@@ -377,6 +397,24 @@ class FrameUpdate:
 
         Returns:
             ``True`` when nothing blocks the in-place path.
+
+        Examples:
+            - It is the one question :attr:`blocker` answers twice over, so the two always agree:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> scene = Map(crs=4326)
+                >>> FrameUpdate(scene, [], {}, kind="pcolormesh").in_place
+                True
+                >>> FrameUpdate(scene, [], {}, kind="rgb_composite").in_place
+                False
+                >>> FrameUpdate(scene, [], {}, kind="imshow", mode="redraw").in_place
+                False
+                >>> scene.close()
+
+                ```
         """
         return self.blocker is None
 
@@ -394,6 +432,44 @@ class FrameUpdate:
             ValueError: when ``blit=True`` or ``update="in_place"`` was asked for and this animation cannot
                 be drawn that way, with :attr:`blocker` as the reason; and when ``blit=True`` is combined
                 with per-frame ``titles``, which blitting cannot repaint.
+
+        Examples:
+            - The two answers the frame loop reads: the strategy itself, or ``None`` for "clear and
+              rebuild each time" — which is what an unblockable call gets under ``update="auto"``:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> scene = Map(crs=4326)
+                >>> plan = FrameUpdate(scene, [], {}, kind="imshow")
+                >>> plan.settle(blit=False) is plan
+                True
+                >>> print(FrameUpdate(scene, [], {}, kind="contour").settle(blit=False))
+                None
+                >>> scene.close()
+
+                ```
+            - Each refusal names what the caller asked for and why it cannot be had:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> scene = Map(crs=4326)
+                >>> refused = FrameUpdate(scene, [], {}, kind="contour", mode="in_place")
+                >>> refused.settle(blit=False)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: update='in_place' is not available for this animation: kind='contour' draws...
+                >>> titled = FrameUpdate(scene, [], {}, kind="imshow", titles=["Jan"])
+                >>> titled.settle(blit=True)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: blit=True cannot be combined with titles=...
+                >>> scene.close()
+
+                ```
         """
         if blit and self.blocker is not None:
             raise ValueError(
@@ -446,6 +522,54 @@ class FrameUpdate:
                 strict still makes. Otherwise a frame the display CRS cannot show hides the artist for that
                 frame, because "draws nothing" has to mean nothing *is* drawn rather than the previous
                 frame staying up.
+
+        Examples:
+            - The artist the first frame drew is given the second frame's values, with nothing else on
+              the axes touched:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> frames = [Dataset.from_array(arr=np.full((60, 120), v, "float32"), geo_ref=geo)
+                ...           for v in (1.0, 2.0)]
+                >>> m = Map(crs=4326)
+                >>> _ = m.field(frames[0], name="f")
+                >>> image = m.artist("f")
+                >>> float(np.asarray(image.get_array()).max())
+                1.0
+                >>> FrameUpdate(m, frames, {}, kind="imshow").apply(1, image)
+                True
+                >>> float(np.asarray(image.get_array()).max())
+                2.0
+                >>> m.close()
+
+                ```
+            - A frame on a different grid answers ``False`` instead of refilling the artist at the wrong
+              resolution, which is the frame loop's signal to clear and redraw from there on:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> fine = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> coarse = GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326)
+                >>> frames = [
+                ...     Dataset.from_array(arr=np.full((60, 120), 1.0, "float32"), geo_ref=fine),
+                ...     Dataset.from_array(arr=np.full((30, 60), 9.0, "float32"), geo_ref=coarse),
+                ... ]
+                >>> m = Map(crs=4326)
+                >>> _ = m.field(frames[0], name="f")
+                >>> FrameUpdate(m, frames, {}, kind="imshow").apply(1, m.artist("f"))
+                False
+                >>> m.close()
+
+                ```
         """
         method = _KIND_METHODS.get(self.kind, (self.kind, {}))[0]
         try:
@@ -1263,9 +1387,14 @@ class AnimationMixin(_MixinBase):
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
                 >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> stack = [Dataset.from_array(arr=np.full((60, 120), v, "float32"), geo_ref=geo)
+                ...          for v in (1.0, 2.0)]
                 >>> refused = Map(crs=4326)
-                >>> refused.animate(fields, kind="contourf", blit=True)  # doctest: +ELLIPSIS
+                >>> refused.animate(stack, kind="contourf", blit=True)  # doctest: +ELLIPSIS
                 Traceback (most recent call last):
                     ...
                 ValueError: blit=True needs frames that update one artist in place, ...

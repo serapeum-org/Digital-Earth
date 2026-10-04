@@ -517,8 +517,12 @@ class FieldColors:
 
         Two keywords state one thing, and both are cleopatra's rather than this tier's:
 
-        * ``center=`` symmetrises the limits to ``center ± max|data - center|``, so the ramp's middle lands
-          on the centre and one unit of departure is one step of colour on either side;
+        * ``center=`` symmetrises the colour limits on it — cleopatra's ``_center_limits`` takes the larger
+          of ``|vmin - center|`` and ``|vmax - center|`` as the half-range, so the result is
+          ``center ± that`` — and the ramp's middle then lands on the centre, one unit of departure being
+          one step of colour on either side. Measured: a band running ``-3`` to ``8`` with ``center=0``
+          draws through limits ``(-8.0, 8.0)``, and so does the same band with ``vmin=-3, vmax=8`` given
+          explicitly, because the symmetrisation is of the *limits* and not of the data;
         * ``color_scale="midpoint", midpoint=`` keeps the data's own asymmetric limits and moves the
           *colour* centre instead, through cleopatra's ``MidpointNormalize``.
 
@@ -565,7 +569,34 @@ class FieldColors:
             requested: The colormap the caller asked for, or ``None`` when the tier resolved one itself.
 
         Returns:
-            A diverging colormap built from `cmap`'s two end colours, or `cmap` itself.
+            A diverging colormap built from `cmap`'s two end colours, or `cmap` itself — the very object
+            that was passed in, so a declined call is a no-op rather than a rebuild.
+
+        Examples:
+            - A centre the band straddles replaces the ramp with a diverging one built from its ends:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> anomaly = np.array([-3.0, 0.0, 4.0, 8.0])
+                >>> FieldColors(center=0.0).ramp_over("viridis", anomaly, None).name
+                'viridis-diverging'
+
+                ```
+            - It declines three ways, each giving the resolved ramp straight back: no centre was stated,
+              the caller named their own colormap, or the band does not straddle the centre:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> anomaly = np.array([-3.0, 0.0, 4.0, 8.0])
+                >>> rainfall = np.array([12.0, 40.0, 88.0])
+                >>> FieldColors().ramp_over("viridis", anomaly, None)
+                'viridis'
+                >>> FieldColors(center=0.0).ramp_over("viridis", anomaly, "RdBu_r")
+                'viridis'
+                >>> FieldColors(center=0.0).ramp_over("viridis", rainfall, None)
+                'viridis'
+
+                ```
         """
         if self.center is None or requested is not None:
             return cmap
@@ -599,6 +630,17 @@ class FieldColors:
         Returns:
             ``False`` when none was stated, which is the signal to leave the resolved colormap exactly as it
             is — the reason this capability changes nothing for a figure that does not ask for it.
+
+        Examples:
+            - One stated colour is enough, and a divergence centre is not one of the three:
+                ```python
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> FieldColors(under="#0000ff").states_extremes
+                True
+                >>> FieldColors(center=0.0).states_extremes
+                False
+
+                ```
         """
         return any((self.missing, self.over, self.under))
 
@@ -620,6 +662,30 @@ class FieldColors:
 
         Returns:
             The layer, with its artist's colormap recoloured and the stated colours on its published scale.
+
+        Examples:
+            - The two halves of what it does, read back off a drawn field: the colours are on the drawn
+              colormap, and on the scale the figure's colour encoding carries — which is how another tier
+              reading the figure colours the same values the same way:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.colors import to_hex
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(
+                ...     np.arange(12.0).reshape(3, 4), name="g", over="#ff0000", missing="#cccccc"
+                ... )
+                >>> cmap = m.artist("g").get_cmap()
+                >>> to_hex(cmap.get_over()), to_hex(cmap.get_bad())
+                ('#ff0000', '#cccccc')
+                >>> described = m.figure_spec.layers.get("g").symbology.encodings["color"].scale
+                >>> described.extremes()
+                {'missing': '#cccccc', 'over': '#ff0000'}
+                >>> m.close()
+
+                ```
         """
         artist = drawn.artist
         if artist is None or not hasattr(artist, "set_cmap"):
@@ -1209,6 +1275,27 @@ class RasterMixin(_MixinBase):
                 categories rather than class edges — so :attr:`last_breaks` stays ``None`` and a
                 colorbar is refused in favour of the legend.
 
+                Four more of those keywords decide the **colour domain** and what falls outside it, and
+                they are declared in :data:`~digitalearth.static.render_compat.STATIC_STYLE_SCHEMA` (ST-3,
+                ST-10) rather than named in this signature:
+
+                * ``robust=True`` takes the limits from the band's 2nd and 98th percentile instead of its
+                  min and max, so one outlier stops flattening the rest of the field — xarray's spelling,
+                  honoured by cleopatra. Measured on a grid of zeros with two cells at 1000: the limits
+                  are ``(0.0, 20.0)`` rather than ``(0.0, 1000.0)``. An explicit ``vmin``/``vmax`` wins
+                  over it.
+                * ``center=`` is the value a diverging scale is built around. cleopatra symmetrises the
+                  limits on it, and this tier supplies the diverging **ramp** — built from the resolved
+                  colormap's own two ends — but only when the caller named no ``cmap`` of their own and
+                  the band straddles the centre. A centre outside the band keeps the sequential ramp and
+                  says so at ``WARNING``, because one arm would otherwise hold every value.
+                * ``missing=``, ``over=`` and ``under=`` colour what the ramp cannot place: a nodata cell,
+                  a value above the upper limit and one below the lower. They are this tier's own keywords
+                  (:class:`FieldColors`), folded onto the drawn colormap *and* onto the scale the layer
+                  publishes, so another tier reading the figure back colours those values the same way.
+                  Unstated, each leaves the colormap's own treatment alone — which is matplotlib's
+                  transparent "bad" and the ramp's end colours.
+
         Returns:
             This map, so a figure reads as one expression — measured:
             ``type(m.field(ds).set_title("Flow").colorbar()).__name__`` is ``'Map'`` (ST-20). **This is the
@@ -1258,8 +1345,41 @@ class RasterMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> with Map() as canvas:
                 ...     _ = canvas.field(np.arange(12.0).reshape(3, 4), name="grid")
-                ...     canvas._renderer.drawn["grid"].artist.get_extent()
+                ...     canvas.artist("grid").get_extent()
                 [-0.5, 3.5, -0.5, 2.5]
+
+                ```
+            - A diverging field: the centre asks for symmetric limits *and* a diverging ramp, and the
+              extreme colours say what a clipped value and a nodata cell are drawn as:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.colors import to_hex
+                >>> from digitalearth.static import Map
+                >>> anomaly = np.array([[-3.0, 0.0], [4.0, 8.0]])
+                >>> with Map() as m:
+                ...     _ = m.field(anomaly, name="anom", center=0.0, over="#ff0000", missing="#cccccc")
+                ...     m.artist("anom").get_clim()
+                ...     m.artist("anom").get_cmap().name
+                ...     to_hex(m.artist("anom").get_cmap().get_over())
+                (-8.0, 8.0)
+                'viridis-diverging'
+                '#ff0000'
+
+                ```
+            - A centre the band does not straddle keeps the sequential ramp rather than drawing one arm
+              of a diverging one, and says so in the log:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> rainfall = np.array([[12.0, 40.0], [50.0, 88.0]])
+                >>> with Map() as m:
+                ...     _ = m.field(rainfall, name="rain", center=0.0)
+                ...     m.artist("rain").get_cmap().name
+                'viridis'
 
                 ```
             - Classify a raster into four equal-interval classes, and read back the edges it was cut at:
@@ -1393,7 +1513,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.contours(
                 ...     p, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig"
                 ... )
-                >>> list(m._renderer.drawn["sig"].artist.hatches)
+                >>> list(m.artist("sig").hatches)
                 ['///', '']
                 >>> legend = m.legend(
                 ...     "sig", labels=["p < 0.05", "p >= 0.05"]
