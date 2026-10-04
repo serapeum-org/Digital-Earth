@@ -262,6 +262,27 @@ class TestTissot:
         expected = 2 * math.degrees(500_000.0 / MEAN_EARTH_R)
         assert width == pytest.approx(expected, rel=1e-2), width
 
+    def test_a_ring_across_the_antimeridian_stays_one_ring_on_a_projected_crs(self):
+        """The same ring on Web Mercator keeps its 500 km width instead of smearing across the world.
+
+        Test scenario:
+            The sibling test above runs on ``crs=4326``, where the reprojection is short-circuited, so it
+            never exercises the projected path. Unwrapping the ring's longitudes past 180 survives only
+            while the ring is drawn in degrees: handed to PROJ, lon 184.5 comes back as lon -175.5, so the
+            vertices land alternately at the two edges of the Mercator world and the indicatrix is drawn as
+            a zigzag band spanning it. The width must be the Mercator width of a 500 km circle at the
+            equator — written out here from the spherical Mercator formula — not the width of the world.
+        """
+        canvas = Map(crs=3857)
+        canvas.ax.set_xlim(-2.0e7, 2.0e7)
+        canvas.ax.set_ylim(-2.0e7, 2.0e7)
+        artist = canvas.tissot([180.0], [0.0], radius_m=500_000.0)
+        assert len(artist.get_paths()) == 1, len(artist.get_paths())
+        offset = math.degrees(500_000.0 / MEAN_EARTH_R)
+        expected = _mercator(180.0 + offset, 0.0)[0] - _mercator(180.0 - offset, 0.0)[0]
+        width = np.ptp(artist.get_paths()[0].vertices[:, 0])
+        assert width == pytest.approx(expected, rel=1e-2), width
+
     def test_a_far_side_ring_on_a_globe_is_left_out(self):
         """A circle behind the globe has no near-side outline; only the visible one is drawn."""
         canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)

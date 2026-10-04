@@ -942,6 +942,11 @@ def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnL
 def _continuous_ring(ring: np.ndarray, centre_lon: float) -> np.ndarray:
     """Unwrap a lon/lat ring's longitudes around its centre, so a ring across the antimeridian stays whole.
 
+    This is the lon/lat form, and it is drawable **only** on lon/lat axes. Unwrapped longitudes do not
+    survive a reprojection: PROJ wraps lon 184.5 back to lon -175.5, so the vertices of a ring across the
+    antimeridian land alternately at the two edges of the world. A projected display CRS therefore unwraps
+    in display coordinates instead — see :func:`_continuous_display_ring` (round 3, H2).
+
     Args:
         ring: An ``(m, 2)`` lon/lat ring whose longitudes are wrapped to ``(-180, 180]``.
         centre_lon: The longitude the ring is drawn around.
@@ -954,6 +959,100 @@ def _continuous_ring(ring: np.ndarray, centre_lon: float) -> np.ndarray:
     return out
 
 
+def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
+    """Measure the display-x width of the world at each latitude, or ``0`` where the CRS has no seam.
+
+    A ring is reconnected across the antimeridian by adding that width to the vertices that fell on the far
+    side of it, so the width has to be measured in the display CRS rather than assumed. Only a projection
+    that *cuts* the antimeridian has one: Web Mercator puts lon -180 and lon 180 a whole world apart
+    (``4.008e7`` m), while a polar stereographic puts them at the same point (``0``) because its own
+    discontinuity is elsewhere, and a clipped projection has no image of either (non-finite). Both of those
+    answer ``0``, which means "leave the projected ring alone".
+
+    Args:
+        scene: The map whose display CRS is measured.
+        lats: The ring-centre latitudes, measured one per ring because a non-cylindrical projection need not
+            cut the antimeridian at the same x everywhere.
+
+    Returns:
+        A ``(len(lats),)`` array of display-x widths, ``0`` wherever there is no usable seam.
+    """
+    if len(lats) == 0:
+        return np.zeros(0, dtype=float)
+    edges = np.column_stack(
+        [
+            np.tile([-180.0, 180.0], len(lats)),
+            np.repeat(np.asarray(lats, dtype=float), 2),
+        ]
+    )
+    x = _lonlat_to_display(scene, edges)[:, 0].reshape(-1, 2)
+    with np.errstate(invalid="ignore"):  # inf - inf off a clipped projection's image
+        period = x[:, 1] - x[:, 0]
+    return np.where(np.isfinite(period) & (period > 0.0), period, 0.0)
+
+
+def _continuous_display_ring(
+    ring: np.ndarray, centre_x: float, period: float
+) -> np.ndarray:
+    """Unwrap a projected ring's x around its projected centre, so a ring across the seam stays whole.
+
+    The display-coordinate counterpart of :func:`_continuous_ring`, and the one a projected CRS uses. The
+    ring is projected with its longitudes still wrapped — which PROJ places exactly — and the vertices that
+    came back from the far side of the seam are carried across it by one world width, the way the lon/lat
+    form carries them past 180.
+
+    Args:
+        ring: An ``(m, 2)`` projected ring.
+        centre_x: The ring centre's own projected x, the value the vertices are gathered around.
+        period: The display-x width of the world from :func:`_antimeridian_periods`; ``0`` leaves the ring
+            as it is.
+
+    Returns:
+        The ring, unchanged when there is no seam to cross or the ring is not wholly placeable, else a copy
+        whose x runs continuously around ``centre_x``.
+    """
+    if period <= 0.0 or not math.isfinite(centre_x) or not np.isfinite(ring).all():
+        return ring
+    out = np.array(ring, dtype=float)
+    half = period / 2.0
+    out[:, 0] = centre_x + (out[:, 0] - centre_x + half) % period - half
+    return out
+
+
+def _projected_rings(
+    scene: Any,
+    circles: Sequence[np.ndarray],
+    lons: Sequence[float],
+    lats: Sequence[float],
+) -> List[np.ndarray]:
+    """Project lon/lat circles into the display CRS, keeping each one whole across the antimeridian.
+
+    Args:
+        scene: The map being drawn on, whose display CRS is not lon/lat.
+        circles: The lon/lat rings, longitudes wrapped to ``(-180, 180]`` as ``tissot_circles`` returns them.
+        lons: The ring-centre longitudes, one per circle.
+        lats: The ring-centre latitudes, one per circle.
+
+    Returns:
+        One projected ``(m, 2)`` ring per circle.
+    """
+    if not circles:
+        return []
+    periods = _antimeridian_periods(scene, lats)
+    centres = _lonlat_to_display(
+        scene,
+        np.column_stack([np.asarray(lons, dtype=float), np.asarray(lats, dtype=float)]),
+    )
+    return [
+        _continuous_display_ring(
+            _lonlat_to_display(scene, np.asarray(circle, dtype=float)),
+            float(centre_x),
+            float(period),
+        )
+        for circle, centre_x, period in zip(circles, centres[:, 0], periods)
+    ]
+
+
 def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     """Draw the Tissot indicatrices a described layer recorded, through the display projection.
 
@@ -961,6 +1060,10 @@ def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer
     what a circle becomes on the map is the projection's doing, so the rings are projected here through
     pyramids. A ring the projection cannot place whole — one on the far side of a globe — is left out rather
     than drawn as a fragment, since half an indicatrix reads as a different distortion.
+
+    A ring across the antimeridian is reconnected in whichever coordinates it is drawn in: in degrees on
+    lon/lat axes (:func:`_continuous_ring`), and in display coordinates once a projection is involved
+    (:func:`_projected_rings`), because unwrapped longitudes do not survive PROJ.
 
     Args:
         scene: The map being drawn on.
@@ -974,9 +1077,12 @@ def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer
     props = dict(layer.symbology.props)
     lons, lats = list(props["lons"]), list(props["lats"])
     circles = tissot_circles(lons, lats, float(props["radius_m"]), n=int(props["n"]))
-    rings = [_continuous_ring(circle, float(lon)) for circle, lon in zip(circles, lons)]
-    if not same_crs(scene.crs, 4326):
-        rings = [_lonlat_to_display(scene, ring) for ring in rings]
+    if same_crs(scene.crs, 4326):
+        rings = [
+            _continuous_ring(circle, float(lon)) for circle, lon in zip(circles, lons)
+        ]
+    else:
+        rings = _projected_rings(scene, circles, lons, lats)
     rings = [ring for ring in rings if np.isfinite(ring).all()]
     if not rings:
         return None
