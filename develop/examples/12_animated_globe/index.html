@@ -4567,7 +4567,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <li><strong><code>Map.animate(stack, ...)</code></strong> — step a stack of grids (here the 12 monthly WorldClim temperature fields) frame by frame.</li>
 <li><strong><code>Map.rotate(dataset, ...)</code></strong> — keep one field and sweep the orthographic centre longitude to spin the Earth.</li>
 </ul>
-<p>Both return a <code>matplotlib.animation.FuncAnimation</code>. Internally each frame is a full <code>Map(globe=True)</code> draw — <strong>pyramids</strong> reprojects, <strong>cleopatra</strong> renders, and the projection frame is applied — so frames get coastlines, graticule, and limb-clipping for free.</p>
+<p>Both return a <code>matplotlib.animation.FuncAnimation</code>. The <strong>first</strong> frame is a full <code>Map(globe=True)</code> draw — <strong>pyramids</strong> reprojects, <strong>cleopatra</strong> renders, and the projection frame is applied — so frames get coastlines, graticule, and limb-clipping for free. Every frame after it keeps the axes and gives the image the next frame's values, so the decoration, the projection frame and the view are drawn once instead of per frame (<code>update=</code> picks the path, and <code>blit=True</code> is available wherever that path is). <code>rotate</code> warps into a new view each frame, so it redraws every one.</p>
 <blockquote>
 <p>The GIFs are written to a temp file and embedded into the notebook output, so nothing extra is committed. WorldClim downloads on first run (cached, git-ignored).</p>
 </blockquote>
