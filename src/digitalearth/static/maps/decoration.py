@@ -1997,9 +1997,9 @@ class DecorationMixin(_MixinBase):
             The circles' ``PolyCollection``, or ``None`` when no circle could be placed.
 
         Raises:
-            ValueError: when only one of ``lons``/``lats`` is given, when they differ in length, when
-                ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n`` is below 4.
-                The layer is not described.
+            ValueError: when only one of ``lons``/``lats`` is given, when both are empty, when they differ
+                in length, when ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n``
+                is below 4. The layer is not described.
 
         Examples:
             - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:
@@ -2042,6 +2042,14 @@ class DecorationMixin(_MixinBase):
         else:
             lon_list = [float(v) for v in np.atleast_1d(np.asarray(lons, dtype=float))]
             lat_list = [float(v) for v in np.atleast_1d(np.asarray(lats, dtype=float))]
+            if not lon_list and not lat_list:
+                # `None` is this method's answer for "every ring was off-limb", so an empty pair must not
+                # share it: a caller whose centre list came out empty would read it as the projection's
+                # doing. `facet` refuses an empty stack by name for the same reason (round 3, L5).
+                raise ValueError(
+                    "tissot() was given no centres to draw; pass lons= and lats=, or neither for the "
+                    "world grid"
+                )
         return self._draw(
             LayerRecord(
                 "tissot",

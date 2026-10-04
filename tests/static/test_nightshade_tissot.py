@@ -421,6 +421,24 @@ class TestTissot:
         with pytest.raises(ValueError, match="same shape"):
             canvas.tissot([0.0, 10.0], [0.0])
 
+    def test_an_empty_centre_pair_is_refused_by_name(self):
+        """An empty pair of centres is a caller mistake, not a drawing with no rings in it.
+
+        Test scenario:
+            ``None`` is the documented answer for "every ring was off-limb", which is a real figure the
+            projection could not place. ``tissot([], [])`` drew nothing, described nothing and answered
+            ``None`` too, so a caller whose centre list came out empty read it as the off-limb case and
+            looked at the projection instead of at their own data. ``facet`` refuses an empty stack by
+            name for exactly this reason, so an empty centre pair is refused the same way, before any
+            ring is computed.
+        """
+        canvas = _world_4326()
+        with pytest.raises(ValueError, match="no centres to draw"):
+            canvas.tissot([], [])
+        assert canvas.layer_ids == [], (
+            f"a refused pair must leave no layer behind, got {canvas.layer_ids}"
+        )
+
     @pytest.mark.parametrize(
         "lons, lats",
         [([0.0, 10.0], None), (None, [0.0, 10.0])],
