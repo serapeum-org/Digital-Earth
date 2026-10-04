@@ -1,9 +1,22 @@
 """Tests for digitalearth.static.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from digitalearth.static import Map, grid, shared_colorbar
+
+
+@pytest.fixture
+def closed_figures():
+    """Close every figure the test leaves behind.
+
+    Yields:
+        None: the fixture is teardown only, so a panel grid built here cannot leak a figure into the next
+        test (#382 — nine doctests already do).
+    """
+    yield
+    plt.close("all")
 
 
 class TestGrid:
@@ -82,3 +95,263 @@ class TestSharedColorbar:
             "a None mappable should add no bar rather than raising"
         )
         assert not fig.axes[0].collections, "no colorbar axes should have been added"
+
+
+def _x_group(panel):
+    """Return the axes sharing ``panel``'s x axis, as a set of ids.
+
+    Args:
+        panel: A ``Map`` from :func:`grid`.
+
+    Returns:
+        The ids of every axes in its x sharing group — just its own when nothing is shared.
+    """
+    return {id(ax) for ax in panel.ax.get_shared_x_axes().get_siblings(panel.ax)}
+
+
+def _y_group(panel):
+    """Return the axes sharing ``panel``'s y axis, as a set of ids.
+
+    Args:
+        panel: A ``Map`` from :func:`grid`.
+
+    Returns:
+        The ids of every axes in its y sharing group — just its own when nothing is shared.
+    """
+    return {id(ax) for ax in panel.ax.get_shared_y_axes().get_siblings(panel.ax)}
+
+
+class TestGridSharedAxes:
+    """grid(sharex=/sharey=) — panels on one pair of axis scales."""
+
+    def test_panels_share_nothing_by_default(self, closed_figures):
+        """With no sharing asked for, each panel's sharing group is itself alone.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            Sharing is opt-in: the four panels of a default grid must stay independent, so a caller who
+            draws a different region on each one keeps four separate scales.
+        """
+        _fig, maps = grid(2, 2, crs=4326)
+        groups = [len(_x_group(panel)) for panel in maps]
+        assert groups == [1, 1, 1, 1], (
+            f"expected no x sharing, got group sizes {groups}"
+        )
+
+    def test_sharex_all_puts_every_panel_in_one_x_group(self, closed_figures):
+        """``sharex="all"`` links all four panels' x axes into one group.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The global form of matplotlib's own vocabulary. Every panel's sharing group must hold every
+            panel's axes, which is built here from the panels themselves rather than counted.
+        """
+        _fig, maps = grid(2, 2, crs=4326, sharex="all")
+        everyone = {id(panel.ax) for panel in maps}
+        assert _x_group(maps[0]) == everyone, (
+            f"sharex='all' should group all four axes; got {len(_x_group(maps[0]))}"
+        )
+
+    def test_sharex_col_links_a_column_and_leaves_the_row_apart(self, closed_figures):
+        """``sharex="col"`` groups the panels of one column, not of one row.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The per-column form. Panels are row-major, so in a 2x2 the first column is indices 0 and 2 —
+            the expected group is built from those positions, independently of what the sharing reports.
+        """
+        _fig, maps = grid(2, 2, crs=4326, sharex="col")
+        first_column = {id(maps[0].ax), id(maps[2].ax)}
+        assert _x_group(maps[0]) == first_column, (
+            "sharex='col' should group the panels of a column (row-major indices 0 and 2)"
+        )
+
+    def test_sharey_row_links_a_row_and_leaves_the_column_apart(self, closed_figures):
+        """``sharey="row"`` groups the panels of one row, not of one column.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The per-row form, on the other axis. In a 2x2 the first row is row-major indices 0 and 1.
+        """
+        _fig, maps = grid(2, 2, crs=4326, sharey="row")
+        first_row = {id(maps[0].ax), id(maps[1].ax)}
+        assert _y_group(maps[0]) == first_row, (
+            "sharey='row' should group the panels of a row (row-major indices 0 and 1)"
+        )
+
+    @pytest.mark.parametrize(
+        ("asked", "shared"), [(True, True), (False, False), ("none", False)]
+    )
+    def test_the_boolean_spellings_mean_all_and_none(
+        self, asked, shared, closed_figures
+    ):
+        """``True``/``False``/``"none"`` mean what they mean in ``plt.subplots``.
+
+        Args:
+            asked: The value passed as ``sharex``.
+            shared: Whether every panel is expected to end up in one group.
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The vocabulary is matplotlib's, so the two boolean spellings have to be the aliases of
+            ``"all"`` and ``"none"`` they are there rather than something a caller has to learn here.
+        """
+        _fig, maps = grid(1, 2, crs=4326, sharex=asked)
+        together = _x_group(maps[0]) == {id(panel.ax) for panel in maps}
+        assert together is shared, f"sharex={asked!r} should share={shared}"
+
+    def test_shared_x_hides_the_inner_rows_tick_labels(self, closed_figures):
+        """Under ``sharex="all"`` only the bottom row keeps x tick labels.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            matplotlib drops the redundant labels itself (``Axes._label_outer_xaxis``), and a caller needs
+            to know the ticks move rather than merely linking. Measured in a 2x2: the top row's
+            ``labelbottom`` goes False, the bottom row's stays True.
+        """
+        _fig, maps = grid(2, 2, crs=4326, sharex="all")
+        labelled = [
+            panel.ax.xaxis.get_tick_params(which="major").get("labelbottom")
+            for panel in maps
+        ]
+        assert labelled == [False, False, True, True], (
+            f"only the bottom row should keep x tick labels; got {labelled}"
+        )
+
+    def test_shared_y_per_row_hides_the_inner_columns_tick_labels(self, closed_figures):
+        """Under ``sharey="row"`` only the left column keeps y tick labels.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The y counterpart, and the asymmetry worth pinning: labels are dropped where sharing makes
+            them redundant *along that axis*, so ``"row"`` drops them for y where ``"col"`` does for x.
+        """
+        _fig, maps = grid(2, 2, crs=4326, sharey="row")
+        labelled = [
+            panel.ax.yaxis.get_tick_params(which="major").get("labelleft")
+            for panel in maps
+        ]
+        assert labelled == [True, False, True, False], (
+            f"only the left column should keep y tick labels; got {labelled}"
+        )
+
+    def test_framing_one_panel_frames_its_shared_siblings(self, closed_figures):
+        """A shared panel's limits are its siblings' limits — framing one frames them all.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            This is what sharing is *for*: two panels of the same region read against each other. The
+            second panel is framed by nothing of its own, so its limits can only come from the first.
+        """
+        _fig, maps = grid(1, 2, crs=4326, sharex="all", sharey="all")
+        maps[0].set_bounds([2.0, 3.0, 8.0, 9.0])
+        assert [float(v) for v in maps[1].ax.get_xlim()] == [2.0, 8.0], (
+            f"the sibling should hold the framed x limits; got {maps[1].ax.get_xlim()}"
+        )
+
+    def test_framing_one_panel_leaves_an_unshared_panel_alone(self, closed_figures):
+        """Without sharing the second panel keeps matplotlib's own default limits.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The other half of the claim above — the linkage is the opt-in and not something grid() does
+            anyway. An unframed, undrawn axes holds the unit square.
+        """
+        _fig, maps = grid(1, 2, crs=4326)
+        maps[0].set_bounds([2.0, 3.0, 8.0, 9.0])
+        assert [float(v) for v in maps[1].ax.get_xlim()] == [0.0, 1.0], (
+            f"an unshared sibling should be untouched; got {maps[1].ax.get_xlim()}"
+        )
+
+    def test_an_unknown_sharing_word_is_refused_by_matplotlib(self, closed_figures):
+        """A value outside the vocabulary is refused, and the refusal names ``sharex``.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            grid() forwards the word rather than re-validating it, so the caller gets matplotlib's own
+            message listing the supported values — the point of not inventing a second vocabulary.
+        """
+        with pytest.raises(ValueError, match="not a valid value for sharex"):
+            grid(2, 2, crs=4326, sharex="both")
+
+
+class TestGridFigureTitle:
+    """grid(suptitle=) — one title over the panels."""
+
+    def test_no_suptitle_by_default(self, closed_figures):
+        """A grid built without one carries no figure-level text.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The title is opt-in, and ``fig.texts`` is where ``suptitle`` lands — so it must be empty until
+            one is asked for.
+        """
+        fig, _maps = grid(1, 2, crs=4326)
+        assert [text.get_text() for text in fig.texts] == [], (
+            "a grid with no suptitle should carry no figure text"
+        )
+
+    def test_suptitle_titles_the_figure(self, closed_figures):
+        """``suptitle=`` puts the text on the figure.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            One title over several panels is figure-level, which is matplotlib's ``Figure.suptitle`` and
+            not any panel's ``set_title``.
+        """
+        fig, _maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+        assert [text.get_text() for text in fig.texts] == ["rainfall, 2020"], (
+            f"the figure title should be the one asked for; got {fig.texts}"
+        )
+
+    def test_the_figure_title_is_not_a_panel_title(self, closed_figures):
+        """A figure title leaves every panel's own title empty.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The two titles are different places. A caller titling the figure must still be free to title
+            each panel (which is what facet() does), so suptitle must not write any axes title.
+        """
+        _fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+        titles = [panel.ax.get_title() for panel in maps]
+        assert titles == ["", ""], f"panel titles should be untouched; got {titles}"
+
+    def test_a_panel_title_sits_beside_the_figure_title(self, closed_figures):
+        """Both titles can be set, and neither replaces the other.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The combination is the normal one for small multiples — a shared heading plus one caption per
+            panel — so the figure text and the axes title are read back together.
+        """
+        fig, maps = grid(1, 2, crs=4326, suptitle="whole")
+        maps[0].set_title("left")
+        assert (fig.texts[0].get_text(), maps[0].ax.get_title()) == ("whole", "left"), (
+            "the figure title and the panel title should both stand"
+        )

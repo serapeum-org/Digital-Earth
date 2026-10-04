@@ -5,6 +5,12 @@ earthkit-plots models a figure as ``Figure → Subplot/Map → Layer``. Digital-
 ``Map`` to each axes, plus :func:`shared_colorbar` for one colorbar spanning the panels, and :func:`facet`, which
 lays a raster stack out as small multiples on one shared colour scale. This is orchestration only — the
 rendering stays in each ``Map`` (pyramids + cleopatra).
+
+What the panels can share is therefore in three places, and they are independent: one **colour** scale
+(:func:`shared_colorbar`, and :func:`facet`, which resolves one over a whole stack), one pair of **axis**
+scales (:func:`grid`'s ``sharex``/``sharey``, in matplotlib's own vocabulary) and one **title** over the
+figure (:func:`grid`'s ``suptitle``). :func:`facet` asks for none of the last two: its frames need not cover
+one area, and it titles each panel by what that panel is.
 """
 
 import logging
@@ -58,12 +64,29 @@ def grid(
     crs: Any = 3857,
     globe: bool = False,
     figsize: Optional[Tuple[float, float]] = None,
+    sharex: Any = False,
+    sharey: Any = False,
+    suptitle: Optional[str] = None,
     **kwargs,
 ) -> Tuple[Figure, List[Map]]:
     """Create an ``nrows`` × ``ncols`` grid of :class:`Map` panels sharing one figure.
 
     Each cell of a ``matplotlib`` subplot grid is wrapped in a ``Map`` (all the same ``crs``/``globe``), so
-    panels can be drawn on independently while sharing one figure for a single ``savefig`` / colorbar / title.
+    panels can be drawn on independently while sharing one figure for a single ``savefig`` / colorbar /
+    title. ``sharex``/``sharey`` additionally put the panels on **one pair of axis scales**, and ``suptitle``
+    titles the figure rather than any panel.
+
+    **The sharing vocabulary is matplotlib's own, not a second one.** ``sharex``/``sharey`` are forwarded
+    verbatim to ``plt.subplots``, so they take ``False`` (the default — nothing shared), ``True`` or
+    ``"all"`` (every panel in one group), ``"row"``, ``"col"`` and ``"none"``, and a word outside that list
+    is refused by matplotlib with its own message naming the keyword. There is therefore a *global* and a
+    *per-row/per-column* form, and which one you get is the word you pass.
+
+    **Sharing moves the ticks as well as linking the scales.** matplotlib drops the tick labels its sharing
+    makes redundant: ``sharex="all"``/``"col"`` leaves x labels on the bottom row only, and
+    ``sharey="all"``/``"row"`` leaves y labels on the leftmost column only (both measured below). The
+    labels are dropped where sharing makes them redundant *along that axis*, so ``sharex="row"`` and
+    ``sharey="col"`` link their groups and leave every panel's labels in place.
 
     Args:
         nrows: Number of panel rows.
@@ -71,11 +94,23 @@ def grid(
         crs: Display CRS for every panel (passed to each ``Map``).
         globe: When True, every panel is a globe (``Map(globe=True)``).
         figsize: Figure size in inches; ``None`` uses the matplotlib default.
+        sharex: How the panels share their x axis — ``False`` (default), ``True``/``"all"``, ``"row"``,
+            ``"col"`` or ``"none"``, exactly as ``plt.subplots`` reads them. Sharing links the *limits*:
+            framing or autoscaling one panel of a group frames every panel in it, which is the point of
+            asking for it, and means a grid whose panels show different regions should leave it off.
+        sharey: The same for the y axis.
+        suptitle: One title over the whole figure (``Figure.suptitle``). ``None`` (default) adds none.
+            This is **not** a panel title: every panel's own ``set_title`` is untouched, so a shared
+            heading and one caption per panel coexist. Style it by calling ``fig.suptitle`` yourself on
+            the returned figure.
         **kwargs: Forwarded to each ``Map`` (e.g. ``domain``).
 
     Returns:
         ``(fig, maps)`` — the shared :class:`~matplotlib.figure.Figure` and the list of ``Map`` panels in
         row-major (left-to-right, top-to-bottom) order, length ``nrows * ncols``.
+
+    Raises:
+        ValueError: from ``plt.subplots``, for a ``sharex``/``sharey`` outside the vocabulary above.
 
     Examples:
         - A 2×2 grid yields four Maps sharing one figure:
@@ -88,6 +123,7 @@ def grid(
             4
             >>> all(m.fig is fig for m in maps)
             True
+            >>> maps[0].close()
 
             ```
         - Draw on each panel independently (they share the figure):
@@ -100,12 +136,60 @@ def grid(
             >>> _ = maps[1].set_title("right")
             >>> [m.ax.get_title() for m in maps]
             ['left', 'right']
+            >>> maps[0].close()
+
+            ```
+        - Shared axes: framing one panel frames its group, and the redundant tick labels go. In a 2×2
+          under ``sharex="all"`` only the bottom row keeps x tick labels:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(2, 2, crs=4326, sharex="all", sharey="all")
+            >>> _ = maps[0].set_bounds([2.0, 3.0, 8.0, 9.0])
+            >>> [float(v) for v in maps[3].ax.get_xlim()]
+            [2.0, 8.0]
+            >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
+            [False, False, True, True]
+            >>> maps[0].close()
+
+            ```
+        - Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair
+          ``(0, 2)`` — and a word outside matplotlib's vocabulary is refused by name:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(2, 2, crs=4326, sharex="col")
+            >>> group = maps[0].ax.get_shared_x_axes().get_siblings(maps[0].ax)
+            >>> sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))
+            True
+            >>> maps[0].close()
+            >>> try:
+            ...     grid(2, 2, crs=4326, sharex="both")
+            ... except ValueError as error:
+            ...     print(error)
+            'both' is not a valid value for sharex. Supported values are 'all', 'row', 'col', 'none', False, True
+
+            ```
+        - A figure title sits beside the panels' own titles rather than replacing one:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+            >>> _ = maps[0].set_title("January")
+            >>> [t.get_text() for t in fig.texts], maps[0].ax.get_title()
+            (['rainfall, 2020'], 'January')
+            >>> maps[0].close()
 
             ```
     """
-    fig, axs = plt.subplots(nrows, ncols, figsize=figsize)
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize, sharex=sharex, sharey=sharey)
     axes = np.atleast_1d(axs).ravel()
     maps = [Map(crs=crs, globe=globe, ax=ax, fig=fig, **kwargs) for ax in axes]
+    if suptitle is not None:
+        fig.suptitle(suptitle)
     return fig, maps
 
 
