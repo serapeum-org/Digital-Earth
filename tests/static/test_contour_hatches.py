@@ -306,28 +306,86 @@ class TestTheHatchLegend:
         # A swatch colour travels as hex, so it agrees with the band to within one 8-bit step.
         assert np.allclose(keyed, drawn, atol=1 / 255), (keyed, drawn)
 
-    def test_the_callers_labels_name_the_keyed_rows(self, p_values):
-        """``labels=`` numbers the rows the key draws — one, for the overlay.
+    def test_the_callers_labels_name_the_bands_the_levels_declare(self, p_values):
+        """``labels=`` is one label per band between ``levels``, and the drawn row takes its own.
 
         Args:
             p_values: The p-value field.
+
+        Test scenario:
+            - ``_overlay`` declares ``levels=[0, 0.05, 1]`` — two bands — and only the first is keyed,
+              since the second is neither hatched nor filled.
+            - ``labels=`` is counted against the two declared bands, so both are named; the label of the
+              band that is not keyed is dropped with its row and only ``"p < 0.05"`` is drawn.
         """
         canvas = Map(crs=4326)
         _overlay(canvas, p_values)
-        canvas.legend("significance", labels=["p < 0.05"])
+        canvas.legend("significance", labels=["p < 0.05", "not significant"])
         texts = [text.get_text() for text in canvas.ax.get_legend().get_texts()]
         assert texts == ["p < 0.05"], texts
 
-    def test_labels_that_do_not_number_the_rows_are_refused(self, p_values):
-        """Two labels for a one-row key would label a swatch nobody drew.
+    def test_a_label_count_the_levels_do_not_declare_is_refused(self, p_values):
+        """One label for a two-band layer leaves a declared band unnamed.
 
         Args:
             p_values: The p-value field.
         """
         canvas = Map(crs=4326)
         _overlay(canvas, p_values)
-        with pytest.raises(ValueError, match="1 rows"):
-            canvas.legend("significance", labels=["p < 0.05", "not significant"])
+        with pytest.raises(ValueError, match="2 bands"):
+            canvas.legend("significance", labels=["p < 0.05"])
+
+    def test_the_label_count_does_not_follow_the_data(self, p_values):
+        """``labels=`` numbers the declared bands, so a saved list survives data that marks fewer of them.
+
+        Args:
+            p_values: The p-value field, whose values lie in [0.01, 0.95].
+
+        Test scenario:
+            - Four bands are declared, ``levels=[0, 0.05, 1, 5, 10]``, each with a pattern, over a field
+              that stops at 0.95 — so only the first two bands hold geometry and only those two are keyed.
+            - Four labels, one per declared band, are accepted: the count is a property of the call, not of
+              the raster, so the same ``labels=`` keeps working when the data stops reaching a band.
+            - Only the labels of the two keyed bands are drawn; ``"c"`` and ``"d"`` go with their rows.
+            - Before this, four labels were refused with "has 2 rows, so labels= needs 2 labels; got 4" and
+              only a two-item list — derived from the data — was accepted.
+        """
+        canvas = Map(crs=4326)
+        canvas.contours(
+            p_values,
+            levels=[0.0, 0.05, 1.0, 5.0, 10.0],
+            filled=True,
+            hatches=["///", "..", "xx", "oo"],
+            fill=False,
+            name="declared",
+        )
+        canvas.legend("declared", labels=["a", "b", "c", "d"])
+        texts = [text.get_text() for text in canvas.ax.get_legend().get_texts()]
+        assert texts == ["a", "b"], texts
+
+    def test_a_label_list_the_data_happens_to_number_is_refused_too(self, p_values):
+        """The count that the data would give is not the count the call declares.
+
+        Args:
+            p_values: The p-value field, whose values lie in [0.01, 0.95].
+
+        Test scenario:
+            - The same four declared bands, of which the data marks two — and two labels, which the old
+              data-derived rule accepted.
+            - It is refused now, naming the four bands ``levels=`` declares, so the accepted spelling is
+              the one that stays accepted.
+        """
+        canvas = Map(crs=4326)
+        canvas.contours(
+            p_values,
+            levels=[0.0, 0.05, 1.0, 5.0, 10.0],
+            filled=True,
+            hatches=["///", "..", "xx", "oo"],
+            fill=False,
+            name="declared",
+        )
+        with pytest.raises(ValueError, match="4 bands"):
+            canvas.legend("declared", labels=["a", "b"])
 
     def test_an_unhatched_filled_layer_is_keyed_as_before(self, p_values):
         """Hatching changes nothing for a layer that has none.
@@ -352,8 +410,8 @@ class TestTheHatchLegend:
         Test scenario:
             The ``show`` gate sits *behind* the derivation for the hatched path too, which is what keeps one
             spelling of a call from being valid only half the time (review M1): labels that do not number
-            the keyed rows are refused whether or not the key is drawn. So the same overlay must leave no
-            legend on the axes with ``visible=False``, and still refuse a bad ``labels=`` through it.
+            the declared bands are refused whether or not the key is drawn. So the same overlay must leave
+            no legend on the axes with ``visible=False``, and still refuse a bad ``labels=`` through it.
         """
         canvas = Map(crs=4326)
         _overlay(canvas, p_values)
@@ -361,8 +419,8 @@ class TestTheHatchLegend:
         assert canvas.ax.get_legend() is None, (
             f"a key switched off must not be on the axes, got {canvas.ax.get_legend()}"
         )
-        with pytest.raises(ValueError, match="1 rows"):
-            canvas.legend("significance", labels=["a", "b"], visible=False)
+        with pytest.raises(ValueError, match="2 bands"):
+            canvas.legend("significance", labels=["a", "b", "c"], visible=False)
 
     def test_a_plan_naming_no_hatch_colour_leaves_the_strokes_at_the_engine_default(
         self,

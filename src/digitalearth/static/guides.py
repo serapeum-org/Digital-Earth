@@ -526,7 +526,15 @@ def _hatch_rows(
         the second, and keying them invented classes nothing on the figure showed (review M1).
 
     Raises:
-        ValueError: when the recorded labels do not number the kept rows.
+        ValueError: when the recorded labels do not number the bands the layer's ``levels=`` **declares**.
+
+    Note:
+        ``labels=`` is counted against the declared bands, not the kept ones, and the labels of the bands
+        that are not kept are dropped alongside their rows. Counting the kept rows made the accepted
+        spelling a property of the *raster*: a four-band call was told "the key has 2 rows", and a
+        ``labels=`` recorded against one reading of the field started raising as soon as the data reached a
+        third band (review M3). One label per band between the levels — equivalently, one per ``hatches=``
+        entry — is derivable from the call alone, so it keeps working as the data moves.
     """
     levels = tuple(float(level) for level in artist.levels)
     faces = [tuple(face) for face in artist.get_facecolor()]
@@ -544,12 +552,12 @@ def _hatch_rows(
     if labels is None:
         return spec, kept, [spec.entries[index].label for index in kept]
     rows = [str(label) for label in labels]
-    if len(rows) != len(kept):
+    if len(rows) != len(hatches):
         raise ValueError(
-            f"the key of layer {layer.id!r} has {len(kept)} rows, so labels= needs {len(kept)} labels; "
-            f"got {len(rows)}"
+            f"layer {layer.id!r} declares {len(hatches)} bands between its levels, so labels= needs "
+            f"{len(hatches)} labels, one per band; got {len(rows)}"
         )
-    return spec, kept, rows
+    return spec, kept, [rows[index] for index in kept]
 
 
 @dataclass(frozen=True)
@@ -607,7 +615,8 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
         ValueError: when a colorbar is asked for over a **categorical** scale, naming the swatch legend
             instead: a categorical fill's norm bins the class codes cleopatra assigned, so a bar over them
             reads ``0, 1, 2 …`` where the category labels belong. Also when the layer publishes no scale for
-            a swatch key's rows to be derived from, and when recorded row labels do not number those rows.
+            a swatch key's rows to be derived from, and when recorded row labels do not number those rows —
+            for a hatched layer, the bands its ``levels=`` declares rather than the rows the data leaves.
 
             **Every one of the three is raised whether or not the guide is shown.** A guide switched off is
             a key the caller asked not to be drawn *yet*, not one that has stopped being described — so a

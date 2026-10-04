@@ -82,10 +82,15 @@ leaves the bands uncoloured so only the hatching draws — the usual way to mark
 mask over another field without spending its colours. `legend()` on such a layer keys the bands it marks by
 their pattern; `hatch_color=` colours the strokes on the map and in the key alike.
 
+`labels=` names the bands `levels=` declares — one label per band, the same count as `hatches=` — and the
+labels of the bands the map does not mark are dropped alongside their rows. The count therefore comes from the
+call and not from the raster, so a `labels=` written against one reading of the field keeps working when the
+data stops reaching a band (or starts reaching another).
+
 ```python
 m.field(trend, cmap="RdBu_r")
 m.contours(p_value, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig")
-m.legend("sig", labels=["p < 0.05"])
+m.legend("sig", labels=["p < 0.05", "not significant"])  # two declared bands; only the hatched one is keyed
 ```
 
 ## Overlays computed from the globe itself
