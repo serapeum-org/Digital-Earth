@@ -543,3 +543,157 @@ class TestInset:
         assert main.fig.number in plt.get_fignums(), (
             "the figure should still be open after adding a locator"
         )
+
+
+class TestWhatTheLocatorIsBeforeAndAfter:
+    """``Map.locator`` — the one handle on an inset, and what it answers before there is one."""
+
+    def test_a_map_with_no_inset_holds_no_locator(self, closed_figures):
+        """Reading the handle on a map nobody called ``inset`` on answers ``None``.
+
+        Args:
+            closed_figures: Teardown fixture closing the figures.
+
+        Test scenario:
+            ``inset`` hands back the *main* map so it chains like every other builder, which makes
+            ``.locator`` the only way to reach the inset — so its unset value has to be a readable
+            ``None`` rather than an ``AttributeError``.
+        """
+        assert Map(crs=4326).locator is None, (
+            "a map with no inset must report no locator"
+        )
+
+    def test_the_fourth_corner_is_placed_where_it_is_named(self, framed):
+        """``"lower right"`` — the corner the parametrised case above leaves out.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            The three tested corners between them exercise ``right=1`` and ``upper=1`` but never the
+            ``(1, 0)`` pair, so a transposed lookup in ``_CORNERS`` would pass them all. Checked by side,
+            like its siblings: a "lower right" inset's bottom edge is below the middle and its left edge
+            is right of it.
+        """
+        main = framed(4326)
+        child = main.inset(position="lower right").locator.ax.get_position()
+        parent = main.ax.get_position()
+        above = (child.y0 - parent.y0) / parent.height > 0.5
+        right = (child.x0 - parent.x0) / parent.width > 0.5
+        assert (above, right) == (False, True), (
+            f"'lower right' landed at above={above}, right={right}"
+        )
+
+
+class TestARefusedInsetNamesWhatWasWrong:
+    """The two refusals whose *message* is the only thing a caller can act on."""
+
+    @pytest.mark.parametrize("bad", [(0.1, 0.2), 42, "0.1 0.2 0.3 0.4"])
+    def test_a_position_that_is_neither_a_corner_nor_four_fractions_is_refused(
+        self, bad, framed
+    ):
+        """Anything that does not unpack into four numbers is refused by name.
+
+        Args:
+            bad: A ``position`` that is not a corner and does not give four fractions — too short, not a
+                sequence at all, and a string that looks like one but is not a corner name.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            The corner names are checked against a whitelist, so the remaining job is the escape hatch:
+            a two-number tuple and a bare number both reach the unpacking, and letting either through
+            would raise from inside matplotlib's ``inset_axes`` with no mention of ``position``.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(position="):
+            main.inset(position=bad)
+
+    @pytest.mark.parametrize("bad", [True, "big", None])
+    def test_a_size_that_is_not_a_number_at_all_is_refused(self, bad, framed):
+        """``size`` must be a real number, and ``True`` is not one of them.
+
+        Args:
+            bad: A ``size`` that is not a usable fraction — ``True`` (a ``bool`` is an ``int``, so it
+                passes a numeric check and means nothing here), a word, and ``None``.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            The numeric cases (0.0, 1.5, -0.2) are covered above; these are the ones a range check alone
+            would let through. ``size=True`` is the one that matters: ``isinstance(True, Real)`` is
+            ``True`` and ``float(True)`` is ``1.0``, so without the explicit ``bool`` rejection it would
+            be read as a request for a full-size inset.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(size="):
+            main.inset(size=bad)
+
+
+class TestAnExtentPROJCannotTransformMarksNothing:
+    """The other half of "no box rather than a wrong one": a transform that *raises*."""
+
+    def test_a_transform_that_raises_marks_nothing(self, framed, mocker):
+        """A PROJ error while placing the box is answered with no box.
+
+        Args:
+            framed: Factory for the framed main map.
+            mocker: Patches the reprojection the placement goes through.
+
+        Test scenario:
+            The non-finite case above is pyproj answering ``inf``; this is pyproj *refusing* — a CRS it
+            cannot resolve, or a transform it rejects. Both have to end in no box, and only the
+            non-finite one happens on data this suite can build, so the refusal is injected.
+        """
+        main = framed(4326)
+        mocker.patch(
+            "digitalearth.static.maps.inset.reproject_coordinates",
+            side_effect=RuntimeError("PROJ refused the transform"),
+        )
+        marked = Map(crs=3857).mark_extent(main)
+        assert marked is None, f"a refused transform should mark nothing; got {marked}"
+
+    def test_the_refusal_is_logged(self, framed, mocker, caplog):
+        """And it is named in a warning, not dropped silently.
+
+        Args:
+            framed: Factory for the framed main map.
+            mocker: Patches the reprojection the placement goes through.
+            caplog: Captures the warning.
+
+        Test scenario:
+            Same reason as the non-finite skip: a locator with no box on it looks exactly like a
+            ``mark_extent`` that was never called.
+        """
+        main = framed(4326)
+        mocker.patch(
+            "digitalearth.static.maps.inset.reproject_coordinates",
+            side_effect=ValueError("unknown CRS"),
+        )
+        locator = Map(crs=3857)
+        with caplog.at_level("WARNING"):
+            locator.mark_extent(main)
+        assert "no finite image" in caplog.text, (
+            f"the skip should say the extent has no image; log was {caplog.text!r}"
+        )
+
+    def test_nothing_is_registered_for_a_box_that_was_not_drawn(self, framed, mocker):
+        """A skipped box adds no layer either, so the figure does not describe one.
+
+        Args:
+            framed: Factory for the framed main map.
+            mocker: Patches the reprojection the placement goes through.
+
+        Test scenario:
+            ``_mark`` registers the patch through ``add_layer``, which is reached only after the ring is
+            placed. A layer recorded for a box nobody can see would be redrawn as nothing on every
+            replay of the figure.
+        """
+        main = framed(4326)
+        mocker.patch(
+            "digitalearth.static.maps.inset.reproject_coordinates",
+            side_effect=RuntimeError("PROJ refused the transform"),
+        )
+        locator = Map(crs=3857)
+        locator.mark_extent(main)
+        assert locator.layer_ids == [], (
+            f"a skipped box should register no layer; got {locator.layer_ids}"
+        )

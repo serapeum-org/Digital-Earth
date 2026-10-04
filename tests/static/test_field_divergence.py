@@ -366,3 +366,75 @@ class TestNothingShiftsWithoutACentre:
         assert clim == (float(ANOMALY.min()), float(ANOMALY.max())), (
             f"an uncentred field must keep the data's range; got {clim}"
         )
+
+
+class TestAMidpointBelongingToAnotherColourScale:
+    """``midpoint=`` is read as a centre only for the colour scale it belongs to."""
+
+    def test_a_midpoint_on_a_linear_scale_states_no_centre(self):
+        """A midpoint carried beside a *linear* scale is not a diverging centre.
+
+        Test scenario:
+            ``midpoint`` is cleopatra's keyword for the ``ColorScale.MIDPOINT`` scale, so it only names a
+            centre when that scale is the one in force. A caller who switched ``color_scale`` to
+            ``"linear"`` and left the old ``midpoint=`` on the call has asked for no divergence — reading
+            it anyway would resymmetrise their limits and swap their ramp.
+        """
+        stated = FieldColors.stated_on({"color_scale": "linear", "midpoint": 2.5})
+        assert stated.center is None, (
+            f"a midpoint beside a linear scale should state no centre; got {stated.center}"
+        )
+
+    def test_an_explicit_centre_still_wins_over_the_scale(self):
+        """``center=`` is read whatever ``color_scale`` says, because it is this tier's own keyword.
+
+        Test scenario:
+            The reverse of the case above, so the two together pin which of the two spellings decides.
+            ``center=`` is declared in this tier's schema and read first; ``midpoint`` is cleopatra's and
+            read only through its own scale.
+        """
+        stated = FieldColors.stated_on(
+            {CENTER_KEY: 1.5, "color_scale": "linear", "midpoint": 2.5}
+        )
+        assert stated.center == 1.5, (
+            f"an explicit centre should be the one read; got {stated.center}"
+        )
+
+
+class TestTheRampIsBuiltFromAColormapObjectToo:
+    """The two arms are taken off the resolved ramp, which is not always a name."""
+
+    def test_a_colormap_object_is_diverged_rather_than_looked_up(self):
+        """A resolved ramp handed over as an object is used directly, not indexed by name.
+
+        Test scenario:
+            ``auto_cmap`` resolves a *name* for most variables, but a caller's built colormap and a
+            registry object both arrive here as a ``Colormap``. ``colormaps[cmap]`` on one of those raises
+            ``TypeError``, so the two cases are told apart — and the built ramp is named after the one it
+            came from, which is what is read back here.
+        """
+        diverged = FieldColors(center=0.0).ramp_over(
+            colormaps["viridis"], np.array([-1.0, 1.0]), None
+        )
+        assert diverged.name == "viridis-diverging", (
+            f"the ramp should be built from the object it was handed; got {diverged.name!r}"
+        )
+
+    def test_the_built_ramp_is_lightest_at_its_centre(self):
+        """And it is a real diverging ramp, not merely a renamed sequential one.
+
+        Test scenario:
+            The property a diverging map is read by. Measured through cleopatra's own Lab conversion
+            against both ends, so a ramp that kept viridis' monotone lightness fails.
+        """
+        diverged = FieldColors(center=0.0).ramp_over(
+            colormaps["viridis"], np.array([-1.0, 1.0]), None
+        )
+        middle, bottom, top = (
+            _lightness(diverged(0.5)),
+            _lightness(diverged(0.0)),
+            _lightness(diverged(1.0)),
+        )
+        assert middle > max(bottom, top), (
+            f"the centre ({middle}) should be lighter than both ends ({bottom}, {top})"
+        )

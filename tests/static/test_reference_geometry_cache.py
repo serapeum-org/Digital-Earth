@@ -326,3 +326,37 @@ class TestTheProjectedGeometryIsKept:
         paths = len(filled.get_paths())
         second.close()
         assert paths > 0, "the globe fill drew no polygons from the kept rings"
+
+
+class TestTheFingerprintOfAGeometryWithNothingInIt:
+    """The cache key reads the first and last coordinate of the geometry — which may not exist."""
+
+    def test_a_layer_whose_every_part_is_empty_fingerprints_to_nothing(self):
+        """A reference layer with no coordinate at all has an empty fingerprint, not an `IndexError`.
+
+        Test scenario:
+            The fingerprint exists so that geometry changed under one name is not served from the cache,
+            and it reads `drawn[0][0]` and `drawn[-1][-1]`. A layer whose parts are all empty — a
+            resolution that clipped everything away, or an upstream read that answered nothing — has no
+            such coordinate, so the reader stops at the count instead of indexing into nothing.
+        """
+        fingerprint = decoration._ProjectedReference._fingerprint(
+            [np.empty((0, 2)), np.empty((0, 2))]
+        )
+        assert fingerprint == (), (
+            f"an all-empty layer should fingerprint to nothing; got {fingerprint!r}"
+        )
+
+    def test_a_layer_with_one_coordinate_still_fingerprints_to_something(self):
+        """One point is enough, so the empty answer above is about emptiness and not about shape.
+
+        Test scenario:
+            The pair of tests is what pins where the line is. A reader that returned `()` for any layer
+            would pass the case above and lose the cache's only protection against stale geometry.
+        """
+        fingerprint = decoration._ProjectedReference._fingerprint(
+            [np.array([[1.0, 2.0]]), np.empty((0, 2))]
+        )
+        assert fingerprint == ((1, 0), (1.0, 2.0), (1.0, 2.0)), (
+            f"one coordinate should fingerprint to its counts and ends; got {fingerprint!r}"
+        )

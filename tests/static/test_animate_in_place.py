@@ -530,3 +530,128 @@ class TestOffLimbFrames:
         assert out.stat().st_size > 0, (
             "an animation whose first frame is hidden should still render"
         )
+
+
+def _coarser(offset: float) -> Dataset:
+    """The same global field on **half** the grid, so a stack can change shape between frames.
+
+    Args:
+        offset: Constant added to every cell, so the frame still differs by value as well as by shape.
+
+    Returns:
+        A 15x30 global EPSG:4326 raster — the same extent as :func:`_field`, at twice the cell size.
+    """
+    ny, nx = 15, 30
+    lat = np.linspace(90, -90, ny)[:, None]
+    plane = (np.cos(np.deg2rad(lat)) * 20 + offset) * np.ones((ny, nx), "float32")
+    return Dataset.from_array(
+        arr=plane.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 12.0, 0.0, 90.0, 0.0, -12.0), epsg=4326),
+    )
+
+
+class TestAFrameOnAnotherGridFallsBackMidClip:
+    """A stack whose frames are not all one shape: the in-place path gives up where it has to."""
+
+    def test_the_later_frame_is_drawn_on_a_rebuilt_artist(self):
+        """A frame on a coarser grid cannot refill the artist, so the artist is rebuilt for it.
+
+        Test scenario:
+            ``AxesImage.set_data`` with a differently shaped array leaves the image's extent describing
+            the first frame's grid, so the picture would be stretched rather than redrawn. The strategy
+            is chosen once, up front, from the *first* frame — nothing up there can know the third frame
+            is a different shape — so the fallback has to happen mid-clip.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        first = clip._func(0)
+        second = clip._func(1)
+        scene.close()
+        assert first[0] is not second[0], (
+            "a frame on another grid must be drawn on a rebuilt artist, not the kept one"
+        )
+
+    def test_the_fallback_says_which_frame_changed_shape(self, caplog):
+        """The switch is logged with both grids, so a slow clip is explained.
+
+        Test scenario:
+            The only other symptom is an animation that silently becomes as slow as the redrawing path.
+            Naming the frame and the two shapes is what lets a caller fix the stack instead.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        clip._func(0)
+        with caplog.at_level(logging.WARNING):
+            clip._func(1)
+        scene.close()
+        assert (
+            "holds a (15, 30) grid where the first frame held (30, 60)" in caplog.text
+        ), f"the fallback should name both grids; log was {caplog.text!r}"
+
+    def test_the_frames_after_the_change_keep_redrawing(self):
+        """Once the strategy is dropped it stays dropped, rather than being retried per frame.
+
+        Test scenario:
+            Retrying would re-measure the mismatch on every remaining frame and log it again. Read off
+            the artists: a third frame back on the *first* grid is still drawn on a new artist, because
+            the kept one was given up two frames ago.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0), _field(16.0)], fps=2, **CLIM)
+        drawn = [clip._func(index)[0] for index in range(3)]
+        scene.close()
+        assert drawn[2] is not drawn[0], (
+            "a frame after the fallback must be redrawn, not handed back the first artist"
+        )
+
+    def test_the_clip_still_renders_every_frame(self, tmp_path):
+        """And the clip saves — the fallback is a slower path, not a failure.
+
+        Args:
+            tmp_path: Where the GIF is written.
+
+        Test scenario:
+            The mid-clip switch happens inside matplotlib's frame function, where an exception would be
+            swallowed into a half-written file rather than reported. Writing the clip is what proves it
+            was not.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        out = tmp_path / "mixed-grids.gif"
+        clip.save(str(out), writer=PillowWriter(fps=2))
+        scene.close()
+        assert out.stat().st_size > 0, "a stack of mixed grids should still save a clip"
+
+
+class TestAKindWithNoReasonOnRecord:
+    """``FrameUpdate`` is built directly by the tiers, so it answers for a kind ``animate`` never passes."""
+
+    def test_an_unlisted_kind_is_blocked_with_a_general_reason(self):
+        """A kind in neither table is blocked rather than assumed updatable.
+
+        Test scenario:
+            ``animate`` validates ``kind`` against ``_ANIMATION_KINDS`` first, and every member of that
+            tuple is either in ``SETTERS`` or in ``UNUPDATABLE`` — so this default is the answer for a
+            kind added upstream before its row here, and the safe default is "cannot update in place".
+        """
+        scene = Map(crs=4326)
+        update = FrameUpdate(scene, [_field(0.0)], {}, kind="hexbin")
+        scene.close()
+        assert (
+            update.blocker
+            == "kind='hexbin' draws no artist whose values can be replaced"
+        ), f"an unlisted kind should be blocked by name; got {update.blocker!r}"
+
+    def test_an_unlisted_kind_is_not_updated_in_place(self):
+        """Which is to say the strategy reports itself unavailable.
+
+        Test scenario:
+            The blocker above is the message; this is the behaviour it stands for, so a change that kept
+            the string and let the kind through fails here.
+        """
+        scene = Map(crs=4326)
+        update = FrameUpdate(scene, [_field(0.0)], {}, kind="hexbin")
+        scene.close()
+        assert not update.in_place, (
+            "a kind with no setter must not take the in-place path"
+        )

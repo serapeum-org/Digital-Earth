@@ -24,6 +24,7 @@ from pyramids.dataset import Dataset, GeoReference
 from shapely.geometry import Point
 
 from digitalearth.static import Map
+from digitalearth.static.renderer import Renderer
 from digitalearth.static.scene import Pick
 
 #: A 2x2 lat/lon geo-reference, so a field can be drawn without reading a file.
@@ -526,3 +527,93 @@ class TestTakingACallbackOff:
         m.close()
         m.fig.canvas.callbacks.process("button_press_event", click)
         assert picked == []
+
+
+class _Unhittable:
+    """A visible artist whose hit test raises, as one drawn without a renderer does.
+
+    ``Artist.contains`` needs a renderer to measure some artists against — a ``Text`` is the one in this
+    file — and raises ``RuntimeError`` when there is none. A plugin's artist can raise for its own
+    reasons. Either way the pick has to answer "not this one" rather than take the whole click down.
+    """
+
+    def __init__(self, error):
+        self._error = error
+        #: How many times the hit test was asked.
+        self.asked = 0
+
+    def get_visible(self):
+        """Report the artist as visible, so the hit test is reached at all.
+
+        Returns:
+            ``True``, always.
+        """
+        return True
+
+    def contains(self, event):
+        """Refuse to answer whether the event is over this artist.
+
+        Args:
+            event: The click, ignored.
+
+        Raises:
+            Exception: The error this stub was built with.
+        """
+        self.asked += 1
+        raise self._error
+
+
+class TestAnArtistThatCannotBeHitTested:
+    """A hit test that raises is not a pick, and not a crash either."""
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            RuntimeError("no renderer to measure against"),
+            AttributeError("contains is not implemented"),
+            TypeError("contains got an event it cannot read"),
+            ValueError("the artist has no path to test"),
+        ],
+    )
+    def test_an_artist_whose_hit_test_raises_is_not_picked(self, error):
+        """Each refusal a hit test can raise is read as "not under the pointer".
+
+        Args:
+            error: The exception the artist's ``contains`` raises.
+
+        Test scenario:
+            The pick walks every drawn artist, so one that cannot answer must not end the walk — a
+            callback would then never hear about the layer *under* it. The four types are the ones the
+            walk catches; anything else is a real fault and is left to propagate.
+        """
+        assert Renderer._touches(_Unhittable(error), object()) is False, (
+            f"an artist raising {type(error).__name__} must not count as picked"
+        )
+
+    def test_the_hit_test_was_really_asked(self):
+        """The answer above is a caught refusal, not a short circuit before the call.
+
+        Test scenario:
+            A reader that returned ``False`` without asking would pass every case above while quietly
+            picking nothing at all, on any artist.
+        """
+        artist = _Unhittable(RuntimeError("no renderer to measure against"))
+        Renderer._touches(artist, object())
+        assert artist.asked == 1, (
+            f"the hit test should have been asked once; it was asked {artist.asked} time(s)"
+        )
+
+    def test_an_invisible_artist_is_not_even_asked(self):
+        """A hidden artist is answered from its flag, without a hit test.
+
+        Test scenario:
+            The other order this could have been written in. Asking first would make a hidden layer's
+            pick depend on whether its artist happens to be hit-testable, which is not the rule — the
+            flag decides.
+        """
+        artist = _Unhittable(RuntimeError("no renderer to measure against"))
+        artist.get_visible = lambda: False
+        Renderer._touches(artist, object())
+        assert artist.asked == 0, (
+            f"a hidden artist should not be hit-tested; it was asked {artist.asked} time(s)"
+        )

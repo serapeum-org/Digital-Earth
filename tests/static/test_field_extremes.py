@@ -23,6 +23,7 @@ from matplotlib.colors import to_rgba
 from digitalearth.static import Map
 from digitalearth.static.maps.raster import FieldColors
 from digitalearth.static.render_compat import EXTREME_KEYS, STATIC_STYLE_SCHEMA
+from digitalearth.static.renderer import DrawnLayer
 
 MISSING = "#cccccc"
 OVER = "#ff0000"
@@ -281,4 +282,90 @@ class TestTheLayerPublishesWhatItWasDrawnWith:
             )
         assert scale.extremes() == {}, (
             f"an unstated layer must publish no extreme colours; got {scale.extremes()}"
+        )
+
+
+class _Unscaled:
+    """A mappable-looking artist that carries a colormap and no norm, so it publishes no scale.
+
+    The state :func:`~digitalearth.static.guides.drawn_scale` answers ``None`` for: an artist that
+    colours by nothing. Stood in for rather than drawn, because every field render this tier performs
+    ends in an artist that *does* carry a norm — which is exactly why the branch needs a test.
+    """
+
+    def __init__(self):
+        self.cmap = colormaps["viridis"]
+        #: How many times anything tried to recolour this artist.
+        self.recolours = 0
+
+    def get_cmap(self):
+        """Return the colormap, as a mappable does.
+
+        Returns:
+            The colormap this stub holds.
+        """
+        return self.cmap
+
+    def set_cmap(self, cmap):
+        """Record a colormap, as a mappable does, and count the call.
+
+        Args:
+            cmap: The colormap handed over.
+        """
+        self.cmap = cmap
+        self.recolours += 1
+
+
+class TestALayerWithNothingToRecolourIsLeftAlone:
+    """``FieldColors.applied_to`` has to be a no-op where there is no colormap to restate."""
+
+    def test_a_layer_that_drew_no_artist_comes_back_unchanged(self):
+        """A drawer that returned no artist leaves nothing to recolour.
+
+        Test scenario:
+            ``draw_field`` can hand back a layer with no artist — an off-limb frame on a globe is the
+            case — and the extreme colours are applied on the way out of it. Reaching for
+            ``artist.get_cmap()`` there would turn a skipped layer into an ``AttributeError``.
+        """
+        drawn = DrawnLayer(artist=None)
+        assert FieldColors(missing=MISSING).applied_to(drawn) is drawn, (
+            "a layer with no artist must come back as it went in"
+        )
+
+    def test_an_artist_with_no_colormap_comes_back_unchanged(self):
+        """Nor is a colour forced onto an artist that colours by something else.
+
+        Test scenario:
+            Not every artist a field path can produce is a mappable — a composite's pixels are a frozen
+            three-channel stretch with no colormap to restate, and neither has anything a plugin drew.
+            The test is ``set_cmap``, the method the restating would call.
+        """
+        drawn = DrawnLayer(artist=object())
+        assert FieldColors(over=OVER).applied_to(drawn) is drawn, (
+            "an artist with no set_cmap must come back as it went in"
+        )
+
+    def test_an_artist_that_publishes_no_scale_comes_back_unchanged(self):
+        """And a mappable with no norm publishes no scale to carry the colours.
+
+        Test scenario:
+            The colours are stated *on the layer's scale*, so with no scale there is nowhere to put them
+            — and inventing one would label the colour key with a domain the layer never drew.
+        """
+        drawn = DrawnLayer(artist=_Unscaled())
+        assert FieldColors(under=UNDER).applied_to(drawn) is drawn, (
+            "an artist publishing no scale must come back as it went in"
+        )
+
+    def test_the_colormap_of_an_unscaled_artist_is_not_touched(self):
+        """The other half of the claim above: nothing is written to it either.
+
+        Test scenario:
+            Returning the layer unchanged and *still* having recoloured the artist would be the worst of
+            both — the picture would carry colours the layer's description does not.
+        """
+        artist = _Unscaled()
+        FieldColors(under=UNDER).applied_to(DrawnLayer(artist=artist))
+        assert artist.recolours == 0, (
+            f"the artist should not have been recoloured; set_cmap ran {artist.recolours} time(s)"
         )

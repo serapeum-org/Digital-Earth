@@ -265,3 +265,63 @@ def test_the_record_is_the_text_the_axes_draws(asked, recorded):
     with Scene() as scene:
         scene.set_title(asked)
         assert scene.title == recorded
+
+
+class _Blank:
+    """Something whose rendered text is whitespace, for the "not a string and still blank" case."""
+
+    def __str__(self):
+        """Return the text matplotlib would draw for this object.
+
+        Returns:
+            Two spaces, so the text is non-empty and still blank.
+        """
+        return "  "
+
+
+class TestATitleThatIsNotAString:
+    """matplotlib accepts anything it can render; the record has to carry the same text."""
+
+    def test_a_number_is_recorded_as_the_text_it_draws(self):
+        """`set_title(2020)` draws "2020", so that is what the figure describes.
+
+        Test scenario:
+            A year, a numpy scalar off a time axis and a `Path` are all things a caller hands a title
+            without converting first, and matplotlib renders each through `str`. `PanelSpec.title` is a
+            string field, so storing the object itself would make the description unserialisable — and
+            dropping it would lose a title the picture is showing.
+        """
+        with Scene() as scene:
+            scene.set_title(2020)
+            assert scene.title == "2020", (
+                f"a numeric title should be recorded as its text; got {scene.title!r}"
+            )
+
+    def test_the_recorded_text_is_the_text_the_axes_draws(self):
+        """And the two agree, which is the whole point of recording it beside the draw.
+
+        Test scenario:
+            Read off the axes rather than compared with another `str(2020)`, so a record built by a
+            different route than matplotlib's own would fail here.
+        """
+        with Scene() as scene:
+            scene.set_title(2020)
+            assert scene.title == scene.ax.get_title(), (
+                f"the record {scene.title!r} should be the drawn title "
+                f"{scene.ax.get_title()!r}"
+            )
+
+    def test_an_object_whose_text_is_blank_records_no_title(self):
+        """And the blank rule is applied to the text, not to the object.
+
+        Test scenario:
+            `PanelSpec` refuses a blank title, so an object rendering as whitespace has to clear the
+            record the same way `set_title("   ")` does — otherwise the figure would describe a title
+            made of spaces.
+        """
+        with Scene() as scene:
+            scene.set_title("Discharge")
+            scene.set_title(_Blank())
+            assert scene.title is None, (
+                f"a title rendering as whitespace should clear the record; got {scene.title!r}"
+            )

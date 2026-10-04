@@ -565,3 +565,53 @@ class TestAnUnknownIdIsRefusedInOneVoice:
         assert str(from_move.value) == str(from_get.value), (
             f"move_layer said {from_move.value} where get_layer said {from_get.value}"
         )
+
+
+class TestAskingAnEmptyFigureForItsArtist:
+    """`artist()` with no id means "the last thing drawn" — which may be nothing at all."""
+
+    def test_an_empty_figure_is_refused_rather_than_indexed(self, blank):
+        """A figure with nothing drawn on it is refused by name.
+
+        Args:
+            blank: An empty map.
+
+        Test scenario:
+            ST-20 made every data builder return `self`, so `artist()` is how a caller reaches the
+            matplotlib object — and the no-argument form reads the *last* drawn layer. On an empty figure
+            that is `list({}.values())[-1]`, an `IndexError` out of the middle of the reader that says
+            nothing about what to do.
+        """
+        with pytest.raises(ValueError, match="has nothing to hand back"):
+            blank.artist()
+
+    def test_the_refusal_says_what_to_do_about_it(self, blank):
+        """And the message names both ways out, because the caller cannot tell which they meant.
+
+        Args:
+            blank: An empty map.
+
+        Test scenario:
+            The two fixes are different calls: draw a layer first, or name the layer already expected to
+            be there. A refusal naming only one of them sends half the callers the wrong way.
+        """
+        with pytest.raises(ValueError) as refusal:
+            blank.artist()
+        assert "name the layer you mean" in str(refusal.value), (
+            f"the refusal should offer naming the layer; got {refusal.value}"
+        )
+
+    def test_one_drawn_layer_is_enough_for_the_no_argument_form(self, blank):
+        """Which is to say the refusal is about emptiness and nothing else.
+
+        Args:
+            blank: An empty map.
+
+        Test scenario:
+            The other side of the line. Without it a reader that always refused would pass both tests
+            above while breaking every `Map(...).field(...).artist()` in the suite.
+        """
+        blank.text(0.0, 0.0, "a", name="one")
+        assert blank.artist() in blank.ax.texts, (
+            f"the artist handed back should be on the axes; got {blank.artist()!r}"
+        )

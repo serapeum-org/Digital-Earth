@@ -19,6 +19,8 @@ Every claim here is read off the **artists and the axes' texts**, never off the 
 test that asked the figure would have passed throughout.
 """
 
+import warnings
+
 import pytest
 from matplotlib.collections import LineCollection
 from matplotlib.text import Text
@@ -271,3 +273,222 @@ class TestHidingReachesTheLabels:
         flags = {artist.get_visible() for artist in drawn.artists}
         canvas.close()
         assert flags == {False}, flags
+
+
+#: A square window in EPSG:3413 (NSIDC Arctic Polar Stereographic North), 6000 km on a side, whose lon/lat
+#: envelope spans every longitude while the square itself holds only four of the meridians' anchors — the
+#: case a label has to be dropped in.
+ARCTIC_SQUARE = [-3.0e6, -3.0e6, 3.0e6, 3.0e6]
+
+#: The degree sign the labels are written with, spelled as an escape so this file stays ASCII-safe.
+DEGREE = "°"
+
+
+class TestTheDegreeAtTheDateline:
+    """A line whose degree has no hemisphere: ``180`` belongs to neither side."""
+
+    def test_the_dateline_is_labelled_without_a_hemisphere(self):
+        """``180`` is the same meridian east and west, so its label carries no letter.
+
+        Test scenario:
+            The module's window never reaches it; a map framed on the whole world does. ``180E`` and
+            ``180W`` name one line, so a hemisphere letter there would assert a side that does not exist
+            — and the equator, already covered, is the other value this rule has to hold for.
+        """
+        canvas = Map(crs=4326)
+        canvas.set_bounds([-180.0, -90.0, 180.0, 90.0])
+        canvas.graticule(spacing=STEP)
+        drawn = _label_texts(canvas)
+        canvas.close()
+        assert f"180{DEGREE}" in drawn, (
+            f"the dateline should be labelled without a hemisphere; got {drawn}"
+        )
+
+    def test_the_eastern_and_western_dateline_read_the_same(self):
+        """Both ends of a world-framed view are labelled, and identically.
+
+        Test scenario:
+            ``lines_within`` returns -180 and 180 as two lines, one per edge of the view. They are the
+            same meridian, so the two labels have to read the same — if the hemisphere rule used the sign
+            rather than the magnitude they would read ``180W`` and ``180E``.
+        """
+        canvas = Map(crs=4326)
+        canvas.set_bounds([-180.0, -90.0, 180.0, 90.0])
+        canvas.graticule(spacing=STEP)
+        drawn = _label_texts(canvas)
+        canvas.close()
+        assert drawn.count(f"180{DEGREE}") == 2, (
+            f"both edges of a world view should carry the same dateline label; got {drawn}"
+        )
+
+
+class TestAnUnframedMapIsLabelledForTheWholeWorld:
+    """``graticule()`` before anything framed the view still labels its lines."""
+
+    def test_the_lines_of_an_unframed_map_are_labelled(self):
+        """A map nobody framed is about to be autoscaled to the grid, so no label is dropped.
+
+        Test scenario:
+            An unframed axes still holds matplotlib's unit square, and a label is placed in lon/lat and
+            then projected — so judging "is it inside the view" against that square would drop every
+            label on the most ordinary call there is, ``Map(crs=4326).graticule()``.
+        """
+        canvas = Map(crs=4326)
+        canvas.graticule(spacing=60.0)
+        drawn = _label_texts(canvas)
+        canvas.close()
+        assert f"60{DEGREE}E" in drawn, (
+            f"an unframed map's lines should still be labelled; got {drawn}"
+        )
+
+    def test_an_unframed_map_still_draws_its_lines(self):
+        """And the grid itself is there, so the labels are not standing alone.
+
+        Test scenario:
+            The claim above is about the labels; this is the other half, so a regression that dropped the
+            lines and kept the text could not pass both.
+        """
+        canvas = Map(crs=4326)
+        canvas.graticule(spacing=60.0)
+        collections = _grid_lines(canvas)
+        canvas.close()
+        assert len(collections) == 1, (
+            f"an unframed map should own one line collection; got {len(collections)}"
+        )
+
+
+class TestALabelWithNoPlaceInTheViewIsDroppedAndSaidSo:
+    """What happens to a degree whose anchor the display CRS puts outside the frame."""
+
+    def test_a_label_outside_the_framed_view_is_dropped_with_a_warning(self):
+        """The dropped degrees are named, so a thinned grid is explained rather than mysterious.
+
+        Test scenario:
+            A polar-stereographic square's lon/lat envelope runs the whole way round the pole, so
+            ``lines_within`` asks for every meridian — but most of their anchors project outside the
+            square itself. Drawing them would put text beyond the axes; dropping them silently would
+            leave a grid whose lines outnumber its labels for no stated reason.
+        """
+        canvas = Map(crs=3413)
+        canvas.set_bounds(ARCTIC_SQUARE)
+        with pytest.warns(UserWarning, match="could not place"):
+            canvas.graticule(spacing=STEP)
+        canvas.close()
+
+    def test_the_labels_that_could_be_placed_are_still_drawn(self):
+        """Dropping some is not dropping all — the grid keeps the degrees it can place.
+
+        Test scenario:
+            The refusal is per label, so the meridians whose anchors do land inside the square are drawn.
+            A refusal that returned nothing would leave a polar map unlabelled altogether.
+        """
+        canvas = Map(crs=3413)
+        canvas.set_bounds(ARCTIC_SQUARE)
+        with pytest.warns(UserWarning):
+            canvas.graticule(spacing=STEP)
+        drawn = _label_texts(canvas)
+        canvas.close()
+        assert f"90{DEGREE}W" in drawn, (
+            f"a placeable degree should still be drawn; got {drawn}"
+        )
+
+    def test_every_drawn_label_is_inside_the_axes(self):
+        """What survives the drop is inside the view, which is the point of dropping anything.
+
+        Test scenario:
+            Read off the artists' own positions against the axes limits rather than off the count, so a
+            change that kept the warning and drew the labels anyway fails here.
+        """
+        canvas = Map(crs=3413)
+        canvas.set_bounds(ARCTIC_SQUARE)
+        with pytest.warns(UserWarning):
+            canvas.graticule(spacing=STEP)
+        xmin, xmax = canvas.ax.get_xlim()
+        ymin, ymax = canvas.ax.get_ylim()
+        layer = canvas.figure_spec.layers.layers[-1]
+        placed = [
+            artist.get_position()
+            for artist in canvas._renderer.drawn[layer.id].artists
+            if isinstance(artist, Text)
+        ]
+        canvas.close()
+        outside = [
+            (x, y) for x, y in placed if not (xmin <= x <= xmax and ymin <= y <= ymax)
+        ]
+        assert outside == [], (
+            f"every drawn label should be inside the view; {outside} are not"
+        )
+
+
+class TestAViewWithNoLineInItIsLabelledWithNothing:
+    """Two different "no labels" answers, told apart: nothing asked for, and nothing placeable."""
+
+    def test_a_window_holding_no_line_draws_no_label(self):
+        """A one-degree window at a 30-degree spacing holds no meridian, so there is nothing to label.
+
+        Test scenario:
+            ``lines_within`` returns an empty list, and the reader stops there rather than reprojecting
+            an empty anchor list — which is what a bare ``reproject_coordinates([], [])`` would be asked
+            to do.
+        """
+        canvas = Map(crs=4326)
+        canvas.set_bounds([1.0, 1.0, 2.0, 2.0])
+        canvas.graticule(spacing=STEP)
+        drawn = _label_texts(canvas)
+        canvas.close()
+        assert drawn == [], (
+            f"a window holding no line should draw no label; got {drawn}"
+        )
+
+    def test_a_window_holding_no_line_is_not_warned_about(self):
+        """And it is not a warning: asking for a spacing coarser than the view is not an error.
+
+        Test scenario:
+            The warnings this reader raises are both about a label it *wanted* to place. A view that
+            asked for none is an ordinary zoom, and warning there would fire on every close-up.
+        """
+        canvas = Map(crs=4326)
+        canvas.set_bounds([1.0, 1.0, 2.0, 2.0])
+        with warnings.catch_warnings(record=True) as seen:
+            warnings.simplefilter("always")
+            canvas.graticule(spacing=STEP)
+        canvas.close()
+        raised = [
+            str(record.message)
+            for record in seen
+            if "graticule()" in str(record.message)
+        ]
+        assert raised == [], (
+            f"a view with no line in it should warn about nothing; got {raised}"
+        )
+
+    def test_a_view_with_no_longitude_at_all_warns_that_there_is_no_window(self):
+        """An orthographic view framed entirely off the limb has no lon/lat to place a degree in.
+
+        Test scenario:
+            Every sample of the view reprojects to a non-finite lon/lat, so there is no window — a
+            different failure from "no line in the window" above, and it says so: an unlabelled grid on a
+            frame the caller believes is over the earth is worth one warning.
+        """
+        canvas = Map(crs=projections.orthographic(0.0, 0.0))
+        canvas.set_bounds([2.0e7, 2.0e7, 3.0e7, 3.0e7])
+        with pytest.warns(UserWarning, match="no window to place them in"):
+            canvas.graticule(spacing=STEP)
+        canvas.close()
+
+    def test_that_view_still_draws_its_lines(self):
+        """The grid is still drawn — only the labels were impossible.
+
+        Test scenario:
+            The labels are computed before the first artist reaches the axes precisely so that this
+            warning does not cost the lines; a reader that raised instead of warning would lose them.
+        """
+        canvas = Map(crs=projections.orthographic(0.0, 0.0))
+        canvas.set_bounds([2.0e7, 2.0e7, 3.0e7, 3.0e7])
+        with pytest.warns(UserWarning):
+            canvas.graticule(spacing=STEP)
+        collections = _grid_lines(canvas)
+        canvas.close()
+        assert len(collections) == 1, (
+            f"the unlabelled view should still own one line collection; got {len(collections)}"
+        )
