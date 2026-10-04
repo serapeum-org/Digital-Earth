@@ -496,26 +496,47 @@ class TestTissot:
         ), props
         assert props["radius_m"] == 250_000.0, props
 
-    def test_centres_of_two_lengths_are_refused(self):
-        """``lons`` and ``lats`` pair up; two lengths is a caller error, not a silent truncation."""
-        canvas = _world_4326()
-        with pytest.raises(ValueError, match="same shape"):
-            canvas.tissot([0.0, 10.0], [0.0])
+    def test_centres_of_two_lengths_are_refused_by_this_method(self):
+        """``lons`` and ``lats`` pair up; two lengths is a caller error, not a silent truncation.
 
-    def test_an_empty_centre_pair_is_refused_by_name(self):
-        """An empty pair of centres is a caller mistake, not a drawing with no rings in it.
+        Test scenario:
+            The refusal used to come out of cleopatra, from inside the drawer, while ``tissot``'s own
+            ``Raises`` presented it as this method's — so the message named neither the method nor the
+            keywords the caller passed. It is checked in the builder now, beside the pair and empty
+            guards, and names both counts.
+        """
+        canvas = _world_4326()
+        with pytest.raises(ValueError, match=r"tissot\(\) takes one lat per lon"):
+            canvas.tissot([0.0, 10.0], [0.0])
+        assert canvas.layer_ids == [], (
+            f"a refused pair must leave no layer behind, got {canvas.layer_ids}"
+        )
+
+    @pytest.mark.parametrize(
+        "lons, lats",
+        [([], []), ([], [0.0]), ([0.0], [])],
+        ids=["both-empty", "lons-empty", "lats-empty"],
+    )
+    def test_an_empty_centre_list_is_refused_by_name(self, lons, lats):
+        """A centre list that came out empty is a caller mistake, not a drawing with no rings in it.
+
+        Args:
+            lons: The longitudes given.
+            lats: The latitudes given.
 
         Test scenario:
             ``None`` is the documented answer for "every ring was off-limb", which is a real figure the
             projection could not place. ``tissot([], [])`` drew nothing, described nothing and answered
             ``None`` too, so a caller whose centre list came out empty read it as the off-limb case and
             looked at the projection instead of at their own data. ``facet`` refuses an empty stack by
-            name for exactly this reason, so an empty centre pair is refused the same way, before any
-            ring is computed.
+            name for exactly this reason. The guard was gated on **both** lists being empty, so the
+            half-empty pair — the shape a caller gets when one of two filters came out empty, which is the
+            case the by-name refusal was added for — fell through to cleopatra's shape message instead.
+            All three spellings answer alike now.
         """
         canvas = _world_4326()
         with pytest.raises(ValueError, match="no centres to draw"):
-            canvas.tissot([], [])
+            canvas.tissot(lons, lats)
         assert canvas.layer_ids == [], (
             f"a refused pair must leave no layer behind, got {canvas.layer_ids}"
         )

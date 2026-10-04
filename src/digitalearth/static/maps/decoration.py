@@ -2495,9 +2495,13 @@ class DecorationMixin(_MixinBase):
             The circles' ``PolyCollection``, or ``None`` when no circle could be placed.
 
         Raises:
-            ValueError: when only one of ``lons``/``lats`` is given, when both are empty, when they differ
-                in length, when ``radius_m`` is not a positive, less-than-antipodal distance, or when ``n``
-                is below 4. The layer is not described.
+            ValueError: when only one of ``lons``/``lats`` is given, when **either** is empty, when they
+                differ in length, or when ``n`` is not a whole number of at least 4. All four are refused
+                here, in the builder, by name and before any ring is computed, and the layer is not
+                described. ``radius_m`` raises the same type but not from here: cleopatra refuses a
+                distance that is not positive and sub-antipodal from inside the drawer, because the bound
+                is the mean Earth radius' to set and is not restated in this tier. The layer is not
+                described in that case either — a drawer that raises takes its own description with it.
 
         Examples:
             - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:
@@ -2540,18 +2544,37 @@ class DecorationMixin(_MixinBase):
                 True
 
                 ```
-            - An empty pair of centre lists is refused by name, because ``None`` already means "every ring
-              was off the map" and the two must not read alike:
+            - An empty centre list is refused by name, because ``None`` already means "every ring was off
+              the map" and the two must not read alike. **Either** list empty answers the same way: a
+              half-empty pair is what a caller gets when one of two filters came out empty, which is the
+              case the refusal is for:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     for pair in (([], []), ([], [0.0]), ([0.0], [])):
+                ...         try:
+                ...             m.tissot(lons=pair[0], lats=pair[1])
+                ...         except ValueError as error:
+                ...             print(error)
+                tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid
+                tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid
+                tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid
+
+                ```
+            - Two centre lists of different lengths are refused by this method too, with both counts
+              named, rather than by cleopatra from inside the drawer:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> with Map(crs=4326) as m:
                 ...     try:
-                ...         m.tissot(lons=[], lats=[])
+                ...         m.tissot(lons=[0.0, 10.0], lats=[0.0])
                 ...     except ValueError as error:
                 ...         print(error)
-                tissot() was given no centres to draw; pass lons= and lats=, or neither for the world grid
+                tissot() takes one lat per lon; got 2 in lons= and 1 in lats=
 
                 ```
 
@@ -2570,13 +2593,23 @@ class DecorationMixin(_MixinBase):
         else:
             lon_list = [float(v) for v in np.atleast_1d(np.asarray(lons, dtype=float))]
             lat_list = [float(v) for v in np.atleast_1d(np.asarray(lats, dtype=float))]
-            if not lon_list and not lat_list:
-                # `None` is this method's answer for "every ring was off-limb", so an empty pair must not
-                # share it: a caller whose centre list came out empty would read it as the projection's
-                # doing. `facet` refuses an empty stack by name for the same reason (round 3, L5).
+            if not lon_list or not lat_list:
+                # `None` is this method's answer for "every ring was off-limb", so an empty centre list
+                # must not share it: a caller whose list came out empty would read it as the projection's
+                # doing. `facet` refuses an empty stack by name for the same reason (round 3, L5). Gated
+                # on **either** list, not both: the half-empty pair is the shape a caller gets when one of
+                # two filters came out empty, which is the case this refusal was added for, and it used to
+                # fall through to cleopatra's shape message instead (round 4, M6).
                 raise ValueError(
                     "tissot() was given no centres to draw; pass lons= and lats=, or neither for the "
                     "world grid"
+                )
+            if len(lon_list) != len(lat_list):
+                # Refused here rather than left to cleopatra's `tissot_circles`, because `Raises` presents
+                # it as this method's refusal — so it names this method and the two counts (round 4, M6).
+                raise ValueError(
+                    f"tissot() takes one lat per lon; got {len(lon_list)} in lons= and "
+                    f"{len(lat_list)} in lats="
                 )
         return self._draw(
             LayerRecord(
