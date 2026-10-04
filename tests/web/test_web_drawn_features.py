@@ -40,6 +40,24 @@ TRIANGLE_WITH_OWN_ID = {
     "properties": {"id": "USER-SET"},
 }
 
+#: A point carrying its own ``id`` property and **no** draw id — what a caller-supplied widget or a trait set
+#: from Python holds, since MapboxDraw itself always writes one.
+POINT_WITHOUT_DRAW_ID = {
+    "type": "Feature",
+    "properties": {"id": "mine", "label": "plot A"},
+    "geometry": {"type": "Point", "coordinates": [8.0, 51.0]},
+}
+
+#: The same point with the draw id present but ``None``, which is the other way the key can be missing.
+POINT_WITH_NULL_DRAW_ID = {**POINT_WITHOUT_DRAW_ID, "id": None}
+
+#: A point with no ``id`` anywhere — neither a draw id nor a property.
+POINT_WITH_NO_ID_AT_ALL = {
+    "type": "Feature",
+    "properties": {"label": "plot B"},
+    "geometry": {"type": "Point", "coordinates": [9.0, 52.0]},
+}
+
 
 def _draw(widget, *features):
     """Set the widget's synced draw state the way the front-end does after a ``draw.create``.
@@ -87,6 +105,81 @@ class TestDrawnFeatures:
         m = WebMap().measure()
         _draw(m.render(), TRIANGLE_WITH_OWN_ID)
         assert list(m.drawn_features()["id"]) == [TRIANGLE["id"]]
+
+    def test_an_own_id_property_survives_a_feature_with_no_draw_id(self):
+        """With no draw id to prefer, the feature's own ``id`` property is the only one there is.
+
+        Test scenario:
+            - A point carrying ``id="mine"`` in its properties and no top-level draw id, which is what a
+              caller-supplied widget or a trait set from Python holds; MapboxDraw itself always writes one.
+            - The merge used to be unconditional, so ``None`` won and the property was destroyed —
+              measured: ``id column: [None]``. Before round 1's draw-id fix the property survived, so this
+              was a regression, not a gap.
+        """
+        m = WebMap().measure()
+        _draw(m.render(), POINT_WITHOUT_DRAW_ID)
+        assert list(m.drawn_features()["id"]) == ["mine"], (
+            f"the feature's own id property must survive, got "
+            f"{list(m.drawn_features()['id'])}"
+        )
+
+    def test_the_other_properties_survive_a_feature_with_no_draw_id(self):
+        """Nothing else on the feature is disturbed by the missing draw id.
+
+        Test scenario:
+            - The same point. Its ``label`` always came through; this pins that the narrower merge did not
+              cost it.
+        """
+        m = WebMap().measure()
+        _draw(m.render(), POINT_WITHOUT_DRAW_ID)
+        assert list(m.drawn_features()["label"]) == ["plot A"], (
+            f"the other properties must survive, got {list(m.drawn_features()['label'])}"
+        )
+
+    def test_a_draw_id_that_is_explicitly_null_does_not_displace_the_property(self):
+        """A present-but-``None`` draw id is a missing one, not a value to write.
+
+        Test scenario:
+            - The same point with ``"id": None`` beside the geometry rather than the key absent. Reading
+              ``feature.get("id")`` cannot tell the two apart, and neither should the merge: both leave the
+              property standing.
+        """
+        m = WebMap().measure()
+        _draw(m.render(), POINT_WITH_NULL_DRAW_ID)
+        assert list(m.drawn_features()["id"]) == ["mine"], (
+            f"an explicit null draw id must not displace the property, got "
+            f"{list(m.drawn_features()['id'])}"
+        )
+
+    def test_a_feature_with_no_id_anywhere_still_has_an_id_column(self):
+        """The ``id`` column is there whatever the feature holds, so no caller has to branch on it.
+
+        Test scenario:
+            - A point with neither a draw id nor an ``id`` property. The unconditional merge gave the
+              column for free; only writing the key when there is a draw id would have taken it away and
+              made ``drawn["id"]`` a ``KeyError`` — the very failure round 1's M5 fix removed from the
+              empty path.
+            - The column is therefore still declared, holding ``None`` for the row that has no id.
+        """
+        m = WebMap().measure()
+        _draw(m.render(), POINT_WITH_NO_ID_AT_ALL)
+        assert list(m.drawn_features()["id"]) == [None], (
+            f"the id column must exist even with no id anywhere, got "
+            f"{list(m.drawn_features()['id'])}"
+        )
+
+    def test_a_drawn_feature_still_prefers_the_draw_id_over_the_property(self):
+        """The draw id keeps winning when there is one — the behaviour round 1 fixed stays fixed.
+
+        Test scenario:
+            - The triangle carrying ``id="USER-SET"`` in its properties while MapboxDraw's id is ``"a1"``,
+              read through the narrower merge rather than the unconditional one.
+        """
+        m = WebMap().measure()
+        _draw(m.render(), TRIANGLE_WITH_OWN_ID)
+        assert list(m.drawn_features()["id"]) == ["a1"], (
+            f"the draw id must still win, got {list(m.drawn_features()['id'])}"
+        )
 
     def test_feature_properties_become_columns(self):
         """Properties a feature carries reach the frame as columns."""

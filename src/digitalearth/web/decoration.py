@@ -1752,8 +1752,11 @@ class DecorationMixin(_MixinBase):
         Each row keeps MapboxDraw's feature ``id`` in an ``id`` column, which is what the widget's
         ``draw_features_created``/``…_updated``/``…_deleted`` events name, so a row can be matched to them.
         A feature carrying an ``id`` **property** of its own — one set through ``draw.setFeatureProperty``,
-        or imported with the shape — does not displace it: the draw id is written last and wins. The column
-        is there on the empty collection too, so ``drawn["id"]`` reads the same whether anything was drawn.
+        or imported with the shape — does not displace it: the draw id wins wherever there is one. Where
+        there is none (``id`` absent or ``None`` beside the geometry, which MapboxDraw never leaves but a
+        caller-supplied widget or a trait set from Python can) the feature's own property stands, and a
+        feature with no ``id`` of either kind reads ``None``. The column is there on the empty collection
+        too, so ``drawn["id"]`` reads the same whether anything was drawn.
 
         Args:
             widget: The ``MapWidget`` to read, for a caller holding one from an earlier :meth:`render`.
@@ -1799,7 +1802,7 @@ class DecorationMixin(_MixinBase):
 
                 ```
             - A shape that carries an ``id`` property of its own keeps its other properties and still
-              reports the draw id, because the draw id is written last:
+              reports the draw id, because the draw id wins wherever there is one:
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> m = WebMap().measure()
@@ -1811,6 +1814,20 @@ class DecorationMixin(_MixinBase):
                 >>> drawn = m.drawn_features()
                 >>> list(drawn["id"]), list(drawn["label"])
                 (['draw-1'], ['plot A'])
+
+                ```
+            - The same shape with **no** draw id keeps its own ``id`` instead of losing it to ``None``:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().measure()
+                >>> widget = m.render()
+                >>> widget.draw_feature_collection_all = {"type": "FeatureCollection", "features": [{
+                ...     "type": "Feature",
+                ...     "properties": {"id": "mine", "label": "plot A"},
+                ...     "geometry": {"type": "Point", "coordinates": [8.0, 51.0]}}]}
+                >>> drawn = m.drawn_features()
+                >>> list(drawn["id"]), list(drawn["label"])
+                (['mine'], ['plot A'])
 
                 ```
 
@@ -1834,17 +1851,7 @@ class DecorationMixin(_MixinBase):
 
         collection = widget.draw_feature_collection_all or {}
         features = [
-            {
-                **feature,
-                # The draw id is written **last**, so a feature carrying an `id` property of its own — one
-                # set through `draw.setFeatureProperty`, or imported with the shape — cannot displace it.
-                # Written first it did, and the one column the method exists to preserve was lost exactly
-                # when a caller had set properties (review M4).
-                "properties": {
-                    **(feature.get("properties") or {}),
-                    "id": feature.get("id"),
-                },
-            }
+            {**feature, "properties": self._drawn_properties(feature)}
             for feature in collection.get("features") or []
         ]
         if not features:
@@ -1853,6 +1860,37 @@ class DecorationMixin(_MixinBase):
             # presents as the safe one, so every caller had to branch on `len()` first (review M5).
             return FeatureCollection({"id": []}, geometry=[], crs=_DRAWN_CRS)
         return FeatureCollection.from_features(features, crs=_DRAWN_CRS)
+
+    @staticmethod
+    def _drawn_properties(feature: dict) -> dict:
+        """Return one drawn feature's properties with its ``id`` column settled.
+
+        Three readings have to hold at once, and the first two pulled against each other:
+
+        - A feature carrying an ``id`` **property** of its own — set through ``draw.setFeatureProperty``,
+          or imported with the shape — must not displace MapboxDraw's draw id, because the draw id is what
+          the create/update/delete events name (review M4). So the draw id is written over it.
+        - It must not be displaced *by nothing*. The write was unconditional, so a feature with no draw id
+          had its own property replaced with ``None`` — measured ``id column: [None]`` for properties
+          ``{"id": "mine", "label": "plot A"}`` — which the property survived before the M4 fix. That is a
+          regression, so the draw id is written only when there is one (review L4).
+        - The column must exist whatever the feature holds, so ``drawn["id"]`` never raises on a path
+          presented as the safe one (review M5). Dropping the key altogether would have taken that back,
+          so a feature with no id of either kind gets an explicit ``None``.
+
+        Args:
+            feature: One GeoJSON feature as the widget's ``draw_feature_collection_all`` holds it.
+
+        Returns:
+            Its ``properties``, copied, carrying an ``id`` key: the draw id when there is one, else the
+            feature's own ``id`` property, else ``None``.
+        """
+        properties = dict(feature.get("properties") or {})
+        draw_id = feature.get("id")
+        if draw_id is not None:
+            properties["id"] = draw_id
+        properties.setdefault("id", None)
+        return properties
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:
