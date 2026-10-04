@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pytest
+from cleopatra.basemap.solar import subsolar_point
 from matplotlib.collections import PolyCollection
 
 from digitalearth.static import Map, projections
@@ -253,6 +254,36 @@ class TestNightshade:
         artist = canvas.nightshade(EQUINOX_NOON)
         assert artist is not None, "the night side faces the viewer"
         assert _covered(artist, (0.0, 0.0)), "the centre of the disc is at midnight"
+
+    def test_the_globe_fill_follows_cleopatras_own_subsolar_point(self):
+        """The globe's local solar-altitude copy must keep agreeing with the upstream it duplicates.
+
+        Test scenario:
+            ``_globe_nightshade`` writes the solar-altitude formula out locally, because cleopatra — which
+            owns solar geometry — exposes the night side only as a polygon a globe cannot take
+            (cleopatra#379). A local copy can drift from the upstream precision model it was derived from,
+            so this pins the two together through the public API: a globe centred exactly on cleopatra's
+            own ``subsolar_point`` sees the day hemisphere and nothing else, and one centred on its
+            antipode sees the night hemisphere and nothing else. Both answers are decided entirely by
+            where cleopatra puts the sun, so they change the moment the copy stops agreeing with it.
+        """
+        sun_lon, sun_lat = subsolar_point(JUNE_NOON)
+        noon = Map(
+            crs=projections.orthographic(lon=sun_lon, lat=sun_lat),
+            globe=True,
+        )
+        assert noon.nightshade(JUNE_NOON) is None, (
+            "a globe centred on the subsolar point shows the day hemisphere only"
+        )
+        midnight = Map(
+            crs=projections.orthographic(lon=sun_lon - 180.0, lat=-sun_lat),
+            globe=True,
+        )
+        artist = midnight.nightshade(JUNE_NOON)
+        assert artist is not None, "the antisolar hemisphere is entirely at night"
+        assert _covered(artist, (0.0, 0.0)), (
+            "the antisolar point is the deepest night there is"
+        )
 
     def test_a_globe_whose_visible_side_holds_no_night_draws_nothing(self):
         """A globe centred on the day side, asked for deep night, has none to shade — so no layer.

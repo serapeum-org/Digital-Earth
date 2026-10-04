@@ -6,6 +6,17 @@ land/ocean/lake/river layers (with the globe limb-splitting/closing helpers behi
 The reference data comes from ``cleopatra.basemap.reference`` (``natural_earth`` raw lon/lat coordinate arrays for
 the globe limb-splitting; ``add_features`` for the flat, hole-aware reprojected render) — these helpers
 moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
+
+**One deliberate, temporary deviation from the engine boundary.** ``cleopatra.basemap.solar`` owns solar
+geometry, and everything here goes through it — except :func:`_globe_nightshade`, which computes the
+solar altitude over a display grid with the formula written out locally. It has to: cleopatra exposes the
+night side as a *polygon*, which a globe cannot take (half of it is on the far side, where the projection
+has no position at all), and exposes no way to ask how high the sun stands at a lon/lat. The missing
+upstream helper is requested as **cleopatra#379** (``solar_altitude`` / a night-mask form); until it
+lands, the local copy stays, pinned against the upstream it duplicates by
+``tests/static/test_nightshade_tissot.py::TestNightshade::test_the_globe_fill_follows_cleopatras_own_subsolar_point``
+so the two cannot drift apart unnoticed. It is not to be grown: anything further about solar geometry
+belongs in that issue, not in this module (round 3, M7).
 """
 
 import contextlib
@@ -920,6 +931,9 @@ def _globe_nightshade(
     grid is taken back to lon/lat through pyramids, and the solar altitude there is read off cleopatra's
     subsolar point. The fill is the region where it is below ``refraction`` — exact at the terminator (the
     contour interpolates the crossing) and empty off the disc, where the inverse projection has no answer.
+
+    The altitude itself is the module docstring's one deliberate deviation from the engine boundary: the
+    formula is written out here because cleopatra exposes no way to ask it, which is **cleopatra#379**.
 
     Args:
         scene: The globe being drawn on.
