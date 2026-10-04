@@ -203,6 +203,64 @@ class TestTheHatchLegend:
         ]
         assert [handle.get_hatch() for handle in legend.legend_handles] == ["///"]
 
+    def test_a_hatched_band_holding_no_data_is_not_keyed(self, p_values):
+        """Levels past the field leave bands with no geometry, and a band that marks nothing has no row.
+
+        Args:
+            p_values: The p-value field, whose values lie in [0.01, 0.95].
+
+        Test scenario:
+            - Ask for levels that run well past the data — ``[0, 0.05, 1, 5, 10]`` over p-values that stop
+              at 0.95 — with a pattern on three of the four bands, drawn as an uncoloured overlay.
+            - The last two bands hold no geometry at all (measured: ``get_paths()`` reports 11 vertices for
+              band 0, 11 for band 1 and 0 for bands 2 and 3), so the only band the map marks is the first.
+            - The key used to read ``['0.0 – 0.05', '1.0 – 5.0', '5.0 – 10.0']``, inventing two
+              significance classes a reader would look for and not find.
+        """
+        canvas = Map(crs=4326)
+        canvas.contours(
+            p_values,
+            levels=[0.0, 0.05, 1.0, 5.0, 10.0],
+            filled=True,
+            hatches=["///", "", "..", "xx"],
+            fill=False,
+            name="beyond",
+        )
+        canvas.legend("beyond")
+        legend = canvas.ax.get_legend()
+        assert [text.get_text() for text in legend.get_texts()] == ["0.0 – 0.05"], [
+            text.get_text() for text in legend.get_texts()
+        ]
+        assert [handle.get_hatch() for handle in legend.legend_handles] == ["///"]
+
+    def test_a_coloured_band_holding_no_data_is_not_keyed_either(self, p_values):
+        """A band with a colour and a pattern but no geometry still draws nothing, so it is not keyed.
+
+        Args:
+            p_values: The p-value field, whose values lie in [0.01, 0.95].
+
+        Test scenario:
+            - The same over-wide levels, but filled: every band now has an opaque face as well as a
+              pattern, so the old ``pattern or face[3] > 0.0`` filter kept all four rows.
+            - Only the two bands the data reaches draw anything, so the key has two rows, labelled for the
+              two level pairs the field spans.
+        """
+        canvas = Map(crs=4326)
+        canvas.contours(
+            p_values,
+            levels=[0.0, 0.05, 1.0, 5.0, 10.0],
+            filled=True,
+            hatches=["///", "||", "..", "xx"],
+            name="filled-beyond",
+        )
+        canvas.legend("filled-beyond")
+        legend = canvas.ax.get_legend()
+        assert [text.get_text() for text in legend.get_texts()] == [
+            "0.0 – 0.05",
+            "0.05 – 1.0",
+        ], [text.get_text() for text in legend.get_texts()]
+        assert [handle.get_hatch() for handle in legend.legend_handles] == ["///", "||"]
+
     def test_an_overlay_swatch_is_unfilled(self, p_values):
         """The swatch shows the pattern on the background, as the map does.
 

@@ -441,6 +441,30 @@ def _hatches_of(artist: Any) -> Optional[Tuple[str, ...]]:
     return tuple(patterns[index % len(patterns)] or "" for index in range(bands))
 
 
+def _marked_bands(artist: Any, bands: int) -> List[bool]:
+    """Say, band by band, whether a filled contour set put any geometry on the axes for it.
+
+    Levels may run past the data — ``levels=[0, 0.05, 1, 5, 10]`` over a p-value field that stops at 0.95
+    — and the bands beyond it are drawn as empty paths. They carry the set's colour and pattern all the
+    same, so a key filtered on those two alone invents classes a reader will look for and not find
+    (review M1). A filled ``ContourSet`` holds one compound path per band, in level order, and an empty
+    band's path has no vertices.
+
+    Args:
+        artist: The filled ``ContourSet``.
+        bands: How many bands the set's levels declare.
+
+    Returns:
+        One flag per band, ``True`` when the band holds at least one vertex. Every band is reported marked
+        when the artist's paths do not number the bands, since dropping a row on a reading that no longer
+        holds would be worse than keeping an empty one.
+    """
+    paths = list(artist.get_paths())
+    if len(paths) != bands:
+        return [True] * bands
+    return [len(path.vertices) > 0 for path in paths]
+
+
 def _hatch_rows(
     layer: LayerSpec, artist: Any, hatches: Sequence[str], title: Optional[str]
 ) -> Tuple[LegendSpec, List[int], List[str]]:
@@ -459,7 +483,10 @@ def _hatch_rows(
 
     Returns:
         ``(spec, kept, rows)``: the legend over every band, the indices of the bands keyed, and one label per
-        kept band. A band that is neither coloured nor hatched draws nothing on the map, so it is not kept.
+        kept band. A band is kept only when the map actually marks it, which takes both: something to mark
+        it *with* — a pattern, or a face that is not fully transparent — and some geometry to mark, which
+        :func:`_marked_bands` reads off the artist. Levels that run past the data satisfy the first and not
+        the second, and keying them invented classes nothing on the figure showed (review M1).
 
     Raises:
         ValueError: when the recorded labels do not number the kept rows.
@@ -470,10 +497,11 @@ def _hatch_rows(
     colors = [to_hex(face, keep_alpha=True) for face in faces]
     scale = Scale(levels[0], levels[-1], scheme=levels, breaks=levels)
     spec = LegendSpec.from_scale(scale, colors=colors, title=title)
+    marked = _marked_bands(artist, len(hatches))
     kept = [
         index
         for index, (face, pattern) in enumerate(zip(faces, hatches))
-        if pattern or face[3] > 0.0
+        if marked[index] and (pattern or face[3] > 0.0)
     ]
     labels = layer.symbology.props.get(GUIDE_LABELS_KEY)
     if labels is None:
