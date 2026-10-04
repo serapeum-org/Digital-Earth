@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -12840,33 +12840,47 @@ the returned figure.</p>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">xaxis</span><span class="o">.</span><span class="n">get_tick_params</span><span class="p">(</span><span class="n">which</span><span class="o">=</span><span class="s2">&quot;major&quot;</span><span class="p">)[</span><span class="s2">&quot;labelbottom&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">]</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">]</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">yaxis</span><span class="o">.</span><span class="n">get_tick_params</span><span class="p">(</span><span class="n">which</span><span class="o">=</span><span class="s2">&quot;major&quot;</span><span class="p">)[</span><span class="s2">&quot;labelleft&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">]</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">]</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </code></pre></div></li>
-<li>Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair
-  <code>(0, 2)</code> — and a word outside matplotlib's vocabulary is refused by name:
+<li>Sharing per row and per column drops no labels at all, because neither makes a label redundant
+  along its own axis:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;Agg&quot;</span><span class="p">)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.figure</span><span class="w"> </span><span class="kn">import</span> <span class="n">grid</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="s2">&quot;col&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">group</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">get_shared_x_axes</span><span class="p">()</span><span class="o">.</span><span class="n">get_siblings</span><span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ax</span><span class="p">)</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">group</span><span class="p">)</span> <span class="o">==</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="kc">True</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="o">...</span>     <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="s1">&#39;both&#39;</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">a</span> <span class="n">valid</span> <span class="n">value</span> <span class="k">for</span> <span class="n">sharex</span><span class="o">.</span> <span class="n">Supported</span> <span class="n">values</span> <span class="n">are</span> <span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;row&#39;</span><span class="p">,</span> <span class="s1">&#39;col&#39;</span><span class="p">,</span> <span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="s2">&quot;row&quot;</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="s2">&quot;col&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">xaxis</span><span class="o">.</span><span class="n">get_tick_params</span><span class="p">(</span><span class="n">which</span><span class="o">=</span><span class="s2">&quot;major&quot;</span><span class="p">)[</span><span class="s2">&quot;labelbottom&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">]</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">]</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">yaxis</span><span class="o">.</span><span class="n">get_tick_params</span><span class="p">(</span><span class="n">which</span><span class="o">=</span><span class="s2">&quot;major&quot;</span><span class="p">)[</span><span class="s2">&quot;labelleft&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">]</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">]</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </code></pre></div></li>
-<li>A figure title sits beside the panels' own titles rather than replacing one:
+<li>Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair
+  <code>(0, 2)</code> — and a word outside matplotlib's vocabulary is refused by name:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;Agg&quot;</span><span class="p">)</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.figure</span><span class="w"> </span><span class="kn">import</span> <span class="n">grid</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">suptitle</span><span class="o">=</span><span class="s2">&quot;rainfall, 2020&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;January&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">get_text</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">fig</span><span class="o">.</span><span class="n">texts</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">get_title</span><span class="p">()</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">([</span><span class="s1">&#39;rainfall, 2020&#39;</span><span class="p">],</span> <span class="s1">&#39;January&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="s2">&quot;col&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">group</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">get_shared_x_axes</span><span class="p">()</span><span class="o">.</span><span class="n">get_siblings</span><span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ax</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">group</span><span class="p">)</span> <span class="o">==</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="kc">True</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="o">...</span>     <span class="n">grid</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="s1">&#39;both&#39;</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">a</span> <span class="n">valid</span> <span class="n">value</span> <span class="k">for</span> <span class="n">sharex</span><span class="o">.</span> <span class="n">Supported</span> <span class="n">values</span> <span class="n">are</span> <span class="s1">&#39;all&#39;</span><span class="p">,</span> <span class="s1">&#39;row&#39;</span><span class="p">,</span> <span class="s1">&#39;col&#39;</span><span class="p">,</span> <span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">True</span>
+</code></pre></div></li>
+<li>A figure title sits beside the panels' own titles rather than replacing one:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;Agg&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.figure</span><span class="w"> </span><span class="kn">import</span> <span class="n">grid</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span> <span class="o">=</span> <span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">suptitle</span><span class="o">=</span><span class="s2">&quot;rainfall, 2020&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;January&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">get_text</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">fig</span><span class="o">.</span><span class="n">texts</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">get_title</span><span class="p">()</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">([</span><span class="s1">&#39;rainfall, 2020&#39;</span><span class="p">],</span> <span class="s1">&#39;January&#39;</span><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">maps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </code></pre></div></li>
 </ul>
 
@@ -13006,7 +13020,23 @@ the returned figure.</p>
 <span class="normal"><a href="#__codelineno-0-190">190</a></span>
 <span class="normal"><a href="#__codelineno-0-191">191</a></span>
 <span class="normal"><a href="#__codelineno-0-192">192</a></span>
-<span class="normal"><a href="#__codelineno-0-193">193</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="k">def</span><span class="w"> </span><span class="nf">grid</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="k">def</span><span class="w"> </span><span class="nf">grid</span><span class="p">(</span>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a>    <span class="n">nrows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
 <a id="__codelineno-0-62" name="__codelineno-0-62"></a>    <span class="n">ncols</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
 <a id="__codelineno-0-63" name="__codelineno-0-63"></a>    <span class="o">*</span><span class="p">,</span>
@@ -13100,46 +13130,62 @@ the returned figure.</p>
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a><span class="sd">            [2.0, 8.0]</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a><span class="sd">            &gt;&gt;&gt; [m.ax.xaxis.get_tick_params(which=&quot;major&quot;)[&quot;labelbottom&quot;] for m in maps]</span>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="sd">            [False, False, True, True]</span>
-<a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
-<a id="__codelineno-0-155" name="__codelineno-0-155"></a>
-<a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">        - Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">          ``(0, 2)`` — and a word outside matplotlib&#39;s vocabulary is refused by name:</span>
-<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static.figure import grid</span>
-<a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">            &gt;&gt;&gt; fig, maps = grid(2, 2, crs=4326, sharex=&quot;col&quot;)</span>
-<a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">            &gt;&gt;&gt; group = maps[0].ax.get_shared_x_axes().get_siblings(maps[0].ax)</span>
-<a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">            &gt;&gt;&gt; sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))</span>
-<a id="__codelineno-0-166" name="__codelineno-0-166"></a><span class="sd">            True</span>
-<a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
-<a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-169" name="__codelineno-0-169"></a><span class="sd">            ...     grid(2, 2, crs=4326, sharex=&quot;both&quot;)</span>
-<a id="__codelineno-0-170" name="__codelineno-0-170"></a><span class="sd">            ... except ValueError as error:</span>
-<a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">            ...     print(error)</span>
-<a id="__codelineno-0-172" name="__codelineno-0-172"></a><span class="sd">            &#39;both&#39; is not a valid value for sharex. Supported values are &#39;all&#39;, &#39;row&#39;, &#39;col&#39;, &#39;none&#39;, False, True</span>
-<a id="__codelineno-0-173" name="__codelineno-0-173"></a>
-<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">        - A figure title sits beside the panels&#39; own titles rather than replacing one:</span>
-<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static.figure import grid</span>
-<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="sd">            &gt;&gt;&gt; fig, maps = grid(1, 2, crs=4326, suptitle=&quot;rainfall, 2020&quot;)</span>
-<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">            &gt;&gt;&gt; _ = maps[0].set_title(&quot;January&quot;)</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">            &gt;&gt;&gt; [t.get_text() for t in fig.texts], maps[0].ax.get_title()</span>
-<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">            ([&#39;rainfall, 2020&#39;], &#39;January&#39;)</span>
-<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
-<a id="__codelineno-0-185" name="__codelineno-0-185"></a>
-<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-188" name="__codelineno-0-188"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">nrows</span><span class="p">,</span> <span class="n">ncols</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">sharex</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="n">sharey</span><span class="p">)</span>
-<a id="__codelineno-0-189" name="__codelineno-0-189"></a>    <span class="n">axes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">axs</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
-<a id="__codelineno-0-190" name="__codelineno-0-190"></a>    <span class="n">maps</span> <span class="o">=</span> <span class="p">[</span><span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="n">globe</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">]</span>
-<a id="__codelineno-0-191" name="__codelineno-0-191"></a>    <span class="k">if</span> <span class="n">suptitle</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-192" name="__codelineno-0-192"></a>        <span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">suptitle</span><span class="p">)</span>
-<a id="__codelineno-0-193" name="__codelineno-0-193"></a>    <span class="k">return</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span>
+<a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">            &gt;&gt;&gt; [m.ax.yaxis.get_tick_params(which=&quot;major&quot;)[&quot;labelleft&quot;] for m in maps]</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">            [True, False, True, False]</span>
+<a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">        - Sharing per row and per column drops no labels at all, because neither makes a label redundant</span>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">          along its own axis:</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static.figure import grid</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">            &gt;&gt;&gt; fig, maps = grid(2, 2, crs=4326, sharex=&quot;row&quot;, sharey=&quot;col&quot;)</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a><span class="sd">            &gt;&gt;&gt; [m.ax.xaxis.get_tick_params(which=&quot;major&quot;)[&quot;labelbottom&quot;] for m in maps]</span>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="sd">            [True, True, True, True]</span>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="sd">            &gt;&gt;&gt; [m.ax.yaxis.get_tick_params(which=&quot;major&quot;)[&quot;labelleft&quot;] for m in maps]</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a><span class="sd">            [True, True, True, True]</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">        - Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">          ``(0, 2)`` — and a word outside matplotlib&#39;s vocabulary is refused by name:</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static.figure import grid</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">            &gt;&gt;&gt; fig, maps = grid(2, 2, crs=4326, sharex=&quot;col&quot;)</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="sd">            &gt;&gt;&gt; group = maps[0].ax.get_shared_x_axes().get_siblings(maps[0].ax)</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">            &gt;&gt;&gt; sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">            True</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">            ...     grid(2, 2, crs=4326, sharex=&quot;both&quot;)</span>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">            ... except ValueError as error:</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">            ...     print(error)</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">            &#39;both&#39; is not a valid value for sharex. Supported values are &#39;all&#39;, &#39;row&#39;, &#39;col&#39;, &#39;none&#39;, False, True</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">        - A figure title sits beside the panels&#39; own titles rather than replacing one:</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static.figure import grid</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">            &gt;&gt;&gt; fig, maps = grid(1, 2, crs=4326, suptitle=&quot;rainfall, 2020&quot;)</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">            &gt;&gt;&gt; _ = maps[0].set_title(&quot;January&quot;)</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">            &gt;&gt;&gt; [t.get_text() for t in fig.texts], maps[0].ax.get_title()</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">            ([&#39;rainfall, 2020&#39;], &#39;January&#39;)</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">            &gt;&gt;&gt; maps[0].close()</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">nrows</span><span class="p">,</span> <span class="n">ncols</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">sharex</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="n">sharey</span><span class="p">)</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a>    <span class="n">axes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">axs</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>    <span class="n">maps</span> <span class="o">=</span> <span class="p">[</span><span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="n">globe</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">]</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a>    <span class="k">if</span> <span class="n">suptitle</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a>        <span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">suptitle</span><span class="p">)</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a>    <span class="k">return</span> <span class="n">fig</span><span class="p">,</span> <span class="n">maps</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13291,23 +13337,7 @@ whose data lies outside the display CRS draws nothing and so has no scale to rep
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/figure.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-196">196</a></span>
-<span class="normal"><a href="#__codelineno-0-197">197</a></span>
-<span class="normal"><a href="#__codelineno-0-198">198</a></span>
-<span class="normal"><a href="#__codelineno-0-199">199</a></span>
-<span class="normal"><a href="#__codelineno-0-200">200</a></span>
-<span class="normal"><a href="#__codelineno-0-201">201</a></span>
-<span class="normal"><a href="#__codelineno-0-202">202</a></span>
-<span class="normal"><a href="#__codelineno-0-203">203</a></span>
-<span class="normal"><a href="#__codelineno-0-204">204</a></span>
-<span class="normal"><a href="#__codelineno-0-205">205</a></span>
-<span class="normal"><a href="#__codelineno-0-206">206</a></span>
-<span class="normal"><a href="#__codelineno-0-207">207</a></span>
-<span class="normal"><a href="#__codelineno-0-208">208</a></span>
-<span class="normal"><a href="#__codelineno-0-209">209</a></span>
-<span class="normal"><a href="#__codelineno-0-210">210</a></span>
-<span class="normal"><a href="#__codelineno-0-211">211</a></span>
-<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-212">212</a></span>
 <span class="normal"><a href="#__codelineno-0-213">213</a></span>
 <span class="normal"><a href="#__codelineno-0-214">214</a></span>
 <span class="normal"><a href="#__codelineno-0-215">215</a></span>
@@ -13320,36 +13350,52 @@ whose data lies outside the display CRS draws nothing and so has no scale to rep
 <span class="normal"><a href="#__codelineno-0-222">222</a></span>
 <span class="normal"><a href="#__codelineno-0-223">223</a></span>
 <span class="normal"><a href="#__codelineno-0-224">224</a></span>
-<span class="normal"><a href="#__codelineno-0-225">225</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="k">def</span><span class="w"> </span><span class="nf">shared_colorbar</span><span class="p">(</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a>    <span class="n">fig</span><span class="p">:</span> <span class="n">Figure</span><span class="p">,</span>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a>    <span class="n">mappable</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a>    <span class="n">maps</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Map</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a>    <span class="n">label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add one colorbar to ``fig`` spanning the given panels (or every axes when ``maps`` is ``None``).</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">        fig: The figure created by :func:`grid`.</span>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">        mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel&#39;s ``field``)</span>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">            whose colour scale the bar represents. ``None`` is accepted and adds no bar, since a layer</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">            whose data lies outside the display CRS draws nothing and so has no scale to represent.</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">        maps: Panels the colorbar should steal space from; ``None`` spans all of the figure&#39;s axes.</span>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">        label: Optional colorbar label.</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">        **kwargs: Forwarded to ``Figure.colorbar`` (e.g. ``orientation``, ``shrink``, ``fraction``).</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">        The :class:`~matplotlib.colorbar.Colorbar` added to the figure, or ``None`` when ``mappable`` is</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">        ``None`` — there is no colour scale to draw a bar for.</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="k">if</span> <span class="n">mappable</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># the layer it would describe was never drawn (e.g. off-limb)</span>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a>        <span class="k">return</span> <span class="kc">None</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="n">axes</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">]</span> <span class="k">if</span> <span class="n">maps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="n">cbar</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">mappable</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a>        <span class="n">cbar</span><span class="o">.</span><span class="n">set_label</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="k">return</span> <span class="n">cbar</span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span>
+<span class="normal"><a href="#__codelineno-0-229">229</a></span>
+<span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span>
+<span class="normal"><a href="#__codelineno-0-241">241</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="k">def</span><span class="w"> </span><span class="nf">shared_colorbar</span><span class="p">(</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="n">fig</span><span class="p">:</span> <span class="n">Figure</span><span class="p">,</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="n">mappable</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="n">maps</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Map</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>    <span class="n">label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add one colorbar to ``fig`` spanning the given panels (or every axes when ``maps`` is ``None``).</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">        fig: The figure created by :func:`grid`.</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">        mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel&#39;s ``field``)</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">            whose colour scale the bar represents. ``None`` is accepted and adds no bar, since a layer</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">            whose data lies outside the display CRS draws nothing and so has no scale to represent.</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">        maps: Panels the colorbar should steal space from; ``None`` spans all of the figure&#39;s axes.</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">        label: Optional colorbar label.</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">        **kwargs: Forwarded to ``Figure.colorbar`` (e.g. ``orientation``, ``shrink``, ``fraction``).</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">        The :class:`~matplotlib.colorbar.Colorbar` added to the figure, or ``None`` when ``mappable`` is</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">        ``None`` — there is no colour scale to draw a bar for.</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>    <span class="k">if</span> <span class="n">mappable</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># the layer it would describe was never drawn (e.g. off-limb)</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="n">axes</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">]</span> <span class="k">if</span> <span class="n">maps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="n">cbar</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">mappable</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>    <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a>        <span class="n">cbar</span><span class="o">.</span><span class="n">set_label</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a>    <span class="k">return</span> <span class="n">cbar</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
