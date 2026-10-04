@@ -4188,11 +4188,12 @@ tile matrix set, by key-value parameters or by filling a RESTful URL template.</
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/geoserver/wms&quot;</span><span class="p">,</span> <span class="s2">&quot;topp:states&quot;</span><span class="p">))</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMTSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/wmts/</span><span class="si">{TileMatrix}</span><span class="s2">/</span><span class="si">{TileRow}</span><span class="s2">/</span><span class="si">{TileCol}</span><span class="s2">.png&quot;</span><span class="p">,</span> <span class="s2">&quot;basemap&quot;</span><span class="p">))</span>
 </code></pre></div>
-<p>A credential the service needs goes in the provider's <code>extra_params</code>.</p>
+<p>A credential the service needs goes in the provider's <code>extra_params</code> — <strong>not</strong> in the service URL's query
+string, which a figure does not record (see below).</p>
 <h3 id="what-a-figure-records-of-an-ogc-basemap"><a class="toclink" href="#what-a-figure-records-of-an-ogc-basemap">What a figure records of an OGC basemap</a><a class="headerlink" href="#what-a-figure-records-of-an-ogc-basemap" title="Permanent link">#</a></h3>
 <p>The provider <strong>object</strong> is held beside the layer — it is an engine object, and it carries whatever is in
 <code>extra_params</code>. What the figure's description carries is the provider's own fields, every one of them except
-<code>extra_params</code>:</p>
+<code>extra_params</code>, and <code>url</code> reduced to its scheme, host and path:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">m</span><span class="o">.</span><span class="n">figure_spec</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;bm&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">symbology</span><span class="o">.</span><span class="n">props</span><span class="p">[</span><span class="s2">&quot;source&quot;</span><span class="p">]</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># {&#39;ogc&#39;: &#39;wms&#39;, &#39;url&#39;: &#39;https://example.org/geoserver/wms&#39;, &#39;layers&#39;: &#39;topp:states&#39;,</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">#  &#39;styles&#39;: &#39;&#39;, &#39;version&#39;: &#39;1.3.0&#39;, &#39;image_format&#39;: &#39;image/png&#39;, &#39;transparent&#39;: True,</span>
@@ -4210,6 +4211,19 @@ the cross-tier basemap gap, not an OGC one.</p>
 is written to JSON and read back, and a token written into one leaks with it. So a replayed figure asks the
 service <strong>without</strong> a credential. If the service needs one, it answers with its own error — which is the
 honest outcome; pass the provider again, with its <code>extra_params</code>, to draw it authenticated.</p>
+<p><strong>A query string on the service URL does not travel either, whatever it holds.</strong> <code>?token=</code>, <code>?api_key=</code> and
+<code>?SERVICE_KEY=</code> are ordinary ways for an OGC service to authenticate, and nothing in this tier can tell such a
+parameter from a harmless one — so the whole query is dropped and only the base URL is recorded. The drop is
+warned about by name, because the replayed figure will not carry it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">m</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="n">WMSProvider</span><span class="p">(</span><span class="s2">&quot;https://example.org/geoserver/wms?token=s3cret&quot;</span><span class="p">,</span> <span class="s2">&quot;topp:states&quot;</span><span class="p">))</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># UserWarning: the figure records this OGC service as &#39;https://example.org/geoserver/wms&#39;: its query string</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># is dropped because a parameter there may be a credential, and a figure is written to JSON and read back.</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Dropped parameters: [&#39;token&#39;]. Pass what the service needs through extra_params=, which is held beside the</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># layer and never recorded.</span>
+</code></pre></div>
+<p>So the two paths a credential can take into a provider — <code>extra_params</code> and the URL's query — both stay on
+the object, and every field a figure records names the service. This is the same value <code>_quiet_tile_urls</code>
+keeps out of the logs for keyed XYZ tiles, and it is now treated as a secret in both places.</p>
 <h2 id="adding-a-preset"><a class="toclink" href="#adding-a-preset">Adding a preset</a><a class="headerlink" href="#adding-a-preset" title="Permanent link">#</a></h2>
 <p>Presets live in <a class="autorefs autorefs-internal" href="#digitalearth.base.basemaps"><code>digitalearth.base.basemaps</code></a> — engine-neutral definitions (URL
 template, credential variable, attribution, coverage) that every backend resolves by name. A new one is a
