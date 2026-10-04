@@ -1029,7 +1029,15 @@ def _fit_within_crs_extent(scene: Any) -> None:
     ``± 3.3e6`` m it declares for itself. Autoscaling a bare axes to it framed a December polar night at
     ``± 1.5e10`` m, roughly 4600 times the projection's extent, with Antarctica a sub-pixel dot (executed;
     round 3, M2). Intersecting the fitted view with the declared extent keeps the fit where the projection
-    has something to show, and loses nothing: what lies outside is off the map by definition.
+    has something to show, and loses nothing **of the shade**: what lies outside the declared area is where
+    the overlay's own pole vertex went, not where a map is.
+
+    The narrowed view is set with ``auto=True``, so **autoscaling stays on**. The declared area of use is
+    not the projection's domain — an EPSG:3031 grid out at ``± 7e6`` m projects perfectly well — and
+    matplotlib turns autoscaling off on an axis whose limits are set outright, so without that flag the
+    overlay froze the map at its own fit and every later layer was cropped into it: a raster spanning
+    ``± 7e6`` m stayed at the ``± 3.333e6`` m this fit had set, over half of it invisible (executed; round
+    4, H1). The bound is the shade's frame, not the map's.
 
     A CRS that declares no area of use is left alone, as is a view that does not meet the extent at all —
     an unknown bound is not a reason to move a view that matplotlib has just fitted to real geometry.
@@ -1046,9 +1054,9 @@ def _fit_within_crs_extent(scene: Any) -> None:
     left, right = max(xmin, west), min(xmax, east)
     bottom, top = max(ymin, south), min(ymax, north)
     if right > left:
-        scene.ax.set_xlim(left, right)
+        scene.ax.set_xlim(left, right, auto=True)
     if top > bottom:
-        scene.ax.set_ylim(bottom, top)
+        scene.ax.set_ylim(bottom, top, auto=True)
 
 
 #: Samples per side of the display grid a globe's night shade is evaluated on **at the default ``n``**.

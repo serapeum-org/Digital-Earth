@@ -16,6 +16,8 @@ import numpy as np
 import pytest
 from cleopatra.basemap.solar import subsolar_point
 from matplotlib.collections import PolyCollection
+from pyramids.base.georeference import GeoReference
+from pyramids.dataset import Dataset
 
 from digitalearth.static import Map, projections
 from digitalearth.static.maps import decoration
@@ -40,6 +42,14 @@ POLAR_TRUE_SCALE_LAT = 71.0
 
 #: The northern limit of EPSG:3031's declared area of use, in degrees.
 POLAR_AREA_OF_USE_LAT = -60.0
+
+#: Western edge, in EPSG:3031 metres, of the raster :func:`_wide_polar_raster` builds. It is twice as far
+#: out as the ``+/- 3.3e6`` m the CRS declares for itself, which is the whole point of it: the declared area
+#: of use is not the projection's domain, so a grid out here still projects.
+_POLAR_RASTER_WEST = -7.0e6
+
+#: Width and height, in EPSG:3031 metres, of :func:`_wide_polar_raster`'s grid.
+_POLAR_RASTER_WIDTH = 1.4e7
 
 
 def _mercator(lon: float, lat: float):
@@ -84,6 +94,23 @@ def _covered(artist, xy) -> bool:
         ``True`` when a path contains it.
     """
     return any(path.contains_point(xy) for path in artist.get_paths())
+
+
+def _wide_polar_raster() -> Dataset:
+    """Return an EPSG:3031 raster twice as wide as the extent that CRS declares for itself.
+
+    Returns:
+        An 8x8 single-band dataset spanning :data:`_POLAR_RASTER_WIDTH` metres on both axes, centred on the
+        south pole.
+    """
+    cell = _POLAR_RASTER_WIDTH / 8.0
+    north = _POLAR_RASTER_WEST + _POLAR_RASTER_WIDTH
+    return Dataset.from_array(
+        arr=np.arange(64, dtype="float32").reshape(8, 8),
+        geo_ref=GeoReference(
+            geo=(_POLAR_RASTER_WEST, cell, 0.0, north, 0.0, -cell), epsg=3031
+        ),
+    )
 
 
 def _world_4326() -> Map:
@@ -641,6 +668,28 @@ class TestTheExtentAFittedViewIsBoundedBy:
             f"a view past the extent must keep its y limits, got {canvas.ax.get_ylim()}"
         )
 
+    def test_a_layer_drawn_after_the_fit_still_frames_itself(self):
+        """Narrowing the view to the projection's extent must not freeze what is drawn next.
+
+        Test scenario:
+            The fit intersects the autoscaled view with the CRS's declared extent, and matplotlib turns
+            autoscaling **off** on an axis whose limits are set outright. A night shade drawn before the
+            data therefore pinned the map to the ``+/- 3.3e6`` m EPSG:3031 declares for itself, and a
+            raster reaching ``+/- 7e6`` m — a real, projectable grid, since the declared area of use is
+            not the projection's domain — was cropped to under half its width with no warning. The raster
+            must still frame itself: its own bbox, read from the dataset rather than from the axes, has to
+            fit inside the view that holds after it is drawn.
+        """
+        canvas = Map(crs=3031)
+        canvas.nightshade(DECEMBER_NOON)
+        wide = _wide_polar_raster()
+        west, east = _POLAR_RASTER_WEST, _POLAR_RASTER_WEST + _POLAR_RASTER_WIDTH
+        canvas.field(wide)
+        xmin, xmax = sorted(canvas.ax.get_xlim())
+        assert xmin <= west and xmax >= east, (
+            f"the raster spans x {(west, east)} and must fit the view it framed, got {(xmin, xmax)}"
+        )
+
 
 class TestTheProjectedRingSeam:
     """The two helpers ``draw_tissot`` projects its rings through, asked for nothing.
@@ -680,7 +729,9 @@ class TestTheSampleCountIsRefusedTheSameWayOnEveryFrame:
     """``n`` counts the samples a ring is drawn from, so a count that cannot form one is refused everywhere."""
 
     @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
-    @pytest.mark.parametrize("samples", [-5, 0, 3], ids=["negative", "zero", "below-four"])
+    @pytest.mark.parametrize(
+        "samples", [-5, 0, 3], ids=["negative", "zero", "below-four"]
+    )
     def test_a_sample_count_too_small_for_a_ring_is_refused(self, globe, samples):
         """``nightshade(n=…)`` below four is refused on a flat map and on a globe alike.
 
@@ -697,7 +748,9 @@ class TestTheSampleCountIsRefusedTheSameWayOnEveryFrame:
         canvas = Map(crs=3857, globe=globe)
         with pytest.raises(ValueError, match=r"nightshade\(\) needs n="):
             canvas.nightshade(JUNE_NOON, n=samples)
-        assert canvas.layer_ids == [], f"a refused shade must add no layer, got {canvas.layer_ids}"
+        assert canvas.layer_ids == [], (
+            f"a refused shade must add no layer, got {canvas.layer_ids}"
+        )
 
     @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
     def test_a_tissot_sample_count_too_small_for_a_ring_is_refused(self, globe):
@@ -712,7 +765,9 @@ class TestTheSampleCountIsRefusedTheSameWayOnEveryFrame:
         canvas = Map(crs=3857, globe=globe)
         with pytest.raises(ValueError, match=r"tissot\(\) needs n="):
             canvas.tissot([0.0], [0.0], radius_m=5.0e5, n=3)
-        assert canvas.layer_ids == [], f"a refused indicatrix must add no layer, got {canvas.layer_ids}"
+        assert canvas.layer_ids == [], (
+            f"a refused indicatrix must add no layer, got {canvas.layer_ids}"
+        )
 
     @pytest.mark.parametrize("globe", [False, True], ids=["flat", "globe"])
     def test_the_smallest_count_that_forms_a_ring_still_draws(self, globe):
