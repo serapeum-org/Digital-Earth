@@ -10,9 +10,11 @@ pattern rather than reading a continuous ramp off a layer that has no colours.
 import numpy as np
 import pytest
 from matplotlib.colors import to_rgba
+from matplotlib.patches import Patch
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map
+from digitalearth.static.guides import GuidePlan, paint_guide
 
 #: The p-value bands of a significance overlay: significant below 0.05, not above it.
 P_LEVELS = [0.0, 0.05, 1.0]
@@ -229,3 +231,57 @@ class TestTheHatchLegend:
         assert all(not handle.get_hatch() for handle in handles), [
             handle.get_hatch() for handle in handles
         ]
+
+    def test_a_hatch_key_switched_off_is_checked_and_then_not_drawn(self, p_values):
+        """``visible=False`` records the guide and draws nothing — after the rows have been derived.
+
+        Args:
+            p_values: The p-value field.
+
+        Test scenario:
+            The ``show`` gate sits *behind* the derivation for the hatched path too, which is what keeps one
+            spelling of a call from being valid only half the time (review M1): labels that do not number
+            the keyed rows are refused whether or not the key is drawn. So the same overlay must leave no
+            legend on the axes with ``visible=False``, and still refuse a bad ``labels=`` through it.
+        """
+        canvas = Map(crs=4326)
+        _overlay(canvas, p_values)
+        canvas.legend("significance", visible=False)
+        assert canvas.ax.get_legend() is None, (
+            f"a key switched off must not be on the axes, got {canvas.ax.get_legend()}"
+        )
+        with pytest.raises(ValueError, match="1 rows"):
+            canvas.legend("significance", labels=["a", "b"], visible=False)
+
+    def test_a_plan_naming_no_hatch_colour_leaves_the_strokes_at_the_engine_default(
+        self,
+    ):
+        """A derived key with patterns but no stroke colour paints the patterns and recolours nothing.
+
+        Test scenario:
+            ``GuidePlan`` is the seam between deciding what a key is and putting it on the figure, and its
+            ``hatch_color`` is optional. Painting a coloured, patterned plan that names no stroke colour
+            must still set every swatch's pattern — the patterns are the whole point of the key — while
+            leaving the strokes wherever matplotlib puts them, which a bare ``Patch`` built here reports
+            independently of the code under test.
+        """
+        rows, hatches = ("low", "high"), ("///", "..")
+        plan = GuidePlan(
+            "legend",
+            colors=("#1f77b4ff", "#ff7f0eff"),
+            rows=rows,
+            hatches=hatches,
+        )
+        canvas = Map(crs=4326)
+        handles = paint_guide(canvas, plan).legend_handles
+        default_stroke = tuple(Patch(hatch="///").get_hatchcolor())
+        assert [handle.get_hatch() for handle in handles] == list(hatches), (
+            f"every swatch must carry its band's pattern, got "
+            f"{[handle.get_hatch() for handle in handles]}"
+        )
+        assert [tuple(handle.get_hatchcolor()) for handle in handles] == [
+            default_stroke
+        ] * len(hatches), (
+            f"a plan naming no hatch colour must leave the strokes at {default_stroke}, got "
+            f"{[tuple(handle.get_hatchcolor()) for handle in handles]}"
+        )

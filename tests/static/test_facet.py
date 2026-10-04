@@ -11,7 +11,7 @@ import pytest
 from matplotlib.colors import BoundaryNorm
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.static import Map, facet
+from digitalearth.static import Map, facet, projections
 
 #: Four 4 x 4 frames whose values climb frame by frame, so a per-panel scale would differ on every panel.
 FRAMES = [np.arange(16, dtype="float64").reshape(4, 4) + 10.0 * i for i in range(4)]
@@ -19,17 +19,21 @@ FRAMES = [np.arange(16, dtype="float64").reshape(4, 4) + 10.0 * i for i in range
 #: The lon/lat placement every frame shares.
 GEO = GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
 
+#: The same 4 x 4 footprint moved to lon 170-174, which is behind a globe centred on lon 0.
+GEO_FAR_SIDE = GeoReference(geo=(170.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
 
-def _dataset(arr: np.ndarray) -> Dataset:
+
+def _dataset(arr: np.ndarray, geo_ref: GeoReference = GEO) -> Dataset:
     """Wrap one array as a lon/lat dataset.
 
     Args:
         arr: A 2-D frame, or a 3-D ``(bands, rows, cols)`` stack.
+        geo_ref: Where it sits. The shared lon/lat placement by default.
 
     Returns:
         A pyramids `Dataset`.
     """
-    return Dataset.from_array(arr=arr, geo_ref=GEO, no_data_value=-9999.0)
+    return Dataset.from_array(arr=arr, geo_ref=geo_ref, no_data_value=-9999.0)
 
 
 @pytest.fixture
@@ -124,6 +128,42 @@ class TestOneSharedScale:
         """
         with pytest.raises(ValueError, match="levels"):
             facet(stack, crs=4326, kind="contourf")
+
+    def test_limits_passed_as_none_are_still_filled_from_the_stack(self, stack):
+        """``vmin=None``/``vmax=None`` is the default spelt out, not a request for per-panel limits.
+
+        Args:
+            stack: The frames.
+
+        Test scenario:
+            A caller forwarding its own optional arguments passes ``vmin=None`` rather than omitting it,
+            and ``dict.setdefault`` leaves a key that is present and ``None`` exactly as it found it. Were
+            the explicit ``None`` not filled in as well, each panel would scale itself off its own frame —
+            the one thing a facet exists to prevent — so the limits must come out the same as when the
+            keywords are left off altogether.
+        """
+        _, maps = facet(stack, crs=4326, vmin=None, vmax=None)
+        expected = (
+            float(min(a.min() for a in FRAMES)),
+            float(max(a.max() for a in FRAMES)),
+        )
+        clims = {m.layers[-1][1].get_clim() for m in maps}
+        assert clims == {expected}, (
+            f"an explicit vmin=None/vmax=None must pool the stack to {expected}, got {clims}"
+        )
+
+    def test_a_kind_that_is_not_a_render_is_refused(self, stack):
+        """``kind=`` names one of the four renders; anything else is refused by name.
+
+        Args:
+            stack: The frames.
+
+        Test scenario:
+            The refusal arrives before any axes are made, and it lists what is on offer — a misspelt
+            render must not fall through to ``getattr(panel, ...)`` and fail as a missing attribute.
+        """
+        with pytest.raises(ValueError, match="is not a render"):
+            facet(stack, crs=4326, kind="heatmap")
 
     def test_each_panel_describes_its_layer(self, stack):
         """A panel is an ordinary ``Map``: its frame is a described raster layer.
@@ -245,3 +285,31 @@ class TestABandStack:
         clims = {m.layers[-1][1].get_clim() for m in maps}
         assert titles == ["band = 1", "band = 2", "band = 3"], titles
         assert clims == {(float(cube.min()), float(cube.max()))}, clims
+
+
+class TestAFrameTheDisplayCrsCannotPlace:
+    """A frame off the limb draws nothing, so it bounds nothing either."""
+
+    def test_an_off_limb_frame_is_left_out_of_the_shared_scale(self):
+        """On a globe centred on lon 0, a frame at lon 170 is behind it and contributes no limits.
+
+        Test scenario:
+            The shared scale is pooled over the frames that actually land. A frame the projection cannot
+            place draws no panel at all, and letting its values into the pool would stretch every visible
+            panel's colours over a range nothing on the figure shows. The far frame's values sit 100 above
+            the near frame's, so a pooled scale would be unmistakable: the near panel's limits must stay
+            the near frame's own.
+        """
+        near = _dataset(FRAMES[0])
+        far = _dataset(FRAMES[0] + 100.0, GEO_FAR_SIDE)
+        _, maps = facet(
+            [near, far], crs=projections.orthographic(lon=0, lat=0), globe=True
+        )
+        expected = (float(FRAMES[0].min()), float(FRAMES[0].max()))
+        assert maps[0].layers[-1][1].get_clim() == expected, (
+            f"the near panel must scale to the frames that land, {expected}, got "
+            f"{maps[0].layers[-1][1].get_clim()}"
+        )
+        assert not maps[1].layers, (
+            f"the far-side panel draws nothing, got {maps[1].layers}"
+        )

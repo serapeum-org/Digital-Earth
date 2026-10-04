@@ -12,7 +12,7 @@ import geopandas as gpd
 import numpy as np
 import pytest
 from matplotlib.collections import LineCollection
-from matplotlib.colors import BoundaryNorm, to_rgba
+from matplotlib.colors import BoundaryNorm, LogNorm, Normalize, to_rgba
 from pyramids.feature import FeatureCollection
 from shapely.geometry import LineString, MultiLineString, Point
 
@@ -145,6 +145,28 @@ class TestColour:
         """
         artist = Map(crs=4326).lines(rivers, column="discharge", cmap="plasma")
         assert artist.get_cmap().name == "plasma", artist.get_cmap().name
+
+    def test_a_built_norm_under_color_scales_the_column(self, rivers):
+        """``color=`` a ``Normalize`` is the colour *scaling*, not a constant line colour.
+
+        Args:
+            rivers: The reaches.
+
+        Test scenario:
+            ``color=`` is overloaded on this builder: a matplotlib colour paints every line, and a built
+            ``ColorScaling``/``Normalize`` is instead how ``column`` maps onto the ramp — the escape hatch
+            every other static builder offers. Discharge spans 10 to 40, so a ``LogNorm`` and a linear one
+            place the middle reach at visibly different points on the ramp; the object the caller built
+            must arrive on the collection untouched rather than be rebuilt or read as a colour name.
+        """
+        caller_norm = LogNorm(vmin=10.0, vmax=40.0)
+        artist = Map(crs=4326).lines(rivers, column="discharge", color=caller_norm)
+        assert artist.norm is caller_norm, (
+            f"the caller's own norm must reach the collection, got {artist.norm!r}"
+        )
+        assert artist.norm(25.0) != pytest.approx(Normalize(10.0, 40.0)(25.0)), (
+            "a LogNorm that scaled like a linear one would make this pin vacuous"
+        )
 
 
 class TestWidthAndOpacity:

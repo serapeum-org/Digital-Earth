@@ -479,12 +479,13 @@ class TestCoordinatesThatWereNonFiniteBeforeAnyWarp:
             ("voronoi", {"column": "v"}),
             ("quadtree", {"column": "v"}),
             ("kde", {}),
+            ("hexbin", {}),
         ],
     )
     def test_the_builder_refuses_by_name_instead_of_failing_inside_the_engine(
         self, method, kwargs
     ):
-        """The three point builders check what survived the finite filter before they use it.
+        """Every point builder checks what survived the finite filter before it uses it.
 
         Args:
             method: The builder under test.
@@ -494,8 +495,9 @@ class TestCoordinatesThatWereNonFiniteBeforeAnyWarp:
             The off-limb policy answers coordinates that *became* non-finite in the warp, and it is the
             warp that raises. Data that was non-finite before any warp — a nodata-padded point layer
             already in the display CRS — reaches the builder with an empty finite mask instead, and
-            handing that on lets GEOS, the quadtree binner or the KDE fail somewhere with a message that
-            names none of this.
+            handing that on lets GEOS, the quadtree binner, the KDE or the hexagonal binner fail somewhere
+            with a message that names none of this. ``hexbin`` is on the list because it is the newest
+            point aggregate and reaches the same shared filter (ST-22).
         """
         canvas = Map(crs=32618)
         data = self._already_non_finite()

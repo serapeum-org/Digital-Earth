@@ -167,6 +167,21 @@ class TestNightshade:
             canvas.nightshade(EQUINOX_NOON, refraction=5.0)
         assert canvas.layer_ids == [], canvas.layer_ids
 
+    def test_a_moment_that_is_neither_a_datetime_nor_text_is_refused(self):
+        """An instant has two spellings; a bare number is neither, and says so by type.
+
+        Test scenario:
+            ``when=2026`` reads as a year to a caller and as a POSIX timestamp to nobody in particular.
+            Guessing either would shade the wrong night, so the builder refuses it with a ``TypeError``
+            naming the type it got, and describes no layer.
+        """
+        canvas = _world_4326()
+        with pytest.raises(TypeError, match="datetime or ISO 8601"):
+            canvas.nightshade(2026)
+        assert canvas.layer_ids == [], (
+            f"a refused moment must leave no layer behind, got {canvas.layer_ids}"
+        )
+
     def test_hiding_the_layer_hides_the_shade(self):
         """The shade is addressable by its id, like every other layer."""
         canvas = _world_4326()
@@ -180,6 +195,28 @@ class TestNightshade:
         artist = canvas.nightshade(EQUINOX_NOON)
         assert artist is not None, "the night side faces the viewer"
         assert _covered(artist, (0.0, 0.0)), "the centre of the disc is at midnight"
+
+    def test_a_globe_whose_visible_side_holds_no_night_draws_nothing(self):
+        """A globe centred on the day side, asked for deep night, has none to shade — so no layer.
+
+        Test scenario:
+            A globe does not shade a night *polygon*; it fills the region of a display grid where the sun
+            stands below ``refraction``. With the globe centred near the subsolar point and ``refraction``
+            at -80, that region is the 10-degree cap around the antisolar point — entirely behind the
+            globe. The flat map proves the same call does shade a world view, so the ``None`` is the
+            hemisphere's doing and not a mis-specified request, and an undrawn layer is not described.
+        """
+        deep_night = -80.0
+        canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
+        assert canvas.nightshade(EQUINOX_NOON, refraction=deep_night) is None, (
+            "nothing on the day-side hemisphere is 80 degrees from the antisolar point"
+        )
+        assert canvas.layer_ids == [], (
+            f"a layer that drew nothing must not be described, got {canvas.layer_ids}"
+        )
+        assert (
+            _world_4326().nightshade(EQUINOX_NOON, refraction=deep_night) is not None
+        ), "the same request over the whole world does reach the antisolar cap"
 
 
 class TestTissot:
@@ -231,6 +268,23 @@ class TestTissot:
         artist = canvas.tissot([0.0, 180.0], [0.0, 0.0])
         assert len(artist.get_paths()) == 1, len(artist.get_paths())
 
+    def test_a_globe_that_can_place_no_ring_at_all_draws_nothing(self):
+        """Every centre behind the globe leaves no ring, which is an undrawn layer rather than an empty one.
+
+        Test scenario:
+            The sibling test keeps one visible centre, so a collection is still drawn. With the only centre
+            on the far side the drawer has nothing to hand cleopatra, and an empty ``PolyCollection`` would
+            describe an indicatrix layer that marks nothing. It returns ``None`` and describes no layer, the
+            way the vector builders answer geometry the display CRS cannot place.
+        """
+        canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
+        assert canvas.tissot([180.0], [0.0]) is None, (
+            "a centre on the antimeridian is behind a globe centred on lon 0"
+        )
+        assert canvas.layer_ids == [], (
+            f"a layer that drew nothing must not be described, got {canvas.layer_ids}"
+        )
+
     def test_style_reaches_the_artist(self):
         """``edgecolor`` and friends are cleopatra's, forwarded to the collection."""
         artist = _world_4326().tissot([0.0], [0.0], edgecolor="crimson")
@@ -256,3 +310,28 @@ class TestTissot:
         canvas = _world_4326()
         with pytest.raises(ValueError, match="same shape"):
             canvas.tissot([0.0, 10.0], [0.0])
+
+    @pytest.mark.parametrize(
+        "lons, lats",
+        [([0.0, 10.0], None), (None, [0.0, 10.0])],
+        ids=["lons-only", "lats-only"],
+    )
+    def test_one_coordinate_without_the_other_is_refused(self, lons, lats):
+        """Centres come as a pair, or not at all — half a pair is not the world grid.
+
+        Args:
+            lons: The longitudes given, or ``None``.
+            lats: The latitudes given, or ``None``.
+
+        Test scenario:
+            Omitting both asks for the world grid, which is a different drawing from the centres given.
+            Reading one argument and quietly defaulting the other would put rings on the equator (or on
+            the prime meridian) that the caller never named, so the mismatch is refused before any ring is
+            computed.
+        """
+        canvas = _world_4326()
+        with pytest.raises(ValueError, match="together"):
+            canvas.tissot(lons, lats)
+        assert canvas.layer_ids == [], (
+            f"a refused pair must leave no layer behind, got {canvas.layer_ids}"
+        )
