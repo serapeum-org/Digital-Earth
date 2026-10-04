@@ -989,6 +989,79 @@ class Scene(WatermarkMixin):
         self._require_layer(layer_id)
         return self._layer_tree.get(layer_id)
 
+    def artist(self, layer_id: Optional[str] = None) -> Any:
+        """Return the matplotlib artist one layer drew.
+
+        The companion to the builders returning ``Self`` (ST-20): they hand back the map so a figure reads
+        as one expression, and this is how the engine's object is reached when a caller genuinely wants it
+        — to read a drawn colormap, a norm, the cells' paths, the limits a render settled on. It was the
+        builders' return value until then, which made every chained call impossible; the artist was
+        reachable only as ``scene._renderer.drawn[layer_id].artist``, a private attribute this tier's own
+        docstrings had taken to pointing callers at.
+
+        Args:
+            layer_id: Which layer's artist. ``None`` (the default) takes the layer **drawn last**, which is
+                the one the call before this drew — so ``m.field(ds); m.artist()`` is the old return value,
+                with no name needed.
+
+        Returns:
+            Whatever that layer's drawer produced, which is exactly what its builder used to return: the
+            mappable of a field render, the ``PolyCollection`` of a fill, the ``LineCollection`` of a line
+            layer, the **list** of ``Annotation`` of a :meth:`~digitalearth.static.maps.vector.VectorMixin.labels`
+            layer. A layer that owns several artists — a limb-split coastline, a graticule's lines — is
+            better asked through :attr:`~digitalearth.static.renderer.DrawnLayer.artists`, which this one
+            does not flatten.
+
+        Raises:
+            KeyError: when `layer_id` names no layer on this figure, naming the ids that do. A layer whose
+                data the display CRS could not place drew nothing and was dropped from the description, so
+                it is refused here too — which is the same answer its builder's ``None`` used to give, in
+                the tier's own words.
+            ValueError: when `layer_id` is ``None`` and nothing has been drawn yet: there is no "last" for
+                an empty figure, and ``None`` would read as "that layer drew nothing".
+
+        Examples:
+            - The old return value, by one more call:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> m.field(np.arange(12.0).reshape(3, 4)).artist().get_extent()
+                [-0.5, 3.5, -0.5, 2.5]
+                >>> m.close()
+
+                ```
+            - By id, which is what a figure of several layers wants:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(12.0).reshape(3, 4), name="grid")
+                >>> type(m.artist("grid")).__name__
+                'AxesImage'
+                >>> m.artist("nope")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no layer 'nope' on this figure; its layers are ['grid']"
+                >>> m.close()
+
+                ```
+        """
+        if layer_id is None:
+            drawn = self._renderer.drawn
+            if not drawn:
+                raise ValueError(
+                    f"{type(self).__name__}.artist() has nothing to hand back: no layer has been drawn on "
+                    "this figure yet. Draw one first, or name the layer you mean"
+                )
+            return list(drawn.values())[-1].artist
+        self._require_layer(layer_id)
+        return self._renderer.drawn[layer_id].artist
+
     def add_layer(
         self, artist: Any, *, name: Optional[str] = None, band: Optional[str] = None
     ) -> Self:

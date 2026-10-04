@@ -619,10 +619,11 @@ class _HatchedKey:
             ...     no_data_value=-9999.0,
             ... )
             >>> with Map(crs=4326) as m:
-            ...     sig = m.contours(
+            ...     _ = m.contours(
             ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
             ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
             ...     )
+            ...     sig = m._renderer.drawn["sig"].artist
             ...     key = _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p")
             ...     key.hatches
             ...     key.kept
@@ -647,10 +648,11 @@ class _HatchedKey:
             ...     no_data_value=-9999.0,
             ... )
             >>> with Map(crs=4326) as m:
-            ...     sig = m.contours(
+            ...     _ = m.contours(
             ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
             ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
             ...     )
+            ...     sig = m._renderer.drawn["sig"].artist
             ...     _ = m.legend("sig", labels=["a", "b", "c", "d"])
             ...     _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p").rows
             ...     try:

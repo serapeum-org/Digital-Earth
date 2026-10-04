@@ -1085,7 +1085,16 @@ class AnimationMixin(_MixinBase):
         if ocean and self.globe:
             self.ocean()
         method, picked = _KIND_METHODS.get(kind, (kind, {}))
-        drawn = getattr(self, method)(data, **picked, **opts)
+        # The builders hand back the map rather than the artist since ST-20, so the frame's mappable is read
+        # off the layer the call has just drawn. It is the **last** layer id: the ocean disc above is drawn
+        # first, and the coastlines below have not run yet, so the data layer is the newest one on the
+        # figure. A frame the display CRS cannot show draws nothing, is forgotten again, and so leaves
+        # `layer_ids` as it was — which is the `None` this used to get back from the builder.
+        before = set(self.layer_ids)
+        getattr(self, method)(data, **picked, **opts)
+        added = [layer_id for layer_id in self.layer_ids if layer_id not in before]
+        record = self._renderer.drawn.get(added[-1]) if added else None
+        drawn = None if record is None else record.artist
         if coastlines:
             try:
                 self.coastlines()

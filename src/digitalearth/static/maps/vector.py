@@ -9,7 +9,7 @@ import os
 from functools import wraps
 from math import isfinite
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Self, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -412,8 +412,14 @@ def _skips_off_limb(builder: Callable) -> Callable:
             :func:`~digitalearth.base.crs.reproject`.
 
     Returns:
-        The same method, with an off-limb reprojection turned into a skipped layer (``None``) — or, under
+        The same method, with an off-limb reprojection turned into a skipped layer — or, under
         ``strict=True``, into an :class:`~digitalearth.base.crs.OffLimbError` naming the layer.
+
+        **A skip hands back the map**, as the builder itself now does (ST-20): every method this wraps
+        returns ``Self``, so answering a skip with ``None`` would have made a chain break on exactly the
+        data that is hardest to notice — a layer the display CRS could not place. The skipped layer is
+        read where every other tier reads it, by its absence from
+        :attr:`~digitalearth.static.renderer.Renderer.drawn`.
     """
 
     @wraps(builder)
@@ -426,7 +432,8 @@ def _skips_off_limb(builder: Callable) -> Callable:
             **kwargs: The builder's keyword arguments.
 
         Returns:
-            Whatever the builder returns, or ``None`` when the layer was skipped.
+            Whatever the builder returns — the map, for every builder this wraps — and the map as well
+            when the layer was skipped, so a chain survives an off-limb layer.
 
         Raises:
             OffLimbError: when the map was built with ``strict=True``.
@@ -435,7 +442,7 @@ def _skips_off_limb(builder: Callable) -> Callable:
             return builder(self, *args, **kwargs)
         except OffLimbError:
             self._skipped_off_limb(builder.__name__)
-            return None
+            return self
 
     return guarded
 
@@ -1603,7 +1610,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Plot a pyramids ``FeatureCollection`` of points, sized by a column (``ScatterGlyph``).
 
         Args:
@@ -1625,12 +1632,15 @@ class VectorMixin(_MixinBase):
                 cleopatra's constructor calls it ``point_size``.
 
         Returns:
-            The scatter ``PathCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "points",
                 source=features,
@@ -1645,6 +1655,7 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self
 
     @_skips_off_limb
     def labels(
@@ -1661,7 +1672,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Label every feature with the text in ``column`` — one string per feature, from an attribute.
 
         The static third of order 27's text layers (ST-16, #345). ``WebMap.labels`` shipped first and the
@@ -1722,9 +1733,12 @@ class VectorMixin(_MixinBase):
                 ``va``, ``zorder``, …), the plain ones described beside the layer as on every other builder.
 
         Returns:
-            The list of :class:`matplotlib.text.Annotation` drawn, one per labelled feature (registered as one
-            Scene layer). ``None`` instead when nothing was labelled — every feature outside what the display
-            CRS shows, or every value in the column missing.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             KeyError: when ``column`` is not one of the features' attributes, naming the ones that are.
@@ -1743,8 +1757,8 @@ class VectorMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> places = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> with Map(crs=places.epsg) as canvas:
-                ...     drawn = canvas.labels(places, "fid", text_size=9.0)
-                ...     len(drawn) == len(places)
+                ...     _ = canvas.labels(places, "fid", text_size=9.0, name="names")
+                ...     len(canvas._renderer.drawn["names"].artists) == len(places)
                 True
 
                 ```
@@ -1774,7 +1788,7 @@ class VectorMixin(_MixinBase):
             raise ValueError(
                 f"{_LABELS_CALLER} needs halo_width= as a width, so zero or more; got {halo_width!r}"
             )
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "labels",
                 source=features,
@@ -1800,6 +1814,7 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self
 
     def grid_points(
         self,
@@ -1808,7 +1823,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
 
         Args:
@@ -1824,9 +1839,12 @@ class VectorMixin(_MixinBase):
                 ``point_size`` constructor keyword by the one place that knows about it.
 
         Returns:
-            The scatter ``PathCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Examples:
             - Scatter the raster's valid cell centres and count the resulting layer:
@@ -1858,14 +1876,14 @@ class VectorMixin(_MixinBase):
             opts=opts,
         )
         try:
-            return self._draw(record)
+            self._draw(record)
         except OffLimbError:
             self._skipped_off_limb("grid_points")
-            return None
+        return self
 
     def point_cloud(
         self, dataset: Any, *, name: Optional[str] = None, visible: bool = True, **opts
-    ) -> Any:
+    ) -> Self:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
 
         Args:
@@ -1879,11 +1897,15 @@ class VectorMixin(_MixinBase):
             **opts: Styling kwargs, forwarded to :meth:`grid_points` unchanged.
 
         Returns:
-            The scatter ``PathCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
         """
-        return self.grid_points(dataset, name=name, visible=visible, **opts)
+        self.grid_points(dataset, name=name, visible=visible, **opts)
+        return self
 
     def grid_cells(
         self,
@@ -1893,7 +1915,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
 
         Args:
@@ -1912,9 +1934,12 @@ class VectorMixin(_MixinBase):
                 describes — see ``_polygon_layer``.
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
@@ -1933,8 +1958,9 @@ class VectorMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> m = Map(crs=ds.epsg)
-                >>> pc = m.grid_cells(ds)
-                >>> len(pc.get_paths()) == ds.rows * ds.columns
+                >>> _ = m.grid_cells(ds, name="cells")
+                >>> cells = m._renderer.drawn["cells"].artist
+                >>> len(cells.get_paths()) == ds.rows * ds.columns
                 True
 
                 ```
@@ -1952,10 +1978,10 @@ class VectorMixin(_MixinBase):
             opts=opts,
         )
         try:
-            return self._draw(record)
+            self._draw(record)
         except OffLimbError:
             self._skipped_off_limb("grid_cells")
-            return None
+        return self
 
     def _vector(
         self,
@@ -2030,7 +2056,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
 
         Args:
@@ -2048,9 +2074,12 @@ class VectorMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The ``Quiver`` mappable (registered as a Scene layer; carries the key for :meth:`quiverkey`).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: from ``VectorGlyph`` for a styling keyword it does not accept, or when a component
@@ -2058,9 +2087,10 @@ class VectorMixin(_MixinBase):
             FileNotFoundError: when a component's path names nothing.
             KeyError: when no resolver is registered for a component's URL scheme.
         """
-        return self._vector(
+        self._vector(
             u_dataset, v_dataset, kind="quiver", name=name, visible=visible, **kwargs
         )
+        return self
 
     def barbs(
         self,
@@ -2070,7 +2100,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``).
 
         Args:
@@ -2088,9 +2118,12 @@ class VectorMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The ``Barbs`` mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: from ``VectorGlyph`` for a styling keyword it does not accept, or when a component
@@ -2098,9 +2131,10 @@ class VectorMixin(_MixinBase):
             FileNotFoundError: when a component's path names nothing.
             KeyError: when no resolver is registered for a component's URL scheme.
         """
-        return self._vector(
+        self._vector(
             u_dataset, v_dataset, kind="barbs", name=name, visible=visible, **kwargs
         )
+        return self
 
     def streamplot(
         self,
@@ -2110,7 +2144,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
 
         Args:
@@ -2128,9 +2162,12 @@ class VectorMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The streamplot mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: from ``VectorGlyph`` for a styling keyword it does not accept, or when a component
@@ -2138,7 +2175,7 @@ class VectorMixin(_MixinBase):
             FileNotFoundError: when a component's path names nothing.
             KeyError: when no resolver is registered for a component's URL scheme.
         """
-        return self._vector(
+        self._vector(
             u_dataset,
             v_dataset,
             kind="streamplot",
@@ -2146,6 +2183,7 @@ class VectorMixin(_MixinBase):
             visible=visible,
             **kwargs,
         )
+        return self
 
     def quiverkey(
         self,
@@ -2272,7 +2310,7 @@ class VectorMixin(_MixinBase):
 
     def tricontourf(
         self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
-    ) -> Any:
+    ) -> Self:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
         Args:
@@ -2287,20 +2325,24 @@ class VectorMixin(_MixinBase):
                 held beside the layer rather than described.
 
         Returns:
-            The tricontourf mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        return self._tri(data, kind="tricontourf", name=name, visible=visible, **kwargs)
+        self._tri(data, kind="tricontourf", name=name, visible=visible, **kwargs)
+        return self
 
     def tricontour(
         self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
-    ) -> Any:
+    ) -> Self:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
         Args:
@@ -2315,20 +2357,24 @@ class VectorMixin(_MixinBase):
                 held beside the layer rather than described.
 
         Returns:
-            The tricontour mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        return self._tri(data, kind="tricontour", name=name, visible=visible, **kwargs)
+        self._tri(data, kind="tricontour", name=name, visible=visible, **kwargs)
+        return self
 
     def tripcolor(
         self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
-    ) -> Any:
+    ) -> Self:
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
         Args:
@@ -2343,16 +2389,20 @@ class VectorMixin(_MixinBase):
                 held beside the layer rather than described.
 
         Returns:
-            The tripcolor mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        return self._tri(data, kind="tripcolor", name=name, visible=visible, **kwargs)
+        self._tri(data, kind="tripcolor", name=name, visible=visible, **kwargs)
+        return self
 
     @staticmethod
     def _polygon_vertices(geometry: Any) -> tuple:
@@ -2444,7 +2494,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
 
         Args:
@@ -2489,9 +2539,12 @@ class VectorMixin(_MixinBase):
                 web/interactive tiers either way.
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Examples:
             - Colour buffered point features by their ``fid`` column and count the drawn polygons:
@@ -2503,8 +2556,8 @@ class VectorMixin(_MixinBase):
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> fc["geometry"] = fc.geometry.buffer(500.0)
                 >>> m = Map(crs=fc.epsg)
-                >>> pc = m.choropleth(fc, column="fid")
-                >>> len(pc.get_paths()) >= len(fc)
+                >>> _ = m.choropleth(fc, column="fid", name="zones")
+                >>> len(m._renderer.drawn["zones"].artist.get_paths()) >= len(fc)
                 True
 
                 ```
@@ -2512,9 +2565,10 @@ class VectorMixin(_MixinBase):
                 ```python
                 >>> fc["zone"] = ["urban", "rural"] * (len(fc) // 2) + ["urban"] * (len(fc) % 2)
                 >>> m = Map(crs=fc.epsg)
-                >>> pc = m.choropleth(fc, column="zone", scheme="categorical")
+                >>> _ = m.choropleth(fc, column="zone", scheme="categorical", name="zoning")
                 >>> from matplotlib.colors import BoundaryNorm
-                >>> isinstance(pc.norm, BoundaryNorm)  # discrete class codes, not a continuous scale
+                >>> norm = m._renderer.drawn["zoning"].artist.norm
+                >>> isinstance(norm, BoundaryNorm)  # discrete class codes, not a continuous scale
                 True
                 >>> [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
                 ['rural', 'urban']
@@ -2529,7 +2583,7 @@ class VectorMixin(_MixinBase):
         # under the engine's own spelling — exactly where a caller's `alpha=` always went.
         if opacity is not None:
             opts["alpha"] = opacity
-        return self._draw(
+        self._draw(
             LayerRecord(
                 # A column is required, so the polygons are always filled by a value: a choropleth.
                 _polygon_kind(column),
@@ -2549,6 +2603,7 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self
 
     @_skips_off_limb
     def polygons(
@@ -2558,7 +2613,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
 
         Args:
@@ -2572,11 +2627,14 @@ class VectorMixin(_MixinBase):
             **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 _polygon_kind(None),  # outlines only, whatever the collection carries
                 source=features,
@@ -2586,6 +2644,7 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self
 
     def _clip_geometry(self, clip: Any) -> Any:
         """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.
@@ -2640,7 +2699,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """Voronoi diagram of a point ``FeatureCollection`` (pyramids points → cells → ``PolygonGlyph``).
 
         Tessellates the points into Voronoi cells (``shapely.voronoi_polygons`` with ``ordered=True``, so cell
@@ -2667,9 +2726,12 @@ class VectorMixin(_MixinBase):
                 way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries.
@@ -2683,13 +2745,13 @@ class VectorMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> m = Map(crs=fc.epsg)
-                >>> pc = m.voronoi(fc, column="fid")
+                >>> _ = m.voronoi(fc, column="fid")
                 >>> len(m.layers)
                 1
 
                 ```
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 # With a column the cells are filled by its value, without one only their outlines are
                 # drawn — the same recipe, two kinds, decided by the argument rather than by the drawing.
@@ -2705,6 +2767,7 @@ class VectorMixin(_MixinBase):
                 key=clip,
             )
         )
+        return self
 
     @staticmethod
     def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
@@ -2734,7 +2797,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """Cartogram: scale each polygon about its centroid by a value column (pyramids → ``PolygonGlyph``).
 
         Each feature's geometry is affine-scaled about its own centroid by a factor derived from ``scale``
@@ -2759,9 +2822,12 @@ class VectorMixin(_MixinBase):
                 way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` contains non-polygon geometry.
@@ -2776,13 +2842,13 @@ class VectorMixin(_MixinBase):
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> fc["geometry"] = fc.geometry.buffer(500.0)
                 >>> m = Map(crs=fc.epsg)
-                >>> pc = m.cartogram(fc, scale="fid", column="fid")
+                >>> _ = m.cartogram(fc, scale="fid", column="fid")
                 >>> len(m.layers)
                 1
 
                 ```
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 # As in `voronoi`: a column fills the scaled polygons, no column leaves their outlines.
                 _polygon_kind(column),
@@ -2800,6 +2866,7 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self
 
     @staticmethod
     def _quadtree_cells(
@@ -2868,7 +2935,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """Quadtree choropleth: aggregate points into adaptive cells (pyramids points → ``PolygonGlyph``).
 
         Recursively splits the points' bounding box into quadrants until each cell holds ``<= nmax`` points,
@@ -2900,9 +2967,12 @@ class VectorMixin(_MixinBase):
                 way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries, or ``agg`` is an unknown name.
@@ -2916,14 +2986,14 @@ class VectorMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> m = Map(crs=fc.epsg)
-                >>> pc = m.quadtree(fc, nmax=1)
+                >>> _ = m.quadtree(fc, nmax=1)
                 >>> len(m.layers)
                 1
 
                 ```
         """
         recorded_agg, held_agg = _described_agg(agg)
-        return self._draw(
+        self._draw(
             LayerRecord(
                 # A quadtree is always filled — by the column's aggregate, or by the point count.
                 _polygon_kind(column or "count"),
@@ -2946,6 +3016,7 @@ class VectorMixin(_MixinBase):
                 key=(held_agg, clip),
             )
         )
+        return self
 
     @staticmethod
     def _polygons_of(geom: Any) -> list:
@@ -3009,7 +3080,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Aggregate points onto a hexagonal lattice and colour each cell (pyramids points → ``HexbinGlyph``).
 
         The discrete counterpart of :meth:`kde`: with no ``column`` each cell is coloured by how many points
@@ -3041,8 +3112,12 @@ class VectorMixin(_MixinBase):
                 ``scheme``, ``k``, ``color_scale``, ``edge_color``, ``line_width``, ``extent``, …).
 
         Returns:
-            The cells' ``PolyCollection`` (registered as a Scene layer), or ``None`` when the data lies
-            entirely outside what the display CRS shows.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` is empty or holds non-point geometry; if ``gridsize`` is not a
@@ -3068,7 +3143,8 @@ class VectorMixin(_MixinBase):
                 ...     crs="EPSG:4326",
                 ... ))
                 >>> m = Map(crs=4326)
-                >>> sorted(m.hexbin(wells, gridsize=4).get_array().tolist())
+                >>> _ = m.hexbin(wells, gridsize=4, name="counts")
+                >>> sorted(m._renderer.drawn["counts"].artist.get_array().tolist())
                 [1.0, 3.0]
                 >>> m.close()
 
@@ -3087,7 +3163,8 @@ class VectorMixin(_MixinBase):
                 ...     crs="EPSG:4326",
                 ... ))
                 >>> m = Map(crs=4326)
-                >>> sorted(m.hexbin(wells, "depth", reduce="mean", gridsize=4).get_array().tolist())
+                >>> _ = m.hexbin(wells, "depth", reduce="mean", gridsize=4, name="depths")
+                >>> sorted(m._renderer.drawn["depths"].artist.get_array().tolist())
                 [4.0, 100.0]
                 >>> m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props["via"]
                 'hexbin'
@@ -3154,7 +3231,7 @@ class VectorMixin(_MixinBase):
         """
         gridsize, min_count = _hexbin_lattice(gridsize, min_count)
         held_reduce = None if isinstance(reduce, str) else reduce
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "choropleth",
                 source=features,
@@ -3173,6 +3250,7 @@ class VectorMixin(_MixinBase):
                 key=held_reduce,
             )
         )
+        return self
 
     @_skips_off_limb
     def kde(
@@ -3183,7 +3261,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """2-D kernel-density (isochrone) plot of a point ``FeatureCollection`` (pyramids points → ``KDEGlyph``).
 
         Estimates the point density on a grid and draws it as filled (``shade=True``) or line contours, coloured
@@ -3203,9 +3281,12 @@ class VectorMixin(_MixinBase):
                 ``bw_method``, ``cmap``, …).
 
         Returns:
-            The contour set (``QuadContourSet``) registered as a Scene layer.
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries.
@@ -3219,13 +3300,13 @@ class VectorMixin(_MixinBase):
                 >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> m = Map(crs=fc.epsg)
-                >>> cs = m.kde(fc)
+                >>> _ = m.kde(fc)
                 >>> len(m.layers)
                 1
 
                 ```
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "heatmap",
                 source=features,
@@ -3236,6 +3317,7 @@ class VectorMixin(_MixinBase):
                 key=clip,  # a geometry, which a figure cannot carry — see `voronoi`
             )
         )
+        return self
 
     @_skips_off_limb
     def lines(
@@ -3252,7 +3334,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Draw line features — rivers, roads, tracks, reach networks (pyramids lines → ``FlowGlyph``).
 
         The Core contract's ``lines``, with the web tier's keywords: a constant colour, or a colour per
@@ -3286,8 +3368,12 @@ class VectorMixin(_MixinBase):
                 ``glow``, …).
 
         Returns:
-            The ``LineCollection`` (registered as a Scene layer), or ``None`` when the data lies entirely
-            outside what the display CRS shows.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a
@@ -3314,7 +3400,8 @@ class VectorMixin(_MixinBase):
                 ...     crs="EPSG:4326",
                 ... ))
                 >>> with Map(crs=4326) as m:
-                ...     lc = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
+                ...     _ = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
+                ...     lc = m._renderer.drawn[m.layer_ids[-1]].artist
                 ...     lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})
                 ...     m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 ([10.0, 40.0, 25.0], [2.0])
@@ -3335,8 +3422,8 @@ class VectorMixin(_MixinBase):
                 ...     crs="EPSG:4326",
                 ... ))
                 >>> with Map(crs=4326) as m:
-                ...     lc = m.lines(roads, width="lanes", color="dimgray")
-                ...     widths = lc.get_linewidths()
+                ...     _ = m.lines(roads, width="lanes", color="dimgray")
+                ...     widths = m._renderer.drawn[m.layer_ids[-1]].artist.get_linewidths()
                 >>> bool(widths[1] > widths[0])
                 True
 
@@ -3426,7 +3513,7 @@ class VectorMixin(_MixinBase):
         if scheme is not None:
             opts["scheme"] = scheme
             opts["k"] = k
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "lines",
                 source=features,
@@ -3444,6 +3531,7 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self
 
     @_skips_off_limb
     def sankey(
@@ -3455,7 +3543,7 @@ class VectorMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """Spatial flow / Sankey map of a line ``FeatureCollection`` (pyramids lines → ``FlowGlyph``).
 
         Draws each line as a path whose **colour** encodes ``column`` and whose **width** encodes ``scale``
@@ -3475,9 +3563,12 @@ class VectorMixin(_MixinBase):
                 ``size_legend``, …).
 
         Returns:
-            The ``LineCollection`` (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See
+            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            map rather than the artist (ST-20).
 
         Raises:
             ValueError: if ``features`` contains non-line geometry.
@@ -3500,13 +3591,13 @@ class VectorMixin(_MixinBase):
                 ...     crs="EPSG:4326",
                 ... )
                 >>> m = Map(crs=4326)
-                >>> lc = m.sankey(FeatureCollection(gdf), column="flow", scale="flow")
+                >>> _ = m.sankey(FeatureCollection(gdf), column="flow", scale="flow")
                 >>> len(m.layers)
                 1
 
                 ```
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "flow",
                 source=features,
@@ -3522,3 +3613,4 @@ class VectorMixin(_MixinBase):
                 opts=opts,
             )
         )
+        return self

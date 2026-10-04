@@ -981,8 +981,16 @@ def facet(
     method, fixed = _FACET_KINDS[kind]
     drawn = None
     for panel, frame, frame_band, title in plan.panels(maps):
-        artist = getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
-        drawn = artist if drawn is None else drawn
+        getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
+        # The builders hand back the panel rather than the artist since ST-20, so the mappable the shared
+        # bar is keyed to is read off the layer the panel has just drawn. `layer_ids` lists only layers
+        # that *were* drawn — a skip is forgotten again — so an off-limb panel contributes nothing and the
+        # first panel that drew something still wins, exactly as the artist-or-`None` pick did.
+        record = (
+            panel._renderer.drawn.get(panel.layer_ids[-1]) if panel.layer_ids else None
+        )
+        if drawn is None and record is not None:
+            drawn = record.artist
         panel.set_title(title)
     if colorbar and drawn is not None and measured is None:
         # The shared scale fell back to the (0, 1) a `Scale` uses for an unmeasurable domain, so a bar here

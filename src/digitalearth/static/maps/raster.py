@@ -15,7 +15,7 @@ the full read stands, so nothing already drawn moves.
 import logging
 from dataclasses import dataclass, replace
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -1152,7 +1152,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
         **A bare 2-D numpy array is drawn too** — the "just show me this grid" case, which was
@@ -1210,9 +1210,34 @@ class RasterMixin(_MixinBase):
                 colorbar is refused in favour of the legend.
 
         Returns:
-            The image mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map, so a figure reads as one expression — measured:
+            ``type(m.field(ds).set_title("Flow").colorbar()).__name__`` is ``'Map'`` (ST-20). **This is the
+            canonical note the other builders point at.**
+
+            Not every method on this tier is chainable yet — ``coastlines()`` still hands back the axes, so
+            ``m.field(ds).coastlines()`` is an ``Axes`` and the chain stops there. ST-20 is the **data**
+            builders; the decoration methods are their own row.
+
+            It returned the ``AxesImage`` until ST-20, and that was a silent divergence from this
+            package's own contract: :class:`~digitalearth.base.contract.Method` declares
+            ``returns = "self"`` as its *default*, so every builder the Core names has always been
+            declared chainable — and the web, interactive and 3-D tiers all answer that way, while this
+            tier handed back the engine's object. ``tests/test_contract_names.py`` holds the tiers to the
+            Core's keywords and call shape and does not measure return values, which is why the
+            divergence went unnoticed: the same line chained on three tiers and raised ``AttributeError``
+            on the default one.
+
+            **The artist is still reachable**, through
+            :meth:`~digitalearth.static.scene.Scene.artist`: ``m.artist()`` hands back what this call used
+            to return — the layer drawn last — and ``m.artist(layer_id)`` names one, so ``name=`` is the way
+            to keep a stable handle on a layer's artist in a figure of several.
+
+            **An off-limb layer is now read from the figure rather than from a ``None``.** A layer whose
+            data lies entirely outside what the display CRS shows draws nothing and is **absent from**
+            :attr:`~digitalearth.static.scene.Scene.layer_ids`, so
+            :meth:`~digitalearth.static.scene.Scene.artist` refuses it by name — the same answer every other
+            tier gives, and testable without a return value. An off-limb draw still renders an empty frame
+            rather than raising.
 
         Raises:
             TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
@@ -1232,8 +1257,8 @@ class RasterMixin(_MixinBase):
                 >>> import numpy as np
                 >>> from digitalearth.static import Map
                 >>> with Map() as canvas:
-                ...     image = canvas.field(np.arange(12.0).reshape(3, 4))
-                ...     image.get_extent()
+                ...     _ = canvas.field(np.arange(12.0).reshape(3, 4), name="grid")
+                ...     canvas._renderer.drawn["grid"].artist.get_extent()
                 [-0.5, 3.5, -0.5, 2.5]
 
                 ```
@@ -1278,7 +1303,8 @@ class RasterMixin(_MixinBase):
 
                 ```
         """
-        return self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
+        self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
+        return self
 
     def contours(
         self,
@@ -1292,7 +1318,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Trace iso-value lines through a raster band, or fill between them.
 
         One method for both renders, which is what the Tier-2 contract declares and what the web and
@@ -1328,9 +1354,11 @@ class RasterMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The contour mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: when ``hatches``, ``hatch_color`` or ``fill`` is given without ``filled=True`` —
@@ -1362,10 +1390,10 @@ class RasterMixin(_MixinBase):
                 ...     no_data_value=-9999.0,
                 ... )
                 >>> m = Map(crs=4326)
-                >>> sig = m.contours(
+                >>> _ = m.contours(
                 ...     p, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig"
                 ... )
-                >>> list(sig.hatches)
+                >>> list(m._renderer.drawn["sig"].artist.hatches)
                 ['///', '']
                 >>> legend = m.legend(
                 ...     "sig", labels=["p < 0.05", "p >= 0.05"]
@@ -1431,7 +1459,7 @@ class RasterMixin(_MixinBase):
             kwargs["hatches"] = list(hatches)
         if hatch_color is not None:
             kwargs["hatch_color"] = hatch_color
-        return self._field(
+        self._field(
             dataset,
             kind="contourf" if filled else "contour",
             levels=levels,
@@ -1440,6 +1468,7 @@ class RasterMixin(_MixinBase):
             visible=visible,
             **kwargs,
         )
+        return self
 
     def pcolormesh(
         self,
@@ -1448,7 +1477,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
 
         Args:
@@ -1464,16 +1493,17 @@ class RasterMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The ``QuadMesh`` mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(
-            dataset, kind="pcolormesh", name=name, visible=visible, **kwargs
-        )
+        self._field(dataset, kind="pcolormesh", name=name, visible=visible, **kwargs)
+        return self
 
     def block(
         self,
@@ -1482,7 +1512,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.
 
         ``block`` is meant for *discrete* per-cell rectangles aligned to cell **edges**. cleopatra's
@@ -1504,16 +1534,17 @@ class RasterMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The ``QuadMesh`` mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(
-            dataset, kind="pcolormesh", name=name, visible=visible, **kwargs
-        )
+        self._field(dataset, kind="pcolormesh", name=name, visible=visible, **kwargs)
+        return self
 
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
@@ -1559,7 +1590,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
         Args:
@@ -1575,9 +1606,11 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
-            The image mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -1625,7 +1658,7 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("rgb_composite", bands)
-        return self._composite(
+        self._composite(
             "rgb_composite",
             dataset,
             bands,
@@ -1635,6 +1668,7 @@ class RasterMixin(_MixinBase):
             name=name,
             visible=visible,
         )
+        return self
 
     def _composite(
         self,
@@ -1707,7 +1741,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
         Args:
@@ -1721,9 +1755,11 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
-            The image mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -1770,7 +1806,7 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("hsv_composite", bands)
-        return self._composite(
+        self._composite(
             "hsv_composite",
             dataset,
             bands,
@@ -1780,6 +1816,7 @@ class RasterMixin(_MixinBase):
             name=name,
             visible=visible,
         )
+        return self
 
     def spaghetti(
         self,
@@ -1789,7 +1826,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> List[Any]:
+    ) -> Self:
         """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).
 
         Args:
@@ -1805,13 +1842,17 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs forwarded to the per-member contour call.
 
         Returns:
-            The list of per-member contour mappables (each also registered as a Scene layer). Members
-            lying outside what the display CRS shows draw nothing and are absent from the list, so it
-            stays one entry per *drawn* member and never contains ``None``. That means the list cannot be
-            zipped against ``collection.datasets`` when some members are hidden — pair by drawing members
-            individually if a per-member legend needs to know which is which.
+            This map (chainable). It returned the list of per-member contour mappables until ST-20; the
+            members are now read one at a time, by id — ``map.artist(layer_id)`` for any of the ids
+            :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, and ``map.artist()`` for the last
+            member drawn.
+
+            A member lying outside what the display CRS shows draws nothing and is absent from that
+            record, exactly as it was absent from the list — so the record is still one entry per
+            *drawn* member and cannot be zipped against ``collection.datasets`` when some are skipped.
+            Pair by drawing members individually if a per-member legend needs to know which is which.
         """
-        drawn = [
+        for member in collection.datasets:
             self._field(
                 member,
                 kind="contour",
@@ -1821,6 +1862,4 @@ class RasterMixin(_MixinBase):
                 visible=visible,
                 **opts,
             )
-            for member in collection.datasets
-        ]
-        return [artist for artist in drawn if artist is not None]
+        return self
