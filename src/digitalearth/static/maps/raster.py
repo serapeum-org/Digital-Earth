@@ -1281,9 +1281,10 @@ class RasterMixin(_MixinBase):
                 categories rather than class edges — so :attr:`last_breaks` stays ``None`` and a
                 colorbar is refused in favour of the legend.
 
-                Four more of those keywords decide the **colour domain** and what falls outside it, and
-                they are declared in :data:`~digitalearth.static.render_compat.STATIC_STYLE_SCHEMA` (ST-3,
-                ST-10) rather than named in this signature:
+                Five more of those keywords decide the **colour domain** and what falls outside it, and
+                they are declared in `STATIC_STYLE_SCHEMA` (ST-3, ST-10) rather than named in this
+                signature. Measured, `STATIC_STYLE_SCHEMA` carries all five while
+                `INTERACTIVE_STYLE_SCHEMA` carries none of them:
 
                 * ``robust=True`` takes the limits from the band's 2nd and 98th percentile instead of its
                   min and max, so one outlier stops flattening the rest of the field — xarray's spelling,
@@ -1310,23 +1311,29 @@ class RasterMixin(_MixinBase):
             ``type(m.field(ds).set_title("Flow").colorbar()).__name__`` is ``'Map'`` (ST-20). **This is the
             canonical note the other builders point at.**
 
-            Not every method on this tier is chainable yet — ``coastlines()`` still hands back the axes, so
-            ``m.field(ds).coastlines()`` is an ``Axes`` and the chain stops there. ST-20 is the **data**
-            builders; the decoration methods are their own row.
+            **The decoration methods chain too**, as of round 1's L6: `coastlines`, `borders`, `land`,
+            `ocean`, `lakes`, `rivers`, `text`, `annotate`, `nightshade`, `tissot` and `basemap` are all
+            annotated `-> Self`, so `m.field(ds).coastlines().set_title("Flow")` is a `Map` the whole way
+            (measured). `stock_img` is the one deliberate exception — it is annotated `-> Any` and hands
+            back its artist, because for that call the return *is* the point.
 
             It returned the ``AxesImage`` until ST-20, and that was a silent divergence from this
-            package's own contract: :class:`~digitalearth.base.contract.Method` declares
+            package's own contract: `Method` (in `digitalearth.base.contract`) declares
             ``returns = "self"`` as its *default*, so every builder the Core names has always been
             declared chainable — and this tier handed back the engine's object instead. That contract,
             not the other tiers, is what the change answers to: the web and interactive builders do
             answer that way (``field``, ``points``, ``choropleth`` and ``lines`` are annotated
-            ``-> Self`` on both), but the **3-D tier does not** — its four data builders ``terrain``,
-            ``volume``, ``point_cloud`` and ``globe`` are annotated ``-> Any`` and hand back the
-            ``pyvista.Actor`` their drawer produced, or ``None``. So this tier was not the only one
-            returning the engine's object, and the 3-D row is still open.
+            ``-> Self`` on both), but the **3-D tier does not** — measured by an AST scan of
+            `src/digitalearth/three_d/`, all **seven** of its data builders are annotated `-> Any`:
+            `terrain`, `volume`, `isosurface`, `point_cloud`, `vectors`, `extruded_polygons` and `globe`.
+            Each hands back the ``pyvista.Actor`` its drawer produced, or ``None`` when the drawer declined
+            the layer. So this tier was not the only one returning the engine's object, and the 3-D row is
+            still open.
             ``tests/test_contract_names.py`` holds the tiers to the Core's keywords and call shape and
             does not measure return values, which is why the divergence went unnoticed: the same line
-            chained on two tiers and raised ``AttributeError`` on this one.
+            chained on two tiers and raised ``AttributeError`` on this one. The ``-> Self`` promise is
+            checked by ``tests/test_mixin_contract.py`` instead, which requires both halves — the
+            annotation, and a body that really hands back ``self``.
 
             **The artist is still reachable**, through
             :meth:`~digitalearth.static.scene.Scene.artist`: ``m.artist()`` hands back what this call used
@@ -1766,6 +1773,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.rgb_composite(rgb)
                 >>> len(m.ax.images)
                 1
+                >>> m.close()
 
                 ```
             - Frozen ``limits`` replace the per-call stretch: a white point far above the data renders it
@@ -1784,6 +1792,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.rgb_composite(rgb, limits=[(0.0, 1e6)] * 3)
                 >>> round(float(np.nanmax(m.ax.images[-1].get_array())), 3)
                 0.0
+                >>> m.close()
 
                 ```
 
@@ -1915,6 +1924,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.hsv_composite(hsv)
                 >>> len(m.ax.images)
                 1
+                >>> m.close()
 
                 ```
             - The rendered image is band-last RGB, one value per channel per cell:
@@ -1932,6 +1942,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.hsv_composite(hsv)
                 >>> m.ax.images[-1].get_array().shape[-1]
                 3
+                >>> m.close()
 
                 ```
 

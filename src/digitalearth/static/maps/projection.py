@@ -426,7 +426,11 @@ class _GridLine(NamedTuple):
         """The degree label this line carries, e.g. ``"30°E"``.
 
         The format is the web tier's own (``digitalearth.web.decoration._graticule_line``), to the
-        character, so one spacing reads the same way on both tiers.
+        character: both build the label as `f"{abs(value):g}°{suffix}"`, so the same degree reads the same
+        way on both tiers — with one exception, which is the *suffix* rather than the format. This tier
+        empties the hemisphere at the antimeridian as well as at zero (the same line from either side), so
+        a 30-degree grid labels it `'180°'`; the web tier draws only the western copy of that meridian and
+        letters it from its step index, so the same grid labels it `'180°W'` there (measured on both).
 
         Returns:
             The degree with no trailing zeros, a degree sign, and the hemisphere letter where there is one.
@@ -1045,8 +1049,10 @@ class ProjectionMixin(_MixinBase):
 
         Returns:
             This map, so the call chains (``Map(crs=3857).set_bounds(bounds).coastlines()``). The Core
-            declares ``returns="self"`` for this name, and every tier answers that way: the spelling
-            this tier used to carry returned ``None``, so one line worked on one tier and raised on another.
+            declares `returns="self"` for this name, and every tier that has it answers that way — the
+            static, interactive and web tiers; the 3-D tier declares the name **absent**, a scene there
+            being framed by its camera rather than by an extent. The spelling this tier used to carry
+            returned `None`, so one line worked on one tier and raised on another.
 
         Raises:
             ValueError: if the sequence form does not hold exactly four values; if ``bounds=None`` and the
@@ -1085,6 +1091,7 @@ class ProjectionMixin(_MixinBase):
                 >>> _ = m.set_bounds(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
                 >>> round(m.ax.get_xlim()[1])
                 111319
+                >>> m.close()
 
                 ```
             - The bare sequence is ``(west, south, east, north)``, in the display CRS, and the view reports it
@@ -1099,6 +1106,7 @@ class ProjectionMixin(_MixinBase):
                 ([0.0, 100.0], [0.0, 50.0])
                 >>> m.viewport.bounds.as_bbox()
                 [0.0, 0.0, 100.0, 50.0]
+                >>> m.close()
 
                 ```
             - ``padding`` grows the frame by a fraction of its span:
@@ -1110,6 +1118,7 @@ class ProjectionMixin(_MixinBase):
                 >>> _ = m.set_bounds([0.0, 0.0, 10.0, 10.0], padding=0.1)
                 >>> [float(v) for v in m.ax.get_xlim()]
                 [-1.0, 11.0]
+                >>> m.close()
 
                 ```
         """
@@ -1283,6 +1292,7 @@ class ProjectionMixin(_MixinBase):
                 [-25.0, 45.0]
                 >>> [float(v) for v in m.ax.get_ylim()]
                 [34.0, 72.0]
+                >>> m.close()
 
                 ```
         """
@@ -1375,9 +1385,22 @@ class ProjectionMixin(_MixinBase):
             This map, so the call chains like every other layer builder on the tier
             (``m.graticule(spacing=30.0).set_global()``). It registers ``graticule-1`` and draws, which
             makes it a builder by every other test here; it used to hand back nothing, which broke the
-            chain on the one tier whose `visible`/`name` contract is the most elaborate (L6). The lines
-            themselves are reached by id through :meth:`~digitalearth.static.scene.Scene.artist`, which
-            **raises** ``KeyError`` for a layer that drew nothing.
+            chain on the one tier whose `visible`/`name` contract is the most elaborate (L6).
+
+            The grid itself is reached by id, and a graticule is the layer where the two spellings differ.
+            `Scene.artist(layer_id)` hands back **what the drawer computed** — the list of projected
+            polylines, 18 of them at the default spacing, as `(N, 2)` arrays — because that is this
+            drawer's value, and it answers that way even on a globe whose lines are not on the axes yet.
+            What is *on* the axes is `Renderer.drawn[layer_id].artists`, and it is a different shape per
+            frame. A flat map carries one `LineCollection` for the whole grid plus one `Text` per
+            **labelled line** — a count that tracks the degrees the *view* holds rather than the polylines
+            (measured on `Map(crs=4326)`: 18 polylines and 18 `Text` unframed at `spacing=30.0`, but 6
+            `Text` once framed on `[-35, -5, 35, 65]`, and 9 polylines beside 10 `Text` at
+            `spacing=60.0`). With `labels=False` the axes carry the `LineCollection` alone (measured: 1
+            artist). A globe's grid is instead drawn by `apply_projection_frame` as one `Line2D` per
+            polyline (measured: 18, and 0 artists before `render()`). `set_visible` and `remove_layer` act
+            on that second list, so both reach every frame's grid. Neither spelling raises for a graticule
+            this call built — the `KeyError` `Scene.artist` documents is for an id the figure does not hold.
 
         Warns:
             UserWarning: when ``spacing`` is given beside either step, which discards the step; when a
@@ -1401,8 +1424,7 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=4326)
-                >>> m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS
-                <digitalearth.static.map.Map object at ...>
+                >>> _ = m.set_bounds([-35.0, -5.0, 35.0, 65.0])
                 >>> _ = m.graticule(spacing=30.0)
                 >>> sorted({text.get_text() for text in m.ax.texts})
                 ['0°', '30°E', '30°N', '30°W', '60°N']
@@ -1428,8 +1450,7 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=4326)
-                >>> m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS
-                <digitalearth.static.map.Map object at ...>
+                >>> _ = m.set_bounds([-35.0, -5.0, 35.0, 65.0])
                 >>> _ = m.graticule(lon_step=30.0, lat_step=45.0, labels=False)
                 >>> _ = m.graticule(lon_step=60.0)
                 >>> props = m._layer_tree.get(m._graticule_id).symbology.props

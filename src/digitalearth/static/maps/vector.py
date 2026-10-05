@@ -417,9 +417,12 @@ def _skips_off_limb(builder: Callable) -> Callable:
 
         **A skip hands back the map**, as the builder itself now does (ST-20): every method this wraps
         returns ``Self``, so answering a skip with ``None`` would have made a chain break on exactly the
-        data that is hardest to notice — a layer the display CRS could not place. The skipped layer is
-        read where every other tier reads it, by its absence from
-        :attr:`~digitalearth.static.renderer.Renderer.drawn`.
+        data that is hardest to notice — a layer the display CRS could not place. A skipped layer is read
+        off the figure instead, by its absence from `Map.layer_ids` — measured, a skipped `field` leaves
+        `layer_ids` empty and `Map.artist("far")` then raises
+        `KeyError: "no layer 'far' on this figure; its layers are []"`. That is the public reading; the
+        renderer's own `drawn` mapping says the same thing but is reached through the private
+        `_renderer`, so it is not the handle to document.
     """
 
     @wraps(builder)
@@ -1858,6 +1861,7 @@ class VectorMixin(_MixinBase):
                 >>> _ = m.grid_points(ds)
                 >>> len(m.layers)
                 1
+                >>> m.close()
 
                 ```
 
@@ -2517,11 +2521,15 @@ class VectorMixin(_MixinBase):
                 ramp has no classes and is left to matplotlib.
             k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
                 ``"categorical"``).
-            opacity: How opaque the fill is, in ``[0, 1]``. This is the spelling
-                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
-                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+            opacity: How opaque the fill is, in ``[0, 1]``. This is the spelling `CHANNELS` (in
+                `digitalearth.base.spec.encoding`) and the Core contract use, so the same channel is
+                written the same way wherever it is offered (#332). Measured, `choropleth` names it on
+                all three 2-D tiers — static, web and interactive; the 3-D tier names it only on
+                `volume`, not on its polygon builder `extruded_polygons`.
                 matplotlib's own ``alpha`` is what it arrives as. ``None`` (default) sets no opacity at
-                all, which is not the same as ``1.0``: it leaves the colormap's own alpha channel in force.
+                all, which is not the same as ``1.0``: measured, `opacity=None` leaves
+                `artist.get_alpha()` at `None` — the colormap's own alpha channel still in force —
+                while `opacity=1.0` sets it to `1.0`.
             cmap: The colormap the fill is drawn with, forwarded to ``PolygonGlyph`` exactly as a
                 ``cmap=`` in ``**opts`` always was. Named in the signature because the Core declares it
                 as a keyword of ``choropleth`` on every tier, and a keyword that works but is not
@@ -2751,6 +2759,7 @@ class VectorMixin(_MixinBase):
                 >>> _ = m.voronoi(fc, column="fid")
                 >>> len(m.layers)
                 1
+                >>> m.close()
 
                 ```
         """
@@ -2848,6 +2857,7 @@ class VectorMixin(_MixinBase):
                 >>> _ = m.cartogram(fc, scale="fid", column="fid")
                 >>> len(m.layers)
                 1
+                >>> m.close()
 
                 ```
         """
@@ -2992,6 +3002,7 @@ class VectorMixin(_MixinBase):
                 >>> _ = m.quadtree(fc, nmax=1)
                 >>> len(m.layers)
                 1
+                >>> m.close()
 
                 ```
         """
@@ -3306,6 +3317,7 @@ class VectorMixin(_MixinBase):
                 >>> _ = m.kde(fc)
                 >>> len(m.layers)
                 1
+                >>> m.close()
 
                 ```
         """
@@ -3597,6 +3609,7 @@ class VectorMixin(_MixinBase):
                 >>> _ = m.sankey(FeatureCollection(gdf), column="flow", scale="flow")
                 >>> len(m.layers)
                 1
+                >>> m.close()
 
                 ```
         """

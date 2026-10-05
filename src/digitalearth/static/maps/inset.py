@@ -452,14 +452,31 @@ class InsetMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=4326)
-                >>> m.set_bounds([2.0, 3.0, 8.0, 9.0])  # doctest: +ELLIPSIS
-                <....Map object at ...>
+                >>> _ = m.set_bounds([2.0, 3.0, 8.0, 9.0])
                 >>> m.locator is None
                 True
                 >>> m.inset() is m
                 True
-                >>> type(m.locator).__name__
-                'Map'
+                >>> m.locator.layer_ids
+                ['land-1', 'coastlines-1', 'custom-1']
+                >>> m.close()
+
+                ```
+            - A second call replaces it, and the inset it names is the most recent one — the earlier
+              locator is an ordinary `Map` and goes on working, it is simply no longer what this returns:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> _ = m.set_bounds([2.0, 3.0, 8.0, 9.0])
+                >>> _ = m.inset(size=0.2)
+                >>> first = m.locator
+                >>> _ = m.inset(size=0.2, position="lower left")
+                >>> m.locator is first, len(m.ax.child_axes)
+                (False, 2)
+                >>> first.set_title("still drawable").ax.get_title()
+                'still drawable'
                 >>> m.close()
 
                 ```

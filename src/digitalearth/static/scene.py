@@ -225,8 +225,10 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
             >>> from digitalearth.static import Scene
             >>> from digitalearth.static.scene import drawing_style
             >>> layer = LayerSpec("a", "raster", symbology=Symbology(props={"opts": {"vmin": 1.0}}))
-            >>> drawing_style(Scene(), layer)
+            >>> scene = Scene()
+            >>> drawing_style(scene, layer)
             {'vmin': 1.0}
+            >>> scene.close()
 
             ```
     """
@@ -321,11 +323,6 @@ class LayerRecord:
             and says nothing about what it draws. ``None`` takes the kind's band.
         visible: Whether the layer was built visible.
         symbology: How it looks, as values. ``None`` records an empty symbology.
-        held: The caller's **own engine object**, for a ``custom:matplotlib`` layer: the artist they
-            built and handed to :meth:`Scene._add_layer`, with the glyph that made it and its
-            colorbar label. A description cannot rebuild it — that is what makes the layer custom —
-            so the scene keeps it under the layer's id and the drawer puts it back from there, the
-            way every other tier holds its own engine's custom layers.
         key: Something the layer's drawer needs that a **description cannot carry** — a clip boundary (a
             shapely geometry, which a figure written to JSON has no spelling for, and which would make two
             symbologies uncomparable) or a basemap credential (which must never be written into a figure at
@@ -342,6 +339,11 @@ class LayerRecord:
             into a figure at all. A figure read back on a scene that holds nothing therefore draws the
             plain keywords it carries, and the engine's defaults in place of the rest. ``None`` or empty
             for a layer given none.
+        held: The caller's **own engine object**, for a ``custom:matplotlib`` layer: the artist they
+            built and handed to :meth:`Scene._add_layer`, with the glyph that made it and its
+            colorbar label. A description cannot rebuild it — that is what makes the layer custom —
+            so the scene keeps it under the layer's id and the drawer puts it back from there, the
+            way every other tier holds its own engine's custom layers.
 
     Examples:
         - The record a raster builder writes, beside the drawing it made:
@@ -417,6 +419,7 @@ class Scene(WatermarkMixin):
             []
             >>> scene.layer_ids
             []
+            >>> scene.close()
 
             ```
         - Wrap a caller-supplied figure/axes instead of creating one:
@@ -955,7 +958,15 @@ class Scene(WatermarkMixin):
         Returns:
             The figure, with the sources of exactly those layers, the panel's title (:meth:`set_title`) and
             the figure's heading (``Figure.suptitle``) — the two places a heading can live, described
-            separately because `draw_figure` prefers the figure's and falls back to the panel's.
+            separately because they are **restored** separately:
+            :meth:`~digitalearth.static.map.Map.draw_figure` puts the panel's title back on the axes and the
+            figure's heading back as the `suptitle`, each into the slot it was described from, so neither
+            stands in for the other. Measured on a map titled `January` under the heading
+            `rainfall, 2020`: described as `('rainfall, 2020', 'January')` for
+            `(figure.title, figure.panels[0].title)`, drawn into a fresh map it restores the same pair as
+            `(fig.get_suptitle(), ax.get_title())` and redescribes unchanged, with `to_dict()` equal across
+            two further passes. Each is written **only when the incoming figure carries it**, so drawing an
+            untitled figure does not blank a heading the map already has.
         """
         panel = PanelSpec(
             PANEL_ID, self.viewport, layers=tuple(tree.ids), title=self._title
@@ -1059,16 +1070,32 @@ class Scene(WatermarkMixin):
 
             So it is not always a matplotlib artist, because not every drawer produces one object on the
             axes. A **graticule** is the case to know: its drawer's value is the list of projected
-            polylines (18 of them at the default spacing), while what it put on the axes is a
-            `LineCollection` plus one `Text` per degree. A layer like that — a graticule, a limb-split
-            coastline — is asked through :attr:`~digitalearth.static.renderer.DrawnLayer.artists`, which
-            holds what is on the axes and is what :meth:`set_visible` and :meth:`remove_layer` act on.
+            polylines (18 of them at the default spacing), while what it put on the axes is one
+            `LineCollection` plus one `Text` per **labelled gridline** — 19 artists in all at that
+            spacing, and just the `LineCollection` when the layer was drawn `labels=False`. The two
+            counts track the gridlines rather than the degrees between them: at `spacing=60.0` the
+            drawer hands back 9 polylines and the axes holds 11 artists.
+
+            Those counts are the **flat** map's. On a **globe** the same drawer's value is the same list
+            of 18 polylines, but the grid is painted by `apply_projection_frame` as 18 `Line2D` — no
+            `LineCollection` and no `Text` — and it is painted at :meth:`render`, so before that call the
+            layer is described, `artist()` already hands back its 18 arrays, and the axes holds none of
+            its artists yet. So read the drawer's value as the drawer's value: what the axes holds is a
+            per-projection, per-render answer, not a property of the layer.
+
+            A layer like that — a graticule, a limb-split coastline — owns a whole set of artists, and
+            that set is the renderer's own record (`DrawnLayer.artists`), which is what
+            :meth:`set_visible` and :meth:`remove_layer` act on rather than part of this tier's public
+            surface.
 
         Raises:
-            KeyError: when `layer_id` names no layer on this figure, naming the ids that do. A layer whose
-                data the display CRS could not place drew nothing and was dropped from the description, so
-                it is refused here too — which is the same answer its builder's `None` used to give, in
-                the tier's own words.
+            KeyError: when `layer_id` names no layer on this figure, naming the ids that do. The test is
+                whether the **description** holds the id, not whether anything of the layer is on the
+                axes: a layer whose data the display CRS could not place is dropped from the description
+                outright, so it is refused here too — the same answer its builder's `None` used to give,
+                in the tier's own words. A layer that is described but has **no artists yet** is *not*
+                refused; it hands its drawer's value back as usual, which is what a globe's graticule does
+                before :meth:`render` has painted it.
             ValueError: when `layer_id` is `None` and nothing has been drawn yet: there is no "last" for
                 an empty figure, and `None` would read as "that layer drew nothing".
 
@@ -1102,9 +1129,10 @@ class Scene(WatermarkMixin):
                 >>> m.close()
 
                 ```
-            - A graticule's drawer hands back its projected lines rather than one artist, so what is on
-              the axes is read from the drawn record instead; and a figure with nothing drawn has no
-              "last" to hand back:
+            - A graticule's drawer hands back its projected lines rather than one artist. Its set of
+              on-axes artists lives in the renderer's internal record, shown here only to make the
+              difference between the two counts concrete; and a figure with nothing drawn has no "last"
+              to hand back:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1114,6 +1142,38 @@ class Scene(WatermarkMixin):
                 >>> len(m.artist("graticule-1")), len(m._renderer.drawn["graticule-1"].artists)
                 (18, 19)
                 >>> m.close()
+                >>> coarse = Map(crs=4326)
+                >>> _ = coarse.graticule(spacing=60.0)
+                >>> len(coarse.artist("graticule-1")), len(coarse._renderer.drawn["graticule-1"].artists)
+                (9, 11)
+                >>> coarse.close()
+
+                ```
+            - On a globe the drawer's value is unchanged while the axes holds nothing until
+              :meth:`render` paints the grid as `Line2D` — so a described layer with no artists yet is
+              answered, not refused:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> globe = Map(crs=4326, globe=True)
+                >>> _ = globe.graticule(spacing=30.0)
+                >>> len(globe.artist("graticule-1")), len(globe._renderer.drawn["graticule-1"].artists)
+                (18, 0)
+                >>> globe.render()
+                >>> drawn = globe._renderer.drawn["graticule-1"].artists
+                >>> len(globe.artist("graticule-1")), len(drawn)
+                (18, 18)
+                >>> sorted({type(artist).__name__ for artist in drawn})
+                ['Line2D']
+                >>> globe.close()
+
+                ```
+            - A figure with nothing drawn has no "last" to hand back:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
                 >>> bare = Map(globe=False)
                 >>> bare.artist()  # doctest: +ELLIPSIS
                 Traceback (most recent call last):
@@ -1989,11 +2049,14 @@ class Scene(WatermarkMixin):
                 place.
 
         Returns:
-            This scene, so figure decoration reads as one expression. The Core declares ``returns="self"``
+            This scene, so figure decoration reads as one expression. The Core declares `returns="self"`
             for this name and the web and interactive tiers already answer that way; returning the
-            ``Colorbar`` meant ``m.field(ds).colorbar().legend(...)`` chained on two tiers and raised on this
-            one. The drawn bar is still reachable, as
-            ``scene._renderer.drawn[layer_id].guides``.
+            `Colorbar` meant `m.field(ds).colorbar().legend(...)` chained on two tiers and raised on this
+            one. What the bar *is* comes back off the layer instead, and off the description rather than
+            off the engine: `get_layer(layer_id).symbology.guide()` is the recorded
+            `Guide` — its `title` and whether it is shown — which is the reading that survives being
+            written out and read back. The matplotlib `Colorbar` object itself is not on this tier's
+            public surface.
 
         Raises:
             KeyError: when `layer_id` names no layer on this figure, naming the ids that do.
@@ -2008,6 +2071,55 @@ class Scene(WatermarkMixin):
             stealing width from the axes. The web tier shows exactly one key and a second replaces the first,
             so a figure ported between the two changes its count; asking for one bar here means keying one
             layer. Asking twice for the *same* layer replaces its bar rather than stacking a second.
+
+        Examples:
+            - Key a field and read the recorded guide back off the layer; the bar is an axes of its own
+              on the figure, and asking twice replaces it rather than stacking a second:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> depth = Dataset.from_array(
+                ...     arr=np.array([[1.0, 2.0], [3.0, 4.0]]),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.field(depth, name="depth").colorbar(label="m")
+                >>> m.get_layer("depth").symbology.guide()
+                Guide(show=True, title='m', anchor=None)
+                >>> len(m.fig.axes)
+                2
+                >>> _ = m.colorbar(label="m")
+                >>> len(m.fig.axes)
+                2
+                >>> m.close()
+
+                ```
+            - A categorical fill is refused by name, because a bar over it would read the class codes
+              cleopatra assigned rather than the categories:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth import Map
+                >>> cells = gpd.GeoDataFrame(
+                ...     {"use": ["arable", "forest", "urban"]},
+                ...     geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(3)],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.choropleth(cells, column="use", scheme="categorical", name="use")
+                >>> m.colorbar("use")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: layer 'use' is coloured by category, so a colorbar over it would read the ...
+                >>> m.close()
+
+                ```
         """
         layer = self._keyed_layer(layer_id, "colorbar")
         # Before the guide is recorded, not from inside the draw: a call this tier cannot answer must leave
@@ -2036,15 +2148,43 @@ class Scene(WatermarkMixin):
             **kwargs: Forwarded to :meth:`colorbar` for every layer keyed.
 
         Returns:
-            This scene (chainable). It returned the list of colorbars it had created until order 24; the
-            bars are reachable per layer as ``scene._renderer.drawn[layer_id].guides``, and a method that
-            keys several layers has no one bar to hand back.
+            This scene (chainable). It returned the list of colorbars it had created until order 24; a
+            method that keys several layers has no one bar to hand back, and each layer's key is read
+            back off its own description with `get_layer(layer_id).symbology.guide()`.
 
         Note:
             A layer coloured by nothing is **skipped**, not refused — which is the point of the plural: a
             figure of one raster, a coastline and a graticule keys the raster and says nothing about the
             other two. A layer coloured by **category** is skipped as well, because its key is a swatch
             legend rather than a bar (:meth:`legend`).
+
+        Examples:
+            - Three coloured fields take three bars, and the graticule drawn over them is skipped
+              rather than refused — so the figure holds its own axes plus one per keyed layer:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> def band(offset):
+                ...     return Dataset.from_array(
+                ...         arr=np.array([[1.0, 2.0], [3.0, 4.0]]) + offset,
+                ...         geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...         no_data_value=-9999.0,
+                ...     )
+                >>> m = Map(crs=4326)
+                >>> for name, offset in (("a", 0.0), ("b", 10.0), ("c", 20.0)):
+                ...     _ = m.field(band(offset), name=name)
+                >>> _ = m.graticule(spacing=60.0)
+                >>> _ = m.colorbars()
+                >>> len(m.fig.axes)
+                4
+                >>> [i for i in m.layer_ids if m.get_layer(i).symbology.guide() is not None]
+                ['a', 'b', 'c']
+                >>> m.close()
+
+                ```
         """
         for layer_id in self._color_keyed():
             if bar_refusal(self._layer_tree.get(layer_id)) is not None:
@@ -2086,8 +2226,10 @@ class Scene(WatermarkMixin):
                 (``loc``, ``ncol``, ``fontsize``, …). Styling for this call, not part of the record.
 
         Returns:
-            This scene (chainable) — the Core declares ``returns="self"`` for this name. The drawn
-            ``Legend`` is reachable as ``scene._renderer.drawn[layer_id].guides``.
+            This scene (chainable) — the Core declares `returns="self"` for this name. What the key is
+            called and whether it is shown read back off the layer's own description, as
+            `get_layer(layer_id).symbology.guide()`; the matplotlib `Legend` object itself is not on
+            this tier's public surface.
 
         Raises:
             KeyError: when `layer_id` names no layer on this figure.
@@ -2107,6 +2249,58 @@ class Scene(WatermarkMixin):
             it is not fed back into the next call. A categorical fill already draws its own
             swatch legend through cleopatra; asking here records it on the layer, which is what lets it be
             titled, relabelled, hidden and removed with the layer.
+
+        Examples:
+            - Key a categorical fill, then key a second one: the axes holds one legend, the displaced
+              layer's guide is switched off while keeping the title and rows it was given, and taking
+              the key back re-derives both:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth import Map
+                >>> cells = gpd.GeoDataFrame(
+                ...     {"use": ["arable", "forest", "urban"]},
+                ...     geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(3)],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> for name in ("use", "soil"):
+                ...     _ = m.choropleth(cells, column="use", scheme="categorical", name=name)
+                >>> _ = m.legend("use", title="Land use", labels=["Arable", "Forest", "Urban"])
+                >>> m.get_layer("use").symbology.guide()
+                Guide(show=True, title='Land use', anchor=None)
+                >>> _ = m.legend("soil", title="Soil")
+                >>> m.get_layer("use").symbology.guide()
+                Guide(show=False, title='Land use', anchor=None)
+                >>> _ = m.legend("use")
+                >>> m.get_layer("use").symbology.guide()
+                Guide(show=True, title=None, anchor=None)
+                >>> m.close()
+
+                ```
+            - Row labels that do not number the rows are refused by name, whatever `visible` says:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth import Map
+                >>> cells = gpd.GeoDataFrame(
+                ...     {"use": ["arable", "forest", "urban"]},
+                ...     geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(3)],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.choropleth(cells, column="use", scheme="categorical", name="use")
+                >>> m.legend("use", labels=["only one"])
+                Traceback (most recent call last):
+                    ...
+                ValueError: the key of layer 'use' has 3 rows, so labels= needs 3 labels; got 1
+                >>> m.close()
+
+                ```
         """
         layer = self._keyed_layer(layer_id, "legend")
         self._record_key(
@@ -2555,6 +2749,7 @@ class Scene(WatermarkMixin):
                 >>> mark_ax = scene.stamp(logo, frac=0.2, shadow=False)
                 >>> [round(float(v), 3) for v in mark_ax.get_position().bounds]
                 [0.775, 0.025, 0.2, 0.133]
+                >>> scene.close()
 
                 ```
         """
@@ -2579,11 +2774,13 @@ class Scene(WatermarkMixin):
                 >>> import tempfile
                 >>> from pathlib import Path
                 >>> from digitalearth.static import Scene
-                >>> out = Scene().save(Path(tempfile.mkdtemp()) / "scene.png")
+                >>> scene = Scene()
+                >>> out = scene.save(Path(tempfile.mkdtemp()) / "scene.png")
                 >>> out.suffix
                 '.png'
                 >>> out.exists()
                 True
+                >>> scene.close()
 
                 ```
         """
@@ -2591,7 +2788,41 @@ class Scene(WatermarkMixin):
         return Path(path)
 
     def show(self) -> None:
-        """Show the figure via ``matplotlib.pyplot.show``."""
+        """Show the figure via `matplotlib.pyplot.show`.
+
+        Returns:
+            `None`. This is the one Core name where this tier does not hand its engine object back. The
+            Core declares `returns="engine"` for `show`, and the other three tiers each answer with the
+            object their engine displays: the web tier returns its widget, the interactive tier the
+            composed HoloViews object, and the 3-D tier whatever `pyvista.Plotter.show` hands back.
+            On those tiers displaying a map *produces* something. `pyplot.show` does not — it hands the
+            figure to whatever GUI backend is active and returns nothing — so there is no engine object
+            here to hand over, and inventing one would be inventing it.
+
+        Note:
+            Nothing is displayed under a non-interactive backend. On `Agg` — which the test suite and
+            every headless run use — matplotlib warns `FigureCanvasAgg is non-interactive, and thus
+            cannot be shown` and the call is otherwise a no-op; use :meth:`save` there.
+
+        Examples:
+            - Showing a scene on the headless backend returns nothing and leaves the figure intact, so
+              it can still be saved or closed afterwards:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import warnings
+                >>> from digitalearth.static import Scene
+                >>> scene = Scene()
+                >>> with warnings.catch_warnings():
+                ...     warnings.simplefilter("ignore")
+                ...     print(scene.show())
+                None
+                >>> len(scene.fig.axes)
+                1
+                >>> scene.close()
+
+                ```
+        """
         plt.show()
 
     def close(self) -> None:

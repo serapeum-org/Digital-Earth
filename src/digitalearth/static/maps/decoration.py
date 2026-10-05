@@ -321,10 +321,16 @@ _SHARED_PROVIDERS = {
     "osm": "OpenStreetMap.Mapnik",
 }
 
-#: Colormap a raster backdrop falls back to when neither the caller nor ``auto_style`` names one — the
-#: hypsometric look a relief/imagery backdrop is usually wanted in. It sits *behind* the lookup rather than
-#: in :meth:`DecorationMixin.stock_img`'s signature, so a backdrop whose variable is recognised (a DEM, say)
-#: is coloured the same way the same data would be as a data layer.
+#: Colormap a raster backdrop asks for when neither the caller nor the variable lookup names one — the
+#: hypsometric look a relief/imagery backdrop is usually wanted in. It goes in as `field`'s `default_cmap`,
+#: which sits *behind* the lookup rather than in `DecorationMixin.stock_img`'s signature, so a backdrop
+#: whose variable is recognised (a DEM, say) is coloured the same way the same data would be as a data
+#: layer.
+#:
+#: **The shipped lookup always names one**, though — `auto_style` seeds every answer from a `default` group
+#: carrying `viridis`, which `digitalearth.base.display.auto_cmap` spells out — so this value is reached
+#: only if a lookup ever answers no colormap at all. An unrecognised backdrop is drawn `viridis` (measured
+#: on `examples/data/acc4000.tif`, whose band carries no variable the lookup knows), not `gist_earth`.
 STOCK_IMG_CMAP = "gist_earth"
 
 
@@ -675,11 +681,12 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
             ```python
             >>> from digitalearth.static.maps.decoration import _ogc_provider_from_description
             >>> base = {"ogc": "wms", "url": "https://example.org/wms", "layers": "topp:states"}
-            >>> try:
+            >>> try:  # doctest: +NORMALIZE_WHITESPACE
             ...     _ogc_provider_from_description({**base, "newthing": 1})
             ... except ValueError as error:
             ...     print(str(error).split(". It takes")[0])
-            this figure records an OGC basemap of kind 'wms' that this version of digitalearth cannot rebuild: field(s) ['newthing'] are not ones it takes and field(s) [] are missing
+            this figure records an OGC basemap of kind 'wms' that this version of digitalearth cannot
+            rebuild: field(s) ['newthing'] are not ones it takes and field(s) [] are missing
             >>> try:
             ...     _ogc_provider_from_description({"ogc": "wms", "url": "https://example.org/wms"})
             ... except ValueError as error:
@@ -690,11 +697,12 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
         - A kind this version has never heard of is named too, with the kinds it does know:
             ```python
             >>> from digitalearth.static.maps.decoration import _ogc_provider_from_description
-            >>> try:
+            >>> try:  # doctest: +NORMALIZE_WHITESPACE
             ...     _ogc_provider_from_description({"ogc": "wcs", "url": "https://example.org/wcs"})
             ... except ValueError as error:
             ...     print(error)
-            this figure records an OGC basemap of kind 'wcs', which this version of digitalearth cannot rebuild; it knows ['wms', 'wmts']
+            this figure records an OGC basemap of kind 'wcs', which this version of digitalearth cannot
+            rebuild; it knows ['wms', 'wmts']
 
             ```
     """
@@ -1044,14 +1052,19 @@ class _ProjectedReference:
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map, projections
             >>> from digitalearth.static.maps.decoration import _ProjectedReference
-            >>> cache = _ProjectedReference(keep=1)
+            >>> cache = _ProjectedReference()
             >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
             >>> lines = cache.projected(m, "land", "110m")
             >>> rings = cache.projected(m, "land", "110m", polygon=True)
-            >>> len(cache)
-            1
+            >>> len(cache), cache.keep
+            (2, 8)
             >>> cache.projected(m, "land", "110m", polygon=True) is rings
             True
+            >>> bounded = _ProjectedReference(keep=1)
+            >>> _ = bounded.projected(m, "coastline", "110m")
+            >>> _ = bounded.projected(m, "borders", "110m")
+            >>> len(bounded)
+            1
             >>> cache.clear()
             >>> len(cache)
             0
@@ -1165,11 +1178,16 @@ class _ProjectedReference:
 
 
 #: The one projected-reference cache the static tier draws from — the module-level instance of
-#: :class:`_ProjectedReference`, whose docstring holds what it is keyed on, what a hit costs and the two
-#: refusals it makes. Process-wide on purpose: the projection of a coastline into EPSG:3857 is the same
-#: geometry whichever map asked for it, so a second figure and an animation's next frame should both be
-#: free. It holds at most :attr:`_ProjectedReference.keep` entries (8), and `PROJECTED_REFERENCE.clear()`
-#: is how a caller reclaims the memory or a test starts cold.
+#: :class:`_ProjectedReference`, whose docstring holds what it is keyed on and what a hit costs.
+#: Process-wide on purpose: the projection of a coastline into EPSG:3857 is the same geometry whichever map
+#: asked for it, so a second figure and an animation's next frame should both be free. It holds at most
+#: `keep` entries, which is 8 here, and `PROJECTED_REFERENCE.clear()` is how a caller reclaims the memory
+#: or a test starts cold.
+#:
+#: It refuses nothing of its own. A write through a handed-out array is numpy's
+#: `ValueError: assignment destination is read-only`, and an unknown layer or resolution is cleopatra's —
+#: `ValueError: Unknown layer 'nosuchlayer'. Choose from [...]` — raised by the `natural_earth` read this
+#: makes on every call.
 PROJECTED_REFERENCE = _ProjectedReference()
 
 
@@ -1688,10 +1706,11 @@ def _terminator_altitude(refraction: Any, caller: str) -> float:
             >>> from digitalearth.static.maps.decoration import _terminator_altitude
             >>> (_terminator_altitude(0, "nightshade()"), _terminator_altitude(-18.0, "nightshade()"))
             (0.0, -18.0)
-            >>> _terminator_altitude(10.0, "nightshade()")
+            >>> _terminator_altitude(10.0, "nightshade()")  # doctest: +NORMALIZE_WHITESPACE
             Traceback (most recent call last):
                 ...
-            ValueError: nightshade() needs refraction= in (-90, 0] degrees, where 0 is the geometric terminator and -6/-12/-18 the civil, nautical and astronomical twilight lines; got 10.0
+            ValueError: nightshade() needs refraction= in (-90, 0] degrees, where 0 is the geometric
+            terminator and -6/-12/-18 the civil, nautical and astronomical twilight lines; got 10.0
 
             ```
     """
@@ -2288,8 +2307,45 @@ class DecorationMixin(_MixinBase):
             This map (chainable). The :class:`matplotlib.text.Text` is reached through
             :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id — a label is one artist a
             caller restyles afterwards, and that is where ST-20 moved every such artist to (round-1 L6). A
-            point off the visible globe registers no layer, which is what the ``None`` this used to answer
-            with said; `artist()` then refuses that id by name rather than answering ``None``.
+            point off the visible globe registers no layer, which is what the `None` this used to answer
+            with said; `artist()` then refuses that id by name rather than answering `None`, with
+            `KeyError: "no layer 'far' on this figure; its layers are []"`.
+
+        Examples:
+            - A label is placed in lon/lat and reached by the name the call gave it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     label = m.text(4.9, 52.4, "Amsterdam", name="ams").artist("ams")
+                ...     label.get_text()
+                ...     tuple(round(float(v), 1) for v in label.get_position())
+                'Amsterdam'
+                (4.9, 52.4)
+
+                ```
+            - A point on the far side of a globe draws nothing and registers no layer, and the call still
+              chains — so the id is the one thing that refuses, by name:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     m.text(180.0, 0.0, "far side", name="far") is m
+                ...     m.layer_ids
+                ...     try:
+                ...         m.artist("far")
+                ...     except KeyError as error:
+                ...         print(error)
+                True
+                []
+                "no layer 'far' on this figure; its layers are []"
+
+                ```
+
+        See Also:
+            annotate: the same placement, through `Axes.annotate`, with an optional arrow.
         """
         self._draw(
             LayerRecord(
@@ -2355,7 +2411,41 @@ class DecorationMixin(_MixinBase):
         Returns:
             This map (chainable). The :class:`matplotlib.text.Annotation` is reached through
             :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id, exactly as :meth:`text`'s
-            is (round-1 L6). A point off the visible globe registers no layer.
+            is (round-1 L6). A point off the visible globe registers no layer, and `artist()` then refuses
+            that id with `KeyError`, as it does for :meth:`text`.
+
+        Examples:
+            - The annotated point is the reprojected lon/lat; `xytext` and `arrowprops` draw the arrow:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     note = m.annotate(
+                ...         4.9, 52.4, "Amsterdam", xytext=(20, 20), textcoords="offset points",
+                ...         arrowprops={"arrowstyle": "->"}, name="ams",
+                ...     ).artist("ams")
+                ...     note.get_text()
+                ...     tuple(round(float(v), 1) for v in note.xy)
+                'Amsterdam'
+                (4.9, 52.4)
+
+                ```
+            - A point on the far side of a globe is skipped, and the call still chains:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     m.annotate(180.0, 0.0, "far side", name="far") is m
+                ...     m.layer_ids
+                True
+                []
+
+                ```
+
+        See Also:
+            text: the same placement without an arrow, through `Axes.text`.
         """
         self._draw(
             LayerRecord(
@@ -2402,10 +2492,13 @@ class DecorationMixin(_MixinBase):
             dataset: A pyramids ``Dataset`` to use as the backdrop, or a path or URL to one, or
                 ``None`` to try a tile basemap. Only a path-backed layer can be written down.
             zorder: Draw order for the backdrop (default ``-3.0``, below data/coastlines).
-            cmap: Colormap for a raster backdrop (ignored for the tile path). ``None`` (default) resolves
-                one from the backdrop's own variable via
-                :func:`~digitalearth.base.autostyle.auto_style` — so a DEM backdrop is coloured as terrain
-                — falling back to :data:`STOCK_IMG_CMAP` when the lookup has no opinion.
+            cmap: Colormap for a raster backdrop (ignored for the tile path). `None` (default) resolves
+                one from the backdrop's own variable through
+                :func:`~digitalearth.base.autostyle.auto_style`, so a backdrop that lookup recognises is
+                coloured the way the same data would be as a data layer. That lookup always answers a
+                colormap — `viridis` for a variable it does not recognise — so an **unrecognised** backdrop
+                is drawn `viridis`: :data:`STOCK_IMG_CMAP` goes in as `field`'s `default_cmap` and is
+                reached only if the lookup ever answers none.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2424,6 +2517,41 @@ class DecorationMixin(_MixinBase):
             (:meth:`~digitalearth.static.maps.raster.RasterMixin.field` for a raster, :meth:`basemap`
             for tiles), through :meth:`~digitalearth.static.scene.Scene.artist`, rather than off that
             call's return value — which is now the map, on both paths.
+
+        Examples:
+            - A raster backdrop hands back the `AxesImage`, not the map, so it can be restyled in place:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth import Map
+                >>> with Map() as m:
+                ...     backdrop = m.stock_img(Dataset.read_file("examples/data/acc4000.tif"))
+                ...     backdrop is m
+                ...     backdrop.get_zorder()
+                ...     backdrop.get_cmap().name
+                False
+                -3.0
+                'viridis'
+
+                ```
+            - With no dataset the tile path is tried and skipped when it cannot be drawn, which answers
+              `None` and leaves no layer behind:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map() as m:
+                ...     print(m.stock_img())
+                ...     m.layer_ids
+                None
+                []
+
+                ```
+
+        See Also:
+            digitalearth.static.maps.raster.RasterMixin.field: what the raster path draws through.
+            basemap: what the no-argument path draws through.
         """
         if dataset is None:
             tiled = set(self.layer_ids)
@@ -2648,9 +2776,46 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            This map (chainable). The coastline — polyline artists on a globe, the reprojected plot artist
-            on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by this
-            layer's id (round-1 L6).
+            This map (chainable). The coastline is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
+            **list** of `Line2D`, one per run the limb split the layer into (measured: 57 at 110m through
+            an orthographic projection); on a flat map **the axes**, because cleopatra's `add_features`
+            draws onto them and hands them back rather than naming what it drew (see
+            :func:`draw_natural_earth`).
+
+        Examples:
+            - The reference layers chain, and on a flat map each one's artist is the axes they were drawn
+              onto:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     m.coastlines().borders().rivers() is m
+                ...     m.layer_ids
+                ...     m.artist("coastlines-1") is m.ax
+                True
+                ['coastlines-1', 'borders-1', 'rivers-1']
+                True
+
+                ```
+            - On a globe the limb splits the layer, so the artist is a **list** of polylines:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     lines = m.coastlines("110m", color="black").artist("coastlines-1")
+                ...     len(lines) > 1
+                ...     type(lines[0]).__name__
+                True
+                'Line2D'
+
+                ```
+
+        See Also:
+            borders: the same line path for country boundaries.
+            land: the filled counterpart.
         """
         return self._natural_earth(
             "coastline", resolution, zorder=2.5, name=name, visible=visible, **kwargs
@@ -2680,9 +2845,39 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            This map (chainable). The border artist — polyline artists on a globe, the reprojected plot
-            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
-            this layer's id (round-1 L6).
+            This map (chainable). The borders are reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
+            **list** of `Line2D`, one per run the limb split the layer into; on a flat map **the axes**,
+            because cleopatra's `add_features` draws onto them and hands them back rather than naming what
+            it drew (see :func:`draw_natural_earth`).
+
+        Examples:
+            - Borders are drawn at the same height as coastlines, and the call chains:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     m.borders("110m", linewidth=0.4) is m
+                ...     m.get_layer("borders-1").symbology.props["zorder"]
+                True
+                2.5
+
+                ```
+            - A plain style keyword travels with the description, so another scene draws it the same:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     _ = m.borders(color="dimgray")
+                ...     m.figure_spec.layers.get("borders-1").kind
+                'borders'
+
+                ```
+
+        See Also:
+            coastlines: the same line path for the coast.
         """
         return self._natural_earth(
             "borders", resolution, zorder=2.5, name=name, visible=visible, **kwargs
@@ -2698,9 +2893,11 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Fill Natural-Earth land polygons.
 
-        On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
-        re-closed at the projection limb into finite rings and filled as a map-specific overlay (drawn below
-        data and coastlines, clipped to the boundary). Interior rings (holes) are dropped in v1 — see #43.
+        On a **flat** map the polygons are reprojected and filled directly, by cleopatra's `add_features`,
+        which assembles each polygon into a hole-aware compound path — so an inland hole is cut out of the
+        fill there. On a **globe** map they are re-closed at the projection limb into finite rings and
+        filled as a map-specific overlay (drawn below data and coastlines, clipped to the boundary); **the
+        globe path has no holes**, because `natural_earth` hands back exterior rings only — see #43.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
@@ -2716,9 +2913,41 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            This map (chainable). The land fill — a ``PolyCollection`` on a globe, the reprojected plot
-            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
-            this layer's id (round-1 L6).
+            This map (chainable). The land fill is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): a
+            `PolyCollection` on a globe; on a flat map **the axes**, because cleopatra's `add_features`
+            draws onto them and hands them back rather than naming the `PathCollection` it added (see
+            :func:`draw_natural_earth`).
+
+        Examples:
+            - On a globe the fill is one `PolyCollection` of limb-closed rings, drawn below the data:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     type(m.land(facecolor="wheat").artist("land-1")).__name__
+                ...     m.get_layer("land-1").symbology.props["zorder"]
+                'PolyCollection'
+                -1.5
+
+                ```
+            - On a flat map the layer is handed to `add_features`, which answers the axes:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     m.land() is m
+                ...     m.artist("land-1") is m.ax
+                True
+                True
+
+                ```
+
+        See Also:
+            lakes: the same fill path, drawn just above land.
+            ocean: the complementary fill.
         """
         return self._natural_earth(
             "land",
@@ -2758,9 +2987,41 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            This map (chainable). The ocean fill — a ``PolyCollection`` disc on a globe, the reprojected
-            plot artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`,
-            by this layer's id (round-1 L6).
+            This map (chainable). The ocean fill is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): a
+            `PolyCollection` disc on a globe; on a flat map **the axes**, because cleopatra's
+            `add_features` draws onto them and hands them back rather than naming what it added (see
+            :func:`draw_natural_earth`).
+
+        Examples:
+            - On a globe the ocean is the projection disc itself — one ring, below land:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     disc = m.ocean().artist("ocean-1")
+                ...     len(disc.get_paths())
+                ...     m.get_layer("ocean-1").symbology.props["zorder"]
+                1
+                -2.0
+
+                ```
+            - On a flat map the Natural-Earth ocean polygons are drawn instead, at the line default:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     m.ocean() is m
+                ...     m.get_layer("ocean-1").symbology.props["zorder"]
+                True
+                0.5
+
+                ```
+
+        See Also:
+            land: the fill the ocean sits beneath.
         """
         if self.globe:
             # The disc is the ocean: filling the whole projection boundary and letting land overlay it is
@@ -2807,9 +3068,39 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            This map (chainable). The lake fill — a ``PolyCollection`` on a globe, the reprojected plot
-            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
-            this layer's id (round-1 L6).
+            This map (chainable). The lake fill is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): a
+            `PolyCollection` on a globe; on a flat map **the axes**, because cleopatra's `add_features`
+            draws onto them and hands them back rather than naming what it added (see
+            :func:`draw_natural_earth`).
+
+        Examples:
+            - Lakes are filed just above land, so the two stack in the order they are read in:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     _ = m.land().lakes()
+                ...     [m.get_layer(i).symbology.props["zorder"] for i in m.layer_ids]
+                [-1.5, -1.4]
+
+                ```
+            - On a flat map the fill is drawn by `add_features` and the call chains:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     m.lakes(facecolor="lightblue") is m
+                ...     m.artist("lakes-1") is m.ax
+                True
+                True
+
+                ```
+
+        See Also:
+            land: the fill lakes are drawn over.
         """
         return self._natural_earth(
             "lakes",
@@ -2845,9 +3136,41 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            This map (chainable). The river artist — polyline artists on a globe, the reprojected plot
-            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
-            this layer's id (round-1 L6).
+            This map (chainable). The rivers are reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
+            **list** of `Line2D`, one per run the limb split the layer into; on a flat map **the axes**,
+            because cleopatra's `add_features` draws onto them and hands them back rather than naming what
+            it drew (see :func:`draw_natural_earth`).
+
+        Examples:
+            - Rivers are drawn just under the coastline, so a coast still reads over them:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map(crs=4326) as m:
+                ...     m.rivers("110m", color="steelblue") is m
+                ...     m.artist("rivers-1") is m.ax
+                ...     m.get_layer("rivers-1").symbology.props["zorder"]
+                True
+                True
+                2.4
+
+                ```
+            - On a globe the limb splits the centerlines into several polylines under one layer id:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map, projections
+                >>> with Map(crs=projections.orthographic(0, 0), globe=True) as m:
+                ...     lines = m.rivers().artist("rivers-1")
+                ...     len(m.layer_ids), type(lines[0]).__name__
+                (1, 'Line2D')
+
+                ```
+
+        See Also:
+            coastlines: the line layer rivers are drawn beneath.
         """
         return self._natural_earth(
             "rivers", resolution, zorder=2.4, name=name, visible=visible, **kwargs
@@ -3059,10 +3382,12 @@ class DecorationMixin(_MixinBase):
             ValueError: when only one of ``lons``/``lats`` is given, when **either** is empty, when they
                 differ in length, or when ``n`` is not a whole number of at least 4. All four are refused
                 here, in the builder, by name and before any ring is computed, and the layer is not
-                described. ``radius_m`` raises the same type but not from here: cleopatra refuses a
-                distance that is not positive and sub-antipodal from inside the drawer, because the bound
-                is the mean Earth radius' to set and is not restated in this tier. The layer is not
-                described in that case either — a drawer that raises takes its own description with it.
+                described. `radius_m` raises the same type but not from here: cleopatra refuses a
+                distance that is not positive and sub-antipodal from inside the drawer — `radius_m must be
+                a positive, sub-antipodal ground radius in metres (0, 20015114)` — because that bound is
+                half the mean Earth circumference, cleopatra's own constant to set, and is not restated in
+                this tier. The layer is not described in that case either: a drawer that raises takes its
+                own description with it.
 
         Examples:
             - On Web Mercator a circle at 60 degrees is drawn twice as wide as one at the equator:
@@ -3264,10 +3589,15 @@ class DecorationMixin(_MixinBase):
             description with them.
 
         Raises:
-            ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``
-                or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose
-                instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there
-                is one, else the current axes limits — lies entirely outside the coverage.
+            ValueError: when a keyed preset is unknown, its credential is unavailable, when a `preset`
+                or an `api_key` is passed to an ordinary source, when a preset keyword is passed loose
+                instead of in `preset`, or when the extent being drawn — the declared `domain` if there
+                is one, else the current axes limits — lies entirely outside the coverage. Two more come
+                from cleopatra as the tiles are fetched, and are refusals of this call all the same:
+                `Axes have no data extent. Plot data before adding a basemap.` when nothing has framed the
+                axes yet (a declared `domain` alone does not — it is applied at render time), and
+                `Unknown tile provider: '<source>'...` for a name neither this tier's table nor
+                `xyzservices` holds. In every case the layer is not left in the description.
             TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.
 
         Examples:
@@ -3278,6 +3608,37 @@ class DecorationMixin(_MixinBase):
                 ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
                 ... )                                                  # doctest: +SKIP
                 >>> tiled.artist("basemap-1")                          # doctest: +SKIP
+
+                ```
+            - A preset keyword passed loose is refused by name, and nothing is described:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map() as m:
+                ...     try:
+                ...         m.basemap("OSM", date="2024-01")
+                ...     except ValueError as error:
+                ...         print(str(error).split(";")[0])
+                ...     m.layer_ids
+                basemap() takes preset keywords in preset={...}, not loose
+                []
+
+                ```
+            - Tiles need a framed extent to cover, so a basemap on an untouched axes is refused rather
+              than drawn blank:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> with Map() as m:
+                ...     try:
+                ...         m.basemap()
+                ...     except ValueError as error:
+                ...         print(error)
+                ...     m.layer_ids
+                Axes have no data extent. Plot data before adding a basemap.
+                []
 
                 ```
 

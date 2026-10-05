@@ -116,7 +116,11 @@ def grid(
         row-major (left-to-right, top-to-bottom) order, length ``nrows * ncols``.
 
     Raises:
-        ValueError: from ``plt.subplots``, for a ``sharex``/``sharey`` outside the vocabulary above.
+        ValueError: from ``plt.subplots``, for a ``sharex``/``sharey`` outside the vocabulary above. The
+            figure is created before matplotlib reads the keyword, so such a refusal leaves that empty
+            figure open and the caller gets no handle to it — close it with `plt.close("all")` (measured:
+            `plt.get_fignums()` is `[1]` after a refused call on a clean state). This is unlike
+            :func:`facet`, whose own refusals are all raised before any axes exists.
 
     Examples:
         - A 2×2 grid yields four Maps sharing one figure:
@@ -187,11 +191,13 @@ def grid(
             >>> sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))
             True
             >>> maps[0].close()
+            >>> import matplotlib.pyplot as plt
             >>> try:
             ...     grid(2, 2, crs=4326, sharex="both")
             ... except ValueError as error:
             ...     print(error)
             'both' is not a valid value for sharex. Supported values are 'all', 'row', 'col', 'none', False, True
+            >>> plt.close("all")  # the refused call had already made its figure
 
             ```
         - A figure title sits beside the panels' own titles rather than replacing one:
@@ -254,6 +260,46 @@ def shared_colorbar(
     Returns:
         The :class:`~matplotlib.colorbar.Colorbar` added to the figure, or ``None`` when ``mappable`` is
         ``None`` — there is no colour scale to draw a bar for.
+
+    Examples:
+        - One bar across both panels of a grid. It is an axes of its own, so the figure gains one, and the
+            scale it shows is the mappable's — reached by name through `Map.artist`, never the renderer's
+            private record:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from digitalearth.static import grid, shared_colorbar
+            >>> fig, maps = grid(1, 2, crs=4326)
+            >>> values = np.arange(16.0).reshape(4, 4)
+            >>> for panel in maps:
+            ...     _ = panel.field(values, vmin=0.0, vmax=15.0)
+            >>> len(fig.axes)
+            2
+            >>> bar = shared_colorbar(fig, maps[0].artist(maps[0].layer_ids[-1]), maps, label="mm/day")
+            >>> len(fig.axes), bar.ax.get_ylabel(), bar.mappable.get_clim()
+            (3, 'mm/day', (0.0, 15.0))
+            >>> maps[0].close()
+
+            ```
+        - A panel whose layer drew nothing has no mappable to key, so passing `None` adds no bar and no
+            axes rather than raising — which is what lets :func:`facet` call this unconditionally:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import grid, shared_colorbar
+            >>> fig, maps = grid(1, 2, crs=4326)
+            >>> print(shared_colorbar(fig, None, maps))
+            None
+            >>> len(fig.axes)
+            2
+            >>> maps[0].close()
+
+            ```
+
+    See Also:
+        grid: builds the figure and panels this spans.
+        facet: resolves one scale over a whole stack and calls this for the bar.
     """
     if mappable is None:  # the layer it would describe was never drawn (e.g. off-limb)
         return None
@@ -724,10 +770,12 @@ def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
             ...     try:
             ...         _checked_classes(style)
             ...     except ValueError as error:
-            ...         print(str(error).split("; ")[0])
+            ...         print(str(error).split("; ")[0])  # doctest: +NORMALIZE_WHITESPACE
             facet(k=4) counts the classes a scheme cuts, so it classifies nothing without scheme=
-            facet(k=4) counts the classes a scheme cuts, so it classifies nothing beside scheme=[0.0, 1.0, 2.0], which gives the class edges outright
-            facet(k=4) counts the classes a scheme cuts, so it classifies nothing under scheme='categorical', where a class code is its own class
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing beside
+            scheme=[0.0, 1.0, 2.0], which gives the class edges outright
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing under
+            scheme='categorical', where a class code is its own class
 
             ```
         - A value that is not a count is refused rather than truncated or coerced, ``True`` included:

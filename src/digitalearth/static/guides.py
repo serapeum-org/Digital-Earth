@@ -208,9 +208,10 @@ def _swatches(legend: Any) -> Tuple[List[Any], List[str]]:
 def drawn_scale(artist: Any) -> Optional[Scale]:
     """Return the scale a drawn artist colours through, read off its own norm.
 
-    Shared rather than private because a drawer needs the same answer: the raster field path reads it to
-    restate the layer's extreme colours on the scale it publishes (ST-10), and two spellings of "the scale
-    this artist drew" would be two chances to disagree about what the picture shows.
+    Shared rather than private because a drawer needs the same answer: `FieldColors.applied_to` in the
+    raster mixin reads it to restate the layer's extreme colours on the scale it publishes (ST-10) — only
+    as the fallback, since a categorical field already states a scale of its own — and two spellings of
+    "the scale this artist drew" would be two chances to disagree about what the picture shows.
 
     Args:
         artist: The mappable the layer's drawer produced.
@@ -278,11 +279,11 @@ def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
 
     Examples:
         - A raster field publishes its band and the limits the render settled on. This is the one caller
-          that reads the whole drawn record rather than :meth:`~digitalearth.static.scene.Scene.artist`,
-          which hands back the artist alone: the encoding is built from the layer's stated scale and its
-          glyph's category legend as well, so the artist on its own is not enough — measured,
-          ``color_encoding("band 1", m.artist("grid"))`` raises
-          ``AttributeError: 'AxesImage' object has no attribute 'glyph'``:
+          that reads the whole drawn record rather than `Scene.artist(layer_id)`, which hands back the
+          artist alone: the encoding is built from the layer's stated scale and its glyph's category
+          legend as well, so the artist on its own is not enough — measured,
+          `color_encoding("band 1", m.artist("grid"))` raises
+          `AttributeError: 'AxesImage' object has no attribute 'glyph'`:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")

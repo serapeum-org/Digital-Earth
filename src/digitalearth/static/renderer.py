@@ -25,8 +25,12 @@ else, so a figure read back elsewhere draws *those* with the engine's defaults i
 **This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
 :meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
 drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as well as its own record when
-a figure is refused half-way — the web and interactive tiers rebuild their engine object on every render and
-can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
+a figure is refused half-way. The web and interactive tiers hold their picture as a value the map owns — a
+render queue plus its band counts there, the overlay list here — so a rollback puts those back by
+reassignment alongside the `_drawn` record; on this tier an artist already added to the axes stays on it
+until something takes it off. Neither of those two rebuilds everything, either: the interactive reconcile
+re-overlays the element the map already holds for a layer it did not touch, because `.opts()` writes into
+HoloViews' option store against the object it was called on.
 
 **:meth:`Renderer.apply` has a caller.** It reaches the axes and this module's record of what is on it,
 and it reached nothing else for a wave: no code in ``src/`` called it, so a map's description was written by
@@ -42,11 +46,22 @@ reorder changed every tier's description and none of their figures. :meth:`Rende
 half: matplotlib paints the artists of one z-order in the order they were added, so re-arranging that list
 re-arranges the picture.
 
-**The drawer table is keyed by kind and then by recipe.** Several builders draw one kind: ``imshow`` and
-``block`` are both a field render, and ``choropleth``, ``voronoi``, ``cartogram``, ``quadtree`` and
-``grid_cells`` are all a ``choropleth``. The kind vocabulary is shared with every other tier and names *what*
-a layer is, so it cannot say which builder made it — each builder records that under ``via``, and that is the
-second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
+**The drawer table is keyed by kind and then by recipe.** The kind vocabulary is shared with every other
+tier and names *what* a layer is, so it cannot say which builder made it — each builder records that under
+`via`, and that is the second key (the shape :mod:`digitalearth.interactive.renderer` settled on). Seven
+kinds are drawn more than one way, and these are all of them (measured off `_recipes()`):
+
+* `choropleth` — `cartogram`, `choropleth`, `grid_cells`, `hexbin`, `quadtree`, `voronoi`
+* `unstructured` — `tricontour`, `tricontourf`, `tripcolor`
+* `polygons` — `cartogram`, `shapes`, `voronoi`
+* `points` — `grid_points`, `scatter`
+* `rgb` — `hsv_composite`, `rgb_composite`
+* `text` — `annotate`, `text`
+* `vectors` — `barbs`, `quiver`
+
+Every other kind has exactly one recipe, `raster` included: a field render is `raster` drawn `via="imshow"`,
+and `Map.block` is not a second recipe for it but the separate `mesh` kind drawn `via="pcolormesh"` (the two
+share a word only in `Map.animate`'s own `kind=` vocabulary, which is a list of render *methods*).
 """
 
 import logging
@@ -106,8 +121,30 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
             >>> from digitalearth.base.spec import LayerSpec
             >>> from digitalearth.static import Scene
             >>> from digitalearth.static.renderer import drawing_opts
-            >>> drawing_opts(Scene(), LayerSpec("a", "raster"))
+            >>> scene = Scene()
+            >>> drawing_opts(scene, LayerSpec("a", "raster"))
             {}
+            >>> scene.close()
+
+            ```
+        - A keyword with no JSON form comes back as the caller's own object, and the layer's description
+            carries no trace of it — which is the whole reason this half of the pair exists:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from matplotlib.colors import Normalize
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.renderer import drawing_opts
+            >>> norm = Normalize(vmin=0.0, vmax=15.0)
+            >>> m = Map(globe=False)
+            >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="f", norm=norm)
+            >>> held = drawing_opts(m, m.get_layer("f"))
+            >>> sorted(held), held["norm"] is norm
+            (['norm'], True)
+            >>> "norm" in m.get_layer("f").symbology.props
+            False
+            >>> m.close()
 
             ```
     """

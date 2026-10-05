@@ -70,8 +70,9 @@ class Scale:
         missing: Colour for a value the scale cannot place — nodata, or a category it never saw.
         over: Colour for a value above `vmax`, or `None` to leave the renderer's own treatment of it alone.
         under: Colour for a value below `vmin`, likewise. The pair is what tells a clipped field apart from
-            one that really peaks at its limit: see :meth:`with_extremes` for how a tier states them and
-            :meth:`extremes` for how one reads them back.
+            one that really peaks at its limit: see `with_extremes()` for how a tier states them and
+            `extremes()` for how one reads them back. Neither is validated as a colour here — the renderer
+            that resolves it is the one that can refuse it.
 
     Raises:
         ValueError: if `vmin`/`vmax` are not finite, if `vmax` is not greater than `vmin`, or if `breaks`
@@ -683,22 +684,26 @@ class Scale:
     ) -> "Scale":
         """Return this scale with the extreme colours a caller stated, leaving the rest as they were.
 
-        A scale is normally *derived* — :meth:`from_values` measures the domain from the data — while the
+        A scale is normally *derived* — `from_values()` measures the domain from the data — while the
         colours for what falls outside it are the caller's styling and arrive separately. So stating them is
         a step on an existing scale rather than three more arguments on every builder.
 
         `None` means "leave this one alone", which is what lets two calls compose and matches
-        `matplotlib.colors.Colormap.with_extremes`, the method a renderer ends up handing these to. The
-        scale itself is immutable, so the stated colours come back on a **new** scale: a domain derived once
-        and shared across an animation's frames must not pick up one frame's styling.
+        `matplotlib.colors.Colormap.with_extremes`, the method a renderer ends up handing these to — its own
+        `set_extremes` applies each of `bad`/`under`/`over` only `if ... is not None`. So `None` cannot
+        **clear** a colour already stated: `with_extremes(over=None)` on a scale whose `over` is `'#ff0000'`
+        answers `{'over': '#ff0000'}` again, and a call with no arguments at all is accepted and changes
+        nothing. The scale itself is immutable, so the stated colours come back on a **new** scale: a domain
+        derived once and shared across an animation's frames must not pick up one frame's styling.
 
         Args:
-            missing: Colour for a value the scale cannot place, or `None` to keep :attr:`missing`.
-            over: Colour for a value above :attr:`vmax`, or `None` to keep :attr:`over`.
-            under: Colour for a value below :attr:`vmin`, or `None` to keep :attr:`under`.
+            missing: Colour for a value the scale cannot place, or `None` to keep the current `missing`.
+            over: Colour for a value above `vmax`, or `None` to keep the current `over`.
+            under: Colour for a value below `vmin`, or `None` to keep the current `under`.
 
         Returns:
-            A scale with the same domain, scheme, classes and categories, carrying the stated colours.
+            A new scale with the same domain, scheme, classes and categories, carrying the stated colours.
+            Never `self`, even when nothing was stated.
 
         Examples:
             - State all three on a derived scale, and read them back:
@@ -729,6 +734,17 @@ class Scale:
                 True
 
                 ```
+            - `None` keeps rather than clears, and a call that states nothing is still a new scale:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000")
+                >>> stated.with_extremes(over=None).extremes()
+                {'over': '#ff0000'}
+                >>> bare = stated.with_extremes()
+                >>> bare.extremes(), bare is stated
+                ({'over': '#ff0000'}, False)
+
+                ```
         """
         return replace(
             self,
@@ -745,15 +761,18 @@ class Scale:
         colormap the caller built themselves.
 
         Returns:
-            A mapping over `"missing"`, `"over"` and `"under"`, holding only the ones that are set —
-            empty when the scale states none.
+            A new plain `dict` over `"missing"`, `"over"` and `"under"`, holding only the ones that are set
+            — empty when the scale states none. The keys come in that order, whatever order they were
+            stated in, so `to_dict()` writes a stored figure the same way twice.
 
         Examples:
-            - A scale that states nothing reports nothing:
+            - A scale that states nothing reports nothing, so the mapping itself is the "any?" test:
                 ```python
                 >>> from digitalearth.base.spec import Scale
                 >>> Scale.from_limits(0.0, 10.0).extremes()
                 {}
+                >>> bool(Scale.from_limits(0.0, 10.0).extremes())
+                False
 
                 ```
             - A half-stated scale reports its half:
@@ -761,6 +780,16 @@ class Scale:
                 >>> from digitalearth.base.spec import Scale
                 >>> Scale.from_limits(0.0, 10.0).with_extremes(under="#0000ff").extremes()
                 {'under': '#0000ff'}
+
+                ```
+            - All three come back in the fixed `missing`, `over`, `under` order, not the stated one:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(
+                ...     under="#0000ff", over="#ff0000", missing="#cccccc"
+                ... )
+                >>> list(stated.extremes())
+                ['missing', 'over', 'under']
 
                 ```
         """
@@ -952,7 +981,9 @@ class Scale:
 
         Returns:
             The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the
-            breaks, which is what makes a frozen scale reproduce the colours it was drawn with.
+            breaks, which is what makes a frozen scale reproduce the colours it was drawn with. All three
+            extreme colours are read back — `missing`, and the `over`/`under` pair `to_dict()` now writes —
+            and a key absent from the dict comes back as `None`, which is what an unstated extreme is.
 
         Raises:
             TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming
@@ -960,7 +991,9 @@ class Scale:
             ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown
                 key, or a scale the constructor refuses — a
                 non-finite or degenerate domain, a single class edge, or a colour count that does not match the
-                categories.
+                categories. The known keys are listed in the message, so matplotlib's own spelling of the
+                nodata colour is answered rather than silently dropped: `Scale.from_dict({..., "bad": ...})`
+                raises *"Scale.from_dict got unknown keys ['bad']; known keys are [...]"*.
 
         Examples:
             - Stored class edges come back without re-classifying anything:
@@ -986,6 +1019,24 @@ class Scale:
                 Traceback (most recent call last):
                     ...
                 ValueError: Scale needs vmax > vmin; got vmin=1.0, vmax=1.0. ...
+
+                ```
+            - The extreme colours survive the round trip, and the ones the dict leaves out stay unstated:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stored = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000").to_dict()
+                >>> back = Scale.from_dict(stored)
+                >>> back.extremes(), back.under is None
+                ({'over': '#ff0000'}, True)
+
+                ```
+            - matplotlib's spelling of the nodata colour is not this one, and is refused by name:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_dict({"vmin": 0.0, "vmax": 1.0, "bad": "#ffffff"})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Scale.from_dict got unknown keys ['bad']; known keys are [...]
 
                 ```
         """

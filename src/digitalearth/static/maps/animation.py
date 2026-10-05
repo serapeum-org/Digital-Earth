@@ -161,10 +161,13 @@ _ANIMATION_KINDS = (
 
 #: Where the method that draws a ``kind`` differs from the kind itself, as ``{kind: (method, keywords)}``.
 #:
-#: A ``kind`` is the *renderer* a caller names, and order 27a moved the methods it dispatches to — so
-#: dispatching on the kind alone would reach a method that has been renamed, and fail from inside the
-#: never wrote. The old kinds stay in the vocabulary because they are what a caller may already have
-#: written; the keywords are what tells ``contour`` and ``contourf`` apart now that they are one method.
+#: A `kind` is the *renderer* a caller names, and order 27a moved the methods it dispatches to — so
+#: dispatching on the kind alone would reach a method that no longer exists. Measured: of the eight
+#: `_ANIMATION_KINDS`, `Map.imshow`, `Map.contour` and `Map.contourf` are all absent, and
+#: `getattr(self, kind)` for one of them raises `AttributeError` at the first frame — inside matplotlib's
+#: frame loop, where a caller has nothing to act on. The old kinds stay in the vocabulary because they
+#: are what a caller may already have written; the keywords are what tells `contour` and `contourf`
+#: apart now that `Map.contours` draws both.
 _KIND_METHODS = {
     "imshow": ("field", {}),
     "contour": ("contours", {"filled": False}),
@@ -319,20 +322,30 @@ class FrameUpdate:
     }
 
     #: Render options derived from *the frame being drawn*, which an artist kept across frames cannot
-    #: follow: ``scheme`` cuts its class edges from that frame's own values, and ``cyclic`` adds a column,
-    #: so the array stops matching the grid the artist was built on. Either sends the animation down the
+    #: follow: `scheme` cuts its class edges from that frame's own values, and `cyclic` adds a column, so
+    #: the array stops matching the grid the artist was built on. Either sends the animation down the
     #: redrawing path.
     #:
-    #: A stated ``center=`` (or ``color_scale="midpoint", midpoint=``) reads the same way and is
-    #: deliberately **not** listed: its diverging ramp is a colour decision, and
+    #: `cyclic`'s mechanism, measured: a `(60, 120)` band drawn with `cyclic=True` leaves a `(60, 121)`
+    #: image, while :meth:`apply` reads the next frame through
+    #: :func:`~digitalearth.static.maps.raster._field_source`, which does not close the seam and so hands
+    #: back `(60, 120)`. Pointed at that artist, :meth:`apply` answers `False` and logs
+    #: "animation: frame 1 holds a (60, 120) grid where the first frame held (60, 121), so the axes is
+    #: cleared and every layer redrawn from here on" — the degrade this entry gets ahead of.
+    #:
+    #: A stated `center=` (or `color_scale="midpoint", midpoint=`) reads the same way and is deliberately
+    #: **not** listed: its diverging ramp is a colour decision, and
     #: :meth:`AnimationMixin._freeze_animation_ramp` takes it once over the stack's shared scale before any
     #: frame is drawn — so there is nothing left for a frame to restate, and listing it here would buy
     #: agreement between the paths at the price of a ramp that flickers along the clip.
-    #: Measured over a 2-frame stack running -5..5 then 1..5, drawn with ``center=0.0``: the colormap per
-    #: frame is ``['viridis-diverging', 'viridis-diverging']`` under both ``update='redraw'`` and
-    #: ``update='auto'``. ``robust``, ``vmin``/``vmax``, ``cmap``, ``norm`` and the ``missing``/``over``/
-    #: ``under`` colours need no entry either: each is settled before the frames run, and the two paths
-    #: were measured to agree on all of them.
+    #: Measured over a 2-frame stack running -5..5 then 1..5, drawn with `center=0.0`: the colormap per
+    #: frame is `['viridis-diverging', 'viridis-diverging']` under both `update='redraw'` and
+    #: `update='auto'`. `robust`, `vmin`/`vmax`, `cmap`, `norm` and the `missing`/`over`/`under` colours
+    #: need no entry either: each is settled before the frames run, and the two paths were re-measured to
+    #: agree on all of them — per frame, the colormap name, the clim, the norm class and the bad/over/under
+    #: colours of the artist each path hands back are identical for `robust=True`, for an explicit
+    #: `vmin`/`vmax`, for `cmap="magma"`, for `norm=LogNorm(...)` and for
+    #: `missing="black", over="red", under="blue"`.
     PER_FRAME_OPTS = ("scheme", "cyclic")
 
     #: The accepted spellings of :meth:`AnimationMixin.animate`'s ``update``: take the cheapest path that is
@@ -362,17 +375,23 @@ class FrameUpdate:
             titles: The per-frame titles, or ``None``.
 
         Raises:
-            ValueError: when ``mode`` is not one of :attr:`MODES`; and, **on the in-place path only**, when
-                ``opts`` names a band that is not a whole number of 1 or more (from
-                :func:`_animated_band`, so the refusal is the same one a still makes). A blocked strategy
-                does not read the band at all — see :attr:`band` — so a bad one gets past this constructor
-                there. Measured: ``FrameUpdate(scene, frames, {"band": 0}, kind="imshow")`` refuses, while
-                the same call with ``kind="contour"`` or ``kind="rgb_composite"`` does not and leaves
-                ``band`` at its default. That is not a hole at the public level — every kind that reads a
-                band meets the same refusal from :meth:`AnimationMixin._prime_animation`, measured on
-                ``Map.animate(..., band=0)`` for ``kind="imshow"`` and ``kind="contourf"`` alike. A
-                composite is the one kind that refuses nothing, because it names ``bands``, not ``band``,
-                and so never reads the value.
+            ValueError: when `mode` is not one of :attr:`MODES`; and, **on the in-place path only**, when
+                `opts` names a band that is not a whole number of 1 or more (from :func:`_animated_band`,
+                so the refusal is the same one a still makes). A blocked strategy does not read the band
+                at all — see :attr:`band` — so a bad one gets past this constructor there. Measured:
+                `FrameUpdate(scene, frames, {"band": 0}, kind="imshow")` refuses, while the same call with
+                `kind="contour"` or `kind="rgb_composite"` does not and leaves `band` at its default.
+
+                Where a blocked strategy ends up refusing anyway is
+                :meth:`AnimationMixin._prime_animation` — but only when it has a reason to read the band:
+                the stack scan (a missing `vmin` or `vmax`), a `colorbar=True`, or a stated `center=`.
+                Give a blocked call both bounds and neither of the other two and `band=0` reaches the
+                frame loop. Measured on this stack, `Map.animate(frames, ...)`:
+                `kind="contourf", band=0` refuses; `kind="contourf", band=0, vmin=0.0, vmax=1.0` does
+                **not**; adding `colorbar=True` or `center=0.5` to that call refuses again; and
+                `kind="imshow", band=0, vmin=0.0, vmax=1.0, update="redraw"` does not either, because
+                `update="redraw"` is itself recorded as a blocker. A composite never reads the value at
+                all: it names `bands`, not `band`.
         """
         if mode not in self.MODES:
             raise ValueError(
@@ -459,8 +478,9 @@ class FrameUpdate:
                 :meth:`_stack_blocker` as the reason.
 
         Examples:
-            - The two answers the frame loop reads: the strategy itself, or ``None`` for "clear and
-              rebuild each time" — which is what an unblockable call gets under ``update="auto"``:
+            - The two answers the frame loop reads: `self` for a call nothing blocks, or `None` for
+              "clear and rebuild each time" — which is what `update="auto"` falls back to once something
+              does block it:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -814,6 +834,7 @@ class AnimationMixin(_MixinBase):
                 >>> written = m.save_animation(str(out))
                 >>> Path(written).exists()
                 True
+                >>> m.close()
 
                 ```
             - Render once and deliver both a video and a GIF derived from that file:
@@ -826,10 +847,12 @@ class AnimationMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> Map(crs=4326).save_animation("clip.gif")
+                >>> bare = Map(crs=4326)
+                >>> bare.save_animation("clip.gif")
                 Traceback (most recent call last):
                     ...
                 RuntimeError: no animation to save; call animate() or rotate() first
+                >>> bare.close()
 
                 ```
         """
@@ -1004,9 +1027,11 @@ class AnimationMixin(_MixinBase):
                 ...     for k in range(3)
                 ... ]
                 >>> opts = {"band": 2}
-                >>> Map(crs=4326)._resolve_animation_clim(frames, opts)
+                >>> scene = Map(crs=4326)
+                >>> scene._resolve_animation_clim(frames, opts)
                 >>> opts["vmin"], opts["vmax"]
                 (500.0, 700.0)
+                >>> scene.close()
 
                 ```
             - A bound the caller already set is kept, and only the missing one is measured:
@@ -1026,9 +1051,11 @@ class AnimationMixin(_MixinBase):
                 ...     for k in range(3)
                 ... ]
                 >>> opts = {"band": 2, "vmin": 0.0}
-                >>> Map(crs=4326)._resolve_animation_clim(frames, opts)
+                >>> scene = Map(crs=4326)
+                >>> scene._resolve_animation_clim(frames, opts)
                 >>> opts["vmin"], opts["vmax"]
                 (0.0, 700.0)
+                >>> scene.close()
 
                 ```
         """
@@ -1239,27 +1266,44 @@ class AnimationMixin(_MixinBase):
         cbar_label: Optional[str],
         views: Optional[Sequence[Any]] = None,
     ) -> None:
-        """Resolve the one shared colour treatment into ``opts``, and if asked add the static colorbar.
+        """Resolve the one shared colour treatment into `opts`, and if asked add the static colorbar.
 
-                The setup shared by :meth:`animate` and :meth:`rotate`, branching on what ``kind`` draws:
+        The setup shared by :meth:`animate` and :meth:`rotate`, branching on what `kind` draws:
 
-                - A **scalar field** gets a missing ``vmin``/``vmax`` filled once from the stack so colours don't
-                  flicker between frames, then optionally one persistent colorbar.
-                - A **composite** (:data:`_COMPOSITE_KINDS`) gets frozen per-channel stretch ``limits`` instead. A
-                  clim is meaningless for an RGB image — the composite runs its own per-channel stretch, so nothing
-                  in its render path reads ``vmin``/``vmax`` (they are still forwarded to the glyph with every other
-                  kwarg; they simply have no colour scale to move). There is likewise no single mappable to key a
-                  colorbar to, so an explicit ``colorbar=True`` is refused rather than answered with a useless bar.
+        - A **scalar field** gets a missing `vmin`/`vmax` filled once from the stack so colours do not
+          flicker between frames, then optionally one persistent colorbar.
+        - A **composite** (:data:`_COMPOSITE_KINDS`) gets frozen per-channel stretch `limits` instead. A
+          clim is meaningless for an RGB image — the composite runs its own per-channel stretch, so nothing
+          in its render path reads `vmin`/`vmax`. They are still forwarded to the glyph with every other
+          kwarg; they simply have no colour scale to move. Measured on a two-frame true-colour stack, the
+          first frame's image reports `get_clim() == (0.0, 0.0)` both with and without
+          `vmin=-100.0, vmax=100.0`. There is likewise no single mappable to key a colorbar to, so an
+          explicit `colorbar=True` is refused rather than answered with a useless bar.
 
-        Real limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the
-                scan. A ``limits`` of ``None`` counts as absent and is filled, matching how
-                :meth:`_resolve_animation_clim` treats a ``None`` ``vmin``/``vmax`` — an explicit ``limits=None`` is
-                what a wrapper forwarding an optional passes, and silently skipping the freeze there would put the
-                flicker back with nothing to notice.
+        Real limits already in `opts` are kept, so a caller can pass their own `limits=` to override the
+        scan. A `limits` of `None` counts as absent and is filled, matching how
+        :meth:`_resolve_animation_clim` treats a `None` `vmin`/`vmax` — an explicit `limits=None` is what a
+        wrapper forwarding an optional passes, and silently skipping the freeze there would put the
+        flicker back with nothing to notice. Measured over a stack running 1 then 5 in every channel:
+        `limits` absent and `limits=None` both resolve to `[(1.0, 5.0), (1.0, 5.0), (1.0, 5.0)]`, while
+        `limits=[(0.0, 1.0)] * 3` is left exactly as passed.
 
-                Raises:
-                    ValueError: when ``colorbar=True`` is combined with a composite ``kind``, or when a composite's
-                        ``bands`` does not hold exactly three indices.
+        Args:
+            datasets: The animation's frames — the stack the shared treatment is measured over.
+            opts: The render options every frame will be drawn with. The resolved `vmin`/`vmax` (scalar) or
+                `bands`/`limits` (composite) are written back into it, and so is the `cmap` a colorbar or a
+                stated `center=` resolves.
+            kind: The renderer the frames are drawn with, which decides the branch.
+            colorbar: Whether to add one static colorbar. Refused on a composite `kind`.
+            cbar_label: Caller-supplied colorbar label, or `None` to fall back to the variable's `units`.
+            views: The display CRSs :meth:`rotate` will sweep, or `None` for an :meth:`animate` whose
+                frames share the current CRS.
+
+        Raises:
+            ValueError: when `colorbar=True` is combined with a composite `kind`; when a composite's
+                `bands` does not hold exactly three indices (measured:
+                `rgb_composite() needs exactly three bands, got 2: (1, 2)`); and, whenever a band is read
+                at all here, when `opts` names one that is not a whole number of 1 or more.
         """
         if kind in _COMPOSITE_KINDS:
             if colorbar:
@@ -1492,11 +1536,13 @@ class AnimationMixin(_MixinBase):
             ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``kind`` is not a known renderer, ``update`` is not one of
-                :attr:`FrameUpdate.MODES`, ``stack`` is empty, ``titles`` is given with a mismatched length,
-                ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` /
-                ``update="in_place"`` is asked for where the frames cannot update one artist — including a
-                ``blit=True`` stack whose frames are not all drawn on one grid.
+            ValueError: if `kind` is not a known renderer, `update` is not one of
+                :attr:`FrameUpdate.MODES`, `stack` is empty, `titles` is given with a mismatched length,
+                `colorbar=True` is combined with a composite `kind`, a composite's `bands` does not hold
+                exactly three indices (measured: `rgb_composite() needs exactly three bands, got 2:
+                (1, 2)`), a band that is read is not a whole number of 1 or more, or `blit=True` /
+                `update="in_place"` is asked for where the frames cannot update one artist — including a
+                `blit=True` stack whose frames are not all drawn on one grid.
 
         Note:
             ``blit=True`` repaints only what the frame function returns, which is the data artist and
@@ -1519,6 +1565,7 @@ class AnimationMixin(_MixinBase):
                 >>> anim = m.animate(stack, fps=2)
                 >>> len(list(anim.new_frame_seq()))
                 2
+                >>> m.close()
 
                 ```
             - A true-colour stack animates as a composite, on one stretch frozen over the whole stack:
@@ -1535,6 +1582,7 @@ class AnimationMixin(_MixinBase):
                 >>> anim = m.animate(stack, kind="rgb_composite", fps=2)
                 >>> len(list(anim.new_frame_seq()))
                 2
+                >>> m.close()
 
                 ```
             - A composite has no scalar mappable, so asking for a colorbar is refused rather than
@@ -1548,11 +1596,12 @@ class AnimationMixin(_MixinBase):
                 >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
                 >>> stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), 1.0, "float32")] * 3),
                 ...                             geo_ref=geo)]
-                >>> Map(crs=4326).animate(stack, kind="rgb_composite",
-                ...                       colorbar=True)  # doctest: +ELLIPSIS
+                >>> refused = Map(crs=4326)
+                >>> refused.animate(stack, kind="rgb_composite", colorbar=True)  # doctest: +ELLIPSIS
                 Traceback (most recent call last):
                     ...
                 ValueError: colorbar=True is not supported for a 'rgb_composite' animation: ...
+                >>> refused.close()
 
                 ```
             - A field animation can be blitted, because its frames update one image:
@@ -1645,9 +1694,13 @@ class AnimationMixin(_MixinBase):
         Forces a globe map and redraws ``dataset`` on ``n_frames`` orthographic projections whose centre
         longitude steps a full 360 degrees from ``lon0``.
 
-        **Terminal for this Map's projection:** ``rotate`` sets ``globe=True`` and sweeps the display CRS
-        (:attr:`crs`) as the animation renders, leaving the Map centred on the **final** frame. Treat a
-        rotated Map as consumed by the animation — create a fresh ``Map`` if you need the original projection.
+        **Terminal for this Map's projection:** `rotate` sets `globe=True` immediately and sweeps the
+        display CRS (:attr:`crs`) *as the animation renders*, leaving the Map centred on the **final** frame.
+        The two do not land together, which matters if you read :attr:`crs` back: measured on a Map built
+        with `crs=4326`, `globe` is already `True` when `rotate` returns while `crs` is still `4326` — the
+        scan restores what it borrowed — and only after the frames have played does `crs` read
+        `+proj=ortho +lat_0=15.0 +lon_0=90.0 ...`, the last view of the sweep. Treat a rotated Map as
+        consumed by the animation — create a fresh `Map` if you need the original projection.
 
         The colour treatment is measured across the projections the sweep will actually use, not the one the
         Map was built with, so a rotation is not scaled to whichever hemisphere happened to face front when
@@ -1687,8 +1740,10 @@ class AnimationMixin(_MixinBase):
             ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``n_frames`` is less than 1, ``kind`` is not a known renderer,
-                ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` is asked for.
+            ValueError: if `n_frames` is less than 1, `kind` is not a known renderer, `colorbar=True` is
+                combined with a composite `kind`, a composite's `bands` does not hold exactly three indices
+                (measured: `rgb_composite() needs exactly three bands, got 2: (1, 2)`), or `blit=True` is
+                asked for.
 
         Examples:
             - Spin one field over four frames; the map is forced into globe mode:
@@ -1706,6 +1761,7 @@ class AnimationMixin(_MixinBase):
                 4
                 >>> m.globe
                 True
+                >>> m.close()
 
                 ```
             - A composite spins too, sharing animate's kind validation:
@@ -1718,9 +1774,11 @@ class AnimationMixin(_MixinBase):
                 >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
                 >>> rgb = Dataset.from_array(arr=np.stack([np.full((60, 120), 1.0, "float32")] * 3),
                 ...                          geo_ref=geo)
-                >>> anim = Map(crs=4326).rotate(rgb, kind="rgb_composite", n_frames=3)
+                >>> spun = Map(crs=4326)
+                >>> anim = spun.rotate(rgb, kind="rgb_composite", n_frames=3)
                 >>> len(list(anim.new_frame_seq()))
                 3
+                >>> spun.close()
 
                 ```
 

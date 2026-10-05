@@ -159,14 +159,16 @@ _MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
 #: is declared beside them. The object is drawn with as given, not copied or rebuilt.
 NORM_KEY = "norm"
 
-#: The colours a field gives the values its ramp cannot place: a nodata cell (``missing``), a value below
-#: ``vmin`` (``under``) and one above ``vmax`` (``over``). They are **this tier's own** keywords rather than
+#: The colours a field gives the values its ramp cannot place: a nodata cell (`missing`), a value below
+#: `vmin` (`under`) and one above `vmax` (`over`). They are **this tier's own** keywords rather than
 #: cleopatra's — the glyphs take their extremes on the colormap, not as keywords — so they are popped out of
-#: the drawing options by :class:`~digitalearth.static.maps.raster.FieldColors`, which owns the decision and
-#: folds it onto the colormap through
-#: :meth:`~digitalearth.base.spec.scale.Scale.with_extremes`. The spellings are matplotlib's own, minus
-#: ``bad``: a nodata cell is ``missing`` everywhere else in this package (``Scale.missing``,
-#: :data:`~digitalearth.base.symbology.MISSING_COLOR`), and that is the name the four tiers share.
+#: the drawing options by `digitalearth.static.maps.raster.FieldColors`, which owns the decision and spends
+#: them twice: `FieldColors.applied_to` folds them onto the drawn colormap through matplotlib's
+#: `Colormap.with_extremes(bad=..., over=..., under=...)`, and restates them on the `Scale` the layer
+#: publishes through `Scale.with_extremes`, so the picture and its description agree. The spellings are
+#: matplotlib's own, minus `bad`: a nodata cell is `missing` everywhere else in this package
+#: (`Scale.missing`, `digitalearth.base.symbology.MISSING_COLOR`, measured as `'#cccccc'`), and that is the
+#: name the four tiers share.
 EXTREME_KEYS: Tuple[str, ...] = ("missing", "over", "under")
 
 #: Percentile colour limits, xarray's spelling. cleopatra reads it from its own keyword list and clips the

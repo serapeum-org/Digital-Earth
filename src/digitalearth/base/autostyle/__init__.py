@@ -323,9 +323,36 @@ def _with_source_units(style: Dict[str, Any], source: Source) -> Dict[str, Any]:
         - A recognised variable keeps the library's canonical units instead, and an unlabelled source
           leaves the key out:
             ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import DimensionInfo, Source
+            >>> from digitalearth.base.autostyle import auto_style
+            >>> def src(variable, units):
+            ...     return Source(
+            ...         DimensionInfo(np.zeros((2, 2)), "z"),
+            ...         DimensionInfo(np.array([0.0, 1.0]), "x"),
+            ...         DimensionInfo(np.array([0.0, 1.0]), "y"),
+            ...         metadata={"variable": variable},
+            ...         units=units,
+            ...     )
             >>> auto_style(src("msl", "Pa"))["units"]
             'hPa'
             >>> "units" in auto_style(src("widget_flux", None))
+            False
+
+            ```
+        - A source declaring an empty string names no units either, so no key is added:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import DimensionInfo, Source
+            >>> from digitalearth.base.autostyle import auto_style
+            >>> blank = Source(
+            ...     DimensionInfo(np.zeros((2, 2)), "z"),
+            ...     DimensionInfo(np.array([0.0, 1.0]), "x"),
+            ...     DimensionInfo(np.array([0.0, 1.0]), "y"),
+            ...     metadata={"variable": "widget_flux"},
+            ...     units="",
+            ... )
+            >>> "units" in auto_style(blank)
             False
 
             ```
