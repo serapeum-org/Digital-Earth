@@ -3,8 +3,8 @@
 Two things carry the risk and are covered closely. The **extent box is drawn in the locator's own CRS**, and
 a box reprojected by its corners alone lands wrong — the EPSG:3031 case below is the proof: all four corners
 of a polar-stereographic square sit at the *same* latitude, so a corner-only box has zero height. And a
-borrowed axes is still closed by ``Scene.close`` (#371), so what closing the locator does to the caller's
-figure is measured rather than assumed.
+borrowed axes is **spared** by ``Scene.close`` (#371, resolved), so closing the locator leaves the caller's
+figure open — measured rather than assumed.
 """
 
 import re
@@ -772,21 +772,21 @@ class TestInset:
             f"a refused inset should leave no child axes; got {main.ax.child_axes}"
         )
 
-    def test_closing_the_locator_closes_the_parents_figure(self, framed):
-        """``Scene.close`` on a borrowed axes closes the whole figure (#371) — measured, not assumed.
+    def test_closing_the_locator_spares_the_parents_figure(self, framed):
+        """``Scene.close`` on the locator leaves the parent's figure open (#371, resolved) — measured.
 
         Args:
             framed: Factory for the framed main map.
 
         Test scenario:
-            The locator holds the parent's figure, and ``close`` calls ``pyplot.close`` on whatever
-            figure a scene holds. So closing the locator takes the map with it, which is why ``inset``
-            must not be context-managed and why the docstring says so.
+            The locator borrows the parent's figure, so `close` (which gates `pyplot.close` on
+            `_owns_fig`) spares it: closing the locator does not take the map with it. A caller may now
+            close a locator without destroying the figure it sits in.
         """
         main = framed(4326)
         main.inset().locator.close()
-        assert main.fig.number not in plt.get_fignums(), (
-            "closing the locator is expected to close the parent figure too (#371)"
+        assert main.fig.number in plt.get_fignums(), (
+            "closing the locator should spare the parent figure it borrows (#371)"
         )
 
     def test_the_locator_leaves_the_figure_open_until_closed(self, framed):

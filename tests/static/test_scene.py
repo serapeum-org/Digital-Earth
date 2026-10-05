@@ -674,13 +674,14 @@ class TestDeliveringOnePickToSeveralCallbacks:
 
 
 class TestWhichFigureCloseCloses:
-    """`close()` closes the scene's **own** figure, deterministically, borrowed or not (R2-L12).
+    """`close()` closes the scene's **own** figure and spares a borrowed one (#371, resolved).
 
     It used to reach `pyplot.close(None)` on a scene given only an `ax`, which closes whichever figure is
     *current* -- so a borrowed figure was spared or closed by luck, and issue #371 ("should a borrowed
-    figure be spared?") was written against that. `3d72bee7` made `self.fig` always a real figure, and
-    its message said #371 was "unchanged by this". The blast radius did change: the caller's figure is
-    now closed every time rather than sometimes, which is the behaviour these two pin.
+    figure be spared?") was written against that. `3d72bee7` made `self.fig` always a real figure, then
+    `9a0cbc42` gated `pyplot.close` on `_owns_fig` to resolve #371: a figure the scene created is closed,
+    one it borrowed (`ax=`/`fig=`, a grid panel, an inset locator) is left for its owner. These pin both
+    arms, and that the merely-current figure is never the one touched.
     """
 
     @pytest.fixture
@@ -697,20 +698,20 @@ class TestWhichFigureCloseCloses:
         plt.close(host)
         plt.close(current)
 
-    def test_the_scenes_own_figure_is_the_one_closed(self, borrowed_then_another):
-        """The borrowed figure goes, although another figure is the current one.
+    def test_a_borrowed_figure_is_spared(self, borrowed_then_another):
+        """A figure the scene did not create survives `close` (#371, resolved).
 
         Args:
             borrowed_then_another: The caller's figure and axes, plus a later current figure.
 
         Test scenario:
-            Read as "the host's number is gone from `get_fignums()`", which is what "closed" means to
-            pyplot. With the old `self.fig = fig` the scene held `None` and closed `current` instead.
+            `close` gates `pyplot.close` on `_owns_fig`, so a scene built on a borrowed axes leaves the
+            caller's figure open — and does not reach for the merely-current one either.
         """
         host, ax, _current = borrowed_then_another
         Scene(ax=ax).close()
-        assert host.number not in plt.get_fignums(), (
-            f"the borrowed figure should be the one closed; open: {plt.get_fignums()}"
+        assert host.number in plt.get_fignums(), (
+            f"the borrowed figure should be spared, not closed; open: {plt.get_fignums()}"
         )
 
     def test_the_merely_current_figure_is_left_alone(self, borrowed_then_another):
