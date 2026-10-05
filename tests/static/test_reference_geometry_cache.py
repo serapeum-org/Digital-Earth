@@ -26,6 +26,8 @@ the parent: ``hasattr(cleopatra.basemap.reference.natural_earth, "cache_info")``
 ``lru_cache`` in the module is that one.
 """
 
+import contextlib
+
 import numpy as np
 import pytest
 from cleopatra.basemap.reference import natural_earth
@@ -399,3 +401,88 @@ class TestTheFingerprintOfAGeometryWithNothingInIt:
         assert fingerprint == ((1, 0), (1.0, 2.0), (1.0, 2.0)), (
             f"one coordinate should fingerprint to its counts and ends; got {fingerprint!r}"
         )
+
+
+class TestWhatTheCacheHandsOutCannotReachBackIntoIt:
+    """The entries are process-wide, so a handed-out reference is a handle on every later map's draw.
+
+    One ``rings.clear()`` by one caller used to make ``Map(...).land()`` draw nothing for the rest of the
+    process: ``_fill_globe_polygons`` sees an empty sequence, answers ``None``, and the layer is dropped
+    from the figure altogether — no exception and no warning. Measured on the parent of this fix:
+
+    ```
+    Map A land paths: 62
+    handed-out type: list  len: 62
+    *** .clear() SUCCEEDED on the handed-out container
+    Map B layer_ids: []
+    Map B artist('fill') -> KeyError "no layer 'fill' on this figure; its layers are []"
+    ```
+
+    So the container is held and handed out as a tuple. The three tests below are the three ways a
+    sequence is mutated; the fourth is the consequence that made it Medium rather than Nit.
+    """
+
+    def test_the_rings_it_hands_out_cannot_be_emptied(self, globe):
+        """``clear()`` is the escape route that silenced every later map.
+
+        Args:
+            globe: The map being drawn on.
+        """
+        rings = decoration.PROJECTED_REFERENCE.projected(
+            globe, "land", RESOLUTION, polygon=True
+        )
+        with pytest.raises(AttributeError, match="clear"):
+            rings.clear()
+
+    def test_the_rings_it_hands_out_cannot_be_appended_to(self, globe):
+        """An ``append`` used to inject a forged ring into every later map's fill (62 paths became 63).
+
+        Args:
+            globe: The map being drawn on.
+        """
+        rings = decoration.PROJECTED_REFERENCE.projected(
+            globe, "land", RESOLUTION, polygon=True
+        )
+        forged = np.zeros((4, 2))
+        with pytest.raises(AttributeError, match="append"):
+            rings.append(forged)
+
+    def test_a_part_of_what_it_hands_out_cannot_be_replaced(self, globe):
+        """Replacing a part reaches past the arrays' read-only flag, which guards only their contents.
+
+        Args:
+            globe: The map being drawn on.
+
+        Test scenario:
+            ``kept[0] = ...`` never touched the frozen array — it swapped a writable one into the entry,
+            and so was the one mutation the write flag could not see.
+        """
+        kept = decoration.PROJECTED_REFERENCE.projected(globe, "coastline", RESOLUTION)
+        forged = np.zeros((2, 2))
+        with pytest.raises(TypeError, match="does not support item assignment"):
+            kept[0] = forged
+
+    def test_the_next_map_still_fills_land_after_a_caller_tried_to_empty_the_entry(
+        self,
+    ):
+        """The consequence, end to end: the refusal is what keeps the next map's land on the figure.
+
+        Test scenario:
+            Two maps in one projection, the second drawing from the cache. Between them a caller does
+            what the old `list` allowed; the attempt is suppressed rather than asserted on, because the
+            claim here is about what the *second* map draws, which is the part that was silently empty.
+            ``Map.artist`` raises ``KeyError`` for a layer that drew nothing, so a dropped layer fails
+            this test by raising rather than by reading zero.
+        """
+        first = Map(crs=GLOBE, globe=True)
+        rings = decoration.PROJECTED_REFERENCE.projected(
+            first, "land", RESOLUTION, polygon=True
+        )
+        first.close()
+        with contextlib.suppress(AttributeError):
+            rings.clear()
+        second = Map(crs=GLOBE, globe=True)
+        second.land(resolution=RESOLUTION, name="fill")
+        paths = len(second.artist("fill").get_paths())
+        second.close()
+        assert paths > 0, "an emptied cache entry left the next map's land unfilled"

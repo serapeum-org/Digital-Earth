@@ -1014,10 +1014,20 @@ class _ProjectedReference:
     process-wide cache turning into cross-test contamination. It covers a swapped Natural-Earth data
     directory for the same reason.
 
-    **What it hands out is read-only.** The arrays are shared by every layer and every map drawing that
-    geography, so an artist that wrote through one would corrupt what the next draw gets; the write flag
-    turns that into an error at the write rather than a wrong picture three draws later. matplotlib reads
-    vertices and does not write them, which the globe fill and line paths in this module are the proof of.
+    **What it hands out is the entry itself, so the entry is immutable.** The parts are shared by every
+    layer and every map drawing that geography, so a caller holding them holds a handle on every later
+    draw in the process. One ``rings.clear()`` used to make ``Map(...).land()`` draw nothing for the rest
+    of the process — ``_fill_globe_polygons`` sees an empty sequence, answers ``None``, and the layer is
+    dropped from the figure with no exception and no warning — and one ``append`` injected a forged ring
+    into every later fill. So the container is a ``tuple``: ``clear``/``append`` are an ``AttributeError``
+    and ``kept[0] = …`` a ``TypeError``, at the attempt rather than three draws later.
+
+    The arrays inside it carry ``writeable=False``, so an artist that wrote through one gets an error at
+    the write rather than a wrong picture three draws later. matplotlib reads vertices and does not write
+    them, which the globe fill and line paths in this module are the proof of.
+
+    What a caller can still reach deliberately is :meth:`clear` and :attr:`keep` on the cache object, both
+    of which only ever cost a recomputation — never a wrong picture — which is why they stay public.
 
     Attributes:
         keep: How many entries it holds before the least recently used is dropped. A 10m layer is megabytes
@@ -1025,8 +1035,8 @@ class _ProjectedReference:
             Natural-Earth layers in one projection with room for a second.
 
     Examples:
-        - A second ask for the same geography in the same CRS hands back the **same** list, and what it
-          hands back cannot be written through:
+        - A second ask for the same geography in the same CRS hands back the **same** tuple, and what it
+          hands back cannot be mutated or written through:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -1042,6 +1052,10 @@ class _ProjectedReference:
             ... except ValueError as error:
             ...     print(error)
             assignment destination is read-only
+            >>> first.clear()
+            Traceback (most recent call last):
+            ...
+            AttributeError: 'tuple' object has no attribute 'clear'
             >>> m.close()
 
             ```
@@ -1080,7 +1094,9 @@ class _ProjectedReference:
             keep: How many projected layers to hold at once.
         """
         self.keep = keep
-        self._held: "OrderedDict[Tuple[Any, ...], List[np.ndarray]]" = OrderedDict()
+        self._held: "OrderedDict[Tuple[Any, ...], Tuple[np.ndarray, ...]]" = (
+            OrderedDict()
+        )
 
     def __len__(self) -> int:
         """Return how many projected layers are held.
@@ -1100,7 +1116,7 @@ class _ProjectedReference:
 
     def projected(
         self, scene: Any, name: str, resolution: str, polygon: bool = False
-    ) -> List[np.ndarray]:
+    ) -> Tuple[np.ndarray, ...]:
         """Return a Natural-Earth layer projected into this map's display CRS.
 
         Args:
@@ -1112,9 +1128,11 @@ class _ProjectedReference:
                 they are different geometry.
 
         Returns:
-            The projected parts, as read-only arrays: closed fill rings for ``polygon=True``, finite
-            polyline segments otherwise. The **same list object** on a hit, which is what a test asserting
-            identity reads to tell a hit from a recomputation.
+            The projected parts, as read-only arrays in an immutable tuple: closed fill rings for
+            ``polygon=True``, finite polyline segments otherwise. The **same tuple object** on a hit,
+            which is what a test asserting identity reads to tell a hit from a recomputation. A tuple
+            rather than a list because this *is* the entry the cache holds, and every later map in the
+            process draws from it — see the class docstring.
         """
         parts = natural_earth(name, resolution)
         key = (
@@ -1130,7 +1148,7 @@ class _ProjectedReference:
             return held
         # Annotated because both projectors are reached through an untyped `scene`, so what they answer is
         # `Any` and the declared return would be inferred away.
-        built: List[np.ndarray] = (
+        built: Tuple[np.ndarray, ...] = tuple(
             scene._project_polygon_features(parts)
             if polygon
             else scene._project_line_features(parts)
@@ -1184,10 +1202,12 @@ class _ProjectedReference:
 #: `keep` entries, which is 8 here, and `PROJECTED_REFERENCE.clear()` is how a caller reclaims the memory
 #: or a test starts cold.
 #:
-#: It refuses nothing of its own. A write through a handed-out array is numpy's
-#: `ValueError: assignment destination is read-only`, and an unknown layer or resolution is cleopatra's —
-#: `ValueError: Unknown layer 'nosuchlayer'. Choose from [...]` — raised by the `natural_earth` read this
-#: makes on every call.
+#: Its only refusals are the immutability of what it hands out, which is the entry itself: `clear()` or
+#: `append()` on it is `AttributeError: 'tuple' object has no attribute ...`, replacing a part is
+#: `TypeError: 'tuple' object does not support item assignment`, and a write through one of its arrays is
+#: numpy's `ValueError: assignment destination is read-only`. An unknown layer or resolution is
+#: cleopatra's — `ValueError: Unknown layer 'nosuchlayer'. Choose from [...]` — raised by the
+#: `natural_earth` read this makes on every call.
 PROJECTED_REFERENCE = _ProjectedReference()
 
 
@@ -2652,7 +2672,7 @@ class DecorationMixin(_MixinBase):
 
     def _fill_globe_polygons(
         self,
-        rings: List[np.ndarray],
+        rings: Sequence[np.ndarray],
         *,
         zorder: float,
         **style: Any,
