@@ -589,9 +589,10 @@ class Scene(WatermarkMixin):
         # so a scene nobody picks on puts no handler on the canvas at all.
         self._pick_handlers: List[Callable[[Pick], Any]] = []
         self._pick_cid: Optional[int] = None
-        # The figure's heading, as the description carries it (see `set_title`). Held on the scene rather
-        # than read back off `ax.title`, because matplotlib keeps three titles on an axes — centre, left and
-        # right — and a figure has one heading whichever of them it was drawn at.
+        # The panel's title, as the description carries it (see `set_title`); the figure's own heading is
+        # its `suptitle`, read off the figure by `figure_spec`. Held on the scene rather than read back off
+        # `ax.title`, because matplotlib keeps three titles on an axes — centre, left and right — and a
+        # panel has one title whichever of them it was drawn at.
         self._title: Optional[str] = None
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
@@ -2410,18 +2411,20 @@ class Scene(WatermarkMixin):
 
     @property
     def title(self) -> Optional[str]:
-        """The figure's heading, as its description carries it.
+        """The panel's title, as the figure's description carries it.
 
         Returns:
             What :meth:`set_title` last recorded — the text it drew, normalised by :meth:`_recorded_title` —
-            or ``None`` for a scene nobody has titled and one whose title was cleared.
+            or ``None`` for a scene nobody has titled and one whose title was cleared. It is
+            ``FigureSpec.panels[0].title``; the **figure's** own heading is its ``suptitle``, described as
+            ``FigureSpec.title``, and :attr:`figure_spec` is where that one is read.
 
             It is **one** value, where the axes has three: matplotlib keeps a centre, a left and a right
-            title, so ``ax.get_title(loc=...)`` answers per position while the figure has one heading
+            title, so ``ax.get_title(loc=...)`` answers per position while the panel has one title
             whichever position it was drawn at. A caller who wants the drawn text back should ask the axes.
 
         Examples:
-            - A titled scene reads its heading back, and clearing it reads back as none:
+            - A titled scene reads its panel title back, and clearing it reads back as none:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -2438,7 +2441,7 @@ class Scene(WatermarkMixin):
         return self._title
 
     def set_title(self, title: str, **kwargs: Any) -> Self:
-        """Set the figure's heading: draw it above the axes, and record it on the figure.
+        """Set the panel's title: draw it above the axes, and record it on the figure's description.
 
         Figure-level decoration rather than a layer — it draws straight onto :attr:`ax`, so removing every
         layer does not remove it — but **described** all the same, on this tier's one

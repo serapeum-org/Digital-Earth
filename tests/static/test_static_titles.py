@@ -524,3 +524,51 @@ class TestABlankTitleIsNotPainted:
                 )
             finally:
                 second.close()
+
+
+class TestTheTitleVocabularyIsOneWord:
+    """What `set_title` sets is the **panel's** title, and its own summary line said otherwise (R2-L6).
+
+    The distinction is the one R1-M4 and R2-M1 exist to make: this tier describes two headings, the
+    panel's title (`PanelSpec.title`, painted on the axes) and the figure's heading
+    (`FigureSpec.title`, its ``suptitle``). `842a2d95` rewrote `set_title`'s body to say so and left the
+    summary reading "Set the figure's heading" -- and the summary is the line tooling and mkdocstrings
+    surface first. These two guards keep the two names apart in the text a reader meets before the body.
+    """
+
+    @staticmethod
+    def _summary(member):
+        """Return the first line of a member's docstring.
+
+        Args:
+            member: The function or property to read.
+
+        Returns:
+            The summary line, stripped.
+        """
+        doc = member.__doc__ or ""
+        return doc.strip().splitlines()[0].strip()
+
+    def test_set_titles_summary_names_the_panel(self):
+        """`Scene.set_title`'s summary line does not call what it sets the figure's heading.
+
+        Test scenario:
+            Asserted on the absence of the figure's name rather than on the whole sentence, so rewording
+            the line stays free while the one claim it must not make is pinned.
+        """
+        summary = self._summary(Scene.set_title)
+        assert "figure's heading" not in summary, (
+            f"set_title sets the panel's title, not the figure's heading; got {summary!r}"
+        )
+
+    def test_the_title_properties_summary_names_the_panel(self):
+        """`Scene.title` reads back what `set_title` recorded, so it is the panel's title too.
+
+        Test scenario:
+            The same sentence about the same value, one line above the method; correcting one and leaving
+            the other is how the summary survived the body's rewrite in the first place.
+        """
+        summary = self._summary(Scene.title)
+        assert "figure's heading" not in summary, (
+            f"Scene.title reads the panel's title, not the figure's heading; got {summary!r}"
+        )
