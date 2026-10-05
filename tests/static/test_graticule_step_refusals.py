@@ -361,8 +361,11 @@ class TestATinyPositiveStepIsRefusedBeforeItCanHang:
         _, raised = _raises_within(
             lambda: Map(crs=4326).graticule(**{keyword: TINY_STEP}), timeout=5.0
         )
-        assert isinstance(raised, ValueError) and keyword in str(raised), (
-            f"graticule({keyword}={TINY_STEP!r}) should raise a ValueError naming {keyword!r}; got {raised!r}"
+        assert isinstance(raised, ValueError), (
+            f"graticule({keyword}={TINY_STEP!r}) should raise a ValueError, not hang; got {raised!r}"
+        )
+        assert keyword in str(raised), (
+            f"the refusal of graticule({keyword}={TINY_STEP!r}) should name {keyword!r}; got {raised!r}"
         )
 
 
