@@ -531,3 +531,92 @@ class TestUnregisteringALayerThatRegisteredNoMappable:
             )
         finally:
             scene.close()
+
+
+class _EqualToEveryHandler:
+    """A callable that reports equal to every other instance of itself.
+
+    The case that tells equality matching apart from identity matching: two instances are distinct objects
+    that compare equal, so `off_pick` answers differently depending on which it uses.
+    """
+
+    def __eq__(self, other):
+        """Report equal to any other instance of this class.
+
+        Args:
+            other: The object compared against.
+
+        Returns:
+            True for another `_EqualToEveryHandler`, `NotImplemented` for anything else.
+        """
+        return isinstance(other, _EqualToEveryHandler) or NotImplemented
+
+    #: Unhashable, as a class defining `__eq__` without `__hash__` is anyway; written down so the list
+    #: lookup under test cannot silently become a set lookup.
+    __hash__ = None
+
+    def __call__(self, pick):
+        """Accept a pick and do nothing with it.
+
+        Args:
+            pick: The `Pick` the scene would deliver.
+        """
+
+
+class TestHowOffPickMatchesACallback:
+    """`off_pick` matches by equality, and says so (L3)."""
+
+    def test_the_docstring_states_the_rule_it_follows(self):
+        """The method documents matching by equality, which is what it does.
+
+        Test scenario:
+            It promised "the very object that was registered" — identity — while matching with `in` and
+            `list.remove`, which are `==`. A caller reading that promise would keep a reference they do
+            not need, and would expect a refusal they will not get.
+        """
+        assert "equality" in Scene.off_pick.__doc__, (
+            "off_pick's docstring should state how it matches a callback"
+        )
+
+    def test_a_fresh_bound_method_reference_takes_the_registered_one_off(self):
+        """`off_pick(picked.append)` works although the bound method is a new object each time.
+
+        Test scenario:
+            `list.append` builds a new bound method on every attribute access — equal to the registered
+            one, never the same object — so this is the idiom identity matching would break, and it is
+            the one `on_pick`/`off_pick`'s own examples use.
+        """
+        picked = []
+        with Map(globe=False) as canvas:
+            canvas.on_pick(picked.append).off_pick(picked.append)
+            assert canvas._pick_handlers == [], (
+                f"a fresh bound-method reference should match; got {canvas._pick_handlers}"
+            )
+
+    def test_an_equal_but_distinct_callable_takes_the_registered_one_off(self):
+        """A callable that compares equal to the registered one is accepted in its place.
+
+        Test scenario:
+            The consequence of the rule, pinned so it is a decision rather than an accident: the match is
+            the callable's own `__eq__`, so a type that reports equal to its siblings cannot distinguish
+            them here — and a handler that wants to be taken off by identity alone simply leaves `__eq__`
+            as `object` defines it.
+        """
+        with Map(globe=False) as canvas:
+            canvas.on_pick(_EqualToEveryHandler()).off_pick(_EqualToEveryHandler())
+            assert canvas._pick_handlers == [], (
+                f"an equal callable should match the registered one; got {canvas._pick_handlers}"
+            )
+
+    def test_a_callable_that_compares_equal_to_nothing_is_refused(self):
+        """A callable equal to no registered one is still refused by name.
+
+        Test scenario:
+            Equality matching must not turn the refusal into a no-op: an unregistered callback is the case
+            `off_pick` raises for, and the default `__eq__` is identity, so an ordinary function that was
+            never registered matches nothing.
+        """
+        with Map(globe=False) as canvas:
+            canvas.on_pick(_EqualToEveryHandler())
+            with pytest.raises(ValueError, match="is not registered on this figure"):
+                canvas.off_pick(print)

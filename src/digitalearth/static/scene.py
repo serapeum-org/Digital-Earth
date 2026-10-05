@@ -2369,8 +2369,16 @@ class Scene(WatermarkMixin):
         """Stop delivering picks to one callback, or to all of them.
 
         Args:
-            callback: The callback to take off — the very object that was registered. ``None`` (the
-                default) takes every one off, which is what a caller tearing a session down wants.
+            callback: The callback to take off, matched by **equality** — ``==``, the way ``list.remove``
+                and ``atexit.unregister`` match what they were given, not by identity. That is what makes
+                the ordinary idiom work: ``list.append`` builds a *new* bound method on every attribute
+                access, so ``m.on_pick(picked.append).off_pick(picked.append)`` hands over two distinct
+                objects that compare equal, and identity matching would refuse the second (measured:
+                ``ValueError: <built-in method append of list object …> is not registered``). The
+                consequence is the other way round too — a callable whose own ``__eq__`` reports equal to
+                its siblings is matched by that ``__eq__``, so a handler that wants to be taken off by
+                identity alone leaves ``__eq__`` as ``object`` defines it. ``None`` (the default) takes
+                every one off, which is what a caller tearing a session down wants.
 
         Returns:
             This scene (chainable).
@@ -2429,6 +2437,8 @@ class Scene(WatermarkMixin):
         """
         if callback is None:
             self._pick_handlers = []
+        # `in` and `remove` are both `==`, which is the documented rule rather than an accident of the
+        # spelling: see the `callback` argument above for why identity would refuse `picked.append`.
         elif callback in self._pick_handlers:
             self._pick_handlers.remove(callback)
         else:
