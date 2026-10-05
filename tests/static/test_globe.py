@@ -656,12 +656,13 @@ class TestOffLimbEveryLayerKind:
             paths.append(str(path))
         collection = DatasetCollection.from_files(paths)
         hidden.spaghetti(collection)
-        artists = [hidden.artist(layer_id) for layer_id in hidden.layer_ids]
-        assert artists == [], (
-            f"no member is on the view, so nothing is drawn: {artists}"
+        drawn_on_axes = list(hidden.ax.collections)
+        assert drawn_on_axes == [], (
+            f"nothing is on the view, so the axes should be empty: {drawn_on_axes}"
         )
-        assert len(artists) == len(hidden.layers), (
-            f"artists ({len(artists)}) must match registered layers ({len(hidden.layers)})"
+        assert len(drawn_on_axes) == len(hidden.layers), (
+            f"artists on the axes ({len(drawn_on_axes)}) must match registered layers "
+            f"({len(hidden.layers)})"
         )
 
     @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
@@ -850,8 +851,16 @@ class TestOffLimbEveryLayerKind:
             for layer_id in visible.layer_ids
             if layer_id.startswith("contours")
         ]
-        artists = [visible.artist(layer_id) for layer_id in members]
-        assert len(artists) == 2, f"both visible members should draw, got {artists}"
+        assert len(members) == 2, f"both visible members should register, got {members}"
+        drawn_on_axes = list(visible.ax.collections)
+        assert len(drawn_on_axes) == len(members), (
+            f"artists on the axes ({len(drawn_on_axes)}) must match the registered "
+            f"members ({len(members)})"
+        )
+        missing = [layer_id for layer_id in members if visible.artist(layer_id) is None]
+        assert missing == [], (
+            f"every registered member must have a drawn artist, these have none: {missing}"
+        )
 
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
