@@ -511,6 +511,145 @@ class TestSelfReturningBuilders:
         )
 
 
+#: How a layer reaches the figure: the funnels a builder calls on `self` to register one. Any
+#: `self._describe*` call counts as well — `graticule` goes through `self._describe_graticule`, which is its
+#: own funnel because a second call *replaces* the layer rather than adding one.
+REGISTRARS = {"_draw", "add_layer", "add_underlay"}
+
+
+def _self_calls(function) -> set:
+    """Return the `self.<name>(...)` methods called in a function's own scope.
+
+    Args:
+        function: The `FunctionDef` to read.
+
+    Returns:
+        The attribute names called on `self`, skipping nested functions, lambdas and classes — a call
+        inside a closure belongs to the closure, not to the method.
+    """
+    names, stack = set(), list(function.body)
+    while stack:
+        node = stack.pop()
+        nested = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        if isinstance(node, nested):
+            continue
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "self"
+        ):
+            names.add(node.func.attr)
+        stack.extend(ast.iter_child_nodes(node))
+    return names
+
+
+@functools.lru_cache(maxsize=None)
+def _public_none_methods() -> tuple:
+    """Return `(module, ClassName, FunctionDef)` for every public mixin method annotated `-> None`.
+
+    Public only: the contract is about the API a caller chains. `VectorMixin._draw_contour_features` is a
+    private helper that delegates to a `-> Self` builder and correctly answers nothing, and it is the one
+    thing a rule that read private methods too would flag.
+    """
+    found = []
+    for backend in BACKENDS:
+        for path in sorted(_module_path(backend).glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for klass in tree.body:
+                if not (
+                    isinstance(klass, ast.ClassDef) and klass.name.endswith("Mixin")
+                ):
+                    continue
+                for node in klass.body:
+                    is_function = isinstance(
+                        node, (ast.FunctionDef, ast.AsyncFunctionDef)
+                    )
+                    if not is_function or node.name.startswith("_"):
+                        continue
+                    if node.returns is None or ast.unparse(node.returns) != "None":
+                        continue
+                    found.append((f"{backend}/{path.name}", klass.name, node))
+    return tuple(found)
+
+
+class TestNoBuilderQuietlyReturnsNone:
+    """Tests that a method which *builds* is annotated `-> Self` rather than `-> None`.
+
+    The guard above checks that a method annotated `-> Self` really returns `self`. A builder annotated
+    `-> None` satisfies it by having nothing to check, which is how `static.maps.projection.graticule`,
+    `set_domain` and `set_global` sat beside a `set_bounds` that returned `Self` for a whole release:
+    `graticule` registered `graticule-1` and drew, and handed back nothing. These two rules read the
+    *other* direction — a method that does a builder's work must not declare a builder's opposite.
+
+    Executed against the commit before they were converted, the rules flag exactly those three and
+    nothing else across the four backends:
+
+    ```
+    projection.py:1257 ProjectionMixin.set_domain -> None delegates to ['set_bounds']
+    projection.py:1303 ProjectionMixin.graticule  -> None registers via ['_describe_graticule']
+    projection.py:1627 ProjectionMixin.set_global -> None delegates to ['set_bounds']
+    ```
+
+    What they deliberately do not flag: `render` and `show` (terminal actions that call neither a funnel
+    nor a `-> Self` method) and `save` (annotated `-> Path`, because the path it wrote is the point).
+    """
+
+    def test_the_scan_sees_the_methods_it_polices(self):
+        """The scan finds the public `-> None` mixin methods, so the two rules are not vacuous.
+
+        Test scenario:
+            Both assertions below iterate this scan and pass over an empty one. `render` is the method
+            that must always be in it — a terminal action, public, annotated `-> None` — so finding it is
+            the proof that the scan reached the mixins at all.
+        """
+        seen = {f"{klass}.{node.name}" for _, klass, node in _public_none_methods()}
+        assert "ProjectionMixin.render" in seen, (
+            f"the scan should see the tier's terminal actions; it saw {sorted(seen)}"
+        )
+
+    def test_no_public_method_registers_a_layer_and_returns_none(self):
+        """A method that puts a layer in the figure hands the map back, so the call chains.
+
+        Test scenario:
+            Registering is what makes a method a builder: the layer it describes is addressable by id,
+            carries a `visible` flag and is redrawn from a stored figure, and every other such method on
+            every tier answers `Self`. One that answers `None` breaks the chain at exactly the point a
+            caller cannot see coming.
+        """
+        offenders = [
+            f"{module}:{klass}.{node.name} registers via {sorted(registers)}"
+            for module, klass, node in _public_none_methods()
+            for registers in [
+                {name for name in _self_calls(node) if name.startswith("_describe")}
+                | (_self_calls(node) & REGISTRARS)
+            ]
+            if registers
+        ]
+        assert offenders == [], (
+            f"these register a layer and must be annotated `-> Self`, returning self: {offenders}"
+        )
+
+    def test_no_public_method_delegates_to_a_builder_and_returns_none(self):
+        """A method whose work is another builder's answers what that builder answers.
+
+        Test scenario:
+            `set_domain` and `set_global` are `set_bounds` with the argument worked out — one resolves a
+            named region, the other reads the projection's own domain — so throwing its `Self` away was
+            the whole defect. A terminal action is not caught by this: `render` calls `_apply_frame`,
+            which is not a builder, and `show` calls `super().show()`, which is not a call on `self`.
+        """
+        chainable = {node.name for _, node in _self_builders()}
+        offenders = [
+            f"{module}:{klass}.{node.name} delegates to {sorted(_self_calls(node) & chainable)}"
+            for module, klass, node in _public_none_methods()
+            if _self_calls(node) & chainable
+        ]
+        assert offenders == [], (
+            f"these delegate to a `-> Self` builder and must answer what it answers: {offenders}"
+        )
+
+
 class TestBuilderChaining:
     """Tests that the engine-free registration builders chain on the composed class."""
 
