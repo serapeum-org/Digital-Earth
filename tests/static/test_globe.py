@@ -720,8 +720,12 @@ class TestOffLimbEveryLayerKind:
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     def test_a_broken_raster_on_an_unclipped_crs_warns(self, caplog):
@@ -790,8 +794,12 @@ class TestOffLimbEveryLayerKind:
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional_rgb) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional_rgb)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
@@ -800,8 +808,12 @@ class TestOffLimbEveryLayerKind:
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional, regional) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional, regional)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
@@ -810,8 +822,12 @@ class TestOffLimbEveryLayerKind:
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     def test_stock_img_and_spaghetti_still_draw_when_visible(self, regional, tmp_path):
