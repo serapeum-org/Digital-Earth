@@ -227,7 +227,6 @@ class TestTheDescription:
         """
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
         canvas.hexbin(wells)
-        assert canvas.layer_ids == []
         assert canvas.layer_ids == [], canvas.layer_ids
 
 
