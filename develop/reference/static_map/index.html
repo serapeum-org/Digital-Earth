@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -6259,7 +6259,15 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <span class="normal"><a href="#__codelineno-0-365">365</a></span>
 <span class="normal"><a href="#__codelineno-0-366">366</a></span>
 <span class="normal"><a href="#__codelineno-0-367">367</a></span>
-<span class="normal"><a href="#__codelineno-0-368">368</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="k">class</span><span class="w"> </span><span class="nc">Map</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#__codelineno-0-373">373</a></span>
+<span class="normal"><a href="#__codelineno-0-374">374</a></span>
+<span class="normal"><a href="#__codelineno-0-375">375</a></span>
+<span class="normal"><a href="#__codelineno-0-376">376</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="k">class</span><span class="w"> </span><span class="nc">Map</span><span class="p">(</span>
 <a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">RasterMixin</span><span class="p">,</span>
 <a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">VectorMixin</span><span class="p">,</span>
 <a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="n">DecorationMixin</span><span class="p">,</span>
@@ -6378,221 +6386,229 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a><span class="sd">        `set_title` paints the axes and that is panel-local.</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="sd">        **A title is written only when the incoming figure carries one**, so drawing an untitled figure does</span>
-<a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">        not blank a heading the map already had. The layers are reconciled, not merely added — that part</span>
-<a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">        really does bring the map from whatever it showed before.</span>
-<a id="__codelineno-0-156" name="__codelineno-0-156"></a>
-<a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">        One asymmetry is worth knowing, because the two titles live in different places. The figure&#39;s</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">        heading is on the figure and always survives. The panel&#39;s title is painted on the **axes**, and a</span>
-<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">        cleopatra glyph clears the axes on a scene&#39;s *first* render — so on a map that has not drawn a glyph</span>
-<a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">        yet, an axes title set beforehand is wiped by the incoming figure&#39;s first layer while the scene goes</span>
-<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">        on describing it. Measured, drawing an untitled figure into a map titled</span>
-<a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">        `(&#39;stale heading&#39;, &#39;stale panel&#39;)`: a map that had **already** drawn a layer reports</span>
-<a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">        `(&#39;stale heading&#39;, &#39;stale panel&#39;)` from `(fig.get_suptitle(), ax.get_title())`, while a map that had</span>
-<a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">        drawn nothing reports `(&#39;stale heading&#39;, &#39;&#39;)` — and `figure_spec` still says `&#39;stale panel&#39;` for</span>
-<a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">        both, because the panel&#39;s title is held on the scene rather than read back off the axes.</span>
-<a id="__codelineno-0-166" name="__codelineno-0-166"></a>
-<a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="sd">            figure: The figure to draw. Its one panel&#39;s :class:`~digitalearth.base.spec.Viewport` set the</span>
-<a id="__codelineno-0-169" name="__codelineno-0-169"></a><span class="sd">                display CRS/domain/globe at construction; here its layers are drawn in order, each title it</span>
-<a id="__codelineno-0-170" name="__codelineno-0-170"></a><span class="sd">                carries is restored to its own slot, and any `set_bounds` framing on the panel&#39;s view is</span>
-<a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">                reapplied (a fit-to-data view carries no bounds and is left to re-fit). An ``object:``</span>
-<a id="__codelineno-0-172" name="__codelineno-0-172"></a><span class="sd">                (in-memory) source is replayed in process, so the scene that registered it must stay alive</span>
-<a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">                until this returns; a path or URL source has no such constraint.</span>
-<a id="__codelineno-0-174" name="__codelineno-0-174"></a>
-<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">            This map, so the call chains.</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">            KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know —</span>
-<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="sd">                `&quot;the static tier does not draw &#39;terrain&#39; layers; it draws [...]&quot;`.</span>
-<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">            OffLimbError: when a layer&#39;s data cannot be placed and the map is ``strict``.</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a>
-<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">        Warns:</span>
-<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">            UserWarning: when the incoming figure carries a heading and this map does not own its figure —</span>
-<a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">                naming the heading that was not drawn, and the ``fig.suptitle`` call that would draw it.</span>
+<a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">        not blank a heading the map already had. &quot;Carries one&quot; is decided by</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene._recorded_title`, the same normaliser `set_title` and</span>
+<a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">        `grid(suptitle=)` use: a `FigureSpec` refuses `&quot;&quot;` but accepts `&quot;   &quot;`, and a whitespace heading is</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">        the request &quot;no heading&quot; rather than a heading made of spaces. It used to be painted and then</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">        described as none, so a figure written down and read back drew a different picture (R2-L5). The layers are reconciled, not merely added — that part</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">        really does bring the map from whatever it showed before.</span>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">        One asymmetry is worth knowing, because the two titles live in different places. The figure&#39;s</span>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">        heading is on the figure and always survives. The panel&#39;s title is painted on the **axes**, and a</span>
+<a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">        cleopatra glyph clears the axes on a scene&#39;s *first* render — so on a map that has not drawn a glyph</span>
+<a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">        yet, an axes title set beforehand is wiped by the incoming figure&#39;s first layer while the scene goes</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">        on describing it. Measured, drawing an untitled figure into a map titled</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a><span class="sd">        `(&#39;stale heading&#39;, &#39;stale panel&#39;)`: a map that had **already** drawn a layer reports</span>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="sd">        `(&#39;stale heading&#39;, &#39;stale panel&#39;)` from `(fig.get_suptitle(), ax.get_title())`, while a map that had</span>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="sd">        drawn nothing reports `(&#39;stale heading&#39;, &#39;&#39;)` — and `figure_spec` still says `&#39;stale panel&#39;` for</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a><span class="sd">        both, because the panel&#39;s title is held on the scene rather than read back off the axes.</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a><span class="sd">            figure: The figure to draw. Its one panel&#39;s :class:`~digitalearth.base.spec.Viewport` set the</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">                display CRS/domain/globe at construction; here its layers are drawn in order, each title it</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">                carries is restored to its own slot, and any `set_bounds` framing on the panel&#39;s view is</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">                reapplied (a fit-to-data view carries no bounds and is left to re-fit). An ``object:``</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">                (in-memory) source is replayed in process, so the scene that registered it must stay alive</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">                until this returns; a path or URL source has no such constraint.</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="sd">            This map, so the call chains.</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">            KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know —</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">                `&quot;the static tier does not draw &#39;terrain&#39; layers; it draws [...]&quot;`.</span>
+<a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">            OffLimbError: when a layer&#39;s data cannot be placed and the map is ``strict``.</span>
 <a id="__codelineno-0-186" name="__codelineno-0-186"></a>
-<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">            - A figure drawn into a fresh map comes back describing exactly what it described, each title</span>
-<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">                in its own place, and stays there on a second pass:</span>
-<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
-<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">                &gt;&gt;&gt; first = Map(crs=4326)</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">                &gt;&gt;&gt; _ = first.field(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">                &gt;&gt;&gt; _ = first.set_title(&quot;January&quot;)</span>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">                &gt;&gt;&gt; _ = first.fig.suptitle(&quot;rainfall, 2020&quot;)</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">                &gt;&gt;&gt; stored = first.figure_spec.to_dict()</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">                &gt;&gt;&gt; first.close()</span>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">                &gt;&gt;&gt; second = Map(crs=4326).draw_figure(FigureSpec.from_dict(stored))</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">                &gt;&gt;&gt; second.fig.get_suptitle(), second.ax.get_title()</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">                (&#39;rainfall, 2020&#39;, &#39;January&#39;)</span>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">                &gt;&gt;&gt; second.figure_spec.to_dict() == stored</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">                True</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">                &gt;&gt;&gt; second.close()</span>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">            - A figure that carries no title of its own does not blank the headings already on the map —</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">                and the panel title survives on the axes because this map had already drawn a layer:</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">                &gt;&gt;&gt; blank = Map(crs=4326)</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">                &gt;&gt;&gt; _ = blank.field(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">                &gt;&gt;&gt; untitled = FigureSpec.from_dict(blank.figure_spec.to_dict())</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="sd">                &gt;&gt;&gt; blank.close()</span>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">                &gt;&gt;&gt; _ = m.field(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">                &gt;&gt;&gt; _ = m.set_title(&quot;stale panel&quot;)</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">                &gt;&gt;&gt; _ = m.fig.suptitle(&quot;stale heading&quot;)</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">                &gt;&gt;&gt; _ = m.draw_figure(untitled)</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">                &gt;&gt;&gt; m.fig.get_suptitle(), m.ax.get_title()</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">                (&#39;stale heading&#39;, &#39;stale panel&#39;)</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">            - On a map that has drawn **nothing** yet, the first layer&#39;s render clears the axes and takes a</span>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">                pre-existing axes title with it, while the description keeps it:</span>
-<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">                &gt;&gt;&gt; blank = Map(crs=4326)</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">                &gt;&gt;&gt; _ = blank.field(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">                &gt;&gt;&gt; untitled = FigureSpec.from_dict(blank.figure_spec.to_dict())</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">                &gt;&gt;&gt; blank.close()</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">                &gt;&gt;&gt; _ = m.set_title(&quot;stale panel&quot;)</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">                &gt;&gt;&gt; _ = m.draw_figure(untitled)</span>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">                &gt;&gt;&gt; m.ax.get_title(), m.figure_spec.panels[0].title</span>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">                (&#39;&#39;, &#39;stale panel&#39;)</span>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">            - A kind this tier has no drawer for is refused by name, and the map is left as it was:</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">                &gt;&gt;&gt; import copy</span>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">                &gt;&gt;&gt; source = Map(crs=4326)</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">                &gt;&gt;&gt; _ = source.field(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">                &gt;&gt;&gt; stored = copy.deepcopy(source.figure_spec.to_dict())</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="sd">                &gt;&gt;&gt; source.close()</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">                &gt;&gt;&gt; stored[&quot;layers&quot;][&quot;layers&quot;][0][&quot;kind&quot;] = &quot;terrain&quot;</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">                &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">                ...     m.draw_figure(FigureSpec.from_dict(stored))</span>
-<a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">                ... except KeyError as error:</span>
-<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">                ...     print(str(error).split(&quot;;&quot;)[0].strip(&#39;&quot;&#39;))</span>
-<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">                the static tier does not draw &#39;terrain&#39; layers</span>
-<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">                &gt;&gt;&gt; m.layer_ids</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">                []</span>
-<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a>
-<a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a>        <span class="c1"># Normalise recipe names before drawing, so a figure the web or interactive tier described draws here:</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a>        <span class="c1"># a foreign recipe is retargeted to this tier&#39;s own, and the field drawer fills the style a portable</span>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a>        <span class="c1"># figure omits from its own defaults. A same-tier figure already knows every recipe, so this is a no-op.</span>
-<a id="__codelineno-0-276" name="__codelineno-0-276"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">retarget_via</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a>
-<a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="n">figure</span> <span class="o">=</span> <span class="n">retarget_via</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_sources</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">sources</span><span class="p">)</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_change</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="c1"># The layer diff does not re-read either title, so both are set here — each into the slot it was</span>
-<a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="c1"># described from. This tier describes two: the **panel&#39;s** title, which `set_title` paints on the</span>
-<a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="c1"># axes (ST-18), and the **figure&#39;s** heading, which is its `suptitle` (M4). Restoring them through</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="c1"># one `set_title` — `figure.title or figure.panels[0].title` — put the heading on the axes and</span>
-<a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="c1"># dropped the panel&#39;s title with it, so the round trip was not even idempotent. Measured on a</span>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="c1"># one-panel grid carrying both: described `(&#39;rainfall, 2020&#39;, &#39;January&#39;)` as</span>
-<a id="__codelineno-0-287" name="__codelineno-0-287"></a>        <span class="c1"># `(figure.title, panels[0].title)`, restored `(&#39;&#39;, &#39;rainfall, 2020&#39;)` as</span>
-<a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="c1"># `(fig.get_suptitle(), ax.get_title())`, and redescribed `(None, &#39;rainfall, 2020&#39;)`.</span>
-<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="k">if</span> <span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">title</span><span class="p">:</span>
-<a id="__codelineno-0-290" name="__codelineno-0-290"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
-<a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="c1"># Only onto a figure this map owns. `Figure.suptitle` is figure-level, and in a `grid` every panel</span>
-<a id="__codelineno-0-292" name="__codelineno-0-292"></a>        <span class="c1"># shares one figure, so an unguarded restore is a per-panel call rewriting the whole figure&#39;s</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="c1"># heading: measured on a two-panel grid headed `&#39;grid heading&#39;`, drawing a description headed</span>
-<a id="__codelineno-0-294" name="__codelineno-0-294"></a>        <span class="c1"># `&#39;INCOMING&#39;` into `maps[1]` left `fig.get_suptitle()` as `&#39;INCOMING&#39;`, and `maps[0]` — never</span>
-<a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="c1"># drawn into — then described `&#39;INCOMING&#39;` as its own (R2-M1). The panel&#39;s title above is</span>
-<a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="c1"># unguarded because `set_title` paints the **axes**, which is panel-local.</span>
-<a id="__codelineno-0-297" name="__codelineno-0-297"></a>        <span class="k">if</span> <span class="n">figure</span><span class="o">.</span><span class="n">title</span><span class="p">:</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_owns_fig</span><span class="p">:</span>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a>            <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a>                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a>                    <span class="sa">f</span><span class="s2">&quot;draw_figure() did not restore the figure heading </span><span class="si">{</span><span class="n">figure</span><span class="o">.</span><span class="n">title</span><span class="si">!r}</span><span class="s2">: this map was &quot;</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a>                    <span class="sa">f</span><span class="s2">&quot;built on an axes somebody else laid out, and the heading belongs to the figure &quot;</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>                    <span class="sa">f</span><span class="s2">&quot;that axes is in, which its siblings share. Call &quot;</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a>                    <span class="sa">f</span><span class="s2">&quot;`map.fig.suptitle(</span><span class="si">{</span><span class="n">figure</span><span class="o">.</span><span class="n">title</span><span class="si">!r}</span><span class="s2">)` yourself if the whole figure should carry it.&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a>                    <span class="ne">UserWarning</span><span class="p">,</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a>                    <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a>                <span class="p">)</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="c1"># The view&#39;s explicit framing is not a layer, so `_change` does not carry it: restore any `set_bounds`</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a>        <span class="c1"># region from the panel&#39;s viewport, or a map framed on a subregion replays showing the full data</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a>        <span class="c1"># extent. `set_bounds` reprojects a `Bounds` in any CRS, so a figure another tier described frames</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a>        <span class="c1"># correctly too. A fit-to-data view (no bounds) is left to re-fit.</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;bounds&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a>        <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_figure</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">figure</span><span class="p">:</span> <span class="n">FigureSpec</span><span class="p">,</span> <span class="o">**</span><span class="n">scene_kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a map and draw a figure into it — the round trip the description seam exists for.</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">        A map describes itself with :attr:`~digitalearth.static.scene.Scene.figure_spec`, the description</span>
-<a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">        survives ``to_dict()``/``from_dict()``, and this draws it again. :func:`digitalearth.api.to_backend`</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">        dispatches here for ``backend=&quot;matplotlib&quot;``.</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">        Warns:</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">            UserWarning: when the incoming figure carries a heading and this map does not own its figure —</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">                naming the heading that was not drawn, and the ``fig.suptitle`` call that would draw it.</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">            - A figure drawn into a fresh map comes back describing exactly what it described, each title</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">                in its own place, and stays there on a second pass:</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">                &gt;&gt;&gt; first = Map(crs=4326)</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">                &gt;&gt;&gt; _ = first.field(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">                &gt;&gt;&gt; _ = first.set_title(&quot;January&quot;)</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">                &gt;&gt;&gt; _ = first.fig.suptitle(&quot;rainfall, 2020&quot;)</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">                &gt;&gt;&gt; stored = first.figure_spec.to_dict()</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">                &gt;&gt;&gt; first.close()</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">                &gt;&gt;&gt; second = Map(crs=4326).draw_figure(FigureSpec.from_dict(stored))</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">                &gt;&gt;&gt; second.fig.get_suptitle(), second.ax.get_title()</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">                (&#39;rainfall, 2020&#39;, &#39;January&#39;)</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">                &gt;&gt;&gt; second.figure_spec.to_dict() == stored</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">                True</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">                &gt;&gt;&gt; second.close()</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">            - A figure that carries no title of its own does not blank the headings already on the map —</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a><span class="sd">                and the panel title survives on the axes because this map had already drawn a layer:</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">                &gt;&gt;&gt; blank = Map(crs=4326)</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">                &gt;&gt;&gt; _ = blank.field(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">                &gt;&gt;&gt; untitled = FigureSpec.from_dict(blank.figure_spec.to_dict())</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">                &gt;&gt;&gt; blank.close()</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">                &gt;&gt;&gt; _ = m.field(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">                &gt;&gt;&gt; _ = m.set_title(&quot;stale panel&quot;)</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">                &gt;&gt;&gt; _ = m.fig.suptitle(&quot;stale heading&quot;)</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">                &gt;&gt;&gt; _ = m.draw_figure(untitled)</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">                &gt;&gt;&gt; m.fig.get_suptitle(), m.ax.get_title()</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">                (&#39;stale heading&#39;, &#39;stale panel&#39;)</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            - On a map that has drawn **nothing** yet, the first layer&#39;s render clears the axes and takes a</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">                pre-existing axes title with it, while the description keeps it:</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">                &gt;&gt;&gt; blank = Map(crs=4326)</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">                &gt;&gt;&gt; _ = blank.field(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">                &gt;&gt;&gt; untitled = FigureSpec.from_dict(blank.figure_spec.to_dict())</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">                &gt;&gt;&gt; blank.close()</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">                &gt;&gt;&gt; _ = m.set_title(&quot;stale panel&quot;)</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">                &gt;&gt;&gt; _ = m.draw_figure(untitled)</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">                &gt;&gt;&gt; m.ax.get_title(), m.figure_spec.panels[0].title</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">                (&#39;&#39;, &#39;stale panel&#39;)</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">            - A kind this tier has no drawer for is refused by name, and the map is left as it was:</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">                &gt;&gt;&gt; import copy</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import FigureSpec</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">                &gt;&gt;&gt; source = Map(crs=4326)</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="sd">                &gt;&gt;&gt; _ = source.field(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">                &gt;&gt;&gt; stored = copy.deepcopy(source.figure_spec.to_dict())</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">                &gt;&gt;&gt; source.close()</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">                &gt;&gt;&gt; stored[&quot;layers&quot;][&quot;layers&quot;][0][&quot;kind&quot;] = &quot;terrain&quot;</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">                &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">                ...     m.draw_figure(FigureSpec.from_dict(stored))</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">                ... except KeyError as error:</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">                ...     print(str(error).split(&quot;;&quot;)[0].strip(&#39;&quot;&#39;))</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">                the static tier does not draw &#39;terrain&#39; layers</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">                &gt;&gt;&gt; m.layer_ids</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">                []</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>        <span class="c1"># Normalise recipe names before drawing, so a figure the web or interactive tier described draws here:</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="c1"># a foreign recipe is retargeted to this tier&#39;s own, and the field drawer fills the style a portable</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="c1"># figure omits from its own defaults. A same-tier figure already knows every recipe, so this is a no-op.</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">retarget_via</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="n">figure</span> <span class="o">=</span> <span class="n">retarget_via</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_sources</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">sources</span><span class="p">)</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_change</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="c1"># The layer diff does not re-read either title, so both are set here — each into the slot it was</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="c1"># described from. This tier describes two: the **panel&#39;s** title, which `set_title` paints on the</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>        <span class="c1"># axes (ST-18), and the **figure&#39;s** heading, which is its `suptitle` (M4). Restoring them through</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="c1"># one `set_title` — `figure.title or figure.panels[0].title` — put the heading on the axes and</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="c1"># dropped the panel&#39;s title with it, so the round trip was not even idempotent. Measured on a</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="c1"># one-panel grid carrying both: described `(&#39;rainfall, 2020&#39;, &#39;January&#39;)` as</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="c1"># `(figure.title, panels[0].title)`, restored `(&#39;&#39;, &#39;rainfall, 2020&#39;)` as</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>        <span class="c1"># `(fig.get_suptitle(), ax.get_title())`, and redescribed `(None, &#39;rainfall, 2020&#39;)`.</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="k">if</span> <span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">title</span><span class="p">:</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="c1"># Only onto a figure this map owns. `Figure.suptitle` is figure-level, and in a `grid` every panel</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="c1"># shares one figure, so an unguarded restore is a per-panel call rewriting the whole figure&#39;s</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>        <span class="c1"># heading: measured on a two-panel grid headed `&#39;grid heading&#39;`, drawing a description headed</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="c1"># `&#39;INCOMING&#39;` into `maps[1]` left `fig.get_suptitle()` as `&#39;INCOMING&#39;`, and `maps[0]` — never</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="c1"># drawn into — then described `&#39;INCOMING&#39;` as its own (R2-M1). The panel&#39;s title above is</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="c1"># unguarded because `set_title` paints the **axes**, which is panel-local.</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>        <span class="c1"># Through `_recorded_title`, like `set_title` and `grid(suptitle=)`: a `FigureSpec` refuses `&quot;&quot;`</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>        <span class="c1"># but accepts `&quot;   &quot;`, so whitespace is the blank spelling that reaches this tier, and the</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>        <span class="c1"># `if figure.title:` guard let it through to be painted and then described as no heading (R2-L5).</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>        <span class="n">heading</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recorded_title</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>        <span class="k">if</span> <span class="n">heading</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_owns_fig</span><span class="p">:</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">heading</span><span class="p">)</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a>                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>                    <span class="sa">f</span><span class="s2">&quot;draw_figure() did not restore the figure heading </span><span class="si">{</span><span class="n">heading</span><span class="si">!r}</span><span class="s2">: this map was &quot;</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>                    <span class="sa">f</span><span class="s2">&quot;built on an axes somebody else laid out, and the heading belongs to the figure &quot;</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a>                    <span class="sa">f</span><span class="s2">&quot;that axes is in, which its siblings share. Call &quot;</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a>                    <span class="sa">f</span><span class="s2">&quot;`map.fig.suptitle(</span><span class="si">{</span><span class="n">heading</span><span class="si">!r}</span><span class="s2">)` yourself if the whole figure should carry it.&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a>                    <span class="ne">UserWarning</span><span class="p">,</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a>                    <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>                <span class="p">)</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a>        <span class="c1"># The view&#39;s explicit framing is not a layer, so `_change` does not carry it: restore any `set_bounds`</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>        <span class="c1"># region from the panel&#39;s viewport, or a map framed on a subregion replays showing the full data</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>        <span class="c1"># extent. `set_bounds` reprojects a `Bounds` in any CRS, so a figure another tier described frames</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>        <span class="c1"># correctly too. A fit-to-data view (no bounds) is left to re-fit.</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;bounds&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a>        <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="k">return</span> <span class="bp">self</span>
 <a id="__codelineno-0-325" name="__codelineno-0-325"></a>
-<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">            figure: The figure to draw.</span>
-<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">            **scene_kwargs: Passed to the constructor — ``figsize``, ``strict``, ``ax``/``fig``; a ``crs``,</span>
-<a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">                ``domain`` or ``globe`` here overrides the one the figure&#39;s viewport carries.</span>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>
-<a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">            The map, with every layer drawn.</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_figure</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">figure</span><span class="p">:</span> <span class="n">FigureSpec</span><span class="p">,</span> <span class="o">**</span><span class="n">scene_kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a map and draw a figure into it — the round trip the description seam exists for.</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">        A map describes itself with :attr:`~digitalearth.static.scene.Scene.figure_spec`, the description</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">        survives ``to_dict()``/``from_dict()``, and this draws it again. :func:`digitalearth.api.to_backend`</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">        dispatches here for ``backend=&quot;matplotlib&quot;``.</span>
 <a id="__codelineno-0-333" name="__codelineno-0-333"></a>
-<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">            KeyError: from :meth:`draw_figure`, when a layer names a kind this tier does not draw or a</span>
-<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">                recipe it does not know. The map has been constructed by then, so its figure is left open.</span>
-<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">            OffLimbError: from :meth:`draw_figure`, when a layer&#39;s data cannot be placed and `strict=True`</span>
-<a id="__codelineno-0-338" name="__codelineno-0-338"></a><span class="sd">                was passed through `**scene_kwargs`.</span>
-<a id="__codelineno-0-339" name="__codelineno-0-339"></a>
-<a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">            - A figure a map describes draws again into a fresh map, carrying its display CRS:</span>
-<a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">                &gt;&gt;&gt; from pyramids.dataset import Dataset</span>
-<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="sd">                &gt;&gt;&gt; ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">                &gt;&gt;&gt; first = Map(crs=ds.epsg)</span>
-<a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">                &gt;&gt;&gt; _ = first.field(ds)</span>
-<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">                &gt;&gt;&gt; second = Map.from_figure(first.figure_spec)</span>
-<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">                &gt;&gt;&gt; second.layer_ids == first.layer_ids</span>
-<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">                True</span>
-<a id="__codelineno-0-353" name="__codelineno-0-353"></a><span class="sd">                &gt;&gt;&gt; first.close()</span>
-<a id="__codelineno-0-354" name="__codelineno-0-354"></a><span class="sd">                &gt;&gt;&gt; second.close()</span>
-<a id="__codelineno-0-355" name="__codelineno-0-355"></a>
-<a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-358" name="__codelineno-0-358"></a>        <span class="n">view</span> <span class="o">=</span> <span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">view</span>
-<a id="__codelineno-0-359" name="__codelineno-0-359"></a>        <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-360" name="__codelineno-0-360"></a>            <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
-<a id="__codelineno-0-361" name="__codelineno-0-361"></a>            <span class="s2">&quot;globe&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;globe&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)),</span>
-<a id="__codelineno-0-362" name="__codelineno-0-362"></a>        <span class="p">}</span>
-<a id="__codelineno-0-363" name="__codelineno-0-363"></a>        <span class="n">crs</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="k">if</span> <span class="n">crs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-365" name="__codelineno-0-365"></a>            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;crs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">crs</span>
-<a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="n">scene</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">scene_kwargs</span><span class="p">})</span>
-<a id="__codelineno-0-367" name="__codelineno-0-367"></a>        <span class="n">scene</span><span class="o">.</span><span class="n">draw_figure</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
-<a id="__codelineno-0-368" name="__codelineno-0-368"></a>        <span class="k">return</span> <span class="n">scene</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">            figure: The figure to draw.</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">            **scene_kwargs: Passed to the constructor — ``figsize``, ``strict``, ``ax``/``fig``; a ``crs``,</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">                ``domain`` or ``globe`` here overrides the one the figure&#39;s viewport carries.</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">            The map, with every layer drawn.</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">            KeyError: from :meth:`draw_figure`, when a layer names a kind this tier does not draw or a</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">                recipe it does not know. The map has been constructed by then, so its figure is left open.</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">            OffLimbError: from :meth:`draw_figure`, when a layer&#39;s data cannot be placed and `strict=True`</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">                was passed through `**scene_kwargs`.</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">            - A figure a map describes draws again into a fresh map, carrying its display CRS:</span>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a><span class="sd">                &gt;&gt;&gt; from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="sd">                &gt;&gt;&gt; ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">                &gt;&gt;&gt; first = Map(crs=ds.epsg)</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="sd">                &gt;&gt;&gt; _ = first.field(ds)</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a><span class="sd">                &gt;&gt;&gt; second = Map.from_figure(first.figure_spec)</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a><span class="sd">                &gt;&gt;&gt; second.layer_ids == first.layer_ids</span>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a><span class="sd">                True</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a><span class="sd">                &gt;&gt;&gt; first.close()</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a><span class="sd">                &gt;&gt;&gt; second.close()</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="n">view</span> <span class="o">=</span> <span class="n">figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">view</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a>        <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a>            <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>            <span class="s2">&quot;globe&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;globe&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)),</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>        <span class="p">}</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>        <span class="n">crs</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a>        <span class="k">if</span> <span class="n">crs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a>            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;crs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">crs</span>
+<a id="__codelineno-0-374" name="__codelineno-0-374"></a>        <span class="n">scene</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">scene_kwargs</span><span class="p">})</span>
+<a id="__codelineno-0-375" name="__codelineno-0-375"></a>        <span class="n">scene</span><span class="o">.</span><span class="n">draw_figure</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
+<a id="__codelineno-0-376" name="__codelineno-0-376"></a>        <span class="k">return</span> <span class="n">scene</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -16587,7 +16603,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>This map (chainable). The tile artist <code>add_tiles</code> added to the axes is reached through</p>
+                <p>This map (chainable). What :meth:<code>~digitalearth.static.scene.Scene.artist</code> answers for this</p>
               </div>
             </td>
           </tr>
@@ -16597,7 +16613,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code>, by this layer's id (round-1 L6). Tiles that</p>
+                <p>layer's id is <strong>the axes</strong>, because cleopatra's <code>add_tiles</code> draws onto them and hands them</p>
               </div>
             </td>
           </tr>
@@ -16607,7 +16623,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>cannot be fetched raise rather than answering <code>None</code>, and the layer is dropped from the</p>
+                <p>back rather than naming what it added (its own <code>Returns:</code> reads *"matplotlib.axes.Axes: The</p>
               </div>
             </td>
           </tr>
@@ -16617,7 +16633,77 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>description with them.</p>
+                <p>same axes, for chaining"*) — the same situation as the Natural-Earth layers on a flat map, and</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the same wording. The tile <code>AxesImage</code> is the layer's all the same, which is what</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>meth:<code>~digitalearth.static.scene.Scene.set_visible</code> and</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>meth:<code>~digitalearth.static.scene.Scene.remove_layer</code> reach; no public accessor names it</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(round 2, M5 — the claim this replaces said <code>artist</code> did, and</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>tests/static/test_basemap_tile_artist.py</code> is where that is measured against the real</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>engine). Tiles that cannot be fetched raise rather than answering <code>None</code>, and the layer is</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>dropped from the description with them.</p>
               </div>
             </td>
           </tr>
@@ -16838,7 +16924,14 @@ axes yet (a declared <code>domain</code> alone does not — it is applied at ren
 <span class="normal"><a href="#__codelineno-0-3732">3732</a></span>
 <span class="normal"><a href="#__codelineno-0-3733">3733</a></span>
 <span class="normal"><a href="#__codelineno-0-3734">3734</a></span>
-<span class="normal"><a href="#__codelineno-0-3735">3735</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3609" name="__codelineno-0-3609"></a><span class="k">def</span><span class="w"> </span><span class="nf">basemap</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-3735">3735</a></span>
+<span class="normal"><a href="#__codelineno-0-3736">3736</a></span>
+<span class="normal"><a href="#__codelineno-0-3737">3737</a></span>
+<span class="normal"><a href="#__codelineno-0-3738">3738</a></span>
+<span class="normal"><a href="#__codelineno-0-3739">3739</a></span>
+<span class="normal"><a href="#__codelineno-0-3740">3740</a></span>
+<span class="normal"><a href="#__codelineno-0-3741">3741</a></span>
+<span class="normal"><a href="#__codelineno-0-3742">3742</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3609" name="__codelineno-0-3609"></a><span class="k">def</span><span class="w"> </span><span class="nf">basemap</span><span class="p">(</span>
 <a id="__codelineno-0-3610" name="__codelineno-0-3610"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-3611" name="__codelineno-0-3611"></a>    <span class="n">source</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-3612" name="__codelineno-0-3612"></a>    <span class="o">*</span><span class="p">,</span>
@@ -16881,90 +16974,97 @@ axes yet (a declared <code>domain</code> alone does not — it is applied at ren
 <a id="__codelineno-0-3649" name="__codelineno-0-3649"></a><span class="sd">        **kwargs: Forwarded to ``add_tiles``.</span>
 <a id="__codelineno-0-3650" name="__codelineno-0-3650"></a>
 <a id="__codelineno-0-3651" name="__codelineno-0-3651"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-3652" name="__codelineno-0-3652"></a><span class="sd">        This map (chainable). The tile artist ``add_tiles`` added to the axes is reached through</span>
-<a id="__codelineno-0-3653" name="__codelineno-0-3653"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist`, by this layer&#39;s id (round-1 L6). Tiles that</span>
-<a id="__codelineno-0-3654" name="__codelineno-0-3654"></a><span class="sd">        cannot be fetched raise rather than answering ``None``, and the layer is dropped from the</span>
-<a id="__codelineno-0-3655" name="__codelineno-0-3655"></a><span class="sd">        description with them.</span>
-<a id="__codelineno-0-3656" name="__codelineno-0-3656"></a>
-<a id="__codelineno-0-3657" name="__codelineno-0-3657"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-3658" name="__codelineno-0-3658"></a><span class="sd">        ValueError: when a keyed preset is unknown, its credential is unavailable, when a `preset`</span>
-<a id="__codelineno-0-3659" name="__codelineno-0-3659"></a><span class="sd">            or an `api_key` is passed to an ordinary source, when a preset keyword is passed loose</span>
-<a id="__codelineno-0-3660" name="__codelineno-0-3660"></a><span class="sd">            instead of in `preset`, or when the extent being drawn — the declared `domain` if there</span>
-<a id="__codelineno-0-3661" name="__codelineno-0-3661"></a><span class="sd">            is one, else the current axes limits — lies entirely outside the coverage. Two more come</span>
-<a id="__codelineno-0-3662" name="__codelineno-0-3662"></a><span class="sd">            from cleopatra as the tiles are fetched, and are refusals of this call all the same:</span>
-<a id="__codelineno-0-3663" name="__codelineno-0-3663"></a><span class="sd">            `Axes have no data extent. Plot data before adding a basemap.` when nothing has framed the</span>
-<a id="__codelineno-0-3664" name="__codelineno-0-3664"></a><span class="sd">            axes yet (a declared `domain` alone does not — it is applied at render time), and</span>
-<a id="__codelineno-0-3665" name="__codelineno-0-3665"></a><span class="sd">            `Unknown tile provider: &#39;&lt;source&gt;&#39;...` for a name neither this tier&#39;s table nor</span>
-<a id="__codelineno-0-3666" name="__codelineno-0-3666"></a><span class="sd">            `xyzservices` holds. In every case the layer is not left in the description.</span>
-<a id="__codelineno-0-3667" name="__codelineno-0-3667"></a><span class="sd">        TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.</span>
-<a id="__codelineno-0-3668" name="__codelineno-0-3668"></a>
-<a id="__codelineno-0-3669" name="__codelineno-0-3669"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-3670" name="__codelineno-0-3670"></a><span class="sd">        - A keyed preset resolves its own provider and credential:</span>
-<a id="__codelineno-0-3671" name="__codelineno-0-3671"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3672" name="__codelineno-0-3672"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map                       # doctest: +SKIP</span>
-<a id="__codelineno-0-3673" name="__codelineno-0-3673"></a><span class="sd">            &gt;&gt;&gt; tiled = Map(domain=(-60, -5, -55, 0)).basemap(     # doctest: +SKIP</span>
-<a id="__codelineno-0-3674" name="__codelineno-0-3674"></a><span class="sd">            ...     &quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;, &quot;flavour&quot;: &quot;visual&quot;}</span>
-<a id="__codelineno-0-3675" name="__codelineno-0-3675"></a><span class="sd">            ... )                                                  # doctest: +SKIP</span>
-<a id="__codelineno-0-3676" name="__codelineno-0-3676"></a><span class="sd">            &gt;&gt;&gt; tiled.artist(&quot;basemap-1&quot;)                          # doctest: +SKIP</span>
-<a id="__codelineno-0-3677" name="__codelineno-0-3677"></a>
-<a id="__codelineno-0-3678" name="__codelineno-0-3678"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3679" name="__codelineno-0-3679"></a><span class="sd">        - A preset keyword passed loose is refused by name, and nothing is described:</span>
-<a id="__codelineno-0-3680" name="__codelineno-0-3680"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3681" name="__codelineno-0-3681"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3682" name="__codelineno-0-3682"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3683" name="__codelineno-0-3683"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3684" name="__codelineno-0-3684"></a><span class="sd">            &gt;&gt;&gt; with Map() as m:</span>
-<a id="__codelineno-0-3685" name="__codelineno-0-3685"></a><span class="sd">            ...     try:</span>
-<a id="__codelineno-0-3686" name="__codelineno-0-3686"></a><span class="sd">            ...         m.basemap(&quot;OSM&quot;, date=&quot;2024-01&quot;)</span>
-<a id="__codelineno-0-3687" name="__codelineno-0-3687"></a><span class="sd">            ...     except ValueError as error:</span>
-<a id="__codelineno-0-3688" name="__codelineno-0-3688"></a><span class="sd">            ...         print(str(error).split(&quot;;&quot;)[0])</span>
-<a id="__codelineno-0-3689" name="__codelineno-0-3689"></a><span class="sd">            ...     m.layer_ids</span>
-<a id="__codelineno-0-3690" name="__codelineno-0-3690"></a><span class="sd">            basemap() takes preset keywords in preset={...}, not loose</span>
-<a id="__codelineno-0-3691" name="__codelineno-0-3691"></a><span class="sd">            []</span>
-<a id="__codelineno-0-3692" name="__codelineno-0-3692"></a>
-<a id="__codelineno-0-3693" name="__codelineno-0-3693"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3694" name="__codelineno-0-3694"></a><span class="sd">        - Tiles need a framed extent to cover, so a basemap on an untouched axes is refused rather</span>
-<a id="__codelineno-0-3695" name="__codelineno-0-3695"></a><span class="sd">          than drawn blank:</span>
-<a id="__codelineno-0-3696" name="__codelineno-0-3696"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3697" name="__codelineno-0-3697"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3698" name="__codelineno-0-3698"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3699" name="__codelineno-0-3699"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3700" name="__codelineno-0-3700"></a><span class="sd">            &gt;&gt;&gt; with Map() as m:</span>
-<a id="__codelineno-0-3701" name="__codelineno-0-3701"></a><span class="sd">            ...     try:</span>
-<a id="__codelineno-0-3702" name="__codelineno-0-3702"></a><span class="sd">            ...         m.basemap()</span>
-<a id="__codelineno-0-3703" name="__codelineno-0-3703"></a><span class="sd">            ...     except ValueError as error:</span>
-<a id="__codelineno-0-3704" name="__codelineno-0-3704"></a><span class="sd">            ...         print(error)</span>
-<a id="__codelineno-0-3705" name="__codelineno-0-3705"></a><span class="sd">            ...     m.layer_ids</span>
-<a id="__codelineno-0-3706" name="__codelineno-0-3706"></a><span class="sd">            Axes have no data extent. Plot data before adding a basemap.</span>
-<a id="__codelineno-0-3707" name="__codelineno-0-3707"></a><span class="sd">            []</span>
-<a id="__codelineno-0-3708" name="__codelineno-0-3708"></a>
-<a id="__codelineno-0-3709" name="__codelineno-0-3709"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3710" name="__codelineno-0-3710"></a>
-<a id="__codelineno-0-3711" name="__codelineno-0-3711"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-3712" name="__codelineno-0-3712"></a><span class="sd">        digitalearth.base.basemaps: the keyed-preset definitions this resolves.</span>
-<a id="__codelineno-0-3713" name="__codelineno-0-3713"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-3714" name="__codelineno-0-3714"></a>    <span class="n">loose</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">PRESET_KEYWORDS</span><span class="p">)</span>
-<a id="__codelineno-0-3715" name="__codelineno-0-3715"></a>    <span class="k">if</span> <span class="n">loose</span><span class="p">:</span>
-<a id="__codelineno-0-3716" name="__codelineno-0-3716"></a>        <span class="c1"># These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.</span>
-<a id="__codelineno-0-3717" name="__codelineno-0-3717"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-3718" name="__codelineno-0-3718"></a>            <span class="sa">f</span><span class="s2">&quot;basemap() takes preset keywords in preset=</span><span class="se">{{</span><span class="s2">...</span><span class="se">}}</span><span class="s2">, not loose; move </span><span class="si">{</span><span class="n">loose</span><span class="si">}</span><span class="s2"> into it — &quot;</span>
-<a id="__codelineno-0-3719" name="__codelineno-0-3719"></a>            <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, preset=</span><span class="se">{{</span><span class="si">{</span><span class="n">loose</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">: ...</span><span class="se">}}</span><span class="s2">)&quot;</span>
-<a id="__codelineno-0-3720" name="__codelineno-0-3720"></a>        <span class="p">)</span>
-<a id="__codelineno-0-3721" name="__codelineno-0-3721"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_keyed_basemap</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
-<a id="__codelineno-0-3722" name="__codelineno-0-3722"></a>        <span class="k">if</span> <span class="n">preset</span><span class="p">:</span>
-<a id="__codelineno-0-3723" name="__codelineno-0-3723"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-3724" name="__codelineno-0-3724"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no preset keywords; </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">preset</span><span class="p">)</span><span class="si">}</span><span class="s2"> apply only to a &quot;</span>
-<a id="__codelineno-0-3725" name="__codelineno-0-3725"></a>                <span class="sa">f</span><span class="s2">&quot;keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
-<a id="__codelineno-0-3726" name="__codelineno-0-3726"></a>            <span class="p">)</span>
-<a id="__codelineno-0-3727" name="__codelineno-0-3727"></a>        <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-3728" name="__codelineno-0-3728"></a>            <span class="c1"># Dropping it silently would leave a caller believing they had authenticated.</span>
-<a id="__codelineno-0-3729" name="__codelineno-0-3729"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-3730" name="__codelineno-0-3730"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no api_key; it is a token-free source. Credentials apply &quot;</span>
-<a id="__codelineno-0-3731" name="__codelineno-0-3731"></a>                <span class="sa">f</span><span class="s2">&quot;only to a keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
-<a id="__codelineno-0-3732" name="__codelineno-0-3732"></a>            <span class="p">)</span>
-<a id="__codelineno-0-3733" name="__codelineno-0-3733"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_basemap</span><span class="p">(</span>
-<a id="__codelineno-0-3734" name="__codelineno-0-3734"></a>        <span class="n">source</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span>
-<a id="__codelineno-0-3735" name="__codelineno-0-3735"></a>    <span class="p">)</span>
+<a id="__codelineno-0-3652" name="__codelineno-0-3652"></a><span class="sd">        This map (chainable). What :meth:`~digitalearth.static.scene.Scene.artist` answers for this</span>
+<a id="__codelineno-0-3653" name="__codelineno-0-3653"></a><span class="sd">        layer&#39;s id is **the axes**, because cleopatra&#39;s ``add_tiles`` draws onto them and hands them</span>
+<a id="__codelineno-0-3654" name="__codelineno-0-3654"></a><span class="sd">        back rather than naming what it added (its own ``Returns:`` reads *&quot;matplotlib.axes.Axes: The</span>
+<a id="__codelineno-0-3655" name="__codelineno-0-3655"></a><span class="sd">        same axes, for chaining&quot;*) — the same situation as the Natural-Earth layers on a flat map, and</span>
+<a id="__codelineno-0-3656" name="__codelineno-0-3656"></a><span class="sd">        the same wording. The tile ``AxesImage`` is the layer&#39;s all the same, which is what</span>
+<a id="__codelineno-0-3657" name="__codelineno-0-3657"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.set_visible` and</span>
+<a id="__codelineno-0-3658" name="__codelineno-0-3658"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.remove_layer` reach; no public accessor names it</span>
+<a id="__codelineno-0-3659" name="__codelineno-0-3659"></a><span class="sd">        (round 2, M5 — the claim this replaces said ``artist`` did, and</span>
+<a id="__codelineno-0-3660" name="__codelineno-0-3660"></a><span class="sd">        ``tests/static/test_basemap_tile_artist.py`` is where that is measured against the real</span>
+<a id="__codelineno-0-3661" name="__codelineno-0-3661"></a><span class="sd">        engine). Tiles that cannot be fetched raise rather than answering ``None``, and the layer is</span>
+<a id="__codelineno-0-3662" name="__codelineno-0-3662"></a><span class="sd">        dropped from the description with them.</span>
+<a id="__codelineno-0-3663" name="__codelineno-0-3663"></a>
+<a id="__codelineno-0-3664" name="__codelineno-0-3664"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-3665" name="__codelineno-0-3665"></a><span class="sd">        ValueError: when a keyed preset is unknown, its credential is unavailable, when a `preset`</span>
+<a id="__codelineno-0-3666" name="__codelineno-0-3666"></a><span class="sd">            or an `api_key` is passed to an ordinary source, when a preset keyword is passed loose</span>
+<a id="__codelineno-0-3667" name="__codelineno-0-3667"></a><span class="sd">            instead of in `preset`, or when the extent being drawn — the declared `domain` if there</span>
+<a id="__codelineno-0-3668" name="__codelineno-0-3668"></a><span class="sd">            is one, else the current axes limits — lies entirely outside the coverage. Two more come</span>
+<a id="__codelineno-0-3669" name="__codelineno-0-3669"></a><span class="sd">            from cleopatra as the tiles are fetched, and are refusals of this call all the same:</span>
+<a id="__codelineno-0-3670" name="__codelineno-0-3670"></a><span class="sd">            `Axes have no data extent. Plot data before adding a basemap.` when nothing has framed the</span>
+<a id="__codelineno-0-3671" name="__codelineno-0-3671"></a><span class="sd">            axes yet (a declared `domain` alone does not — it is applied at render time), and</span>
+<a id="__codelineno-0-3672" name="__codelineno-0-3672"></a><span class="sd">            `Unknown tile provider: &#39;&lt;source&gt;&#39;...` for a name neither this tier&#39;s table nor</span>
+<a id="__codelineno-0-3673" name="__codelineno-0-3673"></a><span class="sd">            `xyzservices` holds. In every case the layer is not left in the description.</span>
+<a id="__codelineno-0-3674" name="__codelineno-0-3674"></a><span class="sd">        TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.</span>
+<a id="__codelineno-0-3675" name="__codelineno-0-3675"></a>
+<a id="__codelineno-0-3676" name="__codelineno-0-3676"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-3677" name="__codelineno-0-3677"></a><span class="sd">        - A keyed preset resolves its own provider and credential:</span>
+<a id="__codelineno-0-3678" name="__codelineno-0-3678"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3679" name="__codelineno-0-3679"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map                       # doctest: +SKIP</span>
+<a id="__codelineno-0-3680" name="__codelineno-0-3680"></a><span class="sd">            &gt;&gt;&gt; tiled = Map(domain=(-60, -5, -55, 0)).basemap(     # doctest: +SKIP</span>
+<a id="__codelineno-0-3681" name="__codelineno-0-3681"></a><span class="sd">            ...     &quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;, &quot;flavour&quot;: &quot;visual&quot;}</span>
+<a id="__codelineno-0-3682" name="__codelineno-0-3682"></a><span class="sd">            ... )                                                  # doctest: +SKIP</span>
+<a id="__codelineno-0-3683" name="__codelineno-0-3683"></a><span class="sd">            &gt;&gt;&gt; tiled.artist(&quot;basemap-1&quot;)                          # doctest: +SKIP</span>
+<a id="__codelineno-0-3684" name="__codelineno-0-3684"></a>
+<a id="__codelineno-0-3685" name="__codelineno-0-3685"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3686" name="__codelineno-0-3686"></a><span class="sd">        - A preset keyword passed loose is refused by name, and nothing is described:</span>
+<a id="__codelineno-0-3687" name="__codelineno-0-3687"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3688" name="__codelineno-0-3688"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3689" name="__codelineno-0-3689"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3690" name="__codelineno-0-3690"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3691" name="__codelineno-0-3691"></a><span class="sd">            &gt;&gt;&gt; with Map() as m:</span>
+<a id="__codelineno-0-3692" name="__codelineno-0-3692"></a><span class="sd">            ...     try:</span>
+<a id="__codelineno-0-3693" name="__codelineno-0-3693"></a><span class="sd">            ...         m.basemap(&quot;OSM&quot;, date=&quot;2024-01&quot;)</span>
+<a id="__codelineno-0-3694" name="__codelineno-0-3694"></a><span class="sd">            ...     except ValueError as error:</span>
+<a id="__codelineno-0-3695" name="__codelineno-0-3695"></a><span class="sd">            ...         print(str(error).split(&quot;;&quot;)[0])</span>
+<a id="__codelineno-0-3696" name="__codelineno-0-3696"></a><span class="sd">            ...     m.layer_ids</span>
+<a id="__codelineno-0-3697" name="__codelineno-0-3697"></a><span class="sd">            basemap() takes preset keywords in preset={...}, not loose</span>
+<a id="__codelineno-0-3698" name="__codelineno-0-3698"></a><span class="sd">            []</span>
+<a id="__codelineno-0-3699" name="__codelineno-0-3699"></a>
+<a id="__codelineno-0-3700" name="__codelineno-0-3700"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3701" name="__codelineno-0-3701"></a><span class="sd">        - Tiles need a framed extent to cover, so a basemap on an untouched axes is refused rather</span>
+<a id="__codelineno-0-3702" name="__codelineno-0-3702"></a><span class="sd">          than drawn blank:</span>
+<a id="__codelineno-0-3703" name="__codelineno-0-3703"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3704" name="__codelineno-0-3704"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3705" name="__codelineno-0-3705"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3706" name="__codelineno-0-3706"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3707" name="__codelineno-0-3707"></a><span class="sd">            &gt;&gt;&gt; with Map() as m:</span>
+<a id="__codelineno-0-3708" name="__codelineno-0-3708"></a><span class="sd">            ...     try:</span>
+<a id="__codelineno-0-3709" name="__codelineno-0-3709"></a><span class="sd">            ...         m.basemap()</span>
+<a id="__codelineno-0-3710" name="__codelineno-0-3710"></a><span class="sd">            ...     except ValueError as error:</span>
+<a id="__codelineno-0-3711" name="__codelineno-0-3711"></a><span class="sd">            ...         print(error)</span>
+<a id="__codelineno-0-3712" name="__codelineno-0-3712"></a><span class="sd">            ...     m.layer_ids</span>
+<a id="__codelineno-0-3713" name="__codelineno-0-3713"></a><span class="sd">            Axes have no data extent. Plot data before adding a basemap.</span>
+<a id="__codelineno-0-3714" name="__codelineno-0-3714"></a><span class="sd">            []</span>
+<a id="__codelineno-0-3715" name="__codelineno-0-3715"></a>
+<a id="__codelineno-0-3716" name="__codelineno-0-3716"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3717" name="__codelineno-0-3717"></a>
+<a id="__codelineno-0-3718" name="__codelineno-0-3718"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-3719" name="__codelineno-0-3719"></a><span class="sd">        digitalearth.base.basemaps: the keyed-preset definitions this resolves.</span>
+<a id="__codelineno-0-3720" name="__codelineno-0-3720"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-3721" name="__codelineno-0-3721"></a>    <span class="n">loose</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">PRESET_KEYWORDS</span><span class="p">)</span>
+<a id="__codelineno-0-3722" name="__codelineno-0-3722"></a>    <span class="k">if</span> <span class="n">loose</span><span class="p">:</span>
+<a id="__codelineno-0-3723" name="__codelineno-0-3723"></a>        <span class="c1"># These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.</span>
+<a id="__codelineno-0-3724" name="__codelineno-0-3724"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-3725" name="__codelineno-0-3725"></a>            <span class="sa">f</span><span class="s2">&quot;basemap() takes preset keywords in preset=</span><span class="se">{{</span><span class="s2">...</span><span class="se">}}</span><span class="s2">, not loose; move </span><span class="si">{</span><span class="n">loose</span><span class="si">}</span><span class="s2"> into it — &quot;</span>
+<a id="__codelineno-0-3726" name="__codelineno-0-3726"></a>            <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">, preset=</span><span class="se">{{</span><span class="si">{</span><span class="n">loose</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">: ...</span><span class="se">}}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-3727" name="__codelineno-0-3727"></a>        <span class="p">)</span>
+<a id="__codelineno-0-3728" name="__codelineno-0-3728"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_keyed_basemap</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
+<a id="__codelineno-0-3729" name="__codelineno-0-3729"></a>        <span class="k">if</span> <span class="n">preset</span><span class="p">:</span>
+<a id="__codelineno-0-3730" name="__codelineno-0-3730"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-3731" name="__codelineno-0-3731"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no preset keywords; </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">preset</span><span class="p">)</span><span class="si">}</span><span class="s2"> apply only to a &quot;</span>
+<a id="__codelineno-0-3732" name="__codelineno-0-3732"></a>                <span class="sa">f</span><span class="s2">&quot;keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
+<a id="__codelineno-0-3733" name="__codelineno-0-3733"></a>            <span class="p">)</span>
+<a id="__codelineno-0-3734" name="__codelineno-0-3734"></a>        <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3735" name="__codelineno-0-3735"></a>            <span class="c1"># Dropping it silently would leave a caller believing they had authenticated.</span>
+<a id="__codelineno-0-3736" name="__codelineno-0-3736"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-3737" name="__codelineno-0-3737"></a>                <span class="sa">f</span><span class="s2">&quot;basemap(</span><span class="si">{</span><span class="n">source</span><span class="si">!r}</span><span class="s2">) takes no api_key; it is a token-free source. Credentials apply &quot;</span>
+<a id="__codelineno-0-3738" name="__codelineno-0-3738"></a>                <span class="sa">f</span><span class="s2">&quot;only to a keyed preset such as &#39;Planet.NICFI&#39;&quot;</span>
+<a id="__codelineno-0-3739" name="__codelineno-0-3739"></a>            <span class="p">)</span>
+<a id="__codelineno-0-3740" name="__codelineno-0-3740"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_basemap</span><span class="p">(</span>
+<a id="__codelineno-0-3741" name="__codelineno-0-3741"></a>        <span class="n">source</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span>
+<a id="__codelineno-0-3742" name="__codelineno-0-3742"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -21842,19 +21942,7 @@ reference it by path to keep such a figure readable.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2912">2912</a></span>
-<span class="normal"><a href="#__codelineno-0-2913">2913</a></span>
-<span class="normal"><a href="#__codelineno-0-2914">2914</a></span>
-<span class="normal"><a href="#__codelineno-0-2915">2915</a></span>
-<span class="normal"><a href="#__codelineno-0-2916">2916</a></span>
-<span class="normal"><a href="#__codelineno-0-2917">2917</a></span>
-<span class="normal"><a href="#__codelineno-0-2918">2918</a></span>
-<span class="normal"><a href="#__codelineno-0-2919">2919</a></span>
-<span class="normal"><a href="#__codelineno-0-2920">2920</a></span>
-<span class="normal"><a href="#__codelineno-0-2921">2921</a></span>
-<span class="normal"><a href="#__codelineno-0-2922">2922</a></span>
-<span class="normal"><a href="#__codelineno-0-2923">2923</a></span>
-<span class="normal"><a href="#__codelineno-0-2924">2924</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2924">2924</a></span>
 <span class="normal"><a href="#__codelineno-0-2925">2925</a></span>
 <span class="normal"><a href="#__codelineno-0-2926">2926</a></span>
 <span class="normal"><a href="#__codelineno-0-2927">2927</a></span>
@@ -21885,50 +21973,62 @@ reference it by path to keep such a figure readable.</p>
 <span class="normal"><a href="#__codelineno-0-2952">2952</a></span>
 <span class="normal"><a href="#__codelineno-0-2953">2953</a></span>
 <span class="normal"><a href="#__codelineno-0-2954">2954</a></span>
-<span class="normal"><a href="#__codelineno-0-2955">2955</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2912" name="__codelineno-0-2912"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2913" name="__codelineno-0-2913"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
-<a id="__codelineno-0-2914" name="__codelineno-0-2914"></a>
-<a id="__codelineno-0-2915" name="__codelineno-0-2915"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
-<a id="__codelineno-0-2916" name="__codelineno-0-2916"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
-<a id="__codelineno-0-2917" name="__codelineno-0-2917"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
-<a id="__codelineno-0-2918" name="__codelineno-0-2918"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
-<a id="__codelineno-0-2919" name="__codelineno-0-2919"></a><span class="sd">    ``with`` calls on the way out.</span>
-<a id="__codelineno-0-2920" name="__codelineno-0-2920"></a>
-<a id="__codelineno-0-2921" name="__codelineno-0-2921"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
-<a id="__codelineno-0-2922" name="__codelineno-0-2922"></a>
-<a id="__codelineno-0-2923" name="__codelineno-0-2923"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
-<a id="__codelineno-0-2924" name="__codelineno-0-2924"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
-<a id="__codelineno-0-2925" name="__codelineno-0-2925"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
+<span class="normal"><a href="#__codelineno-0-2955">2955</a></span>
+<span class="normal"><a href="#__codelineno-0-2956">2956</a></span>
+<span class="normal"><a href="#__codelineno-0-2957">2957</a></span>
+<span class="normal"><a href="#__codelineno-0-2958">2958</a></span>
+<span class="normal"><a href="#__codelineno-0-2959">2959</a></span>
+<span class="normal"><a href="#__codelineno-0-2960">2960</a></span>
+<span class="normal"><a href="#__codelineno-0-2961">2961</a></span>
+<span class="normal"><a href="#__codelineno-0-2962">2962</a></span>
+<span class="normal"><a href="#__codelineno-0-2963">2963</a></span>
+<span class="normal"><a href="#__codelineno-0-2964">2964</a></span>
+<span class="normal"><a href="#__codelineno-0-2965">2965</a></span>
+<span class="normal"><a href="#__codelineno-0-2966">2966</a></span>
+<span class="normal"><a href="#__codelineno-0-2967">2967</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2924" name="__codelineno-0-2924"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2925" name="__codelineno-0-2925"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
 <a id="__codelineno-0-2926" name="__codelineno-0-2926"></a>
-<a id="__codelineno-0-2927" name="__codelineno-0-2927"></a><span class="sd">    .. warning::</span>
-<a id="__codelineno-0-2928" name="__codelineno-0-2928"></a><span class="sd">        This closes the **entire** ``self.fig``. The panels returned by</span>
-<a id="__codelineno-0-2929" name="__codelineno-0-2929"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
-<a id="__codelineno-0-2930" name="__codelineno-0-2930"></a><span class="sd">        close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
-<a id="__codelineno-0-2931" name="__codelineno-0-2931"></a><span class="sd">        whole workflow or call :meth:`save` and close the figure yourself instead.</span>
+<a id="__codelineno-0-2927" name="__codelineno-0-2927"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
+<a id="__codelineno-0-2928" name="__codelineno-0-2928"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
+<a id="__codelineno-0-2929" name="__codelineno-0-2929"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
+<a id="__codelineno-0-2930" name="__codelineno-0-2930"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
+<a id="__codelineno-0-2931" name="__codelineno-0-2931"></a><span class="sd">    ``with`` calls on the way out.</span>
 <a id="__codelineno-0-2932" name="__codelineno-0-2932"></a>
-<a id="__codelineno-0-2933" name="__codelineno-0-2933"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2934" name="__codelineno-0-2934"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
-<a id="__codelineno-0-2935" name="__codelineno-0-2935"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2936" name="__codelineno-0-2936"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2937" name="__codelineno-0-2937"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2938" name="__codelineno-0-2938"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2939" name="__codelineno-0-2939"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
-<a id="__codelineno-0-2940" name="__codelineno-0-2940"></a>
-<a id="__codelineno-0-2941" name="__codelineno-0-2941"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2942" name="__codelineno-0-2942"></a>
-<a id="__codelineno-0-2943" name="__codelineno-0-2943"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2944" name="__codelineno-0-2944"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2945" name="__codelineno-0-2945"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2946" name="__codelineno-0-2946"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
-<a id="__codelineno-0-2947" name="__codelineno-0-2947"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2948" name="__codelineno-0-2948"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2949" name="__codelineno-0-2949"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2950" name="__codelineno-0-2950"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
-<a id="__codelineno-0-2951" name="__codelineno-0-2951"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
-<a id="__codelineno-0-2952" name="__codelineno-0-2952"></a>    <span class="c1"># whose data has just been let go (see `on_pick`).</span>
-<a id="__codelineno-0-2953" name="__codelineno-0-2953"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
-<a id="__codelineno-0-2954" name="__codelineno-0-2954"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-2955" name="__codelineno-0-2955"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
+<a id="__codelineno-0-2933" name="__codelineno-0-2933"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
+<a id="__codelineno-0-2934" name="__codelineno-0-2934"></a>
+<a id="__codelineno-0-2935" name="__codelineno-0-2935"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
+<a id="__codelineno-0-2936" name="__codelineno-0-2936"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
+<a id="__codelineno-0-2937" name="__codelineno-0-2937"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
+<a id="__codelineno-0-2938" name="__codelineno-0-2938"></a>
+<a id="__codelineno-0-2939" name="__codelineno-0-2939"></a><span class="sd">    .. warning::</span>
+<a id="__codelineno-0-2940" name="__codelineno-0-2940"></a><span class="sd">        This closes the **entire** ``self.fig``. The panels returned by</span>
+<a id="__codelineno-0-2941" name="__codelineno-0-2941"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
+<a id="__codelineno-0-2942" name="__codelineno-0-2942"></a><span class="sd">        close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
+<a id="__codelineno-0-2943" name="__codelineno-0-2943"></a><span class="sd">        whole workflow or call :meth:`save` and close the figure yourself instead.</span>
+<a id="__codelineno-0-2944" name="__codelineno-0-2944"></a>
+<a id="__codelineno-0-2945" name="__codelineno-0-2945"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2946" name="__codelineno-0-2946"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
+<a id="__codelineno-0-2947" name="__codelineno-0-2947"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2948" name="__codelineno-0-2948"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2949" name="__codelineno-0-2949"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2950" name="__codelineno-0-2950"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2951" name="__codelineno-0-2951"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
+<a id="__codelineno-0-2952" name="__codelineno-0-2952"></a>
+<a id="__codelineno-0-2953" name="__codelineno-0-2953"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2954" name="__codelineno-0-2954"></a>
+<a id="__codelineno-0-2955" name="__codelineno-0-2955"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2956" name="__codelineno-0-2956"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2957" name="__codelineno-0-2957"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2958" name="__codelineno-0-2958"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+<a id="__codelineno-0-2959" name="__codelineno-0-2959"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2960" name="__codelineno-0-2960"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2961" name="__codelineno-0-2961"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2962" name="__codelineno-0-2962"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
+<a id="__codelineno-0-2963" name="__codelineno-0-2963"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
+<a id="__codelineno-0-2964" name="__codelineno-0-2964"></a>    <span class="c1"># whose data has just been let go (see `on_pick`).</span>
+<a id="__codelineno-0-2965" name="__codelineno-0-2965"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
+<a id="__codelineno-0-2966" name="__codelineno-0-2966"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-2967" name="__codelineno-0-2967"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
