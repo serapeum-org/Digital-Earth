@@ -27,6 +27,7 @@ the parent: ``hasattr(cleopatra.basemap.reference.natural_earth, "cache_info")``
 """
 
 import contextlib
+import threading
 
 import numpy as np
 import pytest
@@ -550,3 +551,97 @@ class TestWhatTheReadOnlyFlagOnAKeptArrayIsWorth:
         kept = decoration.PROJECTED_REFERENCE.projected(globe, "coastline", RESOLUTION)
         kept[0].setflags(write=True)
         assert kept[0].flags.writeable, "numpy refused to re-enable writing after all"
+
+
+class TestTheIdentityContractHoldsAcrossThreads:
+    """The cache is process-wide, and a process can have threads; the "same object on a hit" has to mean it.
+
+    Round 2, L3. The ``OrderedDict`` was read and written with no lock, so two threads arriving on one cold
+    key both missed, both projected, and both wrote — one of them then holding a tuple the cache no longer
+    has. Measured on the parent of this fix, five trials, both threads released from one barrier:
+
+    ```
+      trial 0: same object: False  cache len: 1  equal content: True
+      trial 1: same object: False  cache len: 1  equal content: True
+      trial 2: same object: False  cache len: 1  equal content: True
+      trial 3: same object: False  cache len: 1  equal content: True
+      trial 4: same object: False  cache len: 1  equal content: True
+    ```
+
+    Nothing was corrupted and the ``keep`` bound held — the damage was the contract reading false and one
+    thread's projection (up to 1.3 s for a fill) being computed and thrown away. The contract is kept
+    rather than dropped, because the identity is what the hit tests and the class doctests read to tell a
+    hit from a recomputation, and serialising the computation is the cheaper half of the trade: one thread
+    waits for a projection that another is already doing, instead of paying for it a second time.
+    """
+
+    @staticmethod
+    def _asked_by_two_threads(scene, barrier):
+        """Ask the cache for one cold key from two threads released together.
+
+        Args:
+            scene: The map being drawn on.
+            barrier: The two-party barrier both threads wait on, so neither can win by starting first.
+
+        Returns:
+            The two tuples the threads were handed, in completion order.
+        """
+        handed = []
+
+        def ask():
+            barrier.wait()
+            handed.append(
+                decoration.PROJECTED_REFERENCE.projected(scene, "coastline", RESOLUTION)
+            )
+
+        threads = [threading.Thread(target=ask) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        return handed
+
+    def test_two_threads_asking_for_one_cold_key_are_handed_the_same_tuple(self, globe):
+        """The documented contract, under the only condition that could break it.
+
+        Args:
+            globe: The map being drawn on, with its projection frame already warmed.
+
+        Test scenario:
+            A barrier releases both threads at once onto an empty cache, so both reach the miss branch.
+            Identity is the claim: equal content was already true before the lock — it is the *same object*
+            that was not.
+        """
+        handed = self._asked_by_two_threads(globe, threading.Barrier(2))
+        assert handed[0] is handed[1], "two threads were handed two different tuples"
+
+    def test_the_bound_still_holds_when_many_threads_fill_the_cache_at_once(self):
+        """Evicting under a lock must still stop at ``keep``, however many threads are writing.
+
+        Test scenario:
+            One more display CRS than the cache keeps, each asked for by its own thread. The maps are built
+            in this thread — matplotlib figure creation is not thread-safe, and the claim here is about the
+            dict, not about matplotlib.
+        """
+        keep = decoration.PROJECTED_REFERENCE.keep
+        scenes = [
+            Map(crs=projections.orthographic(float(lon * 10), 0.0), globe=True)
+            for lon in range(keep + 4)
+        ]
+        for scene in scenes:
+            scene._frame()
+        threads = [
+            threading.Thread(
+                target=decoration.PROJECTED_REFERENCE.projected,
+                args=(scene, "coastline", RESOLUTION),
+            )
+            for scene in scenes
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        held = len(decoration.PROJECTED_REFERENCE)
+        for scene in scenes:
+            scene.close()
+        assert held == keep, held

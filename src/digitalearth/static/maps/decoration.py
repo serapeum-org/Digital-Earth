@@ -23,6 +23,7 @@ import contextlib
 import logging
 import math
 import numbers
+import threading
 import warnings
 from collections import OrderedDict
 from dataclasses import MISSING
@@ -1037,6 +1038,15 @@ class _ProjectedReference:
     What a caller can still reach deliberately is :meth:`clear` and :attr:`keep` on the cache object, both
     of which only ever cost a recomputation — never a wrong picture — which is why they stay public.
 
+    **One ask at a time, so the identity contract means what it says.** Every read and write of the hold is
+    under one reentrant lock, including the projection itself. Without it, two threads arriving on one cold
+    key both missed, both projected, and both wrote — measured five trials out of five, both released from
+    one barrier — so one of them walked away with a tuple the cache no longer held, and the "same object on
+    a hit" below read false. Nothing was corrupted and the ``keep`` bound held either way; what was wasted
+    was a whole projection, up to 1.3 s for a fill. Serialising is the cheaper half of that trade: a thread
+    waits for a projection another is already doing rather than paying for it again, and matplotlib's own
+    drawing is not thread-safe, so a second thread is not drawing meanwhile in any case.
+
     Attributes:
         keep: How many entries it holds before the least recently used is dropped. A 10m layer is megabytes
             of vertices, so this is bounded rather than a cache that only grows: eight covers the six
@@ -1125,6 +1135,10 @@ class _ProjectedReference:
         self._held: "OrderedDict[Tuple[Any, ...], Tuple[np.ndarray, ...]]" = (
             OrderedDict()
         )
+        # Reentrant rather than plain, only as a guard: nothing under the lock reads the cache again
+        # today — `natural_earth` and the two projectors do not — and a plain `Lock` would turn a future
+        # one into a deadlock instead of a slow call.
+        self._guard = threading.RLock()
 
     def __len__(self) -> int:
         """Return how many projected layers are held.
@@ -1132,7 +1146,8 @@ class _ProjectedReference:
         Returns:
             The entry count, which never exceeds :attr:`keep`.
         """
-        return len(self._held)
+        with self._guard:
+            return len(self._held)
 
     def clear(self) -> None:
         """Forget every projected layer.
@@ -1140,7 +1155,8 @@ class _ProjectedReference:
         For a caller that has to reclaim the memory, and for a test that needs a cold cache — the entries
         are process-wide by design, because two maps in one projection should share them.
         """
-        self._held.clear()
+        with self._guard:
+            self._held.clear()
 
     def projected(
         self, scene: Any, name: str, resolution: str, polygon: bool = False
@@ -1157,36 +1173,38 @@ class _ProjectedReference:
 
         Returns:
             The projected parts, as read-only arrays in an immutable tuple: closed fill rings for
-            ``polygon=True``, finite polyline segments otherwise. The **same tuple object** on a hit,
-            which is what a test asserting identity reads to tell a hit from a recomputation. A tuple
+            ``polygon=True``, finite polyline segments otherwise. The **same tuple object** on a hit — from
+            any thread, because the whole call is under the cache's lock — which is what a test asserting
+            identity reads to tell a hit from a recomputation. A tuple
             rather than a list because this *is* the entry the cache holds, and every later map in the
             process draws from it — see the class docstring.
         """
-        parts = natural_earth(name, resolution)
-        key = (
-            name,
-            resolution,
-            polygon,
-            crs_to_json(scene.crs, "Map.crs"),
-            self._fingerprint(parts),
-        )
-        held = self._held.get(key)
-        if held is not None:
-            self._held.move_to_end(key)
-            return held
-        # Annotated because both projectors are reached through an untyped `scene`, so what they answer is
-        # `Any` and the declared return would be inferred away.
-        built: Tuple[np.ndarray, ...] = tuple(
-            scene._project_polygon_features(parts)
-            if polygon
-            else scene._project_line_features(parts)
-        )
-        for array in built:
-            array.setflags(write=False)
-        self._held[key] = built
-        while len(self._held) > self.keep:
-            self._held.popitem(last=False)
-        return built
+        with self._guard:
+            parts = natural_earth(name, resolution)
+            key = (
+                name,
+                resolution,
+                polygon,
+                crs_to_json(scene.crs, "Map.crs"),
+                self._fingerprint(parts),
+            )
+            held = self._held.get(key)
+            if held is not None:
+                self._held.move_to_end(key)
+                return held
+            # Annotated because both projectors are reached through an untyped `scene`, so what they
+            # answer is `Any` and the declared return would be inferred away.
+            built: Tuple[np.ndarray, ...] = tuple(
+                scene._project_polygon_features(parts)
+                if polygon
+                else scene._project_line_features(parts)
+            )
+            for array in built:
+                array.setflags(write=False)
+            self._held[key] = built
+            while len(self._held) > self.keep:
+                self._held.popitem(last=False)
+            return built
 
     @staticmethod
     def _fingerprint(parts: Any) -> Tuple[Any, ...]:
