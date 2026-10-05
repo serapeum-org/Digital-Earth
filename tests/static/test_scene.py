@@ -703,24 +703,57 @@ class TestASceneOnABorrowedAxes:
         fig, ax = borrowed_axes
         assert Scene(ax=ax).fig is fig, "the scene should adopt the axes' own figure"
 
-    def test_a_figure_passed_explicitly_still_wins(self, borrowed_axes):
-        """An explicit `fig=` is kept, even when the axes belongs to another figure.
+    def test_a_figure_that_agrees_with_the_axes_is_kept(self, borrowed_axes):
+        """An explicit `fig=` naming the axes' own figure is accepted, which is what `grid` passes.
 
         Args:
             borrowed_axes: The caller's `(fig, ax)`.
 
         Test scenario:
-            Deriving the figure must not overrule a caller who names one: `fig=` is the argument, and the
-            axes' own figure is only the fallback.
+            The argument is not pointless once the fallback exists: `grid` builds every panel with
+            `ax=ax, fig=fig`, so the agreeing call has to stay a plain success.
+        """
+        fig, ax = borrowed_axes
+        assert Scene(ax=ax, fig=fig).fig is fig, (
+            "an explicit figure naming the axes' own should be kept"
+        )
+
+    def test_a_figure_that_disagrees_with_the_axes_is_refused(self, borrowed_axes):
+        """`fig=` naming a figure the axes does not belong to is refused by name (R2-M8).
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            It used to be stored, and the scene was then split across two figures: layers drew on `ax` in
+            figure A while `save()`, `close()` and `figure_spec` all acted on figure B. Measured on the
+            branch before the refusal — `save()` wrote a 2492-byte blank where the real figure was 9219,
+            and `figure_spec.title` read `None` off B while A was headed. cleopatra warns about the same
+            configuration from the other side, so nothing downstream wanted it either.
         """
         _fig, ax = borrowed_axes
         other = plt.figure()
         try:
-            assert Scene(ax=ax, fig=other).fig is other, (
-                "an explicit figure should win over the axes' own"
-            )
+            with pytest.raises(ValueError, match="is not the figure that owns"):
+                Scene(ax=ax, fig=other)
         finally:
             plt.close(other)
+
+    def test_a_figure_named_without_an_axes_is_refused(self, borrowed_axes):
+        """`fig=` alone is refused too: the scene would make its own figure and drop the named one.
+
+        Args:
+            borrowed_axes: The caller's `(fig, _ax)`, used here only as a figure to name.
+
+        Test scenario:
+            The same class as the disagreement above, measured: `Scene(fig=host)` ran `plt.subplots`,
+            so `scene.fig is host` was `False` and the figure the caller named held no axes of the
+            scene's at all. An argument that is silently not honoured is the defect, whichever way it is
+            not honoured.
+        """
+        fig, _ax = borrowed_axes
+        with pytest.raises(ValueError, match="only read together with"):
+            Scene(fig=fig)
 
     def test_the_description_is_readable(self, borrowed_axes):
         """`figure_spec` answers on a borrowed axes, with no builder called.

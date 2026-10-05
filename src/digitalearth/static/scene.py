@@ -437,6 +437,23 @@ class Scene(WatermarkMixin):
             >>> plt.close(fig)
 
             ```
+        - A `fig` the axes does not belong to is refused rather than stored, so a scene is never split
+          across two figures:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from digitalearth.static import Scene
+            >>> fig, ax = plt.subplots()
+            >>> elsewhere = plt.figure()
+            >>> Scene(ax=ax, fig=elsewhere)  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: the given fig= is not the figure that owns ax=, ...
+            >>> plt.close(elsewhere)
+            >>> plt.close(fig)
+
+            ```
     """
 
     def __init__(
@@ -459,20 +476,44 @@ class Scene(WatermarkMixin):
                 class docstring).
             fig: The figure `ax` belongs to; taken from `ax` when omitted — its **root** figure, for an
                 axes inside a ``SubFigure``, since :meth:`save` and :meth:`close` hand the figure to
-                ``savefig`` and ``pyplot.close`` and neither takes a subfigure. Naming one explicitly wins,
-                so a caller composing into a figure of their own keeps theirs. Because a scene always holds
-                a real figure now, the note on `ax` above holds for a scene given **only** an axes too:
-                :meth:`close` closes that figure. It previously reached ``pyplot.close(None)``, which closes
-                whichever figure is *current* — the scene's own only by coincidence.
+                ``savefig`` and ``pyplot.close`` and neither takes a subfigure. It is a **confirmation of
+                the axes' own figure, not an override**: naming a different one is refused, and naming one
+                without an `ax` is refused too. `grid` passes `ax=ax, fig=fig` for every panel and that is
+                the shape this argument exists for. Storing a figure that disagreed split the scene across
+                two — layers on `ax` in one, :meth:`save`, :meth:`close` and :attr:`figure_spec` on the
+                other; measured, ``save()`` wrote a 2492-byte blank where the real figure was 7107 bytes
+                and ``figure_spec.title`` read `None` off the empty one while the drawn figure was headed
+                (R2-M8). A caller composing into a figure of their own passes an `ax` *from* it, which the
+                derivation already honours. Because a scene always holds a real figure now, the note on
+                `ax` above holds for a scene given **only** an axes too: :meth:`close` closes that figure.
+                It previously reached ``pyplot.close(None)``, which closes whichever figure is *current* —
+                the scene's own only by coincidence.
             figsize: Size of the figure created when `ax` is None, in inches.
             strict: What to do with a layer that has nothing to draw — data entirely outside the view, or a
                 band with no finite values. `False` (the default) skips it with a warning naming the layer,
                 so one bad frame does not abort a batch; `True` raises `OffLimbError` instead, which is what
                 a pipeline that must not publish a map with a layer missing should pass.
+
+        Raises:
+            ValueError: when `fig` is named without an `ax`, or names a figure that `ax` does not belong
+                to. Both are a `fig=` the scene cannot honour, and storing one quietly split the scene
+                across two figures (R2-M8).
         """
         made_figure = ax is None
         if ax is None:
+            if fig is not None:
+                raise ValueError(
+                    "fig= is only read together with ax=: it names the figure that axes belongs to, and "
+                    "a scene given no axes builds a figure of its own, so the figure named here would "
+                    "never be drawn on. Pass ax= as well, or drop fig=."
+                )
             fig, ax = plt.subplots(figsize=figsize)
+        elif fig is not None and fig is not ax.get_figure(root=True):
+            raise ValueError(
+                "the given fig= is not the figure that owns ax=, so the scene would be split across two: "
+                "layers draw on the axes, while save(), close() and figure_spec all act on fig=. Pass "
+                "only ax= (its figure is derived), or an axes that belongs to fig=."
+            )
         # Derived when the caller names only the axes, which is what `fig`'s own documentation has always
         # promised ("taken from `ax` when omitted") and what the `Figure` annotation below claims. It was
         # stored as the `None` it was passed instead, so every one of the nine `self.fig` reads was an
