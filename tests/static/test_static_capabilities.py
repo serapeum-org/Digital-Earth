@@ -158,10 +158,10 @@ class TestTheDeclaration:
     @pytest.mark.parametrize(
         "name, phrase",
         [
-            ("tooltip", "no pointer"),
+            ("tooltip", "a click, not a hover"),
             ("height", "flat"),
             ("export_html", "not as a page"),
-            ("layer_switcher", "drawn once"),
+            ("layer_switcher", "draws no control"),
         ],
     )
     def test_what_is_missing_says_why(self, name, phrase):

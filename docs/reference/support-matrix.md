@@ -121,14 +121,17 @@ omissions with no positive counterpart on any backend, so they appear only in th
   index to ask which ones overlap, so `labels` takes no allow_overlap= and a crowded column is thinned by
   filtering the features before drawing them. MapLibre's symbol layer is where that decision is made for the
   tier that has one
-- **`layer_switcher`** — the figure is drawn once and does not respond to a pointer, so there is nothing for a
-  switch to toggle; layers are chosen before the figure is drawn
+- **`layer_switcher`** — the tier draws no control onto the figure for a reader to toggle: visibility is set
+  from code, with `set_visible` before or between draws, and a live canvas can do that from a `Scene.on_pick`
+  callback — but the switch itself is a widget the other tiers' engines provide and this one does not
 - **`measure`** — there is no pointer to measure with; a distance is drawn as a layer of its own
 - **`navigation`** — there is no viewport to pan: the extent is set by `set_bounds` before drawing
 - **`time_slider`** — a sequence over time is written out as an animation here rather than scrubbed, which is
   what `animate` is
-- **`tooltip`** — a matplotlib figure is a picture: there is no pointer over it to hover, so a value is read
-  from the colorbar or printed into the cell
+- **`tooltip`** — nothing follows the pointer: a saved figure is a picture, and on a live canvas the gesture
+  this tier delivers is a click, not a hover — `Scene.on_pick` reports the layer a click landed on and its data
+  coordinates, which a caller prints or annotates themselves. A value is otherwise read from the colorbar or
+  printed into the cell
 
 ### web
 
