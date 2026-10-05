@@ -13,6 +13,10 @@ import pytest
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.static import Map
+from digitalearth.static.maps.inset import _CORNER_PAD, _CORNERS
+
+#: The largest side a named corner can hold: the inset keeps :data:`_CORNER_PAD` on both sides of it.
+LARGEST_CORNER = 1.0 - 2.0 * _CORNER_PAD
 
 #: A box in EPSG:3031 (Antarctic Polar Stereographic) whose four corners all reproject to one latitude.
 POLAR_BOX = (-2.0e6, -2.0e6, 2.0e6, 2.0e6)
@@ -511,6 +515,55 @@ class TestInset:
         main = framed(4326)
         with pytest.raises(ValueError, match=r"inset\(size="):
             main.inset(size=bad)
+
+    @pytest.mark.parametrize("too_big", [0.95, 1.0])
+    def test_a_size_that_cannot_keep_its_pad_in_a_corner_is_refused(
+        self, too_big, framed
+    ):
+        """A corner keeps a pad on both sides, so the side it can hold is at most ``0.94``.
+
+        Args:
+            too_big: A size inside ``(0, 1]`` that still does not fit in a padded corner.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            ``size=1.0`` passed the documented ``(0, 1]`` range and placed the inset at ``x0 = -0.03``,
+            outside the map, because the corner arithmetic subtracts the 0.03 pad twice (round 1, L1).
+            The range the corners can honour is the one they are now held to.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(size="):
+            main.inset(size=too_big)
+
+    @pytest.mark.parametrize("corner", sorted(_CORNERS))
+    def test_the_largest_corner_inset_stays_inside_the_map(self, corner, framed):
+        """At the top of its range a corner inset is still wholly inside the axes it sits in.
+
+        Args:
+            corner: The position asked for.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            Measured as a fraction of the parent axes rather than re-derived: the inset's near edge is
+            at or inside 0 and its far edge at or inside 1, for every corner, at the largest size the
+            corner path accepts.
+        """
+        main = framed(4326)
+        child = main.inset(
+            position=corner, size=LARGEST_CORNER
+        ).locator.ax.get_position()
+        parent = main.ax.get_position()
+        near = (
+            round((child.x0 - parent.x0) / parent.width, 6),
+            round((child.y0 - parent.y0) / parent.height, 6),
+        )
+        far = (
+            round((child.x1 - parent.x0) / parent.width, 6),
+            round((child.y1 - parent.y0) / parent.height, 6),
+        )
+        assert min(near) >= 0.0 and max(far) <= 1.0, (
+            f"{corner} at size={LARGEST_CORNER} ran to near={near}, far={far}"
+        )
 
     def test_the_locators_ticks_are_off(self, framed):
         """A locator map carries no tick labels — it is a thumbnail, not a plot.

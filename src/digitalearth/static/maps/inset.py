@@ -52,6 +52,12 @@ _CORNERS: Dict[str, Tuple[int, int]] = {
 #: Gap between the inset and the edge of the map it sits in, as a fraction of the map.
 _CORNER_PAD = 0.03
 
+#: The largest side a *named corner* can hold, since the pad is kept on both sides of the inset. Measured:
+#: ``_InsetFrame.resolve("upper right", 1.0)`` used to answer ``(-0.03, -0.03, 1.0, 1.0)`` — inside the
+#: documented ``(0, 1]`` and outside the map (round 1, L1). At this value the four corners all answer
+#: ``(0.03, 0.03, 0.94, 0.94)``, which is the whole axes less its two pads.
+_LARGEST_CORNER = 1.0 - 2.0 * _CORNER_PAD
+
 #: The inset's side, as a fraction of the map it sits in.
 _DEFAULT_SIZE = 0.28
 
@@ -313,6 +319,19 @@ class _InsetFrame:
             inset(position='top right') is not a corner
 
             ```
+        - The largest corner inset is the axes less its two pads, and a size that cannot keep them is
+          refused rather than hung off the edge:
+            ```python
+            >>> from digitalearth.static.maps.inset import _InsetFrame
+            >>> _InsetFrame.resolve("upper right", 0.94).as_bounds()
+            (0.03, 0.03, 0.94, 0.94)
+            >>> try:
+            ...     _InsetFrame.resolve("upper right", 1.0)
+            ... except ValueError as error:
+            ...     print(str(error).split(":")[0])
+            inset(size=1.0) does not fit in the 'upper right' corner
+
+            ```
     """
 
     x0: float
@@ -336,8 +355,12 @@ class _InsetFrame:
         Raises:
             ValueError: for a ``size`` that is not a fraction in ``(0, 1]`` — ``0`` draws an inset with no
                 area and anything above ``1`` hangs outside the map, neither of which matplotlib refuses
-                on its own — for a string that is not one of the four corners, and for a sequence that does
-                not hold four numbers.
+                on its own — for a string that is not one of the four corners, for a ``size`` above
+                :data:`_LARGEST_CORNER` *beside a named corner*, which cannot keep its pad on both sides
+                and so hangs outside the map from the other end (round 1, L1), and for a sequence that
+                does not hold four numbers. The corner bound is not applied to an explicit rectangle:
+                that spelling places the inset itself, pad and all, and ``size`` is then only read to
+                refuse a value that could not be a fraction at all.
         """
         fraction = float(size) if isinstance(size, Real) else None
         if fraction is None or isinstance(size, bool) or not 0.0 < fraction <= 1.0:
@@ -352,8 +375,15 @@ class _InsetFrame:
                     f"inset(position={position!r}) is not a corner; use one of {sorted(_CORNERS)}, or "
                     "four axes fractions (x0, y0, width, height)"
                 )
+            if fraction > _LARGEST_CORNER:
+                raise ValueError(
+                    f"inset(size={size!r}) does not fit in the {position!r} corner: the inset keeps a "
+                    f"{_CORNER_PAD} pad on both sides of itself, so a named corner holds a side of at "
+                    f"most {_LARGEST_CORNER}. Ask for a smaller size, or place the inset yourself with "
+                    "four axes fractions as position=(x0, y0, width, height)"
+                )
             right, upper = _CORNERS[position]
-            span = 1.0 - fraction - 2.0 * _CORNER_PAD
+            span = _LARGEST_CORNER - fraction
             return cls(
                 x0=_CORNER_PAD + right * span,
                 y0=_CORNER_PAD + upper * span,
@@ -583,7 +613,10 @@ class InsetMixin(_MixinBase):
             position: Where the inset sits — `"upper right"` (default), `"upper left"`,
                 `"lower right"`, `"lower left"`, or four axes fractions
                 `(x0, y0, width, height)` used as given.
-            size: The inset's side as a fraction of this map, for the named corners. Default `0.28`.
+            size: The inset's side as a fraction of this map, for the named corners. Default `0.28`, and
+                at most `0.94` there — the inset keeps a `0.03` pad on both sides of itself, so a larger
+                side would hang outside the map. An explicit `position` rectangle places the inset
+                itself and is not bounded that way.
             extent: The wider area the locator shows, as `(west, south, east, north)` in the locator's
                 CRS. `None` (default) shows the whole projection domain.
             reference: The Natural-Earth layers drawn into the locator, in order. Default
@@ -596,8 +629,8 @@ class InsetMixin(_MixinBase):
             axes and sharing this map's figure.
 
         Raises:
-            ValueError: for a `size` that is not a fraction in `(0, 1]`, a `position` that is
-                neither a corner nor four numbers, a `reference` naming something that is not a
+            ValueError: for a `size` that is not a fraction in `(0, 1]` or one above `0.94` beside a
+                named corner, a `position` that is neither a corner nor four numbers, a `reference` naming something that is not a
                 Natural-Earth layer, or a map that has not been framed — there is then no extent to mark,
                 and the refusal happens **before** the inset axes is created, so nothing half-built is
                 left on the figure. Each of the four names `inset()`, including the last: the extent is
