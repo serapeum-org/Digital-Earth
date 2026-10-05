@@ -567,7 +567,9 @@ class TestInset:
         Test scenario:
             Measured as a fraction of the parent axes rather than re-derived: the inset's near edge is
             at or inside 0 and its far edge at or inside 1, for every corner, at the largest size the
-            corner path accepts.
+            corner path accepts. The two edges are asserted apart because they fail apart — raising the
+            limit past 0.94 pushes a near-anchored corner's *far* edge out and a far-anchored corner's
+            *near* edge out, and a single composite assertion could not say which.
         """
         main = framed(4326)
         child = main.inset(
@@ -582,8 +584,13 @@ class TestInset:
             round((child.x1 - parent.x0) / parent.width, 6),
             round((child.y1 - parent.y0) / parent.height, 6),
         )
-        assert min(near) >= 0.0 and max(far) <= 1.0, (
-            f"{corner} at size={LARGEST_CORNER} ran to near={near}, far={far}"
+        assert min(near) >= 0.0, (
+            f"{corner} at size={LARGEST_CORNER} ran out past the parent's near edge: "
+            f"near={near} (far={far})"
+        )
+        assert max(far) <= 1.0, (
+            f"{corner} at size={LARGEST_CORNER} ran out past the parent's far edge: "
+            f"far={far} (near={near})"
         )
 
     def test_the_locators_ticks_are_off(self, framed):
