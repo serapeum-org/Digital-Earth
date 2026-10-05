@@ -548,9 +548,9 @@ class TestWhatTheDrawerDeclines:
         away = projections.orthographic(lon=-175.0, lat=15.0)
         with Map(crs=away, globe=True) as canvas:
             canvas.labels(places, "fid")
-            held = dict(canvas._renderer.drawn)
             remaining = list(canvas.layer_ids)
-        assert held == {}, f"an off-limb label layer draws nothing; got {held!r}"
+            with pytest.raises(ValueError, match="has nothing to hand back"):
+                canvas.artist()
         assert remaining == [], (
             f"a layer that drew nothing must not be described: {remaining}"
         )
@@ -599,11 +599,9 @@ class TestWhatTheDrawerDeclines:
         )
         with Map(crs=4326) as canvas:
             canvas.labels(FeatureCollection(frame), "name")
-            held = dict(canvas._renderer.drawn)
             remaining = list(canvas.layer_ids)
-        assert held == {}, (
-            f"nothing was labellable, so nothing should be drawn; got {held!r}"
-        )
+            with pytest.raises(ValueError, match="has nothing to hand back"):
+                canvas.artist()
         assert remaining == [], (
             f"a layer that drew nothing must not be described: {remaining}"
         )
