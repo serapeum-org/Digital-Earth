@@ -416,20 +416,21 @@ class TestGridFigureTitle:
     def test_the_described_heading_is_restored_from_the_description(
         self, closed_figures
     ):
-        """A panel's description, drawn again, comes back carrying the heading.
+        """A panel's description, drawn again, comes back carrying the heading — as a heading.
 
         Args:
             closed_figures: Teardown fixture closing the figure.
 
         Test scenario:
-            The round trip is what the record is for: ``draw_figure`` restores
-            ``figure.title or figure.panels[0].title``, so a described heading reaches the new figure while
-            an undescribed one was lost between the two.
+            The round trip is what the record is for, and the slot is half of it: a heading restored onto
+            the axes title is not the figure's heading any more. ``draw_figure`` sets each described title
+            where it came from.
         """
         _fig, maps = grid(1, 1, crs=4326, suptitle="rainfall, 2020")
-        assert (
-            Map.from_figure(maps[0].figure_spec).ax.get_title() == "rainfall, 2020"
-        ), "the heading should survive a round trip through the description"
+        restored = Map.from_figure(maps[0].figure_spec)
+        assert restored.fig.get_suptitle() == "rainfall, 2020", (
+            f"the heading should come back as the figure's; got {restored.fig.get_suptitle()!r}"
+        )
 
     @pytest.mark.parametrize("blank", ["", "   "])
     def test_a_blank_heading_draws_none(self, blank, closed_figures):
@@ -519,4 +520,67 @@ class TestHowTheSharingKeywordsAreTyped:
         annotation = inspect.signature(grid).parameters[keyword].annotation
         assert bool in get_args(annotation), (
             f"grid({keyword}=) should admit bool; got {annotation}"
+        )
+
+
+class TestWhereARoundTripPutsTheTwoTitles:
+    """A figure carrying both a heading and a panel title restores each into its own slot."""
+
+    @pytest.fixture
+    def both_titles(self, closed_figures):
+        """A one-panel grid headed "rainfall, 2020" whose panel is titled "January".
+
+        Args:
+            closed_figures: Teardown fixture closing the figures.
+
+        Returns:
+            The map rebuilt from that panel's description.
+        """
+        _fig, maps = grid(1, 1, crs=4326, suptitle="rainfall, 2020")
+        maps[0].set_title("January")
+        return Map.from_figure(maps[0].figure_spec)
+
+    def test_the_figure_heading_comes_back_on_the_figure(self, both_titles):
+        """The described ``FigureSpec.title`` is drawn as the figure's heading.
+
+        Args:
+            both_titles: The map rebuilt from a described figure carrying both titles.
+
+        Test scenario:
+            It was restored through ``set_title``, which paints the axes, so the heading changed slot on
+            every round trip and the figure came back with none.
+        """
+        assert both_titles.fig.get_suptitle() == "rainfall, 2020", (
+            f"the heading should be the figure's; got {both_titles.fig.get_suptitle()!r}"
+        )
+
+    def test_the_panel_title_comes_back_on_the_axes(self, both_titles):
+        """The described ``PanelSpec.title`` is drawn as the axes title.
+
+        Args:
+            both_titles: The map rebuilt from a described figure carrying both titles.
+
+        Test scenario:
+            The restore read ``figure.title or figure.panels[0].title``, so a figure carrying both never
+            reached the second: the panel's own title was described, dropped, and the heading drawn in its
+            place.
+        """
+        assert both_titles.ax.get_title() == "January", (
+            f"the panel title should be the axes title; got {both_titles.ax.get_title()!r}"
+        )
+
+    def test_the_pair_describes_the_same_way_again(self, both_titles):
+        """The rebuilt map describes the pair it was built from.
+
+        Args:
+            both_titles: The map rebuilt from a described figure carrying both titles.
+
+        Test scenario:
+            A round trip that moves a title between slots is not idempotent — the second description read
+            ``(None, 'rainfall, 2020')`` where the first read ``('rainfall, 2020', 'January')`` — so a
+            figure stored, drawn and stored again drifted.
+        """
+        spec = both_titles.figure_spec
+        assert (spec.title, spec.panels[0].title) == ("rainfall, 2020", "January"), (
+            f"the pair should describe the same way again; got {(spec.title, spec.panels[0].title)}"
         )

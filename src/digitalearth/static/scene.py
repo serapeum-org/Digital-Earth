@@ -2196,9 +2196,10 @@ class Scene(WatermarkMixin):
         :class:`~digitalearth.base.spec.PanelSpec`, the way the 3-D tier has always described its own
         (ST-18). Until then it reached matplotlib and nothing else: a titled map answered
         ``figure_spec.panels[0].title is None``, so a figure written down lost its heading and
-        :meth:`~digitalearth.static.map.Map.draw_figure` — which already restores
-        ``figure.title or figure.panels[0].title`` — had nothing to restore on a round trip through this
-        tier's own description.
+        :meth:`~digitalearth.static.map.Map.draw_figure` had nothing to restore on a round trip through
+        this tier's own description. It is the **panel's** title, and `draw_figure` paints it back on the
+        axes; the figure's own heading is its ``suptitle``, described as ``FigureSpec.title`` and restored
+        there (M4).
 
         Args:
             title: The text to place above the axes. Recorded as the text matplotlib draws for it

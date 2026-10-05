@@ -93,8 +93,9 @@ class Map(
 
         Args:
             figure: The figure to draw. Its one panel's :class:`~digitalearth.base.spec.Viewport` set the
-                display CRS/domain/globe at construction; here its layers are drawn in order and its title and
-                any ``set_bounds`` framing reapplied. An ``object:`` (in-memory) source is replayed in process,
+                display CRS/domain/globe at construction; here its layers are drawn in order and its two
+                titles — the panel's, onto the axes, and the figure's heading, onto the figure — and any
+                ``set_bounds`` framing reapplied. An ``object:`` (in-memory) source is replayed in process,
                 so the scene that registered it must stay alive until this returns; a path or URL source has no
                 such constraint.
 
@@ -113,17 +114,18 @@ class Map(
         figure = retarget_via(figure)
         self._sources = dict(figure.sources)
         self._change(figure)
-        # The layer diff does not re-read the figure's title, so a title the diff cannot carry would be
-        # lost; set it best-effort. Both halves of the pair are live now, and a same-tier round trip does
-        # restore a title: this tier's `figure_spec` records the panel title `set_title` wrote (ST-18) and,
-        # since M4, a `FigureSpec.title` derived from the figure's own suptitle. Measured on one field:
-        # `figure.title=None, panels[0].title='January'` for a plain map, `('rainfall', 'January')` for one
-        # carrying a suptitle too, and `ax.get_title()` comes back `'January'` for the first. A figure
-        # carrying both is headed with `figure.title`, which this sets as the *axes* title — so the panel
-        # title it also carries is not redrawn, and `ax.get_title()` reads `'rainfall'` for that case.
-        title = figure.title or figure.panels[0].title
-        if title:
-            self.set_title(title)
+        # The layer diff does not re-read either title, so both are set here — each into the slot it was
+        # described from. This tier describes two: the **panel's** title, which `set_title` paints on the
+        # axes (ST-18), and the **figure's** heading, which is its `suptitle` (M4). Restoring them through
+        # one `set_title` — `figure.title or figure.panels[0].title` — put the heading on the axes and
+        # dropped the panel's title with it, so the round trip was not even idempotent. Measured on a
+        # one-panel grid carrying both: described `('rainfall, 2020', 'January')` as
+        # `(figure.title, panels[0].title)`, restored `('', 'rainfall, 2020')` as
+        # `(fig.get_suptitle(), ax.get_title())`, and redescribed `(None, 'rainfall, 2020')`.
+        if figure.panels[0].title:
+            self.set_title(figure.panels[0].title)
+        if figure.title:
+            self.fig.suptitle(figure.title)
         # The view's explicit framing is not a layer, so `_change` does not carry it: restore any `set_bounds`
         # region from the panel's viewport, or a map framed on a subregion replays showing the full data
         # extent. `set_bounds` reprojects a `Bounds` in any CRS, so a figure another tier described frames
