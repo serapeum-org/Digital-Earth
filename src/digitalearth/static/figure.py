@@ -19,7 +19,7 @@ import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -65,8 +65,8 @@ def grid(
     crs: Any = 3857,
     globe: bool = False,
     figsize: Optional[Tuple[float, float]] = None,
-    sharex: Union[bool, Literal["all", "row", "col", "none"]] = False,
-    sharey: Union[bool, Literal["all", "row", "col", "none"]] = False,
+    sharex: bool | Literal["all", "row", "col", "none"] = False,
+    sharey: bool | Literal["all", "row", "col", "none"] = False,
     suptitle: Optional[str] = None,
     **kwargs,
 ) -> Tuple[Figure, List[Map]]:
