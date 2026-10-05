@@ -10,6 +10,10 @@ caller state", one builder that states them, and the serialisation that carries 
 `Scale` shared by four tiers needs, since a figure stored by one is read back by another.
 """
 
+from inspect import getsource
+
+from matplotlib.colors import Colormap
+
 from digitalearth.base.spec import Scale
 
 #: Deliberately not the grey `digitalearth.base.symbology.MISSING_COLOR` names: these tests are about a
@@ -120,6 +124,34 @@ class TestStatingTheExtremes:
         reported = Scale.from_limits(0.0, 10.0).with_extremes(under=UNDER).extremes()
         assert reported == {"under": UNDER}, (
             f"only the stated colour must be reported; got {reported}"
+        )
+
+
+class TestTheRationaleNamesMatplotlibsRealLogic:
+    """`with_extremes`'s rationale borrows matplotlib's rule, so it has to name where that rule lives."""
+
+    def test_the_rationale_names_the_method_that_holds_the_keep_rule(self):
+        """The "None means keep" logic is `Colormap._set_extremes`, not the public `set_extremes`.
+
+        Test scenario:
+            The rationale cited `Colormap.set_extremes`, which matplotlib 3.11 marked pending-deprecated
+            and reduced to a one-line delegate — so the sentence pointed at a wrapper that will go away
+            and not at the three `if ... is not None` branches it describes.
+        """
+        assert "_set_extremes" in Scale.with_extremes.__doc__, (
+            "the rationale must name `_set_extremes`, where the None-means-keep branches really are"
+        )
+
+    def test_matplotlibs_public_set_extremes_is_pending_deprecated(self):
+        """The evidence for the sentence above, read off matplotlib rather than remembered."""
+        assert "pending=True" in getsource(Colormap.set_extremes), (
+            f"set_extremes is no longer pending-deprecated; got {getsource(Colormap.set_extremes)!r}"
+        )
+
+    def test_the_keep_branches_live_in_the_private_helper(self):
+        """And the branches the rationale describes are in `_set_extremes`."""
+        assert "if over is not None" in getsource(Colormap._set_extremes), (
+            f"the keep branches moved; got {getsource(Colormap._set_extremes)!r}"
         )
 
 

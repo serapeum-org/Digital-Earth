@@ -689,8 +689,13 @@ class Scale:
         a step on an existing scale rather than three more arguments on every builder.
 
         `None` means "leave this one alone", which is what lets two calls compose and matches
-        `matplotlib.colors.Colormap.with_extremes`, the method a renderer ends up handing these to — its own
-        `set_extremes` applies each of `bad`/`under`/`over` only `if ... is not None`. So `None` cannot
+        `matplotlib.colors.Colormap.with_extremes`, the method a renderer ends up handing these to: it copies
+        the colormap and delegates to `Colormap._set_extremes`, which is where the rule really lives — three
+        branches, `if bad is not None` / `if under is not None` / `if over is not None`, under a docstring
+        reading *"Parameters that are None are left unchanged"* (read off matplotlib 3.11.1). The public
+        `Colormap.set_extremes` is a one-line delegate to that helper and is pending-deprecated as of
+        matplotlib 3.11 (`@_api.deprecated("3.11", pending=True, alternative="cmap.with_extremes(...)")`), so
+        it is not what this rule is borrowed from. So `None` cannot
         **clear** a colour already stated: `with_extremes(over=None)` on a scale whose `over` is `'#ff0000'`
         answers `{'over': '#ff0000'}` again, and a call with no arguments at all is accepted and changes
         nothing. The scale itself is immutable, so the stated colours come back on a **new** scale: a domain
