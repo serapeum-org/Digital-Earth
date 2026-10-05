@@ -232,10 +232,11 @@ class OffLimbError(RuntimeError):
             >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
             >>> hidden.field(ds, name="far") is hidden
             True
-            >>> "far" in hidden._renderer.drawn
-            False
+            >>> "far" not in hidden.layer_ids
+            True
             >>> len(hidden.ax.images)
             0
+            >>> hidden.close()
 
             ```
         - The matplotlib backend re-exports the very same class, for a caller that wants to catch it:

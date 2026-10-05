@@ -277,7 +277,12 @@ def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
         the one thing this tier cannot name a field for.
 
     Examples:
-        - A raster field publishes its band and the limits the render settled on:
+        - A raster field publishes its band and the limits the render settled on. This is the one caller
+          that reads the whole drawn record rather than :meth:`~digitalearth.static.scene.Scene.artist`,
+          which hands back the artist alone: the encoding is built from the layer's stated scale and its
+          glyph's category legend as well, so the artist on its own is not enough — measured,
+          ``color_encoding("band 1", m.artist("grid"))`` raises
+          ``AttributeError: 'AxesImage' object has no attribute 'glyph'``:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -623,7 +628,7 @@ class _HatchedKey:
             ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
             ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
             ...     )
-            ...     sig = m._renderer.drawn["sig"].artist
+            ...     sig = m.artist("sig")
             ...     key = _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p")
             ...     key.hatches
             ...     key.kept
@@ -652,7 +657,7 @@ class _HatchedKey:
             ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
             ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
             ...     )
-            ...     sig = m._renderer.drawn["sig"].artist
+            ...     sig = m.artist("sig")
             ...     _ = m.legend("sig", labels=["a", "b", "c", "d"])
             ...     _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p").rows
             ...     try:
