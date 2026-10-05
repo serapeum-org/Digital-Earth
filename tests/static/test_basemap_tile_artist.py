@@ -40,8 +40,7 @@ def offline_tiles(monkeypatch):
     Args:
         monkeypatch: pytest's patcher, which puts the real fetch back afterwards.
 
-    Yields:
-        None.
+    The patch is the whole effect; ``monkeypatch`` undoes it at teardown, so the fixture needs no yield body.
     """
     from cleopatra.basemap import tiles as cleo_tiles
     from PIL import Image
@@ -54,7 +53,6 @@ def offline_tiles(monkeypatch):
         return tile, png
 
     monkeypatch.setattr(cleo_tiles, "fetch_single_tile", fetch)
-    yield
 
 
 @pytest.fixture
