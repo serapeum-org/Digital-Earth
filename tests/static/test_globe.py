@@ -78,8 +78,9 @@ def test_globe_coastlines(dataset):
     """Globe coastlines project per-line and split at the limb (real 110m data, seeded cache)."""
     m = Map(crs=projections.orthographic(10, 25), globe=True)
     m.field(dataset)
-    segs = m.coastlines(resolution="110m")
-    assert segs
+    m.coastlines(resolution="110m", name="coast")
+    segs = m.artist("coast")
+    assert segs, "the coastline layer must hand back the polylines it drew"
     assert m.ax.lines
     pts = np.vstack([line.get_xydata() for line in m.ax.lines])
     assert np.isfinite(pts).all()  # no inf/nan reached the axes
@@ -88,8 +89,9 @@ def test_globe_coastlines(dataset):
 def test_ocean_fills_disc_on_globe():
     """ocean() fills the whole projection disc on a globe with a single finite ring (no network)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.ocean()
-    assert pc is not None and len(pc.get_paths()) == 1
+    m.ocean(name="sea")
+    pc = m.artist("sea")
+    assert len(pc.get_paths()) == 1, f"the disc is one ring, got {len(pc.get_paths())}"
     verts = np.vstack([p.vertices for p in pc.get_paths()])
     assert np.isfinite(verts).all()
 
@@ -307,8 +309,9 @@ def test_land_fill_finite_on_globe(land_fc, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.land()
-    assert pc is not None and pc.get_paths()
+    m.land(name="fill")
+    pc = m.artist("fill")
+    assert pc.get_paths(), "the land fill must have drawn at least one ring"
     verts = np.vstack([p.vertices for p in pc.get_paths()])
     assert np.isfinite(verts).all()
 
@@ -322,17 +325,18 @@ def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
     m.field(dataset)
     img = m.artist()
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
-    pc = m.land()
-    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, (
-        "land() blew out the extent"
-    )
+    m.land(name="fill")
+    pc = m.artist("fill")
+    assert m.ax.get_xlim() == xlim0, "land() blew out the x extent"
+    assert m.ax.get_ylim() == ylim0, "land() blew out the y extent"
     assert pc.get_zorder() < img.get_zorder(), "land must draw beneath the data raster"
 
 
 def test_ocean_below_land_zorder():
     """ocean() draws below land() (ocean is the deepest background layer)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    ocean = m.ocean()
+    m.ocean(name="sea")
+    ocean = m.artist("sea")
     assert ocean.get_zorder() < -1.5, (
         f"ocean zorder should sit below land (-1.5), got {ocean.get_zorder()}"
     )
@@ -363,8 +367,9 @@ def test_lakes_fill_on_globe_above_land(land_fc, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.lakes()
-    assert pc is not None and pc.get_paths()
+    m.lakes(name="water")
+    pc = m.artist("water")
+    assert pc.get_paths(), "the lakes fill must have drawn at least one ring"
     assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
     assert pc.get_zorder() > -1.5, "lakes should draw above land (-1.5)"
 
@@ -374,8 +379,9 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
     rv = [np.array([(-9, 39), (-8, 40), (-7, 41)], float)]
     mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=rv)
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
-    artists = m.rivers()
-    assert artists
+    m.rivers(name="rv")
+    artists = m.artist("rv")
+    assert artists, "the rivers layer must hand back the polylines it drew"
     assert m.ax.lines
 
 
@@ -385,8 +391,9 @@ def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=3857, globe=True)  # Web-Mercator boundary is a rectangle, not a circle
-    pc = m.land()
-    assert pc is not None and pc.get_paths()
+    m.land(name="fill")
+    pc = m.artist("fill")
+    assert pc.get_paths(), "the land fill must have drawn at least one ring"
     assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
 
 
