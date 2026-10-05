@@ -1320,10 +1320,14 @@ class AnimationMixin(_MixinBase):
         - A **composite** (:data:`_COMPOSITE_KINDS`) gets frozen per-channel stretch `limits` instead. A
           clim is meaningless for an RGB image — the composite runs its own per-channel stretch, so nothing
           in its render path reads `vmin`/`vmax`. They are still forwarded to the glyph with every other
-          kwarg; they simply have no colour scale to move. Measured on a two-frame true-colour stack, the
-          first frame's image reports `get_clim() == (0.0, 0.0)` both with and without
-          `vmin=-100.0, vmax=100.0`. There is likewise no single mappable to key a colorbar to, so an
-          explicit `colorbar=True` is refused rather than answered with a useless bar.
+          kwarg; they simply have no colour scale to move. Measured, the first frame's image reports the
+          **same** `get_clim()` with and without `vmin=-100.0, vmax=100.0`, whichever stack it is drawn
+          from — `(0.0, 1.0)` on a two-frame true-colour stack, the unit range the frozen three-channel
+          stretch maps into, and `(0.0, 0.0)` on the degenerate constant stack the `limits` measurement
+          below uses, whose channels stretch to a single number. It is the *agreement* that is the claim;
+          the pair itself is the stretch's, not the bounds'. There is likewise no single mappable to key
+          a colorbar to, so an explicit `colorbar=True` is refused rather than answered with a useless
+          bar.
 
         Real limits already in `opts` are kept, so a caller can pass their own `limits=` to override the
         scan. A `limits` of `None` counts as absent and is filled, matching how

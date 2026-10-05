@@ -812,6 +812,108 @@ class TestAnimateBand:
         )
 
 
+def _flat_rgb_field(value: float, ny: int = 60, nx: int = 120) -> Dataset:
+    """A 3-band raster holding one value in every channel — a degenerate composite frame.
+
+    Args:
+        value: The value every cell of every channel holds.
+        ny: Row count.
+        nx: Column count.
+
+    Returns:
+        Dataset: a constant 3-band global EPSG:4326 raster.
+    """
+    bands = np.stack([np.full((ny, nx), value, "float32")] * 3)
+    return Dataset.from_array(
+        arr=bands,
+        geo_ref=GeoReference(
+            geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326
+        ),
+    )
+
+
+def _first_frame_clim(stack, **kwargs) -> tuple:
+    """Drive a composite clip's first frame and read the clim off the image it drew.
+
+    Args:
+        stack: The composite frames to animate.
+        **kwargs: Forwarded to :meth:`~digitalearth.static.map.Map.animate`.
+
+    Returns:
+        The first frame's ``AxesImage.get_clim()``, as a plain tuple of floats.
+    """
+    scene = Map(crs=4326, figsize=(3, 3))
+    clip = scene.animate(stack, kind="rgb_composite", fps=2, **kwargs)
+    clip._func(0)
+    clim = tuple(float(value) for value in scene.ax.images[0].get_clim())
+    scene.close()
+    return clim
+
+
+class TestACompositeHasNoColourScaleForVminVmaxToMove:
+    """``vmin``/``vmax`` reach a composite glyph and have nothing to do there (round 2, L15).
+
+    ``_prime_animation``'s docstring quoted ``get_clim() == (0.0, 0.0)`` as *"measured on a two-frame
+    true-colour stack"*. The substantive claim — the pair is the same with and without the bounds — holds,
+    but the number was taken off the degenerate constant stack the ``limits`` measurement below it uses:
+    a real two-frame true-colour stack reports ``(0.0, 1.0)``, the unit range the frozen three-channel
+    stretch maps into. Both are pinned here so the sentence cannot drift from either again.
+    """
+
+    def test_a_true_colour_stack_reports_the_unit_range(self):
+        """The stack the sentence names, with no bounds asked for.
+
+        Test scenario:
+            The composite runs its own per-channel stretch into ``[0, 1]`` and hands matplotlib an RGB
+            array, so the image's clim is that unit range rather than anything measured off the band
+            values.
+        """
+        clim = _first_frame_clim([_rgb_field(shift=0.0), _rgb_field(shift=10.0)])
+        assert clim == (0.0, 1.0), (
+            f"a varying true-colour stack should report the unit range; got {clim}"
+        )
+
+    def test_the_bounds_do_not_move_it(self):
+        """Which is the claim that matters: an RGB image has no scale for ``vmin``/``vmax`` to move.
+
+        Test scenario:
+            The two clims are measured from two separate clips, one given ``vmin=-100.0, vmax=100.0`` and
+            one given nothing, so the comparison is between two differently-built pictures rather than
+            one value read twice.
+        """
+        varying = [_rgb_field(shift=0.0), _rgb_field(shift=10.0)]
+        assert _first_frame_clim(varying, vmin=-100.0, vmax=100.0) == _first_frame_clim(
+            varying
+        ), "vmin/vmax must not move a composite's clim"
+
+    def test_a_constant_stack_is_where_the_zero_pair_comes_from(self):
+        """The number the docstring used to quote, and the stack it was actually measured on.
+
+        Test scenario:
+            A stack holding one value in every channel stretches to a single number, so the RGB array is
+            flat and the image reports a degenerate clim. It is the same stack the ``limits`` measurement
+            eight lines further down the docstring uses, which is how the two got crossed.
+        """
+        clim = _first_frame_clim([_flat_rgb_field(1.0), _flat_rgb_field(5.0)])
+        assert clim == (0.0, 0.0), (
+            f"a constant stack should report the degenerate pair; got {clim}"
+        )
+
+    def test_the_bounds_do_not_move_that_one_either(self):
+        """So the claim is about the composite path, not about the stack that was measured.
+
+        Test scenario:
+            The degenerate case is the one where a clim could most plausibly be read off the bounds
+            instead, since there is no range of its own to report.
+        """
+        constant = [_flat_rgb_field(1.0), _flat_rgb_field(5.0)]
+        assert _first_frame_clim(
+            constant, vmin=-100.0, vmax=100.0
+        ) == _first_frame_clim(constant), (
+            "vmin/vmax must not move a constant composite's clim either"
+        )
+
+
 class TestAnimateComposites:
     """Tests for animating RGB/HSV composites — the kinds Map.animate used to refuse (issue #150)."""
 
