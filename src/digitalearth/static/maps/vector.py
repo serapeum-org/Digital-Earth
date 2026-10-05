@@ -2206,6 +2206,25 @@ class VectorMixin(_MixinBase):
         artist), so readers can scale the field. Only ``quiver`` arrows carry a key; ``barbs``/``streamplot``
         do not.
 
+        **Furniture, not a layer, and deliberately a carve-out from ST-20.** It is one of the two public
+        static methods annotated ``-> Any`` rather than ``-> Self`` — :meth:`field`'s Returns note is the
+        census of them, and
+        :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is the other. So, measured on
+        a map carrying one ``quiver`` layer: the call hands back matplotlib's ``QuiverKey`` and **not** the
+        map, so it does not chain; it registers **no layer**, leaving ``layer_ids`` at
+        ``['vectors-1']`` either side of it; the arrow is nonetheless on the shared axes
+        (``key in map.ax.get_children()``); and because there is no layer, the key is not reachable through
+        :meth:`~digitalearth.static.scene.Scene.artist` at all —
+        ``map.artist("quiverkey")`` raises ``KeyError("no layer 'quiverkey' on this figure; its layers are
+        ['vectors-1']")``, while ``map.artist("vectors-1")`` still hands back the ``Quiver`` the key
+        describes.
+
+        That shape is the decision rather than an oversight: the return value *is* the point of the call
+        (reposition the key, restyle it, hand it on), as it is for ``save`` and ``stock_img``; and a
+        reference arrow explaining the layer beside it is not data a reader would switch off, re-colour or
+        key in a legend, which is what a layer buys. ``tests/static/test_quiverkey_is_furniture.py`` pins
+        both halves.
+
         Args:
             value: The reference magnitude the sample arrow represents (data units, e.g. ``10`` for 10 m/s).
             text: The label drawn next to the arrow (e.g. ``"10 m/s"``).

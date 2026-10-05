@@ -1322,8 +1322,14 @@ class RasterMixin(_MixinBase):
             **The decoration methods chain too**, as of round 1's L6: `coastlines`, `borders`, `land`,
             `ocean`, `lakes`, `rivers`, `text`, `annotate`, `nightshade`, `tissot` and `basemap` are all
             annotated `-> Self`, so `m.field(ds).coastlines().set_title("Flow")` is a `Map` the whole way
-            (measured). `stock_img` is the one deliberate exception — it is annotated `-> Any` and hands
-            back its artist, because for that call the return *is* the point.
+            (measured). **The deliberate `-> Any` carve-outs are enumerated here**, and a new one belongs
+            in this list rather than beside its own method: `stock_img` hands back its backdrop artist, and
+            :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` hands back matplotlib's
+            ``QuiverKey``. For both, the return *is* the point of the call. `quiverkey` is the further case:
+            it draws onto the axes while registering **no layer**, so — measured on a map carrying one
+            ``quiver`` layer — `layer_ids` is `['vectors-1']` either side of it and
+            ``m.artist("quiverkey")`` raises `KeyError`, the reference arrow being furniture that explains a
+            layer rather than a layer of its own.
 
             It returned the ``AxesImage`` until ST-20, and that was a silent divergence from this
             package's own contract: `Method` (in `digitalearth.base.contract`) declares
