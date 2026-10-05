@@ -1315,11 +1315,16 @@ class RasterMixin(_MixinBase):
             It returned the ``AxesImage`` until ST-20, and that was a silent divergence from this
             package's own contract: :class:`~digitalearth.base.contract.Method` declares
             ``returns = "self"`` as its *default*, so every builder the Core names has always been
-            declared chainable — and the web, interactive and 3-D tiers all answer that way, while this
-            tier handed back the engine's object. ``tests/test_contract_names.py`` holds the tiers to the
-            Core's keywords and call shape and does not measure return values, which is why the
-            divergence went unnoticed: the same line chained on three tiers and raised ``AttributeError``
-            on the default one.
+            declared chainable — and this tier handed back the engine's object instead. That contract,
+            not the other tiers, is what the change answers to: the web and interactive builders do
+            answer that way (``field``, ``points``, ``choropleth`` and ``lines`` are annotated
+            ``-> Self`` on both), but the **3-D tier does not** — its four data builders ``terrain``,
+            ``volume``, ``point_cloud`` and ``globe`` are annotated ``-> Any`` and hand back the
+            ``pyvista.Actor`` their drawer produced, or ``None``. So this tier was not the only one
+            returning the engine's object, and the 3-D row is still open.
+            ``tests/test_contract_names.py`` holds the tiers to the Core's keywords and call shape and
+            does not measure return values, which is why the divergence went unnoticed: the same line
+            chained on two tiers and raised ``AttributeError`` on this one.
 
             **The artist is still reachable**, through
             :meth:`~digitalearth.static.scene.Scene.artist`: ``m.artist()`` hands back what this call used
