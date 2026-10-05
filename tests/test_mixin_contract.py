@@ -32,8 +32,9 @@ methods, being every ``*Mixin`` in the four backend packages **plus** the base a
 compose into (``Scene``, ``GeoLayerBase``, ``Map``, ``TexturedGlobe`` and the three other tiers' pairs) —
 and it tests "not ``Self``" rather than "``-> None``", so a missing annotation, the string ``'None'``, an
 ``-> Any`` artist return and a registrar reached through a private helper or a closure all read as the same
-finding. The eleven methods that deliberately answer something else are enumerated, with a reason each, in
-:data:`CONTRACT_CARVE_OUTS`. For contrast, the version this replaced read 30 classes and 3 methods.
+finding. The methods that deliberately answer something else are enumerated, with a reason each, in
+:data:`CONTRACT_CARVE_OUTS`, and each one is held to still tripping a rule, so a carve-out cannot outlive
+the defect it was written for. For contrast, the version this replaced read 30 classes and 3 methods.
 
 Every scan here reads the source with :mod:`ast` rather than importing, so all 27 mixins are covered in
 every environment — including the five ``three_d`` modules that need PyVista, which the ``dev`` env does not
@@ -579,9 +580,6 @@ _THREE_D_ACTOR = (
 #: rather than escaping the scan silently. (N1's third shape, a description *reader*, is no longer flagged
 #: at all: see :data:`REGISTRARS`.)
 CONTRACT_CARVE_OUTS = {
-    "digitalearth.static.maps.inset:InsetMixin.mark_extent": (
-        "hands back the rectangle it drew on the locator map, which is what the method is for"
-    ),
     "digitalearth.static.maps.decoration:DecorationMixin.stock_img": (
         "hands back the backdrop artist a caller restyles; pinned by "
         "tests/static/test_decoration_chaining.py"
@@ -864,6 +862,41 @@ class TestNoBuilderQuietlyDeclinesToChain:
         stale = sorted(set(CONTRACT_CARVE_OUTS) - reachable)
         assert stale == [], (
             f"these carve-outs name no public method the scan reaches: {stale}"
+        )
+
+    def test_every_carve_out_is_a_method_a_rule_would_otherwise_flag(self):
+        """Each carve-out names a method one of the two rules would flag without the exemption.
+
+        Test scenario:
+            A carve-out is only honest while the thing it exempts is still something the rules catch.
+            `mark_extent` was exempted when it registered a layer under an `Optional[Polygon]` return;
+            round 1's L7 fix made it `-> Self`, so no rule flagged it any more and the entry exempted
+            nothing — yet read as a considered decision, which is the very "guard that overstates its
+            reach" M7 was about. The existence check above could not see that: the method was still
+            there. This asserts the stronger property — that every entry would trip rule 1 or rule 2 if
+            it were removed — so a carve-out whose method stops needing one fails here rather than
+            lingering. A missing method is the companion test's job, so an absent key is skipped here.
+        """
+        chainable = {
+            node.name
+            for _, klass in _contract_classes()
+            for node in _class_members(klass).values()
+            if _answers_self(node)
+        }
+        by_key = {key: (members, node) for key, members, node in _contract_methods()}
+        dead = []
+        for key in CONTRACT_CARVE_OUTS:
+            entry = by_key.get(key)
+            if entry is None:
+                continue
+            members, node = entry
+            registers = _registrar_reach(members, key.rsplit(".", 1)[1])
+            delegates = _self_calls(node) & chainable
+            if _answers_self(node) or not (registers or delegates):
+                dead.append(key)
+        assert dead == [], (
+            "these carve-outs trip neither rule, so they exempt nothing and must be removed: "
+            f"{sorted(dead)}"
         )
 
 
