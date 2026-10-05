@@ -1110,7 +1110,7 @@ class Scene(WatermarkMixin):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
                 >>> m = Map(crs=4326)
-                >>> m.graticule(spacing=30.0)
+                >>> _ = m.graticule(spacing=30.0)
                 >>> len(m.artist("graticule-1")), len(m._renderer.drawn["graticule-1"].artists)
                 (18, 19)
                 >>> m.close()

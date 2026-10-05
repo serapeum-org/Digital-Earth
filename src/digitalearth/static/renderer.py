@@ -1660,7 +1660,7 @@ class Renderer:
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
                 >>> m = Map(crs=4326)
-                >>> m.graticule(spacing=30.0)
+                >>> _ = m.graticule(spacing=30.0)
                 >>> held = m._renderer.drawn["graticule-1"].artists
                 >>> len(held), sorted({m._renderer.layer_of(a) for a in held})
                 (19, ['graticule-1'])
@@ -1757,12 +1757,12 @@ class Renderer:
                 ...         MouseEvent("button_press_event", scene.fig.canvas, px, py, button=1)
                 ...     )
                 >>> flat = Map(crs=4326)
-                >>> flat.graticule(spacing=30.0)
+                >>> _ = flat.graticule(spacing=30.0)
                 >>> hit_at_origin(flat)
                 ('graticule-1',)
                 >>> flat.close()
                 >>> globe = Map(crs=4326, globe=True)
-                >>> globe.graticule(spacing=30.0)
+                >>> _ = globe.graticule(spacing=30.0)
                 >>> hit_at_origin(globe)
                 ()
                 >>> globe.close()
