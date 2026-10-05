@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -7493,7 +7493,7 @@ title filed beside each pair — see :meth:<code>_registered_index</code>.</p>
 <a id="__codelineno-0-1110" name="__codelineno-0-1110"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
 <a id="__codelineno-0-1111" name="__codelineno-0-1111"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
 <a id="__codelineno-0-1112" name="__codelineno-0-1112"></a><span class="sd">                &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1113" name="__codelineno-0-1113"></a><span class="sd">                &gt;&gt;&gt; m.graticule(spacing=30.0)</span>
+<a id="__codelineno-0-1113" name="__codelineno-0-1113"></a><span class="sd">                &gt;&gt;&gt; _ = m.graticule(spacing=30.0)</span>
 <a id="__codelineno-0-1114" name="__codelineno-0-1114"></a><span class="sd">                &gt;&gt;&gt; len(m.artist(&quot;graticule-1&quot;)), len(m._renderer.drawn[&quot;graticule-1&quot;].artists)</span>
 <a id="__codelineno-0-1115" name="__codelineno-0-1115"></a><span class="sd">                (18, 19)</span>
 <a id="__codelineno-0-1116" name="__codelineno-0-1116"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
