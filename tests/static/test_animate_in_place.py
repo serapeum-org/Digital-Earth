@@ -1115,6 +1115,183 @@ class TestAPerFrameCaptionIsNotTheFiguresHeading:
         )
 
 
+class TestATitledClipSaysItIsOverwritingAHeading:
+    """``titles=`` paints over the heading ``set_title`` recorded, and now says so (round 2, L11).
+
+    Round 1's L7 stopped a per-frame caption from being *recorded* as the figure's heading, which is
+    right: a caption is not a heading. What it left behind is the other half — the caller's heading is
+    still painted over on the axes by every frame, so the drawn title and the described one disagree for
+    the whole clip with nothing to notice. The captions stay (they are the point of ``titles=``); the
+    collision is named where the caller made it.
+    """
+
+    TITLES = ["Jan", "Feb"]
+    HEADING = "Monthly mean temperature"
+
+    @pytest.mark.parametrize("mode", ["auto", "redraw"])
+    def test_a_recorded_heading_is_named_in_a_warning(self, stack, caplog, mode):
+        """Both ``update=`` paths paint the caption on, so both have to warn.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+            mode: The ``update=`` path the clip is built for.
+
+        Test scenario:
+            The warning is emitted in ``animate`` itself, before the paths split, because the collision
+            is in the call rather than in the strategy — which is also what keeps the two paths from
+            disagreeing about whether to mention it.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, titles=self.TITLES, update=mode, **CLIM)
+        scene.close()
+        assert self.HEADING in caplog.text, (
+            f"the warning should quote the heading being painted over; log was {caplog.text!r}"
+        )
+
+    def test_the_warning_names_the_keyword_that_does_it(self, stack, caplog):
+        """So the caller knows which of the two to drop.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            A heading and per-frame captions are both legitimate on their own; only asking for both at
+            once is the mistake, and ``titles=`` is the half that wins on the axes.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+        scene.close()
+        assert "titles=" in caplog.text, (
+            f"the warning should name the keyword that overwrites it; log was {caplog.text!r}"
+        )
+
+    def test_it_is_said_once_per_call_not_once_per_frame(self, stack, caplog):
+        """A sixty-frame clip must not log sixty lines about one collision.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            The caption is restated on every frame, so warning where it is restated would scale with the
+            clip's length. Every frame is driven here to prove the count does not.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+            for index in range(2):
+                clip._func(index)
+        scene.close()
+        said = [record for record in caplog.records if "titles=" in record.getMessage()]
+        assert len(said) == 1, (
+            f"the collision should be named once per call; got {len(said)} records"
+        )
+
+    def test_a_map_with_no_heading_is_not_warned_at(self, stack, caplog):
+        """``titles=`` on its own is the ordinary case and overwrites nothing.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures anything logged.
+
+        Test scenario:
+            Warning unconditionally would make the common call noisy, and would train the caller to
+            ignore the line that matters.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+        scene.close()
+        assert caplog.text == "", (
+            f"an untitled map has no heading to paint over; log was {caplog.text!r}"
+        )
+
+    def test_a_heading_without_captions_is_not_warned_at_either(self, stack, caplog):
+        """A clip with a heading and no ``titles=`` keeps that heading drawn, so there is no collision.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures anything logged.
+
+        Test scenario:
+            The other half of the pair: ``Map.set_title(...).animate(stack)`` is the shape that already
+            agreed with itself, and must stay quiet.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, **CLIM)
+        scene.close()
+        assert caplog.text == "", (
+            f"a heading alone is drawn and described alike; log was {caplog.text!r}"
+        )
+
+    def test_the_captions_are_still_drawn_over_it(self, stack, caplog):
+        """The warning is the fix, not a behaviour change: ``titles=`` still captions every frame.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            Dropping the overwrite instead would leave a titled clip showing one heading for all its
+            frames, which is the defect ``FrameUpdate.apply``'s title restatement exists for.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+            clip._func(1)
+        shown = scene.ax.get_title()
+        scene.close()
+        assert shown == self.TITLES[1], (
+            f"the frame drawn should still carry its own caption; got {shown!r}"
+        )
+
+    def test_the_recorded_heading_is_still_the_callers(self, stack, caplog):
+        """And the description still holds the heading, which is what makes the two disagree at all.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            Round 1's L7 put the heading beyond a caption's reach in the record; this pins that half, so
+            a later change that "fixed" the disagreement by recording the caption fails here.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+            clip._func(1)
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described == self.HEADING, (
+            f"the figure must keep describing the caller's heading; described {described!r}"
+        )
+
+
 class TestWhereABadBandIsRefused:
     """``FrameUpdate`` validates the band it is about to read, and only that one."""
 

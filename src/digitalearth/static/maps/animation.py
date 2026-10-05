@@ -661,7 +661,9 @@ class FrameUpdate:
         animation came out with every frame titled "Jan". It is set straight on the axes rather than
         through :meth:`~digitalearth.static.scene.Scene.set_title`, which would also write it into the
         figure's description: a frame's caption is not the figure's heading, and ``titles=`` leaves that
-        heading to the caller.
+        heading to the caller *in the record*. On the axes there is only one title to draw, so a
+        recorded heading is painted over here — :meth:`AnimationMixin.animate` says so once, at
+        ``WARNING``, when a call asks for both (round 2, L11).
 
         Args:
             index: Which frame to show.
@@ -1549,7 +1551,12 @@ class AnimationMixin(_MixinBase):
                 ``**kwargs`` to pick their channels).
             fps: Frames per second (sets the inter-frame interval). Defaults to :data:`DEFAULT_FPS`, the one
                 rate every animation entry point — here, :meth:`rotate`, and the other backends — starts from.
-            titles: Optional per-frame titles; must match the stack length when given.
+            titles: Optional per-frame captions; must match the stack length when given. They are drawn
+                on the axes and left out of the figure's description, so a heading
+                :meth:`~digitalearth.static.scene.Scene.set_title` recorded survives in the record — but
+                it is **painted over** on the axes by every frame, which is a disagreement between the
+                drawn and the described title and is said once, at ``WARNING``, when both are asked for
+                (round 2, L11).
             ocean: When True, fill the ocean disc behind each frame (globe maps only).
             coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).
             colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared
@@ -1704,6 +1711,15 @@ class AnimationMixin(_MixinBase):
         if titles is not None and len(titles) != len(frames):
             raise ValueError(
                 f"titles length ({len(titles)}) must match the stack length ({len(frames)})"
+            )
+        if titles is not None and self.title is not None:
+            # Said here rather than where the caption is painted on, so one clip says it once however
+            # many frames it runs for, and both `update=` paths say it alike.
+            logger.warning(
+                "animate: titles= captions each frame on the axes, which paints over the heading "
+                "set_title() recorded (%r). The figure's description keeps that heading, so the drawn "
+                "and the described title will disagree for the whole clip — drop one of the two",
+                self.title,
             )
         updates = FrameUpdate(
             self, frames, kwargs, kind=kind, mode=update, titles=titles
