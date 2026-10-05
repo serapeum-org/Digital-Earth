@@ -16,6 +16,7 @@ from matplotlib.animation import PillowWriter
 from matplotlib.image import AxesImage
 from pyramids.dataset import Dataset, GeoReference
 
+from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.static import Map, projections
 from digitalearth.static.maps.animation import FrameUpdate
 
@@ -959,3 +960,58 @@ class TestAPerFrameCaptionIsNotTheFiguresHeading:
         assert shown == self.TITLES[-1], (
             f"the last frame drawn should still be captioned {self.TITLES[-1]!r}, got {shown!r}"
         )
+
+
+class TestWhereABadBandIsRefused:
+    """``FrameUpdate`` validates the band it is about to read, and only that one."""
+
+    def test_the_strategy_that_will_read_a_band_refuses_a_bad_one(self, stack):
+        """An in-place animation reads the band itself, so it checks it where it is resolved.
+
+        Test scenario:
+            ``FrameUpdate.apply`` passes ``self.band`` to the field reader on every frame, and bands count
+            from 1 — a 0 reached pyramids as the 0-based band -1 and came back naming a band nobody asked
+            for.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            FrameUpdate(scene, stack, {"band": 0}, kind="imshow")
+        scene.close()
+
+    @pytest.mark.parametrize(
+        "kind",
+        [
+            pytest.param("contour", id="contour-set"),
+            pytest.param("rgb_composite", id="composite"),
+        ],
+    )
+    def test_a_blocked_strategy_does_not_read_the_band_at_all(self, stack, kind):
+        """So it does not validate one either, and its own ``Raises:`` says as much.
+
+        Args:
+            kind: A renderer that cannot update one artist in place.
+
+        Test scenario:
+            A composite names ``bands``, not ``band``, and a redrawn frame has its band checked where
+            every still checks it. Validating here would refuse a value the blocked path never reads —
+            which for a composite is a value that cannot reach the picture at all.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        plan = FrameUpdate(scene, stack, {"band": 0}, kind=kind)
+        scene.close()
+        assert plan.band == DEFAULT_BAND, (
+            f"a blocked strategy should leave the band at its default, got {plan.band}"
+        )
+
+    def test_the_public_call_refuses_it_on_a_redrawn_kind(self, stack):
+        """Which is the refusal a caller actually meets, and it covers the kinds this one does not.
+
+        Test scenario:
+            ``kind="contourf"`` blocks the in-place path, so the constructor above lets ``band=0``
+            through — and ``animate`` still refuses it, from ``_prime_animation``, before a frame is
+            drawn.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            scene.animate(stack, kind="contourf", band=0, fps=2)
+        scene.close()

@@ -362,9 +362,17 @@ class FrameUpdate:
             titles: The per-frame titles, or ``None``.
 
         Raises:
-            ValueError: when ``mode`` is not one of :attr:`MODES`, or when ``opts`` names a band that is not
-                a whole number of 1 or more (from :func:`_animated_band`, so the refusal is the same one a
-                still makes).
+            ValueError: when ``mode`` is not one of :attr:`MODES`; and, **on the in-place path only**, when
+                ``opts`` names a band that is not a whole number of 1 or more (from
+                :func:`_animated_band`, so the refusal is the same one a still makes). A blocked strategy
+                does not read the band at all — see :attr:`band` — so a bad one gets past this constructor
+                there. Measured: ``FrameUpdate(scene, frames, {"band": 0}, kind="imshow")`` refuses, while
+                the same call with ``kind="contour"`` or ``kind="rgb_composite"`` does not and leaves
+                ``band`` at its default. That is not a hole at the public level — every kind that reads a
+                band meets the same refusal from :meth:`AnimationMixin._prime_animation`, measured on
+                ``Map.animate(..., band=0)`` for ``kind="imshow"`` and ``kind="contourf"`` alike. A
+                composite is the one kind that refuses nothing, because it names ``bands``, not ``band``,
+                and so never reads the value.
         """
         if mode not in self.MODES:
             raise ValueError(
