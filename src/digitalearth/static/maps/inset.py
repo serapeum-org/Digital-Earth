@@ -759,11 +759,13 @@ class InsetMixin(_MixinBase):
             Draw everything the locator shows through `inset(reference=)`, or keep the locator flat.
 
         Warning:
-            **The locator shares this map's figure, so do not close it or context-manage it.**
-            :meth:`~digitalearth.static.scene.Scene.close` calls `pyplot.close` on whatever figure a
-            scene holds, and a borrowed figure is not spared (#371) — measured: after
-            `m.inset().locator.close()`, `m.fig.number` is no longer in `pyplot.get_fignums()`, i.e.
-            closing the locator closed the map. Close the *map* when you are done, which closes both.
+            **The locator shares this map's figure, but closing the locator no longer closes the map.**
+            The locator is built on an inset axes of this map's figure, so it does not own that figure
+            (:attr:`~digitalearth.static.scene.Scene._owns_fig` is `False`):
+            :meth:`~digitalearth.static.scene.Scene.close` spares a borrowed figure, so after
+            `m.inset(); m.locator.close()`, `m.fig.number` is still in `pyplot.get_fignums()` — the
+            locator's own state is released and the map's figure is left open (#371, resolved). Close the
+            *map* when you are done, which closes the figure both sit on.
 
         Args:
             crs: Display CRS of the locator. `None` (default) uses **this map's own** display CRS, which
