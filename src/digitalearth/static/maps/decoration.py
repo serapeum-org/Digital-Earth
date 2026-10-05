@@ -3649,10 +3649,17 @@ class DecorationMixin(_MixinBase):
             **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
-            This map (chainable). The tile artist ``add_tiles`` added to the axes is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6). Tiles that
-            cannot be fetched raise rather than answering ``None``, and the layer is dropped from the
-            description with them.
+            This map (chainable). What :meth:`~digitalearth.static.scene.Scene.artist` answers for this
+            layer's id is **the axes**, because cleopatra's ``add_tiles`` draws onto them and hands them
+            back rather than naming what it added (its own ``Returns:`` reads *"matplotlib.axes.Axes: The
+            same axes, for chaining"*) — the same situation as the Natural-Earth layers on a flat map, and
+            the same wording. The tile ``AxesImage`` is the layer's all the same, which is what
+            :meth:`~digitalearth.static.scene.Scene.set_visible` and
+            :meth:`~digitalearth.static.scene.Scene.remove_layer` reach; no public accessor names it
+            (round 2, M5 — the claim this replaces said ``artist`` did, and
+            ``tests/static/test_basemap_tile_artist.py`` is where that is measured against the real
+            engine). Tiles that cannot be fetched raise rather than answering ``None``, and the layer is
+            dropped from the description with them.
 
         Raises:
             ValueError: when a keyed preset is unknown, its credential is unavailable, when a `preset`
