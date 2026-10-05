@@ -1758,7 +1758,7 @@ class VectorMixin(_MixinBase):
                 >>> places = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> with Map(crs=places.epsg) as canvas:
                 ...     _ = canvas.labels(places, "fid", text_size=9.0, name="names")
-                ...     len(canvas._renderer.drawn["names"].artists) == len(places)
+                ...     len(canvas.artist("names")) == len(places)
                 True
 
                 ```
@@ -1959,9 +1959,10 @@ class VectorMixin(_MixinBase):
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> m = Map(crs=ds.epsg)
                 >>> _ = m.grid_cells(ds, name="cells")
-                >>> cells = m._renderer.drawn["cells"].artist
+                >>> cells = m.artist("cells")
                 >>> len(cells.get_paths()) == ds.rows * ds.columns
                 True
+                >>> m.close()
 
                 ```
         """
@@ -2557,8 +2558,9 @@ class VectorMixin(_MixinBase):
                 >>> fc["geometry"] = fc.geometry.buffer(500.0)
                 >>> m = Map(crs=fc.epsg)
                 >>> _ = m.choropleth(fc, column="fid", name="zones")
-                >>> len(m._renderer.drawn["zones"].artist.get_paths()) >= len(fc)
+                >>> len(m.artist("zones").get_paths()) >= len(fc)
                 True
+                >>> m.close()
 
                 ```
             - Colour by an unordered attribute — one colour per distinct class, keyed by a swatch legend:
@@ -2567,11 +2569,12 @@ class VectorMixin(_MixinBase):
                 >>> m = Map(crs=fc.epsg)
                 >>> _ = m.choropleth(fc, column="zone", scheme="categorical", name="zoning")
                 >>> from matplotlib.colors import BoundaryNorm
-                >>> norm = m._renderer.drawn["zoning"].artist.norm
+                >>> norm = m.artist("zoning").norm
                 >>> isinstance(norm, BoundaryNorm)  # discrete class codes, not a continuous scale
                 True
                 >>> [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
                 ['rural', 'urban']
+                >>> m.close()
 
                 ```
         """
@@ -3144,7 +3147,7 @@ class VectorMixin(_MixinBase):
                 ... ))
                 >>> m = Map(crs=4326)
                 >>> _ = m.hexbin(wells, gridsize=4, name="counts")
-                >>> sorted(m._renderer.drawn["counts"].artist.get_array().tolist())
+                >>> sorted(m.artist("counts").get_array().tolist())
                 [1.0, 3.0]
                 >>> m.close()
 
@@ -3164,7 +3167,7 @@ class VectorMixin(_MixinBase):
                 ... ))
                 >>> m = Map(crs=4326)
                 >>> _ = m.hexbin(wells, "depth", reduce="mean", gridsize=4, name="depths")
-                >>> sorted(m._renderer.drawn["depths"].artist.get_array().tolist())
+                >>> sorted(m.artist("depths").get_array().tolist())
                 [4.0, 100.0]
                 >>> m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props["via"]
                 'hexbin'
@@ -3401,7 +3404,7 @@ class VectorMixin(_MixinBase):
                 ... ))
                 >>> with Map(crs=4326) as m:
                 ...     _ = m.lines(reaches, column="discharge", scheme="equal_interval", k=3, width=2.0)
-                ...     lc = m._renderer.drawn[m.layer_ids[-1]].artist
+                ...     lc = m.artist()
                 ...     lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})
                 ...     m.figure_spec.layers.get(m.layer_ids[-1]).kind
                 ([10.0, 40.0, 25.0], [2.0])
@@ -3423,7 +3426,7 @@ class VectorMixin(_MixinBase):
                 ... ))
                 >>> with Map(crs=4326) as m:
                 ...     _ = m.lines(roads, width="lanes", color="dimgray")
-                ...     widths = m._renderer.drawn[m.layer_ids[-1]].artist.get_linewidths()
+                ...     widths = m.artist().get_linewidths()
                 >>> bool(widths[1] > widths[0])
                 True
 
