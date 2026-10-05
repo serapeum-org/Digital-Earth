@@ -81,7 +81,9 @@ is kept, and the decline is logged at `WARNING` naming the centre and the range 
 Three values fall outside a colour ramp, and a field render takes a colour for each: `missing=` for a cell with
 no value, `under=` for a value below `vmin` and `over=` for one above `vmax`. They are stated on the call and
 folded onto the layer's colormap, so they also reach the figure's description — the layer's colour `Scale`
-carries them, which is what lets another backend colour the same values the same way.
+carries them, so a backend that read them back could colour the same values the same way. None does yet: the
+static style schema declares `missing`/`over`/`under` and the interactive one declares none of the three, so the
+round trip that works today is this tier reading back its own figure.
 
 ```python
 m.field(dataset, vmin=0, vmax=100, missing="#cccccc", under="#0000ff", over="#ff0000")

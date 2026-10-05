@@ -27,9 +27,10 @@ luck and drifted where they did not. A `Scale` derived once and reused across fr
 animation's colours flickering, and what lets a legend show the colours that were actually drawn.
 
 It also states what the ramp *cannot* colour: `missing` for a value it cannot place, and `over`/`under` for one
-past either end of the domain. All three travel in the stored form, so the tier that drew a figure and the tier
-that reads it back agree on the colour of a nodata cell and of a clipped value — see `with_extremes` to state
-them and `extremes` to read back only the ones that were stated.
+past either end of the domain. All three travel in the stored form, so a tier that reads a figure back can agree
+with the tier that drew it on the colour of a nodata cell and of a clipped value — see `with_extremes` to state
+them and `extremes` to read back only the ones that were stated. The static tier is the only one that reads them
+back so far; the other three do not.
 
 `straddles` answers the one question a diverging ramp has to pass: does the domain run on both sides of the
 value the ramp would be centred on? Centred outside it, one arm is never drawn and the other carries every

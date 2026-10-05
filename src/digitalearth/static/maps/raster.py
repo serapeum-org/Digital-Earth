@@ -649,7 +649,10 @@ class FieldColors:
 
         The route is through :class:`~digitalearth.base.spec.scale.Scale` rather than straight onto the
         colormap, because the scale is what the layer publishes: the colours end up in the figure's
-        description, so another tier reading it back colours the same values the same way.
+        description, so a tier that reads that description back can colour the same values the same way.
+        No other tier reads them yet: ``STATIC_STYLE_SCHEMA`` declares ``missing``/``over``/``under`` and
+        ``INTERACTIVE_STYLE_SCHEMA`` declares none of the three, so the round trip that works today is this
+        tier reading back its own figure.
 
         An extreme that was not stated is passed as ``None``, which is how
         ``matplotlib.colors.Colormap.with_extremes`` says "keep this one" — so a colormap the caller built
@@ -665,8 +668,8 @@ class FieldColors:
 
         Examples:
             - The two halves of what it does, read back off a drawn field: the colours are on the drawn
-              colormap, and on the scale the figure's colour encoding carries — which is how another tier
-              reading the figure colours the same values the same way:
+              colormap, and on the scale the figure's colour encoding carries — which is what a tier
+              reading the figure back would have to colour from:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1292,7 +1295,8 @@ class RasterMixin(_MixinBase):
                 * ``missing=``, ``over=`` and ``under=`` colour what the ramp cannot place: a nodata cell,
                   a value above the upper limit and one below the lower. They are this tier's own keywords
                   (:class:`FieldColors`), folded onto the drawn colormap *and* onto the scale the layer
-                  publishes, so another tier reading the figure back colours those values the same way.
+                  publishes, so they survive into the figure's description and come back on a re-read.
+                  This tier is the only one that reads them back so far.
                   Unstated, each leaves the colormap's own treatment alone — which is matplotlib's
                   transparent "bad" and the ramp's end colours.
 
