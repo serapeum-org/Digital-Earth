@@ -322,8 +322,8 @@ class TestTheProjectedGeometryIsKept:
         first.land(resolution=RESOLUTION)
         first.close()
         second = Map(crs=GLOBE, globe=True)
-        filled = second.land(resolution=RESOLUTION)
-        paths = len(filled.get_paths())
+        second.land(resolution=RESOLUTION, name="fill")
+        paths = len(second.artist("fill").get_paths())
         second.close()
         assert paths > 0, "the globe fill drew no polygons from the kept rings"
 

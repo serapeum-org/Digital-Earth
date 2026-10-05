@@ -38,6 +38,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Self,
     Sequence,
     Tuple,
 )
@@ -2534,7 +2535,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
 
         On a **globe** map, line layers (coastline/borders/rivers) are projected per-line and split at the
@@ -2562,12 +2563,14 @@ class DecorationMixin(_MixinBase):
                 :func:`~digitalearth.static.scene.described_opts`).
 
         Returns:
-            Whatever the path that drew it returns — the ``PolyCollection`` of a globe fill, the list of
-            polyline artists of a globe line layer, or the axes on a flat map; and ``None`` when nothing
-            was on the near side to draw. All three describe one layer of the reference geography's own
-            kind, whichever matplotlib objects they happened to leave behind.
+            This map (chainable). Whichever matplotlib objects the drawing path left behind — the
+            ``PolyCollection`` of a globe fill, the polyline artists of a globe line layer, the axes on a
+            flat map — are reached through :meth:`~digitalearth.static.scene.Scene.artist`, because the
+            three are one layer of the reference geography's own kind and a caller should not have to know
+            which frame drew it. Nothing on the near side draws nothing and registers no layer id, which
+            is what the ``None`` this used to answer with said (round-1 L6).
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 _NATURAL_EARTH_KINDS[layer],
                 name=name,
@@ -2585,6 +2588,7 @@ class DecorationMixin(_MixinBase):
                 opts=kwargs,
             )
         )
+        return self
 
     def coastlines(
         self,
@@ -2593,7 +2597,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
 
         Args:
@@ -2610,8 +2614,9 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
-            on a flat map).
+            This map (chainable). The coastline — polyline artists on a globe, the reprojected plot artist
+            on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by this
+            layer's id (round-1 L6).
         """
         return self._natural_earth(
             "coastline", resolution, zorder=2.5, name=name, visible=visible, **kwargs
@@ -2624,7 +2629,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Overlay Natural-Earth country borders.
 
         Args:
@@ -2641,8 +2646,9 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
-            flat map).
+            This map (chainable). The border artist — polyline artists on a globe, the reprojected plot
+            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
+            this layer's id (round-1 L6).
         """
         return self._natural_earth(
             "borders", resolution, zorder=2.5, name=name, visible=visible, **kwargs
@@ -2655,7 +2661,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Fill Natural-Earth land polygons.
 
         On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
@@ -2676,8 +2682,9 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            The land fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
-            the reprojected plot artist on a flat map).
+            This map (chainable). The land fill — a ``PolyCollection`` on a globe, the reprojected plot
+            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
+            this layer's id (round-1 L6).
         """
         return self._natural_earth(
             "land",
@@ -2696,7 +2703,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Fill Natural-Earth ocean polygons.
 
         On a **globe** map, ``ocean`` fills the whole projection disc (the boundary ring) with the ocean
@@ -2717,8 +2724,9 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            The ocean fill layer (a ``PolyCollection`` disc on a globe; the reprojected plot artist on a flat
-            map).
+            This map (chainable). The ocean fill — a ``PolyCollection`` disc on a globe, the reprojected
+            plot artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`,
+            by this layer's id (round-1 L6).
         """
         if self.globe:
             # The disc is the ocean: filling the whole projection boundary and letting land overlay it is
@@ -2745,7 +2753,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Fill Natural-Earth lake polygons.
 
         Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
@@ -2765,8 +2773,9 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            The lake fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
-            the reprojected plot artist on a flat map).
+            This map (chainable). The lake fill — a ``PolyCollection`` on a globe, the reprojected plot
+            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
+            this layer's id (round-1 L6).
         """
         return self._natural_earth(
             "lakes",
@@ -2785,7 +2794,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs,
-    ) -> Any:
+    ) -> Self:
         """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe.
 
         Args:
@@ -2802,8 +2811,9 @@ class DecorationMixin(_MixinBase):
                 to the Natural-Earth default for it.
 
         Returns:
-            The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
-            flat map).
+            This map (chainable). The river artist — polyline artists on a globe, the reprojected plot
+            artist on a flat map — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by
+            this layer's id (round-1 L6).
         """
         return self._natural_earth(
             "rivers", resolution, zorder=2.4, name=name, visible=visible, **kwargs
