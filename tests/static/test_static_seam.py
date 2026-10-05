@@ -1167,13 +1167,18 @@ class TestANamedArgumentIsNormalisedForTheDescription:
         from pyramids.base.crs import crs_from_user_input
 
         canvas = Map(crs=dataset.epsg)
-        placed = canvas.text(4.9, 52.4, "Amsterdam", crs=crs_from_user_input(4326))
-        by_code = Map(crs=dataset.epsg).text(4.9, 52.4, "Amsterdam", crs=4326)
+        canvas.text(4.9, 52.4, "Amsterdam", crs=crs_from_user_input(4326))
+        other = Map(crs=dataset.epsg)
+        other.text(4.9, 52.4, "Amsterdam", crs=4326)
         recorded = canvas.figure_spec.layers.get("text-1").symbology.props["crs"]
         json.dumps(canvas.figure_spec.layers.to_dict(), allow_nan=False)
+        # Read off the layers before the figures go, since the builders hand back the map now (round-1 L6).
+        placed = canvas.artist("text-1").get_position()
+        by_code = other.artist("text-1").get_position()
         canvas.close()
+        other.close()
         assert recorded == "EPSG:4326", recorded
-        assert placed.get_position() == by_code.get_position()
+        assert placed == by_code, (placed, by_code)
 
     def test_a_channel_with_no_limits_to_freeze_is_recorded_as_none(self, dataset):
         """``channel_limits`` documents ``(nan, nan)`` for an unmeasurable channel; JSON has no nan.

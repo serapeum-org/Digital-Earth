@@ -2251,12 +2251,12 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Place a text label at a ``lon``/``lat`` location (reprojected to the display CRS).
 
         The point is reprojected from ``crs`` (lon/lat by default) into the display CRS via pyramids, then
         drawn with ``Axes.text``. On a globe, a point on the **far side** reprojects to non-finite coordinates
-        and is skipped (no artist, returns ``None``).
+        and is skipped: nothing is drawn and no layer is registered, and the call still chains.
 
         Args:
             lon: Longitude (x) of the label, in ``crs``.
@@ -2279,9 +2279,13 @@ class DecorationMixin(_MixinBase):
                 ``fontname``.
 
         Returns:
-            The :class:`matplotlib.text.Text`, or ``None`` if the point is off the visible globe.
+            This map (chainable). The :class:`matplotlib.text.Text` is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id — a label is one artist a
+            caller restyles afterwards, and that is where ST-20 moved every such artist to (round-1 L6). A
+            point off the visible globe registers no layer, which is what the ``None`` this used to answer
+            with said; `artist()` then refuses that id by name rather than answering ``None``.
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "text",
                 name=name,
@@ -2300,6 +2304,7 @@ class DecorationMixin(_MixinBase):
                 opts=kwargs,
             )
         )
+        return self
 
     def annotate(
         self,
@@ -2312,12 +2317,12 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Annotate a ``lon``/``lat`` location (reprojected), optionally with an arrow.
 
         Like :meth:`text` but via ``Axes.annotate``: the annotated point ``xy`` is the reprojected
         ``lon``/``lat``; pass ``xytext`` (with ``arrowprops``) to draw an arrow from the label to the point.
-        A far-side point on a globe is skipped (returns ``None``).
+        A far-side point on a globe is skipped: nothing is drawn and no layer is registered.
 
         Args:
             lon: Longitude (x) of the annotated point, in ``crs``.
@@ -2342,9 +2347,11 @@ class DecorationMixin(_MixinBase):
                 and ``fontname``.
 
         Returns:
-            The :class:`matplotlib.text.Annotation`, or ``None`` if the point is off the visible globe.
+            This map (chainable). The :class:`matplotlib.text.Annotation` is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id, exactly as :meth:`text`'s
+            is (round-1 L6). A point off the visible globe registers no layer.
         """
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "text",
                 name=name,
@@ -2362,6 +2369,7 @@ class DecorationMixin(_MixinBase):
                 opts=kwargs,
             )
         )
+        return self
 
     def stock_img(
         self,

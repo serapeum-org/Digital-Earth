@@ -47,7 +47,18 @@ CHAINING_CALLS = {
     "ocean": (lambda canvas: canvas.ocean(COARSE, name="deco"), "deco"),
     "lakes": (lambda canvas: canvas.lakes(COARSE, name="deco"), "deco"),
     "rivers": (lambda canvas: canvas.rivers(COARSE, name="deco"), "deco"),
+    "text": (
+        lambda canvas: canvas.text(NEAR_LON, NEAR_LAT, "Amsterdam", name="deco"),
+        "deco",
+    ),
+    "annotate": (
+        lambda canvas: canvas.annotate(NEAR_LON, NEAR_LAT, "Amsterdam", name="deco"),
+        "deco",
+    ),
 }
+
+#: The orthographic globe whose far side the skipped-label tests place a point on.
+FAR_SIDE_GLOBE = "+proj=ortho +lon_0=0 +lat_0=0"
 
 
 @pytest.fixture
@@ -157,6 +168,54 @@ class TestTheDocumentedChainRuns:
             scene.field(dataset, name="grid").coastlines(COARSE, name="coast")
             assert scene.layer_ids == ["grid", "coast"], scene.layer_ids
 
+class TestALayerThatDrewNothingStillChains:
+    """Tests for what replaced the ``None`` ``text``/``annotate`` used to answer with."""
+
+    @pytest.mark.parametrize("method", ["text", "annotate"])
+    def test_a_far_side_label_registers_no_layer(self, method):
+        """A point on the far side of a globe draws nothing, and describes nothing.
+
+        Args:
+            method: ``text`` or ``annotate`` — both reproject their point the same way.
+
+        Test scenario:
+            Both answered ``None`` for this before L6. The successor signal is the absent layer id —
+            the reading ``digitalearth.base.crs`` already uses — and the chain still runs, so a caller
+            who did not care never has to branch on it.
+        """
+        with Map(crs=FAR_SIDE_GLOBE, globe=True) as scene:
+            getattr(scene, method)(180.0, 0.0, "hidden", name="far")
+            assert scene.layer_ids == [], scene.layer_ids
+
+    @pytest.mark.parametrize("method", ["text", "annotate"])
+    def test_a_far_side_label_still_hands_back_the_map(self, method):
+        """The skipped call chains like a drawn one.
+
+        Args:
+            method: ``text`` or ``annotate``.
+
+        Test scenario:
+            The point of the uniform return: a chain does not break on the one link whose data the
+            display CRS could not place.
+        """
+        with Map(crs=FAR_SIDE_GLOBE, globe=True) as scene:
+            assert getattr(scene, method)(180.0, 0.0, "hidden") is scene
+
+    def test_the_skipped_layer_s_artist_is_refused_by_name(self):
+        """Asking for the artist of a layer that drew nothing is refused, not answered ``None``.
+
+        Test scenario:
+            ``Map.artist`` raises for an unknown id, and a skipped layer is dropped from the
+            description — so that refusal is how "that layer drew nothing" now reads to a caller who
+            does go looking for the artist. ``None`` would have been indistinguishable from a drawn
+            layer whose drawer produced nothing.
+        """
+        with Map(crs=FAR_SIDE_GLOBE, globe=True) as scene:
+            scene.text(180.0, 0.0, "hidden", name="far")
+            with pytest.raises(KeyError, match="no layer 'far' on this figure"):
+                scene.artist("far")
+
+
 class TestStockImgStillAnswersWithItsArtist:
     """Tests for the one decoration method that keeps its artist return, deliberately."""
 
@@ -192,6 +251,32 @@ class TestStockImgStillAnswersWithItsArtist:
 
 class TestTheDrawnGeometrySurvivedTheMigration:
     """Tests that moving the return value did not change what reaches the axes."""
+
+    def test_the_label_keeps_the_text_it_was_given(self, canvas):
+        """The ``Text`` ``text()`` drew is reachable and says what it was asked to.
+
+        Args:
+            canvas: The flat lon/lat map.
+
+        Test scenario:
+            ``text()`` used to hand the ``Text`` straight back, and a caller's one use for it was to
+            read or restyle it. That must still be possible, by layer id.
+        """
+        canvas.text(NEAR_LON, NEAR_LAT, "Amsterdam", name="label")
+        assert canvas.artist("label").get_text() == "Amsterdam"
+
+    def test_the_annotation_is_the_one_on_the_axes(self, canvas):
+        """``annotate()``'s ``Annotation`` is reachable by id, and is the artist matplotlib holds.
+
+        Args:
+            canvas: The flat lon/lat map.
+
+        Test scenario:
+            Identity against ``ax.texts`` rather than a type check, so an accessor that built a second
+            artist would fail — the drawn one is what a caller restyles.
+        """
+        canvas.annotate(NEAR_LON, NEAR_LAT, "Amsterdam", name="arrow")
+        assert canvas.artist("arrow") in canvas.ax.texts
 
     def test_the_reference_layer_put_finite_geometry_on_the_axes(self, canvas):
         """A chained Natural-Earth call still draws, with no non-finite vertex reaching matplotlib.

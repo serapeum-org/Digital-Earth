@@ -279,24 +279,25 @@ def test_text_at_lonlat(dataset):
     """text() places a Text at the reprojected lon/lat on a flat map."""
     m = Map(crs=dataset.epsg)
     m.field(dataset)
-    txt = m.text(
+    m.text(
         float(dataset.x.mean()) if hasattr(dataset, "x") else 0.0,
         0.0,
         "x",
         crs=dataset.epsg,
+        name="label",
     )
     # on a matching CRS the point is finite -> a Text is added
-    assert txt is not None
-    assert txt in m.ax.texts
+    assert m.artist("label") in m.ax.texts
 
 
 def test_text_far_side_globe_skipped():
-    """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (returns None)."""
+    """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (no layer)."""
     from digitalearth.static import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     # (180, 0) is the antipode of the ortho centre -> off the visible disc
-    assert m.text(180.0, 0.0, "hidden") is None
+    m.text(180.0, 0.0, "hidden", name="far")
+    assert m.layer_ids == [], m.layer_ids
 
 
 def test_annotate_with_arrow(dataset):
@@ -305,7 +306,7 @@ def test_annotate_with_arrow(dataset):
 
     m = Map(crs=dataset.epsg)
     m.field(dataset)
-    ann = m.annotate(
+    m.annotate(
         0.0,
         0.0,
         "here",
@@ -313,17 +314,20 @@ def test_annotate_with_arrow(dataset):
         textcoords="offset points",
         arrowprops={"arrowstyle": "->"},
         crs=dataset.epsg,
+        name="arrow",
     )
+    ann = m.artist("arrow")
     assert isinstance(ann, Annotation)
     assert ann in m.ax.texts
 
 
 def test_annotate_far_side_globe_skipped():
-    """annotate() also skips an off-globe point."""
+    """annotate() also skips an off-globe point, registering no layer."""
     from digitalearth.static import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
-    assert m.annotate(180.0, 0.0, "hidden") is None
+    m.annotate(180.0, 0.0, "hidden", name="far")
+    assert m.layer_ids == [], m.layer_ids
 
 
 def test_stock_img_dataset_backdrop(dataset):
