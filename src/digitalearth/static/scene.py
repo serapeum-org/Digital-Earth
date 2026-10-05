@@ -27,6 +27,7 @@ of a globe) is dropped from the description again, so a figure never names somet
 """
 
 import os
+import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
@@ -2552,6 +2553,12 @@ class Scene(WatermarkMixin):
         nothing: a pick is a pick *of a layer*, and there is no layer to name. A layer owning several
         artists (a limb-split coastline, a graticule's lines) is reported once, by its one id.
 
+        **A callback that raises does not take the others with it.** Each is called inside its own
+        ``try``: the failure is reported as a ``UserWarning`` naming the callback and the exception, and
+        the remaining callbacks still hear the pick, as does the next click. It propagated before
+        (R2-L1), which starved every handler registered after the raising one — measured, a two-handler
+        figure whose first handler raised `RuntimeError` ran the second 0 times.
+
         Args:
             callback: Called as ``callback(pick)`` with one :class:`Pick`. Several may be registered and
                 each is called, in the order they were registered. Registering the same callback twice
@@ -2563,6 +2570,10 @@ class Scene(WatermarkMixin):
         Raises:
             TypeError: when `callback` is not callable — the refusal belongs at the registration, where
                 the caller is, rather than at the first click, where they are not.
+
+        Warns:
+            UserWarning: at **delivery**, when a registered callback raises — naming the callback and the
+                exception. The pick still reaches the other callbacks.
 
         Note:
             This is the **matplotlib canvas only**. The interactive and web tiers have pointer events of
@@ -2744,6 +2755,17 @@ class Scene(WatermarkMixin):
             called). It is spelled ``list.copy`` because ``list(...)`` over something already iterable
             reads as a redundant cast — to a reader and to a linter (SonarCloud python:S7504) — where
             this is a snapshot taken on purpose.
+
+            A callback that **raises** is contained here rather than propagated (R2-L1): the exception
+            left the canvas dispatch and took every handler registered after it with it, which is the
+            same starvation the copy exists to prevent, by another route. Each callback is called inside
+            its own ``try``, and a failure is reported as a ``UserWarning`` naming the callback and the
+            exception. The gesture survives too — the connection is untouched, so the next click is
+            delivered as usual.
+
+        Warns:
+            UserWarning: when a registered callback raises, naming the callback's repr and the
+                exception's type and message. The remaining callbacks are still called.
         """
         if getattr(event, "inaxes", None) is not self.ax:
             return
@@ -2752,7 +2774,21 @@ class Scene(WatermarkMixin):
             return
         pick = Pick(hits[0], float(event.xdata), float(event.ydata), hits, event)
         for callback in self._pick_handlers.copy():
-            callback(pick)
+            try:
+                callback(pick)
+            except Exception as error:
+                # One handler's failure is not the gesture's. Matplotlib's own `CallbackRegistry`
+                # takes the same line, and without this the exception left the canvas dispatch and
+                # every handler registered after the raising one was skipped: measured, a two-handler
+                # figure whose first handler raised `RuntimeError` ran the second 0 times. `Exception`
+                # rather than a named class, because the handler is the caller's own code and can fail
+                # any way it likes; `BaseException` is left alone so a `KeyboardInterrupt` still stops.
+                warnings.warn(
+                    f"a pick callback raised and was skipped: {callback!r} raised "
+                    f"{type(error).__name__}: {error}. The other callbacks still heard this pick.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the figure (delegates to cleopatra's ``WatermarkMixin.stamp_mark``).

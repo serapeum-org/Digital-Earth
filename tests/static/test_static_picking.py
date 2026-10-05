@@ -15,6 +15,8 @@ hears a **layer id**, never a matplotlib artist, and the id it hears is the topm
 pointer — never a hidden one, and never one that has been removed.
 """
 
+import warnings
+
 import geopandas as gpd
 import numpy as np
 import pytest
@@ -218,6 +220,93 @@ class TestAPickReportsALayerId:
         with Map(crs=4326, globe=False) as m:
             with pytest.raises(TypeError, match="needs something to call"):
                 m.on_pick("not a callback")
+
+
+class TestARaisingCallbackDoesNotStarveTheOthers:
+    """One misbehaving handler must not take the whole gesture down (R2-L1).
+
+    `_deliver_pick` reasons carefully about iterating over a copy so a handler that calls `off_pick` does
+    not skip its neighbour, and a handler that *raises* skipped it just as effectively: measured on the
+    branch before the guard, the `RuntimeError` propagated out of the canvas dispatch and the handler
+    registered after it ran 0 times.
+    """
+
+    @staticmethod
+    def _boom(_pick):
+        """Fail the way a caller's handler fails.
+
+        Args:
+            _pick: The pick delivered, unused.
+
+        Raises:
+            RuntimeError: always, which is the point.
+        """
+        raise RuntimeError("handler blew up")
+
+    @pytest.fixture
+    def after_a_raising_handler(self):
+        """Click one layer with a raising handler registered ahead of a recording one.
+
+        Returns:
+            The list the second handler appends to, which is empty when it was starved.
+        """
+        seen = []
+        with Map(crs=4326, globe=False) as m:
+            m.field(_raster(), name="f")
+            m.on_pick(self._boom).on_pick(lambda pick: seen.append("second"))
+            with pytest.warns(UserWarning):
+                _click(m, 0.5, 1.5)
+        return seen
+
+    def test_the_handler_after_the_raising_one_still_hears_the_pick(
+        self, after_a_raising_handler
+    ):
+        """The second handler is called although the first raised.
+
+        Args:
+            after_a_raising_handler: What the second handler recorded.
+
+        Test scenario:
+            Read as the list the second handler filled rather than as "no exception escaped": a dispatch
+            that swallowed the failure and then stopped early would pass the weaker check.
+        """
+        assert after_a_raising_handler == ["second"], (
+            f"the second handler should still have heard the pick; got {after_a_raising_handler}"
+        )
+
+    def test_the_failure_is_reported_rather_than_swallowed(self):
+        """The warning names the callback and carries the exception it raised.
+
+        Test scenario:
+            Continuing quietly would turn a broken handler into a figure that merely ignores clicks, so
+            the repr of the callback and the message of its exception both have to reach the caller.
+        """
+        with Map(crs=4326, globe=False) as m:
+            m.field(_raster(), name="f")
+            m.on_pick(self._boom)
+            with pytest.warns(UserWarning, match="handler blew up"):
+                _click(m, 0.5, 1.5)
+
+    def test_a_raising_handler_does_not_stop_the_next_click(self):
+        """The gesture survives the failure: a second click is delivered too.
+
+        Test scenario:
+            A dispatch that disconnected itself on the first failure would satisfy the two checks above
+            and still leave the figure dead to the click after.
+        """
+        seen = []
+        with Map(crs=4326, globe=False) as m:
+            m.field(_raster(), name="f")
+            m.on_pick(self._boom).on_pick(lambda pick: seen.append("again"))
+            # Two clicks, so `pytest.warns` is the wrong manager here: a block holding two
+            # warning-raising calls is what `tests/base/test_refusal_blocks.py` reports (S9088).
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                _click(m, 0.5, 1.5)
+                _click(m, 0.5, 1.5)
+        assert len(seen) == 2, (
+            f"both clicks should have been delivered; got {len(seen)}"
+        )
 
 
 class TestWhichLayerAPickReports:
