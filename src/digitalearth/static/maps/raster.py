@@ -15,7 +15,7 @@ the full read stands, so nothing already drawn moves.
 import logging
 from dataclasses import dataclass, replace
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple, cast
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -706,7 +706,10 @@ class FieldColors:
                 bad=scale.missing, over=scale.over, under=scale.under
             )
         )
-        return replace(drawn, scale=scale)
+        # `cast` because `dataclasses.replace` is declared to hand back a bare `DataclassInstance`:
+        # the object is the `DrawnLayer` that went in, and this method's callers and its own
+        # annotation both say so (python:S5886).
+        return cast(DrawnLayer, replace(drawn, scale=scale))
 
 
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -823,7 +826,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     if classes is not None and classes.is_categorical:
         # A categorical scale is the one a norm cannot state — its edges look like any graduated cut — so the
         # drawer says it outright; a graduated one is read off the norm as it always was.
-        drawn = replace(drawn, scale=classes.scale)
+        drawn = cast(DrawnLayer, replace(drawn, scale=classes.scale))
     if colors.states_extremes:
         drawn = colors.applied_to(drawn)
     # The band's own name, which only the drawer can answer: the builder records a band *number* and never
