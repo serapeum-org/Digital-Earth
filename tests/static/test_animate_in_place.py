@@ -551,6 +551,32 @@ def _coarser(offset: float) -> Dataset:
     )
 
 
+def _antipodal_pair() -> list:
+    """Two small regional frames of one grid, the second at the antipode of the first.
+
+    Shared by the two stack-refusal suites below, because both need the same stack read from two
+    different globes: centred on the second frame it is a clip whose **first** frame draws nothing,
+    and centred on the first it is a clip whose *later* frame is merely hidden.
+
+    Returns:
+        list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
+    """
+    _, xx = np.mgrid[0:20, 0:24]
+    values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+    return [
+        Dataset.from_array(
+            values,
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        ),
+        Dataset.from_array(
+            values + 3.0,
+            geo_ref=GeoReference(geo=(-176.0, 0.02, 0.0, -53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        ),
+    ]
+
+
 class TestAFrameOnAnotherGridFallsBackMidClip:
     """A stack whose frames are not all one shape: the in-place path gives up where it has to."""
 
@@ -773,22 +799,7 @@ class TestBlitRefusesAStackItCannotHold:
         Returns:
             list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
         """
-        _, xx = np.mgrid[0:20, 0:24]
-        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
-        return [
-            Dataset.from_array(
-                values,
-                geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
-                no_data_value=-9999.0,
-            ),
-            Dataset.from_array(
-                values + 3.0,
-                geo_ref=GeoReference(
-                    geo=(-176.0, 0.02, 0.0, -53.0, 0.0, -0.02), epsg=4326
-                ),
-                no_data_value=-9999.0,
-            ),
-        ]
+        return _antipodal_pair()
 
     def test_a_stack_of_mixed_grids_is_refused_by_name(self):
         """A frame on another grid clears the axes mid-clip, which is what blitting cannot be left over.
@@ -867,6 +878,148 @@ class TestBlitRefusesAStackItCannotHold:
         scene.close()
         assert drawn[1] is not drawn[0], (
             "without blitting a mixed-grid stack must still fall back to a rebuilt artist"
+        )
+
+
+class TestInPlaceRefusesAStackItCannotHold:
+    """``update="in_place"`` refuses the stacks ``"auto"`` silently degrades on (round 2, M4).
+
+    ``"in_place"`` exists to be told when the fast path is unavailable — that is the whole difference
+    between it and ``"auto"``, and what its docstring promises: it *"insists, and refuses the call naming
+    the blocker rather than falling back"*. :meth:`FrameUpdate._stack_blocker` already computes the two
+    runtime degradations (a frame on another display grid; a first frame the display CRS cannot show), and
+    it was consulted for ``blit=True`` only, so the reason was computed and thrown away for the one mode
+    whose purpose is to refuse.
+    """
+
+    @pytest.fixture
+    def regional(self):
+        """Two small regional frames of one grid, the second at the antipode of the first.
+
+        Returns:
+            list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
+        """
+        return _antipodal_pair()
+
+    def test_a_mixed_grid_stack_is_refused_by_name(self):
+        """The mode the caller asked for is what the refusal names, not the fallback it avoided.
+
+        Test scenario:
+            A caller who writes ``update="in_place"`` to be told when the fast path is unavailable was
+            handed a clip that cleared the axes mid-run and reported it at WARNING — the ``"auto"``
+            behaviour they explicitly opted out of.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="update='in_place'"):
+            scene.animate(mixed, fps=2, update="in_place", **CLIM)
+        scene.close()
+
+    def test_the_refusal_names_the_frame_and_both_grids(self):
+        """So a long stack can be fixed rather than the mode merely dropped.
+
+        Test scenario:
+            The message is the only evidence the caller has about which frame of the stack is the odd
+            one — the same reason ``blit=True``'s refusal carries it.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(
+            ValueError, match=r"frame 1 is drawn on a \(15, 30\) grid"
+        ) as refusal:
+            scene.animate(mixed, fps=2, update="in_place", **CLIM)
+        scene.close()
+        assert "(30, 60)" in str(refusal.value), (
+            f"the refusal should name the first frame's grid too; got {refusal.value}"
+        )
+
+    def test_a_stack_whose_first_frame_draws_nothing_is_refused(self, regional):
+        """With no artist kept from frame 0 there is nothing to insist on keeping.
+
+        Args:
+            regional: The antipodal pair, read from the globe that hides its first frame.
+
+        Test scenario:
+            The second of the two degradations ``_stack_blocker`` computes, reached a different way: a
+            globe centred at the antipode of frame 0 cannot show it, so every frame draws itself for the
+            clip's whole length.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=-176, lat=-53), globe=True, figsize=(3, 3)
+        )
+        with pytest.raises(ValueError, match="first frame draws nothing"):
+            scene.animate(regional, fps=2, update="in_place", **CLIM)
+        scene.close()
+
+    def test_auto_still_degrades_on_the_very_same_stack(self):
+        """Which is the distinction between the two modes, and must survive the refusal above.
+
+        Test scenario:
+            ``"auto"`` is documented to take the cheapest correct path and clear the axes when it cannot,
+            so the stack is a slower clip rather than a refusal there. Refusing it for both modes would
+            have made ``update=`` a single setting with a new failure.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, update="auto", **CLIM)
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[1] is not drawn[0], (
+            "update='auto' must still fall back to a rebuilt artist on a mixed-grid stack"
+        )
+
+    def test_redraw_is_not_refused_for_it_either(self):
+        """``"redraw"`` clears every frame by construction, so a changing grid is nothing to it.
+
+        Test scenario:
+            The scan is behind the mode check, so the two modes that never promised the fast path pay
+            neither the read nor the refusal.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate(
+            [_field(0.0), _coarser(8.0)], fps=2, update="redraw", **CLIM
+        )
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[1] is not drawn[0], (
+            "update='redraw' must keep rebuilding the artist whatever the stack's grids"
+        )
+
+    def test_a_single_grid_stack_is_still_animated_in_place(self, stack):
+        """The refusal is the stack's, not the mode's: a stack every frame can refill still insists.
+
+        Args:
+            stack: Three frames of one global grid.
+
+        Test scenario:
+            The scan must not refuse what it was added to protect — an ordinary stack keeps the one
+            artist across every frame.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate(stack, fps=2, update="in_place", **CLIM)
+        drawn = [clip._func(index)[0] for index in range(len(stack))]
+        scene.close()
+        assert drawn[0] is drawn[1] is drawn[2], (
+            f"an in-place clip should keep one artist across its frames; got {drawn}"
+        )
+
+    def test_a_later_off_limb_frame_is_no_reason_to_refuse(self, regional):
+        """A frame hidden *after* the first leaves the kept artist in place, so it still insists.
+
+        Args:
+            regional: The antipodal pair, read from the globe that shows its first frame.
+
+        Test scenario:
+            ``FrameUpdate.apply`` hides the kept artist for an off-limb frame and reports success, so the
+            axes is never cleared — the same carve-out ``blit=True`` already makes.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(3, 3)
+        )
+        clip = scene.animate(regional, fps=2, update="in_place", **CLIM)
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[0] is drawn[1], (
+            f"a merely hidden later frame must keep the first frame's artist; got {drawn}"
         )
 
 

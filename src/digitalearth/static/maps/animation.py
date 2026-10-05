@@ -473,9 +473,11 @@ class FrameUpdate:
         Raises:
             ValueError: when ``blit=True`` or ``update="in_place"`` was asked for and this animation cannot
                 be drawn that way, with :attr:`blocker` as the reason; when ``blit=True`` is combined
-                with per-frame ``titles``, which blitting cannot repaint; and when ``blit=True`` is asked
-                for a stack that would take the clip into the rebuilding path at playback, with
-                :meth:`_stack_blocker` as the reason.
+                with per-frame ``titles``, which blitting cannot repaint; and when either of those two —
+                ``blit=True`` **or** ``update="in_place"`` — is asked for a stack that would take the clip
+                into the rebuilding path at playback, with :meth:`_stack_blocker` as the reason. The two
+                modes that never promised the fast path, ``"auto"`` and ``"redraw"``, are not refused for
+                such a stack and do not pay the read either (round 2, M4).
 
         Examples:
             - The two answers the frame loop reads: `self` for a call nothing blocks, or `None` for
@@ -528,26 +530,64 @@ class FrameUpdate:
                 "blits, and the title is drawn above it, so every frame would show the first frame's "
                 "title. Drop one of the two"
             )
-        if blit:
+        if self.blocker is not None:
+            if self.mode == "in_place":
+                raise ValueError(self._in_place_refusal(self.blocker))
+            logger.info(
+                "animate: clearing the axes and redrawing every frame — %s",
+                self.blocker,
+            )
+            return None
+        # Nothing the kind and the options decide stands in the way, so the *stack* is read — but only
+        # for the two callers that promised not to degrade. `"auto"` and `"redraw"` pay neither the read
+        # nor the refusal: clearing and rebuilding repaints the whole axes, so for them a frame on
+        # another grid is a slower path rather than a broken picture or a broken promise.
+        if blit or self.mode == "in_place":
             standing = self._stack_blocker()
             if standing is not None:
-                raise ValueError(
-                    f"blit=True needs every frame to refill the artist the first frame drew, and this "
-                    f"stack does not: {standing}. Blitting leaves everything the frame function does not "
-                    "return standing, so a rebuilt frame would stack on the one before it. Drop "
-                    "blit=True, or animate frames that share one grid"
-                )
-        if self.blocker is None:
-            return self
-        if self.mode == "in_place":
-            raise ValueError(
-                f"update='in_place' is not available for this animation: {self.blocker}. Leave update at "
-                "'auto' to redraw the frames instead"
-            )
-        logger.info(
-            "animate: clearing the axes and redrawing every frame — %s", self.blocker
+                if blit:
+                    raise ValueError(
+                        f"blit=True needs every frame to refill the artist the first frame drew, and "
+                        f"this stack does not: {standing}. Blitting leaves everything the frame function "
+                        "does not return standing, so a rebuilt frame would stack on the one before it. "
+                        "Drop blit=True, or animate frames that share one grid"
+                    )
+                raise ValueError(self._in_place_refusal(standing))
+        return self
+
+    @staticmethod
+    def _in_place_refusal(reason: str) -> str:
+        """Return the sentence ``update="in_place"`` is refused with, for ``reason``.
+
+        One phrasing for both halves of the refusal, so the caller meets the same words whether the
+        in-place path is unavailable because of the ``kind`` and the options (:attr:`blocker`, a static
+        fact) or because of the stack (:meth:`_stack_blocker`, read once before the first frame). They are
+        one refusal to a caller — ``update="in_place"`` could not be honoured — and differ only in which
+        reason is named.
+
+        Args:
+            reason: Why the in-place path is unavailable, as a sentence.
+
+        Returns:
+            The refusal message.
+
+        Examples:
+            - The mode that was asked for opens the sentence, the reason is quoted as it stands, and the
+              way out closes it:
+                ```python
+                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> message = FrameUpdate._in_place_refusal("frame 1 is on another grid")
+                >>> message.split(":")[0]
+                "update='in_place' is not available for this animation"
+                >>> message.split(". ")[-1]
+                "Leave update at 'auto' to redraw the frames instead"
+
+                ```
+        """
+        return (
+            f"update='in_place' is not available for this animation: {reason}. Leave update at 'auto' "
+            "to redraw the frames instead"
         )
-        return None
 
     def _display_grid(self, index: int) -> Optional[Tuple[int, ...]]:
         """Return the grid frame ``index`` is **drawn** on, or ``None`` when it draws nothing.
@@ -572,20 +612,23 @@ class FrameUpdate:
         return tuple(np.shape(src.z.values))
 
     def _stack_blocker(self) -> Optional[str]:
-        """Return why this stack cannot be blitted all the way through, or ``None`` when it can.
+        """Return why this stack cannot be held in place all the way through, or ``None`` when it can.
 
-        :meth:`settle` refuses ``blit=True`` for what the *kind and the options* make impossible, which is
-        a static fact. A stack can take the same animation into the clear-and-rebuild path at **runtime**
-        instead: a frame on another grid cannot refill the artist (:meth:`apply` answers ``False``, and
-        :meth:`AnimationMixin._animate_frames` rebuilds every frame from there on), and a first frame the
-        display CRS cannot show leaves no artist to keep at all, so every frame draws itself. Either way
-        the rebuilt decoration is absent from the artist list a blitted frame hands back and is never
-        repainted — which is exactly what :meth:`settle`'s own refusal text says must not happen. So the
-        stack is read here, before the first frame, and the caller is told.
+        :meth:`settle` refuses ``blit=True`` and ``update="in_place"`` for what the *kind and the options*
+        make impossible, which is a static fact. A stack can take the same animation into the
+        clear-and-rebuild path at **runtime** instead: a frame on another grid cannot refill the artist
+        (:meth:`apply` answers ``False``, and :meth:`AnimationMixin._animate_frames` rebuilds every frame
+        from there on), and a first frame the display CRS cannot show leaves no artist to keep at all, so
+        every frame draws itself. Under ``blit=True`` the rebuilt decoration is then absent from the artist
+        list a blitted frame hands back and is never repainted — which is exactly what :meth:`settle`'s own
+        refusal text says must not happen; under ``update="in_place"`` the picture is sound but the mode's
+        promise is not, since insisting is the one thing that mode is for. Either way the stack is read
+        here, before the first frame, and the caller is told.
 
-        This costs one read of every frame, which is why it is behind the ``blit=True`` check rather than
-        done for every animation. An unblitted stack needs no such scan: clearing and rebuilding repaints
-        the whole axes, so the fallback is a slower path rather than a broken picture.
+        This costs one read of every frame, which is why it is behind a ``blit=True``/``"in_place"`` check
+        rather than done for every animation. ``"auto"`` and ``"redraw"`` need no such scan: clearing and
+        rebuilding repaints the whole axes, and neither mode promised otherwise, so the fallback is a
+        slower path rather than a broken picture or a broken contract (round 2, M4).
 
         Returns:
             A sentence naming what stands in the way, or ``None``.
@@ -1514,9 +1557,14 @@ class AnimationMixin(_MixinBase):
             cbar_label: Optional label for the colorbar.
             update: How the frames after the first are drawn — one of :attr:`FrameUpdate.MODES`. ``"auto"``
                 (default) updates the artist the first frame drew when the ``kind`` and the options allow
-                it and clears the axes when they do not, logging which. ``"in_place"`` insists, and refuses
-                the call naming the blocker (:attr:`FrameUpdate.blocker`) rather than falling back.
-                ``"redraw"`` always clears, which is what every animation did before ST-9.
+                it and clears the axes when they do not, logging which — including mid-clip, at
+                ``WARNING``, for a stack whose later frame is drawn on another grid. ``"in_place"``
+                insists, and refuses the call rather than falling back: naming
+                :attr:`FrameUpdate.blocker` for what the ``kind`` and the options settle, and — read off
+                the stack once, before the first frame — naming the frame and the two grids for a stack
+                that would leave the fast path mid-clip, or the first frame the display CRS cannot show.
+                ``"redraw"`` always clears, which is what every animation did before ST-9, and is refused
+                for nothing.
             blit: When True, build the animation with matplotlib's blitting, which repaints only the artist
                 each frame returns. It requires the in-place path and is refused without it, and it is
                 refused alongside ``titles`` (see the note below). It is also refused for a **stack** that
@@ -1541,8 +1589,9 @@ class AnimationMixin(_MixinBase):
                 `colorbar=True` is combined with a composite `kind`, a composite's `bands` does not hold
                 exactly three indices (measured: `rgb_composite() needs exactly three bands, got 2:
                 (1, 2)`), a band that is read is not a whole number of 1 or more, or `blit=True` /
-                `update="in_place"` is asked for where the frames cannot update one artist — including a
-                `blit=True` stack whose frames are not all drawn on one grid.
+                `update="in_place"` is asked for where the frames cannot update one artist — including,
+                for **either** of those two, a stack whose frames are not all drawn on one grid or whose
+                first frame the display CRS cannot show.
 
         Note:
             ``blit=True`` repaints only what the frame function returns, which is the data artist and
