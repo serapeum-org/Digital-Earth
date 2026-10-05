@@ -1254,13 +1254,18 @@ class ProjectionMixin(_MixinBase):
                 measured[layer.id] = Bounds(*covered, self.crs)
         return measured
 
-    def set_domain(self, domain: Optional[DomainLike] = None) -> None:
+    def set_domain(self, domain: Optional[DomainLike] = None) -> Self:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
 
         Args:
             domain: A registered region name (e.g. ``"Europe"``), an explicit ``(west, south, east, north)``
                 bbox in EPSG:4326, or ``None`` to fall back to the domain passed at construction. A no-op
                 when neither resolves to a domain.
+
+        Returns:
+            This map, so the call chains like :meth:`set_bounds`, which it frames through. **The no-op
+            path answers the map as well**: a call with nothing to resolve frames nothing, and a chain
+            must survive it (L6).
 
         Raises:
             ValueError: if a caller-supplied bbox has its corners the wrong way round — including one
@@ -1273,7 +1278,7 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
                 >>> m = Map(crs=4326)
-                >>> m.set_domain("europe")
+                >>> _ = m.set_domain("europe")
                 >>> [float(v) for v in m.ax.get_xlim()]
                 [-25.0, 45.0]
                 >>> [float(v) for v in m.ax.get_ylim()]
@@ -1283,7 +1288,7 @@ class ProjectionMixin(_MixinBase):
         """
         bbox = resolve_domain(domain if domain is not None else self.domain)
         if bbox is None:
-            return
+            return self
         # A resolved domain is always EPSG:4326 (see `static/domains.py`), which is exactly the assumption
         # a bare 4-tuple used to carry implicitly. Bounds makes it a value, and does the warp through pyramids.
         try:
@@ -1296,7 +1301,7 @@ class ProjectionMixin(_MixinBase):
                 "(west, south, east, north) in EPSG:4326, and cannot express a region crossing the "
                 f"antimeridian — split it into two, or set the extent directly ({error})"
             ) from error
-        self.set_bounds(box.to_crs(self.crs))
+        return self.set_bounds(box.to_crs(self.crs))
 
     # ------------------------------------------------------------------ globe / projection frame
 
@@ -1309,7 +1314,7 @@ class ProjectionMixin(_MixinBase):
         labels: Optional[bool] = None,
         name: Optional[str] = None,
         visible: Optional[bool] = None,
-    ) -> None:
+    ) -> Self:
         """Add a lon/lat graticule to the map, with its degrees labelled.
 
         A second call **replaces** the first — the map holds one set of graticule lines, so it draws one
@@ -1366,6 +1371,14 @@ class ProjectionMixin(_MixinBase):
                 *replacing* call it means whatever the caller last chose, so restyling a hidden graticule
                 does not put it back on screen (review R-L5).
 
+        Returns:
+            This map, so the call chains like every other layer builder on the tier
+            (``m.graticule(spacing=30.0).set_global()``). It registers ``graticule-1`` and draws, which
+            makes it a builder by every other test here; it used to hand back nothing, which broke the
+            chain on the one tier whose `visible`/`name` contract is the most elaborate (L6). The lines
+            themselves are reached by id through :meth:`~digitalearth.static.scene.Scene.artist`, which
+            **raises** ``KeyError`` for a layer that drew nothing.
+
         Warns:
             UserWarning: when ``spacing`` is given beside either step, which discards the step; when a
                 *replacing* call names a ``name`` the layer does not already carry, which is discarded
@@ -1390,7 +1403,7 @@ class ProjectionMixin(_MixinBase):
                 >>> m = Map(crs=4326)
                 >>> m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS
                 <digitalearth.static.map.Map object at ...>
-                >>> m.graticule(spacing=30.0)
+                >>> _ = m.graticule(spacing=30.0)
                 >>> sorted({text.get_text() for text in m.ax.texts})
                 ['0°', '30°E', '30°N', '30°W', '60°N']
                 >>> m.close()
@@ -1402,7 +1415,7 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=4326)
-                >>> m.graticule(spacing=60.0, labels=False)
+                >>> _ = m.graticule(spacing=60.0, labels=False)
                 >>> len(m.ax.texts)
                 0
                 >>> m.close()
@@ -1417,8 +1430,8 @@ class ProjectionMixin(_MixinBase):
                 >>> m = Map(crs=4326)
                 >>> m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS
                 <digitalearth.static.map.Map object at ...>
-                >>> m.graticule(lon_step=30.0, lat_step=45.0, labels=False)
-                >>> m.graticule(lon_step=60.0)
+                >>> _ = m.graticule(lon_step=30.0, lat_step=45.0, labels=False)
+                >>> _ = m.graticule(lon_step=60.0)
                 >>> props = m._layer_tree.get(m._graticule_id).symbology.props
                 >>> (props["lon_step"], props["lat_step"], props["labels"])
                 (60.0, 45.0, False)
@@ -1434,7 +1447,7 @@ class ProjectionMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> globe = Map(crs=4326, globe=True)
-                >>> globe.graticule(spacing=30.0)
+                >>> _ = globe.graticule(spacing=30.0)
                 >>> len(globe.ax.texts)
                 0
                 >>> globe.graticule(spacing=30.0, labels=True)  # doctest: +ELLIPSIS
@@ -1455,7 +1468,7 @@ class ProjectionMixin(_MixinBase):
                 >>> _ = m.set_bounds([-3.0e6, -3.0e6, 3.0e6, 3.0e6])
                 >>> with warnings.catch_warnings(record=True) as caught:
                 ...     warnings.simplefilter("always")
-                ...     m.graticule(spacing=30.0)
+                ...     _ = m.graticule(spacing=30.0)
                 >>> message = str(caught[0].message)
                 >>> message.split(":")[0]
                 'graticule() could not place 8 degree label(s)'
@@ -1483,6 +1496,7 @@ class ProjectionMixin(_MixinBase):
         except BaseException:
             edit.undo(self)
             raise
+        return self
 
     def _labels_asked(
         self, labels: Optional[bool], carried: Optional["_GraticuleSteps"] = None
@@ -1624,12 +1638,32 @@ class ProjectionMixin(_MixinBase):
             self._frame_cache = (self.crs, projections.projection_frame(self.crs))
         return self._frame_cache[1]
 
-    def set_global(self) -> None:
-        """Set the axes extent to the full projection domain (the whole globe/world)."""
+    def set_global(self) -> Self:
+        """Set the axes extent to the full projection domain (the whole globe/world).
+
+        Returns:
+            This map, so the call chains like :meth:`set_bounds`, which it frames through — it is that
+            method with the whole projection domain for an argument.
+
+        Examples:
+            - The frame is the projection's own, and the call hands the map on:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> m.set_global() is m
+                True
+                >>> [float(value) for value in m.ax.get_xlim()]
+                [-180.0, 180.0]
+                >>> m.close()
+
+                ```
+        """
         _, xlim, ylim = self._frame()
         # `_frame` answers in matplotlib's pairs; `set_bounds` reads (west, south, east, north), so the
         # four values are re-ordered here rather than handed over in the order they arrived.
-        self.set_bounds([xlim[0], ylim[0], xlim[1], ylim[1]])
+        return self.set_bounds([xlim[0], ylim[0], xlim[1], ylim[1]])
 
     def _apply_frame(self) -> Any:
         """Draw the projection boundary + graticule and clip the layers to it (once, at render time).
