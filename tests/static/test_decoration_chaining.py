@@ -55,6 +55,8 @@ CHAINING_CALLS = {
         lambda canvas: canvas.annotate(NEAR_LON, NEAR_LAT, "Amsterdam", name="deco"),
         "deco",
     ),
+    "nightshade": (lambda canvas: canvas.nightshade(EQUINOX_NOON, name="deco"), "deco"),
+    "tissot": (lambda canvas: canvas.tissot(name="deco"), "deco"),
 }
 
 #: The orthographic globe whose far side the skipped-label tests place a point on.
@@ -154,6 +156,25 @@ class TestTheDocumentedChainRuns:
         with Map(crs=dataset.epsg) as scene:
             assert scene.field(dataset).coastlines(COARSE).colorbar() is scene
 
+    def test_a_decoration_chain_mixes_the_overlays_and_the_reference_layers(self):
+        """Several decoration calls chain into one another, across the kinds.
+
+        Test scenario:
+            The six Natural-Earth layers, the two text builders and the two solar overlays were three
+            separate return conventions before L6 — an ``Axes``, a ``Text`` and a ``PolyCollection``.
+            Chaining all three kinds in one expression is what proves they are now one.
+        """
+        with Map(crs=4326) as scene:
+            chained = (
+                scene.ocean(COARSE)
+                .land(COARSE)
+                .coastlines(COARSE)
+                .tissot()
+                .nightshade(EQUINOX_NOON)
+                .text(NEAR_LON, NEAR_LAT, "Amsterdam")
+            )
+            assert len(chained.layer_ids) == 6, chained.layer_ids
+
     def test_the_chain_draws_every_link_it_names(self, dataset):
         """A chained figure holds one layer per call, in the order they were made.
 
@@ -251,6 +272,39 @@ class TestStockImgStillAnswersWithItsArtist:
 
 class TestTheDrawnGeometrySurvivedTheMigration:
     """Tests that moving the return value did not change what reaches the axes."""
+
+    def test_the_night_shade_covers_midnight_and_not_noon(self, canvas):
+        """The shade read off ``artist()`` is the same geometry the old return value was.
+
+        Args:
+            canvas: The flat lon/lat map.
+
+        Test scenario:
+            The sharpest check available on that artist: at the March equinox at noon UTC lon 170 is at
+            midnight and lon 0 is at noon, so the shade must contain the one and not the other. Reading
+            it through ``artist()`` proves the accessor hands back the real ``PolyCollection`` rather
+            than something that merely answers ``get_paths``.
+        """
+        canvas.nightshade(EQUINOX_NOON, name="night")
+        shade = canvas.artist("night")
+        covered = [
+            any(path.contains_point(xy) for path in shade.get_paths())
+            for xy in ((170.0, 0.0), (0.0, 0.0))
+        ]
+        assert covered == [True, False], covered
+
+    def test_the_world_grid_of_indicatrices_is_sixty_rings(self, canvas):
+        """``tissot()``'s default world grid is still 60 rings, read off the artist.
+
+        Args:
+            canvas: The flat lon/lat map.
+
+        Test scenario:
+            Five latitudes by twelve longitudes. That count is what the old return value was read for,
+            so it is read the new way here.
+        """
+        canvas.tissot(name="rings")
+        assert len(canvas.artist("rings").get_paths()) == 60
 
     def test_the_label_keeps_the_text_it_was_given(self, canvas):
         """The ``Text`` ``text()`` drew is reachable and says what it was asked to.

@@ -118,7 +118,7 @@ def _fill_rgba(artist) -> tuple:
     both answer ``get_facecolor``, and this exists only to name that and take the first polygon.
 
     Args:
-        artist: What ``nightshade`` returned.
+        artist: The shade's artist, as :func:`_shade` reads it off the layer.
 
     Returns:
         The first polygon's RGBA as four floats.
@@ -143,6 +143,57 @@ def _wide_polar_raster() -> Dataset:
     )
 
 
+#: The layer id the two helpers below file an overlay under, so its artist is read back by name.
+OVERLAY = "overlay"
+
+
+def _shade(canvas: Map, *args, name: str = OVERLAY, **kwargs):
+    """Shade one night on ``canvas`` and hand back the artist the layer filed.
+
+    ``nightshade`` returns the map since round-1 L6, so what it drew is reached through
+    :meth:`~digitalearth.static.scene.Scene.artist` by the layer's id. Named once here rather than in
+    every test below, and it reads the artist by **that id** rather than by "the last layer", so a test
+    that draws twice still asks for the shade it means.
+
+    Args:
+        canvas: The map to shade.
+        *args: Positional arguments for ``nightshade`` — the instant.
+        name: The layer id to file it under.
+        **kwargs: Keyword arguments for ``nightshade``.
+
+    Returns:
+        The artist the layer filed: a ``PolyCollection`` on a flat map, the filled ``ContourSet`` a globe
+        draws it as.
+
+    Raises:
+        KeyError: when the call registered no layer, which is what its ``None`` used to say — so a test
+            that expects a shade fails here rather than on a ``None`` attribute access.
+    """
+    canvas.nightshade(*args, name=name, **kwargs)
+    return canvas.artist(name)
+
+
+def _rings(canvas: Map, *args, name: str = OVERLAY, **kwargs):
+    """Draw one set of indicatrices on ``canvas`` and hand back the artist the layer filed.
+
+    The :func:`_shade` story, for ``tissot``.
+
+    Args:
+        canvas: The map to draw on.
+        *args: Positional arguments for ``tissot`` — the centre longitudes and latitudes.
+        name: The layer id to file it under.
+        **kwargs: Keyword arguments for ``tissot``.
+
+    Returns:
+        The circles' ``PolyCollection``.
+
+    Raises:
+        KeyError: when no circle could be placed, so no layer was registered.
+    """
+    canvas.tissot(*args, name=name, **kwargs)
+    return canvas.artist(name)
+
+
 def _world_4326() -> Map:
     """Return a lon/lat map framed on the whole world.
 
@@ -161,13 +212,13 @@ class TestNightshade:
     def test_it_draws_a_polygon_collection_on_the_axes(self):
         """The public return is cleopatra's artist, and it is on the map's axes."""
         canvas = _world_4326()
-        artist = canvas.nightshade(EQUINOX_NOON)
+        artist = _shade(canvas, EQUINOX_NOON)
         assert isinstance(artist, PolyCollection), type(artist)
         assert artist in canvas.ax.collections, "the shade must be on the map's axes"
 
     def test_midnight_is_shaded_and_noon_is_not_on_a_lonlat_map(self):
         """At the equinox at noon UTC the antimeridian is at midnight and Greenwich at noon."""
-        artist = _world_4326().nightshade(EQUINOX_NOON)
+        artist = _shade(_world_4326(), EQUINOX_NOON)
         assert _covered(artist, (170.0, 0.0)), "lon 170 at noon UTC is night"
         assert not _covered(artist, (0.0, 0.0)), "lon 0 at noon UTC is day"
 
@@ -176,7 +227,7 @@ class TestNightshade:
         canvas = Map(crs=3857)
         canvas.ax.set_xlim(-2.0e7, 2.0e7)
         canvas.ax.set_ylim(-2.0e7, 2.0e7)
-        artist = canvas.nightshade(EQUINOX_NOON)
+        artist = _shade(canvas, EQUINOX_NOON)
         assert _covered(artist, _mercator(170.0, 10.0)), "lon 170 is night"
         assert not _covered(artist, _mercator(0.0, 10.0)), "lon 0 is day"
 
@@ -191,7 +242,7 @@ class TestNightshade:
         canvas = Map(crs=3857)
         canvas.ax.set_xlim(-2.0e7, 2.0e7)
         canvas.ax.set_ylim(-2.0e7, 2.0e7)
-        artist = canvas.nightshade(JUNE_NOON)
+        artist = _shade(canvas, JUNE_NOON)
         assert _covered(artist, _mercator(0.0, -80.0)), (
             "the south pole is in polar night in June"
         )
@@ -227,7 +278,7 @@ class TestNightshade:
             the positive ``y`` axis — must fall inside the shade.
         """
         canvas = Map(crs=3031)
-        artist = canvas.nightshade(JUNE_NOON)
+        artist = _shade(canvas, JUNE_NOON)
         assert _covered(artist, (0.0, _polar_stereographic_south(-80.0))), (
             "80 S is in polar night at the June solstice"
         )
@@ -248,7 +299,7 @@ class TestNightshade:
 
     def test_style_reaches_the_artist(self):
         """Style keywords are cleopatra's, forwarded to the collection."""
-        artist = _world_4326().nightshade(EQUINOX_NOON, alpha=0.6, zorder=7)
+        artist = _shade(_world_4326(), EQUINOX_NOON, alpha=0.6, zorder=7)
         assert artist.get_alpha() == pytest.approx(0.6), artist.get_alpha()
         assert artist.get_zorder() == 7, artist.get_zorder()
 
@@ -274,7 +325,7 @@ class TestNightshade:
 
     def test_an_iso_string_is_a_moment_too(self):
         """A figure read back carries the instant as text, so the builder takes text."""
-        artist = _world_4326().nightshade("2026-03-20T12:00:00+00:00")
+        artist = _shade(_world_4326(), "2026-03-20T12:00:00+00:00")
         assert _covered(artist, (170.0, 0.0)), "lon 170 at noon UTC is night"
 
     def test_a_refraction_out_of_range_is_refused_and_not_described(self):
@@ -302,16 +353,17 @@ class TestNightshade:
     def test_hiding_the_layer_hides_the_shade(self):
         """The shade is addressable by its id, like every other layer."""
         canvas = _world_4326()
-        artist = canvas.nightshade(EQUINOX_NOON, name="night")
+        artist = _shade(canvas, EQUINOX_NOON, name="night")
         canvas.set_visible("night", False)
         assert artist.get_visible() is False, "hiding the layer must hide its artist"
 
     def test_on_a_globe_the_near_side_night_is_shaded(self):
         """On an orthographic globe centred on the antimeridian at noon UTC, the disc centre is night."""
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
-        artist = canvas.nightshade(EQUINOX_NOON)
-        assert artist is not None, "the night side faces the viewer"
-        assert _covered(artist, (0.0, 0.0)), "the centre of the disc is at midnight"
+        canvas.nightshade(EQUINOX_NOON, name="night")
+        assert canvas.layer_ids == ["night"], "the night side faces the viewer"
+        shade = canvas.artist("night")
+        assert _covered(shade, (0.0, 0.0)), "the centre of the disc is at midnight"
 
     def test_the_globe_fill_follows_cleopatras_own_subsolar_point(self):
         """The globe's local solar-altitude copy must keep agreeing with the upstream it duplicates.
@@ -330,16 +382,19 @@ class TestNightshade:
             crs=projections.orthographic(lon=sun_lon, lat=sun_lat),
             globe=True,
         )
-        assert noon.nightshade(JUNE_NOON) is None, (
+        noon.nightshade(JUNE_NOON, name="shade")
+        assert noon.layer_ids == [], (
             "a globe centred on the subsolar point shows the day hemisphere only"
         )
         midnight = Map(
             crs=projections.orthographic(lon=sun_lon - 180.0, lat=-sun_lat),
             globe=True,
         )
-        artist = midnight.nightshade(JUNE_NOON)
-        assert artist is not None, "the antisolar hemisphere is entirely at night"
-        assert _covered(artist, (0.0, 0.0)), (
+        midnight.nightshade(JUNE_NOON, name="shade")
+        assert midnight.layer_ids == ["shade"], (
+            "the antisolar hemisphere is entirely at night"
+        )
+        assert _covered(midnight.artist("shade"), (0.0, 0.0)), (
             "the antisolar point is the deepest night there is"
         )
 
@@ -355,8 +410,10 @@ class TestNightshade:
             as many vertices.
         """
         fine, coarse = (
-            Map(crs=projections.orthographic(lon=180, lat=0), globe=True).nightshade(
-                EQUINOX_NOON, n=samples
+            _shade(
+                Map(crs=projections.orthographic(lon=180, lat=0), globe=True),
+                EQUINOX_NOON,
+                n=samples,
             )
             for samples in (720, 180)
         )
@@ -376,15 +433,19 @@ class TestNightshade:
         """
         deep_night = -80.0
         canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
-        assert canvas.nightshade(EQUINOX_NOON, refraction=deep_night) is None, (
+        before = len(canvas.ax.collections)
+        canvas.nightshade(EQUINOX_NOON, refraction=deep_night, name="deep")
+        assert len(canvas.ax.collections) == before, (
             "nothing on the day-side hemisphere is 80 degrees from the antisolar point"
         )
         assert canvas.layer_ids == [], (
             f"a layer that drew nothing must not be described, got {canvas.layer_ids}"
         )
-        assert (
-            _world_4326().nightshade(EQUINOX_NOON, refraction=deep_night) is not None
-        ), "the same request over the whole world does reach the antisolar cap"
+        world = _world_4326()
+        world.nightshade(EQUINOX_NOON, refraction=deep_night, name="cap")
+        assert world.layer_ids == ["cap"], (
+            "the same request over the whole world does reach the antisolar cap"
+        )
 
 
 class TestTissot:
@@ -393,18 +454,18 @@ class TestTissot:
     def test_it_draws_one_ring_per_centre(self):
         """Three centres, three rings."""
         canvas = _world_4326()
-        artist = canvas.tissot([-90.0, 0.0, 90.0], [0.0, 0.0, 0.0])
+        artist = _rings(canvas, [-90.0, 0.0, 90.0], [0.0, 0.0, 0.0])
         assert isinstance(artist, PolyCollection), type(artist)
         assert len(artist.get_paths()) == 3, len(artist.get_paths())
 
     def test_the_default_is_a_world_grid(self):
         """With no centres given, a grid covers the world so the distortion can be read everywhere."""
-        artist = _world_4326().tissot()
+        artist = _rings(_world_4326())
         assert len(artist.get_paths()) > 10, len(artist.get_paths())
 
     def test_a_ring_has_the_angular_radius_of_its_ground_radius(self):
         """On lon/lat axes a 500 km ring at the equator spans 500 km / R in latitude each way."""
-        artist = _world_4326().tissot([0.0], [0.0], radius_m=500_000.0)
+        artist = _rings(_world_4326(), [0.0], [0.0], radius_m=500_000.0)
         lat = artist.get_paths()[0].vertices[:, 1]
         expected = math.degrees(500_000.0 / MEAN_EARTH_R)
         assert lat.max() == pytest.approx(expected, rel=1e-3), lat.max()
@@ -414,7 +475,7 @@ class TestTissot:
         canvas = Map(crs=3857)
         canvas.ax.set_xlim(-2.0e7, 2.0e7)
         canvas.ax.set_ylim(-2.0e7, 2.0e7)
-        artist = canvas.tissot([0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)
+        artist = _rings(canvas, [0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)
         equator, sixty = (np.ptp(path.vertices[:, 0]) for path in artist.get_paths())
         assert sixty / equator == pytest.approx(2.0, rel=0.02), sixty / equator
 
@@ -425,7 +486,7 @@ class TestTissot:
             Wrapped longitudes put half the ring at +179 and half at -179; drawn as is, its outline would
             cross the whole world. Its width in lon/lat must stay that of a 500 km circle.
         """
-        artist = _world_4326().tissot([180.0], [0.0], radius_m=500_000.0)
+        artist = _rings(_world_4326(), [180.0], [0.0], radius_m=500_000.0)
         width = np.ptp(artist.get_paths()[0].vertices[:, 0])
         expected = 2 * math.degrees(500_000.0 / MEAN_EARTH_R)
         assert width == pytest.approx(expected, rel=1e-2), width
@@ -444,7 +505,7 @@ class TestTissot:
         canvas = Map(crs=3857)
         canvas.ax.set_xlim(-2.0e7, 2.0e7)
         canvas.ax.set_ylim(-2.0e7, 2.0e7)
-        artist = canvas.tissot([180.0], [0.0], radius_m=500_000.0)
+        artist = _rings(canvas, [180.0], [0.0], radius_m=500_000.0)
         assert len(artist.get_paths()) == 1, len(artist.get_paths())
         offset = math.degrees(500_000.0 / MEAN_EARTH_R)
         expected = _mercator(180.0 + offset, 0.0)[0] - _mercator(180.0 - offset, 0.0)[0]
@@ -467,7 +528,7 @@ class TestTissot:
         canvas = Map(crs=3832)
         canvas.ax.set_xlim(-2.0e7, 2.0e7)
         canvas.ax.set_ylim(-2.0e7, 2.0e7)
-        artist = canvas.tissot([PDC_SEAM_LON], [0.0], radius_m=500_000.0)
+        artist = _rings(canvas, [PDC_SEAM_LON], [0.0], radius_m=500_000.0)
         assert len(artist.get_paths()) == 1, len(artist.get_paths())
         offset = math.degrees(500_000.0 / MEAN_EARTH_R)
         expected = (
@@ -480,7 +541,7 @@ class TestTissot:
     def test_a_far_side_ring_on_a_globe_is_left_out(self):
         """A circle behind the globe has no near-side outline; only the visible one is drawn."""
         canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
-        artist = canvas.tissot([0.0, 180.0], [0.0, 0.0])
+        artist = _rings(canvas, [0.0, 180.0], [0.0, 0.0])
         assert len(artist.get_paths()) == 1, len(artist.get_paths())
 
     def test_a_globe_that_can_place_no_ring_at_all_draws_nothing(self):
@@ -493,7 +554,9 @@ class TestTissot:
             way the vector builders answer geometry the display CRS cannot place.
         """
         canvas = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
-        assert canvas.tissot([180.0], [0.0]) is None, (
+        before = len(canvas.ax.collections)
+        canvas.tissot([180.0], [0.0], name="ring")
+        assert len(canvas.ax.collections) == before, (
             "a centre on the antimeridian is behind a globe centred on lon 0"
         )
         assert canvas.layer_ids == [], (
@@ -502,7 +565,7 @@ class TestTissot:
 
     def test_style_reaches_the_artist(self):
         """``edgecolor`` and friends are cleopatra's, forwarded to the collection."""
-        artist = _world_4326().tissot([0.0], [0.0], edgecolor="crimson")
+        artist = _rings(_world_4326(), [0.0], [0.0], edgecolor="crimson")
         assert tuple(artist.get_edgecolor()[0]) == pytest.approx(
             (220 / 255, 20 / 255, 60 / 255, 1.0)
         )
@@ -709,7 +772,7 @@ class TestTheExtentAFittedViewIsBoundedBy:
             *is* pulled in, and this is the case where it must not be.
         """
         canvas = Map(crs="+proj=robin")
-        artist = canvas.nightshade(EQUINOX_NOON)
+        artist = _shade(canvas, EQUINOX_NOON)
         vertices = np.vstack([path.vertices for path in artist.get_paths()])
         finite = vertices[np.isfinite(vertices).all(axis=1)]
         xmin, xmax = canvas.ax.get_xlim()
@@ -1045,7 +1108,7 @@ class TestTheNightShadeColourAnswersAlikeOnEveryFrame:
             module.
         """
         canvas = Map(crs=3857, globe=globe)
-        artist = canvas.nightshade(JUNE_NOON, **{keyword: None})
+        artist = _shade(canvas, JUNE_NOON, **{keyword: None})
         assert _fill_rgba(artist) == pytest.approx(NIGHT_DEFAULT_RGBA), (
             f"{keyword}=None must draw the night default, got {_fill_rgba(artist)}"
         )
@@ -1091,7 +1154,7 @@ class TestTheNightShadeColourAnswersAlikeOnEveryFrame:
             invalid colour without starting to refuse a legitimate ``None``.
         """
         canvas = Map(crs=3857, globe=globe)
-        artist = canvas.nightshade(JUNE_NOON, edgecolor=None, name="ns")
+        artist = _shade(canvas, JUNE_NOON, edgecolor=None, name="ns")
         assert canvas.layer_ids == ["ns"], (
             f"edgecolor=None must draw, got {canvas.layer_ids}"
         )
@@ -1115,7 +1178,7 @@ class TestTheNightShadeColourAnswersAlikeOnEveryFrame:
             itself untouched.
         """
         canvas = Map(crs=3857, globe=globe)
-        artist = canvas.nightshade(JUNE_NOON, alpha=alpha)
+        artist = _shade(canvas, JUNE_NOON, alpha=alpha)
         assert _fill_rgba(artist) == pytest.approx((0.0, 0.0, 0.0, 0.0)), (
             f"alpha={alpha} must draw a fully transparent shade, got {_fill_rgba(artist)}"
         )
@@ -1136,7 +1199,7 @@ class TestTheNightShadeColourAnswersAlikeOnEveryFrame:
             differently could easily drop the caller's own. Crimson is written out from its CSS4 bytes.
         """
         canvas = Map(crs=3857, globe=globe)
-        artist = canvas.nightshade(JUNE_NOON, **{keyword: "crimson"})
+        artist = _shade(canvas, JUNE_NOON, **{keyword: "crimson"})
         assert _fill_rgba(artist) == pytest.approx(CRIMSON_RGBA), (
             f"{keyword}='crimson' must draw crimson, got {_fill_rgba(artist)}"
         )

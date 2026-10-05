@@ -2836,7 +2836,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **style: Any,
-    ) -> Any:
+    ) -> Self:
         """Shade the night side of the day/night terminator at one instant.
 
         The terminator is computed by cleopatra (``cleopatra.basemap.solar``, a low-precision solar position
@@ -2875,8 +2875,10 @@ class DecorationMixin(_MixinBase):
                 refused on either frame — and then dropped there, where a flat map draws it.
 
         Returns:
-            The night shade's ``PolyCollection`` — on a globe, the filled ``ContourSet`` it is drawn as there
-            — or ``None`` on a globe whose visible side holds no night.
+            This map (chainable). The shade's ``PolyCollection`` — on a globe, the filled ``ContourSet`` it
+            is drawn as there — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by this
+            layer's id (round-1 L6). A globe whose visible side holds no night draws nothing and registers
+            no layer, which is what the ``None`` this used to answer with said.
 
         Raises:
             ValueError: when ``refraction`` is outside ``(-90, 0]``, when ``n`` is not a whole number of at
@@ -2896,10 +2898,12 @@ class DecorationMixin(_MixinBase):
                 >>> from datetime import datetime, timezone
                 >>> from digitalearth import Map
                 >>> m = Map(crs=4326)
-                >>> night = m.nightshade(datetime(2026, 3, 20, 12, tzinfo=timezone.utc))
+                >>> night = m.nightshade(
+                ...     datetime(2026, 3, 20, 12, tzinfo=timezone.utc), name="night"
+                ... ).artist("night")
                 >>> [any(p.contains_point(xy) for p in night.get_paths()) for xy in ((170, 0), (0, 0))]
                 [True, False]
-                >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
+                >>> m.figure_spec.layers.get("night").kind
                 'nightshade'
                 >>> m.close()
 
@@ -2924,9 +2928,13 @@ class DecorationMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> with Map(crs=4326) as m:
-                ...     shade = m.nightshade("2026-12-21T12:00:00+00:00", color=None)
+                ...     shade = m.nightshade(
+                ...         "2026-12-21T12:00:00+00:00", color=None, name="black"
+                ...     ).artist("black")
                 ...     [tuple(round(float(c), 2) for c in face) for face in shade.get_facecolor()]
-                ...     faint = m.nightshade("2026-12-21T12:00:00+00:00", alpha=0)
+                ...     faint = m.nightshade(
+                ...         "2026-12-21T12:00:00+00:00", alpha=0, name="clear"
+                ...     ).artist("clear")
                 ...     [tuple(round(float(c), 2) for c in face) for face in faint.get_facecolor()]
                 [(0.0, 0.0, 0.0, 0.35)]
                 [(0.0, 0.0, 0.0, 0.0)]
@@ -2960,7 +2968,7 @@ class DecorationMixin(_MixinBase):
             for key, value in style.items()
             if value is not None or key not in _NIGHT_FILL_KEYWORDS
         }
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "nightshade",
                 name=name,
@@ -2976,6 +2984,7 @@ class DecorationMixin(_MixinBase):
                 opts=fill,
             )
         )
+        return self
 
     def tissot(
         self,
@@ -2987,7 +2996,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **style: Any,
-    ) -> Any:
+    ) -> Self:
         """Draw Tissot's indicatrices: circles of one ground radius, shown as the projection distorts them.
 
         Each circle is the set of points ``radius_m`` from its centre on the sphere (cleopatra's
@@ -3015,7 +3024,10 @@ class DecorationMixin(_MixinBase):
                 The default is an unfilled black outline.
 
         Returns:
-            The circles' ``PolyCollection``, or ``None`` when no circle could be placed.
+            This map (chainable). The circles' ``PolyCollection`` is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6). No circle the
+            projection could place draws nothing and registers no layer, which is what the ``None`` this
+            used to answer with said.
 
         Raises:
             ValueError: when only one of ``lons``/``lats`` is given, when **either** is empty, when they
@@ -3034,7 +3046,9 @@ class DecorationMixin(_MixinBase):
                 >>> import numpy as np
                 >>> from digitalearth import Map
                 >>> m = Map(crs=3857)
-                >>> rings = m.tissot([0.0, 0.0], [0.0, 60.0], radius_m=100_000.0)
+                >>> rings = m.tissot(
+                ...     [0.0, 0.0], [0.0, 60.0], radius_m=100_000.0, name="rings"
+                ... ).artist("rings")
                 >>> equator, sixty = (np.ptp(p.vertices[:, 0]) for p in rings.get_paths())
                 >>> round(float(sixty / equator), 1)
                 2.0
@@ -3047,9 +3061,9 @@ class DecorationMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> m = Map(crs=4326)
-                >>> len(m.tissot(edgecolor="crimson").get_paths())
+                >>> len(m.tissot(edgecolor="crimson", name="grid").artist("grid").get_paths())
                 60
-                >>> m.figure_spec.layers.get(m.layer_ids[-1]).kind
+                >>> m.figure_spec.layers.get("grid").kind
                 'tissot'
                 >>> m.close()
 
@@ -3061,8 +3075,10 @@ class DecorationMixin(_MixinBase):
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth import Map
                 >>> with Map(crs=3857) as m:
-                ...     xs = m.tissot(lons=[179.5], lats=[0.0], radius_m=500_000.0).get_paths()[0]
-                ...     span = xs.vertices[:, 0]
+                ...     seam = m.tissot(
+                ...         lons=[179.5], lats=[0.0], radius_m=500_000.0, name="seam"
+                ...     ).artist("seam")
+                ...     span = seam.get_paths()[0].vertices[:, 0]
                 ...     (round(float(span.min())), round(float(span.max())))
                 ...     bool(span.max() > 20037508.0)
                 (19481444, 20482253)
@@ -3154,7 +3170,7 @@ class DecorationMixin(_MixinBase):
                     f"tissot() takes one lat per lon; got {len(lon_list)} in lons= and "
                     f"{len(lat_list)} in lats="
                 )
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "tissot",
                 name=name,
@@ -3171,6 +3187,7 @@ class DecorationMixin(_MixinBase):
                 opts=style,
             )
         )
+        return self
 
     def basemap(
         self,
