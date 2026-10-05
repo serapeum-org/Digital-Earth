@@ -587,7 +587,10 @@ class FrameUpdate:
 
         The title goes with it. A title is the one piece of per-frame *decoration*, so an updated frame has
         to restate it just as a redrawn one does — leaving it to the first frame is how an in-place
-        animation came out with every frame titled "Jan".
+        animation came out with every frame titled "Jan". It is set straight on the axes rather than
+        through :meth:`~digitalearth.static.scene.Scene.set_title`, which would also write it into the
+        figure's description: a frame's caption is not the figure's heading, and ``titles=`` leaves that
+        heading to the caller.
 
         Args:
             index: Which frame to show.
@@ -674,7 +677,11 @@ class FrameUpdate:
         getattr(artist, self.SETTERS[self.kind])(values)
         artist.set_visible(True)
         if self.titles is not None:
-            self.scene.set_title(self.titles[index])
+            # Drawn, not recorded. `Scene.set_title` writes the heading onto the figure's description
+            # (ST-18), and a frame's caption is not the figure's heading: restating it through there left
+            # a clip describing itself as headed with its *last* frame's caption, over whatever heading
+            # the caller had set.
+            self.scene.ax.set_title(self.titles[index])
         return True
 
 
@@ -1357,7 +1364,8 @@ class AnimationMixin(_MixinBase):
 
         The per-frame body shared by :meth:`animate` and :meth:`rotate`. Ocean fill and coastlines are
         decoration: the ocean disc is drawn only on a globe, and a coastline failure (no network/data) is
-        swallowed so the animation still renders.
+        swallowed so the animation still renders. So is the title, which is drawn on the axes and left out
+        of the figure's description — see :meth:`FrameUpdate.apply`, which restates it the other way.
 
         Returns:
             The data layer's mappable — the artist a later frame updates in place rather than drawing again,
@@ -1383,7 +1391,9 @@ class AnimationMixin(_MixinBase):
             except Exception:  # network/data unavailable — decoration is best-effort
                 pass
         if title is not None:
-            self.set_title(title)
+            # On the axes only, for the reason `FrameUpdate.apply` gives: the same caption reaches the
+            # picture by this path, and the two must be as quiet as each other about the description.
+            self.ax.set_title(title)
         return drawn
 
     def animate(

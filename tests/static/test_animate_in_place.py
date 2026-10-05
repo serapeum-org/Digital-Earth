@@ -867,3 +867,95 @@ class TestBlitRefusesAStackItCannotHold:
         assert drawn[1] is not drawn[0], (
             "without blitting a mixed-grid stack must still fall back to a rebuilt artist"
         )
+
+
+class TestAPerFrameCaptionIsNotTheFiguresHeading:
+    """``titles=`` captions the frames; the figure's described heading is ``set_title``'s to write."""
+
+    TITLES = ["Jan", "Feb"]
+
+    def _animated(self, stack, mode: str) -> Map:
+        """Drive every frame of a titled animation of ``stack`` and hand back the map it drew on.
+
+        Args:
+            stack: The frames to animate.
+            mode: The ``update=`` path to drive.
+
+        Returns:
+            The map, with the clip's last frame standing on it.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate(
+            stack[: len(self.TITLES)],
+            fps=2,
+            titles=self.TITLES,
+            update=mode,
+            **CLIM,
+        )
+        for index in range(len(self.TITLES)):
+            clip._func(index)
+        return scene
+
+    def test_the_in_place_path_does_not_record_the_last_caption(self, stack):
+        """The updated frame restates its caption on the axes and leaves the description alone.
+
+        Test scenario:
+            ``set_title`` records onto ``PanelSpec.title``, so restating a caption through it left the
+            figure describing itself as headed "Feb" — a heading nobody wrote, and one a map rebuilt from
+            the description would then draw.
+        """
+        scene = self._animated(stack, "auto")
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described is None, (
+            f"a per-frame caption must not become the figure's heading; described {described!r}"
+        )
+
+    def test_the_redrawing_path_does_not_record_it_either(self, stack):
+        """The same caption reaches the axes the other way and must be as quiet about it.
+
+        Test scenario:
+            A redrawn frame sets its caption in ``_draw_animation_frame`` rather than in
+            ``FrameUpdate.apply``, so the two paths had to be fixed together or ``update=`` would decide
+            what the figure says about itself.
+        """
+        scene = self._animated(stack, "redraw")
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described is None, (
+            f"the redrawing path must not record a caption either; described {described!r}"
+        )
+
+    def test_a_heading_the_caller_set_survives_the_clip(self, stack):
+        """And a real heading is still there afterwards, rather than overwritten by the last frame.
+
+        Test scenario:
+            ``Map.set_title("Monthly mean temperature").animate(..., titles=[...])`` is the shape the
+            notebooks use: one heading for the figure, one caption per frame.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title("Monthly mean temperature")
+        clip = scene.animate(
+            stack[:2], fps=2, titles=self.TITLES, update="auto", **CLIM
+        )
+        clip._func(0)
+        clip._func(1)
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described == "Monthly mean temperature", (
+            f"an animation must not rewrite the figure's own heading; described {described!r}"
+        )
+
+    def test_each_frame_still_shows_its_own_caption(self, stack):
+        """The caption is still drawn — this is about the record, not about the picture.
+
+        Test scenario:
+            Dropping the record by dropping the call would leave every frame carrying the first frame's
+            title, which is the defect ``apply``'s title restatement exists for.
+        """
+        scene = self._animated(stack, "auto")
+        shown = scene.ax.get_title()
+        scene.close()
+        assert shown == self.TITLES[-1], (
+            f"the last frame drawn should still be captioned {self.TITLES[-1]!r}, got {shown!r}"
+        )
