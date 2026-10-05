@@ -37,6 +37,7 @@ from digitalearth.base.raster_classes import (
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
+from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,9 @@ def grid(
             framing or autoscaling one panel of a group frames every panel in it, which is the point of
             asking for it, and means a grid whose panels show different regions should leave it off.
         sharey: The same for the y axis.
-        suptitle: One title over the whole figure (``Figure.suptitle``). ``None`` (default) adds none.
+        suptitle: One title over the whole figure (``Figure.suptitle``). ``None`` (default) adds none,
+            and so do ``""`` and ``"   "``: a blank heading is the one request "no heading" the panels'
+            own ``set_title`` reads it as, rather than an empty ``Text`` on the figure.
             This is **not** a panel title: every panel's own ``set_title`` is untouched, so a shared
             heading and one caption per panel coexist. Style it by calling ``fig.suptitle`` yourself on
             the returned figure — which each panel describes as its figure's heading either way, since
@@ -219,8 +222,12 @@ def grid(
     fig, axs = plt.subplots(nrows, ncols, figsize=figsize, sharex=sharex, sharey=sharey)
     axes = np.atleast_1d(axs).ravel()
     maps = [Map(crs=crs, globe=globe, ax=ax, fig=fig, **kwargs) for ax in axes]
-    if suptitle is not None:
-        fig.suptitle(suptitle)
+    # Through the panels' own normaliser, not a guard of its own: `None`, `""` and `"   "` are the one
+    # request "no heading" on this tier (ST-18), and a bare `is not None` put an empty `Text` on the figure
+    # where `set_title("")` draws and records none (L4).
+    heading = Scene._recorded_title(suptitle)
+    if heading is not None:
+        fig.suptitle(heading)
     return fig, maps
 
 

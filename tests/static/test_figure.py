@@ -406,3 +406,21 @@ class TestGridFigureTitle:
         assert (
             Map.from_figure(maps[0].figure_spec).ax.get_title() == "rainfall, 2020"
         ), "the heading should survive a round trip through the description"
+
+    @pytest.mark.parametrize("blank", ["", "   "])
+    def test_a_blank_heading_draws_none(self, blank, closed_figures):
+        """A blank ``suptitle`` is the request "no heading", and nothing is drawn for it.
+
+        Args:
+            blank: A way of asking for no heading.
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            ``set_title`` already reads ``None``, ``""`` and ``"   "`` as one request (ST-18), while
+            ``grid`` guarded only on ``is not None`` and put an empty ``Text`` on the figure — two
+            answers to one question on the same tier (L4).
+        """
+        fig, _maps = grid(1, 2, crs=4326, suptitle=blank)
+        assert [text.get_text() for text in fig.texts] == [], (
+            f"suptitle={blank!r} should draw no figure text; got {fig.texts}"
+        )
