@@ -38,6 +38,9 @@ EQUINOX_NOON = "2026-03-20T12:00:00+00:00"
 #: One Natural-Earth resolution, named once so the calls below read as the chain and not the keywords.
 COARSE = "110m"
 
+#: What the stubbed tile fetch hands back, so the accessor can be asserted against the engine's own object.
+TILE_ARTIST = object()
+
 #: Every decoration method that must chain, as ``name -> (call, layer name)``. The layer name is what the
 #: call asks for, so the artist can be read back by id rather than by "the last one".
 CHAINING_CALLS = {
@@ -103,7 +106,9 @@ class TestEveryDecorationMethodHandsBackTheMap:
             `self`.
         """
         call, _ = CHAINING_CALLS[method]
-        assert call(canvas) is canvas, f"{method}() did not hand back the map it drew on"
+        assert call(canvas) is canvas, (
+            f"{method}() did not hand back the map it drew on"
+        )
 
     @pytest.mark.parametrize("method", sorted(CHAINING_CALLS))
     def test_the_artist_is_still_reachable_by_the_layer_s_name(self, method, canvas):
@@ -189,6 +194,7 @@ class TestTheDocumentedChainRuns:
             scene.field(dataset, name="grid").coastlines(COARSE, name="coast")
             assert scene.layer_ids == ["grid", "coast"], scene.layer_ids
 
+
 class TestALayerThatDrewNothingStillChains:
     """Tests for what replaced the ``None`` ``text``/``annotate`` used to answer with."""
 
@@ -235,6 +241,73 @@ class TestALayerThatDrewNothingStillChains:
             scene.text(180.0, 0.0, "hidden", name="far")
             with pytest.raises(KeyError, match="no layer 'far' on this figure"):
                 scene.artist("far")
+
+
+class TestBasemapChainsWithoutTheNetwork:
+    """Tests for ``basemap``, which the tables above leave out because it fetches tiles."""
+
+    @pytest.fixture
+    def tiled(self, mocker):
+        """A framed map whose tile fetch is a stand-in, closed when the test ends.
+
+        Args:
+            mocker: Stubs ``cleopatra.basemap.tiles.add_tiles`` where the tier calls it.
+
+        Yields:
+            The map, framed on a lon/lat region so the extent the tiles are asked for exists.
+        """
+        mocker.patch(
+            "digitalearth.static.maps.decoration.add_tiles", return_value=TILE_ARTIST
+        )
+        scene = Map(domain=(-10.0, 35.0, 5.0, 45.0))
+        scene.ax.set_xlim(-10.0, 5.0)
+        scene.ax.set_ylim(35.0, 45.0)
+        yield scene
+        scene.close()
+
+    def test_the_call_returns_the_very_map_it_drew_on(self, tiled):
+        """``basemap()`` hands back the map, so a basemap can open a chain.
+
+        Args:
+            tiled: The framed map with a stubbed tile fetch.
+
+        Test scenario:
+            ``WebMap().basemap().points(...)`` is how the web tier already reads; this is the static
+            tier catching up, which is the cross-tier half of L6.
+        """
+        assert tiled.basemap(name="tiles") is tiled
+
+    def test_the_tile_artist_is_reachable_by_the_layer_s_name(self, tiled):
+        """What ``add_tiles`` returned is still reachable, by layer id.
+
+        Args:
+            tiled: The framed map with a stubbed tile fetch.
+
+        Test scenario:
+            The stand-in's own object is asserted, so this fails if the accessor hands back anything
+            other than exactly what the engine produced.
+        """
+        tiled.basemap(name="tiles")
+        assert tiled.artist("tiles") is TILE_ARTIST
+
+    def test_a_basemap_opens_a_chain_of_decoration(self, tiled):
+        """A basemap, then reference geography, then a label — one expression.
+
+        Args:
+            tiled: The framed map with a stubbed tile fetch.
+
+        Test scenario:
+            The chain spans all three former return conventions and starts at the one that fetches,
+            which is the shape a user writes.
+        """
+        chained = (
+            tiled.basemap(name="tiles")
+            .coastlines(COARSE)
+            .text(NEAR_LON, NEAR_LAT, "Amsterdam")
+        )
+        assert chained.layer_ids == ["tiles", "coastlines-1", "text-1"], (
+            chained.layer_ids
+        )
 
 
 class TestStockImgStillAnswersWithItsArtist:

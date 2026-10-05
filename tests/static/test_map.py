@@ -367,12 +367,29 @@ def test_stock_img_tiles_graceful_offline(mocker, caplog):
     )
 
 
-def test_stock_img_tiles_path(mocker):
-    """stock_img() with no dataset delegates to basemap when tiles are reachable."""
-    sentinel = object()
-    spy = mocker.patch.object(Map, "basemap", return_value=sentinel)
+def test_stock_img_tiles_delegate_to_basemap(mocker):
+    """stock_img() with no dataset asks basemap for the tiles."""
+    spy = mocker.patch.object(Map, "basemap", return_value=None)
     m = Map(crs=3857)
-    assert m.stock_img() is sentinel and spy.called
+    m.stock_img()
+    assert spy.called, "the no-dataset form must go through basemap()"
+
+
+def test_stock_img_tiles_path(mocker):
+    """stock_img() with no dataset hands back the tile artist basemap drew.
+
+    `basemap` returns the map since round-1 L6, so the backdrop is read off the layer it registered.
+    `add_tiles` is stubbed rather than `Map.basemap`, so the real builder runs and does register one.
+
+    Args:
+        mocker: Stubs cleopatra's tile fetch.
+    """
+    tiles = object()
+    mocker.patch("digitalearth.static.maps.decoration.add_tiles", return_value=tiles)
+    m = Map(domain=(-10.0, 35.0, 5.0, 45.0))
+    m.ax.set_xlim(-10.0, 5.0)
+    m.ax.set_ylim(35.0, 45.0)
+    assert m.stock_img() is tiles
 
 
 def test_set_domain_names_itself_when_a_bbox_is_back_to_front():

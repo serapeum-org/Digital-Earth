@@ -40,6 +40,7 @@ from typing import (
     Optional,
     Self,
     Sequence,
+    Set,
     Tuple,
 )
 from urllib.parse import parse_qs, urlsplit, urlunsplit
@@ -2411,18 +2412,24 @@ class DecorationMixin(_MixinBase):
             The backdrop ``AxesImage`` (raster path), the tile artist, or ``None`` if a tile backdrop is
             unavailable offline or the raster lies outside what the display CRS shows.
 
-            **Unchanged by ST-20**, deliberately. The data builders return ``Self`` now, and this does not:
-            a backdrop is one artist a caller styles afterwards — a uniform fill, an alpha, a zorder — and
-            handing that artist back is the whole point of the method. It is read off the layer the
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` call below drew, through
-            :meth:`~digitalearth.static.scene.Scene.artist`, rather than off that call's return value.
+            **Unchanged by ST-20, and unchanged by round-1 L6**, deliberately. Every data builder and
+            every other decoration method returns ``Self`` now, and this does not: a backdrop is one
+            artist a caller styles afterwards — a uniform fill, an alpha, a zorder — and handing that
+            artist back is the whole point of the method. It is read off the layer the call below drew
+            (:meth:`~digitalearth.static.maps.raster.RasterMixin.field` for a raster, :meth:`basemap`
+            for tiles), through :meth:`~digitalearth.static.scene.Scene.artist`, rather than off that
+            call's return value — which is now the map, on both paths.
         """
         if dataset is None:
+            tiled = set(self.layer_ids)
             try:
-                return self.basemap(name=name, visible=visible, **kwargs)
+                self.basemap(name=name, visible=visible, **kwargs)
             except Exception as exc:  # tile servers unavailable — best-effort backdrop
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
+            # `basemap` hands back the map since L6, so the tile artist comes off the layer it drew,
+            # identified by the id that appeared — the same reading the raster path below uses.
+            return self._artist_that_appeared(tiled)
         before = set(self.layer_ids)
         with self._preserve_view():
             # `draw_band="underlay"` is the description's half of `zorder`: one says where the
@@ -2438,10 +2445,24 @@ class DecorationMixin(_MixinBase):
                 zorder=zorder,
                 **kwargs,
             )
-        # `field` hands back the map since ST-20, so the artist comes from the layer it drew — identified by
-        # the id that appeared, not by "the last one", because a backdrop is drawn into the `underlay` band
-        # and need not sit at the end of the figure's draw order. A raster the display CRS could not place
-        # drew nothing and added no id, which is the `None` this method has always answered for that case.
+        return self._artist_that_appeared(before)
+
+    def _artist_that_appeared(self, before: Set[str]) -> Any:
+        """Return the artist of the layer that appeared since ``before``, or ``None`` if none did.
+
+        The builders hand back the map (ST-20 for the data builders, round-1 L6 for the decoration ones),
+        so :meth:`stock_img` reads its backdrop off the layer the delegated call drew. Identified by **the
+        id that appeared**, not by "the last one", because a raster backdrop is drawn into the ``underlay``
+        band and need not sit at the end of the figure's draw order.
+
+        Args:
+            before: The layer ids the figure held before the delegated call.
+
+        Returns:
+            The drawn artist, through :meth:`~digitalearth.static.scene.Scene.artist`; ``None`` when no id
+            appeared, which is a backdrop the display CRS could not place — the answer this method has
+            always given for that case.
+        """
         added = [layer_id for layer_id in self.layer_ids if layer_id not in before]
         return self.artist(added[-1]) if added else None
 
@@ -3198,7 +3219,7 @@ class DecorationMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
 
         ``source`` is passed through to cleopatra unchanged — a provider name or an
@@ -3232,7 +3253,10 @@ class DecorationMixin(_MixinBase):
             **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
-            The tile artist ``add_tiles`` added to the axes.
+            This map (chainable). The tile artist ``add_tiles`` added to the axes is reached through
+            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6). Tiles that
+            cannot be fetched raise rather than answering ``None``, and the layer is dropped from the
+            description with them.
 
         Raises:
             ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``
@@ -3245,9 +3269,10 @@ class DecorationMixin(_MixinBase):
             - A keyed preset resolves its own provider and credential:
                 ```python
                 >>> from digitalearth import Map                       # doctest: +SKIP
-                >>> Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP
+                >>> tiled = Map(domain=(-60, -5, -55, 0)).basemap(     # doctest: +SKIP
                 ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
                 ... )                                                  # doctest: +SKIP
+                >>> tiled.artist("basemap-1")                          # doctest: +SKIP
 
                 ```
 
@@ -3285,7 +3310,7 @@ class DecorationMixin(_MixinBase):
         options: dict,
         name: Optional[str] = None,
         visible: bool = True,
-    ) -> Any:
+    ) -> Self:
         """Record the basemap this map should draw and let :func:`draw_basemap` fetch it.
 
         No data source is recorded — a tile set is named by its provider, which is a style property here,
@@ -3321,9 +3346,10 @@ class DecorationMixin(_MixinBase):
                 hidden, so a switcher reading the figure agrees with the axes (#327).
 
         Returns:
-            Whatever ``add_tiles`` returned. Not ``None``: tiles that cannot be fetched raise, and the
-            layer is dropped from the description with them — :meth:`stock_img` is the one caller that
-            turns that into a quiet ``None``, because a backdrop is best-effort.
+            This map (chainable), like :meth:`basemap` itself. The layer is always registered when this
+            returns: tiles that cannot be fetched raise, and the layer is dropped from the description
+            with them — :meth:`stock_img` is the one caller that turns that into a quiet ``None``,
+            because a backdrop is best-effort.
 
         Raises:
             ValueError: from :func:`draw_basemap` — a keyed preset whose credential is unavailable, an
@@ -3334,7 +3360,7 @@ class DecorationMixin(_MixinBase):
         recorded, held = _described_tile_source(source)
         if held is not None:
             options = {**options, "source": held}
-        return self._draw(
+        self._draw(
             LayerRecord(
                 "basemap",
                 name=name,
@@ -3351,6 +3377,7 @@ class DecorationMixin(_MixinBase):
                 opts=options,
             )
         )
+        return self
 
     def _coverage_extent(self) -> Optional[Tuple[float, float, float, float]]:
         """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.
