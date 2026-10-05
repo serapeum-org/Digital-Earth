@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -18991,6 +18991,12 @@ animation is lazy: call <code>anim.save("out.gif", writer=PillowWriter(fps=...))
 (<code>"rgb_composite"</code> / <code>"hsv_composite"</code>) instead takes one per-channel contrast stretch, frozen
 once over the stack — without which every frame would re-derive its own 2-98 percentile and the
 clip would pump. Pass your own <code>limits=[(lo, hi), ...]</code> to override that scan.</p>
+<p>A stated <code>center=</code> belongs to that one treatment too. The diverging ramp it asks for is resolved
+<strong>once, over the shared scale</strong>, rather than by each frame against its own values: a stack that
+straddles the centre diverges for the whole clip, and one that does not keeps the sequential ramp
+and says so once. Deciding it per frame made the ramp flicker between the two along a clip — and
+made the picture depend on <code>update=</code>, since an artist kept across frames froze the first frame's
+answer while a redrawn one re-asked it.</p>
 <p>Either scan measures frames <strong>as they will be drawn</strong>, reprojected into the display CRS, so the
 animation lands on the same scale as the equivalent still. On a globe that means the scale spans
 what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.</p>
@@ -19367,96 +19373,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/animation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1231">1231</a></span>
-<span class="normal"><a href="#__codelineno-0-1232">1232</a></span>
-<span class="normal"><a href="#__codelineno-0-1233">1233</a></span>
-<span class="normal"><a href="#__codelineno-0-1234">1234</a></span>
-<span class="normal"><a href="#__codelineno-0-1235">1235</a></span>
-<span class="normal"><a href="#__codelineno-0-1236">1236</a></span>
-<span class="normal"><a href="#__codelineno-0-1237">1237</a></span>
-<span class="normal"><a href="#__codelineno-0-1238">1238</a></span>
-<span class="normal"><a href="#__codelineno-0-1239">1239</a></span>
-<span class="normal"><a href="#__codelineno-0-1240">1240</a></span>
-<span class="normal"><a href="#__codelineno-0-1241">1241</a></span>
-<span class="normal"><a href="#__codelineno-0-1242">1242</a></span>
-<span class="normal"><a href="#__codelineno-0-1243">1243</a></span>
-<span class="normal"><a href="#__codelineno-0-1244">1244</a></span>
-<span class="normal"><a href="#__codelineno-0-1245">1245</a></span>
-<span class="normal"><a href="#__codelineno-0-1246">1246</a></span>
-<span class="normal"><a href="#__codelineno-0-1247">1247</a></span>
-<span class="normal"><a href="#__codelineno-0-1248">1248</a></span>
-<span class="normal"><a href="#__codelineno-0-1249">1249</a></span>
-<span class="normal"><a href="#__codelineno-0-1250">1250</a></span>
-<span class="normal"><a href="#__codelineno-0-1251">1251</a></span>
-<span class="normal"><a href="#__codelineno-0-1252">1252</a></span>
-<span class="normal"><a href="#__codelineno-0-1253">1253</a></span>
-<span class="normal"><a href="#__codelineno-0-1254">1254</a></span>
-<span class="normal"><a href="#__codelineno-0-1255">1255</a></span>
-<span class="normal"><a href="#__codelineno-0-1256">1256</a></span>
-<span class="normal"><a href="#__codelineno-0-1257">1257</a></span>
-<span class="normal"><a href="#__codelineno-0-1258">1258</a></span>
-<span class="normal"><a href="#__codelineno-0-1259">1259</a></span>
-<span class="normal"><a href="#__codelineno-0-1260">1260</a></span>
-<span class="normal"><a href="#__codelineno-0-1261">1261</a></span>
-<span class="normal"><a href="#__codelineno-0-1262">1262</a></span>
-<span class="normal"><a href="#__codelineno-0-1263">1263</a></span>
-<span class="normal"><a href="#__codelineno-0-1264">1264</a></span>
-<span class="normal"><a href="#__codelineno-0-1265">1265</a></span>
-<span class="normal"><a href="#__codelineno-0-1266">1266</a></span>
-<span class="normal"><a href="#__codelineno-0-1267">1267</a></span>
-<span class="normal"><a href="#__codelineno-0-1268">1268</a></span>
-<span class="normal"><a href="#__codelineno-0-1269">1269</a></span>
-<span class="normal"><a href="#__codelineno-0-1270">1270</a></span>
-<span class="normal"><a href="#__codelineno-0-1271">1271</a></span>
-<span class="normal"><a href="#__codelineno-0-1272">1272</a></span>
-<span class="normal"><a href="#__codelineno-0-1273">1273</a></span>
-<span class="normal"><a href="#__codelineno-0-1274">1274</a></span>
-<span class="normal"><a href="#__codelineno-0-1275">1275</a></span>
-<span class="normal"><a href="#__codelineno-0-1276">1276</a></span>
-<span class="normal"><a href="#__codelineno-0-1277">1277</a></span>
-<span class="normal"><a href="#__codelineno-0-1278">1278</a></span>
-<span class="normal"><a href="#__codelineno-0-1279">1279</a></span>
-<span class="normal"><a href="#__codelineno-0-1280">1280</a></span>
-<span class="normal"><a href="#__codelineno-0-1281">1281</a></span>
-<span class="normal"><a href="#__codelineno-0-1282">1282</a></span>
-<span class="normal"><a href="#__codelineno-0-1283">1283</a></span>
-<span class="normal"><a href="#__codelineno-0-1284">1284</a></span>
-<span class="normal"><a href="#__codelineno-0-1285">1285</a></span>
-<span class="normal"><a href="#__codelineno-0-1286">1286</a></span>
-<span class="normal"><a href="#__codelineno-0-1287">1287</a></span>
-<span class="normal"><a href="#__codelineno-0-1288">1288</a></span>
-<span class="normal"><a href="#__codelineno-0-1289">1289</a></span>
-<span class="normal"><a href="#__codelineno-0-1290">1290</a></span>
-<span class="normal"><a href="#__codelineno-0-1291">1291</a></span>
-<span class="normal"><a href="#__codelineno-0-1292">1292</a></span>
-<span class="normal"><a href="#__codelineno-0-1293">1293</a></span>
-<span class="normal"><a href="#__codelineno-0-1294">1294</a></span>
-<span class="normal"><a href="#__codelineno-0-1295">1295</a></span>
-<span class="normal"><a href="#__codelineno-0-1296">1296</a></span>
-<span class="normal"><a href="#__codelineno-0-1297">1297</a></span>
-<span class="normal"><a href="#__codelineno-0-1298">1298</a></span>
-<span class="normal"><a href="#__codelineno-0-1299">1299</a></span>
-<span class="normal"><a href="#__codelineno-0-1300">1300</a></span>
-<span class="normal"><a href="#__codelineno-0-1301">1301</a></span>
-<span class="normal"><a href="#__codelineno-0-1302">1302</a></span>
-<span class="normal"><a href="#__codelineno-0-1303">1303</a></span>
-<span class="normal"><a href="#__codelineno-0-1304">1304</a></span>
-<span class="normal"><a href="#__codelineno-0-1305">1305</a></span>
-<span class="normal"><a href="#__codelineno-0-1306">1306</a></span>
-<span class="normal"><a href="#__codelineno-0-1307">1307</a></span>
-<span class="normal"><a href="#__codelineno-0-1308">1308</a></span>
-<span class="normal"><a href="#__codelineno-0-1309">1309</a></span>
-<span class="normal"><a href="#__codelineno-0-1310">1310</a></span>
-<span class="normal"><a href="#__codelineno-0-1311">1311</a></span>
-<span class="normal"><a href="#__codelineno-0-1312">1312</a></span>
-<span class="normal"><a href="#__codelineno-0-1313">1313</a></span>
-<span class="normal"><a href="#__codelineno-0-1314">1314</a></span>
-<span class="normal"><a href="#__codelineno-0-1315">1315</a></span>
-<span class="normal"><a href="#__codelineno-0-1316">1316</a></span>
-<span class="normal"><a href="#__codelineno-0-1317">1317</a></span>
-<span class="normal"><a href="#__codelineno-0-1318">1318</a></span>
-<span class="normal"><a href="#__codelineno-0-1319">1319</a></span>
-<span class="normal"><a href="#__codelineno-0-1320">1320</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1320">1320</a></span>
 <span class="normal"><a href="#__codelineno-0-1321">1321</a></span>
 <span class="normal"><a href="#__codelineno-0-1322">1322</a></span>
 <span class="normal"><a href="#__codelineno-0-1323">1323</a></span>
@@ -19573,213 +19490,316 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 <span class="normal"><a href="#__codelineno-0-1434">1434</a></span>
 <span class="normal"><a href="#__codelineno-0-1435">1435</a></span>
 <span class="normal"><a href="#__codelineno-0-1436">1436</a></span>
-<span class="normal"><a href="#__codelineno-0-1437">1437</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1231" name="__codelineno-0-1231"></a><span class="k">def</span><span class="w"> </span><span class="nf">animate</span><span class="p">(</span>
-<a id="__codelineno-0-1232" name="__codelineno-0-1232"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1233" name="__codelineno-0-1233"></a>    <span class="n">stack</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1234" name="__codelineno-0-1234"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1235" name="__codelineno-0-1235"></a>    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;imshow&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1236" name="__codelineno-0-1236"></a>    <span class="n">fps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_FPS</span><span class="p">,</span>
-<a id="__codelineno-0-1237" name="__codelineno-0-1237"></a>    <span class="n">titles</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1238" name="__codelineno-0-1238"></a>    <span class="n">ocean</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-1239" name="__codelineno-0-1239"></a>    <span class="n">coastlines</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-1240" name="__codelineno-0-1240"></a>    <span class="n">colorbar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-1241" name="__codelineno-0-1241"></a>    <span class="n">cbar_label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1242" name="__codelineno-0-1242"></a>    <span class="n">update</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1243" name="__codelineno-0-1243"></a>    <span class="n">blit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-1244" name="__codelineno-0-1244"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1245" name="__codelineno-0-1245"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FuncAnimation</span><span class="p">:</span>
-<a id="__codelineno-0-1246" name="__codelineno-0-1246"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.</span>
-<a id="__codelineno-0-1247" name="__codelineno-0-1247"></a>
-<a id="__codelineno-0-1248" name="__codelineno-0-1248"></a><span class="sd">    Each frame reprojects ``stack[i]`` to the display CRS (pyramids), renders it with the ``kind`` method</span>
-<a id="__codelineno-0-1249" name="__codelineno-0-1249"></a><span class="sd">    (cleopatra), optionally draws the ocean disc / coastlines, and — on a globe — applies the projection</span>
-<a id="__codelineno-0-1250" name="__codelineno-0-1250"></a><span class="sd">    frame, so every frame gets the boundary, graticule, and limb-clipping for free. The returned</span>
-<a id="__codelineno-0-1251" name="__codelineno-0-1251"></a><span class="sd">    animation is lazy: call ``anim.save(&quot;out.gif&quot;, writer=PillowWriter(fps=...))`` or display it.</span>
-<a id="__codelineno-0-1252" name="__codelineno-0-1252"></a>
-<a id="__codelineno-0-1253" name="__codelineno-0-1253"></a><span class="sd">    All frames share **one colour treatment**, so nothing flickers between them. A scalar field takes</span>
-<a id="__codelineno-0-1254" name="__codelineno-0-1254"></a><span class="sd">    ``vmin``/``vmax`` from ``kwargs`` if given, else measured once over the stack. A composite</span>
-<a id="__codelineno-0-1255" name="__codelineno-0-1255"></a><span class="sd">    (``&quot;rgb_composite&quot;`` / ``&quot;hsv_composite&quot;``) instead takes one per-channel contrast stretch, frozen</span>
-<a id="__codelineno-0-1256" name="__codelineno-0-1256"></a><span class="sd">    once over the stack — without which every frame would re-derive its own 2-98 percentile and the</span>
-<a id="__codelineno-0-1257" name="__codelineno-0-1257"></a><span class="sd">    clip would pump. Pass your own ``limits=[(lo, hi), ...]`` to override that scan.</span>
-<a id="__codelineno-0-1258" name="__codelineno-0-1258"></a>
-<a id="__codelineno-0-1259" name="__codelineno-0-1259"></a><span class="sd">    Either scan measures frames **as they will be drawn**, reprojected into the display CRS, so the</span>
-<a id="__codelineno-0-1260" name="__codelineno-0-1260"></a><span class="sd">    animation lands on the same scale as the equivalent still. On a globe that means the scale spans</span>
-<a id="__codelineno-0-1261" name="__codelineno-0-1261"></a><span class="sd">    what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.</span>
-<a id="__codelineno-0-1262" name="__codelineno-0-1262"></a>
-<a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><span class="sd">    **Only what changes is redrawn (ST-9).** The first frame draws the whole scene; every frame after it</span>
-<a id="__codelineno-0-1264" name="__codelineno-0-1264"></a><span class="sd">    gives the artist that frame drew the new frame&#39;s values (``AxesImage.set_data`` /</span>
-<a id="__codelineno-0-1265" name="__codelineno-0-1265"></a><span class="sd">    ``QuadMesh.set_array``) and touches nothing else, so the ocean disc, the coastlines, the projection</span>
-<a id="__codelineno-0-1266" name="__codelineno-0-1266"></a><span class="sd">    frame, the colorbar and the view survive instead of being thrown away and rebuilt per frame. That is</span>
-<a id="__codelineno-0-1267" name="__codelineno-0-1267"></a><span class="sd">    a strategy, not a different picture: the frames are pixel-identical to the cleared-and-redrawn ones,</span>
-<a id="__codelineno-0-1268" name="__codelineno-0-1268"></a><span class="sd">    which ``tests/static/test_animate_in_place.py`` compares buffer by buffer. ``update=`` chooses the</span>
-<a id="__codelineno-0-1269" name="__codelineno-0-1269"></a><span class="sd">    path, and a ``kind`` or an option that cannot be updated this way (a contour set, a composite, a</span>
-<a id="__codelineno-0-1270" name="__codelineno-0-1270"></a><span class="sd">    per-frame ``scheme=``) is named rather than animated wrongly. A frame the display CRS cannot show</span>
-<a id="__codelineno-0-1271" name="__codelineno-0-1271"></a><span class="sd">    hides the artist for that frame, so an off-limb frame still draws nothing.</span>
-<a id="__codelineno-0-1272" name="__codelineno-0-1272"></a>
-<a id="__codelineno-0-1273" name="__codelineno-0-1273"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1274" name="__codelineno-0-1274"></a><span class="sd">        stack: An ordered collection of pyramids ``Dataset`` frames (e.g. a list, or a</span>
-<a id="__codelineno-0-1275" name="__codelineno-0-1275"></a><span class="sd">            ``DatasetCollection`` datacube) — one raster per animation frame.</span>
-<a id="__codelineno-0-1276" name="__codelineno-0-1276"></a><span class="sd">        kind: The method used to draw each frame — a scalar field (``&quot;imshow&quot;`` / ``&quot;contourf&quot;`` /</span>
-<a id="__codelineno-0-1277" name="__codelineno-0-1277"></a><span class="sd">            ``&quot;contour&quot;`` / ``&quot;pcolormesh&quot;`` / ``&quot;block&quot;``) or a true/false-colour composite</span>
-<a id="__codelineno-0-1278" name="__codelineno-0-1278"></a><span class="sd">            (``&quot;rgb_composite&quot;`` / ``&quot;hsv_composite&quot;``, which take ``bands=(r, g, b)`` through</span>
-<a id="__codelineno-0-1279" name="__codelineno-0-1279"></a><span class="sd">            ``**kwargs`` to pick their channels).</span>
-<a id="__codelineno-0-1280" name="__codelineno-0-1280"></a><span class="sd">        fps: Frames per second (sets the inter-frame interval). Defaults to :data:`DEFAULT_FPS`, the one</span>
-<a id="__codelineno-0-1281" name="__codelineno-0-1281"></a><span class="sd">            rate every animation entry point — here, :meth:`rotate`, and the other backends — starts from.</span>
-<a id="__codelineno-0-1282" name="__codelineno-0-1282"></a><span class="sd">        titles: Optional per-frame titles; must match the stack length when given.</span>
-<a id="__codelineno-0-1283" name="__codelineno-0-1283"></a><span class="sd">        ocean: When True, fill the ocean disc behind each frame (globe maps only).</span>
-<a id="__codelineno-0-1284" name="__codelineno-0-1284"></a><span class="sd">        coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).</span>
-<a id="__codelineno-0-1285" name="__codelineno-0-1285"></a><span class="sd">        colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared</span>
-<a id="__codelineno-0-1286" name="__codelineno-0-1286"></a><span class="sd">            colour scale. Not available on a composite ``kind`` — an RGB image has no scalar mappable.</span>
-<a id="__codelineno-0-1287" name="__codelineno-0-1287"></a><span class="sd">        cbar_label: Optional label for the colorbar.</span>
-<a id="__codelineno-0-1288" name="__codelineno-0-1288"></a><span class="sd">        update: How the frames after the first are drawn — one of :attr:`FrameUpdate.MODES`. ``&quot;auto&quot;``</span>
-<a id="__codelineno-0-1289" name="__codelineno-0-1289"></a><span class="sd">            (default) updates the artist the first frame drew when the ``kind`` and the options allow</span>
-<a id="__codelineno-0-1290" name="__codelineno-0-1290"></a><span class="sd">            it and clears the axes when they do not, logging which. ``&quot;in_place&quot;`` insists, and refuses</span>
-<a id="__codelineno-0-1291" name="__codelineno-0-1291"></a><span class="sd">            the call naming the blocker (:attr:`FrameUpdate.blocker`) rather than falling back.</span>
-<a id="__codelineno-0-1292" name="__codelineno-0-1292"></a><span class="sd">            ``&quot;redraw&quot;`` always clears, which is what every animation did before ST-9.</span>
-<a id="__codelineno-0-1293" name="__codelineno-0-1293"></a><span class="sd">        blit: When True, build the animation with matplotlib&#39;s blitting, which repaints only the artist</span>
-<a id="__codelineno-0-1294" name="__codelineno-0-1294"></a><span class="sd">            each frame returns. It requires the in-place path and is refused without it, and it is</span>
-<a id="__codelineno-0-1295" name="__codelineno-0-1295"></a><span class="sd">            refused alongside ``titles`` (see the note below). It changes **playback only**: saving a</span>
-<a id="__codelineno-0-1296" name="__codelineno-0-1296"></a><span class="sd">            clip draws every frame in full whatever this says.</span>
-<a id="__codelineno-0-1297" name="__codelineno-0-1297"></a><span class="sd">        **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,</span>
-<a id="__codelineno-0-1298" name="__codelineno-0-1298"></a><span class="sd">            ``vmax`` and the rest of its styling — the shared colour scale is measured from that same</span>
-<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a><span class="sd">            ``band`` (1 by default); a composite takes ``bands``, ``mask_nodata`` and ``limits``.</span>
-<a id="__codelineno-0-1300" name="__codelineno-0-1300"></a><span class="sd">            ``vmin``/``vmax`` are accepted on a composite because they reach the glyph like any other</span>
-<a id="__codelineno-0-1301" name="__codelineno-0-1301"></a><span class="sd">            kwarg, but an RGB image has no colour scale for them to move — use ``limits``.</span>
-<a id="__codelineno-0-1302" name="__codelineno-0-1302"></a>
-<a id="__codelineno-0-1303" name="__codelineno-0-1303"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1304" name="__codelineno-0-1304"></a><span class="sd">        A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames (also kept on</span>
-<a id="__codelineno-0-1305" name="__codelineno-0-1305"></a><span class="sd">        ``self._animation`` so it is not garbage-collected before you save/display it).</span>
-<a id="__codelineno-0-1306" name="__codelineno-0-1306"></a>
-<a id="__codelineno-0-1307" name="__codelineno-0-1307"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1308" name="__codelineno-0-1308"></a><span class="sd">        ValueError: if ``kind`` is not a known renderer, ``update`` is not one of</span>
-<a id="__codelineno-0-1309" name="__codelineno-0-1309"></a><span class="sd">            :attr:`FrameUpdate.MODES`, ``stack`` is empty, ``titles`` is given with a mismatched length,</span>
-<a id="__codelineno-0-1310" name="__codelineno-0-1310"></a><span class="sd">            ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` /</span>
-<a id="__codelineno-0-1311" name="__codelineno-0-1311"></a><span class="sd">            ``update=&quot;in_place&quot;`` is asked for where the frames cannot update one artist.</span>
-<a id="__codelineno-0-1312" name="__codelineno-0-1312"></a>
-<a id="__codelineno-0-1313" name="__codelineno-0-1313"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-1314" name="__codelineno-0-1314"></a><span class="sd">        ``blit=True`` repaints only what the frame function returns, which is the data artist and</span>
-<a id="__codelineno-0-1315" name="__codelineno-0-1315"></a><span class="sd">        nothing else. A per-frame **title** is therefore refused: matplotlib blits the axes bounding box</span>
-<a id="__codelineno-0-1316" name="__codelineno-0-1316"></a><span class="sd">        and the title is drawn above it, so it would hold the first frame&#39;s text. A colorbar is fine —</span>
-<a id="__codelineno-0-1317" name="__codelineno-0-1317"></a><span class="sd">        an animation&#39;s colorbar is static by construction, drawn once on its own axes.</span>
-<a id="__codelineno-0-1318" name="__codelineno-0-1318"></a>
-<a id="__codelineno-0-1319" name="__codelineno-0-1319"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1320" name="__codelineno-0-1320"></a><span class="sd">        - Animate a two-frame scalar stack; the animation is lazy, so no frame is drawn yet:</span>
-<a id="__codelineno-0-1321" name="__codelineno-0-1321"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1322" name="__codelineno-0-1322"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1323" name="__codelineno-0-1323"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1324" name="__codelineno-0-1324"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-1325" name="__codelineno-0-1325"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-1326" name="__codelineno-0-1326"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-1327" name="__codelineno-0-1327"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
-<a id="__codelineno-0-1328" name="__codelineno-0-1328"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.full((60, 120), value, &quot;float32&quot;), geo_ref=geo)</span>
-<a id="__codelineno-0-1329" name="__codelineno-0-1329"></a><span class="sd">            ...          for value in (1.0, 2.0)]</span>
-<a id="__codelineno-0-1330" name="__codelineno-0-1330"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1331" name="__codelineno-0-1331"></a><span class="sd">            &gt;&gt;&gt; anim = m.animate(stack, fps=2)</span>
-<a id="__codelineno-0-1332" name="__codelineno-0-1332"></a><span class="sd">            &gt;&gt;&gt; len(list(anim.new_frame_seq()))</span>
-<a id="__codelineno-0-1333" name="__codelineno-0-1333"></a><span class="sd">            2</span>
-<a id="__codelineno-0-1334" name="__codelineno-0-1334"></a>
-<a id="__codelineno-0-1335" name="__codelineno-0-1335"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1336" name="__codelineno-0-1336"></a><span class="sd">        - A true-colour stack animates as a composite, on one stretch frozen over the whole stack:</span>
-<a id="__codelineno-0-1337" name="__codelineno-0-1337"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1338" name="__codelineno-0-1338"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1339" name="__codelineno-0-1339"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1340" name="__codelineno-0-1340"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-1341" name="__codelineno-0-1341"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-1342" name="__codelineno-0-1342"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-1343" name="__codelineno-0-1343"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
-<a id="__codelineno-0-1344" name="__codelineno-0-1344"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), value, &quot;float32&quot;)] * 3),</span>
-<a id="__codelineno-0-1345" name="__codelineno-0-1345"></a><span class="sd">            ...                             geo_ref=geo) for value in (1.0, 2.0)]</span>
-<a id="__codelineno-0-1346" name="__codelineno-0-1346"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1347" name="__codelineno-0-1347"></a><span class="sd">            &gt;&gt;&gt; anim = m.animate(stack, kind=&quot;rgb_composite&quot;, fps=2)</span>
-<a id="__codelineno-0-1348" name="__codelineno-0-1348"></a><span class="sd">            &gt;&gt;&gt; len(list(anim.new_frame_seq()))</span>
-<a id="__codelineno-0-1349" name="__codelineno-0-1349"></a><span class="sd">            2</span>
-<a id="__codelineno-0-1350" name="__codelineno-0-1350"></a>
-<a id="__codelineno-0-1351" name="__codelineno-0-1351"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1352" name="__codelineno-0-1352"></a><span class="sd">        - A composite has no scalar mappable, so asking for a colorbar is refused rather than</span>
-<a id="__codelineno-0-1353" name="__codelineno-0-1353"></a><span class="sd">            answered with a meaningless bar:</span>
-<a id="__codelineno-0-1354" name="__codelineno-0-1354"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1355" name="__codelineno-0-1355"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-1360" name="__codelineno-0-1360"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
-<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), 1.0, &quot;float32&quot;)] * 3),</span>
-<a id="__codelineno-0-1362" name="__codelineno-0-1362"></a><span class="sd">            ...                             geo_ref=geo)]</span>
-<a id="__codelineno-0-1363" name="__codelineno-0-1363"></a><span class="sd">            &gt;&gt;&gt; Map(crs=4326).animate(stack, kind=&quot;rgb_composite&quot;,</span>
-<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><span class="sd">            ...                       colorbar=True)  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-1365" name="__codelineno-0-1365"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-1366" name="__codelineno-0-1366"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-1367" name="__codelineno-0-1367"></a><span class="sd">            ValueError: colorbar=True is not supported for a &#39;rgb_composite&#39; animation: ...</span>
+<span class="normal"><a href="#__codelineno-0-1437">1437</a></span>
+<span class="normal"><a href="#__codelineno-0-1438">1438</a></span>
+<span class="normal"><a href="#__codelineno-0-1439">1439</a></span>
+<span class="normal"><a href="#__codelineno-0-1440">1440</a></span>
+<span class="normal"><a href="#__codelineno-0-1441">1441</a></span>
+<span class="normal"><a href="#__codelineno-0-1442">1442</a></span>
+<span class="normal"><a href="#__codelineno-0-1443">1443</a></span>
+<span class="normal"><a href="#__codelineno-0-1444">1444</a></span>
+<span class="normal"><a href="#__codelineno-0-1445">1445</a></span>
+<span class="normal"><a href="#__codelineno-0-1446">1446</a></span>
+<span class="normal"><a href="#__codelineno-0-1447">1447</a></span>
+<span class="normal"><a href="#__codelineno-0-1448">1448</a></span>
+<span class="normal"><a href="#__codelineno-0-1449">1449</a></span>
+<span class="normal"><a href="#__codelineno-0-1450">1450</a></span>
+<span class="normal"><a href="#__codelineno-0-1451">1451</a></span>
+<span class="normal"><a href="#__codelineno-0-1452">1452</a></span>
+<span class="normal"><a href="#__codelineno-0-1453">1453</a></span>
+<span class="normal"><a href="#__codelineno-0-1454">1454</a></span>
+<span class="normal"><a href="#__codelineno-0-1455">1455</a></span>
+<span class="normal"><a href="#__codelineno-0-1456">1456</a></span>
+<span class="normal"><a href="#__codelineno-0-1457">1457</a></span>
+<span class="normal"><a href="#__codelineno-0-1458">1458</a></span>
+<span class="normal"><a href="#__codelineno-0-1459">1459</a></span>
+<span class="normal"><a href="#__codelineno-0-1460">1460</a></span>
+<span class="normal"><a href="#__codelineno-0-1461">1461</a></span>
+<span class="normal"><a href="#__codelineno-0-1462">1462</a></span>
+<span class="normal"><a href="#__codelineno-0-1463">1463</a></span>
+<span class="normal"><a href="#__codelineno-0-1464">1464</a></span>
+<span class="normal"><a href="#__codelineno-0-1465">1465</a></span>
+<span class="normal"><a href="#__codelineno-0-1466">1466</a></span>
+<span class="normal"><a href="#__codelineno-0-1467">1467</a></span>
+<span class="normal"><a href="#__codelineno-0-1468">1468</a></span>
+<span class="normal"><a href="#__codelineno-0-1469">1469</a></span>
+<span class="normal"><a href="#__codelineno-0-1470">1470</a></span>
+<span class="normal"><a href="#__codelineno-0-1471">1471</a></span>
+<span class="normal"><a href="#__codelineno-0-1472">1472</a></span>
+<span class="normal"><a href="#__codelineno-0-1473">1473</a></span>
+<span class="normal"><a href="#__codelineno-0-1474">1474</a></span>
+<span class="normal"><a href="#__codelineno-0-1475">1475</a></span>
+<span class="normal"><a href="#__codelineno-0-1476">1476</a></span>
+<span class="normal"><a href="#__codelineno-0-1477">1477</a></span>
+<span class="normal"><a href="#__codelineno-0-1478">1478</a></span>
+<span class="normal"><a href="#__codelineno-0-1479">1479</a></span>
+<span class="normal"><a href="#__codelineno-0-1480">1480</a></span>
+<span class="normal"><a href="#__codelineno-0-1481">1481</a></span>
+<span class="normal"><a href="#__codelineno-0-1482">1482</a></span>
+<span class="normal"><a href="#__codelineno-0-1483">1483</a></span>
+<span class="normal"><a href="#__codelineno-0-1484">1484</a></span>
+<span class="normal"><a href="#__codelineno-0-1485">1485</a></span>
+<span class="normal"><a href="#__codelineno-0-1486">1486</a></span>
+<span class="normal"><a href="#__codelineno-0-1487">1487</a></span>
+<span class="normal"><a href="#__codelineno-0-1488">1488</a></span>
+<span class="normal"><a href="#__codelineno-0-1489">1489</a></span>
+<span class="normal"><a href="#__codelineno-0-1490">1490</a></span>
+<span class="normal"><a href="#__codelineno-0-1491">1491</a></span>
+<span class="normal"><a href="#__codelineno-0-1492">1492</a></span>
+<span class="normal"><a href="#__codelineno-0-1493">1493</a></span>
+<span class="normal"><a href="#__codelineno-0-1494">1494</a></span>
+<span class="normal"><a href="#__codelineno-0-1495">1495</a></span>
+<span class="normal"><a href="#__codelineno-0-1496">1496</a></span>
+<span class="normal"><a href="#__codelineno-0-1497">1497</a></span>
+<span class="normal"><a href="#__codelineno-0-1498">1498</a></span>
+<span class="normal"><a href="#__codelineno-0-1499">1499</a></span>
+<span class="normal"><a href="#__codelineno-0-1500">1500</a></span>
+<span class="normal"><a href="#__codelineno-0-1501">1501</a></span>
+<span class="normal"><a href="#__codelineno-0-1502">1502</a></span>
+<span class="normal"><a href="#__codelineno-0-1503">1503</a></span>
+<span class="normal"><a href="#__codelineno-0-1504">1504</a></span>
+<span class="normal"><a href="#__codelineno-0-1505">1505</a></span>
+<span class="normal"><a href="#__codelineno-0-1506">1506</a></span>
+<span class="normal"><a href="#__codelineno-0-1507">1507</a></span>
+<span class="normal"><a href="#__codelineno-0-1508">1508</a></span>
+<span class="normal"><a href="#__codelineno-0-1509">1509</a></span>
+<span class="normal"><a href="#__codelineno-0-1510">1510</a></span>
+<span class="normal"><a href="#__codelineno-0-1511">1511</a></span>
+<span class="normal"><a href="#__codelineno-0-1512">1512</a></span>
+<span class="normal"><a href="#__codelineno-0-1513">1513</a></span>
+<span class="normal"><a href="#__codelineno-0-1514">1514</a></span>
+<span class="normal"><a href="#__codelineno-0-1515">1515</a></span>
+<span class="normal"><a href="#__codelineno-0-1516">1516</a></span>
+<span class="normal"><a href="#__codelineno-0-1517">1517</a></span>
+<span class="normal"><a href="#__codelineno-0-1518">1518</a></span>
+<span class="normal"><a href="#__codelineno-0-1519">1519</a></span>
+<span class="normal"><a href="#__codelineno-0-1520">1520</a></span>
+<span class="normal"><a href="#__codelineno-0-1521">1521</a></span>
+<span class="normal"><a href="#__codelineno-0-1522">1522</a></span>
+<span class="normal"><a href="#__codelineno-0-1523">1523</a></span>
+<span class="normal"><a href="#__codelineno-0-1524">1524</a></span>
+<span class="normal"><a href="#__codelineno-0-1525">1525</a></span>
+<span class="normal"><a href="#__codelineno-0-1526">1526</a></span>
+<span class="normal"><a href="#__codelineno-0-1527">1527</a></span>
+<span class="normal"><a href="#__codelineno-0-1528">1528</a></span>
+<span class="normal"><a href="#__codelineno-0-1529">1529</a></span>
+<span class="normal"><a href="#__codelineno-0-1530">1530</a></span>
+<span class="normal"><a href="#__codelineno-0-1531">1531</a></span>
+<span class="normal"><a href="#__codelineno-0-1532">1532</a></span>
+<span class="normal"><a href="#__codelineno-0-1533">1533</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1320" name="__codelineno-0-1320"></a><span class="k">def</span><span class="w"> </span><span class="nf">animate</span><span class="p">(</span>
+<a id="__codelineno-0-1321" name="__codelineno-0-1321"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1322" name="__codelineno-0-1322"></a>    <span class="n">stack</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1323" name="__codelineno-0-1323"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1324" name="__codelineno-0-1324"></a>    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;imshow&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1325" name="__codelineno-0-1325"></a>    <span class="n">fps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">DEFAULT_FPS</span><span class="p">,</span>
+<a id="__codelineno-0-1326" name="__codelineno-0-1326"></a>    <span class="n">titles</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1327" name="__codelineno-0-1327"></a>    <span class="n">ocean</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-1328" name="__codelineno-0-1328"></a>    <span class="n">coastlines</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-1329" name="__codelineno-0-1329"></a>    <span class="n">colorbar</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-1330" name="__codelineno-0-1330"></a>    <span class="n">cbar_label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1331" name="__codelineno-0-1331"></a>    <span class="n">update</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1332" name="__codelineno-0-1332"></a>    <span class="n">blit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-1333" name="__codelineno-0-1333"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1334" name="__codelineno-0-1334"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FuncAnimation</span><span class="p">:</span>
+<a id="__codelineno-0-1335" name="__codelineno-0-1335"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.</span>
+<a id="__codelineno-0-1336" name="__codelineno-0-1336"></a>
+<a id="__codelineno-0-1337" name="__codelineno-0-1337"></a><span class="sd">    Each frame reprojects ``stack[i]`` to the display CRS (pyramids), renders it with the ``kind`` method</span>
+<a id="__codelineno-0-1338" name="__codelineno-0-1338"></a><span class="sd">    (cleopatra), optionally draws the ocean disc / coastlines, and — on a globe — applies the projection</span>
+<a id="__codelineno-0-1339" name="__codelineno-0-1339"></a><span class="sd">    frame, so every frame gets the boundary, graticule, and limb-clipping for free. The returned</span>
+<a id="__codelineno-0-1340" name="__codelineno-0-1340"></a><span class="sd">    animation is lazy: call ``anim.save(&quot;out.gif&quot;, writer=PillowWriter(fps=...))`` or display it.</span>
+<a id="__codelineno-0-1341" name="__codelineno-0-1341"></a>
+<a id="__codelineno-0-1342" name="__codelineno-0-1342"></a><span class="sd">    All frames share **one colour treatment**, so nothing flickers between them. A scalar field takes</span>
+<a id="__codelineno-0-1343" name="__codelineno-0-1343"></a><span class="sd">    ``vmin``/``vmax`` from ``kwargs`` if given, else measured once over the stack. A composite</span>
+<a id="__codelineno-0-1344" name="__codelineno-0-1344"></a><span class="sd">    (``&quot;rgb_composite&quot;`` / ``&quot;hsv_composite&quot;``) instead takes one per-channel contrast stretch, frozen</span>
+<a id="__codelineno-0-1345" name="__codelineno-0-1345"></a><span class="sd">    once over the stack — without which every frame would re-derive its own 2-98 percentile and the</span>
+<a id="__codelineno-0-1346" name="__codelineno-0-1346"></a><span class="sd">    clip would pump. Pass your own ``limits=[(lo, hi), ...]`` to override that scan.</span>
+<a id="__codelineno-0-1347" name="__codelineno-0-1347"></a>
+<a id="__codelineno-0-1348" name="__codelineno-0-1348"></a><span class="sd">    A stated ``center=`` belongs to that one treatment too. The diverging ramp it asks for is resolved</span>
+<a id="__codelineno-0-1349" name="__codelineno-0-1349"></a><span class="sd">    **once, over the shared scale**, rather than by each frame against its own values: a stack that</span>
+<a id="__codelineno-0-1350" name="__codelineno-0-1350"></a><span class="sd">    straddles the centre diverges for the whole clip, and one that does not keeps the sequential ramp</span>
+<a id="__codelineno-0-1351" name="__codelineno-0-1351"></a><span class="sd">    and says so once. Deciding it per frame made the ramp flicker between the two along a clip — and</span>
+<a id="__codelineno-0-1352" name="__codelineno-0-1352"></a><span class="sd">    made the picture depend on ``update=``, since an artist kept across frames froze the first frame&#39;s</span>
+<a id="__codelineno-0-1353" name="__codelineno-0-1353"></a><span class="sd">    answer while a redrawn one re-asked it.</span>
+<a id="__codelineno-0-1354" name="__codelineno-0-1354"></a>
+<a id="__codelineno-0-1355" name="__codelineno-0-1355"></a><span class="sd">    Either scan measures frames **as they will be drawn**, reprojected into the display CRS, so the</span>
+<a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">    animation lands on the same scale as the equivalent still. On a globe that means the scale spans</span>
+<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">    what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.</span>
+<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a>
+<a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">    **Only what changes is redrawn (ST-9).** The first frame draws the whole scene; every frame after it</span>
+<a id="__codelineno-0-1360" name="__codelineno-0-1360"></a><span class="sd">    gives the artist that frame drew the new frame&#39;s values (``AxesImage.set_data`` /</span>
+<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">    ``QuadMesh.set_array``) and touches nothing else, so the ocean disc, the coastlines, the projection</span>
+<a id="__codelineno-0-1362" name="__codelineno-0-1362"></a><span class="sd">    frame, the colorbar and the view survive instead of being thrown away and rebuilt per frame. That is</span>
+<a id="__codelineno-0-1363" name="__codelineno-0-1363"></a><span class="sd">    a strategy, not a different picture: the frames are pixel-identical to the cleared-and-redrawn ones,</span>
+<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><span class="sd">    which ``tests/static/test_animate_in_place.py`` compares buffer by buffer. ``update=`` chooses the</span>
+<a id="__codelineno-0-1365" name="__codelineno-0-1365"></a><span class="sd">    path, and a ``kind`` or an option that cannot be updated this way (a contour set, a composite, a</span>
+<a id="__codelineno-0-1366" name="__codelineno-0-1366"></a><span class="sd">    per-frame ``scheme=``) is named rather than animated wrongly. A frame the display CRS cannot show</span>
+<a id="__codelineno-0-1367" name="__codelineno-0-1367"></a><span class="sd">    hides the artist for that frame, so an off-limb frame still draws nothing.</span>
 <a id="__codelineno-0-1368" name="__codelineno-0-1368"></a>
-<a id="__codelineno-0-1369" name="__codelineno-0-1369"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><span class="sd">        - A field animation can be blitted, because its frames update one image:</span>
-<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-1375" name="__codelineno-0-1375"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-1377" name="__codelineno-0-1377"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
-<a id="__codelineno-0-1378" name="__codelineno-0-1378"></a><span class="sd">            &gt;&gt;&gt; fields = [Dataset.from_array(arr=np.full((60, 120), v, &quot;float32&quot;), geo_ref=geo)</span>
-<a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">            ...           for v in (1.0, 2.0)]</span>
-<a id="__codelineno-0-1380" name="__codelineno-0-1380"></a><span class="sd">            &gt;&gt;&gt; scene = Map(crs=4326)</span>
-<a id="__codelineno-0-1381" name="__codelineno-0-1381"></a><span class="sd">            &gt;&gt;&gt; len(list(scene.animate(fields, fps=2, blit=True).new_frame_seq()))</span>
-<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">            2</span>
-<a id="__codelineno-0-1383" name="__codelineno-0-1383"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-1384" name="__codelineno-0-1384"></a>
-<a id="__codelineno-0-1385" name="__codelineno-0-1385"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1386" name="__codelineno-0-1386"></a><span class="sd">        - A contour animation cuts its lines from each frame, so blitting it is refused by name:</span>
-<a id="__codelineno-0-1387" name="__codelineno-0-1387"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1388" name="__codelineno-0-1388"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1389" name="__codelineno-0-1389"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1390" name="__codelineno-0-1390"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
-<a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
-<a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.full((60, 120), v, &quot;float32&quot;), geo_ref=geo)</span>
-<a id="__codelineno-0-1395" name="__codelineno-0-1395"></a><span class="sd">            ...          for v in (1.0, 2.0)]</span>
-<a id="__codelineno-0-1396" name="__codelineno-0-1396"></a><span class="sd">            &gt;&gt;&gt; refused = Map(crs=4326)</span>
-<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">            &gt;&gt;&gt; refused.animate(stack, kind=&quot;contourf&quot;, blit=True)  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><span class="sd">            ValueError: blit=True needs frames that update one artist in place, ...</span>
-<a id="__codelineno-0-1401" name="__codelineno-0-1401"></a><span class="sd">            &gt;&gt;&gt; refused.close()</span>
+<a id="__codelineno-0-1369" name="__codelineno-0-1369"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><span class="sd">        stack: An ordered collection of pyramids ``Dataset`` frames (e.g. a list, or a</span>
+<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">            ``DatasetCollection`` datacube) — one raster per animation frame.</span>
+<a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><span class="sd">        kind: The method used to draw each frame — a scalar field (``&quot;imshow&quot;`` / ``&quot;contourf&quot;`` /</span>
+<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">            ``&quot;contour&quot;`` / ``&quot;pcolormesh&quot;`` / ``&quot;block&quot;``) or a true/false-colour composite</span>
+<a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><span class="sd">            (``&quot;rgb_composite&quot;`` / ``&quot;hsv_composite&quot;``, which take ``bands=(r, g, b)`` through</span>
+<a id="__codelineno-0-1375" name="__codelineno-0-1375"></a><span class="sd">            ``**kwargs`` to pick their channels).</span>
+<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">        fps: Frames per second (sets the inter-frame interval). Defaults to :data:`DEFAULT_FPS`, the one</span>
+<a id="__codelineno-0-1377" name="__codelineno-0-1377"></a><span class="sd">            rate every animation entry point — here, :meth:`rotate`, and the other backends — starts from.</span>
+<a id="__codelineno-0-1378" name="__codelineno-0-1378"></a><span class="sd">        titles: Optional per-frame titles; must match the stack length when given.</span>
+<a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">        ocean: When True, fill the ocean disc behind each frame (globe maps only).</span>
+<a id="__codelineno-0-1380" name="__codelineno-0-1380"></a><span class="sd">        coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).</span>
+<a id="__codelineno-0-1381" name="__codelineno-0-1381"></a><span class="sd">        colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared</span>
+<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">            colour scale. Not available on a composite ``kind`` — an RGB image has no scalar mappable.</span>
+<a id="__codelineno-0-1383" name="__codelineno-0-1383"></a><span class="sd">        cbar_label: Optional label for the colorbar.</span>
+<a id="__codelineno-0-1384" name="__codelineno-0-1384"></a><span class="sd">        update: How the frames after the first are drawn — one of :attr:`FrameUpdate.MODES`. ``&quot;auto&quot;``</span>
+<a id="__codelineno-0-1385" name="__codelineno-0-1385"></a><span class="sd">            (default) updates the artist the first frame drew when the ``kind`` and the options allow</span>
+<a id="__codelineno-0-1386" name="__codelineno-0-1386"></a><span class="sd">            it and clears the axes when they do not, logging which. ``&quot;in_place&quot;`` insists, and refuses</span>
+<a id="__codelineno-0-1387" name="__codelineno-0-1387"></a><span class="sd">            the call naming the blocker (:attr:`FrameUpdate.blocker`) rather than falling back.</span>
+<a id="__codelineno-0-1388" name="__codelineno-0-1388"></a><span class="sd">            ``&quot;redraw&quot;`` always clears, which is what every animation did before ST-9.</span>
+<a id="__codelineno-0-1389" name="__codelineno-0-1389"></a><span class="sd">        blit: When True, build the animation with matplotlib&#39;s blitting, which repaints only the artist</span>
+<a id="__codelineno-0-1390" name="__codelineno-0-1390"></a><span class="sd">            each frame returns. It requires the in-place path and is refused without it, and it is</span>
+<a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><span class="sd">            refused alongside ``titles`` (see the note below). It changes **playback only**: saving a</span>
+<a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><span class="sd">            clip draws every frame in full whatever this says.</span>
+<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">        **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,</span>
+<a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><span class="sd">            ``vmax`` and the rest of its styling — the shared colour scale is measured from that same</span>
+<a id="__codelineno-0-1395" name="__codelineno-0-1395"></a><span class="sd">            ``band`` (1 by default); a composite takes ``bands``, ``mask_nodata`` and ``limits``.</span>
+<a id="__codelineno-0-1396" name="__codelineno-0-1396"></a><span class="sd">            ``vmin``/``vmax`` are accepted on a composite because they reach the glyph like any other</span>
+<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">            kwarg, but an RGB image has no colour scale for them to move — use ``limits``.</span>
+<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a>
+<a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><span class="sd">        A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames (also kept on</span>
+<a id="__codelineno-0-1401" name="__codelineno-0-1401"></a><span class="sd">        ``self._animation`` so it is not garbage-collected before you save/display it).</span>
 <a id="__codelineno-0-1402" name="__codelineno-0-1402"></a>
-<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1404" name="__codelineno-0-1404"></a>
-<a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><span class="sd">        rotate: Spin one field on an orthographic globe instead of stepping through a stack.</span>
-<a id="__codelineno-0-1407" name="__codelineno-0-1407"></a><span class="sd">        save_animation: Write the returned animation to an mp4/GIF.</span>
-<a id="__codelineno-0-1408" name="__codelineno-0-1408"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1409" name="__codelineno-0-1409"></a>    <span class="k">if</span> <span class="n">kind</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ANIMATION_KINDS</span><span class="p">:</span>
-<a id="__codelineno-0-1410" name="__codelineno-0-1410"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1411" name="__codelineno-0-1411"></a>            <span class="sa">f</span><span class="s2">&quot;unknown animation kind </span><span class="si">{</span><span class="n">kind</span><span class="si">!r}</span><span class="s2">; choose one of </span><span class="si">{</span><span class="n">_ANIMATION_KINDS</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-1412" name="__codelineno-0-1412"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1413" name="__codelineno-0-1413"></a>    <span class="n">frames</span> <span class="o">=</span> <span class="n">_as_frames</span><span class="p">(</span>
-<a id="__codelineno-0-1414" name="__codelineno-0-1414"></a>        <span class="n">stack</span>
-<a id="__codelineno-0-1415" name="__codelineno-0-1415"></a>    <span class="p">)</span>  <span class="c1"># a DatasetCollection iterates to arrays, not Datasets</span>
-<a id="__codelineno-0-1416" name="__codelineno-0-1416"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">frames</span><span class="p">:</span>
-<a id="__codelineno-0-1417" name="__codelineno-0-1417"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;animate got an empty stack (nothing to animate)&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-1418" name="__codelineno-0-1418"></a>    <span class="k">if</span> <span class="n">titles</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">titles</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">):</span>
-<a id="__codelineno-0-1419" name="__codelineno-0-1419"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1420" name="__codelineno-0-1420"></a>            <span class="sa">f</span><span class="s2">&quot;titles length (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">titles</span><span class="p">)</span><span class="si">}</span><span class="s2">) must match the stack length (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
-<a id="__codelineno-0-1421" name="__codelineno-0-1421"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1422" name="__codelineno-0-1422"></a>    <span class="n">updates</span> <span class="o">=</span> <span class="n">FrameUpdate</span><span class="p">(</span>
-<a id="__codelineno-0-1423" name="__codelineno-0-1423"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">frames</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">kind</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">update</span><span class="p">,</span> <span class="n">titles</span><span class="o">=</span><span class="n">titles</span>
-<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a>    <span class="p">)</span><span class="o">.</span><span class="n">settle</span><span class="p">(</span><span class="n">blit</span><span class="o">=</span><span class="n">blit</span><span class="p">)</span>
-<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_prime_animation</span><span class="p">(</span>
-<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a>        <span class="n">frames</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">kind</span><span class="p">,</span> <span class="n">colorbar</span><span class="o">=</span><span class="n">colorbar</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="n">cbar_label</span>
-<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a>    <span class="p">)</span>
-<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a>
-<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">draw_one</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a>        <span class="n">title</span> <span class="o">=</span> <span class="n">titles</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">titles</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
-<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw_animation_frame</span><span class="p">(</span>
-<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a>            <span class="n">frames</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">kind</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">ocean</span><span class="o">=</span><span class="n">ocean</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="n">coastlines</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span>
-<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1434" name="__codelineno-0-1434"></a>
-<a id="__codelineno-0-1435" name="__codelineno-0-1435"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_animate_frames</span><span class="p">(</span>
-<a id="__codelineno-0-1436" name="__codelineno-0-1436"></a>        <span class="n">draw_one</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">),</span> <span class="n">fps</span><span class="p">,</span> <span class="n">blit</span><span class="o">=</span><span class="n">blit</span><span class="p">,</span> <span class="n">updates</span><span class="o">=</span><span class="n">updates</span>
-<a id="__codelineno-0-1437" name="__codelineno-0-1437"></a>    <span class="p">)</span>
+<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1404" name="__codelineno-0-1404"></a><span class="sd">        ValueError: if ``kind`` is not a known renderer, ``update`` is not one of</span>
+<a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><span class="sd">            :attr:`FrameUpdate.MODES`, ``stack`` is empty, ``titles`` is given with a mismatched length,</span>
+<a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><span class="sd">            ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` /</span>
+<a id="__codelineno-0-1407" name="__codelineno-0-1407"></a><span class="sd">            ``update=&quot;in_place&quot;`` is asked for where the frames cannot update one artist.</span>
+<a id="__codelineno-0-1408" name="__codelineno-0-1408"></a>
+<a id="__codelineno-0-1409" name="__codelineno-0-1409"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-1410" name="__codelineno-0-1410"></a><span class="sd">        ``blit=True`` repaints only what the frame function returns, which is the data artist and</span>
+<a id="__codelineno-0-1411" name="__codelineno-0-1411"></a><span class="sd">        nothing else. A per-frame **title** is therefore refused: matplotlib blits the axes bounding box</span>
+<a id="__codelineno-0-1412" name="__codelineno-0-1412"></a><span class="sd">        and the title is drawn above it, so it would hold the first frame&#39;s text. A colorbar is fine —</span>
+<a id="__codelineno-0-1413" name="__codelineno-0-1413"></a><span class="sd">        an animation&#39;s colorbar is static by construction, drawn once on its own axes.</span>
+<a id="__codelineno-0-1414" name="__codelineno-0-1414"></a>
+<a id="__codelineno-0-1415" name="__codelineno-0-1415"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1416" name="__codelineno-0-1416"></a><span class="sd">        - Animate a two-frame scalar stack; the animation is lazy, so no frame is drawn yet:</span>
+<a id="__codelineno-0-1417" name="__codelineno-0-1417"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1418" name="__codelineno-0-1418"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1419" name="__codelineno-0-1419"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1420" name="__codelineno-0-1420"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-1421" name="__codelineno-0-1421"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-1422" name="__codelineno-0-1422"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1423" name="__codelineno-0-1423"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
+<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.full((60, 120), value, &quot;float32&quot;), geo_ref=geo)</span>
+<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a><span class="sd">            ...          for value in (1.0, 2.0)]</span>
+<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><span class="sd">            &gt;&gt;&gt; anim = m.animate(stack, fps=2)</span>
+<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a><span class="sd">            &gt;&gt;&gt; len(list(anim.new_frame_seq()))</span>
+<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><span class="sd">            2</span>
+<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a>
+<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a><span class="sd">        - A true-colour stack animates as a composite, on one stretch frozen over the whole stack:</span>
+<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1434" name="__codelineno-0-1434"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1435" name="__codelineno-0-1435"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1436" name="__codelineno-0-1436"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-1437" name="__codelineno-0-1437"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-1438" name="__codelineno-0-1438"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1439" name="__codelineno-0-1439"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
+<a id="__codelineno-0-1440" name="__codelineno-0-1440"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), value, &quot;float32&quot;)] * 3),</span>
+<a id="__codelineno-0-1441" name="__codelineno-0-1441"></a><span class="sd">            ...                             geo_ref=geo) for value in (1.0, 2.0)]</span>
+<a id="__codelineno-0-1442" name="__codelineno-0-1442"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-1443" name="__codelineno-0-1443"></a><span class="sd">            &gt;&gt;&gt; anim = m.animate(stack, kind=&quot;rgb_composite&quot;, fps=2)</span>
+<a id="__codelineno-0-1444" name="__codelineno-0-1444"></a><span class="sd">            &gt;&gt;&gt; len(list(anim.new_frame_seq()))</span>
+<a id="__codelineno-0-1445" name="__codelineno-0-1445"></a><span class="sd">            2</span>
+<a id="__codelineno-0-1446" name="__codelineno-0-1446"></a>
+<a id="__codelineno-0-1447" name="__codelineno-0-1447"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1448" name="__codelineno-0-1448"></a><span class="sd">        - A composite has no scalar mappable, so asking for a colorbar is refused rather than</span>
+<a id="__codelineno-0-1449" name="__codelineno-0-1449"></a><span class="sd">            answered with a meaningless bar:</span>
+<a id="__codelineno-0-1450" name="__codelineno-0-1450"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1451" name="__codelineno-0-1451"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1453" name="__codelineno-0-1453"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-1454" name="__codelineno-0-1454"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-1455" name="__codelineno-0-1455"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1456" name="__codelineno-0-1456"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
+<a id="__codelineno-0-1457" name="__codelineno-0-1457"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), 1.0, &quot;float32&quot;)] * 3),</span>
+<a id="__codelineno-0-1458" name="__codelineno-0-1458"></a><span class="sd">            ...                             geo_ref=geo)]</span>
+<a id="__codelineno-0-1459" name="__codelineno-0-1459"></a><span class="sd">            &gt;&gt;&gt; Map(crs=4326).animate(stack, kind=&quot;rgb_composite&quot;,</span>
+<a id="__codelineno-0-1460" name="__codelineno-0-1460"></a><span class="sd">            ...                       colorbar=True)  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-1461" name="__codelineno-0-1461"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-1462" name="__codelineno-0-1462"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-1463" name="__codelineno-0-1463"></a><span class="sd">            ValueError: colorbar=True is not supported for a &#39;rgb_composite&#39; animation: ...</span>
+<a id="__codelineno-0-1464" name="__codelineno-0-1464"></a>
+<a id="__codelineno-0-1465" name="__codelineno-0-1465"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1466" name="__codelineno-0-1466"></a><span class="sd">        - A field animation can be blitted, because its frames update one image:</span>
+<a id="__codelineno-0-1467" name="__codelineno-0-1467"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1468" name="__codelineno-0-1468"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-1471" name="__codelineno-0-1471"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-1472" name="__codelineno-0-1472"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1473" name="__codelineno-0-1473"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
+<a id="__codelineno-0-1474" name="__codelineno-0-1474"></a><span class="sd">            &gt;&gt;&gt; fields = [Dataset.from_array(arr=np.full((60, 120), v, &quot;float32&quot;), geo_ref=geo)</span>
+<a id="__codelineno-0-1475" name="__codelineno-0-1475"></a><span class="sd">            ...           for v in (1.0, 2.0)]</span>
+<a id="__codelineno-0-1476" name="__codelineno-0-1476"></a><span class="sd">            &gt;&gt;&gt; scene = Map(crs=4326)</span>
+<a id="__codelineno-0-1477" name="__codelineno-0-1477"></a><span class="sd">            &gt;&gt;&gt; len(list(scene.animate(fields, fps=2, blit=True).new_frame_seq()))</span>
+<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a><span class="sd">            2</span>
+<a id="__codelineno-0-1479" name="__codelineno-0-1479"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-1480" name="__codelineno-0-1480"></a>
+<a id="__codelineno-0-1481" name="__codelineno-0-1481"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1482" name="__codelineno-0-1482"></a><span class="sd">        - A contour animation cuts its lines from each frame, so blitting it is refused by name:</span>
+<a id="__codelineno-0-1483" name="__codelineno-0-1483"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1486" name="__codelineno-0-1486"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-1487" name="__codelineno-0-1487"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset, GeoReference</span>
+<a id="__codelineno-0-1488" name="__codelineno-0-1488"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1489" name="__codelineno-0-1489"></a><span class="sd">            &gt;&gt;&gt; geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)</span>
+<a id="__codelineno-0-1490" name="__codelineno-0-1490"></a><span class="sd">            &gt;&gt;&gt; stack = [Dataset.from_array(arr=np.full((60, 120), v, &quot;float32&quot;), geo_ref=geo)</span>
+<a id="__codelineno-0-1491" name="__codelineno-0-1491"></a><span class="sd">            ...          for v in (1.0, 2.0)]</span>
+<a id="__codelineno-0-1492" name="__codelineno-0-1492"></a><span class="sd">            &gt;&gt;&gt; refused = Map(crs=4326)</span>
+<a id="__codelineno-0-1493" name="__codelineno-0-1493"></a><span class="sd">            &gt;&gt;&gt; refused.animate(stack, kind=&quot;contourf&quot;, blit=True)  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-1494" name="__codelineno-0-1494"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-1495" name="__codelineno-0-1495"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-1496" name="__codelineno-0-1496"></a><span class="sd">            ValueError: blit=True needs frames that update one artist in place, ...</span>
+<a id="__codelineno-0-1497" name="__codelineno-0-1497"></a><span class="sd">            &gt;&gt;&gt; refused.close()</span>
+<a id="__codelineno-0-1498" name="__codelineno-0-1498"></a>
+<a id="__codelineno-0-1499" name="__codelineno-0-1499"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1500" name="__codelineno-0-1500"></a>
+<a id="__codelineno-0-1501" name="__codelineno-0-1501"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1502" name="__codelineno-0-1502"></a><span class="sd">        rotate: Spin one field on an orthographic globe instead of stepping through a stack.</span>
+<a id="__codelineno-0-1503" name="__codelineno-0-1503"></a><span class="sd">        save_animation: Write the returned animation to an mp4/GIF.</span>
+<a id="__codelineno-0-1504" name="__codelineno-0-1504"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1505" name="__codelineno-0-1505"></a>    <span class="k">if</span> <span class="n">kind</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ANIMATION_KINDS</span><span class="p">:</span>
+<a id="__codelineno-0-1506" name="__codelineno-0-1506"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-1507" name="__codelineno-0-1507"></a>            <span class="sa">f</span><span class="s2">&quot;unknown animation kind </span><span class="si">{</span><span class="n">kind</span><span class="si">!r}</span><span class="s2">; choose one of </span><span class="si">{</span><span class="n">_ANIMATION_KINDS</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-1508" name="__codelineno-0-1508"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1509" name="__codelineno-0-1509"></a>    <span class="n">frames</span> <span class="o">=</span> <span class="n">_as_frames</span><span class="p">(</span>
+<a id="__codelineno-0-1510" name="__codelineno-0-1510"></a>        <span class="n">stack</span>
+<a id="__codelineno-0-1511" name="__codelineno-0-1511"></a>    <span class="p">)</span>  <span class="c1"># a DatasetCollection iterates to arrays, not Datasets</span>
+<a id="__codelineno-0-1512" name="__codelineno-0-1512"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">frames</span><span class="p">:</span>
+<a id="__codelineno-0-1513" name="__codelineno-0-1513"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;animate got an empty stack (nothing to animate)&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1514" name="__codelineno-0-1514"></a>    <span class="k">if</span> <span class="n">titles</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">titles</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">):</span>
+<a id="__codelineno-0-1515" name="__codelineno-0-1515"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-1516" name="__codelineno-0-1516"></a>            <span class="sa">f</span><span class="s2">&quot;titles length (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">titles</span><span class="p">)</span><span class="si">}</span><span class="s2">) must match the stack length (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-1517" name="__codelineno-0-1517"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1518" name="__codelineno-0-1518"></a>    <span class="n">updates</span> <span class="o">=</span> <span class="n">FrameUpdate</span><span class="p">(</span>
+<a id="__codelineno-0-1519" name="__codelineno-0-1519"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">frames</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">kind</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">update</span><span class="p">,</span> <span class="n">titles</span><span class="o">=</span><span class="n">titles</span>
+<a id="__codelineno-0-1520" name="__codelineno-0-1520"></a>    <span class="p">)</span><span class="o">.</span><span class="n">settle</span><span class="p">(</span><span class="n">blit</span><span class="o">=</span><span class="n">blit</span><span class="p">)</span>
+<a id="__codelineno-0-1521" name="__codelineno-0-1521"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_prime_animation</span><span class="p">(</span>
+<a id="__codelineno-0-1522" name="__codelineno-0-1522"></a>        <span class="n">frames</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">kind</span><span class="p">,</span> <span class="n">colorbar</span><span class="o">=</span><span class="n">colorbar</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="n">cbar_label</span>
+<a id="__codelineno-0-1523" name="__codelineno-0-1523"></a>    <span class="p">)</span>
+<a id="__codelineno-0-1524" name="__codelineno-0-1524"></a>
+<a id="__codelineno-0-1525" name="__codelineno-0-1525"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">draw_one</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a>        <span class="n">title</span> <span class="o">=</span> <span class="n">titles</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">titles</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-0-1527" name="__codelineno-0-1527"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_draw_animation_frame</span><span class="p">(</span>
+<a id="__codelineno-0-1528" name="__codelineno-0-1528"></a>            <span class="n">frames</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">kind</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">ocean</span><span class="o">=</span><span class="n">ocean</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="n">coastlines</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span>
+<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1530" name="__codelineno-0-1530"></a>
+<a id="__codelineno-0-1531" name="__codelineno-0-1531"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_animate_frames</span><span class="p">(</span>
+<a id="__codelineno-0-1532" name="__codelineno-0-1532"></a>        <span class="n">draw_one</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">),</span> <span class="n">fps</span><span class="p">,</span> <span class="n">blit</span><span class="o">=</span><span class="n">blit</span><span class="p">,</span> <span class="n">updates</span><span class="o">=</span><span class="n">updates</span>
+<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
