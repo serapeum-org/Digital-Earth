@@ -120,8 +120,9 @@ CAPABILITIES = Capabilities(
         "layer_switcher": (
             "the tier draws no control onto the figure for a reader to toggle: visibility is set from code, "
             "with `set_visible` before or between draws, and a live canvas can do that from a "
-            "`Scene.on_pick` callback — but the switch itself is a widget the other tiers' engines provide "
-            "and this one does not"
+            "`Scene.on_pick` callback — but the switch itself is a widget the interactive and web tiers' "
+            "engines provide and this one does not. The 3-D tier has none either, and gives its own reason: "
+            "its layers are switched by id through the scene's API rather than from a panel"
         ),
         "time_slider": (
             "a sequence over time is written out as an animation here rather than scrubbed, which is what "
