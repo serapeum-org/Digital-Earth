@@ -194,6 +194,62 @@ class TestABrokenPluginDoesNotAbortTheHealthyOnes:
         )
         assert resolve_uri("good:x") == "opened", "the healthy plugin still registered"
 
+    def test_a_malformed_styles_object_is_skipped_by_the_wiring(self):
+        """A styles plugin that loads to something other than a mapping is skipped, not fatal.
+
+        Test scenario:
+            The styles counterpart of the malformed-sources case. ``load_plugins`` loaded the object fine, so
+            the wiring is again what tolerates the wrong shape: a list beside a healthy mapping must leave the
+            healthy group merged rather than abort the whole group's registration.
+        """
+        malformed = _FakeEP("malformed", ["not", "a", "mapping"])
+        good = _FakeEP("good", {"shaped_var": {"match": ["sv"], "cmap": "viridis"}})
+        digitalearth.register_plugins(
+            "digitalearth.styles",
+            load_plugins("digitalearth.styles", eps=[malformed, good]),
+        )
+        assert load_library()["shaped_var"]["cmap"] == "viridis", (
+            "the healthy styles plugin still merged past the malformed one"
+        )
+
+    def test_a_malformed_styles_object_contributes_no_group(self):
+        """The skipped plugin leaves the library exactly as wide as it was — it merges nothing of its own.
+
+        Test scenario:
+            Tolerating the wrong shape must not mean half-registering it, and the payload is chosen so that
+            forwarding it blindly would *succeed*: a list of two-character strings is exactly what
+            ``dict.update`` reads as key/value pairs, so dropping the mapping check grows the library by the
+            groups ``"g"`` and ``"h"``. Measured by mutation — with the check removed, this fails on those two.
+        """
+        before = set(load_library())
+        digitalearth.register_plugins(
+            "digitalearth.styles",
+            load_plugins(
+                "digitalearth.styles", eps=[_FakeEP("malformed", ["gx", "hy"])]
+            ),
+        )
+        assert set(load_library()) == before, (
+            f"the malformed plugin added {sorted(set(load_library()) - before)} to the library"
+        )
+
+    def test_a_malformed_styles_object_is_refused_by_name_when_registered_directly(
+        self,
+    ):
+        """The registrar itself raises ``TypeError`` naming the type — the error ``register_plugins`` catches.
+
+        Test scenario:
+            The tolerance above is only meaningful if something was refused underneath it. Called directly,
+            ``_register_style_plugin`` skips the shadow check a mapping gets and lets
+            ``register_style_library`` refuse, so the wrong shape is rejected by name rather than merged.
+        """
+        with pytest.raises(
+            TypeError, match=r"must load to a mapping of style groups"
+        ) as excinfo:
+            digitalearth._register_style_plugin("malformed", ["not", "a", "mapping"])
+        assert "list" in str(excinfo.value), (
+            f"the refusal must name the type it was handed, got {str(excinfo.value)!r}"
+        )
+
 
 class TestRegisteringIsIdempotentAndDuplicatesFollowTheExistingPolicy:
     """Re-wiring the same set changes nothing, and a duplicate name is the registry's own last-wins."""

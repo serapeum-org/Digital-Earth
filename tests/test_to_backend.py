@@ -10,7 +10,7 @@ import pytest
 
 import digitalearth
 from digitalearth import api
-from digitalearth.base.spec import FigureSpec, PanelSpec
+from digitalearth.base.spec import Camera, FigureSpec, LayerTree, PanelSpec
 
 
 def _one_panel_figure() -> FigureSpec:
@@ -125,3 +125,65 @@ class TestMatplotlibRoundTrip:
         assert replayed.viewport.bounds.as_bbox() == source.viewport.bounds.as_bbox(), (
             f"framing changed: {replayed.viewport.bounds.as_bbox()} vs {source.viewport.bounds.as_bbox()}"
         )
+
+
+def _camera_figure(camera: Camera) -> FigureSpec:
+    """A one-panel figure seen through a camera rather than a viewport — a 3-D tier's description.
+
+    Args:
+        camera: The camera the single panel is seen through.
+
+    Returns:
+        A figure with one layer-less panel holding `camera`. Layer-less on purpose: what is under test is the
+        view the replayed map is *constructed* with, which is read before a single layer is drawn.
+    """
+    return FigureSpec(panels=(PanelSpec(id="main", view=camera),), layers=LayerTree())
+
+
+class TestReplayingAFigureSeenThroughACamera:
+    """A ``Camera`` panel may name no CRS, where a ``Viewport`` must — so the flat replay has a fallback.
+
+    ``PanelSpec.view`` is a ``Viewport`` *or* a ``Camera``, and only the former refuses a ``None`` CRS;
+    ``Camera.crs`` defaults to ``None`` for a 3-D scene that declares none. Replaying such a figure flat is
+    therefore the one route on which the static tier is handed no display CRS at all, and it must keep its own
+    default rather than pass the ``None`` to the constructor.
+    """
+
+    def test_a_camera_naming_no_crs_leaves_the_tier_its_own_default(self):
+        """A CRS-less camera panel replays into a map drawn in the same CRS a bare ``Map`` picks.
+
+        Test scenario:
+            The expected CRS is taken from a separately built bare ``Map``, never from the replayed one.
+            Measured by mutation: with the ``crs is not None`` guard dropped, so that the camera's ``None``
+            reaches the constructor, this fails — the viewport refuses a display CRS of ``None`` outright.
+        """
+        from digitalearth.static import Map
+
+        default = Map()
+        expected = default.crs
+        default.close()
+
+        replayed = api.to_backend(_camera_figure(Camera(position=(1.0, 1.0, 1.0))))
+        try:
+            assert replayed.crs == expected, (
+                f"a CRS-less camera panel replayed in {replayed.crs!r}, not the tier default {expected!r}"
+            )
+        finally:
+            replayed.close()
+
+    def test_a_camera_naming_a_crs_hands_it_to_the_replayed_map(self):
+        """A camera that *does* declare a CRS is honoured, so the fallback is not swallowing a real one.
+
+        Test scenario:
+            The other exit of the same branch, and what makes the fallback test meaningful: a replay that
+            always used the tier default would pass that test and fail this one.
+        """
+        replayed = api.to_backend(
+            _camera_figure(Camera(position=(1.0, 1.0, 1.0), crs=4326))
+        )
+        try:
+            assert replayed.crs == 4326, (
+                f"the camera's declared CRS was dropped on replay; got {replayed.crs!r}"
+            )
+        finally:
+            replayed.close()
