@@ -41,7 +41,10 @@ EQUINOX_NOON = "2026-03-20T12:00:00+00:00"
 #: One Natural-Earth resolution, named once so the calls below read as the chain and not the keywords.
 COARSE = "110m"
 
-#: What the stubbed tile fetch hands back, so the accessor can be asserted against the engine's own object.
+#: A stand-in return for the stubbed ``add_tiles`` in the chaining tests below, which only care that
+#: ``basemap()`` chains and registers its layer. What ``artist()`` really hands back for a basemap, and that
+#: the tiles were actually drawn, is proven against the real ``add_tiles`` in
+#: ``tests/static/test_basemap_tile_artist.py`` (round 2, M5) — a sentinel cannot say either.
 TILE_ARTIST = object()
 
 #: Every decoration method that must chain, as ``name -> (call, layer name)``. The layer name is what the
@@ -389,19 +392,6 @@ class TestBasemapChainsWithoutTheNetwork:
             tier catching up, which is the cross-tier half of L6.
         """
         assert tiled.basemap(name="tiles") is tiled
-
-    def test_the_tile_artist_is_reachable_by_the_layer_s_name(self, tiled):
-        """What ``add_tiles`` returned is still reachable, by layer id.
-
-        Args:
-            tiled: The framed map with a stubbed tile fetch.
-
-        Test scenario:
-            The stand-in's own object is asserted, so this fails if the accessor hands back anything
-            other than exactly what the engine produced.
-        """
-        tiled.basemap(name="tiles")
-        assert tiled.artist("tiles") is TILE_ARTIST
 
     def test_a_basemap_opens_a_chain_of_decoration(self, tiled):
         """A basemap, then reference geography, then a label — one expression.
