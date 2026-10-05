@@ -1287,9 +1287,11 @@ class RasterMixin(_MixinBase):
 
                 * ``robust=True`` takes the limits from the band's 2nd and 98th percentile instead of its
                   min and max, so one outlier stops flattening the rest of the field — xarray's spelling,
-                  honoured by cleopatra. Measured on a grid of zeros with two cells at 1000: the limits
-                  are ``(0.0, 20.0)`` rather than ``(0.0, 1000.0)``. An explicit ``vmin``/``vmax`` wins
-                  over it.
+                  honoured by cleopatra. How much it helps depends on how large a share of the band the
+                  outliers are, so the figure it reaches is grid-dependent: measured on a **10x10** grid
+                  of zeros with two cells at 1000, the upper limit comes out at about ``20`` rather than
+                  ``1000``, while on a 5x5 grid the same two cells are 8% of the band — past the 2% tail
+                  — and the limits stay ``(0.0, 1000.0)``. An explicit ``vmin``/``vmax`` wins over it.
                 * ``center=`` is the value a diverging scale is built around. cleopatra symmetrises the
                   limits on it, and this tier supplies the diverging **ramp** — built from the resolved
                   colormap's own two ends — but only when the caller named no ``cmap`` of their own and
