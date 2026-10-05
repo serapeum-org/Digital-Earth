@@ -803,12 +803,39 @@ class _GraticuleSteps(NamedTuple):
     labels: bool = True
 
     @classmethod
+    def held_by(cls, layer: Optional[LayerSpec]) -> Optional["_GraticuleSteps"]:
+        """Read back what a graticule layer the map already describes is drawn at.
+
+        The other half of :meth:`symbology`, and the reason a *replacing*
+        :meth:`ProjectionMixin.graticule` call can keep an option it was not given: the props are the only
+        record of what the grid already on the axes was asked for.
+
+        Args:
+            layer: The described graticule layer, or ``None`` when the map has none yet.
+
+        Returns:
+            The steps and label choice that layer carries, or ``None`` for ``None`` — which is what the
+            creating call is given, and why its defaults stay the published ones. A prop a layer somehow
+            does not carry falls back the way a creating call would.
+        """
+        if layer is None:
+            return None
+        symbology = getattr(layer, "symbology", None)
+        props: Dict[str, Any] = {} if symbology is None else dict(symbology.props)
+        return cls(
+            float(props.get("lon_step", DEFAULT_GRATICULE_STEP)),
+            float(props.get("lat_step", DEFAULT_GRATICULE_STEP)),
+            bool(props.get("labels", True)),
+        )
+
+    @classmethod
     def asked(
         cls,
         lon_step: Optional[float],
         lat_step: Optional[float],
         spacing: Optional[float],
         labels: bool = True,
+        carried: Optional["_GraticuleSteps"] = None,
     ) -> "_GraticuleSteps":
         """Collapse what a caller wrote into the two steps a graticule is drawn at.
 
@@ -817,9 +844,14 @@ class _GraticuleSteps(NamedTuple):
             lat_step: Parallel spacing the caller named, or ``None``.
             spacing: One step for both, which outranks the other two.
             labels: Whether the lines are labelled, already settled against the frame.
+            carried: What the graticule being *replaced* is drawn at, from :meth:`held_by`, or ``None`` on
+                the call that creates it. A step the caller does not name is taken from here: a call that
+                names one step is asking for that step, not for the other one to be re-cut at the default
+                (round 1, M7). ``spacing`` outranks it, since that argument names both steps.
 
         Returns:
-            The two steps, each falling back to :data:`DEFAULT_GRATICULE_STEP`, and the label choice.
+            The two steps — each the caller's own, else ``carried``'s, else
+            :data:`DEFAULT_GRATICULE_STEP` — and the label choice.
 
         Warns:
             UserWarning: when ``spacing`` is given beside either step, because the call has then had two of
@@ -836,8 +868,13 @@ class _GraticuleSteps(NamedTuple):
                     stacklevel=3,
                 )
             return cls(spacing, spacing, labels)
-        lon = DEFAULT_GRATICULE_STEP if lon_step is None else lon_step
-        lat = DEFAULT_GRATICULE_STEP if lat_step is None else lat_step
+        standing = (
+            cls(DEFAULT_GRATICULE_STEP, DEFAULT_GRATICULE_STEP)
+            if carried is None
+            else carried
+        )
+        lon = standing.lon if lon_step is None else lon_step
+        lat = standing.lat if lat_step is None else lat_step
         return cls(lon, lat, labels)
 
     def symbology(self) -> Symbology:
@@ -1280,8 +1317,16 @@ class ProjectionMixin(_MixinBase):
         what the replacing call named changes. Describing the second call as a second layer would say the
         map draws two grids where it draws one — and that is also why a ``name`` on a *replacing* call
         names nothing: the layer already has its id, and taking a new one would break every caller holding
-        the old one. ``visible`` is the same story from the other side: a call that does not name it is
-        asking for a different spacing, not for a hidden grid to come back (review R-L5).
+        the old one.
+
+        **One rule for the rest of the arguments: a replacing call keeps every option it does not name.**
+        A call that names a spacing is asking for a spacing, not for a hidden grid to come back
+        (``visible``, review R-L5), nor for the degrees of a deliberately bare grid to come back
+        (``labels``), nor for the step it did not mention to be re-cut at the default (``lon_step`` /
+        ``lat_step``) — the last two used to fall back to their construction defaults, which relabelled
+        and re-cut grids in silence (round 1, M7). ``spacing`` is the one argument that overrides what the
+        grid carries without being asked twice, because it names both steps by definition. The frame still
+        outranks all of it: ``labels=True`` on a globe is refused whatever the grid it replaces carried.
 
         **Which frame draws it, and when.** On a flat map — the default — the lines and their labels go on
         the axes as this call runs. On a ``globe=True`` map they are drawn later, by the projection frame
@@ -1291,9 +1336,9 @@ class ProjectionMixin(_MixinBase):
 
         Args:
             lon_step: Meridian spacing in degrees; ``None`` (default) means
-                :data:`DEFAULT_GRATICULE_STEP`.
-            lat_step: Parallel spacing in degrees; ``None`` (default) means
-                :data:`DEFAULT_GRATICULE_STEP`.
+                :data:`DEFAULT_GRATICULE_STEP` on the call that **creates** the graticule, and the step
+                the grid already carries on a *replacing* one.
+            lat_step: Parallel spacing in degrees, the same way round.
             spacing: One step for both, for a caller who wants a square grid; it overrides the two
                 above, and **warns** when it does, because a call that names all three has had two of
                 its own arguments thrown away (review R2-L3). The same **keyword** the web and
@@ -1304,8 +1349,10 @@ class ProjectionMixin(_MixinBase):
                 ``30``. ``spacing=7.5`` draws here and raises there (review R-L10).
             labels: Whether each line carries its degree — ``"30°E"``, ``"60°N"``, the web tier's own
                 spelling. ``None`` (the default) labels the frames that can be labelled, which is every
-                flat map and no globe; ``True`` asks for them and **raises** on a globe, where there is no
-                edge to hang a degree on (see *Raises*); ``False`` draws the lines bare. Each label sits on
+                flat map and no globe — and on a *replacing* call means whatever the grid already
+                carries, so restyling a bare grid leaves it bare; ``True`` asks for them and **raises** on
+                a globe, where there is no edge to hang a degree on (see *Raises*); ``False`` draws the
+                lines bare. Each label sits on
                 its own line, just inside the lower edge of the view for a meridian and the left edge for a
                 parallel, and a degree the display CRS cannot place there is **named in a warning** rather
                 than dropped in silence.
@@ -1361,6 +1408,25 @@ class ProjectionMixin(_MixinBase):
                 >>> m.close()
 
                 ```
+            - A replacing call keeps what it does not name: the grid is re-cut at 60 degrees and stays
+              bare, and its parallels keep the step only the first call named:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=4326)
+                >>> m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS
+                <digitalearth.static.map.Map object at ...>
+                >>> m.graticule(lon_step=30.0, lat_step=45.0, labels=False)
+                >>> m.graticule(lon_step=60.0)
+                >>> props = m._layer_tree.get(m._graticule_id).symbology.props
+                >>> (props["lon_step"], props["lat_step"], props["labels"])
+                (60.0, 45.0, False)
+                >>> len(m.ax.texts)
+                0
+                >>> m.close()
+
+                ```
             - A globe draws the grid unlabelled, and **refuses** `labels=True` rather than dropping them
               quietly — the default `labels=None` is what lets one line serve both frames:
                 ```python
@@ -1401,8 +1467,11 @@ class ProjectionMixin(_MixinBase):
 
                 ```
         """
+        # Read before anything is described: a replacing call keeps every option it does not name, and
+        # the layer it replaces is the only record of what those options were.
+        carried = _GraticuleSteps.held_by(self._graticule_held())
         steps = _GraticuleSteps.asked(
-            lon_step, lat_step, spacing, self._labels_asked(labels)
+            lon_step, lat_step, spacing, self._labels_asked(labels, carried), carried
         )
         edit = self._describe_graticule(steps.symbology(), name=name, visible=visible)
         # Described first, then drawn — but through the renderer directly rather than through
@@ -1415,7 +1484,9 @@ class ProjectionMixin(_MixinBase):
             edit.undo(self)
             raise
 
-    def _labels_asked(self, labels: Optional[bool]) -> bool:
+    def _labels_asked(
+        self, labels: Optional[bool], carried: Optional["_GraticuleSteps"] = None
+    ) -> bool:
         """Settle whether this graticule is labelled, refusing the frame that cannot carry labels.
 
         The one of :meth:`graticule`'s arguments that depends on the **frame** rather than on what the
@@ -1433,16 +1504,23 @@ class ProjectionMixin(_MixinBase):
 
         Args:
             labels: What the caller wrote — ``True``, ``False``, or ``None`` for "wherever this frame can".
+            carried: What the graticule being *replaced* carries, or ``None`` on the call that creates it.
+                A call that does not name ``labels`` is asking for a different spacing, not for the
+                degrees of a deliberately bare grid to come back — the rule ``visible`` already follows
+                (round 1, M7).
 
         Returns:
-            Whether the lines are labelled: always ``False`` on a globe, and otherwise what the caller
-            asked for, defaulting to ``True``.
+            Whether the lines are labelled: always ``False`` on a globe; otherwise what the caller asked
+            for, else what the grid being replaced carried, else ``True``.
 
         Raises:
-            ValueError: for ``labels=True`` on a ``globe=True`` map.
+            ValueError: for ``labels=True`` on a ``globe=True`` map — whatever the replaced grid
+                carried, because the refusal is about the frame and not about the layer.
         """
         if not self.globe:
-            return True if labels is None else bool(labels)
+            if labels is not None:
+                return bool(labels)
+            return True if carried is None else bool(carried.labels)
         if labels:
             raise ValueError(
                 "graticule(labels=True) cannot place degree labels on a globe frame: the projection "
@@ -1452,6 +1530,24 @@ class ProjectionMixin(_MixinBase):
                 "— or label a flat projected map instead (Map(crs=...) without globe=True)."
             )
         return False
+
+    def _graticule_held(self) -> Optional[LayerSpec]:
+        """Return the graticule layer a next call would replace, or ``None`` for a creating call.
+
+        Read by :meth:`graticule` for the options a replacing call inherits and by
+        :meth:`_describe_graticule` for the layer it edits, so the two cannot disagree about which call
+        this is.
+
+        Returns:
+            The described layer :attr:`_graticule_id` points at, or ``None`` when the map has no graticule
+            — including when the id outlived its layer: ``_reset_layers`` clears the tree between
+            animation frames while the lines themselves survive, so the membership test is what keeps the
+            remembered id from raising here.
+        """
+        pointer = self._graticule_id
+        if pointer is None or pointer not in self._layer_tree.ids:
+            return None
+        return self._layer_tree.get(pointer)
 
     def _describe_graticule(
         self,
@@ -1482,11 +1578,7 @@ class ProjectionMixin(_MixinBase):
                 ``stacklevel=3`` so it still names the line that called ``graticule()``.
         """
         pointer = self._graticule_id
-        # `_reset_layers` clears the tree between animation frames while the lines themselves survive, so the
-        # remembered id can outlive its layer; the membership test is what keeps that from raising.
-        was: Optional[LayerSpec] = None
-        if pointer is not None and pointer in self._layer_tree.ids:
-            was = self._layer_tree.get(pointer)
+        was = self._graticule_held()
         if was is None:
             held = self._describe_layer(
                 LayerRecord(
