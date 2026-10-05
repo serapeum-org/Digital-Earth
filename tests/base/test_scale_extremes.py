@@ -12,6 +12,7 @@ caller state", one builder that states them, and the serialisation that carries 
 
 from inspect import getsource
 
+import pytest
 from matplotlib.colors import Colormap
 
 from digitalearth.base.spec import Scale
@@ -125,6 +126,70 @@ class TestStatingTheExtremes:
         assert reported == {"under": UNDER}, (
             f"only the stated colour must be reported; got {reported}"
         )
+
+
+class TestClearingAStatedExtreme:
+    """`with_extremes` can only state a colour, so clearing one needed a verb of its own."""
+
+    def test_a_stated_colour_can_be_cleared(self):
+        """The whole point: a scale can go back to stating no over colour.
+
+        Test scenario:
+            `with_extremes(over=None)` cannot do it — `None` there means "keep", which is what lets two
+            calls compose — so the only way back was `dataclasses.replace`, which is not this type's
+            vocabulary.
+        """
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        assert stated.without_extremes("over").over is None, (
+            "a stated over colour must be clearable by name"
+        )
+
+    def test_the_other_extremes_are_left_stated(self):
+        """Clearing is as narrow as stating: only the named extreme goes."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(missing=MISSING, over=OVER)
+        assert stated.without_extremes("over").extremes() == {"missing": MISSING}, (
+            f"only the named extreme must be cleared; got {stated.without_extremes('over').extremes()}"
+        )
+
+    def test_naming_none_clears_all_three(self):
+        """ "This scale states no extremes" is one call rather than three."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(
+            missing=MISSING, over=OVER, under=UNDER
+        )
+        assert stated.without_extremes().extremes() == {}, (
+            f"a bare call must clear every extreme; got {stated.without_extremes().extremes()}"
+        )
+
+    def test_the_scale_it_was_called_on_still_states_its_colour(self):
+        """It is a builder on a frozen value, so the original is untouched."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        stated.without_extremes("over")
+        assert stated.over == OVER, (
+            f"clearing must not reach back into the scale it was called on; got {stated.over}"
+        )
+
+    def test_the_domain_travels_through_a_clear(self):
+        """Clearing a colour is not a reason to re-derive the domain."""
+        cleared = (
+            Scale.from_limits(2.0, 12.0)
+            .with_extremes(under=UNDER)
+            .without_extremes("under")
+        )
+        assert cleared.as_limits() == (2.0, 12.0), (
+            f"the domain must survive a clear; got {cleared.as_limits()}"
+        )
+
+    def test_an_extreme_the_scale_does_not_have_is_refused(self):
+        """A typo must not be a silent no-op, since the call would read as having cleared something."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        with pytest.raises(ValueError, match="unknown extremes"):
+            stated.without_extremes("bad")
+
+    def test_the_refusal_names_the_extremes_a_scale_has(self):
+        """And the message lists the three, so the caller does not have to look them up."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        with pytest.raises(ValueError, match="missing, over, under"):
+            stated.without_extremes("bad")
 
 
 class TestTheRationaleNamesMatplotlibsRealLogic:

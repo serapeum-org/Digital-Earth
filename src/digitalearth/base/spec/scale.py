@@ -54,6 +54,12 @@ __all__ = ["DEFAULT_CLASS_COUNT", "Scale"]
 #: convention and what every tier already defaulted to; sharing it is what stops a sixth appearing.
 DEFAULT_CLASS_COUNT: int = 5
 
+#: The extremes a scale can state, in the order :meth:`Scale.extremes` reports them — and the set
+#: :meth:`Scale.without_extremes` clears when it is named none. Private because the three *names* are the
+#: public vocabulary (they are keywords on `with_extremes` and keys of `extremes()`); this tuple only keeps
+#: the validation and the clear-them-all default reading off one list.
+_EXTREME_NAMES: Tuple[str, str, str] = ("missing", "over", "under")
+
 
 @dataclass(frozen=True)
 class Scale:
@@ -698,8 +704,11 @@ class Scale:
         it is not what this rule is borrowed from. So `None` cannot
         **clear** a colour already stated: `with_extremes(over=None)` on a scale whose `over` is `'#ff0000'`
         answers `{'over': '#ff0000'}` again, and a call with no arguments at all is accepted and changes
-        nothing. The scale itself is immutable, so the stated colours come back on a **new** scale: a domain
-        derived once and shared across an animation's frames must not pick up one frame's styling.
+        nothing. Clearing one is :meth:`without_extremes`'s job — two verbs rather than one keyword carrying a
+        sentinel, which keeps all three parameters a plain `Optional[str]` and keeps `None` meaning exactly
+        what it means in matplotlib. The scale itself is immutable, so the stated colours come back on a
+        **new** scale: a domain derived once and shared across an animation's frames must not pick up one
+        frame's styling.
 
         Args:
             missing: Colour for a value the scale cannot place, or `None` to keep the current `missing`.
@@ -748,6 +757,8 @@ class Scale:
                 >>> bare = stated.with_extremes()
                 >>> bare.extremes(), bare is stated
                 ({'over': '#ff0000'}, False)
+                >>> stated.without_extremes("over").extremes()
+                {}
 
                 ```
         """
@@ -756,6 +767,97 @@ class Scale:
             missing=self.missing if missing is None else missing,
             over=self.over if over is None else over,
             under=self.under if under is None else under,
+        )
+
+    def without_extremes(self, *names: str) -> "Scale":
+        """Return this scale with the named extreme colours cleared, back to stating none of them.
+
+        The other direction of :meth:`with_extremes`, and a separate verb because `None` there already
+        means "keep this one" — the rule matplotlib's own `with_extremes` follows, through
+        `Colormap._set_extremes`. Overloading `None` to mean "clear" would break the composition two
+        `with_extremes` calls rely on; giving it a sentinel value instead would widen all three parameters
+        from `Optional[str]` to a union every caller and every type check has to carry. So the way back is a
+        call of its own, and `dataclasses.replace` stops being the only route to it.
+
+        What it is for: a stated extreme is *styling*, and a derived scale travels — a domain measured over a
+        stack is handed to each frame, and a stored figure's scale is read back and reused. Handing one on
+        without the previous caller's over colour is then a call rather than a rebuild.
+
+        Args:
+            *names: The extremes to clear, from `"missing"`, `"over"` and `"under"`. Named none, it clears
+                all three, which is how a scale says it states no extremes at all. Naming one twice is the
+                same as naming it once.
+
+        Returns:
+            A new scale with the same domain, scheme, classes and categories, stating the extremes it was
+            not asked to clear. Never `self`, even when there was nothing to clear.
+
+        Raises:
+            ValueError: for a name that is not one of the three, since a silently ignored name would read as
+                a colour that had been cleared.
+
+        Examples:
+            - A colour stated earlier is cleared by name, and the rest stay stated:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(
+                ...     missing="#cccccc", over="#ff0000"
+                ... )
+                >>> stated.without_extremes("over").extremes()
+                {'missing': '#cccccc'}
+
+                ```
+            - Named nothing it clears all three, and the scale it was called on is unchanged:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000")
+                >>> stated.without_extremes().extremes()
+                {}
+                >>> stated.extremes()
+                {'over': '#ff0000'}
+
+                ```
+            - It is the clear `with_extremes` cannot express, since `None` there keeps:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(under="#0000ff")
+                >>> stated.with_extremes(under=None).extremes()
+                {'under': '#0000ff'}
+                >>> stated.without_extremes("under").extremes()
+                {}
+
+                ```
+            - A name that is not one of the three is refused rather than ignored:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).without_extremes("bad")
+                Traceback (most recent call last):
+                    ...
+                ValueError: Scale.without_extremes got unknown extremes ['bad']; known: missing, over, under
+
+                ```
+            - The domain and the classes travel through it:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_values([1.0, 4.0, 9.0], scheme="quantiles", k=2)
+                >>> cleared = scale.with_extremes(missing="#cccccc").without_extremes()
+                >>> cleared.as_limits(), cleared.is_classified
+                ((1.0, 9.0), True)
+
+                ```
+        """
+        unknown = sorted({name for name in names if name not in _EXTREME_NAMES})
+        if unknown:
+            raise ValueError(
+                f"Scale.without_extremes got unknown extremes {unknown}; "
+                f"known: {', '.join(_EXTREME_NAMES)}"
+            )
+        cleared = set(names) if names else set(_EXTREME_NAMES)
+        return replace(
+            self,
+            missing=None if "missing" in cleared else self.missing,
+            over=None if "over" in cleared else self.over,
+            under=None if "under" in cleared else self.under,
         )
 
     def extremes(self) -> Dict[str, str]:
