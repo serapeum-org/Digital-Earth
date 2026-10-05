@@ -7,6 +7,8 @@ borrowed axes is still closed by ``Scene.close`` (#371), so what closing the loc
 figure is measured rather than assumed.
 """
 
+import re
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -1073,6 +1075,116 @@ class TestAnExplicitRectangleIsAPlacementOrARefusal:
         main = framed(4326)
         with pytest.raises(ValueError, match=r"inset\(size=0.0001\)"):
             main.inset(size=0.0001)
+
+
+class TestTheInsetRaisesBlockCannotGoStale:
+    """``inset()``'s documented refusals, as a census rather than as a count (round 2, L13).
+
+    The docstring said *"Each of the four names `inset()`"* and then listed five conditions — the count
+    went stale when ``8d4f6a50`` added the ``globe=True`` beside ``extent`` refusal, and round 2's L10
+    added more. A count in front of a list is a second place to keep in step with the list, so there is
+    no count any more: the claim is *"every one of them"*, and this suite is the census that makes it
+    checkable.
+    """
+
+    #: Every way ``inset()`` refuses a call, as ``(kwargs, the keyword the message must name)``. A
+    #: condition added to :meth:`~digitalearth.static.map.Map.inset` and not to this list leaves the
+    #: docstring's "every one of them" unproven, which is the half a count could not express.
+    REFUSALS = [
+        pytest.param({"size": 1.5}, "size", id="size-above-one"),
+        pytest.param({"size": 0.0}, "size", id="size-zero"),
+        pytest.param({"size": "big"}, "size", id="size-not-a-number"),
+        pytest.param({"size": 0.0001}, "size", id="size-rounds-away"),
+        pytest.param({"size": 0.95}, "size", id="size-too-big-for-a-corner"),
+        pytest.param({"position": "middle"}, "position", id="position-not-a-corner"),
+        pytest.param({"position": (0.1, 0.2)}, "position", id="position-too-short"),
+        pytest.param(
+            {"position": (0.6, 0.6, 0.0, 0.3)}, "position", id="rectangle-zero-side"
+        ),
+        pytest.param(
+            {"position": (float("nan"), 0.0, 0.3, 0.3)},
+            "position",
+            id="rectangle-not-finite",
+        ),
+        pytest.param(
+            {"position": (0.0, -0.5, 0.3, 0.3)}, "position", id="rectangle-off-the-map"
+        ),
+        pytest.param({"reference": ("close",)}, "reference", id="reference-unknown"),
+        pytest.param(
+            {"globe": True, "extent": [-4.0e6, -4.0e6, 4.0e6, 4.0e6]},
+            "globe",
+            id="globe-beside-an-extent",
+        ),
+    ]
+
+    @pytest.mark.parametrize("kwargs, keyword", REFUSALS)
+    def test_every_refusal_names_the_call_and_the_keyword(
+        self, kwargs, keyword, framed
+    ):
+        """Which is what the docstring claims of all of them, counted or not.
+
+        Args:
+            kwargs: The call that is refused.
+            keyword: The keyword the message has to name, so one generic sentence cannot prove the lot.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            Round 1's L2 is the rule being held to — a refusal names the call that was made. The census
+            is here rather than in the docstring's prose because prose cannot be run.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=rf"inset\({keyword}") as refusal:
+            main.inset(**kwargs)
+        assert "inset(" in str(refusal.value), (
+            f"the refusal should name the call; got {refusal.value}"
+        )
+
+    def test_the_unframed_refusal_is_the_thirteenth_and_names_the_call_too(
+        self, closed_figures
+    ):
+        """The one condition that is not a keyword's — it is the map's state.
+
+        Args:
+            closed_figures: Teardown fixture closing the figures.
+
+        Test scenario:
+            It is listed apart from the rest because there is no keyword to quote, and it is the refusal
+            round 1's L2 was actually about.
+        """
+        main = Map(crs=4326)
+        with pytest.raises(
+            ValueError, match=r"^inset\(\): the map has not been framed"
+        ):
+            main.inset()
+
+    def test_the_raises_block_carries_no_count_to_go_stale(self):
+        """A numeral in front of the list is the thing that went stale, so there must not be one.
+
+        Test scenario:
+            "Each of the four" survived the commit that added a fifth refusal because nothing read it.
+            This reads it: any "each of the <n>" phrasing fails here, whatever the number, so the fix
+            cannot be re-broken by adding a refusal and updating nothing.
+        """
+        counted = re.search(
+            r"(?:each|all|any) of the (?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|"
+            r"eleven|twelve|thirteen)\b",
+            Map.inset.__doc__,
+            re.IGNORECASE,
+        )
+        assert counted is None, (
+            f"the Raises block should not count its refusals; found {counted and counted.group(0)!r}"
+        )
+
+    def test_the_raises_block_still_claims_every_refusal_names_the_call(self):
+        """Dropping the count must not drop the claim it was attached to.
+
+        Test scenario:
+            The count was wrong; the promise around it was right and is what round 1's L2 bought. Losing
+            it would make the next sweep re-derive the rule from the code.
+        """
+        assert "every one of them names `inset()`" in Map.inset.__doc__, (
+            "the Raises block should still promise that each refusal names the call"
+        )
 
 
 class TestALocatorOnAGlobe:

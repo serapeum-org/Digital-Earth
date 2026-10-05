@@ -804,14 +804,33 @@ class InsetMixin(_MixinBase):
             axes and sharing this map's figure.
 
         Raises:
-            ValueError: for `globe=True` beside an `extent`, which cannot both be drawn, for a `size`
-                that is not a fraction in `(0, 1]` or one above `0.94` beside a named corner, a
-                `position` that is neither a corner nor four numbers, a `reference` naming something that is not a
-                Natural-Earth layer, or a map that has not been framed — there is then no extent to mark,
-                and the refusal happens **before** the inset axes is created, so nothing half-built is
-                left on the figure. Each of the four names `inset()`, including the last: the extent is
-                read by the same value object :meth:`mark_extent` reads it with, and it is told which
-                call to name.
+            ValueError: for a call that cannot be drawn — listed by what is wrong with it, and
+                deliberately **not** counted. The count that used to open this list ("each of the
+                four") went stale the moment a refusal was added and nothing updated the numeral, so
+                there is no numeral to keep in step any more (round 2, L13). What is said instead holds
+                however many there are: **every one of them names `inset()`**, and every one of them
+                happens *before* the inset axes is created, so a refused call leaves nothing half-built
+                on the figure. `tests/static/test_inset.py` keeps that honest as a census rather than as
+                prose — a refusal added here and not there leaves the claim unproven.
+
+                By keyword:
+
+                * `size` — not a real number; not a fraction in `(0, 1]`; positive but too small to
+                  survive the thousandth-of-the-axes precision a placement is taken to; or above `0.94`
+                  beside a named corner, which cannot keep its pad on both sides (round 1, L1).
+                * `position` — a string that is not one of the four corners; anything that does not
+                  unpack into four numbers; or four numbers that place no inset at all: a non-finite
+                  edge, a side of zero or less, a side that rounds away, or a rectangle that does not
+                  meet the axes anywhere. A rectangle that merely *hangs over* an edge is a placement
+                  and is drawn as asked for, reported at `WARNING` (round 2, L10).
+                * `reference` — a name that is not one of the Natural-Earth layers a locator can draw.
+                * `globe=True` beside an `extent` — the globe frame sets the projection's own limits, so
+                  the two cannot both be honoured.
+
+                And one that belongs to no keyword: a map that **has not been framed**, which has no
+                extent to mark. It names `inset()` like the rest even though the extent is read by the
+                same value object :meth:`mark_extent` reads it with — the object is told which call to
+                name (round 1, L2).
 
         Examples:
             - It chains, because it hands back the map: the locator is a side effect read from
