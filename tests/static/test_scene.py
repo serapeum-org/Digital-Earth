@@ -673,6 +673,63 @@ class TestDeliveringOnePickToSeveralCallbacks:
             )
 
 
+class TestWhichFigureCloseCloses:
+    """`close()` closes the scene's **own** figure, deterministically, borrowed or not (R2-L12).
+
+    It used to reach `pyplot.close(None)` on a scene given only an `ax`, which closes whichever figure is
+    *current* -- so a borrowed figure was spared or closed by luck, and issue #371 ("should a borrowed
+    figure be spared?") was written against that. `3d72bee7` made `self.fig` always a real figure, and
+    its message said #371 was "unchanged by this". The blast radius did change: the caller's figure is
+    now closed every time rather than sometimes, which is the behaviour these two pin.
+    """
+
+    @pytest.fixture
+    def borrowed_then_another(self):
+        """A figure a caller laid out, and a second figure made *current* afterwards.
+
+        Yields:
+            The `(host, ax, current)` triple. `current` is the figure `pyplot.close(None)` would have
+            closed, so the two are distinguishable.
+        """
+        host, ax = plt.subplots()
+        current = plt.figure()
+        yield host, ax, current
+        plt.close(host)
+        plt.close(current)
+
+    def test_the_scenes_own_figure_is_the_one_closed(self, borrowed_then_another):
+        """The borrowed figure goes, although another figure is the current one.
+
+        Args:
+            borrowed_then_another: The caller's figure and axes, plus a later current figure.
+
+        Test scenario:
+            Read as "the host's number is gone from `get_fignums()`", which is what "closed" means to
+            pyplot. With the old `self.fig = fig` the scene held `None` and closed `current` instead.
+        """
+        host, ax, _current = borrowed_then_another
+        Scene(ax=ax).close()
+        assert host.number not in plt.get_fignums(), (
+            f"the borrowed figure should be the one closed; open: {plt.get_fignums()}"
+        )
+
+    def test_the_merely_current_figure_is_left_alone(self, borrowed_then_another):
+        """And the figure that happens to be current survives, which is the other half.
+
+        Args:
+            borrowed_then_another: The caller's figure and axes, plus a later current figure.
+
+        Test scenario:
+            The first check alone would pass if `close()` closed *both*, or closed everything; this is
+            what makes it "the scene's own figure" rather than "a figure".
+        """
+        _host, ax, current = borrowed_then_another
+        Scene(ax=ax).close()
+        assert current.number in plt.get_fignums(), (
+            f"a figure the scene never held should survive; open: {plt.get_fignums()}"
+        )
+
+
 class TestTheArtistAccessorDoesNotTeachThePrivateRecord:
     """`Scene.artist` exists to replace `scene._renderer.drawn[...]`, and its own examples read it (R2-L8).
 

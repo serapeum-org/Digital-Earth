@@ -468,11 +468,17 @@ class Scene(WatermarkMixin):
 
         Args:
             ax: An existing axes to draw on — pass one to compose a Digital-Earth layer into a figure you are
-                laying out yourself. **The figure is still closed on exit**, borrowed or not:
-                :meth:`close` calls ``pyplot.close`` on whatever figure the scene holds, so a ``with`` block
-                around a borrowed axes closes the caller's figure too. Keep the scene out of ``with`` (and do
-                not call :meth:`close`) when the figure has to outlive it; #371 asks whether a borrowed figure
-                should instead be spared. Give each scene an axes of its own: a second scene on the same axes
+                laying out yourself. **The figure is still closed on exit**, borrowed or not, and now
+                *every time* rather than by luck: :meth:`close` calls ``pyplot.close`` on whatever figure
+                the scene holds, so a ``with`` block around a borrowed axes closes the caller's figure too.
+                Measured against the old behaviour, which stored the `None` it was passed and so reached
+                ``pyplot.close(None)``: with another figure made current afterwards, `Scene(ax=ax).close()`
+                closed *that* one and left the borrowed figure open (figures `[1, 2]`, borrowed `1`, open
+                after: `[1]`). It now closes the borrowed figure and leaves the merely-current one
+                (`[2]`). Keep the scene out of ``with`` (and do not call :meth:`close`) when the figure has
+                to outlive it; #371 asks whether a borrowed figure should instead be spared — and its "the
+                scene's own only by coincidence" premise is **stale**, because the choice is no longer
+                incidental (R2-L12). Give each scene an axes of its own: a second scene on the same axes
                 clears what the first drew on its opening render, and the first still describes it (see the
                 class docstring).
             fig: The figure `ax` belongs to; taken from `ax` when omitted — its **root** figure, for an
@@ -2948,7 +2954,13 @@ class Scene(WatermarkMixin):
             This closes the **entire** ``self.fig``. The panels returned by
             :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would
             close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap the
-            whole workflow or call :meth:`save` and close the figure yourself instead.
+            whole workflow or call :meth:`save` and close the figure yourself instead. The same holds for a
+            figure the caller laid out: a scene built with ``ax=`` closes **that** figure, deterministically
+            and every time. It is not "the current figure" and not "sometimes the caller's" — those were the
+            old ``pyplot.close(None)`` behaviour, and #371, which asks whether a borrowed figure should be
+            spared, was written against it (R2-L12). Whether it *should* be spared is still that issue's
+            question and not settled here; the behaviour is only described, deliberately, because changing
+            it is a contract change for every caller passing ``ax=``.
 
         Examples:
             - A scene that drew nothing closes quietly:
