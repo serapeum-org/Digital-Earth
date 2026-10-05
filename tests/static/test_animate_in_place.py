@@ -655,3 +655,108 @@ class TestAKindWithNoReasonOnRecord:
         assert not update.in_place, (
             "a kind with no setter must not take the in-place path"
         )
+
+
+def _anomaly(low: float, high: float) -> Dataset:
+    """A global field running from ``low`` to ``high``, so a frame can straddle zero or not.
+
+    Args:
+        low: The field's smallest value.
+        high: The field's largest value.
+
+    Returns:
+        A 30x60 global EPSG:4326 raster spanning ``[low, high]``.
+    """
+    ny, nx = 30, 60
+    arr = np.linspace(low, high, ny * nx, dtype="float32").reshape(ny, nx)
+    return Dataset.from_array(
+        arr=arr,
+        geo_ref=GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326),
+    )
+
+
+def _ramps(stack, mode: str, **opts) -> list:
+    """Name the colormap each frame of ``stack`` is actually drawn with under ``mode``.
+
+    Args:
+        stack: The frames to animate.
+        mode: The ``update=`` path to drive.
+        **opts: Forwarded to :meth:`~digitalearth.static.map.Map.animate`.
+
+    Returns:
+        One colormap name per frame, in frame order.
+    """
+    scene = Map(crs=4326, figsize=(3, 3))
+    clip = scene.animate(stack, update=mode, fps=2, **opts)
+    names = []
+    for index in range(len(stack)):
+        clip._func(index)
+        names.append(scene.artist().get_cmap().name)
+    scene.close()
+    return names
+
+
+class TestOneAnimationWhicheverPathDrawsIt:
+    """``update=`` picks a path, not a picture: a per-frame colour decision must not ride on the choice."""
+
+    @pytest.fixture
+    def straddling(self):
+        """A 2-frame anomaly stack whose first frame crosses zero and whose second does not.
+
+        Returns:
+            list[Dataset]: a field running -5..5 followed by one running 1..5.
+        """
+        return [_anomaly(-5.0, 5.0), _anomaly(1.0, 5.0)]
+
+    def test_the_two_paths_agree_on_every_frame_s_ramp(self, straddling):
+        """``center=`` must colour a frame the same way whichever path drew it.
+
+        Test scenario:
+            ``FieldColors.ramp_over`` asks whether *the frame it is drawing* straddles the centre, so a
+            kept artist froze the answer at frame 0 while a redrawn one re-decided it per frame — the same
+            ``animate(stack, center=0.0)`` call drew two different clips.
+        """
+        assert _ramps(straddling, "redraw", center=0.0) == _ramps(
+            straddling, "auto", center=0.0
+        ), "the redraw and in-place paths must draw one animation, not two"
+
+    def test_the_ramp_is_decided_over_the_stack_not_per_frame(self, straddling):
+        """A stack that straddles the centre diverges throughout, rather than flickering back.
+
+        Test scenario:
+            Frame 1 runs 1..5 and so straddles nothing on its own. The animation's colour scale is the
+            stack's, resolved once like ``vmin``/``vmax``, so the ramp is the stack's too and frame 1 is
+            drawn on the same diverging map as frame 0.
+        """
+        assert _ramps(straddling, "redraw", center=0.0) == [
+            "viridis-diverging",
+            "viridis-diverging",
+        ], (
+            "a stack straddling the centre must keep one diverging ramp for the whole clip"
+        )
+
+    def test_a_centre_outside_the_stack_is_declined_once(self, straddling, caplog):
+        """And the decline is said once for the clip, not once per frame.
+
+        Test scenario:
+            A centre no frame straddles keeps the sequential ramp and says so at ``WARNING``. Said per
+            frame that is 60 lines for a 60-frame clip, which is the symptom of the decision being taken
+            in the wrong place.
+        """
+        with caplog.at_level(logging.WARNING):
+            _ramps(straddling, "redraw", center=100.0)
+        assert caplog.text.count("is not drawn") == 1, (
+            f"one decline per clip, not per frame; log was {caplog.text!r}"
+        )
+
+    def test_a_midpoint_scale_agrees_across_the_paths_too(self, straddling):
+        """``color_scale="midpoint"`` states the same request in cleopatra's other spelling.
+
+        Test scenario:
+            ``FieldColors._center_on`` reads both spellings into one centre, so both reach
+            ``ramp_over`` — and both drew two different clips before the ramp was resolved over the stack.
+        """
+        midpoint = {"color_scale": "midpoint", "midpoint": 0.0}
+        assert _ramps(straddling, "redraw", **midpoint) == _ramps(
+            straddling, "auto", **midpoint
+        ), "the midpoint spelling of a centre must also draw one animation"

@@ -52,7 +52,11 @@ from digitalearth.base.stretch import (
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP, _field_source
+from digitalearth.static.maps.raster import (
+    DEFAULT_FIELD_CMAP,
+    FieldColors,
+    _field_source,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +322,17 @@ class FrameUpdate:
     #: follow: ``scheme`` cuts its class edges from that frame's own values, and ``cyclic`` adds a column,
     #: so the array stops matching the grid the artist was built on. Either sends the animation down the
     #: redrawing path.
+    #:
+    #: A stated ``center=`` (or ``color_scale="midpoint", midpoint=``) reads the same way and is
+    #: deliberately **not** listed: its diverging ramp is a colour decision, and
+    #: :meth:`AnimationMixin._freeze_animation_ramp` takes it once over the stack's shared scale before any
+    #: frame is drawn — so there is nothing left for a frame to restate, and listing it here would buy
+    #: agreement between the paths at the price of a ramp that flickers along the clip.
+    #: Measured over a 2-frame stack running -5..5 then 1..5, drawn with ``center=0.0``: the colormap per
+    #: frame is ``['viridis-diverging', 'viridis-diverging']`` under both ``update='redraw'`` and
+    #: ``update='auto'``. ``robust``, ``vmin``/``vmax``, ``cmap``, ``norm`` and the ``missing``/``over``/
+    #: ``under`` colours need no entry either: each is settled before the frames run, and the two paths
+    #: were measured to agree on all of them.
     PER_FRAME_OPTS = ("scheme", "cyclic")
 
     #: The accepted spellings of :meth:`AnimationMixin.animate`'s ``update``: take the cheapest path that is
@@ -1181,9 +1196,83 @@ class AnimationMixin(_MixinBase):
                 )
             return
         self._resolve_animation_clim(datasets, opts, views=views)
+        # Read off a copy: `stated_on` takes the extreme-colour keywords out of the dict it is given, and
+        # every frame still needs them in `opts`. A `scheme=` is left out of it: it cuts its class colours
+        # from the frame being drawn, which is why it blocks the in-place path outright
+        # (:attr:`FrameUpdate.PER_FRAME_OPTS`) — both paths then redraw and so already agree, and pinning a
+        # ramp there would take the shared categorical palette away from a band of class codes.
+        center = (
+            None if opts.get("scheme") else FieldColors.stated_on(dict(opts)).center
+        )
+        # One read of the stack's variable serves both the ramp and the bar, and is paid for only when one
+        # of them is asked for — resolving a style costs a frame read.
+        style = (
+            self._frame_style(datasets, _animated_band(opts))
+            if colorbar or center is not None
+            else {}
+        )
+        if center is not None:
+            self._freeze_animation_ramp(opts, center, style)
         if colorbar:
-            style = self._frame_style(datasets, _animated_band(opts))
             self._animation_colorbar(opts, cbar_label, style)
+
+    def _freeze_animation_ramp(
+        self, opts: dict, center: float, style: Mapping[str, Any]
+    ) -> None:
+        """Resolve the diverging ramp a stated ``center=`` asks for **once over the stack**.
+
+        The ramp is a colour decision, and an animation takes its colour decisions once: a frame drawing
+        itself asks :meth:`~digitalearth.static.maps.raster.FieldColors.ramp_over` whether *that frame*
+        straddles the centre, which made the ramp flicker between diverging and sequential across a clip —
+        and made the answer depend on ``update=``, because an artist kept across frames froze frame 0's
+        answer while a redrawn one re-decided it. Asking once, of the shared ``vmin``/``vmax``
+        :meth:`_resolve_animation_clim` has just measured, is what makes the two paths one animation.
+
+        Written into ``opts["cmap"]``, so from each frame's point of view the colormap is the caller's and
+        ``ramp_over`` declines — the same no-op it gives any call that named its own ``cmap``.
+
+        Args:
+            opts: The render options every frame is drawn with. Read for ``cmap``, ``vmin`` and ``vmax``;
+                the resolved colormap is written back into it.
+            center: The centre the call stated, in either of its spellings.
+            style: The animated variable's :func:`~digitalearth.base.autostyle.auto_style` dict, the source
+                of the colormap a call that named none resolves to.
+
+        Examples:
+            - A stack straddling the centre gets one diverging ramp, built from the resolved map's ends:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> scene = Map(crs=4326)
+                >>> opts = {"vmin": -5.0, "vmax": 5.0}
+                >>> scene._freeze_animation_ramp(opts, 0.0, {"cmap": "viridis"})
+                >>> opts["cmap"].name
+                'viridis-diverging'
+                >>> scene.close()
+
+                ```
+            - A caller's own colormap is left exactly as it was asked for:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> scene = Map(crs=4326)
+                >>> opts = {"vmin": -5.0, "vmax": 5.0, "cmap": "RdBu_r"}
+                >>> scene._freeze_animation_ramp(opts, 0.0, {"cmap": "viridis"})
+                >>> opts["cmap"]
+                'RdBu_r'
+                >>> scene.close()
+
+                ```
+        """
+        requested = opts.get("cmap")
+        resolved = requested or style.get("cmap") or DEFAULT_FIELD_CMAP
+        opts["cmap"] = FieldColors(center=center).ramp_over(
+            resolved,
+            np.asarray([opts["vmin"], opts["vmax"]], dtype="float64"),
+            requested,
+        )
 
     def _draw_animation_frame(
         self,
@@ -1255,6 +1344,13 @@ class AnimationMixin(_MixinBase):
         (``"rgb_composite"`` / ``"hsv_composite"``) instead takes one per-channel contrast stretch, frozen
         once over the stack — without which every frame would re-derive its own 2-98 percentile and the
         clip would pump. Pass your own ``limits=[(lo, hi), ...]`` to override that scan.
+
+        A stated ``center=`` belongs to that one treatment too. The diverging ramp it asks for is resolved
+        **once, over the shared scale**, rather than by each frame against its own values: a stack that
+        straddles the centre diverges for the whole clip, and one that does not keeps the sequential ramp
+        and says so once. Deciding it per frame made the ramp flicker between the two along a clip — and
+        made the picture depend on ``update=``, since an artist kept across frames froze the first frame's
+        answer while a redrawn one re-asked it.
 
         Either scan measures frames **as they will be drawn**, reprojected into the display CRS, so the
         animation lands on the same scale as the equivalent still. On a globe that means the scale spans
