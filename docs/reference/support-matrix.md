@@ -113,14 +113,15 @@ omissions with no positive counterpart on any backend, so they appear only in th
 
 - **`attribution`** — a credit is text placed on the figure — `text` or `stamp` — rather than a control the tier
   draws
-- **`export_html`** — the figure is written as an image, not as a page; an HTML export is the interactive or web
-  tier's
+- **`export_html`** — the figure is written as an image, not as a page; an HTML export is every other tier's —
+  interactive, web and 3-D all declare `export_html` as a feature, and this is the only tier that does not
 - **`fullscreen`** — a saved image has no screen to fill; its size is the figure's
 - **`height`** — an axes is flat; a layer raised by a column is the 3-D tier's extrusion or the web tier's
 - **`label_collision`** — matplotlib draws every label it is given, wherever it lands; there is no collision
   index to ask which ones overlap, so `labels` takes no allow_overlap= and a crowded column is thinned by
   filtering the features before drawing them. MapLibre's symbol layer is where that decision is made for the
-  tier that has one
+  tier that has one: the web tier's `labels` takes an `allow_overlap=` of its own (False by default) and hands
+  it straight to `text-allow-overlap`
 - **`layer_switcher`** — the tier draws no control onto the figure for a reader to toggle: visibility is set
   from code, with `set_visible` before or between draws, and a live canvas can do that from a `Scene.on_pick`
   callback — but the switch itself is a widget the interactive and web tiers' engines provide and this one does

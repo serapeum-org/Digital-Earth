@@ -163,7 +163,7 @@ _ANIMATION_KINDS = (
 #:
 #: A `kind` is the *renderer* a caller names, and order 27a moved the methods it dispatches to — so
 #: dispatching on the kind alone would reach a method that no longer exists. Measured: of the eight
-#: `_ANIMATION_KINDS`, `Map.imshow`, `Map.contour` and `Map.contourf` are all absent, and
+#: `_ANIMATION_KINDS`, `Map` carries no `imshow`, `contour` or `contourf` method at all, and
 #: `getattr(self, kind)` for one of them raises `AttributeError` at the first frame — inside matplotlib's
 #: frame loop, where a caller has nothing to act on. The old kinds stay in the vocabulary because they
 #: are what a caller may already have written; the keywords are what tells `contour` and `contourf`
