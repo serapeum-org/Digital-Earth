@@ -44,6 +44,19 @@ from digitalearth.static.scene import LayerRecord, drawing_style
 #: :meth:`ProjectionMixin.graticule` say when ``spacing=`` has just discarded one (review R2-L3).
 DEFAULT_GRATICULE_STEP: float = 30.0
 
+#: The most gridlines a graticule may draw along one axis, whole-world. The lines span the globe whatever
+#: the view shows — :func:`digitalearth.static.projections.graticule` runs its meridians across the full
+#: ``-180..180`` and its parallels across ``-90..90``, never reading the limits — so the count is a function
+#: of the step alone: ``~360/lon_step`` meridians and ``~180/lat_step`` parallels. A vanishing step draws
+#: millions of them and the call never returns rather than drawing or refusing (the R2-L4 follow-up: a step
+#: that is finite, positive and so clears every other guard, yet ``spacing=1e-4`` builds ~5.4M lines and
+#: ran past two minutes). Each line is a 200-point pyramids reprojection at ~0.6 ms, so this ceiling holds
+#: the build near a second where the unbounded one hung. It is far above any readable grid — 30° is 13
+#: meridians, and even a 1° world grid is 361 — so no step a caller would actually want comes near it. The
+#: step cannot be made cheap on a small view without clipping the line *generation* to the limits, which
+#: lives in :func:`~digitalearth.static.projections.graticule` (and pyramids beneath it), not here.
+MAX_GRATICULE_LINES: int = 2000
+
 #: How a flat map's grid looks when the caller asks for nothing else, in the **plural** keys a
 #: ``LineCollection`` takes. Deliberately quiet: a graticule is a reference the reader consults, not a layer
 #: they look at, and cleopatra's ``apply_projection_frame`` draws the globe's own grid in the same register.
@@ -804,11 +817,17 @@ def _checked_step(keyword: str, value: Optional[float]) -> Optional[float]:
         the one case that means "keep what the grid carries".
 
     Raises:
-        ValueError: when the value is not a finite number of degrees greater than zero. Zero divided by
+        ValueError: when the value is not a finite number of degrees greater than zero — zero divided by
             zero inside the projection, ``nan`` and ``inf`` came back as ``arange: cannot compute
-            length``, and a **negative** step raised nothing at all — it described a graticule layer and
-            put an empty ``LineCollection`` on the axes, which is the figure naming a grid it does not
-            draw (review R2-L4). None of the three messages named the method or the keyword.
+            length``, and a **negative** step raised nothing at all, describing a layer and putting an
+            empty ``LineCollection`` on the axes (review R2-L4) — **or** when it is so small that the
+            whole-world grid would exceed :data:`MAX_GRATICULE_LINES` lines along this keyword's axis. A
+            meridian runs the full ``360`` degrees of longitude and a parallel the ``180`` of latitude, so
+            ``~span/value`` lines are drawn whatever the view shows; ``spacing`` is held to the meridian
+            span, the denser of the two it sets. ``spacing=1e-4`` is finite and positive, so it cleared
+            every other guard, yet it builds ~5.4M lines and never returns (the R2-L4 follow-up). The
+            refusal is this arithmetic, so it lands before a single line is projected. None of the
+            unbounded messages named the method or the keyword.
 
     Examples:
         - A positive step comes back as it was, fractions included, and so does an argument nobody wrote:
@@ -827,16 +846,42 @@ def _checked_step(keyword: str, value: Optional[float]) -> Optional[float]:
             ValueError: graticule() was given lat_step=-30.0, which is not a spacing...
 
             ```
+        - And a step too small to draw is refused before it can build millions of lines:
+            ```python
+            >>> from digitalearth.static.maps.projection import _checked_step
+            >>> _checked_step("spacing", 1e-4)  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: graticule() was given spacing=0.0001, which would draw about 3600000 gridlines...
+
+            ```
     """
-    if value is None or (isfinite(value) and value > 0.0):
+    if value is None:
         return value
-    raise ValueError(
-        f"graticule() was given {keyword}={value!r}, which is not a spacing it can cut a grid at: a step "
-        "is a finite number of degrees greater than zero, because the lines are stepped out from zero to "
-        f"the poles and the datelines. Pass a positive step — {DEFAULT_GRATICULE_STEP} is the default and "
-        "a fraction such as 7.5 is drawn here — or leave the argument out, which keeps the step the grid "
-        "already carries."
-    )
+    if not (isfinite(value) and value > 0.0):
+        raise ValueError(
+            f"graticule() was given {keyword}={value!r}, which is not a spacing it can cut a grid at: a "
+            "step is a finite number of degrees greater than zero, because the lines are stepped out from "
+            f"zero to the poles and the datelines. Pass a positive step — {DEFAULT_GRATICULE_STEP} is the "
+            "default and a fraction such as 7.5 is drawn here — or leave the argument out, which keeps the "
+            "step the grid already carries."
+        )
+    # The lines span the world whatever the view shows, so the count is `span / value` and nothing but the
+    # step enters it. A parallel covers 180 degrees of latitude, a meridian 360 of longitude; `spacing`
+    # sets both, so it answers to the meridian axis, the denser one.
+    span = _PARALLELS.limit * 2.0 if keyword == "lat_step" else _MERIDIANS.limit * 2.0
+    lines = span / value
+    if lines > MAX_GRATICULE_LINES:
+        floor = span / MAX_GRATICULE_LINES
+        raise ValueError(
+            f"graticule() was given {keyword}={value!r}, which would draw about {int(lines)} gridlines "
+            f"across the world — past the {MAX_GRATICULE_LINES}-line budget a reference grid is held to. "
+            "The lines span the whole globe whatever the map is framed on, so a step this small is that "
+            f"many lines even on a small view. Pass {keyword}>={floor:g} (30 is the default), or frame a "
+            "smaller region if a denser grid is what you are after — the line count is the step's, not the "
+            "view's."
+        )
+    return value
 
 
 class _GraticuleSteps(NamedTuple):
