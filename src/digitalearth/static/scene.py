@@ -429,6 +429,9 @@ class Scene(WatermarkMixin):
             >>> scene = Scene(ax=ax, fig=fig)
             >>> scene.ax is ax
             True
+            >>> Scene(ax=ax).fig is fig
+            True
+            >>> plt.close(fig)
 
             ```
     """
@@ -451,7 +454,13 @@ class Scene(WatermarkMixin):
                 should instead be spared. Give each scene an axes of its own: a second scene on the same axes
                 clears what the first drew on its opening render, and the first still describes it (see the
                 class docstring).
-            fig: The figure `ax` belongs to; taken from `ax` when omitted.
+            fig: The figure `ax` belongs to; taken from `ax` when omitted — its **root** figure, for an
+                axes inside a ``SubFigure``, since :meth:`save` and :meth:`close` hand the figure to
+                ``savefig`` and ``pyplot.close`` and neither takes a subfigure. Naming one explicitly wins,
+                so a caller composing into a figure of their own keeps theirs. Because a scene always holds
+                a real figure now, the note on `ax` above holds for a scene given **only** an axes too:
+                :meth:`close` closes that figure. It previously reached ``pyplot.close(None)``, which closes
+                whichever figure is *current* — the scene's own only by coincidence.
             figsize: Size of the figure created when `ax` is None, in inches.
             strict: What to do with a layer that has nothing to draw — data entirely outside the view, or a
                 band with no finite values. `False` (the default) skips it with a warning naming the layer,
@@ -460,7 +469,17 @@ class Scene(WatermarkMixin):
         """
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
-        self.fig: Figure = fig
+        # Derived when the caller names only the axes, which is what `fig`'s own documentation has always
+        # promised ("taken from `ax` when omitted") and what the `Figure` annotation below claims. It was
+        # stored as the `None` it was passed instead, so every one of the nine `self.fig` reads was an
+        # `AttributeError` waiting on a figure a caller laid out themselves: `save` and `on_pick` (ST-25)
+        # from the start, `figure_spec` — and so every builder, which describes itself as it draws — since
+        # the figure's heading began to be read off the figure (M4). `close()` reached `plt.close(None)`,
+        # which closes whatever figure happens to be *current* (measured: figures [1, 2, 3] current 3 ->
+        # [1, 2]) — the scene's own only by luck. An explicit `fig=` still wins, and the **root** figure is
+        # taken for an axes inside a `SubFigure`, because `self.fig` is what `savefig` and `pyplot.close`
+        # are handed and neither takes a subfigure.
+        self.fig: Figure = fig if fig is not None else ax.get_figure(root=True)
         self.ax: Axes = ax
         self.strict: bool = bool(strict)
         self.layers: List[Tuple[Any, Any]] = []

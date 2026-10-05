@@ -1,5 +1,6 @@
 """Tests for digitalearth.static.Scene — the shared-axes glyph host."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
@@ -670,3 +671,120 @@ class TestDeliveringOnePickToSeveralCallbacks:
             assert seen == ["first", "second"], (
                 f"the second callback should still have been called; got {seen}"
             )
+
+
+@pytest.fixture
+def borrowed_axes():
+    """An axes a caller laid out themselves, as `plt.subplots` hands it over.
+
+    Yields:
+        The `(fig, ax)` pair. The figure is closed here rather than by the scene, so a scene built on it
+        can be left unclosed in the test.
+    """
+    fig, ax = plt.subplots()
+    yield fig, ax
+    plt.close(fig)
+
+
+class TestASceneOnABorrowedAxes:
+    """A scene given `ax=` and no `fig=`: the figure is the axes' own."""
+
+    def test_the_axes_figure_is_adopted_when_no_figure_is_given(self, borrowed_axes):
+        """`Scene(ax=ax)` holds the figure that axes belongs to.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The constructor documents `fig` as "taken from `ax` when omitted" and stored the `None` it was
+            passed instead, so `self.fig` was `None` on a path nine reads dereference — and the `Figure`
+            annotation said otherwise, which is why no checker caught it.
+        """
+        fig, ax = borrowed_axes
+        assert Scene(ax=ax).fig is fig, "the scene should adopt the axes' own figure"
+
+    def test_a_figure_passed_explicitly_still_wins(self, borrowed_axes):
+        """An explicit `fig=` is kept, even when the axes belongs to another figure.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            Deriving the figure must not overrule a caller who names one: `fig=` is the argument, and the
+            axes' own figure is only the fallback.
+        """
+        _fig, ax = borrowed_axes
+        other = plt.figure()
+        try:
+            assert Scene(ax=ax, fig=other).fig is other, (
+                "an explicit figure should win over the axes' own"
+            )
+        finally:
+            plt.close(other)
+
+    def test_the_description_is_readable(self, borrowed_axes):
+        """`figure_spec` answers on a borrowed axes, with no builder called.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The figure's heading is read off the figure (M4), so a scene whose figure was `None` could not
+            describe itself at all — and every builder describes itself as it draws, which is how this
+            reached `graticule` and the globe notebook's `Map(..., ax=ax)` loop.
+        """
+        _fig, ax = borrowed_axes
+        assert Map(crs=4326, globe=False, ax=ax).figure_spec.title is None, (
+            "a scene on a borrowed axes should describe itself"
+        )
+
+    def test_a_builder_draws(self, borrowed_axes):
+        """A layer builder draws on a borrowed axes and registers its layer.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The notebook pattern: a `Map` per axes inside the caller's own `plt.subplots` loop, each drawing
+            one layer.
+        """
+        _fig, ax = borrowed_axes
+        canvas = Map(crs=4326, globe=False, ax=ax)
+        assert canvas.field(
+            np.array([[0.0, 1.0], [2.0, 3.0]]), name="grid"
+        ).layer_ids == ["grid"], (
+            f"the layer should be registered; got {canvas.layer_ids}"
+        )
+
+    def test_a_pick_callback_can_be_registered(self, borrowed_axes):
+        """`on_pick` connects to the borrowed figure's canvas.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            ST-25 reaches the canvas as `self.fig.canvas`, so the gesture was unavailable on exactly the
+            figures a caller lays out themselves — independently of the description (measured:
+            `AttributeError: 'NoneType' object has no attribute 'canvas'`).
+        """
+        _fig, ax = borrowed_axes
+        canvas = Map(crs=4326, globe=False, ax=ax)
+        assert canvas.on_pick(print)._pick_cid is not None, (
+            "registering a pick should connect to the figure's canvas"
+        )
+
+    def test_an_axes_in_a_subfigure_adopts_the_root_figure(self):
+        """An axes inside a subfigure gives the scene the **root** figure.
+
+        Test scenario:
+            `ax.figure` is the `SubFigure` there, and `self.fig` is what `savefig` and `pyplot.close` are
+            called on — neither of which takes a subfigure — so the root is the figure to hold.
+        """
+        root = plt.figure()
+        try:
+            axes = root.subfigures(1, 1).subplots()
+            assert Scene(ax=axes).fig is root, (
+                "a subfigure's axes should give the scene the root figure"
+            )
+        finally:
+            plt.close(root)
