@@ -27,12 +27,14 @@ of a globe) is dropped from the description again, so a figure never names somet
 """
 
 import os
+import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterator,
     List,
@@ -224,13 +226,75 @@ def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
             >>> from digitalearth.static import Scene
             >>> from digitalearth.static.scene import drawing_style
             >>> layer = LayerSpec("a", "raster", symbology=Symbology(props={"opts": {"vmin": 1.0}}))
-            >>> drawing_style(Scene(), layer)
+            >>> scene = Scene()
+            >>> drawing_style(scene, layer)
             {'vmin': 1.0}
+            >>> scene.close()
 
             ```
     """
     described = thawed_value(dict(layer.symbology.props.get(DRAWING_OPTS_KEY) or {}))
     return {**described, **drawing_opts(scene, layer)}
+
+
+@dataclass(frozen=True)
+class Pick:
+    """Where a click on the figure landed, and which layer it landed on (ST-25).
+
+    What :meth:`Scene.on_pick` hands a callback. It is a **layer id** and a pair of data coordinates
+    rather than a matplotlib artist, because the id is the name the caller gave the layer and the one
+    every other call on this tier takes: :meth:`Scene.get_layer` describes it, :meth:`Scene.set_visible`
+    hides it, :meth:`Scene.remove_layer` takes it off. An artist is the engine's object and says nothing
+    about which layer put it there — which is the lookup
+    :meth:`~digitalearth.static.renderer.Renderer.layer_of` exists to do.
+
+    Attributes:
+        layer_id: The layer the pick reports: the **topmost** of the layers under the pointer, which is
+            the one the reader sees. Always the first of :attr:`hits`.
+        x: The click's x in the axes' data coordinates — the display CRS for a
+            :class:`~digitalearth.static.map.Map`, and the array's own column index for a figure drawn
+            from a bare numpy array (:data:`AT_INDICES`).
+        y: The click's y, in the same coordinates.
+        hits: Every layer under the pointer, topmost first — so a caller who wants what lies *under* the
+            top layer has it without hit-testing the figure again. One entry for the ordinary case.
+        event: The matplotlib `MouseEvent` itself, as the escape hatch for what this value does not
+            carry: which button, a double click, the pixel coordinates. Reading it ties the callback to
+            matplotlib, which a callback on this tier already is.
+
+    Examples:
+        - The value a callback is handed, built directly: the reported layer is the top of the stack and
+          `hits` says what lies under it, so a callback can look past the layer it was given:
+            ```python
+            >>> from digitalearth.static import Pick
+            >>> pick = Pick("depth", 4.9, 52.4, ("depth", "basemap-1"))
+            >>> pick.layer_id, pick.hits[1:]
+            ('depth', ('basemap-1',))
+            >>> f"{pick.layer_id} at {pick.x:.1f}, {pick.y:.1f}"
+            'depth at 4.9, 52.4'
+
+            ```
+        - It is frozen, so a callback cannot rewrite the pick it was handed; the two trailing fields
+          default, which is what makes one cheap to build in a test:
+            ```python
+            >>> from dataclasses import FrozenInstanceError
+            >>> from digitalearth.static import Pick
+            >>> plain = Pick("depth", 0.0, 0.0)
+            >>> plain.hits, plain.event
+            ((), None)
+            >>> try:
+            ...     plain.layer_id = "other"
+            ... except FrozenInstanceError as error:
+            ...     print(error)
+            cannot assign to field 'layer_id'
+
+            ```
+    """
+
+    layer_id: str
+    x: float
+    y: float
+    hits: Tuple[str, ...] = ()
+    event: Any = None
 
 
 @dataclass(frozen=True)
@@ -260,11 +324,6 @@ class LayerRecord:
             and says nothing about what it draws. ``None`` takes the kind's band.
         visible: Whether the layer was built visible.
         symbology: How it looks, as values. ``None`` records an empty symbology.
-        held: The caller's **own engine object**, for a ``custom:matplotlib`` layer: the artist they
-            built and handed to :meth:`Scene._add_layer`, with the glyph that made it and its
-            colorbar label. A description cannot rebuild it — that is what makes the layer custom —
-            so the scene keeps it under the layer's id and the drawer puts it back from there, the
-            way every other tier holds its own engine's custom layers.
         key: Something the layer's drawer needs that a **description cannot carry** — a clip boundary (a
             shapely geometry, which a figure written to JSON has no spelling for, and which would make two
             symbologies uncomparable) or a basemap credential (which must never be written into a figure at
@@ -281,6 +340,11 @@ class LayerRecord:
             into a figure at all. A figure read back on a scene that holds nothing therefore draws the
             plain keywords it carries, and the engine's defaults in place of the rest. ``None`` or empty
             for a layer given none.
+        held: The caller's **own engine object**, for a ``custom:matplotlib`` layer: the artist they
+            built and handed to :meth:`Scene._add_layer`, with the glyph that made it and its
+            colorbar label. A description cannot rebuild it — that is what makes the layer custom —
+            so the scene keeps it under the layer's id and the drawer puts it back from there, the
+            way every other tier holds its own engine's custom layers.
 
     Examples:
         - The record a raster builder writes, beside the drawing it made:
@@ -356,6 +420,7 @@ class Scene(WatermarkMixin):
             []
             >>> scene.layer_ids
             []
+            >>> scene.close()
 
             ```
         - Wrap a caller-supplied figure/axes instead of creating one:
@@ -368,6 +433,26 @@ class Scene(WatermarkMixin):
             >>> scene = Scene(ax=ax, fig=fig)
             >>> scene.ax is ax
             True
+            >>> Scene(ax=ax).fig is fig
+            True
+            >>> plt.close(fig)
+
+            ```
+        - A `fig` the axes does not belong to is refused rather than stored, so a scene is never split
+          across two figures:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from digitalearth.static import Scene
+            >>> fig, ax = plt.subplots()
+            >>> elsewhere = plt.figure()
+            >>> Scene(ax=ax, fig=elsewhere)  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: the given fig= is not the figure that owns ax=, ...
+            >>> plt.close(elsewhere)
+            >>> plt.close(fig)
 
             ```
     """
@@ -383,24 +468,74 @@ class Scene(WatermarkMixin):
 
         Args:
             ax: An existing axes to draw on — pass one to compose a Digital-Earth layer into a figure you are
-                laying out yourself. **The figure is still closed on exit**, borrowed or not:
-                :meth:`close` calls ``pyplot.close`` on whatever figure the scene holds, so a ``with`` block
-                around a borrowed axes closes the caller's figure too. Keep the scene out of ``with`` (and do
-                not call :meth:`close`) when the figure has to outlive it; #371 asks whether a borrowed figure
-                should instead be spared. Give each scene an axes of its own: a second scene on the same axes
-                clears what the first drew on its opening render, and the first still describes it (see the
-                class docstring).
-            fig: The figure `ax` belongs to; taken from `ax` when omitted.
+                laying out yourself. **That figure is spared on exit**: a scene built with ``ax=`` does not
+                own its figure (``_owns_fig`` is ``False``), so :meth:`close` and a ``with`` block leave the
+                caller's figure open and release only this scene's own state — the object table and the pick
+                handler it connected. This is #371, **resolved** (R2-L12): the old code stored the `None` it
+                was passed and reached ``pyplot.close(None)``, closing whichever figure was *current*, so a
+                borrowed figure was spared or closed only by luck; now it is spared on purpose, the way
+                :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close` always has. Give each scene
+                an axes of its own all the same: a second scene on the same axes clears what the first drew
+                on its opening render, and the first still describes it (see the class docstring).
+            fig: The figure `ax` belongs to; taken from `ax` when omitted — its **root** figure, for an
+                axes inside a ``SubFigure``, since :meth:`save` and :meth:`close` hand the figure to
+                ``savefig`` and ``pyplot.close`` and neither takes a subfigure. It is a **confirmation of
+                the axes' own figure, not an override**: naming a different one is refused, and naming one
+                without an `ax` is refused too. `grid` passes `ax=ax, fig=fig` for every panel and that is
+                the shape this argument exists for. Storing a figure that disagreed split the scene across
+                two — layers on `ax` in one, :meth:`save`, :meth:`close` and :attr:`figure_spec` on the
+                other; measured, ``save()`` wrote a 2492-byte blank where the real figure was 7107 bytes
+                and ``figure_spec.title`` read `None` off the empty one while the drawn figure was headed
+                (R2-M8). A caller composing into a figure of their own passes an `ax` *from* it, which the
+                derivation already honours. Because a scene always holds a real figure now, the note on
+                `ax` above holds for a scene given **only** an axes too: the figure is derived and read by
+                :meth:`save` and :attr:`figure_spec`, but it is a borrowed figure, so :meth:`close` **spares**
+                it (``_owns_fig`` is ``False``). The derivation only fixed which figure those reads see; it
+                did not make the scene own it.
             figsize: Size of the figure created when `ax` is None, in inches.
             strict: What to do with a layer that has nothing to draw — data entirely outside the view, or a
                 band with no finite values. `False` (the default) skips it with a warning naming the layer,
                 so one bad frame does not abort a batch; `True` raises `OffLimbError` instead, which is what
                 a pipeline that must not publish a map with a layer missing should pass.
+
+        Raises:
+            ValueError: when `fig` is named without an `ax`, or names a figure that `ax` does not belong
+                to. Both are a `fig=` the scene cannot honour, and storing one quietly split the scene
+                across two figures (R2-M8).
         """
+        made_figure = ax is None
         if ax is None:
+            if fig is not None:
+                raise ValueError(
+                    "fig= is only read together with ax=: it names the figure that axes belongs to, and "
+                    "a scene given no axes builds a figure of its own, so the figure named here would "
+                    "never be drawn on. Pass ax= as well, or drop fig=."
+                )
             fig, ax = plt.subplots(figsize=figsize)
-        self.fig: Figure = fig
+        elif fig is not None and fig is not ax.get_figure(root=True):
+            raise ValueError(
+                "the given fig= is not the figure that owns ax=, so the scene would be split across two: "
+                "layers draw on the axes, while save(), close() and figure_spec all act on fig=. Pass "
+                "only ax= (its figure is derived), or an axes that belongs to fig=."
+            )
+        # Derived when the caller names only the axes, which is what `fig`'s own documentation has always
+        # promised ("taken from `ax` when omitted") and what the `Figure` annotation below claims. It was
+        # stored as the `None` it was passed instead, so every one of the nine `self.fig` reads was an
+        # `AttributeError` waiting on a figure a caller laid out themselves: `save` and `on_pick` (ST-25)
+        # from the start, `figure_spec` — and so every builder, which describes itself as it draws — since
+        # the figure's heading began to be read off the figure (M4). `close()` reached `plt.close(None)`,
+        # which closes whatever figure happens to be *current* (measured: figures [1, 2, 3] current 3 ->
+        # [1, 2]) — the scene's own only by luck. An explicit `fig=` still wins, and the **root** figure is
+        # taken for an axes inside a `SubFigure`, because `self.fig` is what `savefig` and `pyplot.close`
+        # are handed and neither takes a subfigure.
+        self.fig: Figure = fig if fig is not None else ax.get_figure(root=True)
         self.ax: Axes = ax
+        # Whether this scene made the figure, or was handed one somebody else lays out. Recorded here
+        # rather than counted later, because `len(self.fig.axes)` does not answer it: a lone map that
+        # has drawn a colorbar holds two axes, and a `grid` panel whose siblings have been removed holds
+        # one. It is what tells a figure-level restore it is writing shared state (R2-M1) — a `grid`
+        # panel is given `ax=`, so it never owns its figure, while `Map(crs=...)` always does.
+        self._owns_fig: bool = made_figure
         self.strict: bool = bool(strict)
         self.layers: List[Tuple[Any, Any]] = []
         #: One entry per registered layer (same order as :attr:`layers`): the label :meth:`colorbar` falls
@@ -452,6 +587,16 @@ class Scene(WatermarkMixin):
         #: so reporting them as class edges would be reporting a wrong answer. A categorical key is the
         #: swatch legend the glyph draws on this tier.
         self.last_breaks: Optional[List[float]] = None
+        # The callbacks a click on this figure is delivered to, and the canvas connection that feeds them
+        # (see `on_pick`). The connection is made on the first registration rather than in the constructor,
+        # so a scene nobody picks on puts no handler on the canvas at all.
+        self._pick_handlers: List[Callable[[Pick], Any]] = []
+        self._pick_cid: Optional[int] = None
+        # The panel's title, as the description carries it (see `set_title`); the figure's own heading is
+        # its `suptitle`, read off the figure by `figure_spec`. Held on the scene rather than read back off
+        # `ax.title`, because matplotlib keeps three titles on an axes — centre, left and right — and a
+        # panel has one title whichever of them it was drawn at.
+        self._title: Optional[str] = None
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
 
@@ -851,21 +996,41 @@ class Scene(WatermarkMixin):
         The panel is **derived** rather than maintained beside the tree: this tier draws one axes, so its one
         panel shows every layer, and a figure whose panel named a layer the tree does not hold is refused by
         `FigureSpec` — correctly. Writing that derivation once is what lets :meth:`_change` take a tree and
-        keep the panel in step with it.
+        keep the panel — and the panel's title, which rides on it (:meth:`set_title`) — in step with it.
+
+        The **figure's** heading is read off the figure itself rather than remembered, because this tier's
+        figure is not always this scene's alone: :func:`~digitalearth.static.figure.grid` titles a figure
+        several panels share, and tells a caller who wants to style that heading to call ``fig.suptitle``
+        on the returned figure. One derivation covers both, and covers a scene whose figure was handed in
+        (``Map(fig=...)``). It is normalised by the same :meth:`_recorded_title` the panel's title goes
+        through, so matplotlib's empty ``''`` is the ``None`` `FigureSpec` spells "no title" as.
 
         Args:
             tree: The layers the figure describes.
 
         Returns:
-            The figure, with the sources of exactly those layers.
+            The figure, with the sources of exactly those layers, the panel's title (:meth:`set_title`) and
+            the figure's heading (``Figure.suptitle``) — the two places a heading can live, described
+            separately because they are **restored** separately:
+            :meth:`~digitalearth.static.map.Map.draw_figure` puts the panel's title back on the axes and the
+            figure's heading back as the `suptitle`, each into the slot it was described from, so neither
+            stands in for the other. Measured on a map titled `January` under the heading
+            `rainfall, 2020`: described as `('rainfall, 2020', 'January')` for
+            `(figure.title, figure.panels[0].title)`, drawn into a fresh map it restores the same pair as
+            `(fig.get_suptitle(), ax.get_title())` and redescribes unchanged, with `to_dict()` equal across
+            two further passes. Each is written **only when the incoming figure carries it**, so drawing an
+            untitled figure does not blank a heading the map already has.
         """
-        panel = PanelSpec(PANEL_ID, self.viewport, layers=tuple(tree.ids))
+        panel = PanelSpec(
+            PANEL_ID, self.viewport, layers=tuple(tree.ids), title=self._title
+        )
         return FigureSpec(
             panels=(panel,),
             layers=tree,
             sources={
                 key: ref for key, ref in self._sources.items() if key in set(tree.ids)
             },
+            title=self._recorded_title(self.fig.get_suptitle()),
         )
 
     def _change(self, figure: FigureSpec) -> None:
@@ -934,6 +1099,158 @@ class Scene(WatermarkMixin):
         """
         self._require_layer(layer_id)
         return self._layer_tree.get(layer_id)
+
+    def artist(self, layer_id: Optional[str] = None) -> Any:
+        """Return what one layer's drawer handed back — for most kinds, the matplotlib artist it drew.
+
+        The companion to the builders returning `Self` (ST-20): they hand back the map so a figure reads
+        as one expression, and this is how the engine's object is reached when a caller genuinely wants it
+        — to read a drawn colormap, a norm, the cells' paths, the limits a render settled on. It was the
+        builders' return value until then, which made every chained call impossible; the artist was
+        reachable only as `scene._renderer.drawn[layer_id].artist`, a private attribute this tier's own
+        docstrings had taken to pointing callers at.
+
+        Args:
+            layer_id: Which layer's artist. `None` (the default) takes the layer **drawn last**, which is
+                the one the call before this drew — so `m.field(ds); m.artist()` is the old return value,
+                with no name needed.
+
+        Returns:
+            Whatever that layer's drawer produced, which is exactly what its builder used to return: the
+            mappable of a field render, the `PolyCollection` of a fill, the `LineCollection` of a line
+            layer, the **list** of `Annotation` of a
+            :meth:`~digitalearth.static.maps.vector.VectorMixin.labels` layer.
+
+            So it is not always a matplotlib artist, because not every drawer produces one object on the
+            axes. A **graticule** is the case to know: its drawer's value is the list of projected
+            polylines (18 of them at the default spacing), while what it put on the axes is one
+            `LineCollection` plus one `Text` per **labelled gridline** — 19 artists in all at that
+            spacing, and just the `LineCollection` when the layer was drawn `labels=False`. The two
+            counts track the gridlines rather than the degrees between them: at `spacing=60.0` the
+            drawer hands back 9 polylines and the axes holds 11 artists.
+
+            Those counts are the **flat** map's. On a **globe** the same drawer's value is the same list
+            of 18 polylines, but the grid is painted by `apply_projection_frame` as 18 `Line2D` — no
+            `LineCollection` and no `Text` — and it is painted at :meth:`render`, so before that call the
+            layer is described, `artist()` already hands back its 18 arrays, and the axes holds none of
+            its artists yet. So read the drawer's value as the drawer's value: what the axes holds is a
+            per-projection, per-render answer, not a property of the layer.
+
+            A layer like that — a graticule, a limb-split coastline — owns a whole set of artists, and
+            that set is the renderer's own record (`DrawnLayer.artists`), which is what
+            :meth:`set_visible` and :meth:`remove_layer` act on rather than part of this tier's public
+            surface. **There is no public accessor for it**, and that is a gap rather than a nicety: the
+            examples below count the axes' own lists (``ax.lines``, ``ax.collections``, ``ax.texts``)
+            instead, which is only the layer's set on a figure carrying one layer. A caller who needs to
+            act on the set should go through :meth:`set_visible` / :meth:`remove_layer`; one who needs to
+            *read* it has nowhere public to go, and reaching into `_renderer.drawn` is not a supported
+            route (R2-L8).
+
+        Raises:
+            KeyError: when `layer_id` names no layer on this figure, naming the ids that do. The test is
+                whether the **description** holds the id, not whether anything of the layer is on the
+                axes: a layer whose data the display CRS could not place is dropped from the description
+                outright, so it is refused here too — the same answer its builder's `None` used to give,
+                in the tier's own words. A layer that is described but has **no artists yet** is *not*
+                refused; it hands its drawer's value back as usual, which is what a globe's graticule does
+                before :meth:`render` has painted it.
+            ValueError: when `layer_id` is `None` and nothing has been drawn yet: there is no "last" for
+                an empty figure, and `None` would read as "that layer drew nothing".
+
+        Examples:
+            - The old return value, by one more call:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> m.field(np.arange(12.0).reshape(3, 4)).artist().get_extent()
+                [-0.5, 3.5, -0.5, 2.5]
+                >>> m.close()
+
+                ```
+            - By id, which is what a figure of several layers wants, and an unknown id is refused by name:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(12.0).reshape(3, 4), name="grid", cmap="magma")
+                >>> m.artist("grid").get_cmap().name, m.artist("grid").get_clim()
+                ('magma', (0.0, 11.0))
+                >>> m.artist("nope")
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no layer 'nope' on this figure; its layers are ['grid']"
+                >>> m.close()
+
+                ```
+            - A graticule's drawer hands back its projected lines rather than one artist. What the axes
+              holds is counted off the **axes** — ``ax.collections`` and ``ax.texts``, which on a figure
+              carrying this one layer are exactly its artists: one ``LineCollection`` for the lines plus
+              one ``Text`` per labelled gridline, 19 against the drawer's 18 polylines:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map(crs=4326)
+                >>> _ = m.graticule(spacing=30.0)
+                >>> len(m.artist("graticule-1")), len(m.ax.collections) + len(m.ax.texts)
+                (18, 19)
+                >>> m.close()
+                >>> coarse = Map(crs=4326)
+                >>> _ = coarse.graticule(spacing=60.0)
+                >>> len(coarse.artist("graticule-1")), len(coarse.ax.collections) + len(coarse.ax.texts)
+                (9, 11)
+                >>> coarse.close()
+
+                ```
+            - On a globe the drawer's value is unchanged while the axes holds nothing until
+              :meth:`render` paints the grid as `Line2D` — so a described layer with no artists yet is
+              answered, not refused. ``ax.lines`` is the count to watch here, because that is what the
+              projection frame paints the grid as:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> globe = Map(crs=4326, globe=True)
+                >>> _ = globe.graticule(spacing=30.0)
+                >>> len(globe.artist("graticule-1")), len(globe.ax.lines)
+                (18, 0)
+                >>> globe.render()
+                >>> len(globe.artist("graticule-1")), len(globe.ax.lines)
+                (18, 18)
+                >>> sorted({type(artist).__name__ for artist in globe.ax.lines})
+                ['Line2D']
+                >>> globe.close()
+
+                ```
+            - A figure with nothing drawn has no "last" to hand back:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> bare = Map(globe=False)
+                >>> bare.artist()  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Map.artist() has nothing to hand back: no layer has been drawn...
+                >>> bare.close()
+
+                ```
+        """
+        if layer_id is None:
+            drawn = self._renderer.drawn
+            if not drawn:
+                raise ValueError(
+                    f"{type(self).__name__}.artist() has nothing to hand back: no layer has been drawn on "
+                    "this figure yet. Draw one first, or name the layer you mean"
+                )
+            return list(drawn.values())[-1].artist
+        self._require_layer(layer_id)
+        return self._renderer.drawn[layer_id].artist
 
     def add_layer(
         self, artist: Any, *, name: Optional[str] = None, band: Optional[str] = None
@@ -1790,11 +2107,14 @@ class Scene(WatermarkMixin):
                 place.
 
         Returns:
-            This scene, so figure decoration reads as one expression. The Core declares ``returns="self"``
+            This scene, so figure decoration reads as one expression. The Core declares `returns="self"`
             for this name and the web and interactive tiers already answer that way; returning the
-            ``Colorbar`` meant ``m.field(ds).colorbar().legend(...)`` chained on two tiers and raised on this
-            one. The drawn bar is still reachable, as
-            ``scene._renderer.drawn[layer_id].guides``.
+            `Colorbar` meant `m.field(ds).colorbar().legend(...)` chained on two tiers and raised on this
+            one. What the bar *is* comes back off the layer instead, and off the description rather than
+            off the engine: `get_layer(layer_id).symbology.guide()` is the recorded
+            `Guide` — its `title` and whether it is shown — which is the reading that survives being
+            written out and read back. The matplotlib `Colorbar` object itself is not on this tier's
+            public surface.
 
         Raises:
             KeyError: when `layer_id` names no layer on this figure, naming the ids that do.
@@ -1809,6 +2129,55 @@ class Scene(WatermarkMixin):
             stealing width from the axes. The web tier shows exactly one key and a second replaces the first,
             so a figure ported between the two changes its count; asking for one bar here means keying one
             layer. Asking twice for the *same* layer replaces its bar rather than stacking a second.
+
+        Examples:
+            - Key a field and read the recorded guide back off the layer; the bar is an axes of its own
+              on the figure, and asking twice replaces it rather than stacking a second:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> depth = Dataset.from_array(
+                ...     arr=np.array([[1.0, 2.0], [3.0, 4.0]]),
+                ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...     no_data_value=-9999.0,
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.field(depth, name="depth").colorbar(label="m")
+                >>> m.get_layer("depth").symbology.guide()
+                Guide(show=True, title='m', anchor=None)
+                >>> len(m.fig.axes)
+                2
+                >>> _ = m.colorbar(label="m")
+                >>> len(m.fig.axes)
+                2
+                >>> m.close()
+
+                ```
+            - A categorical fill is refused by name, because a bar over it would read the class codes
+              cleopatra assigned rather than the categories:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth import Map
+                >>> cells = gpd.GeoDataFrame(
+                ...     {"use": ["arable", "forest", "urban"]},
+                ...     geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(3)],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.choropleth(cells, column="use", scheme="categorical", name="use")
+                >>> m.colorbar("use")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: layer 'use' is coloured by category, so a colorbar over it would read the ...
+                >>> m.close()
+
+                ```
         """
         layer = self._keyed_layer(layer_id, "colorbar")
         # Before the guide is recorded, not from inside the draw: a call this tier cannot answer must leave
@@ -1837,15 +2206,43 @@ class Scene(WatermarkMixin):
             **kwargs: Forwarded to :meth:`colorbar` for every layer keyed.
 
         Returns:
-            This scene (chainable). It returned the list of colorbars it had created until order 24; the
-            bars are reachable per layer as ``scene._renderer.drawn[layer_id].guides``, and a method that
-            keys several layers has no one bar to hand back.
+            This scene (chainable). It returned the list of colorbars it had created until order 24; a
+            method that keys several layers has no one bar to hand back, and each layer's key is read
+            back off its own description with `get_layer(layer_id).symbology.guide()`.
 
         Note:
             A layer coloured by nothing is **skipped**, not refused — which is the point of the plural: a
             figure of one raster, a coastline and a graticule keys the raster and says nothing about the
             other two. A layer coloured by **category** is skipped as well, because its key is a swatch
             legend rather than a bar (:meth:`legend`).
+
+        Examples:
+            - Three coloured fields take three bars, and the graticule drawn over them is skipped
+              rather than refused — so the figure holds its own axes plus one per keyed layer:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth import Map
+                >>> def band(offset):
+                ...     return Dataset.from_array(
+                ...         arr=np.array([[1.0, 2.0], [3.0, 4.0]]) + offset,
+                ...         geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+                ...         no_data_value=-9999.0,
+                ...     )
+                >>> m = Map(crs=4326)
+                >>> for name, offset in (("a", 0.0), ("b", 10.0), ("c", 20.0)):
+                ...     _ = m.field(band(offset), name=name)
+                >>> _ = m.graticule(spacing=60.0)
+                >>> _ = m.colorbars()
+                >>> len(m.fig.axes)
+                4
+                >>> [i for i in m.layer_ids if m.get_layer(i).symbology.guide() is not None]
+                ['a', 'b', 'c']
+                >>> m.close()
+
+                ```
         """
         for layer_id in self._color_keyed():
             if bar_refusal(self._layer_tree.get(layer_id)) is not None:
@@ -1887,8 +2284,10 @@ class Scene(WatermarkMixin):
                 (``loc``, ``ncol``, ``fontsize``, …). Styling for this call, not part of the record.
 
         Returns:
-            This scene (chainable) — the Core declares ``returns="self"`` for this name. The drawn
-            ``Legend`` is reachable as ``scene._renderer.drawn[layer_id].guides``.
+            This scene (chainable) — the Core declares `returns="self"` for this name. What the key is
+            called and whether it is shown read back off the layer's own description, as
+            `get_layer(layer_id).symbology.guide()`; the matplotlib `Legend` object itself is not on
+            this tier's public surface.
 
         Raises:
             KeyError: when `layer_id` names no layer on this figure.
@@ -1908,6 +2307,58 @@ class Scene(WatermarkMixin):
             it is not fed back into the next call. A categorical fill already draws its own
             swatch legend through cleopatra; asking here records it on the layer, which is what lets it be
             titled, relabelled, hidden and removed with the layer.
+
+        Examples:
+            - Key a categorical fill, then key a second one: the axes holds one legend, the displaced
+              layer's guide is switched off while keeping the title and rows it was given, and taking
+              the key back re-derives both:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth import Map
+                >>> cells = gpd.GeoDataFrame(
+                ...     {"use": ["arable", "forest", "urban"]},
+                ...     geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(3)],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> for name in ("use", "soil"):
+                ...     _ = m.choropleth(cells, column="use", scheme="categorical", name=name)
+                >>> _ = m.legend("use", title="Land use", labels=["Arable", "Forest", "Urban"])
+                >>> m.get_layer("use").symbology.guide()
+                Guide(show=True, title='Land use', anchor=None)
+                >>> _ = m.legend("soil", title="Soil")
+                >>> m.get_layer("use").symbology.guide()
+                Guide(show=False, title='Land use', anchor=None)
+                >>> _ = m.legend("use")
+                >>> m.get_layer("use").symbology.guide()
+                Guide(show=True, title=None, anchor=None)
+                >>> m.close()
+
+                ```
+            - Row labels that do not number the rows are refused by name, whatever `visible` says:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth import Map
+                >>> cells = gpd.GeoDataFrame(
+                ...     {"use": ["arable", "forest", "urban"]},
+                ...     geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(3)],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> _ = m.choropleth(cells, column="use", scheme="categorical", name="use")
+                >>> m.legend("use", labels=["only one"])
+                Traceback (most recent call last):
+                    ...
+                ValueError: the key of layer 'use' has 3 rows, so labels= needs 3 labels; got 1
+                >>> m.close()
+
+                ```
         """
         layer = self._keyed_layer(layer_id, "legend")
         self._record_key(
@@ -1920,15 +2371,105 @@ class Scene(WatermarkMixin):
         )
         return self
 
-    def set_title(self, title: str, **kwargs: Any) -> Self:
-        """Set the axes title.
+    @staticmethod
+    def _recorded_title(title: Any) -> Optional[str]:
+        """Return the heading a figure records for what was handed to ``Axes.set_title``.
 
-        Figure-level decoration rather than a layer: it draws straight onto :attr:`ax` and is not described,
-        so :attr:`figure_spec` neither carries it nor loses it when a layer is removed.
+        The record has to agree with the drawing, and the two vocabularies are not the same:
+        :class:`~digitalearth.base.spec.PanelSpec` holds a non-empty string or ``None``, while
+        ``Axes.set_title`` takes anything it can render and spells "no title" three ways. Measured on a bare
+        axes: ``set_title(123)`` draws ``'123'``, ``set_title(4.5)`` draws ``'4.5'``, ``set_title(None)``
+        draws ``''`` and ``set_title("   ")`` draws the spaces. So the record follows matplotlib rather than
+        refusing a call that has always worked, and a title with nothing readable in it is recorded as no
+        title.
+
+        It also normalises the **drawing**, because the two have to agree: :meth:`set_title` hands the axes
+        what this returns rather than what the caller passed, and
+        :meth:`~digitalearth.static.map.Map.draw_figure` passes a restored heading through it too. Without
+        that, `set_title("   ")` painted the spaces matplotlib measured above while recording `None`, and a
+        figure written down and read back drew a different picture (R2-L5).
 
         Args:
-            title: The text to place above the axes.
-            **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …).
+            title: What the caller passed to :meth:`set_title`.
+
+        Returns:
+            The text the axes draws, or ``None`` when the caller asked for no title — which is ``None``
+            itself, ``""``, or whitespace. Blank rather than merely empty, for the reason
+            :meth:`_title_for` gives about a guide's title: ``"   "`` is the same request as ``""`` and
+            reads as one.
+
+        Examples:
+            - The three ways of asking for no title all record one answer, and everything else is recorded
+              as the text matplotlib draws for it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> [Scene._recorded_title(asked) for asked in (None, "", "   ")]
+                [None, None, None]
+                >>> Scene._recorded_title("Discharge, 2020"), Scene._recorded_title(123)
+                ('Discharge, 2020', '123')
+
+                ```
+        """
+        if title is None:
+            return None
+        text = title if isinstance(title, str) else str(title)
+        return text if text.strip() else None
+
+    @property
+    def title(self) -> Optional[str]:
+        """The panel's title, as the figure's description carries it.
+
+        Returns:
+            What :meth:`set_title` last recorded — the text it drew, normalised by :meth:`_recorded_title` —
+            or ``None`` for a scene nobody has titled and one whose title was cleared. It is
+            ``FigureSpec.panels[0].title``; the **figure's** own heading is its ``suptitle``, described as
+            ``FigureSpec.title``, and :attr:`figure_spec` is where that one is read.
+
+            It is **one** value, where the axes has three: matplotlib keeps a centre, a left and a right
+            title, so ``ax.get_title(loc=...)`` answers per position while the panel has one title
+            whichever position it was drawn at. A caller who wants the drawn text back should ask the axes.
+
+        Examples:
+            - A titled scene reads its panel title back, and clearing it reads back as none:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> scene = Scene()
+                >>> scene.set_title("Discharge, 2020").title
+                'Discharge, 2020'
+                >>> print(scene.set_title("").title)
+                None
+                >>> scene.close()
+
+                ```
+        """
+        return self._title
+
+    def set_title(self, title: str, **kwargs: Any) -> Self:
+        """Set the panel's title: draw it above the axes, and record it on the figure's description.
+
+        Figure-level decoration rather than a layer — it draws straight onto :attr:`ax`, so removing every
+        layer does not remove it — but **described** all the same, on this tier's one
+        :class:`~digitalearth.base.spec.PanelSpec`, the way the 3-D tier has always described its own
+        (ST-18). Until then it reached matplotlib and nothing else: a titled map answered
+        ``figure_spec.panels[0].title is None``, so a figure written down lost its heading and
+        :meth:`~digitalearth.static.map.Map.draw_figure` had nothing to restore on a round trip through
+        this tier's own description. It is the **panel's** title, and `draw_figure` paints it back on the
+        axes; the figure's own heading is its ``suptitle``, described as ``FigureSpec.title`` and restored
+        there (M4).
+
+        Args:
+            title: The text to place above the axes. Normalised by :meth:`_recorded_title`, so ``None``,
+                ``""`` and any whitespace-only string (``"   "``, ``"	"``) are the one request "no
+                title": none is recorded **and none is drawn**. Anything else is drawn as the text
+                matplotlib renders for it, and recorded as that same text. The drawing was not normalised
+                before, so `set_title("   ")` painted the spaces and described no title (R2-L5).
+            **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …). Styling for the
+                drawing only: ``loc="left"`` moves where the text is painted and the figure still records
+                the heading, because where a tier paints it is not what travels.
 
         Returns:
             This scene, so figure decoration reads as one expression. The Core declares
@@ -1936,7 +2477,7 @@ class Scene(WatermarkMixin):
             here meant the same line chained on one tier and raised on the other (order 27a, #265).
 
         Examples:
-            - Set a title and read it back off the axes:
+            - Set a title and read it back off the axes — and off the figure, which now carries it:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1944,10 +2485,13 @@ class Scene(WatermarkMixin):
                 >>> scene = Scene()
                 >>> scene.set_title("Discharge, 2020").ax.get_title()
                 'Discharge, 2020'
+                >>> scene.figure_spec.panels[0].title
+                'Discharge, 2020'
+                >>> scene.close()
 
                 ```
             - ``loc`` reaches ``Axes.set_title`` through ``**kwargs``, so the text lands on the left title
-              and the centre one stays empty:
+              and the centre one stays empty — while the figure records the heading either way:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1955,6 +2499,9 @@ class Scene(WatermarkMixin):
                 >>> scene = Scene().set_title("Left-aligned", loc="left")
                 >>> scene.ax.get_title(loc="left"), scene.ax.get_title()
                 ('Left-aligned', '')
+                >>> scene.title
+                'Left-aligned'
+                >>> scene.close()
 
                 ```
             - The title is not a layer, so removing every layer leaves it on the figure:
@@ -1975,11 +2522,296 @@ class Scene(WatermarkMixin):
                 []
                 >>> m.ax.get_title()
                 'Depth, m'
+                >>> m.close()
+
+                ```
+            - Because the heading is described, a map rebuilt from its own figure comes back titled:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> first = Map(crs=4326).set_title("Depth, m")
+                >>> second = Map.from_figure(first.figure_spec)
+                >>> second.ax.get_title()
+                'Depth, m'
+                >>> first.close()
+                >>> second.close()
 
                 ```
         """
-        self.ax.set_title(title, **kwargs)
+        # Normalised before the draw as well as after it, so the drawing and the record agree: the four
+        # spellings of "no title" are one request, and `set_title("   ")` painted the spaces while
+        # recording `None` (R2-L5). `grid(suptitle=)` already normalised its own draw (R1-L4); this is
+        # the same rule on the axes. The record is still written *after* the draw, so a `set_title` the
+        # axes refuses leaves no record behind.
+        recorded = self._recorded_title(title)
+        self.ax.set_title("" if recorded is None else recorded, **kwargs)
+        self._title = recorded
         return self
+
+    def on_pick(self, callback: Callable[[Pick], Any]) -> Self:
+        """Call `callback` with a :class:`Pick` whenever a layer on this figure is clicked (ST-25).
+
+        A matplotlib figure is a picture, and this tier says so — it draws no tooltip, no hover and no
+        layer switcher, because there is no pointer over a saved PNG. A figure on a **live canvas** is a
+        different thing: a notebook's ``%matplotlib widget``, a Qt or Tk window, or a test driving the
+        canvas directly. There the canvas does report clicks, and the only piece missing was the one this
+        repo owns — turning the artist matplotlib hands over back into the **layer id** the caller named
+        the layer by (:meth:`~digitalearth.static.renderer.Renderer.layer_of`).
+
+        It is a click rather than matplotlib's own ``pick_event``: that one fires only for artists whose
+        ``set_picker`` was set, and the artists here are built by cleopatra's glyphs and by this tier's
+        drawers, so opting each one in would be a per-kind decision where a tier-wide gesture is wanted.
+        Nothing is asked of the drawers, and a layer drawn before the callback was registered is pickable
+        too.
+
+        **Which layer a pick reports.** Layers overlap, so a click can land on several; the pick reports
+        the **topmost** — the one painted last, which is the one the reader sees — and lists the rest in
+        :attr:`Pick.hits`, topmost first. A layer that is **hidden** is not reported, and neither is one
+        that has been **removed**: the hit test is run against what the renderer holds at the moment of
+        the click, and a hidden layer is excluded explicitly, because ``Artist.contains`` ignores the
+        visibility flag (measured: a hidden ``AxesImage`` still answers ``True`` inside its extent).
+
+        A click that lands on **no** layer — the margin of the axes, or outside it altogether — calls
+        nothing: a pick is a pick *of a layer*, and there is no layer to name. A layer owning several
+        artists (a limb-split coastline, a graticule's lines) is reported once, by its one id.
+
+        **A callback that raises does not take the others with it.** Each is called inside its own
+        ``try``: the failure is reported as a ``UserWarning`` naming the callback and the exception, and
+        the remaining callbacks still hear the pick, as does the next click. It propagated before
+        (R2-L1), which starved every handler registered after the raising one — measured, a two-handler
+        figure whose first handler raised `RuntimeError` ran the second 0 times.
+
+        Args:
+            callback: Called as ``callback(pick)`` with one :class:`Pick`. Several may be registered and
+                each is called, in the order they were registered. Registering the same callback twice
+                calls it twice, which is what a list of handlers means; :meth:`off_pick` takes one off.
+
+        Returns:
+            This scene (chainable), as every other figure-level call on this tier answers.
+
+        Raises:
+            TypeError: when `callback` is not callable — the refusal belongs at the registration, where
+                the caller is, rather than at the first click, where they are not.
+
+        Warns:
+            UserWarning: at **delivery**, when a registered callback raises — naming the callback and the
+                exception. The pick still reaches the other callbacks.
+
+        Note:
+            This is the **matplotlib canvas only**. The interactive and web tiers have pointer events of
+            their own, delivered by Bokeh and MapLibre; nothing here is shared with them, and a saved
+            image carries no callback at all.
+
+        Examples:
+            - Register a callback and drive one click through the canvas, as a GUI backend would:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> picked = []
+                >>> _ = m.on_pick(lambda pick: picked.append((pick.layer_id, round(pick.x, 1))))
+                >>> m.fig.canvas.draw()
+                >>> px, py = m.ax.transData.transform((1.5, 2.0))
+                >>> click = MouseEvent("button_press_event", m.fig.canvas, px, py, button=1)
+                >>> m.fig.canvas.callbacks.process("button_press_event", click)
+                >>> picked
+                [('grid', 1.5)]
+                >>> m.close()
+
+                ```
+            - A click on no layer calls nothing, and something that cannot be called is refused at the
+              registration rather than at the first click:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> picked = []
+                >>> _ = m.on_pick(picked.append)
+                >>> m.fig.canvas.draw()
+                >>> away = MouseEvent("button_press_event", m.fig.canvas, -50, -50, button=1)
+                >>> m.fig.canvas.callbacks.process("button_press_event", away)
+                >>> picked
+                []
+                >>> m.on_pick("not callable")
+                Traceback (most recent call last):
+                    ...
+                TypeError: Map.on_pick needs something to call with each pick; got str
+                >>> m.close()
+
+                ```
+        """
+        if not callable(callback):
+            raise TypeError(
+                f"{type(self).__name__}.on_pick needs something to call with each pick; got "
+                f"{type(callback).__name__}"
+            )
+        self._pick_handlers.append(callback)
+        if self._pick_cid is None:
+            self._pick_cid = self.fig.canvas.mpl_connect(
+                "button_press_event", self._deliver_pick
+            )
+        return self
+
+    def off_pick(self, callback: Optional[Callable[[Pick], Any]] = None) -> Self:
+        """Stop delivering picks to one callback, or to all of them.
+
+        Args:
+            callback: The callback to take off, matched by **equality** — ``==``, the way ``list.remove``
+                and ``atexit.unregister`` match what they were given, not by identity. That is what makes
+                the ordinary idiom work: ``list.append`` builds a *new* bound method on every attribute
+                access, so ``m.on_pick(picked.append).off_pick(picked.append)`` hands over two distinct
+                objects that compare equal, and identity matching would refuse the second (measured:
+                ``ValueError: <built-in method append of list object …> is not registered``). The
+                consequence is the other way round too — a callable whose own ``__eq__`` reports equal to
+                its siblings is matched by that ``__eq__``, so a handler that wants to be taken off by
+                identity alone leaves ``__eq__`` as ``object`` defines it. ``None`` (the default) takes
+                every one off, which is what a caller tearing a session down wants.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            ValueError: when `callback` was never registered, naming how many are. A silent no-op here
+                would look exactly like a callback that refused to go away — the reason
+                :meth:`remove_layer` refuses an unknown id rather than ignoring it.
+
+        Note:
+            The canvas connection is dropped with the **last** callback, so a scene nobody is listening to
+            no longer has a handler on its canvas; the next :meth:`on_pick` makes it again.
+
+        Examples:
+            - A callback taken off hears nothing more:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> picked = []
+                >>> _ = m.on_pick(picked.append).off_pick(picked.append)
+                >>> m.fig.canvas.draw()
+                >>> px, py = m.ax.transData.transform((1.5, 2.0))
+                >>> click = MouseEvent("button_press_event", m.fig.canvas, px, py, button=1)
+                >>> m.fig.canvas.callbacks.process("button_press_event", click)
+                >>> picked
+                []
+                >>> m.close()
+
+                ```
+            - No argument takes every callback off and drops the canvas connection with the last of them;
+              a callback that was never registered is refused rather than ignored:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> seen = []
+                >>> _ = m.on_pick(seen.append)
+                >>> m._pick_cid is None
+                False
+                >>> _ = m.off_pick()
+                >>> m._pick_cid is None
+                True
+                >>> m.off_pick(print)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: ...is not registered on this figure...0 callback(s) are
+                >>> m.close()
+
+                ```
+        """
+        if callback is None:
+            self._pick_handlers = []
+        # `in` and `remove` are both `==`, which is the documented rule rather than an accident of the
+        # spelling: see the `callback` argument above for why identity would refuse `picked.append`.
+        elif callback in self._pick_handlers:
+            self._pick_handlers.remove(callback)
+        else:
+            raise ValueError(
+                f"{callback!r} is not registered on this figure, so there is nothing to take off; "
+                f"{len(self._pick_handlers)} callback(s) are"
+            )
+        if not self._pick_handlers:
+            self._disconnect_picks()
+        return self
+
+    def _disconnect_picks(self) -> None:
+        """Take this scene's click handler off its canvas, if it has one.
+
+        Written once because three callers need it: :meth:`off_pick` when the last callback goes,
+        :meth:`close` so a closed figure delivers nothing, and itself a second time harmlessly — the
+        connection id is cleared, so disconnecting twice is a no-op rather than an error.
+        """
+        if self._pick_cid is not None:
+            self.fig.canvas.mpl_disconnect(self._pick_cid)
+            self._pick_cid = None
+
+    def _deliver_pick(self, event: Any) -> None:
+        """Turn one canvas click into a :class:`Pick` and hand it to every registered callback.
+
+        The scene's half of the gesture: it is what knows which axes is its own, and what builds the
+        public value out of the renderer's answer. The hit test itself is
+        :meth:`~digitalearth.static.renderer.Renderer.hits`, which holds the artist-to-layer mapping.
+
+        Args:
+            event: The matplotlib ``MouseEvent`` the canvas delivered.
+
+        Note:
+            Three clicks deliver nothing: one outside this scene's axes (``inaxes`` is another axes, or
+            none at all — the colorbar's axes is on this figure too and is not the map), one on no layer,
+            and one on a figure whose callbacks have all been taken off. The callbacks are iterated over a
+            **copy**, so a callback that calls :meth:`off_pick` — a "pick once" handler — does not change
+            the list being walked underneath it. The copy is load-bearing rather than defensive, and
+            measured: walking the live list, a handler that takes itself off makes the loop skip the
+            handler that shifts into the index just consumed, silently (its neighbour is simply never
+            called). It is spelled ``list.copy`` because ``list(...)`` over something already iterable
+            reads as a redundant cast — to a reader and to a linter (SonarCloud python:S7504) — where
+            this is a snapshot taken on purpose.
+
+            A callback that **raises** is contained here rather than propagated (R2-L1): the exception
+            left the canvas dispatch and took every handler registered after it with it, which is the
+            same starvation the copy exists to prevent, by another route. Each callback is called inside
+            its own ``try``, and a failure is reported as a ``UserWarning`` naming the callback and the
+            exception. The gesture survives too — the connection is untouched, so the next click is
+            delivered as usual.
+
+        Warns:
+            UserWarning: when a registered callback raises, naming the callback's repr and the
+                exception's type and message. The remaining callbacks are still called.
+        """
+        if getattr(event, "inaxes", None) is not self.ax:
+            return
+        hits = self._renderer.hits(event)
+        if not hits:
+            return
+        pick = Pick(hits[0], float(event.xdata), float(event.ydata), hits, event)
+        for callback in self._pick_handlers.copy():
+            try:
+                callback(pick)
+            except Exception as error:
+                # One handler's failure is not the gesture's. Matplotlib's own `CallbackRegistry`
+                # takes the same line, and without this the exception left the canvas dispatch and
+                # every handler registered after the raising one was skipped: measured, a two-handler
+                # figure whose first handler raised `RuntimeError` ran the second 0 times. `Exception`
+                # rather than a named class, because the handler is the caller's own code and can fail
+                # any way it likes; `BaseException` is left alone so a `KeyboardInterrupt` still stops.
+                warnings.warn(
+                    f"a pick callback raised and was skipped: {callback!r} raised "
+                    f"{type(error).__name__}: {error}. The other callbacks still heard this pick.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the figure (delegates to cleopatra's ``WatermarkMixin.stamp_mark``).
@@ -2024,6 +2856,7 @@ class Scene(WatermarkMixin):
                 >>> mark_ax = scene.stamp(logo, frac=0.2, shadow=False)
                 >>> [round(float(v), 3) for v in mark_ax.get_position().bounds]
                 [0.775, 0.025, 0.2, 0.133]
+                >>> scene.close()
 
                 ```
         """
@@ -2048,11 +2881,13 @@ class Scene(WatermarkMixin):
                 >>> import tempfile
                 >>> from pathlib import Path
                 >>> from digitalearth.static import Scene
-                >>> out = Scene().save(Path(tempfile.mkdtemp()) / "scene.png")
+                >>> scene = Scene()
+                >>> out = scene.save(Path(tempfile.mkdtemp()) / "scene.png")
                 >>> out.suffix
                 '.png'
                 >>> out.exists()
                 True
+                >>> scene.close()
 
                 ```
         """
@@ -2060,7 +2895,41 @@ class Scene(WatermarkMixin):
         return Path(path)
 
     def show(self) -> None:
-        """Show the figure via ``matplotlib.pyplot.show``."""
+        """Show the figure via `matplotlib.pyplot.show`.
+
+        Returns:
+            `None`. This is the one Core name where this tier does not hand its engine object back. The
+            Core declares `returns="engine"` for `show`, and the other three tiers each answer with the
+            object their engine displays: the web tier returns its widget, the interactive tier the
+            composed HoloViews object, and the 3-D tier whatever `pyvista.Plotter.show` hands back.
+            On those tiers displaying a map *produces* something. `pyplot.show` does not — it hands the
+            figure to whatever GUI backend is active and returns nothing — so there is no engine object
+            here to hand over, and inventing one would be inventing it.
+
+        Note:
+            Nothing is displayed under a non-interactive backend. On `Agg` — which the test suite and
+            every headless run use — matplotlib warns `FigureCanvasAgg is non-interactive, and thus
+            cannot be shown` and the call is otherwise a no-op; use :meth:`save` there.
+
+        Examples:
+            - Showing a scene on the headless backend returns nothing and leaves the figure intact, so
+              it can still be saved or closed afterwards:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import warnings
+                >>> from digitalearth.static import Scene
+                >>> scene = Scene()
+                >>> with warnings.catch_warnings():
+                ...     warnings.simplefilter("ignore")
+                ...     print(scene.show())
+                None
+                >>> len(scene.fig.axes)
+                1
+                >>> scene.close()
+
+                ```
+        """
         plt.show()
 
     def close(self) -> None:
@@ -2078,11 +2947,22 @@ class Scene(WatermarkMixin):
         — which is what "closed" means for a figure whose data lived only in this process. Save the data and
         reference it by path to keep such a figure readable.
 
+        **The figure is closed only when this scene created it.** A figure the scene **made** itself (a
+        bare ``Map()``/``Scene()``, and so every :meth:`from_figure` round trip) is closed here; a figure
+        handed in through ``ax=``/``fig=`` is **spared**, because it belongs to whoever laid it out. This is
+        #371, resolved: a borrowed figure is spared (R2-L12), which brings this into line with
+        :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close`, always gated the same way. The
+        object table and the pick handler are released on **every** close regardless — see below.
+
         .. warning::
-            This closes the **entire** ``self.fig``. The panels returned by
-            :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would
-            close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap the
-            whole workflow or call :meth:`save` and close the figure yourself instead.
+            When the scene owns the figure, this closes the **entire** ``self.fig``. The panels returned by
+            :func:`~digitalearth.static.figure.grid` share **one** figure none of them owns (each is built
+            with ``ax=``/``fig=``), so closing a single panel no longer closes its siblings — and an
+            :meth:`~digitalearth.static.maps.inset.InsetMixin.inset` locator, drawn on the host's own
+            figure, likewise spares the host when closed. Close the scene that **made** the figure (or call
+            :meth:`save` and close it yourself) to take the whole figure down. The pick handler this scene
+            connected comes off on close whether the figure is owned or borrowed, so a closed borrowed-axes
+            scene stops answering clicks even though its figure lives on.
 
         Examples:
             - A scene that drew nothing closes quietly:
@@ -2101,7 +2981,18 @@ class Scene(WatermarkMixin):
         self._layer_keys = {}
         self._layer_opts = {}
         self._held_objects = {}
-        plt.close(self.fig)
+        # A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives
+        # `plt.close` as a Python object, and a handler left connected would go on answering for a scene
+        # whose data has just been let go (see `on_pick`). This runs on **every** close, owned or borrowed:
+        # a borrowed-axes scene still connected its own handler, and that is the scene's to take back.
+        self._disconnect_picks()
+        self._pick_handlers = []
+        # Close the figure only when this scene created it (`_owns_fig`, set in `__init__`). A figure handed
+        # in through `ax=`/`fig=` — and so every `grid` panel and every `inset` locator — belongs to whoever
+        # laid it out; closing it here tore down the caller's whole figure, which was the #371 footgun. This
+        # matches `TexturedGlobe.close`, which has always gated on `_owns_fig`.
+        if self._owns_fig:
+            plt.close(self.fig)
 
     def __enter__(self) -> "Scene":
         """Enter the runtime context, returning the scene so ``with Scene(...) as s:`` binds it.
@@ -2115,7 +3006,9 @@ class Scene(WatermarkMixin):
         """Close the scene on exit so a long run of them stays memory-bounded.
 
         The scene is closed whether or not the body raised; any exception propagates (``__exit__`` returns
-        ``False``), so ``with`` never silences errors.
+        ``False``), so ``with`` never silences errors. This is :meth:`close`, so the owned-vs-borrowed rule
+        is the same: a ``with Map(crs=...)`` block closes the figure it made, while a ``with Map(ax=ax)``
+        block over a caller's axes leaves that figure open and only releases this scene's own state.
 
         Args:
             exc_type: The exception type, ignored — closing is unconditional, as it is for a file.

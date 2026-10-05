@@ -17,7 +17,8 @@ def points_fc():
 def test_quadtree_density(points_fc):
     """quadtree with no column colours cells by point count and registers one layer."""
     m = Map(crs=points_fc.epsg)
-    pc = m.quadtree(points_fc, nmax=1)
+    m.quadtree(points_fc, nmax=1)
+    pc = m.artist()
     assert len(m.layers) == 1
     assert m.ax.collections
     assert len(pc.get_paths()) >= 1
@@ -32,8 +33,8 @@ def test_quadtree_aggregate(points_fc):
 
 def test_quadtree_nmax_controls_resolution(points_fc):
     """A small nmax produces more cells than an nmax that exceeds the point count (single cell)."""
-    fine = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1)
-    coarse = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=10**6)
+    fine = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1).artist()
+    coarse = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=10**6).artist()
     assert len(coarse.get_paths()) == 1
     assert len(fine.get_paths()) > len(coarse.get_paths())
 
@@ -53,8 +54,8 @@ def _drawn_area(pc):
 def test_quadtree_clip(points_fc):
     """A convex-hull clip actually trims the cells: clipped area < unclipped area."""
     hull = points_fc.geometry.union_all().convex_hull
-    clipped = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1, clip=hull)
-    unclipped = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1)
+    clipped = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1, clip=hull).artist()
+    unclipped = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1).artist()
     assert len(clipped.get_paths()) >= 1
     assert _drawn_area(clipped) < _drawn_area(unclipped)
 
@@ -105,7 +106,8 @@ def test_quadtree_callable_agg(points_fc):
     """
     m = Map(crs=points_fc.epsg)
     fid_max = float(np.asarray(points_fc["fid"], dtype=float).max())
-    pc = m.quadtree(points_fc, column="fid", agg=lambda a: float(np.max(a)), nmax=1)
+    m.quadtree(points_fc, column="fid", agg=lambda a: float(np.max(a)), nmax=1)
+    pc = m.artist()
     assert len(m.layers) == 1, "callable agg should still produce one layer"
     vals = np.ma.filled(np.asarray(pc.get_array(), dtype="float64"), np.nan)
     assert np.nanmax(vals) <= fid_max + 1e-9, (

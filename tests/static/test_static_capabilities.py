@@ -158,10 +158,10 @@ class TestTheDeclaration:
     @pytest.mark.parametrize(
         "name, phrase",
         [
-            ("tooltip", "no pointer"),
+            ("tooltip", "a click, not a hover"),
             ("height", "flat"),
             ("export_html", "not as a page"),
-            ("layer_switcher", "drawn once"),
+            ("layer_switcher", "draws no control"),
         ],
     )
     def test_what_is_missing_says_why(self, name, phrase):
@@ -172,6 +172,46 @@ class TestTheDeclaration:
             phrase: Part of the reason it gives.
         """
         assert phrase in (CAPABILITIES.reason(name) or ""), CAPABILITIES.reason(name)
+
+    def test_the_layer_switcher_refusal_names_the_tiers_that_have_one(self):
+        """The reason names every other tier that does provide the widget.
+
+        Test scenario:
+            A refusal that explains itself by what another backend has must be true about that backend
+            (L10). Read off the declarations rather than written down, so a tier that gains the widget
+            cannot leave the sentence stale.
+        """
+        from digitalearth.api import _DECLARATIONS
+
+        reason = CAPABILITIES.reason("layer_switcher") or ""
+        providers = sorted(
+            backend
+            for backend, declaration in _DECLARATIONS.items()
+            if backend != "matplotlib" and declaration.supports("layer_switcher")
+        )
+        assert [name for name in providers if name not in reason] == [], (
+            f"the reason should name {providers}; got {reason!r}"
+        )
+
+    def test_the_layer_switcher_refusal_claims_no_tier_that_lacks_one(self):
+        """It does not credit the widget to a tier that declares it absent as well.
+
+        Test scenario:
+            The 3-D tier declares `layer_switcher` absent too ("layers are switched by id through the
+            scene's own API rather than from a panel"), so "the other tiers' engines provide it" was
+            false for one of the three (L10).
+        """
+        from digitalearth.api import _DECLARATIONS
+
+        reason = CAPABILITIES.reason("layer_switcher") or ""
+        without = sorted(
+            backend
+            for backend, declaration in _DECLARATIONS.items()
+            if backend != "matplotlib" and not declaration.supports("layer_switcher")
+        )
+        assert [name for name in without if f"the {name} tier" in reason] == [], (
+            f"the reason should not credit {without} with the widget; got {reason!r}"
+        )
 
     def test_the_declaration_reads_as_data(self):
         """It is a table, not code: nothing but the shared type is imported to build it.

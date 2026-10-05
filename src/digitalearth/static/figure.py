@@ -5,6 +5,12 @@ earthkit-plots models a figure as ``Figure → Subplot/Map → Layer``. Digital-
 ``Map`` to each axes, plus :func:`shared_colorbar` for one colorbar spanning the panels, and :func:`facet`, which
 lays a raster stack out as small multiples on one shared colour scale. This is orchestration only — the
 rendering stays in each ``Map`` (pyramids + cleopatra).
+
+What the panels can share is therefore in three places, and they are independent: one **colour** scale
+(:func:`shared_colorbar`, and :func:`facet`, which resolves one over a whole stack), one pair of **axis**
+scales (:func:`grid`'s ``sharex``/``sharey``, in matplotlib's own vocabulary) and one **title** over the
+figure (:func:`grid`'s ``suptitle``). :func:`facet` asks for none of the last two: its frames need not cover
+one area, and it titles each panel by what that panel is.
 """
 
 import logging
@@ -13,7 +19,7 @@ import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,6 +37,7 @@ from digitalearth.base.raster_classes import (
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
+from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +65,29 @@ def grid(
     crs: Any = 3857,
     globe: bool = False,
     figsize: Optional[Tuple[float, float]] = None,
+    sharex: bool | Literal["all", "row", "col", "none"] = False,
+    sharey: bool | Literal["all", "row", "col", "none"] = False,
+    suptitle: Optional[str] = None,
     **kwargs,
 ) -> Tuple[Figure, List[Map]]:
     """Create an ``nrows`` × ``ncols`` grid of :class:`Map` panels sharing one figure.
 
     Each cell of a ``matplotlib`` subplot grid is wrapped in a ``Map`` (all the same ``crs``/``globe``), so
-    panels can be drawn on independently while sharing one figure for a single ``savefig`` / colorbar / title.
+    panels can be drawn on independently while sharing one figure for a single ``savefig`` / colorbar /
+    title. ``sharex``/``sharey`` additionally put the panels on **one pair of axis scales**, and ``suptitle``
+    titles the figure rather than any panel.
+
+    **The sharing vocabulary is matplotlib's own, not a second one.** ``sharex``/``sharey`` are forwarded
+    verbatim to ``plt.subplots``, so they take ``False`` (the default — nothing shared), ``True`` or
+    ``"all"`` (every panel in one group), ``"row"``, ``"col"`` and ``"none"``, and a word outside that list
+    is refused by matplotlib with its own message naming the keyword. There is therefore a *global* and a
+    *per-row/per-column* form, and which one you get is the word you pass.
+
+    **Sharing moves the ticks as well as linking the scales.** matplotlib drops the tick labels its sharing
+    makes redundant: ``sharex="all"``/``"col"`` leaves x labels on the bottom row only, and
+    ``sharey="all"``/``"row"`` leaves y labels on the leftmost column only (both measured below). The
+    labels are dropped where sharing makes them redundant *along that axis*, so ``sharex="row"`` and
+    ``sharey="col"`` link their groups and leave every panel's labels in place.
 
     Args:
         nrows: Number of panel rows.
@@ -71,11 +95,32 @@ def grid(
         crs: Display CRS for every panel (passed to each ``Map``).
         globe: When True, every panel is a globe (``Map(globe=True)``).
         figsize: Figure size in inches; ``None`` uses the matplotlib default.
+        sharex: How the panels share their x axis — ``False`` (default), ``True``/``"all"``, ``"row"``,
+            ``"col"`` or ``"none"``, exactly as ``plt.subplots`` reads them, and exactly what the
+            signature's own ``Literal`` admits. Sharing links the *limits*:
+            framing or autoscaling one panel of a group frames every panel in it, which is the point of
+            asking for it, and means a grid whose panels show different regions should leave it off.
+        sharey: The same for the y axis.
+        suptitle: One title over the whole figure (``Figure.suptitle``). ``None`` (default) adds none,
+            and so do ``""`` and ``"   "``: a blank heading is the one request "no heading" the panels'
+            own ``set_title`` reads it as, rather than an empty ``Text`` on the figure.
+            This is **not** a panel title: every panel's own ``set_title`` is untouched, so a shared
+            heading and one caption per panel coexist. Style it by calling ``fig.suptitle`` yourself on
+            the returned figure — which each panel describes as its figure's heading either way, since
+            every panel reads the heading off the figure it shares
+            (:attr:`~digitalearth.static.scene.Scene.figure_spec`).
         **kwargs: Forwarded to each ``Map`` (e.g. ``domain``).
 
     Returns:
         ``(fig, maps)`` — the shared :class:`~matplotlib.figure.Figure` and the list of ``Map`` panels in
         row-major (left-to-right, top-to-bottom) order, length ``nrows * ncols``.
+
+    Raises:
+        ValueError: from ``plt.subplots``, for a ``sharex``/``sharey`` outside the vocabulary above. The
+            figure is created before matplotlib reads the keyword, so such a refusal leaves that empty
+            figure open and the caller gets no handle to it — close it with `plt.close("all")` (measured:
+            `plt.get_fignums()` is `[1]` after a refused call on a clean state). This is unlike
+            :func:`facet`, whose own refusals are all raised before any axes exists.
 
     Examples:
         - A 2×2 grid yields four Maps sharing one figure:
@@ -88,6 +133,7 @@ def grid(
             4
             >>> all(m.fig is fig for m in maps)
             True
+            >>> maps[0].close()
 
             ```
         - Draw on each panel independently (they share the figure):
@@ -100,12 +146,95 @@ def grid(
             >>> _ = maps[1].set_title("right")
             >>> [m.ax.get_title() for m in maps]
             ['left', 'right']
+            >>> maps[0].close()
+
+            ```
+        - Shared axes: framing one panel frames its group, and the redundant tick labels go. In a 2×2
+          under ``sharex="all"`` only the bottom row keeps x tick labels:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(2, 2, crs=4326, sharex="all", sharey="all")
+            >>> _ = maps[0].set_bounds([2.0, 3.0, 8.0, 9.0])
+            >>> [float(v) for v in maps[3].ax.get_xlim()]
+            [2.0, 8.0]
+            >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
+            [False, False, True, True]
+            >>> [m.ax.yaxis.get_tick_params(which="major")["labelleft"] for m in maps]
+            [True, False, True, False]
+            >>> maps[0].close()
+
+            ```
+        - Sharing per row and per column drops no labels at all, because neither makes a label redundant
+          along its own axis:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(2, 2, crs=4326, sharex="row", sharey="col")
+            >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
+            [True, True, True, True]
+            >>> [m.ax.yaxis.get_tick_params(which="major")["labelleft"] for m in maps]
+            [True, True, True, True]
+            >>> maps[0].close()
+
+            ```
+        - Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair
+          ``(0, 2)`` — and a word outside matplotlib's vocabulary is refused by name:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(2, 2, crs=4326, sharex="col")
+            >>> group = maps[0].ax.get_shared_x_axes().get_siblings(maps[0].ax)
+            >>> sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))
+            True
+            >>> maps[0].close()
+            >>> import matplotlib.pyplot as plt
+            >>> try:
+            ...     grid(2, 2, crs=4326, sharex="both")
+            ... except ValueError as error:
+            ...     print(error)
+            'both' is not a valid value for sharex. Supported values are 'all', 'row', 'col', 'none', False, True
+            >>> plt.close("all")  # the refused call had already made its figure
+
+            ```
+        - A figure title sits beside the panels' own titles rather than replacing one:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+            >>> _ = maps[0].set_title("January")
+            >>> [t.get_text() for t in fig.texts], maps[0].ax.get_title()
+            (['rainfall, 2020'], 'January')
+            >>> maps[0].close()
+
+            ```
+        - Both headings are described, each in its own place, so a stored figure keeps them (M4):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+            >>> _ = maps[0].set_title("January")
+            >>> spec = maps[0].figure_spec
+            >>> spec.title, spec.panels[0].title
+            ('rainfall, 2020', 'January')
+            >>> maps[0].close()
 
             ```
     """
-    fig, axs = plt.subplots(nrows, ncols, figsize=figsize)
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize, sharex=sharex, sharey=sharey)
     axes = np.atleast_1d(axs).ravel()
     maps = [Map(crs=crs, globe=globe, ax=ax, fig=fig, **kwargs) for ax in axes]
+    # Through the panels' own normaliser, not a guard of its own: `None`, `""` and `"   "` are the one
+    # request "no heading" on this tier (ST-18), and a bare `is not None` put an empty `Text` on the figure
+    # where `set_title("")` draws and records none (L4).
+    heading = Scene._recorded_title(suptitle)
+    if heading is not None:
+        fig.suptitle(heading)
     return fig, maps
 
 
@@ -131,6 +260,46 @@ def shared_colorbar(
     Returns:
         The :class:`~matplotlib.colorbar.Colorbar` added to the figure, or ``None`` when ``mappable`` is
         ``None`` — there is no colour scale to draw a bar for.
+
+    Examples:
+        - One bar across both panels of a grid. It is an axes of its own, so the figure gains one, and the
+            scale it shows is the mappable's — reached by name through `Map.artist`, never the renderer's
+            private record:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from digitalearth.static import grid, shared_colorbar
+            >>> fig, maps = grid(1, 2, crs=4326)
+            >>> values = np.arange(16.0).reshape(4, 4)
+            >>> for panel in maps:
+            ...     _ = panel.field(values, vmin=0.0, vmax=15.0)
+            >>> len(fig.axes)
+            2
+            >>> bar = shared_colorbar(fig, maps[0].artist(maps[0].layer_ids[-1]), maps, label="mm/day")
+            >>> len(fig.axes), bar.ax.get_ylabel(), bar.mappable.get_clim()
+            (3, 'mm/day', (0.0, 15.0))
+            >>> maps[0].close()
+
+            ```
+        - A panel whose layer drew nothing has no mappable to key, so passing `None` adds no bar and no
+            axes rather than raising — which is what lets :func:`facet` call this unconditionally:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static import grid, shared_colorbar
+            >>> fig, maps = grid(1, 2, crs=4326)
+            >>> print(shared_colorbar(fig, None, maps))
+            None
+            >>> len(fig.axes)
+            2
+            >>> maps[0].close()
+
+            ```
+
+    See Also:
+        grid: builds the figure and panels this spans.
+        facet: resolves one scale over a whole stack and calls this for the bar.
     """
     if mappable is None:  # the layer it would describe was never drawn (e.g. off-limb)
         return None
@@ -601,10 +770,12 @@ def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
             ...     try:
             ...         _checked_classes(style)
             ...     except ValueError as error:
-            ...         print(str(error).split("; ")[0])
+            ...         print(str(error).split("; ")[0])  # doctest: +NORMALIZE_WHITESPACE
             facet(k=4) counts the classes a scheme cuts, so it classifies nothing without scheme=
-            facet(k=4) counts the classes a scheme cuts, so it classifies nothing beside scheme=[0.0, 1.0, 2.0], which gives the class edges outright
-            facet(k=4) counts the classes a scheme cuts, so it classifies nothing under scheme='categorical', where a class code is its own class
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing beside
+            scheme=[0.0, 1.0, 2.0], which gives the class edges outright
+            facet(k=4) counts the classes a scheme cuts, so it classifies nothing under
+            scheme='categorical', where a class code is its own class
 
             ```
         - A value that is not a count is refused rather than truncated or coerced, ``True`` included:
@@ -897,8 +1068,16 @@ def facet(
     method, fixed = _FACET_KINDS[kind]
     drawn = None
     for panel, frame, frame_band, title in plan.panels(maps):
-        artist = getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
-        drawn = artist if drawn is None else drawn
+        getattr(panel, method)(frame, band=frame_band, **fixed, **shared)
+        # The builders hand back the panel rather than the artist since ST-20, so the mappable the shared
+        # bar is keyed to is asked for by name — through `Map.artist`, the public accessor that replaced
+        # the read of the renderer's private record here (L9). `layer_ids` lists only layers that *were*
+        # drawn — a skip is forgotten again — so an off-limb panel contributes nothing (there is no id to
+        # pass, and `artist()` would refuse the id of a layer that drew nothing) and the first panel that
+        # drew something still wins, exactly as the artist-or-`None` pick did.
+        artist = panel.artist(panel.layer_ids[-1]) if panel.layer_ids else None
+        if drawn is None and artist is not None:
+            drawn = artist
         panel.set_title(title)
     if colorbar and drawn is not None and measured is None:
         # The shared scale fell back to the (0, 1) a `Scale` uses for an unmeasurable domain, so a bar here

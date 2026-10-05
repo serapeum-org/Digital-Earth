@@ -78,8 +78,10 @@ class TestQuadtreeAggregation:
             ``nmax=100`` keeps the whole bbox as one cell, so ``pc.get_array()[0]`` equals the reducer over
             every value — isolating the per-cell aggregation from the spatial split.
         """
-        pc = Map(crs=value_points.epsg).quadtree(
-            value_points, column="v", agg=agg, nmax=100
+        pc = (
+            Map(crs=value_points.epsg)
+            .quadtree(value_points, column="v", agg=agg, nmax=100)
+            .artist()
         )
         arr = np.asarray(pc.get_array())
         assert arr.size == 1, f"expected one cell, got {arr.size}"
@@ -89,14 +91,16 @@ class TestQuadtreeAggregation:
 
     def test_callable_agg(self, value_points):
         """A callable ``agg`` is applied to the per-cell value array (here counting elements)."""
-        pc = Map(crs=value_points.epsg).quadtree(
-            value_points, column="v", agg=lambda a: a.size, nmax=100
+        pc = (
+            Map(crs=value_points.epsg)
+            .quadtree(value_points, column="v", agg=lambda a: a.size, nmax=100)
+            .artist()
         )
         assert float(np.asarray(pc.get_array())[0]) == pytest.approx(4.0)
 
     def test_density_count_without_column(self, value_points):
         """``column=None`` colours each cell by its point count."""
-        pc = Map(crs=value_points.epsg).quadtree(value_points, nmax=100)
+        pc = Map(crs=value_points.epsg).quadtree(value_points, nmax=100).artist()
         assert float(np.asarray(pc.get_array())[0]) == pytest.approx(4.0)
 
 
@@ -142,7 +146,7 @@ class TestCartogramMultiPolygon:
         """A single MultiPolygon feature (2 parts) yields 2 filled polygons sharing the row's value."""
         mp = MultiPolygon([box(0, 0, 1, 1), box(2, 2, 3, 3)])
         fc = _fc(gpd.GeoDataFrame({"v": [5.0]}, geometry=[mp], crs="EPSG:32618"))
-        pc = Map(crs=fc.epsg).cartogram(fc, scale="v", column="v")
+        pc = Map(crs=fc.epsg).cartogram(fc, scale="v", column="v").artist()
         assert len(pc.get_paths()) == 2, f"expected 2 parts, got {len(pc.get_paths())}"
 
 
@@ -157,7 +161,7 @@ class TestSankeyMultiLineString:
                 {"flow": [1.0], "w": [2.0]}, geometry=[mls], crs="EPSG:32618"
             )
         )
-        lc = Map(crs=fc.epsg).sankey(fc, column="flow", scale="w")
+        lc = Map(crs=fc.epsg).sankey(fc, column="flow", scale="w").artist()
         assert len(lc.get_segments()) == 2, (
             f"expected 2 segments, got {len(lc.get_segments())}"
         )
@@ -171,7 +175,9 @@ class TestScatterScaleAlignment:
         pts = [Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)]
         s = [4.0, 1.0, 3.0, 2.0]
         fc = _fc(gpd.GeoDataFrame({"s": s}, geometry=pts, crs="EPSG:32618"))
-        pc = Map(crs=fc.epsg).points(fc, size_column="s", size_limits=(10, 200))
+        pc = (
+            Map(crs=fc.epsg).points(fc, size_column="s", size_limits=(10, 200)).artist()
+        )
         sizes = np.asarray(pc.get_sizes())
         assert np.argsort(sizes).tolist() == np.argsort(s).tolist(), (
             "sizes not aligned to size column order"
@@ -224,7 +230,8 @@ class TestGlobeNonFinite:
     def test_quadtree_drops_far_side(self, far_side_points):
         """quadtree bins the near-side points only, no inf bbox."""
         m = Map(crs=ORTHO)
-        pc = m.quadtree(far_side_points, column="v", nmax=1)
+        m.quadtree(far_side_points, column="v", nmax=1)
+        pc = m.artist()
         assert len(pc.get_paths()) >= 1
 
     @staticmethod
@@ -259,7 +266,8 @@ class TestGlobeNonFinite:
         """
         m = Map(crs=ORTHO)
         with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
-            assert getattr(m, method)(self._all_far_side(), **kwargs) is None, (
+            getattr(m, method)(self._all_far_side(), **kwargs)
+            assert m.layer_ids == [], (
                 f"{method} should draw nothing when every point is behind the limb"
             )
         assert m.layers == [], f"{method} must not register a layer it could not draw"
@@ -330,8 +338,10 @@ class TestDefensiveBranches:
 
     def test_voronoi_clip_drops_disjoint_cells(self, value_points):
         """A clip box overlapping only one cell drops the others (empty-intersection continue)."""
-        pc = Map(crs=value_points.epsg).voronoi(
-            value_points, column="v", clip=box(0, 0, 1, 1)
+        pc = (
+            Map(crs=value_points.epsg)
+            .voronoi(value_points, column="v", clip=box(0, 0, 1, 1))
+            .artist()
         )
         assert len(pc.get_paths()) == 1, (
             "only the cell overlapping the clip should survive"
@@ -339,8 +349,10 @@ class TestDefensiveBranches:
 
     def test_quadtree_clip_drops_disjoint_cells(self, value_points):
         """A clip box overlapping only one cell drops the others (empty-intersection continue)."""
-        pc = Map(crs=value_points.epsg).quadtree(
-            value_points, column="v", nmax=1, clip=box(0, 0, 1, 1)
+        pc = (
+            Map(crs=value_points.epsg)
+            .quadtree(value_points, column="v", nmax=1, clip=box(0, 0, 1, 1))
+            .artist()
         )
         assert len(pc.get_paths()) >= 1, "at least the overlapping cell should survive"
 
@@ -552,8 +564,9 @@ class TestTriangulatingPointsThatDoNotAllSurviveTheWarp:
         """
         canvas = Map(crs=32618)
         try:
-            drawn = canvas.tricontourf(self._two_of_three_finite(), column="v")
-            assert drawn is None, f"a layer that cannot be triangulated drew {drawn!r}"
+            canvas.tricontourf(self._two_of_three_finite(), column="v")
+            with pytest.raises(ValueError, match="has nothing to hand back"):
+                canvas.artist()
             assert canvas.layers == [], (
                 f"a skipped layer must register nothing; got {canvas.layers}"
             )

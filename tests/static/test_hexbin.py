@@ -60,7 +60,7 @@ class TestCounting:
         Args:
             wells: The wells.
         """
-        artist = Map(crs=4326).hexbin(wells, gridsize=4)
+        artist = Map(crs=4326).hexbin(wells, gridsize=4).artist()
         assert isinstance(artist, PolyCollection), type(artist)
 
     def test_every_point_is_counted_once(self, cloud):
@@ -69,7 +69,7 @@ class TestCounting:
         Args:
             cloud: The scattered points.
         """
-        artist = Map(crs=4326).hexbin(cloud, gridsize=10)
+        artist = Map(crs=4326).hexbin(cloud, gridsize=10).artist()
         assert int(np.asarray(artist.get_array()).sum()) == 500, artist.get_array()
 
     def test_coincident_points_share_a_cell(self, wells):
@@ -78,7 +78,7 @@ class TestCounting:
         Args:
             wells: The wells.
         """
-        artist = Map(crs=4326).hexbin(wells, gridsize=4)
+        artist = Map(crs=4326).hexbin(wells, gridsize=4).artist()
         assert sorted(np.asarray(artist.get_array()).tolist()) == [1.0, 3.0]
 
     def test_an_empty_cell_is_not_drawn(self, cloud):
@@ -87,7 +87,7 @@ class TestCounting:
         Args:
             cloud: The scattered points.
         """
-        artist = Map(crs=4326).hexbin(cloud, gridsize=40)
+        artist = Map(crs=4326).hexbin(cloud, gridsize=40).artist()
         assert np.asarray(artist.get_array()).min() >= 1, artist.get_array()
 
     def test_min_count_drops_sparse_cells(self, wells):
@@ -96,7 +96,7 @@ class TestCounting:
         Args:
             wells: The wells.
         """
-        artist = Map(crs=4326).hexbin(wells, gridsize=4, min_count=2)
+        artist = Map(crs=4326).hexbin(wells, gridsize=4, min_count=2).artist()
         assert np.asarray(artist.get_array()).tolist() == [3.0], artist.get_array()
 
     def test_a_finer_lattice_has_more_cells(self, cloud):
@@ -105,8 +105,8 @@ class TestCounting:
         Args:
             cloud: The scattered points.
         """
-        coarse = Map(crs=4326).hexbin(cloud, gridsize=5)
-        fine = Map(crs=4326).hexbin(cloud, gridsize=30)
+        coarse = Map(crs=4326).hexbin(cloud, gridsize=5).artist()
+        fine = Map(crs=4326).hexbin(cloud, gridsize=30).artist()
         # One value per drawn cell: hexbin draws one hexagon path at many offsets, so paths do not count cells.
         assert len(fine.get_array()) > len(coarse.get_array()), (
             len(coarse.get_array()),
@@ -129,7 +129,9 @@ class TestAggregating:
             reduce: The named reducer.
             origin: Its aggregate of 2, 4 and 6.
         """
-        artist = Map(crs=4326).hexbin(wells, "depth", reduce=reduce, gridsize=4)
+        artist = (
+            Map(crs=4326).hexbin(wells, "depth", reduce=reduce, gridsize=4).artist()
+        )
         assert origin in np.asarray(artist.get_array()).tolist(), artist.get_array()
 
     def test_a_reducer_of_the_callers_own_is_used(self, wells):
@@ -138,7 +140,9 @@ class TestAggregating:
         Args:
             wells: The wells.
         """
-        artist = Map(crs=4326).hexbin(wells, "depth", reduce=np.ptp, gridsize=4)
+        artist = (
+            Map(crs=4326).hexbin(wells, "depth", reduce=np.ptp, gridsize=4).artist()
+        )
         assert 4.0 in np.asarray(artist.get_array()).tolist(), artist.get_array()
 
     def test_a_scheme_classifies_the_cells(self, cloud):
@@ -149,7 +153,11 @@ class TestAggregating:
         """
         from matplotlib.colors import BoundaryNorm
 
-        artist = Map(crs=4326).hexbin(cloud, "v", gridsize=8, scheme="quantiles", k=4)
+        artist = (
+            Map(crs=4326)
+            .hexbin(cloud, "v", gridsize=8, scheme="quantiles", k=4)
+            .artist()
+        )
         assert isinstance(artist.norm, BoundaryNorm), type(artist.norm)
 
 
@@ -218,7 +226,7 @@ class TestTheDescription:
             wells: The wells.
         """
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
-        assert canvas.hexbin(wells) is None
+        canvas.hexbin(wells)
         assert canvas.layer_ids == [], canvas.layer_ids
 
 
@@ -278,7 +286,8 @@ class TestTheLatticeArguments:
             - Both are accepted, cells are drawn, and the description keeps the pair.
         """
         canvas = Map(crs=4326)
-        cells = canvas.hexbin(wells, gridsize=(4, 3), min_count=0, name="h")
+        canvas.hexbin(wells, gridsize=(4, 3), min_count=0, name="h")
+        cells = canvas.artist()
         assert isinstance(cells, PolyCollection)
         assert tuple(
             canvas.figure_spec.layers.get("h").symbology.props["gridsize"]
@@ -302,7 +311,8 @@ class TestTheLatticeArguments:
               writable (a numpy integer is not JSON).
         """
         canvas = Map(crs=4326)
-        cells = canvas.hexbin(wells, gridsize=np.array([4, 3]), min_count=0, name="h")
+        canvas.hexbin(wells, gridsize=np.array([4, 3]), min_count=0, name="h")
+        cells = canvas.artist()
         assert isinstance(cells, PolyCollection), type(cells)
         described = canvas.figure_spec.layers.get("h").symbology.props["gridsize"]
         assert tuple(described) == (4, 3), described

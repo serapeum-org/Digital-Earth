@@ -279,24 +279,25 @@ def test_text_at_lonlat(dataset):
     """text() places a Text at the reprojected lon/lat on a flat map."""
     m = Map(crs=dataset.epsg)
     m.field(dataset)
-    txt = m.text(
+    m.text(
         float(dataset.x.mean()) if hasattr(dataset, "x") else 0.0,
         0.0,
         "x",
         crs=dataset.epsg,
+        name="label",
     )
     # on a matching CRS the point is finite -> a Text is added
-    assert txt is not None
-    assert txt in m.ax.texts
+    assert m.artist("label") in m.ax.texts
 
 
 def test_text_far_side_globe_skipped():
-    """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (returns None)."""
+    """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (no layer)."""
     from digitalearth.static import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     # (180, 0) is the antipode of the ortho centre -> off the visible disc
-    assert m.text(180.0, 0.0, "hidden") is None
+    m.text(180.0, 0.0, "hidden", name="far")
+    assert m.layer_ids == [], m.layer_ids
 
 
 def test_annotate_with_arrow(dataset):
@@ -305,7 +306,7 @@ def test_annotate_with_arrow(dataset):
 
     m = Map(crs=dataset.epsg)
     m.field(dataset)
-    ann = m.annotate(
+    m.annotate(
         0.0,
         0.0,
         "here",
@@ -313,23 +314,27 @@ def test_annotate_with_arrow(dataset):
         textcoords="offset points",
         arrowprops={"arrowstyle": "->"},
         crs=dataset.epsg,
+        name="arrow",
     )
+    ann = m.artist("arrow")
     assert isinstance(ann, Annotation)
     assert ann in m.ax.texts
 
 
 def test_annotate_far_side_globe_skipped():
-    """annotate() also skips an off-globe point."""
+    """annotate() also skips an off-globe point, registering no layer."""
     from digitalearth.static import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
-    assert m.annotate(180.0, 0.0, "hidden") is None
+    m.annotate(180.0, 0.0, "hidden", name="far")
+    assert m.layer_ids == [], m.layer_ids
 
 
 def test_stock_img_dataset_backdrop(dataset):
     """stock_img(dataset) draws a backdrop AxesImage below data and keeps the data extent."""
     m = Map(crs=dataset.epsg)
-    data_im = m.field(dataset)
+    m.field(dataset)
+    data_im = m.artist()
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
     back = m.stock_img(dataset)
     assert back is not None
@@ -362,12 +367,29 @@ def test_stock_img_tiles_graceful_offline(mocker, caplog):
     )
 
 
-def test_stock_img_tiles_path(mocker):
-    """stock_img() with no dataset delegates to basemap when tiles are reachable."""
-    sentinel = object()
-    spy = mocker.patch.object(Map, "basemap", return_value=sentinel)
+def test_stock_img_tiles_delegate_to_basemap(mocker):
+    """stock_img() with no dataset asks basemap for the tiles."""
+    spy = mocker.patch.object(Map, "basemap", return_value=None)
     m = Map(crs=3857)
-    assert m.stock_img() is sentinel and spy.called
+    m.stock_img()
+    assert spy.called, "the no-dataset form must go through basemap()"
+
+
+def test_stock_img_tiles_path(mocker):
+    """stock_img() with no dataset hands back the tile artist basemap drew.
+
+    `basemap` returns the map since round-1 L6, so the backdrop is read off the layer it registered.
+    `add_tiles` is stubbed rather than `Map.basemap`, so the real builder runs and does register one.
+
+    Args:
+        mocker: Stubs cleopatra's tile fetch.
+    """
+    tiles = object()
+    mocker.patch("digitalearth.static.maps.decoration.add_tiles", return_value=tiles)
+    m = Map(domain=(-10.0, 35.0, 5.0, 45.0))
+    m.ax.set_xlim(-10.0, 5.0)
+    m.ax.set_ylim(35.0, 45.0)
+    assert m.stock_img() is tiles
 
 
 def test_set_domain_names_itself_when_a_bbox_is_back_to_front():

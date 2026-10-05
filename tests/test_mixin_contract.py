@@ -26,15 +26,26 @@ mypy cannot enforce it everywhere because ``no-any-return`` is baselined off in 
 promise is checked here instead: every ``-> Self`` method must return ``self``, or delegate to another ``-> Self``
 method that does.
 
-Both scans read the source with :mod:`ast` rather than importing, so all 27 mixins are covered in every
-environment — including the five ``three_d`` modules that need PyVista, which the ``dev`` env does not have.
-The runtime assertions are the belt to that braces, and skip where an optional engine is missing.
+The third guard reads the contract the other way round: a method that does a builder's work must not
+declare a builder's opposite. Its reach is measured rather than claimed — 40 classes and 265 public
+methods, being every ``*Mixin`` in the four backend packages **plus** the base and composed classes they
+compose into (``Scene``, ``GeoLayerBase``, ``Map``, ``TexturedGlobe`` and the three other tiers' pairs) —
+and it tests "not ``Self``" rather than "``-> None``", so a missing annotation, the string ``'None'``, an
+``-> Any`` artist return and a registrar reached through a private helper or a closure all read as the same
+finding. The methods that deliberately answer something else are enumerated, with a reason each, in
+:data:`CONTRACT_CARVE_OUTS`, and each one is held to still tripping a rule, so a carve-out cannot outlive
+the defect it was written for. For contrast, the version this replaced read 30 classes and 3 methods.
+
+Every scan here reads the source with :mod:`ast` rather than importing, so all 27 mixins are covered in
+every environment — including the five ``three_d`` modules that need PyVista, which the ``dev`` env does not
+have. The runtime assertions are the belt to that braces, and skip where an optional engine is missing.
 """
 
 import ast
 import functools
 import importlib
 import pathlib
+import textwrap
 
 import pytest
 
@@ -77,7 +88,7 @@ def _module_path(module: str) -> pathlib.Path:
     return ROOT / "src" / pathlib.Path(*module.split("."))
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _mixins() -> tuple:
     """Return `(backend, module, class name, ClassDef, Module)` for every `*Mixin` in the four backends.
 
@@ -383,7 +394,7 @@ class TestComposedClassMro:
         assert issubclass(composed, base), f"{name} must subclass {base_name}"
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _self_builders() -> tuple:
     """Return `(module, FunctionDef)` for every `-> Self` builder under `src/digitalearth/`.
 
@@ -508,6 +519,665 @@ class TestSelfReturningBuilders:
                     offenders.append(f"{path.name}:{node.name} -> {annotation!r}")
         assert not offenders, (
             f"{backend} builders must be annotated `-> Self`, not a quoted class name: {offenders}"
+        )
+
+
+#: How a layer reaches a figure: the funnels a builder calls on ``self`` to register one. Named **exactly**
+#: rather than by a ``_describe`` prefix, which is what round 2's N1 flagged: a prefix match turns any future
+#: ``self._described_opts()`` *reader* into a registrar. Measured off the tree — ``self._describe_layer``
+#: (static, and ``_draw`` which wraps it), ``self._describe_graticule`` and ``self._describe_basemap`` (the
+#: two that *replace* a layer rather than add one), ``self._add_described_layer`` (the 3-D tier's funnel) and
+#: ``add_layer``/``add_underlay`` (interactive and web).
+REGISTRARS = frozenset(
+    {
+        "_draw",
+        "_describe_layer",
+        "_describe_graticule",
+        "_describe_basemap",
+        "_add_described_layer",
+        "add_layer",
+        "add_underlay",
+    }
+)
+
+#: The base and composed classes the contract is policed over beside the mixins, as
+#: `module -> class names`. The mixins alone are not the chaining surface: `Scene` owns `add_layer`,
+#: `colorbar`, `legend`, `set_title`, `move_layer`, `replace_layer` and `set_visible`, and `GeoLayerBase`,
+#: `WebMapBase`, `Scene3DBase` and `WebMapBase`'s composed `WebMap` own more. Round 2's M7 measured the
+#: previous scan at 3 methods on `*Mixin` classes only, which left every one of these unopened.
+COMPOSED_CLASSES = {
+    "digitalearth.static.scene": ("Scene",),
+    "digitalearth.static.map": ("Map",),
+    "digitalearth.static.textured_globe": ("TexturedGlobe",),
+    "digitalearth.static.maps.base": ("GeoLayerBase",),
+    "digitalearth.interactive.base": ("InteractiveMapBase",),
+    "digitalearth.interactive.map": ("InteractiveMap",),
+    "digitalearth.three_d.base": ("Scene3DBase",),
+    "digitalearth.three_d.scene3d": ("Scene3D",),
+    "digitalearth.web.base": ("WebMapBase",),
+    "digitalearth.web.map": ("WebMap",),
+}
+
+#: How many classes and public methods the scan reached when this guard was widened. Floors, not
+#: equalities — a new mixin or a new method is normal — so that a scan broken into reaching nothing cannot
+#: report as a clean pass. The previous scan's numbers, for contrast: 23 classes and the 3 public `-> None`
+#: methods M7 measured.
+CONTRACT_CLASS_FLOOR = 40
+CONTRACT_METHOD_FLOOR = 265
+
+#: The 3-D tier's own return convention, shared by nine builders.
+_THREE_D_ACTOR = (
+    "the 3-D tier's builders hand back the PyVista actor they made rather than the scene (round 1's M13); "
+    "converting the tier is a `src/` change, not this guard's"
+)
+
+#: The public methods that register a layer, or delegate to a builder, and deliberately do **not** answer
+#: `Self`, as `module:Class.method -> why`. Everything else the two rules below flag is a defect.
+#:
+#: This table is the explicit opt-out the contract needs for a terminal method, and it is where the three
+#: shapes round 2's N1 named belong — a teardown that re-registers to restore layer order, and an event
+#: callback a caller must not chain on, are both flagged by rule 1 and must be entered here with a reason
+#: rather than escaping the scan silently. (N1's third shape, a description *reader*, is no longer flagged
+#: at all: see :data:`REGISTRARS`.)
+CONTRACT_CARVE_OUTS = {
+    "digitalearth.static.maps.decoration:DecorationMixin.stock_img": (
+        "hands back the backdrop artist a caller restyles; pinned by "
+        "tests/static/test_decoration_chaining.py"
+    ),
+    "digitalearth.three_d.base:Scene3DBase.add_mesh": _THREE_D_ACTOR,
+    "digitalearth.three_d.base:Scene3DBase.add_volume": _THREE_D_ACTOR,
+    "digitalearth.three_d.globe:GlobeMixin.globe": _THREE_D_ACTOR,
+    "digitalearth.three_d.point_cloud:PointCloudMixin.point_cloud": _THREE_D_ACTOR,
+    "digitalearth.three_d.terrain:TerrainMixin.terrain": _THREE_D_ACTOR,
+    "digitalearth.three_d.vector:VectorMixin.extruded_polygons": _THREE_D_ACTOR,
+    "digitalearth.three_d.vector:VectorMixin.vectors": _THREE_D_ACTOR,
+    "digitalearth.three_d.volume:VolumeMixin.isosurface": _THREE_D_ACTOR,
+    "digitalearth.three_d.volume:VolumeMixin.volume": _THREE_D_ACTOR,
+}
+
+
+def _self_calls(function, nested: bool = False) -> set:
+    """Return the `self.<name>(...)` methods called in a function.
+
+    Args:
+        function: The `FunctionDef` to read.
+        nested: Whether to read into nested functions and lambdas as well. `False` (the default) keeps a
+            call inside a closure with the closure, which is what the delegation rule wants. `True` is what
+            the registration rule wants: a layer registered from inside a `def apply(widget)` is still
+            registered, and the closure was round 2's M7 escape route I.
+
+    Returns:
+        The attribute names called on `self`. A nested **class** is skipped either way — its methods are
+        another class's `self`.
+    """
+    names, stack = set(), list(function.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.ClassDef):
+            continue
+        shallow = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        if isinstance(node, shallow) and not nested:
+            continue
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "self"
+        ):
+            names.add(node.func.attr)
+        stack.extend(ast.iter_child_nodes(node))
+    return names
+
+
+def _class_members(klass: ast.ClassDef) -> dict:
+    """Return `method name -> FunctionDef` for one class body.
+
+    Args:
+        klass: The `ClassDef` to read.
+
+    Returns:
+        Its own functions, so the registration walk can follow a private helper by name.
+    """
+    return {
+        node.name: node
+        for node in klass.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _registrar_reach(members: dict, name: str, seen=None) -> set:
+    """Return the registration funnels one method reaches, through its class's own private helpers.
+
+    Args:
+        members: The class's `method name -> FunctionDef` map, as :func:`_class_members` builds it.
+        name: The method to walk from.
+        seen: Method names already walked, so a cycle terminates.
+
+    Returns:
+        The names from :data:`REGISTRARS` the method reaches. The walk is transitive through **private**
+        helpers on the same class, which is round 2's M7 escape route C: `mark_extent` calls `self._mark`,
+        which calls `self.add_layer`, and a one-level scan sees neither.
+    """
+    seen = set() if seen is None else seen
+    if name in seen:
+        return set()
+    seen.add(name)
+    node = members.get(name)
+    if node is None:
+        return set()
+    found = set()
+    for called in _self_calls(node, nested=True):
+        if called in REGISTRARS:
+            found.add(called)
+        elif called.startswith("_"):
+            found |= _registrar_reach(members, called, seen)
+    return found
+
+
+@functools.cache
+def _contract_classes() -> tuple:
+    """Return `(module, ClassDef)` for every class the builder contract is policed over.
+
+    Every `*Mixin` in the four backend packages, plus the base and composed classes
+    :data:`COMPOSED_CLASSES` names. Renderers, glyph internals and the private helper classes beside them
+    are deliberately out of scope: they are machinery a caller never chains on, and matching a builder name
+    against them is what makes `Renderer.draw_layer` look like a method that should answer `Self`.
+    """
+    found = []
+    for backend in BACKENDS:
+        for path in sorted(_module_path(backend).glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for klass in tree.body:
+                if isinstance(klass, ast.ClassDef) and klass.name.endswith("Mixin"):
+                    found.append((f"{backend}.{path.stem}", klass))
+    for module, names in COMPOSED_CLASSES.items():
+        path = _module_path(module).with_suffix(".py")
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for klass in tree.body:
+            if isinstance(klass, ast.ClassDef) and klass.name in names:
+                found.append((module, klass))
+    return tuple(found)
+
+
+@functools.cache
+def _contract_methods() -> tuple:
+    """Return `(id, members, FunctionDef)` for every public method on a contract class.
+
+    `id` is `module:Class.method`, the key :data:`CONTRACT_CARVE_OUTS` uses, and `members` is the owning
+    class's method map so a rule can walk it.
+    """
+    found = []
+    for module, klass in _contract_classes():
+        members = _class_members(klass)
+        for name, node in sorted(members.items()):
+            if not name.startswith("_"):
+                found.append((f"{module}:{klass.name}.{name}", members, node))
+    return tuple(found)
+
+
+def _answers_self(node) -> bool:
+    """Return whether a function is annotated `-> Self`."""
+    return node.returns is not None and ast.unparse(node.returns) == "Self"
+
+
+class TestTheContractScanReachesTheComposition:
+    """Tests that the two rules below are read over the whole chaining surface, not a corner of it.
+
+    Round 2's M7 measured the previous scan at **3** public methods: it filtered classes on
+    `name.endswith("Mixin")` and opened only the four backend directories, so `Scene`, `GeoLayerBase`,
+    `Map`, `WebMapBase`, `WebMap`, `Scene3DBase`, `Scene3D`, `InteractiveMapBase` and `InteractiveMap`
+    were never read at all — and `Scene` is where `add_layer` itself lives. These assertions pin the
+    widened scope, because a rule is worth exactly what its scan reaches.
+    """
+
+    def test_the_scan_opens_every_base_and_composed_class(self):
+        """All ten classes :data:`COMPOSED_CLASSES` names are in scope.
+
+        Test scenario:
+            The scope defect M7 named, asserted directly: a filter that reads `*Mixin` classes only
+            satisfies every rule below over a tree where `Scene.add_layer` has regressed.
+        """
+        opened = {f"{module}:{klass.name}" for module, klass in _contract_classes()}
+        expected = {
+            f"{module}:{name}"
+            for module, names in COMPOSED_CLASSES.items()
+            for name in names
+        }
+        assert expected <= opened, (
+            f"these classes must be in the contract scan: {sorted(expected - opened)}"
+        )
+
+    def test_the_scan_still_opens_every_mixin(self):
+        """Every mixin the declaration scan finds is a contract class too.
+
+        Test scenario:
+            The widened scope must be a superset of the old one, so a mixin cannot drop out of the rules
+            while the composed classes are added.
+        """
+        mixins = {f"{module}:{name}" for _, module, name, _, _ in _mixins()}
+        opened = {f"{module}:{klass.name}" for module, klass in _contract_classes()}
+        assert mixins <= opened, (
+            f"these mixins fell out of the contract scan: {sorted(mixins - opened)}"
+        )
+
+    def test_the_scan_reaches_the_methods_it_was_measured_over(self):
+        """The scan reaches at least the classes it reached when it was widened.
+
+        Test scenario:
+            Every assertion in the next class iterates this scan and passes over an empty one, which is
+            how a scan that reached 3 methods read as a guard over 220.
+        """
+        assert len(_contract_classes()) >= CONTRACT_CLASS_FLOOR, (
+            f"expected >={CONTRACT_CLASS_FLOOR} contract classes, found {len(_contract_classes())}"
+        )
+
+    def test_the_scan_reaches_the_public_methods_it_was_measured_over(self):
+        """The scan reaches at least the public-method count it was measured at.
+
+        Test scenario:
+            The companion floor to the class count: a filter that opened every class and then read no
+            method off it would satisfy the one above.
+        """
+        assert len(_contract_methods()) >= CONTRACT_METHOD_FLOOR, (
+            f"expected >={CONTRACT_METHOD_FLOOR} public contract methods, found {len(_contract_methods())}"
+        )
+
+
+class TestNoBuilderQuietlyDeclinesToChain:
+    """Tests that a method which *builds* answers `Self`, so the call chains.
+
+    :class:`TestSelfReturningBuilders` checks that a method annotated `-> Self` really returns `self`. A
+    builder annotated anything else satisfies it by having nothing to check, which is how
+    `static.maps.projection.graticule`, `set_domain` and `set_global` sat beside a `set_bounds` that
+    returned `Self` for a whole release: `graticule` registered `graticule-1` and drew, and handed back
+    nothing. These two rules read the *other* direction — a method that does a builder's work must not
+    declare a builder's opposite.
+
+    The test is **"not `Self`"**, not "`-> None`". Round 2's M7 showed that an `-> None` test leaves four
+    other ways to write the same defect: no annotation at all, the string `'None'`, handing back the artist
+    (the pre-conversion convention), and `-> Any`. All four now read as the same finding.
+    """
+
+    def test_no_public_method_registers_a_layer_without_answering_self(self):
+        """A method that puts a layer in the figure hands the map back, so the call chains.
+
+        Test scenario:
+            Registering is what makes a method a builder: the layer it describes is addressable by id,
+            carries a `visible` flag and is redrawn from a stored figure, and every other such method on
+            the 2-D tiers answers `Self`. One that answers anything else breaks the chain at exactly the
+            point a caller cannot see coming. The known exceptions are enumerated in
+            :data:`CONTRACT_CARVE_OUTS` with a reason each, so a new one has to be argued for rather than
+            merely written.
+        """
+        offenders = [
+            f"{key} -> {'<none>' if node.returns is None else ast.unparse(node.returns)}"
+            f" registers via {sorted(_registrar_reach(members, key.rsplit('.', 1)[1]))}"
+            for key, members, node in _contract_methods()
+            if not _answers_self(node)
+            and key not in CONTRACT_CARVE_OUTS
+            and _registrar_reach(members, key.rsplit(".", 1)[1])
+        ]
+        assert offenders == [], (
+            "these register a layer and must be annotated `-> Self`, returning self (or be entered in "
+            f"CONTRACT_CARVE_OUTS with a reason): {offenders}"
+        )
+
+    def test_no_public_method_delegates_to_a_builder_without_answering_self(self):
+        """A method whose work is another builder's answers what that builder answers.
+
+        Test scenario:
+            `set_domain` and `set_global` are `set_bounds` with the argument worked out — one resolves a
+            named region, the other reads the projection's own domain — so throwing its `Self` away was
+            the whole defect. A terminal action is not caught by this: `render` calls `_apply_frame`,
+            which is not a builder, and `show` calls `super().show()`, which is not a call on `self`.
+        """
+        chainable = {
+            node.name
+            for _, klass in _contract_classes()
+            for node in _class_members(klass).values()
+            if _answers_self(node)
+        }
+        offenders = [
+            f"{key} -> {'<none>' if node.returns is None else ast.unparse(node.returns)}"
+            f" delegates to {sorted(_self_calls(node) & chainable)}"
+            for key, _, node in _contract_methods()
+            if not _answers_self(node)
+            and key not in CONTRACT_CARVE_OUTS
+            and _self_calls(node) & chainable
+        ]
+        assert offenders == [], (
+            "these delegate to a `-> Self` builder and must answer what it answers (or be entered in "
+            f"CONTRACT_CARVE_OUTS with a reason): {offenders}"
+        )
+
+    def test_every_carve_out_names_a_method_the_scan_finds(self):
+        """Each entry in the carve-out table is a method that exists and is in scope.
+
+        Test scenario:
+            A table of names is a second place for the tree to drift away from. An entry whose method was
+            renamed, made private or moved would silently stop exempting anything — and, worse, would read
+            as evidence that the rule had been thought about where it no longer applies.
+        """
+        reachable = {key for key, _, _ in _contract_methods()}
+        stale = sorted(set(CONTRACT_CARVE_OUTS) - reachable)
+        assert stale == [], (
+            f"these carve-outs name no public method the scan reaches: {stale}"
+        )
+
+    def test_every_carve_out_is_a_method_a_rule_would_otherwise_flag(self):
+        """Each carve-out names a method one of the two rules would flag without the exemption.
+
+        Test scenario:
+            A carve-out is only honest while the thing it exempts is still something the rules catch.
+            `mark_extent` was exempted when it registered a layer under an `Optional[Polygon]` return;
+            round 1's L7 fix made it `-> Self`, so no rule flagged it any more and the entry exempted
+            nothing — yet read as a considered decision, which is the very "guard that overstates its
+            reach" M7 was about. The existence check above could not see that: the method was still
+            there. This asserts the stronger property — that every entry would trip rule 1 or rule 2 if
+            it were removed — so a carve-out whose method stops needing one fails here rather than
+            lingering. A missing method is the companion test's job, so an absent key is skipped here.
+        """
+        chainable = {
+            node.name
+            for _, klass in _contract_classes()
+            for node in _class_members(klass).values()
+            if _answers_self(node)
+        }
+        by_key = {key: (members, node) for key, members, node in _contract_methods()}
+        dead = []
+        for key in CONTRACT_CARVE_OUTS:
+            entry = by_key.get(key)
+            if entry is None:
+                continue
+            members, node = entry
+            registers = _registrar_reach(members, key.rsplit(".", 1)[1])
+            delegates = _self_calls(node) & chainable
+            if _answers_self(node) or not (registers or delegates):
+                dead.append(key)
+        assert dead == [], (
+            "these carve-outs trip neither rule, so they exempt nothing and must be removed: "
+            f"{sorted(dead)}"
+        )
+
+
+#: One crafted class per way round 2's M7 proved a registrar could evade the rule, as
+#: `route -> (source, class, method)`. Fed to the helpers the rule itself uses rather than to a
+#: reimplementation of them, so narrowing the rule again fails these rather than passing quietly.
+ESCAPE_ROUTES = {
+    "A-plain-none": (
+        """
+        class Offender:
+            def spaghetti(self, data) -> None:
+                self._draw(data)
+        """,
+        "Offender",
+        "spaghetti",
+    ),
+    "C-private-hop": (
+        """
+        class Offender:
+            def mark_extent(self, extent) -> None:
+                self._mark(extent)
+
+            def _mark(self, extent):
+                return self.add_layer(extent)
+        """,
+        "Offender",
+        "mark_extent",
+    ),
+    "D-no-annotation": (
+        """
+        class Offender:
+            def field(self, data):
+                return self._draw(data)
+        """,
+        "Offender",
+        "field",
+    ),
+    "E-string-none": (
+        """
+        class Offender:
+            def field(self, data) -> 'None':
+                self._draw(data)
+        """,
+        "Offender",
+        "field",
+    ),
+    "F-hands-back-the-artist": (
+        """
+        class Offender:
+            def field(self, data) -> Any:
+                return self._draw(data)
+        """,
+        "Offender",
+        "field",
+    ),
+    "H-three-d-funnel": (
+        """
+        class Offender:
+            def terrain(self, data) -> Any:
+                return self._add_described_layer(data)
+        """,
+        "Offender",
+        "terrain",
+    ),
+    "I-inside-a-closure": (
+        """
+        class Offender:
+            def dynamic(self, data) -> None:
+                def apply(widget):
+                    return self._draw(data)
+
+                apply(None)
+        """,
+        "Offender",
+        "dynamic",
+    ),
+}
+
+#: Crafted classes the rule must leave alone, as `shape -> (source, class, method)`. The first is round 2's
+#: N1: a terminal that only *reads* a description through a name beginning `_describe`, which the previous
+#: prefix match turned into a registrar. The second is the private helper the previous rule excluded by
+#: reading public methods only, kept here so that exclusion is pinned rather than assumed.
+LEGITIMATE_SHAPES = {
+    "a-description-reader": (
+        """
+        class Legitimate:
+            def describe(self) -> None:
+                print(self._described_opts())
+        """,
+        "Legitimate",
+        "describe",
+    ),
+    "a-terminal-that-reads-the-axes": (
+        """
+        class Legitimate:
+            def render(self) -> None:
+                self._apply_frame()
+                self._settle()
+        """,
+        "Legitimate",
+        "render",
+    ),
+}
+
+
+def _crafted(source: str, klass: str) -> dict:
+    """Return the method map of one crafted class, so a rule can be run against it.
+
+    Args:
+        source: An indented class definition, as the tables above hold it.
+        klass: The class to read out of it.
+
+    Returns:
+        Its `method name -> FunctionDef` map, as :func:`_class_members` builds it for a real class.
+    """
+    tree = ast.parse(textwrap.dedent(source))
+    found = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == klass
+    )
+    return _class_members(found)
+
+
+def _registration_rule(source: str, klass: str, method: str) -> bool:
+    """Return whether the registration rule flags one crafted method.
+
+    Args:
+        source: The crafted class definition.
+        klass: The class in it.
+        method: The method the rule is read over.
+
+    Returns:
+        `True` when the method both fails to answer `Self` and reaches a registrar — the exact condition
+        `test_no_public_method_registers_a_layer_without_answering_self` applies to the tree.
+    """
+    members = _crafted(source, klass)
+    node = members[method]
+    return not _answers_self(node) and bool(_registrar_reach(members, method))
+
+
+class TestTheRegistrationRuleHasTeethOnEveryEscapeRoute:
+    """Tests the rule against one planted offender per escape route round 2's M7 measured.
+
+    M7's finding was not that the rule was wrong about the two shapes it was written for, but that it
+    covered only those two: a private hop, a missing annotation, a string annotation, an artist return,
+    the 3-D tier's funnel and a closure all walked past it. Each is planted here, as source, and run
+    through the same helpers the tree is read with.
+    """
+
+    @pytest.mark.parametrize("route", sorted(ESCAPE_ROUTES))
+    def test_the_rule_flags_the_planted_registrar(self, route):
+        """Each planted registrar is flagged.
+
+        Args:
+            route: The entry in :data:`ESCAPE_ROUTES` under test.
+
+        Test scenario:
+            A ratchet is worth what it catches, and the only way to know is to plant the thing it is
+            supposed to catch. These seven were measured as passing undetected before this guard was
+            widened.
+        """
+        source, klass, method = ESCAPE_ROUTES[route]
+        assert _registration_rule(source, klass, method), (
+            f"escape route {route} is not flagged; the rule has no teeth on it"
+        )
+
+    @pytest.mark.parametrize("shape", sorted(LEGITIMATE_SHAPES))
+    def test_the_rule_leaves_the_legitimate_shape_alone(self, shape):
+        """Each shape that is not a builder is left alone.
+
+        Args:
+            shape: The entry in :data:`LEGITIMATE_SHAPES` under test.
+
+        Test scenario:
+            Round 2's N1: the rule's `_describe` **prefix** match made any future
+            `self._described_opts()` reader a registrar. The funnels are named exactly now, and this is
+            what says so.
+        """
+        source, klass, method = LEGITIMATE_SHAPES[shape]
+        assert not _registration_rule(source, klass, method), (
+            f"{shape} is a false positive; the rule should not flag it"
+        )
+
+    def test_a_planted_builder_that_answers_self_is_not_flagged(self):
+        """A registrar annotated `-> Self` is what the rule asks for, so it is not flagged.
+
+        Test scenario:
+            The other half of the rule's condition. Without this the two assertions above would hold for
+            a rule that flagged every registrar, `-> Self` ones included — which would make the contract
+            impossible to satisfy rather than enforced.
+        """
+        source = """
+        class Builder:
+            def field(self, data) -> Self:
+                self._draw(data)
+                return self
+        """
+        assert not _registration_rule(source, "Builder", "field"), (
+            "a `-> Self` registrar satisfies the contract and must not be flagged"
+        )
+
+
+def _delegation_rule(source: str, klass: str, method: str) -> bool:
+    """Return whether the delegation rule flags one crafted method.
+
+    Args:
+        source: The crafted class definition.
+        klass: The class in it.
+        method: The method the rule is read over.
+
+    Returns:
+        `True` when the method fails to answer `Self` and calls a `-> Self` builder on `self`. The
+        chainable set is the tree's own, so this also pins that `set_bounds` is still a builder.
+    """
+    members = _crafted(source, klass)
+    node = members[method]
+    chainable = {
+        other.name
+        for _, found in _contract_classes()
+        for other in _class_members(found).values()
+        if _answers_self(other)
+    }
+    return not _answers_self(node) and bool(_self_calls(node) & chainable)
+
+
+class TestTheDelegationRuleReadsEveryAnnotation:
+    """Tests the delegation rule against the annotations the `-> None` test walked past.
+
+    The rule had teeth on `-> None` — that is how `set_domain` and `set_global` were found — and on
+    nothing else. A method that threw a builder's `Self` away under any other annotation was invisible,
+    which is the same hole round 2's M7 measured on the registration rule.
+    """
+
+    def test_a_none_annotated_delegation_is_flagged(self):
+        """The shape the rule was written for is still flagged.
+
+        Test scenario:
+            The control. Without it the two assertions below would hold for a rule that had stopped
+            reading `-> None` while gaining the other annotations.
+        """
+        source = """
+        class Offender:
+            def set_global(self) -> None:
+                self.set_bounds(-180.0, -90.0, 180.0, 90.0)
+        """
+        assert _delegation_rule(source, "Offender", "set_global"), (
+            "a `-> None` method whose work is `set_bounds` must be flagged"
+        )
+
+    def test_an_any_annotated_delegation_is_flagged(self):
+        """`-> Any` over a builder is the same defect, and now reads as one.
+
+        Test scenario:
+            `-> Any` is the annotation the pre-conversion builders carried, so it is the one a
+            copy-paste reintroduces. The previous rule read `-> None` exactly and let it through.
+        """
+        source = """
+        class Offender:
+            def set_global(self) -> Any:
+                return self.set_bounds(-180.0, -90.0, 180.0, 90.0)
+        """
+        assert _delegation_rule(source, "Offender", "set_global"), (
+            "an `-> Any` method whose work is `set_bounds` must be flagged"
+        )
+
+    def test_a_terminal_action_is_not_flagged(self):
+        """A terminal that calls private helpers only is left alone.
+
+        Test scenario:
+            `render`'s shape: it calls `self._apply_frame()`, which is not a builder, so the rule must
+            not ask it to chain. A rule that flagged every `-> None` method would make the contract
+            impossible to satisfy instead of enforcing it.
+        """
+        source = """
+        class Terminal:
+            def render(self) -> None:
+                self._apply_frame()
+        """
+        assert not _delegation_rule(source, "Terminal", "render"), (
+            "a terminal action calls no builder and must not be flagged"
         )
 
 

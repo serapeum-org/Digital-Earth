@@ -13,14 +13,16 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple, cast
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
+from cleopatra.styling.perceptual import make_diverging
+from cleopatra.styling.scaling import ColorScale
 from matplotlib import colormaps
-from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.colors import BoundaryNorm, ListedColormap, to_hex
 
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
@@ -48,11 +50,16 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
-from digitalearth.static.guides import source_field
+from digitalearth.static.guides import drawn_scale, source_field
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import relocate_flat_style
+from digitalearth.static.render_compat import (
+    CENTER_KEY,
+    EXTREME_KEYS,
+    relocate_flat_style,
+)
 from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord, drawing_style
+from digitalearth.static.style_fold import coerce_color_scale
 
 #: The tier logs through the standard library, as `static/maps/base.py` does — not loguru, which is the web
 #: tier's choice. One logger per tier, so a skip and a fallback from the same draw land in the same place.
@@ -416,6 +423,300 @@ def _class_plan(
     return recorded, asks_categorical(scheme) or from_record
 
 
+@dataclass(frozen=True)
+class FieldColors:
+    """The colour decisions a field render makes that its colormap cannot carry on its own.
+
+    The tier used to state **one** of them, in one place, as a literal:
+    ``artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))`` on a classified vector layer.
+    A field stated none, so a nodata cell took matplotlib's transparent default and a clipped value took the
+    ramp's own end colour — a field clipped at ``vmax`` drew exactly like one that peaks there.
+
+    They travel as one value rather than as three keywords because they are **one decision** asked at two
+    points of the same draw: the keywords have to leave the drawing options before the glyph is built (a
+    cleopatra glyph refuses a keyword outside its own list), while the colours can only be applied once the
+    artist and its limits exist. A value read at the first point and asked at the second is what keeps those
+    two from drifting apart, and what stops the drawer carrying a loose dict between them.
+
+    The divergence centre is the same kind of decision and sits here for the same reason. cleopatra
+    symmetrises the limits around a ``center`` **and** swaps in its own diverging colormap when the caller
+    named none — but this tier resolves a colormap on every field render, through
+    :func:`~digitalearth.base.display.auto_cmap`, so from the glyph's point of view ``cmap`` is always
+    explicit and that swap never fires. The result was symmetric limits drawn through a *sequential* ramp:
+    the neutral centre the symmetry exists for was not there to land on.
+
+    Attributes:
+        missing: Colour for a cell with no value, or ``None`` to leave the colormap's own treatment alone.
+        over: Colour for a value above the upper limit, likewise.
+        under: Colour for a value below the lower limit, likewise.
+        center: The value a diverging scale is built around, or ``None`` when the call asked for none.
+
+    Examples:
+        - Read off a drawing-options dict, which is also how the keywords leave it:
+            ```python
+            >>> from digitalearth.static.maps.raster import FieldColors
+            >>> opts = {"missing": "#cccccc", "cmap": "viridis"}
+            >>> colors = FieldColors.stated_on(opts)
+            >>> colors.missing, opts
+            ('#cccccc', {'cmap': 'viridis'})
+
+            ```
+        - A call that states nothing says so, which is the signal to leave the colormap untouched:
+            ```python
+            >>> from digitalearth.static.maps.raster import FieldColors
+            >>> FieldColors.stated_on({"cmap": "viridis"}).states_extremes
+            False
+
+            ```
+        - Both spellings of a divergence centre are read, and the centre stays in the options because
+          cleopatra is the one that symmetrises the limits with it:
+            ```python
+            >>> from digitalearth.static.maps.raster import FieldColors
+            >>> FieldColors.stated_on({"center": 0.0}).center
+            0.0
+            >>> FieldColors.stated_on({"color_scale": "midpoint", "midpoint": 2.5}).center
+            2.5
+
+            ```
+    """
+
+    missing: Optional[str] = None
+    over: Optional[str] = None
+    under: Optional[str] = None
+    center: Optional[float] = None
+
+    @classmethod
+    def stated_on(cls, opts: Dict[str, Any]) -> "FieldColors":
+        """Read this tier's own colour decisions off a drawing-options dict.
+
+        The :data:`~digitalearth.static.render_compat.EXTREME_KEYS` never reach a cleopatra glyph: a glyph
+        carries its extremes on the **colormap** it is handed, not as keywords, and refuses by name anything
+        outside its own keyword list. Removing them here is what makes them the tier's. The centre is
+        *read and left in place* — it is cleopatra's keyword, and symmetrising the limits with it is
+        cleopatra's job; only the diverging ramp is this tier's to supply.
+
+        Args:
+            opts: The drawing options. The extreme-colour keys are removed from it; the centre is not.
+
+        Returns:
+            The decisions the call stated, with ``None`` for each one it did not.
+
+        Raises:
+            ValueError: when ``color_scale=`` names no colour scale — raised by
+                :func:`~digitalearth.static.style_fold.coerce_color_scale`, the same refusal the colour fold
+                gives a few lines later, with the same message.
+        """
+        return cls(
+            center=cls._center_on(opts),
+            **{key: opts.pop(key) for key in EXTREME_KEYS if key in opts},
+        )
+
+    @staticmethod
+    def _center_on(opts: Dict[str, Any]) -> Optional[float]:
+        """Return the value a diverging scale was asked to be built around, or ``None``.
+
+        Two keywords state one thing, and both are cleopatra's rather than this tier's:
+
+        * ``center=`` symmetrises the colour limits on it — cleopatra's ``_center_limits`` takes the larger
+          of ``|vmin - center|`` and ``|vmax - center|`` as the half-range, so the result is
+          ``center ± that`` — and the ramp's middle then lands on the centre, one unit of departure being
+          one step of colour on either side. Measured: a band running ``-3`` to ``8`` with ``center=0``
+          draws through limits ``(-8.0, 8.0)``, and so does the same band with ``vmin=-3, vmax=8`` given
+          explicitly, because the symmetrisation is of the *limits* and not of the data;
+        * ``color_scale="midpoint", midpoint=`` keeps the data's own asymmetric limits and moves the
+          *colour* centre instead, through cleopatra's ``MidpointNormalize``.
+
+        They are different requests and neither is turned into the other. What they share is that both want
+        a **diverging ramp**, which is the one part of the request this tier has to supply itself.
+
+        Args:
+            opts: The drawing options, read and not mutated. ``midpoint`` counts only together with
+                ``color_scale="midpoint"``: on its own it is a field of the colour group that nothing reads,
+                so treating it as a request would diverge a plainly-scaled layer.
+
+        Returns:
+            The centre as a float, or ``None`` when neither keyword states one.
+        """
+        center = opts.get(CENTER_KEY)
+        if center is not None:
+            return float(center)
+        midpoint, scale = opts.get("midpoint"), opts.get("color_scale")
+        if midpoint is None or scale is None:
+            return None
+        if coerce_color_scale(scale) is not ColorScale.MIDPOINT:
+            return None
+        return float(midpoint)
+
+    def ramp_over(self, cmap: Any, values: Any, requested: Any) -> Any:
+        """Return the colormap this field should draw with, diverging it when the data warrants that.
+
+        Opt-in on both counts. The ramp is replaced only when the call stated a centre *and* the caller named
+        no colormap of their own — the two notebooks that already draw a midpoint scale pass
+        ``cmap='RdBu_r'``, and restyling them would be a change they did not ask for.
+
+        The detection is :meth:`~digitalearth.base.spec.scale.Scale.straddles` over the band's own domain: a
+        ramp centred outside the data draws every value in one arm, which is worse than the sequential ramp
+        it would replace. That case keeps the resolved ramp and says so at ``WARNING``, because a silent
+        decline reads as the option not working. cleopatra still symmetrises the limits — that is its
+        keyword, not this decision — so the decline is of the *ramp* only, and the warning says that too: an
+        off-band centre still widens the colour domain to reach the centre. Measured, a band running ``12``
+        to ``88`` with ``center=0`` draws through ``(-88.0, 88.0)`` on the sequential ramp that was kept.
+
+        Measuring the domain costs one pass over the band, which is why it is behind the centre check rather
+        than done for every field.
+
+        Args:
+            cmap: The colormap this layer resolved to — a registered name or a ``Colormap``.
+            values: The band being drawn, as the array the glyph will receive.
+            requested: The colormap the caller asked for, or ``None`` when the tier resolved one itself.
+
+        Returns:
+            A diverging colormap built from `cmap`'s two end colours, or `cmap` itself — the very object
+            that was passed in, so a declined call is a no-op rather than a rebuild.
+
+        Examples:
+            - A centre the band straddles replaces the ramp with a diverging one built from its ends:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> anomaly = np.array([-3.0, 0.0, 4.0, 8.0])
+                >>> FieldColors(center=0.0).ramp_over("viridis", anomaly, None).name
+                'viridis-diverging'
+
+                ```
+            - It declines three ways, each giving the resolved ramp straight back: no centre was stated,
+              the caller named their own colormap, or the band does not straddle the centre:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> anomaly = np.array([-3.0, 0.0, 4.0, 8.0])
+                >>> rainfall = np.array([12.0, 40.0, 88.0])
+                >>> FieldColors().ramp_over("viridis", anomaly, None)
+                'viridis'
+                >>> FieldColors(center=0.0).ramp_over("viridis", anomaly, "RdBu_r")
+                'viridis'
+                >>> FieldColors(center=0.0).ramp_over("viridis", rainfall, None)
+                'viridis'
+
+                ```
+        """
+        if self.center is None or requested is not None:
+            return cmap
+        scale = Scale.from_values(values)
+        if not scale.straddles(self.center):
+            low, high = scale.as_limits()
+            logger.warning(
+                "field(): the diverging ramp a centre of %s asks for is not drawn — the band runs %s to "
+                "%s, so one arm of the ramp would hold every value; the sequential colormap is kept. Only "
+                "the ramp is declined: `center=` is cleopatra's keyword and still symmetrises the colour "
+                "limits on it, so an off-band centre widens the colour domain to reach the centre (a "
+                '`color_scale="midpoint"` scale leaves the limits alone). Centre it inside the data, or '
+                "drop the centre.",
+                self.center,
+                low,
+                high,
+            )
+            return cmap
+        # The two ends of the resolved ramp become the two arms, which keeps a variable's own auto-styled
+        # colours meaningful instead of overriding them with one hard-coded pair. `make_diverging` builds the
+        # arms in Lab, equalises their lightness and puts a light neutral between them, so the centre is the
+        # lightest colour in the ramp — the property a diverging map is read by.
+        ramp = colormaps[cmap] if isinstance(cmap, str) else cmap
+        return make_diverging(
+            to_hex(ramp(0.0)),
+            to_hex(ramp(1.0)),
+            name=f"{getattr(ramp, 'name', 'ramp')}-diverging",
+        )
+
+    @property
+    def states_extremes(self) -> bool:
+        """Whether the caller stated any extreme colour at all.
+
+        Returns:
+            ``False`` when none was stated, which is the signal to leave the resolved colormap exactly as it
+            is — the reason this capability changes nothing for a figure that does not ask for it.
+
+        Examples:
+            - One stated colour is enough, and a divergence centre is not one of the three:
+                ```python
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> FieldColors(under="#0000ff").states_extremes
+                True
+                >>> FieldColors(center=0.0).states_extremes
+                False
+
+                ```
+        """
+        return any((self.missing, self.over, self.under))
+
+    def applied_to(self, drawn: DrawnLayer) -> DrawnLayer:
+        """Return a drawn layer with the stated colours on its colormap *and* on the scale it publishes.
+
+        The route is through :class:`~digitalearth.base.spec.scale.Scale` rather than straight onto the
+        colormap, because the scale is what the layer publishes: the colours end up in the figure's
+        description, so a tier that reads that description back can colour the same values the same way.
+        No other tier reads them yet: ``STATIC_STYLE_SCHEMA`` declares ``missing``/``over``/``under`` and
+        ``INTERACTIVE_STYLE_SCHEMA`` declares none of the three, so the round trip that works today is this
+        tier reading back its own figure.
+
+        An extreme that was not stated is passed as ``None``, which is how
+        ``matplotlib.colors.Colormap.with_extremes`` says "keep this one" — so a colormap the caller built
+        themselves keeps the extremes it already carried, and only the stated ones are restated.
+
+        Args:
+            drawn: What the glyph produced. Returned unchanged when it has no artist, when its artist
+                colours through no colormap, or when the artist's norm has no limits a scale could be
+                published over.
+
+        Returns:
+            The layer, with its artist's colormap recoloured and the stated colours on its published scale.
+
+        Examples:
+            - The two halves of what it does, read back off a drawn field: the colours are on the drawn
+              colormap, and on the scale the figure's colour encoding carries — which is what a tier
+              reading the figure back would have to colour from:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.colors import to_hex
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(
+                ...     np.arange(12.0).reshape(3, 4), name="g", over="#ff0000", missing="#cccccc"
+                ... )
+                >>> cmap = m.artist("g").get_cmap()
+                >>> to_hex(cmap.get_over()), to_hex(cmap.get_bad())
+                ('#ff0000', '#cccccc')
+                >>> described = m.figure_spec.layers.get("g").symbology.encodings["color"].scale
+                >>> described.extremes()
+                {'missing': '#cccccc', 'over': '#ff0000'}
+                >>> m.close()
+
+                ```
+        """
+        artist = drawn.artist
+        if artist is None or not hasattr(artist, "set_cmap"):
+            return drawn
+        # A categorical field already states its scale — its codes are the one scale a norm cannot express —
+        # so the colours are added to *that* rather than to a second reading of the same artist.
+        stated = drawn.scale if drawn.scale is not None else drawn_scale(artist)
+        if stated is None:
+            return drawn
+        scale = stated.with_extremes(
+            missing=self.missing, over=self.over, under=self.under
+        )
+        artist.set_cmap(
+            artist.get_cmap().with_extremes(
+                bad=scale.missing, over=scale.over, under=scale.under
+            )
+        )
+        # `cast` because `dataclasses.replace` is declared to hand back a bare `DataclassInstance`:
+        # the object is the `DrawnLayer` that went in, and this method's callers and its own
+        # annotation both say so (python:S5886).
+        return cast(DrawnLayer, replace(drawn, scale=scale))
+
+
 def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
 
@@ -441,6 +742,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     props = thawed_value(dict(layer.symbology.props))
     kind = props["via"]
     opts = drawing_style(scene, layer)
+    # The tier's own keywords, taken out before anything cleopatra sees: a glyph carries its extremes on the
+    # colormap, not as keywords, so these are folded there once the artist exists and its limits are known.
+    colors = FieldColors.stated_on(opts)
     recorded, codes = _class_plan(layer, kind, opts.get("scheme"))
     # Read at the size the figure will draw it: a band far past the canvas comes back decimated through
     # pyramids' windowed read, and `identity` carries the band's name and units a bare windowed array lacks
@@ -462,7 +766,7 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # `auto_cmap`'s lookup) or the tier default. A same-tier figure always carries them, so this changes nothing
     # for it.
     requested = opts.pop("cmap", props.get("cmap"))
-    opts["cmap"] = auto_cmap(
+    resolved = auto_cmap(
         src,
         requested,
         # `auto_cmap`'s fallback, reached only if the lookup answers no cmap. `auto_style` always answers one,
@@ -471,6 +775,10 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         props.get("default_cmap") or DEFAULT_FIELD_CMAP,
         lookup=lambda _: style,
     )
+    # A stated centre asks for a *diverging* ramp as well as symmetric limits, and the resolution above is
+    # exactly what stops cleopatra supplying one — so the colour decisions supply it, and only when the band
+    # straddles the centre (ST-3).
+    opts["cmap"] = colors.ramp_over(resolved, z_values, requested)
     levels = props.get("levels")
     if levels is None and kind in _CONTOUR_KINDS:
         # A caller's `interval=` wins over the variable's canonical levels, because it is the one the caller
@@ -523,7 +831,9 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     if classes is not None and classes.is_categorical:
         # A categorical scale is the one a norm cannot state — its edges look like any graduated cut — so the
         # drawer says it outright; a graduated one is read off the norm as it always was.
-        drawn = replace(drawn, scale=classes.scale)
+        drawn = cast(DrawnLayer, replace(drawn, scale=classes.scale))
+    if colors.states_extremes:
+        drawn = colors.applied_to(drawn)
     # The band's own name, which only the drawer can answer: the builder records a band *number* and never
     # opens the source. It is the same `identity` `auto_style` matched the colormap and the units on.
     return drawn.colored_by(source_field(identity, props["band"]))
@@ -919,7 +1229,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Render a raster band as a coloured field — a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
 
         **A bare 2-D numpy array is drawn too** — the "just show me this grid" case, which was
@@ -976,10 +1286,80 @@ class RasterMixin(_MixinBase):
                 categories rather than class edges — so :attr:`last_breaks` stays ``None`` and a
                 colorbar is refused in favour of the legend.
 
+                Five more of those keywords decide the **colour domain** and what falls outside it, and
+                they are declared in `STATIC_STYLE_SCHEMA` (ST-3, ST-10) rather than named in this
+                signature. Measured, `STATIC_STYLE_SCHEMA` carries all five while
+                `INTERACTIVE_STYLE_SCHEMA` carries none of them:
+
+                * ``robust=True`` takes the limits from the band's 2nd and 98th percentile instead of its
+                  min and max, so one outlier stops flattening the rest of the field — xarray's spelling,
+                  honoured by cleopatra. How much it helps depends on how large a share of the band the
+                  outliers are, so the figure it reaches is grid-dependent: measured on a **10x10** grid
+                  of zeros with two cells at 1000, the upper limit comes out at about ``20`` rather than
+                  ``1000``, while on a 5x5 grid the same two cells are 8% of the band — past the 2% tail
+                  — and the limits stay ``(0.0, 1000.0)``. An explicit ``vmin``/``vmax`` wins over it.
+                * ``center=`` is the value a diverging scale is built around. cleopatra symmetrises the
+                  limits on it, and this tier supplies the diverging **ramp** — built from the resolved
+                  colormap's own two ends — but only when the caller named no ``cmap`` of their own and
+                  the band straddles the centre. A centre outside the band keeps the sequential ramp and
+                  says so at ``WARNING``, because one arm would otherwise hold every value — the *ramp* is
+                  what is declined there, not the centre: cleopatra symmetrises the limits either way, so an
+                  off-band centre also widens the domain to reach it (measured: a band running ``12`` to
+                  ``88`` with ``center=0`` draws through ``(-88.0, 88.0)``).
+                * ``missing=``, ``over=`` and ``under=`` colour what the ramp cannot place: a nodata cell,
+                  a value above the upper limit and one below the lower. They are this tier's own keywords
+                  (:class:`FieldColors`), folded onto the drawn colormap *and* onto the scale the layer
+                  publishes, so they survive into the figure's description and come back on a re-read.
+                  This tier is the only one that reads them back so far.
+                  Unstated, each leaves the colormap's own treatment alone — which is matplotlib's
+                  transparent "bad" and the ramp's end colours.
+
         Returns:
-            The image mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map, so a figure reads as one expression — measured:
+            ``type(m.field(ds).set_title("Flow").colorbar()).__name__`` is ``'Map'`` (ST-20). **This is the
+            canonical note the other builders point at.**
+
+            **The decoration methods chain too**, as of round 1's L6: `coastlines`, `borders`, `land`,
+            `ocean`, `lakes`, `rivers`, `text`, `annotate`, `nightshade`, `tissot` and `basemap` are all
+            annotated `-> Self`, so `m.field(ds).coastlines().set_title("Flow")` is a `Map` the whole way
+            (measured). **The deliberate `-> Any` carve-outs are enumerated here**, and a new one belongs
+            in this list rather than beside its own method: `stock_img` hands back its backdrop artist, and
+            :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` hands back matplotlib's
+            ``QuiverKey``. For both, the return *is* the point of the call. `quiverkey` is the further case:
+            it draws onto the axes while registering **no layer**, so — measured on a map carrying one
+            ``quiver`` layer — `layer_ids` is `['vectors-1']` either side of it and
+            ``m.artist("quiverkey")`` raises `KeyError`, the reference arrow being furniture that explains a
+            layer rather than a layer of its own.
+
+            It returned the ``AxesImage`` until ST-20, and that was a silent divergence from this
+            package's own contract: `Method` (in `digitalearth.base.contract`) declares
+            ``returns = "self"`` as its *default*, so every builder the Core names has always been
+            declared chainable — and this tier handed back the engine's object instead. That contract,
+            not the other tiers, is what the change answers to: the web and interactive builders do
+            answer that way (``field``, ``points``, ``choropleth`` and ``lines`` are annotated
+            ``-> Self`` on both), but the **3-D tier does not** — measured by an AST scan of
+            `src/digitalearth/three_d/`, all **seven** of its data builders are annotated `-> Any`:
+            `terrain`, `volume`, `isosurface`, `point_cloud`, `vectors`, `extruded_polygons` and `globe`.
+            Each hands back the ``pyvista.Actor`` its drawer produced, or ``None`` when the drawer declined
+            the layer. So this tier was not the only one returning the engine's object, and the 3-D row is
+            still open.
+            ``tests/test_contract_names.py`` holds the tiers to the Core's keywords and call shape and
+            does not measure return values, which is why the divergence went unnoticed: the same line
+            chained on two tiers and raised ``AttributeError`` on this one. The ``-> Self`` promise is
+            checked by ``tests/test_mixin_contract.py`` instead, which requires both halves — the
+            annotation, and a body that really hands back ``self``.
+
+            **The artist is still reachable**, through
+            :meth:`~digitalearth.static.scene.Scene.artist`: ``m.artist()`` hands back what this call used
+            to return — the layer drawn last — and ``m.artist(layer_id)`` names one, so ``name=`` is the way
+            to keep a stable handle on a layer's artist in a figure of several.
+
+            **An off-limb layer is now read from the figure rather than from a ``None``.** A layer whose
+            data lies entirely outside what the display CRS shows draws nothing and is **absent from**
+            :attr:`~digitalearth.static.scene.Scene.layer_ids`, so
+            :meth:`~digitalearth.static.scene.Scene.artist` refuses it by name — the same answer every other
+            tier gives, and testable without a return value. An off-limb draw still renders an empty frame
+            rather than raising.
 
         Raises:
             TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
@@ -999,9 +1379,42 @@ class RasterMixin(_MixinBase):
                 >>> import numpy as np
                 >>> from digitalearth.static import Map
                 >>> with Map() as canvas:
-                ...     image = canvas.field(np.arange(12.0).reshape(3, 4))
-                ...     image.get_extent()
+                ...     _ = canvas.field(np.arange(12.0).reshape(3, 4), name="grid")
+                ...     canvas.artist("grid").get_extent()
                 [-0.5, 3.5, -0.5, 2.5]
+
+                ```
+            - A diverging field: the centre asks for symmetric limits *and* a diverging ramp, and the
+              extreme colours say what a clipped value and a nodata cell are drawn as:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.colors import to_hex
+                >>> from digitalearth.static import Map
+                >>> anomaly = np.array([[-3.0, 0.0], [4.0, 8.0]])
+                >>> with Map() as m:
+                ...     _ = m.field(anomaly, name="anom", center=0.0, over="#ff0000", missing="#cccccc")
+                ...     m.artist("anom").get_clim()
+                ...     m.artist("anom").get_cmap().name
+                ...     to_hex(m.artist("anom").get_cmap().get_over())
+                (-8.0, 8.0)
+                'viridis-diverging'
+                '#ff0000'
+
+                ```
+            - A centre the band does not straddle keeps the sequential ramp rather than drawing one arm
+              of a diverging one, and says so in the log:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.static import Map
+                >>> rainfall = np.array([[12.0, 40.0], [50.0, 88.0]])
+                >>> with Map() as m:
+                ...     _ = m.field(rainfall, name="rain", center=0.0)
+                ...     m.artist("rain").get_cmap().name
+                'viridis'
 
                 ```
             - Classify a raster into four equal-interval classes, and read back the edges it was cut at:
@@ -1045,7 +1458,8 @@ class RasterMixin(_MixinBase):
 
                 ```
         """
-        return self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
+        self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
+        return self
 
     def contours(
         self,
@@ -1059,7 +1473,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Trace iso-value lines through a raster band, or fill between them.
 
         One method for both renders, which is what the Tier-2 contract declares and what the web and
@@ -1095,9 +1509,11 @@ class RasterMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The contour mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: when ``hatches``, ``hatch_color`` or ``fill`` is given without ``filled=True`` —
@@ -1129,10 +1545,10 @@ class RasterMixin(_MixinBase):
                 ...     no_data_value=-9999.0,
                 ... )
                 >>> m = Map(crs=4326)
-                >>> sig = m.contours(
+                >>> _ = m.contours(
                 ...     p, levels=[0, 0.05, 1], filled=True, hatches=["///", ""], fill=False, name="sig"
                 ... )
-                >>> list(sig.hatches)
+                >>> list(m.artist("sig").hatches)
                 ['///', '']
                 >>> legend = m.legend(
                 ...     "sig", labels=["p < 0.05", "p >= 0.05"]
@@ -1198,7 +1614,7 @@ class RasterMixin(_MixinBase):
             kwargs["hatches"] = list(hatches)
         if hatch_color is not None:
             kwargs["hatch_color"] = hatch_color
-        return self._field(
+        self._field(
             dataset,
             kind="contourf" if filled else "contour",
             levels=levels,
@@ -1207,6 +1623,7 @@ class RasterMixin(_MixinBase):
             visible=visible,
             **kwargs,
         )
+        return self
 
     def pcolormesh(
         self,
@@ -1215,7 +1632,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
 
         Args:
@@ -1231,16 +1648,17 @@ class RasterMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The ``QuadMesh`` mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(
-            dataset, kind="pcolormesh", name=name, visible=visible, **kwargs
-        )
+        self._field(dataset, kind="pcolormesh", name=name, visible=visible, **kwargs)
+        return self
 
     def block(
         self,
@@ -1249,7 +1667,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         """Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.
 
         ``block`` is meant for *discrete* per-cell rectangles aligned to cell **edges**. cleopatra's
@@ -1271,16 +1689,17 @@ class RasterMixin(_MixinBase):
                 (see the class docstring).
 
         Returns:
-            The ``QuadMesh`` mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: from ``ArrayGlyph`` for a styling keyword it does not accept.
         """
-        return self._field(
-            dataset, kind="pcolormesh", name=name, visible=visible, **kwargs
-        )
+        self._field(dataset, kind="pcolormesh", name=name, visible=visible, **kwargs)
+        return self
 
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
@@ -1326,7 +1745,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts: Any,
-    ) -> Any:
+    ) -> Self:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
         Args:
@@ -1342,9 +1761,11 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
-            The image mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -1366,6 +1787,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.rgb_composite(rgb)
                 >>> len(m.ax.images)
                 1
+                >>> m.close()
 
                 ```
             - Frozen ``limits`` replace the per-call stretch: a white point far above the data renders it
@@ -1384,6 +1806,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.rgb_composite(rgb, limits=[(0.0, 1e6)] * 3)
                 >>> round(float(np.nanmax(m.ax.images[-1].get_array())), 3)
                 0.0
+                >>> m.close()
 
                 ```
 
@@ -1392,7 +1815,7 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("rgb_composite", bands)
-        return self._composite(
+        self._composite(
             "rgb_composite",
             dataset,
             bands,
@@ -1402,6 +1825,7 @@ class RasterMixin(_MixinBase):
             name=name,
             visible=visible,
         )
+        return self
 
     def _composite(
         self,
@@ -1474,7 +1898,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> Any:
+    ) -> Self:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
         Args:
@@ -1488,9 +1912,11 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
-            The image mappable (registered as a Scene layer).
-            ``None`` instead when the data lies entirely outside what the display CRS shows:
-            an off-limb draw renders an empty frame rather than raising.
+            This map (chainable). The drawn artist is reached with
+            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
+            drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why
+            the return value is the map rather than the artist.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -1512,6 +1938,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.hsv_composite(hsv)
                 >>> len(m.ax.images)
                 1
+                >>> m.close()
 
                 ```
             - The rendered image is band-last RGB, one value per channel per cell:
@@ -1529,6 +1956,7 @@ class RasterMixin(_MixinBase):
                 >>> _ = m.hsv_composite(hsv)
                 >>> m.ax.images[-1].get_array().shape[-1]
                 3
+                >>> m.close()
 
                 ```
 
@@ -1537,7 +1965,7 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("hsv_composite", bands)
-        return self._composite(
+        self._composite(
             "hsv_composite",
             dataset,
             bands,
@@ -1547,6 +1975,7 @@ class RasterMixin(_MixinBase):
             name=name,
             visible=visible,
         )
+        return self
 
     def spaghetti(
         self,
@@ -1556,7 +1985,7 @@ class RasterMixin(_MixinBase):
         name: Optional[str] = None,
         visible: bool = True,
         **opts,
-    ) -> List[Any]:
+    ) -> Self:
         """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).
 
         Args:
@@ -1572,13 +2001,17 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs forwarded to the per-member contour call.
 
         Returns:
-            The list of per-member contour mappables (each also registered as a Scene layer). Members
-            lying outside what the display CRS shows draw nothing and are absent from the list, so it
-            stays one entry per *drawn* member and never contains ``None``. That means the list cannot be
-            zipped against ``collection.datasets`` when some members are hidden — pair by drawing members
-            individually if a per-member legend needs to know which is which.
+            This map (chainable). It returned the list of per-member contour mappables until ST-20; the
+            members are now read one at a time, by id — ``map.artist(layer_id)`` for any of the ids
+            :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, and ``map.artist()`` for the last
+            member drawn.
+
+            A member lying outside what the display CRS shows draws nothing and is absent from that
+            record, exactly as it was absent from the list — so the record is still one entry per
+            *drawn* member and cannot be zipped against ``collection.datasets`` when some are skipped.
+            Pair by drawing members individually if a per-member legend needs to know which is which.
         """
-        drawn = [
+        for member in collection.datasets:
             self._field(
                 member,
                 kind="contour",
@@ -1588,6 +2021,4 @@ class RasterMixin(_MixinBase):
                 visible=visible,
                 **opts,
             )
-            for member in collection.datasets
-        ]
-        return [artist for artist in drawn if artist is not None]
+        return self

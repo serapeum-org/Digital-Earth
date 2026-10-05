@@ -13,9 +13,12 @@ import pytest
 
 from digitalearth.base.spec import Encoding, Symbology
 from digitalearth.static.render_compat import (
+    CENTER_KEY,
+    EXTREME_KEYS,
     FLAT_STYLE_KEYS,
     MARKER_SIZE_KEY,
     NORM_KEY,
+    ROBUST_KEY,
     STATIC_STYLE_SCHEMA,
     fold_symbology,
     relocate_flat_style,
@@ -32,11 +35,17 @@ class TestTheDeclaredSchema:
         Test scenario:
             This is what stops the keys going undeclared again. A key added upstream — a new `ColorScaling`
             field, say — lands in `FLAT_STYLE_KEYS` automatically but would carry no description and no
-            channel, so it has to fail here rather than quietly rejoin the soup.
+            channel, so it has to fail here rather than quietly rejoin the soup. The three extras beside the
+            flat surface are the tier's own: the marker-size spelling, a caller's `norm`, ST-10's three
+            extreme colours (cleopatra takes those on the colormap rather than as keywords) and ST-3's
+            `robust`/`center`, which travel to the constructor beside `vmin`/`vmax`.
         """
         assert set(STATIC_STYLE_SCHEMA.names()) == FLAT_STYLE_KEYS | {
             MARKER_SIZE_KEY,
             NORM_KEY,
+            ROBUST_KEY,
+            CENTER_KEY,
+            *EXTREME_KEYS,
         }, "every flat style key must be declared, and nothing else"
 
     def test_the_undeclared_count_is_the_one_the_plan_names(self):

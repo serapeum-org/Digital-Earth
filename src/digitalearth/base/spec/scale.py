@@ -32,7 +32,7 @@ The policy stays here — the default class count, the error that names the sche
 into classes — and only the arithmetic is injected.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import inf, isfinite, nextafter
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -54,6 +54,12 @@ __all__ = ["DEFAULT_CLASS_COUNT", "Scale"]
 #: convention and what every tier already defaulted to; sharing it is what stops a sixth appearing.
 DEFAULT_CLASS_COUNT: int = 5
 
+#: The extremes a scale can state, in the order :meth:`Scale.extremes` reports them — and the set
+#: :meth:`Scale.without_extremes` clears when it is named none. Private because the three *names* are the
+#: public vocabulary (they are keywords on `with_extremes` and keys of `extremes()`); this tuple only keeps
+#: the validation and the clear-them-all default reading off one list.
+_EXTREME_NAMES: Tuple[str, str, str] = ("missing", "over", "under")
+
 
 @dataclass(frozen=True)
 class Scale:
@@ -68,6 +74,11 @@ class Scale:
             edges, so a legend can label each class by the range it covers.
         categories: The distinct values a categorical scale colours, in the order their colours were assigned.
         missing: Colour for a value the scale cannot place — nodata, or a category it never saw.
+        over: Colour for a value above `vmax`, or `None` to leave the renderer's own treatment of it alone.
+        under: Colour for a value below `vmin`, likewise. The pair is what tells a clipped field apart from
+            one that really peaks at its limit: see `with_extremes()` for how a tier states them and
+            `extremes()` for how one reads them back. Neither is validated as a colour here — the renderer
+            that resolves it is the one that can refuse it.
 
     Raises:
         ValueError: if `vmin`/`vmax` are not finite, if `vmax` is not greater than `vmin`, or if `breaks`
@@ -107,6 +118,8 @@ class Scale:
     breaks: Tuple[float, ...] = ()
     categories: Tuple[Any, ...] = ()
     missing: Optional[str] = None
+    over: Optional[str] = None
+    under: Optional[str] = None
     _colors: Tuple[str, ...] = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
@@ -583,6 +596,64 @@ class Scale:
         """
         return bool(self.categories)
 
+    def straddles(self, center: float = 0.0) -> bool:
+        """Whether this domain runs on **both** sides of `center` — the test a diverging ramp has to pass.
+
+        A diverging colormap puts a neutral colour at `center` and an arm on either side of it. Centred
+        outside the domain it is worse than a sequential ramp rather than better: one arm is never drawn, so
+        the other carries every value and the picture loses the contrast the ramp was chosen for. Asking the
+        domain first is what lets a tier offer divergence and decline it on the same call.
+
+        The comparison is **strict**, deliberately: a centre sitting exactly on `vmin` or `vmax` leaves one
+        arm holding a single value, and it is also the comparison cleopatra validates a diverging `center`
+        with — `not (vmin < center < vmax)` raises
+        *"diverging 'center' (0.0) must lie strictly between vmin (...) and vmax (...)"* there — so a
+        centre this reader called straddled but cleopatra refuses cannot happen.
+
+        Args:
+            center: The value a diverging ramp would be centred on. Zero by default, which is the centre of
+                every anomaly, difference and trend field. A non-finite centre straddles nothing — answered
+                rather than compared, since `nan` fails every comparison silently.
+
+        Returns:
+            `True` when `vmin < center < vmax`.
+
+        Examples:
+            - An anomaly field with both signs straddles zero; a rainfall total does not:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_values([-2.0, -1.0, 3.0, 6.0]).straddles()
+                True
+                >>> Scale.from_values([12.0, 40.0, 88.0]).straddles()
+                False
+
+                ```
+            - A centre need not be zero — a departure from a long-term mean sits wherever that mean does:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(283.0, 293.0).straddles(288.0)
+                True
+                >>> Scale.from_limits(283.0, 293.0).straddles(273.15)
+                False
+
+                ```
+            - The ends are **not** straddled, which is the comparison cleopatra makes too; and a
+              non-finite centre is answered rather than compared:
+                ```python
+                >>> from math import inf, nan
+                >>> from digitalearth.base.spec import Scale
+                >>> domain = Scale.from_limits(0.0, 10.0)
+                >>> domain.straddles(0.0), domain.straddles(10.0)
+                (False, False)
+                >>> domain.straddles(nan), domain.straddles(inf)
+                (False, False)
+
+                ```
+        """
+        if not isfinite(center):
+            return False
+        return self.vmin < center < self.vmax
+
     def as_limits(self) -> Tuple[float, float]:
         """Return the ``(vmin, vmax)`` pair a renderer's normaliser takes.
 
@@ -609,6 +680,228 @@ class Scale:
                 ```
         """
         return self.vmin, self.vmax
+
+    def with_extremes(
+        self,
+        *,
+        missing: Optional[str] = None,
+        over: Optional[str] = None,
+        under: Optional[str] = None,
+    ) -> "Scale":
+        """Return this scale with the extreme colours a caller stated, leaving the rest as they were.
+
+        A scale is normally *derived* — `from_values()` measures the domain from the data — while the
+        colours for what falls outside it are the caller's styling and arrive separately. So stating them is
+        a step on an existing scale rather than three more arguments on every builder.
+
+        `None` means "leave this one alone", which is what lets two calls compose and matches
+        `matplotlib.colors.Colormap.with_extremes`, the method a renderer ends up handing these to: it copies
+        the colormap and delegates to `Colormap._set_extremes`, which is where the rule really lives — three
+        branches, `if bad is not None` / `if under is not None` / `if over is not None`, under a docstring
+        reading *"Parameters that are None are left unchanged"* (read off matplotlib 3.11.1). The public
+        `Colormap.set_extremes` is a one-line delegate to that helper and is pending-deprecated as of
+        matplotlib 3.11 (`@_api.deprecated("3.11", pending=True, alternative="cmap.with_extremes(...)")`), so
+        it is not what this rule is borrowed from. So `None` cannot
+        **clear** a colour already stated: `with_extremes(over=None)` on a scale whose `over` is `'#ff0000'`
+        answers `{'over': '#ff0000'}` again, and a call with no arguments at all is accepted and changes
+        nothing. Clearing one is :meth:`without_extremes`'s job — two verbs rather than one keyword carrying a
+        sentinel, which keeps all three parameters a plain `Optional[str]` and keeps `None` meaning exactly
+        what it means in matplotlib. The scale itself is immutable, so the stated colours come back on a
+        **new** scale: a domain derived once and shared across an animation's frames must not pick up one
+        frame's styling.
+
+        Args:
+            missing: Colour for a value the scale cannot place, or `None` to keep the current `missing`.
+            over: Colour for a value above `vmax`, or `None` to keep the current `over`.
+            under: Colour for a value below `vmin`, or `None` to keep the current `under`.
+
+        Returns:
+            A new scale with the same domain, scheme, classes and categories, carrying the stated colours.
+            Never `self`, even when nothing was stated.
+
+        Examples:
+            - State all three on a derived scale, and read them back:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_values([1.0, 9.0]).with_extremes(
+                ...     missing="#cccccc", over="#ff0000", under="#0000ff"
+                ... )
+                >>> scale.extremes()
+                {'missing': '#cccccc', 'over': '#ff0000', 'under': '#0000ff'}
+
+                ```
+            - A colour stated earlier survives a later call that does not name it:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> top = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000")
+                >>> top.with_extremes(missing="#cccccc").extremes()
+                {'missing': '#cccccc', 'over': '#ff0000'}
+
+                ```
+            - The scale it was called on is unchanged, and the domain travels through:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> original = Scale.from_limits(0.0, 10.0)
+                >>> original.with_extremes(under="#0000ff").as_limits()
+                (0.0, 10.0)
+                >>> original.under is None
+                True
+
+                ```
+            - `None` keeps rather than clears, and a call that states nothing is still a new scale:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000")
+                >>> stated.with_extremes(over=None).extremes()
+                {'over': '#ff0000'}
+                >>> bare = stated.with_extremes()
+                >>> bare.extremes(), bare is stated
+                ({'over': '#ff0000'}, False)
+                >>> stated.without_extremes("over").extremes()
+                {}
+
+                ```
+        """
+        return replace(
+            self,
+            missing=self.missing if missing is None else missing,
+            over=self.over if over is None else over,
+            under=self.under if under is None else under,
+        )
+
+    def without_extremes(self, *names: str) -> "Scale":
+        """Return this scale with the named extreme colours cleared, back to stating none of them.
+
+        The other direction of :meth:`with_extremes`, and a separate verb because `None` there already
+        means "keep this one" — the rule matplotlib's own `with_extremes` follows, through
+        `Colormap._set_extremes`. Overloading `None` to mean "clear" would break the composition two
+        `with_extremes` calls rely on; giving it a sentinel value instead would widen all three parameters
+        from `Optional[str]` to a union every caller and every type check has to carry. So the way back is a
+        call of its own, and `dataclasses.replace` stops being the only route to it.
+
+        What it is for: a stated extreme is *styling*, and a derived scale travels — a domain measured over a
+        stack is handed to each frame, and a stored figure's scale is read back and reused. Handing one on
+        without the previous caller's over colour is then a call rather than a rebuild.
+
+        Args:
+            *names: The extremes to clear, from `"missing"`, `"over"` and `"under"`. Named none, it clears
+                all three, which is how a scale says it states no extremes at all. Naming one twice is the
+                same as naming it once.
+
+        Returns:
+            A new scale with the same domain, scheme, classes and categories, stating the extremes it was
+            not asked to clear. Never `self`, even when there was nothing to clear.
+
+        Raises:
+            ValueError: for a name that is not one of the three, since a silently ignored name would read as
+                a colour that had been cleared.
+
+        Examples:
+            - A colour stated earlier is cleared by name, and the rest stay stated:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(
+                ...     missing="#cccccc", over="#ff0000"
+                ... )
+                >>> stated.without_extremes("over").extremes()
+                {'missing': '#cccccc'}
+
+                ```
+            - Named nothing it clears all three, and the scale it was called on is unchanged:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000")
+                >>> stated.without_extremes().extremes()
+                {}
+                >>> stated.extremes()
+                {'over': '#ff0000'}
+
+                ```
+            - It is the clear `with_extremes` cannot express, since `None` there keeps:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(under="#0000ff")
+                >>> stated.with_extremes(under=None).extremes()
+                {'under': '#0000ff'}
+                >>> stated.without_extremes("under").extremes()
+                {}
+
+                ```
+            - A name that is not one of the three is refused rather than ignored:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).without_extremes("bad")
+                Traceback (most recent call last):
+                    ...
+                ValueError: Scale.without_extremes got unknown extremes ['bad']; known: missing, over, under
+
+                ```
+            - The domain and the classes travel through it:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_values([1.0, 4.0, 9.0], scheme="quantiles", k=2)
+                >>> cleared = scale.with_extremes(missing="#cccccc").without_extremes()
+                >>> cleared.as_limits(), cleared.is_classified
+                ((1.0, 9.0), True)
+
+                ```
+        """
+        unknown = sorted({name for name in names if name not in _EXTREME_NAMES})
+        if unknown:
+            raise ValueError(
+                f"Scale.without_extremes got unknown extremes {unknown}; "
+                f"known: {', '.join(_EXTREME_NAMES)}"
+            )
+        cleared = set(names) if names else set(_EXTREME_NAMES)
+        return replace(
+            self,
+            missing=None if "missing" in cleared else self.missing,
+            over=None if "over" in cleared else self.over,
+            under=None if "under" in cleared else self.under,
+        )
+
+    def extremes(self) -> Dict[str, str]:
+        """Return only the extreme colours this scale states, keyed by which extreme they colour.
+
+        The keys absent from the mapping are exactly the extremes a renderer must **not** overwrite, which is
+        what makes "did the caller state any?" one test and keeps a tier from pushing a default colour onto a
+        colormap the caller built themselves.
+
+        Returns:
+            A new plain `dict` over `"missing"`, `"over"` and `"under"`, holding only the ones that are set
+            — empty when the scale states none. The keys come in that order, whatever order they were
+            stated in, so `to_dict()` writes a stored figure the same way twice.
+
+        Examples:
+            - A scale that states nothing reports nothing, so the mapping itself is the "any?" test:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).extremes()
+                {}
+                >>> bool(Scale.from_limits(0.0, 10.0).extremes())
+                False
+
+                ```
+            - A half-stated scale reports its half:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).with_extremes(under="#0000ff").extremes()
+                {'under': '#0000ff'}
+
+                ```
+            - All three come back in the fixed `missing`, `over`, `under` order, not the stated one:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stated = Scale.from_limits(0.0, 10.0).with_extremes(
+                ...     under="#0000ff", over="#ff0000", missing="#cccccc"
+                ... )
+                >>> list(stated.extremes())
+                ['missing', 'over', 'under']
+
+                ```
+        """
+        stated = {"missing": self.missing, "over": self.over, "under": self.under}
+        return {name: color for name, color in stated.items() if color is not None}
 
     def color_for(self, category: Any) -> Optional[str]:
         """Return the colour assigned to one category.
@@ -728,13 +1021,15 @@ class Scale:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`
-            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every
-            field goes through the JSON check, so a numpy number is written as a plain Python one.
+            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and the
+            extreme colours (`missing`, `over`, `under`) that is set. Class edges, a scheme given as edges,
+            categories and colours are written as lists. Every field goes through the JSON check, so a numpy
+            number is written as a plain Python one. An unstated extreme colour is **absent** rather than
+            written as ``null``, so adding the two new ones did not lengthen a single stored figure.
 
         Raises:
-            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON
-                form, naming the field.
+            TypeError: if any field — `scheme`, an edge, a category, a colour, or one of the extreme
+                colours — has no JSON form, naming the field.
 
         Examples:
             - A continuous scale is its domain:
@@ -759,6 +1054,13 @@ class Scale:
                 {'vmin': 0.0, 'vmax': 10.0, 'scheme': 'quantiles', 'breaks': [0.0, 4.0, 10.0]}
 
                 ```
+            - The extreme colours travel too, and only the stated ones are written:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000").to_dict()
+                {'vmin': 0.0, 'vmax': 10.0, 'over': '#ff0000'}
+
+                ```
         """
         # Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is
         # finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.
@@ -773,8 +1075,8 @@ class Scale:
         if self.categories:
             out["categories"] = to_json_value(self.categories, "Scale.categories")
             out["colors"] = to_json_value(self._colors, "Scale.colors")
-        if self.missing is not None:
-            out["missing"] = to_json_value(self.missing, "Scale.missing")
+        for name, color in self.extremes().items():
+            out[name] = to_json_value(color, f"Scale.{name}")
         return out
 
     @classmethod
@@ -786,7 +1088,9 @@ class Scale:
 
         Returns:
             The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the
-            breaks, which is what makes a frozen scale reproduce the colours it was drawn with.
+            breaks, which is what makes a frozen scale reproduce the colours it was drawn with. All three
+            extreme colours are read back — `missing`, and the `over`/`under` pair `to_dict()` now writes —
+            and a key absent from the dict comes back as `None`, which is what an unstated extreme is.
 
         Raises:
             TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming
@@ -794,7 +1098,9 @@ class Scale:
             ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown
                 key, or a scale the constructor refuses — a
                 non-finite or degenerate domain, a single class edge, or a colour count that does not match the
-                categories.
+                categories. The known keys are listed in the message, so matplotlib's own spelling of the
+                nodata colour is answered rather than silently dropped: `Scale.from_dict({..., "bad": ...})`
+                raises *"Scale.from_dict got unknown keys ['bad']; known keys are [...]"*.
 
         Examples:
             - Stored class edges come back without re-classifying anything:
@@ -822,11 +1128,39 @@ class Scale:
                 ValueError: Scale needs vmax > vmin; got vmin=1.0, vmax=1.0. ...
 
                 ```
+            - The extreme colours survive the round trip, and the ones the dict leaves out stay unstated:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stored = Scale.from_limits(0.0, 10.0).with_extremes(over="#ff0000").to_dict()
+                >>> back = Scale.from_dict(stored)
+                >>> back.extremes(), back.under is None
+                ({'over': '#ff0000'}, True)
+
+                ```
+            - matplotlib's spelling of the nodata colour is not this one, and is refused by name:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_dict({"vmin": 0.0, "vmax": 1.0, "bad": "#ffffff"})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Scale.from_dict got unknown keys ['bad']; known keys are [...]
+
+                ```
         """
         refuse_unknown(
             "Scale",
             data,
-            ("vmin", "vmax", "scheme", "breaks", "categories", "colors", "missing"),
+            (
+                "vmin",
+                "vmax",
+                "scheme",
+                "breaks",
+                "categories",
+                "colors",
+                "missing",
+                "over",
+                "under",
+            ),
         )
         scheme = data.get("scheme")
         return cls(
@@ -841,5 +1175,7 @@ class Scale:
             ),
             categories=as_list("Scale", "categories", data.get("categories", ())),
             missing=data.get("missing"),
+            over=data.get("over"),
+            under=data.get("under"),
             _colors=as_list("Scale", "colors", data.get("colors", ())),
         )

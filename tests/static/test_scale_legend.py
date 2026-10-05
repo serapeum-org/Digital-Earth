@@ -35,7 +35,8 @@ def lines_fc(points_fc):
 def test_points_column_sizes_span_limits(points_fc):
     """column maps marker areas across size_limits (varying, monotone-bounded)."""
     m = Map(crs=points_fc.epsg)
-    pc = m.points(points_fc, size_column="fid", size_limits=(20, 200))
+    m.points(points_fc, size_column="fid", size_limits=(20, 200))
+    pc = m.artist()
     sizes = np.asarray(pc.get_sizes())
     assert sizes.min() == pytest.approx(20)
     assert sizes.max() == pytest.approx(200)
@@ -51,7 +52,8 @@ def test_points_size_legend(points_fc):
 def test_points_no_column_is_uniform(points_fc):
     """Without a size column, markers keep a single uniform size (backward compatible)."""
     m = Map(crs=points_fc.epsg)
-    pc = m.points(points_fc)
+    m.points(points_fc)
+    pc = m.artist()
     assert len(set(np.asarray(pc.get_sizes()).tolist())) == 1
 
 

@@ -16,7 +16,8 @@ def points_fc():
 def test_kde_plots(points_fc):
     """kde draws a density contour set and registers one layer."""
     m = Map(crs=points_fc.epsg)
-    cs = m.kde(points_fc)
+    m.kde(points_fc)
+    cs = m.artist()
     assert len(m.layers) == 1
     assert m.ax.collections
     assert type(cs).__name__ in ("QuadContourSet", "ContourSet")

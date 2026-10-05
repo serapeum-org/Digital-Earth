@@ -20,6 +20,7 @@ EXPECTED = [
     "to_backend",
     "Map",
     "Scene",
+    "Pick",
     "TexturedGlobe",
     "facet",
     "grid",

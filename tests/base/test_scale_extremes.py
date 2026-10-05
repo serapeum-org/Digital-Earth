@@ -1,0 +1,272 @@
+"""The three colours a scale gives the values it cannot place on its ramp (ST-10).
+
+`Scale` had one of them — `missing`, the colour of a nodata cell or an unseen category — and no way to say
+what a value *below* the domain or *above* it should be. Those two were left to each renderer, which meant
+they were left to matplotlib's defaults: a colormap paints an out-of-range value with its own end colour, so
+a field clipped at `vmax` looks exactly like a field that peaks there.
+
+These pin the declaration: two fields beside `missing`, one reader that answers "which of the three did the
+caller state", one builder that states them, and the serialisation that carries all three — the part a
+`Scale` shared by four tiers needs, since a figure stored by one is read back by another.
+"""
+
+from inspect import getsource
+
+import pytest
+from matplotlib.colors import Colormap
+
+from digitalearth.base.spec import Scale
+
+#: Deliberately not the grey `digitalearth.base.symbology.MISSING_COLOR` names: these tests are about a
+#: *stated* colour surviving, so the values have to be ones no default could supply.
+MISSING = "#cccccc"
+OVER = "#ff0000"
+UNDER = "#0000ff"
+
+
+class TestTheExtremeColoursAreFields:
+    """`over` and `under` sit beside `missing`, with the same shape and the same default."""
+
+    def test_a_scale_states_no_over_colour_by_default(self):
+        """A scale built without one declares nothing, so a renderer leaves its colormap alone.
+
+        Test scenario:
+            The default has to be `None` rather than a colour: a scale that *always* carried an over colour
+            would repaint every existing figure's top end the moment the field was added.
+        """
+        assert Scale.from_limits(0.0, 10.0).over is None, (
+            "a scale states no over colour until one is given"
+        )
+
+    def test_a_scale_states_no_under_colour_by_default(self):
+        """The same for the bottom end."""
+        assert Scale.from_limits(0.0, 10.0).under is None, (
+            "a scale states no under colour until one is given"
+        )
+
+    def test_the_constructor_takes_both(self):
+        """They are ordinary fields, so the public constructor sets them.
+
+        Test scenario:
+            `missing` was always constructor-settable; the two new ones have to be too, or a caller
+            rebuilding a scale by hand can carry one of the three and not the others.
+        """
+        scale = Scale(0.0, 10.0, missing=MISSING, over=OVER, under=UNDER)
+        assert (scale.missing, scale.over, scale.under) == (MISSING, OVER, UNDER), (
+            f"all three must be settable; got {scale}"
+        )
+
+
+class TestStatingTheExtremes:
+    """`with_extremes` is how a scale that was derived from data is given its extreme colours."""
+
+    def test_with_extremes_states_the_three_colours(self):
+        """The builder records exactly what it was handed.
+
+        Test scenario:
+            A scale is normally *derived* — `from_values` measures the domain — and the extreme colours are a
+            caller's styling, which arrives separately. So stating them has to be a step on an existing
+            scale rather than only an argument to every builder.
+        """
+        scale = Scale.from_values([1.0, 9.0]).with_extremes(
+            missing=MISSING, over=OVER, under=UNDER
+        )
+        assert scale.extremes() == {
+            "missing": MISSING,
+            "over": OVER,
+            "under": UNDER,
+        }, f"the three stated colours must come back; got {scale.extremes()}"
+
+    def test_the_domain_is_untouched(self):
+        """Stating a colour is not a reason to re-derive the limits."""
+        assert Scale.from_values([1.0, 9.0]).with_extremes(over=OVER).as_limits() == (
+            1.0,
+            9.0,
+        ), "with_extremes must carry the domain through unchanged"
+
+    def test_an_unnamed_colour_is_left_as_it_was(self):
+        """`None` means "leave this one alone", matching matplotlib's own `with_extremes`.
+
+        Test scenario:
+            A tier states the colours it was given and nothing else, so two calls have to compose: one
+            stating `over` followed by one stating `missing` must end up with both.
+        """
+        scale = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        assert scale.with_extremes(missing=MISSING).over == OVER, (
+            "a colour stated earlier must survive a later call that does not name it"
+        )
+
+    def test_the_original_scale_is_not_changed(self):
+        """`Scale` is a frozen value, so the builder returns a new one.
+
+        Test scenario:
+            The same reason matplotlib's `with_extremes` copies: a scale derived once and shared across an
+            animation's frames must not pick up one frame's styling.
+        """
+        original = Scale.from_limits(0.0, 10.0)
+        original.with_extremes(missing=MISSING)
+        assert original.missing is None, (
+            "the scale the builder was called on must be unchanged"
+        )
+
+    def test_a_scale_that_states_none_reports_none(self):
+        """The reader is empty rather than full of `None`s, so "did the caller state any" is one test."""
+        assert Scale.from_limits(0.0, 10.0).extremes() == {}, (
+            "a scale with no stated extreme colours must report an empty mapping"
+        )
+
+    def test_only_the_stated_colours_are_reported(self):
+        """A half-stated scale reports its half.
+
+        Test scenario:
+            This is what lets a renderer hand the reader straight to matplotlib: the keys absent from it are
+            exactly the extremes it must not overwrite.
+        """
+        reported = Scale.from_limits(0.0, 10.0).with_extremes(under=UNDER).extremes()
+        assert reported == {"under": UNDER}, (
+            f"only the stated colour must be reported; got {reported}"
+        )
+
+
+class TestClearingAStatedExtreme:
+    """`with_extremes` can only state a colour, so clearing one needed a verb of its own."""
+
+    def test_a_stated_colour_can_be_cleared(self):
+        """The whole point: a scale can go back to stating no over colour.
+
+        Test scenario:
+            `with_extremes(over=None)` cannot do it — `None` there means "keep", which is what lets two
+            calls compose — so the only way back was `dataclasses.replace`, which is not this type's
+            vocabulary.
+        """
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        assert stated.without_extremes("over").over is None, (
+            "a stated over colour must be clearable by name"
+        )
+
+    def test_the_other_extremes_are_left_stated(self):
+        """Clearing is as narrow as stating: only the named extreme goes."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(missing=MISSING, over=OVER)
+        assert stated.without_extremes("over").extremes() == {"missing": MISSING}, (
+            f"only the named extreme must be cleared; got {stated.without_extremes('over').extremes()}"
+        )
+
+    def test_naming_none_clears_all_three(self):
+        """ "This scale states no extremes" is one call rather than three."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(
+            missing=MISSING, over=OVER, under=UNDER
+        )
+        assert stated.without_extremes().extremes() == {}, (
+            f"a bare call must clear every extreme; got {stated.without_extremes().extremes()}"
+        )
+
+    def test_the_scale_it_was_called_on_still_states_its_colour(self):
+        """It is a builder on a frozen value, so the original is untouched."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        stated.without_extremes("over")
+        assert stated.over == OVER, (
+            f"clearing must not reach back into the scale it was called on; got {stated.over}"
+        )
+
+    def test_the_domain_travels_through_a_clear(self):
+        """Clearing a colour is not a reason to re-derive the domain."""
+        cleared = (
+            Scale.from_limits(2.0, 12.0)
+            .with_extremes(under=UNDER)
+            .without_extremes("under")
+        )
+        assert cleared.as_limits() == (2.0, 12.0), (
+            f"the domain must survive a clear; got {cleared.as_limits()}"
+        )
+
+    def test_an_extreme_the_scale_does_not_have_is_refused(self):
+        """A typo must not be a silent no-op, since the call would read as having cleared something."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        with pytest.raises(ValueError, match="unknown extremes"):
+            stated.without_extremes("bad")
+
+    def test_the_refusal_names_the_extremes_a_scale_has(self):
+        """And the message lists the three, so the caller does not have to look them up."""
+        stated = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER)
+        with pytest.raises(ValueError, match="missing, over, under"):
+            stated.without_extremes("bad")
+
+
+class TestTheRationaleNamesMatplotlibsRealLogic:
+    """`with_extremes`'s rationale borrows matplotlib's rule, so it has to name where that rule lives."""
+
+    def test_the_rationale_names_the_method_that_holds_the_keep_rule(self):
+        """The "None means keep" logic is `Colormap._set_extremes`, not the public `set_extremes`.
+
+        Test scenario:
+            The rationale cited `Colormap.set_extremes`, which matplotlib 3.11 marked pending-deprecated
+            and reduced to a one-line delegate — so the sentence pointed at a wrapper that will go away
+            and not at the three `if ... is not None` branches it describes.
+        """
+        assert "_set_extremes" in Scale.with_extremes.__doc__, (
+            "the rationale must name `_set_extremes`, where the None-means-keep branches really are"
+        )
+
+    def test_matplotlibs_public_set_extremes_is_pending_deprecated(self):
+        """The evidence for the sentence above, read off matplotlib rather than remembered."""
+        assert "pending=True" in getsource(Colormap.set_extremes), (
+            f"set_extremes is no longer pending-deprecated; got {getsource(Colormap.set_extremes)!r}"
+        )
+
+    def test_the_keep_branches_live_in_the_private_helper(self):
+        """And the branches the rationale describes are in `_set_extremes`."""
+        assert "if over is not None" in getsource(Colormap._set_extremes), (
+            f"the keep branches moved; got {getsource(Colormap._set_extremes)!r}"
+        )
+
+
+class TestTheExtremesAreCarriedByTheSerialisation:
+    """A `Scale` crosses tiers as a dict, so a colour that does not survive that is not declared at all."""
+
+    def test_to_dict_writes_the_two_new_colours(self):
+        """Both appear under their own names, beside `missing`."""
+        stored = Scale.from_limits(0.0, 10.0).with_extremes(over=OVER, under=UNDER)
+        assert stored.to_dict() == {
+            "vmin": 0.0,
+            "vmax": 10.0,
+            "over": OVER,
+            "under": UNDER,
+        }, f"to_dict must carry both; got {stored.to_dict()}"
+
+    def test_to_dict_omits_a_colour_nobody_stated(self):
+        """An unstated colour is absent rather than written as `null`.
+
+        Test scenario:
+            The same rule `missing` already followed. A figure's stored form stays the short one it was
+            before the fields existed, so adding them does not rewrite every committed snapshot.
+        """
+        assert "over" not in Scale.from_limits(0.0, 10.0).to_dict(), (
+            "an unstated extreme colour must not be written"
+        )
+
+    def test_a_round_trip_keeps_all_three(self):
+        """`from_dict(to_dict())` is the test the description tier is built around."""
+        scale = Scale.from_limits(-5.0, 5.0).with_extremes(
+            missing=MISSING, over=OVER, under=UNDER
+        )
+        rebuilt = Scale.from_dict(scale.to_dict())
+        assert rebuilt.extremes() == {
+            "missing": MISSING,
+            "over": OVER,
+            "under": UNDER,
+        }, f"a round trip must keep the three colours; got {rebuilt.extremes()}"
+
+    def test_a_round_trip_of_a_categorical_scale_keeps_them_too(self):
+        """The categorical branch of the serialisation carries them as well.
+
+        Test scenario:
+            `to_dict` writes categories and colours on their own branch, so a field added to only the
+            numeric path would be dropped for a land-cover scale — the very case `missing` exists for.
+        """
+        scale = Scale.categorical(
+            ["land", "sea"], ["#8b4513", "#1e90ff"]
+        ).with_extremes(missing=MISSING, over=OVER)
+        rebuilt = Scale.from_dict(scale.to_dict())
+        assert rebuilt.extremes() == {"missing": MISSING, "over": OVER}, (
+            f"a categorical round trip must keep them; got {rebuilt.extremes()}"
+        )

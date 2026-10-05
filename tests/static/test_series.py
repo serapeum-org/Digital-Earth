@@ -14,9 +14,17 @@ def test_spaghetti_over_collection(dataset):
         ["examples/data/acc4000.tif", "examples/data/acc4000.tif"]
     )
     m = Map(crs=dataset.epsg)
-    artists = m.spaghetti(dc)
-    assert len(artists) == 2
-    assert len(m.layers) == 2
+    m.spaghetti(dc)
+    drawn_on_axes = list(m.ax.collections)
+    assert len(drawn_on_axes) == 2, f"both members should draw, got {drawn_on_axes}"
+    assert len(m.layers) == len(drawn_on_axes), (
+        f"registered layers ({len(m.layers)}) must match the artists on the axes "
+        f"({len(drawn_on_axes)})"
+    )
+    missing = [layer_id for layer_id in m.layer_ids if m.artist(layer_id) is None]
+    assert missing == [], (
+        f"every registered member must have a drawn artist, these have none: {missing}"
+    )
 
 
 class TestEnvelope:

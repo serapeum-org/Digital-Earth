@@ -57,6 +57,7 @@ __all__ = [
     "bar_refusal",
     "color_encoding",
     "draw_guide",
+    "drawn_scale",
     "guide_kind",
     "paint_guide",
     "plan_guide",
@@ -204,8 +205,13 @@ def _swatches(legend: Any) -> Tuple[List[Any], List[str]]:
     return list(labels), colors
 
 
-def _scale_of(artist: Any) -> Optional[Scale]:
+def drawn_scale(artist: Any) -> Optional[Scale]:
     """Return the scale a drawn artist colours through, read off its own norm.
+
+    Shared rather than private because a drawer needs the same answer: `FieldColors.applied_to` in the
+    raster mixin reads it to restate the layer's extreme colours on the scale it publishes (ST-10) — only
+    as the fallback, since a categorical field already states a scale of its own — and two spellings of
+    "the scale this artist drew" would be two chances to disagree about what the picture shows.
 
     Args:
         artist: The mappable the layer's drawer produced.
@@ -215,6 +221,24 @@ def _scale_of(artist: Any) -> Optional[Scale]:
         continuous one over its limits otherwise, and ``None`` when the artist colours by nothing or the
         norm has no usable limits to publish — unmeasured limits are honest as no scale, while inventing a
         pair would label the key with numbers the layer never draws.
+
+    Examples:
+        - The limits a plain norm was built with come back as the scale's domain:
+            ```python
+            >>> from matplotlib.colors import Normalize
+            >>> from digitalearth.static.guides import drawn_scale
+            >>> mappable = type("A", (), {"norm": Normalize(vmin=-3.0, vmax=7.0)})()
+            >>> drawn_scale(mappable).as_limits()
+            (-3.0, 7.0)
+
+            ```
+        - An artist that colours by nothing publishes no scale:
+            ```python
+            >>> from digitalearth.static.guides import drawn_scale
+            >>> drawn_scale(object()) is None
+            True
+
+            ```
     """
     norm = getattr(artist, "norm", None)
     if norm is None:
@@ -254,7 +278,12 @@ def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
         the one thing this tier cannot name a field for.
 
     Examples:
-        - A raster field publishes its band and the limits the render settled on:
+        - A raster field publishes its band and the limits the render settled on. This is the one caller
+          that reads the whole drawn record rather than `Scene.artist(layer_id)`, which hands back the
+          artist alone: the encoding is built from the layer's stated scale and its glyph's category
+          legend as well, so the artist on its own is not enough — measured,
+          `color_encoding("band 1", m.artist("grid"))` raises
+          `AttributeError: 'AxesImage' object has no attribute 'glyph'`:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -295,7 +324,7 @@ def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
         )
     if not _colours_by_value(drawn.artist):
         return None
-    return Encoding.by_field("color", field, scale=_scale_of(drawn.artist))
+    return Encoding.by_field("color", field, scale=drawn_scale(drawn.artist))
 
 
 def bar_refusal(layer: LayerSpec) -> Optional[str]:
@@ -596,10 +625,11 @@ class _HatchedKey:
             ...     no_data_value=-9999.0,
             ... )
             >>> with Map(crs=4326) as m:
-            ...     sig = m.contours(
+            ...     _ = m.contours(
             ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
             ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
             ...     )
+            ...     sig = m.artist("sig")
             ...     key = _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p")
             ...     key.hatches
             ...     key.kept
@@ -624,10 +654,11 @@ class _HatchedKey:
             ...     no_data_value=-9999.0,
             ... )
             >>> with Map(crs=4326) as m:
-            ...     sig = m.contours(
+            ...     _ = m.contours(
             ...         p, levels=[0.0, 0.05, 1.0, 5.0, 10.0], filled=True,
             ...         hatches=["///", "", "xx", ".."], fill=False, name="sig",
             ...     )
+            ...     sig = m.artist("sig")
             ...     _ = m.legend("sig", labels=["a", "b", "c", "d"])
             ...     _HatchedKey.of(m.figure_spec.layers.get("sig"), sig, "p").rows
             ...     try:

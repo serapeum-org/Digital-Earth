@@ -113,22 +113,28 @@ omissions with no positive counterpart on any backend, so they appear only in th
 
 - **`attribution`** — a credit is text placed on the figure — `text` or `stamp` — rather than a control the tier
   draws
-- **`export_html`** — the figure is written as an image, not as a page; an HTML export is the interactive or web
-  tier's
+- **`export_html`** — the figure is written as an image, not as a page; an HTML export is every other tier's —
+  interactive, web and 3-D all declare `export_html` as a feature, and this is the only tier that does not
 - **`fullscreen`** — a saved image has no screen to fill; its size is the figure's
 - **`height`** — an axes is flat; a layer raised by a column is the 3-D tier's extrusion or the web tier's
 - **`label_collision`** — matplotlib draws every label it is given, wherever it lands; there is no collision
   index to ask which ones overlap, so `labels` takes no allow_overlap= and a crowded column is thinned by
   filtering the features before drawing them. MapLibre's symbol layer is where that decision is made for the
-  tier that has one
-- **`layer_switcher`** — the figure is drawn once and does not respond to a pointer, so there is nothing for a
-  switch to toggle; layers are chosen before the figure is drawn
+  tier that has one: the web tier's `labels` takes an `allow_overlap=` of its own (False by default) and hands
+  it straight to `text-allow-overlap`
+- **`layer_switcher`** — the tier draws no control onto the figure for a reader to toggle: visibility is set
+  from code, with `set_visible` before or between draws, and a live canvas can do that from a `Scene.on_pick`
+  callback — but the switch itself is a widget the interactive and web tiers' engines provide and this one does
+  not. The 3-D tier has none either, and gives its own reason: its layers are switched by id through the scene's
+  API rather than from a panel
 - **`measure`** — there is no pointer to measure with; a distance is drawn as a layer of its own
 - **`navigation`** — there is no viewport to pan: the extent is set by `set_bounds` before drawing
 - **`time_slider`** — a sequence over time is written out as an animation here rather than scrubbed, which is
   what `animate` is
-- **`tooltip`** — a matplotlib figure is a picture: there is no pointer over it to hover, so a value is read
-  from the colorbar or printed into the cell
+- **`tooltip`** — nothing follows the pointer: a saved figure is a picture, and on a live canvas the gesture
+  this tier delivers is a click, not a hover — `Scene.on_pick` reports the layer a click landed on and its data
+  coordinates, which a caller prints or annotates themselves. A value is otherwise read from the colorbar or
+  printed into the cell
 
 ### web
 

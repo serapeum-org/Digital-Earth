@@ -1,8 +1,10 @@
 """Tests for digitalearth.static.Scene — the shared-axes glyph host."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
+from matplotlib.backend_bases import MouseEvent
 
 from digitalearth.static import Map, Scene
 
@@ -531,3 +533,409 @@ class TestUnregisteringALayerThatRegisteredNoMappable:
             )
         finally:
             scene.close()
+
+
+class _EqualToEveryHandler:
+    """A callable that reports equal to every other instance of itself.
+
+    The case that tells equality matching apart from identity matching: two instances are distinct objects
+    that compare equal, so `off_pick` answers differently depending on which it uses.
+    """
+
+    def __eq__(self, other):
+        """Report equal to any other instance of this class.
+
+        Args:
+            other: The object compared against.
+
+        Returns:
+            True for another `_EqualToEveryHandler`, `NotImplemented` for anything else.
+        """
+        return isinstance(other, _EqualToEveryHandler) or NotImplemented
+
+    #: Unhashable, as a class defining `__eq__` without `__hash__` is anyway; written down so the list
+    #: lookup under test cannot silently become a set lookup.
+    __hash__ = None
+
+    def __call__(self, pick):
+        """Accept a pick and do nothing with it.
+
+        Args:
+            pick: The `Pick` the scene would deliver.
+        """
+
+
+class TestHowOffPickMatchesACallback:
+    """`off_pick` matches by equality, and says so (L3)."""
+
+    def test_the_docstring_states_the_rule_it_follows(self):
+        """The method documents matching by equality, which is what it does.
+
+        Test scenario:
+            It promised "the very object that was registered" — identity — while matching with `in` and
+            `list.remove`, which are `==`. A caller reading that promise would keep a reference they do
+            not need, and would expect a refusal they will not get.
+        """
+        assert "equality" in Scene.off_pick.__doc__, (
+            "off_pick's docstring should state how it matches a callback"
+        )
+
+    def test_a_fresh_bound_method_reference_takes_the_registered_one_off(self):
+        """`off_pick(picked.append)` works although the bound method is a new object each time.
+
+        Test scenario:
+            `list.append` builds a new bound method on every attribute access — equal to the registered
+            one, never the same object — so this is the idiom identity matching would break, and it is
+            the one `on_pick`/`off_pick`'s own examples use.
+        """
+        picked = []
+        with Map(globe=False) as canvas:
+            canvas.on_pick(picked.append).off_pick(picked.append)
+            assert canvas._pick_handlers == [], (
+                f"a fresh bound-method reference should match; got {canvas._pick_handlers}"
+            )
+
+    def test_an_equal_but_distinct_callable_takes_the_registered_one_off(self):
+        """A callable that compares equal to the registered one is accepted in its place.
+
+        Test scenario:
+            The consequence of the rule, pinned so it is a decision rather than an accident: the match is
+            the callable's own `__eq__`, so a type that reports equal to its siblings cannot distinguish
+            them here — and a handler that wants to be taken off by identity alone simply leaves `__eq__`
+            as `object` defines it.
+        """
+        with Map(globe=False) as canvas:
+            canvas.on_pick(_EqualToEveryHandler()).off_pick(_EqualToEveryHandler())
+            assert canvas._pick_handlers == [], (
+                f"an equal callable should match the registered one; got {canvas._pick_handlers}"
+            )
+
+    def test_a_callable_that_compares_equal_to_nothing_is_refused(self):
+        """A callable equal to no registered one is still refused by name.
+
+        Test scenario:
+            Equality matching must not turn the refusal into a no-op: an unregistered callback is the case
+            `off_pick` raises for, and the default `__eq__` is identity, so an ordinary function that was
+            never registered matches nothing.
+        """
+        with Map(globe=False) as canvas:
+            canvas.on_pick(_EqualToEveryHandler())
+            with pytest.raises(ValueError, match="is not registered on this figure"):
+                canvas.off_pick(print)
+
+
+def _click(scene, x, y):
+    """Drive one click at data coordinates ``(x, y)`` through a scene's canvas.
+
+    The canvas is drawn first, because a hit test runs against what is on screen.
+
+    Args:
+        scene: The scene to click on.
+        x: Data x coordinate.
+        y: Data y coordinate.
+    """
+    scene.fig.canvas.draw()
+    px, py = scene.ax.transData.transform((x, y))
+    event = MouseEvent("button_press_event", scene.fig.canvas, px, py, button=1)
+    scene.fig.canvas.callbacks.process("button_press_event", event)
+
+
+class TestDeliveringOnePickToSeveralCallbacks:
+    """One delivery, and what a callback that unsubscribes mid-delivery must not do to its neighbour."""
+
+    def test_a_callback_that_unsubscribes_does_not_skip_the_next_one(self):
+        """A handler taking itself off mid-delivery leaves the next handler still called.
+
+        Test scenario:
+            `_deliver_pick` walks a **snapshot** of the handler list, and this is the invariant that
+            depends on it: a "pick once" handler calls `off_pick(itself)` from inside the call, which
+            shortens the live list under the loop. Walking the live list would skip the handler that
+            shifted into the index just consumed — silently, with no exception and no sign that a
+            registered callback never ran.
+        """
+        seen = []
+        with Map(globe=False) as canvas:
+
+            def first(pick):
+                """Record the delivery and stop listening.
+
+                Args:
+                    pick: The pick delivered.
+                """
+                seen.append("first")
+                canvas.off_pick(first)
+
+            canvas.field(np.array([[0.0, 1.0], [2.0, 3.0]]), name="grid")
+            canvas.on_pick(first).on_pick(lambda pick: seen.append("second"))
+            _click(canvas, 0.5, 0.5)
+            assert seen == ["first", "second"], (
+                f"the second callback should still have been called; got {seen}"
+            )
+
+
+class TestWhichFigureCloseCloses:
+    """`close()` closes the scene's **own** figure and spares a borrowed one (#371, resolved).
+
+    It used to reach `pyplot.close(None)` on a scene given only an `ax`, which closes whichever figure is
+    *current* -- so a borrowed figure was spared or closed by luck, and issue #371 ("should a borrowed
+    figure be spared?") was written against that. `3d72bee7` made `self.fig` always a real figure, then
+    `9a0cbc42` gated `pyplot.close` on `_owns_fig` to resolve #371: a figure the scene created is closed,
+    one it borrowed (`ax=`/`fig=`, a grid panel, an inset locator) is left for its owner. These pin both
+    arms, and that the merely-current figure is never the one touched.
+    """
+
+    @pytest.fixture
+    def borrowed_then_another(self):
+        """A figure a caller laid out, and a second figure made *current* afterwards.
+
+        Yields:
+            The `(host, ax, current)` triple. `current` is the figure `pyplot.close(None)` would have
+            closed, so the two are distinguishable.
+        """
+        host, ax = plt.subplots()
+        current = plt.figure()
+        yield host, ax, current
+        plt.close(host)
+        plt.close(current)
+
+    def test_a_borrowed_figure_is_spared(self, borrowed_then_another):
+        """A figure the scene did not create survives `close` (#371, resolved).
+
+        Args:
+            borrowed_then_another: The caller's figure and axes, plus a later current figure.
+
+        Test scenario:
+            `close` gates `pyplot.close` on `_owns_fig`, so a scene built on a borrowed axes leaves the
+            caller's figure open — and does not reach for the merely-current one either.
+        """
+        host, ax, _current = borrowed_then_another
+        Scene(ax=ax).close()
+        assert host.number in plt.get_fignums(), (
+            f"the borrowed figure should be spared, not closed; open: {plt.get_fignums()}"
+        )
+
+    def test_the_merely_current_figure_is_left_alone(self, borrowed_then_another):
+        """And the figure that happens to be current survives, which is the other half.
+
+        Args:
+            borrowed_then_another: The caller's figure and axes, plus a later current figure.
+
+        Test scenario:
+            The first check alone would pass if `close()` closed *both*, or closed everything; this is
+            what makes it "the scene's own figure" rather than "a figure".
+        """
+        _host, ax, current = borrowed_then_another
+        Scene(ax=ax).close()
+        assert current.number in plt.get_fignums(), (
+            f"a figure the scene never held should survive; open: {plt.get_fignums()}"
+        )
+
+
+class TestTheArtistAccessorDoesNotTeachThePrivateRecord:
+    """`Scene.artist` exists to replace `scene._renderer.drawn[...]`, and its own examples read it (R2-L8).
+
+    `ff42be5e` closed three of four such public-doctest reads and counted the `Examples:` of `artist`
+    itself out of the census, on the ground that `.artists` -- the *set* a layer owns -- has no public
+    accessor the way `.artist` does. The counts those examples measure are the **axes'**, though, and the
+    axes is public: a labelled graticule puts one `LineCollection` plus one `Text` per labelled gridline
+    on it, which `ax.collections`/`ax.texts`/`ax.lines` report exactly on a figure holding one layer. So
+    the examples say it that way now, and the sentence naming `DrawnLayer.artists` as the renderer's
+    internal record stays in the prose, where it is a statement about the surface rather than a route to
+    copy.
+    """
+
+    @staticmethod
+    def _doctest_lines(member):
+        """Return the runnable lines of a member's docstring.
+
+        Args:
+            member: The function or property whose examples to collect.
+
+        Returns:
+            Every ``>>>`` / ``...`` line, which is what a reader copies and what doctest executes.
+        """
+        return [
+            line.strip()
+            for line in (member.__doc__ or "").splitlines()
+            if line.strip().startswith((">>>", "..."))
+        ]
+
+    def test_the_accessors_examples_do_not_read_the_renderers_record(self):
+        """No runnable line under `Scene.artist` reaches `_renderer.drawn`.
+
+        Test scenario:
+            Scoped to the ``>>>`` lines, because the defect is what the examples *teach*: a reader who
+            copies one copies the private route the accessor was added to retire. The prose above them
+            still names that route, in the past tense, as the thing `artist` replaced -- and naming it
+            is not demonstrating it. The doctest sweep proves the replacements measure the same figures.
+        """
+        offenders = [
+            line
+            for line in self._doctest_lines(Scene.artist)
+            if "_renderer.drawn" in line
+        ]
+        assert offenders == [], (
+            f"Scene.artist's examples should not teach the private record they replace; got {offenders}"
+        )
+
+    def test_the_prose_still_names_the_record_that_has_no_public_route(self):
+        """The gap is named rather than papered over: a layer's artist *set* is not public surface.
+
+        Test scenario:
+            Rewriting the examples must not delete the one true statement they carried -- that the set a
+            layer owns lives in the renderer's record, which `set_visible` and `remove_layer` act on.
+            Dropping it would leave a reader thinking `ax.lines` *is* the layer's set.
+        """
+        assert "DrawnLayer.artists" in (Scene.artist.__doc__ or ""), (
+            "Scene.artist should still name the record that has no public accessor"
+        )
+
+
+@pytest.fixture
+def borrowed_axes():
+    """An axes a caller laid out themselves, as `plt.subplots` hands it over.
+
+    Yields:
+        The `(fig, ax)` pair. The figure is closed here rather than by the scene, so a scene built on it
+        can be left unclosed in the test.
+    """
+    fig, ax = plt.subplots()
+    yield fig, ax
+    plt.close(fig)
+
+
+class TestASceneOnABorrowedAxes:
+    """A scene given `ax=` and no `fig=`: the figure is the axes' own."""
+
+    def test_the_axes_figure_is_adopted_when_no_figure_is_given(self, borrowed_axes):
+        """`Scene(ax=ax)` holds the figure that axes belongs to.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The constructor documents `fig` as "taken from `ax` when omitted" and stored the `None` it was
+            passed instead, so `self.fig` was `None` on a path nine reads dereference — and the `Figure`
+            annotation said otherwise, which is why no checker caught it.
+        """
+        fig, ax = borrowed_axes
+        assert Scene(ax=ax).fig is fig, "the scene should adopt the axes' own figure"
+
+    def test_a_figure_that_agrees_with_the_axes_is_kept(self, borrowed_axes):
+        """An explicit `fig=` naming the axes' own figure is accepted, which is what `grid` passes.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The argument is not pointless once the fallback exists: `grid` builds every panel with
+            `ax=ax, fig=fig`, so the agreeing call has to stay a plain success.
+        """
+        fig, ax = borrowed_axes
+        assert Scene(ax=ax, fig=fig).fig is fig, (
+            "an explicit figure naming the axes' own should be kept"
+        )
+
+    def test_a_figure_that_disagrees_with_the_axes_is_refused(self, borrowed_axes):
+        """`fig=` naming a figure the axes does not belong to is refused by name (R2-M8).
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            It used to be stored, and the scene was then split across two figures: layers drew on `ax` in
+            figure A while `save()`, `close()` and `figure_spec` all acted on figure B. Measured on the
+            branch before the refusal — `save()` wrote a 2492-byte blank where the real figure was 9219,
+            and `figure_spec.title` read `None` off B while A was headed. cleopatra warns about the same
+            configuration from the other side, so nothing downstream wanted it either.
+        """
+        _fig, ax = borrowed_axes
+        other = plt.figure()
+        try:
+            with pytest.raises(ValueError, match="is not the figure that owns"):
+                Scene(ax=ax, fig=other)
+        finally:
+            plt.close(other)
+
+    def test_a_figure_named_without_an_axes_is_refused(self, borrowed_axes):
+        """`fig=` alone is refused too: the scene would make its own figure and drop the named one.
+
+        Args:
+            borrowed_axes: The caller's `(fig, _ax)`, used here only as a figure to name.
+
+        Test scenario:
+            The same class as the disagreement above, measured: `Scene(fig=host)` ran `plt.subplots`,
+            so `scene.fig is host` was `False` and the figure the caller named held no axes of the
+            scene's at all. An argument that is silently not honoured is the defect, whichever way it is
+            not honoured.
+        """
+        fig, _ax = borrowed_axes
+        with pytest.raises(ValueError, match="only read together with"):
+            Scene(fig=fig)
+
+    def test_the_description_is_readable(self, borrowed_axes):
+        """`figure_spec` answers on a borrowed axes, with no builder called.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The figure's heading is read off the figure (M4), so a scene whose figure was `None` could not
+            describe itself at all — and every builder describes itself as it draws, which is how this
+            reached `graticule` and the globe notebook's `Map(..., ax=ax)` loop.
+        """
+        _fig, ax = borrowed_axes
+        assert Map(crs=4326, globe=False, ax=ax).figure_spec.title is None, (
+            "a scene on a borrowed axes should describe itself"
+        )
+
+    def test_a_builder_draws(self, borrowed_axes):
+        """A layer builder draws on a borrowed axes and registers its layer.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            The notebook pattern: a `Map` per axes inside the caller's own `plt.subplots` loop, each drawing
+            one layer.
+        """
+        _fig, ax = borrowed_axes
+        canvas = Map(crs=4326, globe=False, ax=ax)
+        assert canvas.field(
+            np.array([[0.0, 1.0], [2.0, 3.0]]), name="grid"
+        ).layer_ids == ["grid"], (
+            f"the layer should be registered; got {canvas.layer_ids}"
+        )
+
+    def test_a_pick_callback_can_be_registered(self, borrowed_axes):
+        """`on_pick` connects to the borrowed figure's canvas.
+
+        Args:
+            borrowed_axes: The caller's `(fig, ax)`.
+
+        Test scenario:
+            ST-25 reaches the canvas as `self.fig.canvas`, so the gesture was unavailable on exactly the
+            figures a caller lays out themselves — independently of the description (measured:
+            `AttributeError: 'NoneType' object has no attribute 'canvas'`).
+        """
+        _fig, ax = borrowed_axes
+        canvas = Map(crs=4326, globe=False, ax=ax)
+        assert canvas.on_pick(print)._pick_cid is not None, (
+            "registering a pick should connect to the figure's canvas"
+        )
+
+    def test_an_axes_in_a_subfigure_adopts_the_root_figure(self):
+        """An axes inside a subfigure gives the scene the **root** figure.
+
+        Test scenario:
+            `ax.figure` is the `SubFigure` there, and `self.fig` is what `savefig` and `pyplot.close` are
+            called on — neither of which takes a subfigure — so the root is the figure to hold.
+        """
+        root = plt.figure()
+        try:
+            axes = root.subfigures(1, 1).subplots()
+            assert Scene(ax=axes).fig is root, (
+                "a subfigure's axes should give the scene the root figure"
+            )
+        finally:
+            plt.close(root)

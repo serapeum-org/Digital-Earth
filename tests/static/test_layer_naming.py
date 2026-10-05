@@ -383,7 +383,8 @@ class TestTheFontMatplotlibReadsFromAName:
         Args:
             drawn: The map under test.
         """
-        placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
+        placed = drawn.artist(FONT)
         assert placed.get_fontfamily() == [FONT], placed.get_fontfamily()
 
     def test_the_layer_is_named_for_it_all_the_same(self, drawn):
@@ -401,7 +402,8 @@ class TestTheFontMatplotlibReadsFromAName:
         Args:
             drawn: The map under test.
         """
-        placed = drawn.annotate(0.5, 0.5, "Amsterdam", name=FONT)
+        drawn.annotate(0.5, 0.5, "Amsterdam", name=FONT)
+        placed = drawn.artist(FONT)
         assert placed.get_fontfamily() == [FONT], placed.get_fontfamily()
 
     def test_a_name_that_is_no_font_leaves_the_font_alone(self, drawn):
@@ -415,7 +417,8 @@ class TestTheFontMatplotlibReadsFromAName:
             family 'wells' not found.` on every named label. The name is only read as a font when it
             resolves to one.
         """
-        placed = drawn.text(0.5, 0.5, "Amsterdam", name=ASKED)
+        drawn.text(0.5, 0.5, "Amsterdam", name=ASKED)
+        placed = drawn.artist(ASKED)
         assert placed.get_fontfamily() == [DEFAULT_FAMILY], placed.get_fontfamily()
 
     @pytest.mark.parametrize("spelling", FAMILY_SPELLINGS)
@@ -436,7 +439,8 @@ class TestTheFontMatplotlibReadsFromAName:
             The pair is never an error, either: `Axes.text(fontname=..., fontfamily=...)` draws, with the
             later keyword winning, so what this pins is priority rather than a refusal.
         """
-        placed = drawn.text(0.5, 0.5, "Amsterdam", name=FONT, **{spelling: OTHER_FONT})
+        drawn.text(0.5, 0.5, "Amsterdam", name=FONT, **{spelling: OTHER_FONT})
+        placed = drawn.artist(FONT)
         assert placed.get_fontfamily() == [OTHER_FONT], (
             spelling,
             placed.get_fontfamily(),
@@ -471,7 +475,8 @@ class TestTheFontMatplotlibReadsFromAName:
             the check exists to avoid, on the very shape the id allocator mints for a duplicate name
             (review R2-H6). What decides and what is forwarded have to be the same thing.
         """
-        placed = drawn.text(0.5, 0.5, "Amsterdam", name=named)
+        drawn.text(0.5, 0.5, "Amsterdam", name=named)
+        placed = drawn.artist(named)
         assert placed.get_fontfamily() == [DEFAULT_FAMILY], placed.get_fontfamily()
 
     def test_the_font_a_name_implies_is_not_written_into_the_figure(self, drawn):
@@ -512,7 +517,8 @@ class TestTheFontMatplotlibReadsFromAName:
             It is read from the label, which keeps the caller's spelling.
         """
         drawn.text(0.5, 0.5, "Amsterdam", name=FONT)
-        second = drawn.text(0.6, 0.6, "Rotterdam", name=FONT)
+        drawn.text(0.6, 0.6, "Rotterdam", name=FONT)
+        second = drawn.artist(PATTERN_ONLY)
         assert second.get_fontfamily() == [FONT], second.get_fontfamily()
 
     def test_the_second_label_is_still_filed_under_the_suffixed_id(self, drawn):
@@ -537,7 +543,8 @@ class TestTheFontMatplotlibReadsFromAName:
             read the registry would answer `False` and drop the caller's font. Asked through the artist,
             as every case here is: this reads back as the family the label is actually drawn in.
         """
-        placed = drawn.text(0.5, 0.5, "Amsterdam", name=GENERIC_ALIAS)
+        drawn.text(0.5, 0.5, "Amsterdam", name=GENERIC_ALIAS)
+        placed = drawn.artist(GENERIC_ALIAS)
         assert placed.get_fontfamily() == [GENERIC_ALIAS], placed.get_fontfamily()
 
     def test_the_alias_probed_is_one_matplotlib_declares_and_is_not_the_default(self):

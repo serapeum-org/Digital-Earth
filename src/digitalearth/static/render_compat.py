@@ -53,7 +53,10 @@ from digitalearth.static.style_fold import (
 )
 
 __all__ = [
+    "CENTER_KEY",
     "COLOR_SCALE_ALIASES",
+    "EXTREME_KEYS",
+    "ROBUST_KEY",
     "STATIC_STYLE_SCHEMA",
     "coerce_color_scale",
     "fold_color_scaling",
@@ -156,16 +159,55 @@ _MARKER_RESPELLINGS = {"point_size": MARKER_SIZE_KEY}
 #: is declared beside them. The object is drawn with as given, not copied or rebuilt.
 NORM_KEY = "norm"
 
+#: The colours a field gives the values its ramp cannot place: a nodata cell (`missing`), a value below
+#: `vmin` (`under`) and one above `vmax` (`over`). They are **this tier's own** keywords rather than
+#: cleopatra's — the glyphs take their extremes on the colormap, not as keywords — so they are popped out of
+#: the drawing options by `digitalearth.static.maps.raster.FieldColors`, which owns the decision and spends
+#: them twice: `FieldColors.applied_to` folds them onto the drawn colormap through matplotlib's
+#: `Colormap.with_extremes(bad=..., over=..., under=...)`, and restates them on the `Scale` the layer
+#: publishes through `Scale.with_extremes`, so the picture and its description agree. The spellings are
+#: matplotlib's own, minus `bad`: a nodata cell is `missing` everywhere else in this package
+#: (`Scale.missing`, `digitalearth.base.symbology.MISSING_COLOR`, measured as `'#cccccc'`), and that is the
+#: name the four tiers share.
+EXTREME_KEYS: Tuple[str, ...] = ("missing", "over", "under")
+
+#: Percentile colour limits, xarray's spelling. cleopatra reads it from its own keyword list and clips the
+#: limits to the 2nd/98th percentile of the band, so one outlier stops flattening the rest of the field. It
+#: is **not** one of the regrouped flat keys — it travels to the glyph's constructor beside ``vmin``/``vmax``
+#: and is never relocated — but it decided the colour domain of every field render while appearing in no
+#: signature and no schema, which is what ST-3 declares it for.
+ROBUST_KEY = "robust"
+
+#: The value a diverging scale is built around, also cleopatra's own keyword: it symmetrises the **resolved**
+#: limits on it — cleopatra's ``_center_limits`` takes the larger of ``|vmin - center|`` and
+#: ``|vmax - center|`` as the half-range and returns ``center ± that``. So a ``vmin``/``vmax`` the call stated
+#: is what gets symmetrised, and the band's own range is symmetrised only when the call stated neither.
+#: Measured: a band running ``-3`` to ``8`` with ``center=0`` draws through ``(-8.0, 8.0)``, but the same
+#: band with ``center=0, vmax=2`` draws through ``(-3.0, 3.0)`` and with ``center=0, vmin=-1, vmax=2``
+#: through ``(-2.0, 2.0)``. ``FieldColors._center_on`` in the raster mixin states the same rule.
+#: Declared here beside ``robust`` for the same reason, and honoured one
+#: step further — :class:`~digitalearth.static.maps.raster.FieldColors` supplies the diverging *ramp*
+#: cleopatra would have defaulted to, which this tier's own colormap resolution suppresses. The two halves
+#: are honoured on different conditions: the symmetrisation above happens whenever a centre is stated, while
+#: the ramp is supplied only when the caller named no colormap **and** the band straddles the centre. So a
+#: centre the band does not straddle is declined as a *ramp* and still symmetrised as *limits*, which is what
+#: the ``WARNING`` it logs says.
+CENTER_KEY = "center"
+
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
 #: where it drives one. That is the **30** flat members cleopatra's constructors reject, the 6 typed group
-#: parameters they fold into, :data:`MARKER_SIZE_KEY` and :data:`NORM_KEY` — 38 keywords that were in no
-#: signature anywhere.
+#: parameters they fold into, :data:`MARKER_SIZE_KEY`, :data:`NORM_KEY`, the three :data:`EXTREME_KEYS` and
+#: the colour domain's own :data:`ROBUST_KEY`/:data:`CENTER_KEY` — 43 keywords that were in no signature
+#: anywhere.
 #:
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
 #: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
 #: through :class:`~digitalearth.base.spec.encoding.Encoding` rather than through a keyword of their own.
 #: ``tests/static/test_style_schema.py`` pins this table against :data:`FLAT_STYLE_KEYS`, so a key added
 #: upstream cannot quietly go undeclared again.
+#:
+#: Three of them — the :data:`EXTREME_KEYS` — are honoured on a **field** render, which is the one layer kind
+#: whose colormap this tier resolves and can therefore restate the extremes of.
 STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     # -- visual channels of the layer itself
     StyleKey("alpha", "Layer opacity, 0 transparent to 1 opaque.", channel="opacity"),
@@ -246,6 +288,21 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
         NORM_KEY,
         "A built matplotlib Normalize the values are coloured through, used as given.",
     ),
+    # -- the colour domain itself (ST-3)
+    StyleKey(
+        ROBUST_KEY,
+        "Clip the colour limits to the 2nd/98th percentile of the data, so an outlier does not set them.",
+    ),
+    StyleKey(
+        CENTER_KEY,
+        "The value a diverging scale is built around: the limits are symmetrised on it and, unless a "
+        "colormap was named, the ramp becomes a diverging one centred there. The ramp needs the band to "
+        "straddle the centre; the limits are symmetrised either way.",
+    ),
+    # -- the colours for what the ramp cannot place (ST-10)
+    StyleKey("missing", "Colour of a cell with no value, on a field render."),
+    StyleKey("over", "Colour of a value above vmax, on a field render."),
+    StyleKey("under", "Colour of a value below vmin, on a field render."),
 )
 
 #: Channel -> the flat keyword that carries it, derived from the declaration so the two cannot disagree.

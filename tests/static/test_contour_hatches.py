@@ -53,9 +53,10 @@ def _overlay(canvas: Map, dataset: Dataset, **kwargs):
         **kwargs: Extra keywords for ``contours``.
 
     Returns:
-        The contour set.
+        The contour set — read back off the map with `Map.artist`, since the builders hand back the map
+        rather than the artist (ST-20).
     """
-    return canvas.contours(
+    canvas.contours(
         dataset,
         levels=P_LEVELS,
         filled=True,
@@ -64,6 +65,7 @@ def _overlay(canvas: Map, dataset: Dataset, **kwargs):
         name="significance",
         **kwargs,
     )
+    return canvas.artist("significance")
 
 
 class TestTheHatchKeywords:
@@ -94,8 +96,10 @@ class TestTheHatchKeywords:
         Args:
             p_values: The p-value field.
         """
-        artist = Map(crs=4326).contours(
-            p_values, levels=P_LEVELS, filled=True, hatches=["///", ""]
+        artist = (
+            Map(crs=4326)
+            .contours(p_values, levels=P_LEVELS, filled=True, hatches=["///", ""])
+            .artist()
         )
         alphas = np.asarray(artist.get_facecolor())[:, 3]
         assert np.all(alphas > 0.0), alphas
@@ -295,9 +299,10 @@ class TestTheHatchLegend:
             p_values: The p-value field.
         """
         canvas = Map(crs=4326)
-        artist = canvas.contours(
+        canvas.contours(
             p_values, levels=P_LEVELS, filled=True, hatches=["///", ".."], name="p"
         )
+        artist = canvas.artist()
         canvas.legend("p")
         handles = canvas.ax.get_legend().legend_handles
         assert [handle.get_hatch() for handle in handles] == ["///", ".."]

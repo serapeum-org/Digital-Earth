@@ -1,0 +1,1347 @@
+"""Tests for ST-9 — animating without clearing the axes, and blitting.
+
+The capability under test is the per-frame strategy, not the picture: an animation whose ``kind`` draws one
+updatable artist gives that artist the next frame's values (``AxesImage.set_data`` / ``QuadMesh.set_array``)
+instead of clearing the axes and rebuilding every layer, which is what makes ``blit=True`` possible at all.
+The proof that the strategy is only a strategy is :meth:`TestInPlaceFrames.
+test_in_place_frames_match_a_cleared_redraw_pixel_for_pixel`, which renders the same stack both ways and
+compares the canvases.
+"""
+
+import logging
+
+import numpy as np
+import pytest
+from matplotlib.animation import PillowWriter
+from matplotlib.image import AxesImage
+from pyramids.dataset import Dataset, GeoReference
+
+from digitalearth.base.spec import DEFAULT_BAND
+from digitalearth.static import Map, projections
+from digitalearth.static.maps.animation import FrameUpdate
+
+#: A clim every test passes explicitly, so the colour scale is never what a comparison is measuring.
+CLIM = {"vmin": -10.0, "vmax": 40.0}
+
+
+def _field(offset: float, *, bands: int = 1) -> Dataset:
+    """A small global lon/lat raster, shifted by ``offset`` so consecutive frames differ.
+
+    Args:
+        offset: Constant added to every cell.
+        bands: How many bands the raster carries.
+
+    Returns:
+        A 30x60 global EPSG:4326 raster.
+    """
+    ny, nx = 30, 60
+    lat = np.linspace(90, -90, ny)[:, None]
+    plane = (np.cos(np.deg2rad(lat)) * 20 + offset) * np.ones((ny, nx), "float32")
+    arr = plane if bands == 1 else np.stack([plane * (1 + k) for k in range(bands)])
+    return Dataset.from_array(
+        arr=arr.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326),
+    )
+
+
+@pytest.fixture
+def stack():
+    """A 3-frame stack of small global fields.
+
+    Returns:
+        list[Dataset]: three distinct global rasters.
+    """
+    return [_field(offset) for offset in (0.0, 8.0, 16.0)]
+
+
+@pytest.fixture
+def rgb_stack():
+    """A 2-frame stack of 3-band rasters — a composite animation.
+
+    Returns:
+        list[Dataset]: two distinct 3-band global rasters.
+    """
+    return [_field(offset, bands=3) for offset in (0.0, 8.0)]
+
+
+def _canvas(scene: Map) -> np.ndarray:
+    """Render the scene and return its canvas as RGBA pixels.
+
+    Args:
+        scene: The map to draw.
+
+    Returns:
+        The figure's RGBA buffer, copied so a later draw cannot change it.
+    """
+    scene.fig.canvas.draw()
+    return np.asarray(scene.fig.canvas.buffer_rgba()).copy()
+
+
+def _frames_of(scene: Map, anim, count: int):
+    """Drive ``count`` frames of ``anim`` and collect what each one left on the canvas.
+
+    Args:
+        scene: The map the animation draws on.
+        anim: The ``FuncAnimation`` to drive.
+        count: How many frames to draw.
+
+    Returns:
+        One RGBA buffer per frame, in frame order.
+    """
+    return [(anim._func(index), _canvas(scene))[1] for index in range(count)]
+
+
+class TestFrameUpdateStrategy:
+    """The strategy object itself: what it allows, what it refuses, and what it settles to."""
+
+    def test_an_image_field_is_updatable(self, stack):
+        """The capability's own case reports itself available.
+
+        Test scenario:
+            A ``FrameUpdate`` built for an ``imshow`` animation with plain options says the frames update
+            one artist.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        strategy = FrameUpdate(scene, stack, dict(CLIM), kind="imshow")
+        assert strategy.in_place is True, (
+            f"an image field should be updatable, blocked by {strategy.blocker!r}"
+        )
+        scene.close()
+
+    def test_a_blocked_strategy_names_the_kind_it_cannot_update(self, stack):
+        """The blocker is a sentence, because the refusal and the log line both quote it.
+
+        Test scenario:
+            A composite's ``blocker`` names the kind, so the two callers of it cannot describe the same
+            animation differently.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        strategy = FrameUpdate(scene, stack, {}, kind="hsv_composite")
+        assert "hsv_composite" in str(strategy.blocker), (
+            f"the blocker should name the kind, got {strategy.blocker!r}"
+        )
+        scene.close()
+
+    def test_an_updatable_strategy_settles_to_itself(self, stack):
+        """``settle`` hands back the strategy the frame loop should run.
+
+        Test scenario:
+            An updatable strategy asked for blitting returns itself, which is what the frame loop takes as
+            "update rather than redraw".
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        strategy = FrameUpdate(scene, stack, dict(CLIM), kind="imshow")
+        assert strategy.settle(blit=True) is strategy, (
+            "an updatable strategy must settle to itself"
+        )
+        scene.close()
+
+    def test_a_blocked_strategy_settles_to_nothing(self, stack):
+        """And a blocked one settles to ``None``, which is the redrawing path.
+
+        Test scenario:
+            A contour strategy under the default mode falls back rather than refusing, so ``settle``
+            reports no strategy at all.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        strategy = FrameUpdate(scene, stack, {}, kind="contour")
+        assert strategy.settle(blit=False) is None, (
+            "a blocked strategy must settle to no strategy"
+        )
+        scene.close()
+
+
+class TestInPlaceFrames:
+    """An animation that can update one artist does that instead of clearing the axes."""
+
+    def test_the_data_artist_survives_every_frame(self, stack):
+        """Every frame draws onto the artist frame 0 created, rather than a new one.
+
+        Test scenario:
+            A flat three-frame field animation is driven frame by frame; the image on the axes is the same
+            object throughout, and there is only ever one of it.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        anim = scene.animate(stack, fps=2, **CLIM)
+        anim._func(0)
+        first = scene.ax.images[0]
+        for index in (1, 2):
+            anim._func(index)
+        assert scene.ax.images[0] is first, "the frames must share one image artist"
+        assert len(scene.ax.images) == 1, (
+            f"an in-place animation adds no image per frame, got {len(scene.ax.images)}"
+        )
+
+    def test_the_decoration_is_drawn_once_not_once_per_frame(self, stack, mocker):
+        """Globe decoration is background: it is drawn for frame 0 and left standing.
+
+        Test scenario:
+            A globe animation with the ocean disc is driven for three frames with ``Map.ocean`` spied on.
+            Clearing the axes would throw the disc away and redraw it three times; keeping the axes draws
+            it once.
+        """
+        scene = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(3, 3))
+        spy = mocker.spy(scene, "ocean")
+        anim = scene.animate(stack, fps=2, ocean=True, **CLIM)
+        for index in range(3):
+            anim._func(index)
+        assert spy.call_count == 1, (
+            f"the ocean disc should be drawn once, not per frame; drawn {spy.call_count} times"
+        )
+
+    def test_the_axes_is_not_cleared_after_the_first_frame(self, stack, mocker):
+        """``Axes.clear`` runs for frame 0 and never again.
+
+        Test scenario:
+            The same three-frame animation with ``Axes.clear`` spied on. One call is the first frame's; a
+            second would mean the frame's artists, decoration and view were thrown away again.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        spy = mocker.spy(scene.ax, "clear")
+        anim = scene.animate(stack, fps=2, **CLIM)
+        for index in range(3):
+            anim._func(index)
+        assert spy.call_count == 1, (
+            f"the axes should be cleared once, got {spy.call_count} clears"
+        )
+
+    def test_in_place_frames_match_a_cleared_redraw_pixel_for_pixel(self, stack):
+        """Updating in place and clearing-and-redrawing put the same pixels on the canvas.
+
+        Test scenario:
+            The same stack is animated twice on two identical figures — once with ``update="in_place"``,
+            once with ``update="redraw"`` — and each frame's RGBA buffer is compared. The two paths share
+            no code after the first frame, so an equal canvas is the evidence that the strategy is only a
+            strategy.
+        """
+        kept = Map(crs=4326, figsize=(3, 3))
+        rebuilt = Map(crs=4326, figsize=(3, 3))
+        in_place = _frames_of(
+            kept, kept.animate(stack, fps=2, update="in_place", **CLIM), 3
+        )
+        redrawn = _frames_of(
+            rebuilt, rebuilt.animate(stack, fps=2, update="redraw", **CLIM), 3
+        )
+        for index, (left, right) in enumerate(zip(in_place, redrawn)):
+            assert np.array_equal(left, right), (
+                f"frame {index} differs between the in-place and the redrawn path"
+            )
+
+    def test_consecutive_frames_really_change_the_canvas(self, stack):
+        """The comparison above would also pass on an animation that never updated anything.
+
+        Test scenario:
+            The control for the pixel comparison: frames 0 and 2 of the in-place animation must differ,
+            or a frame function that quietly did nothing would read as correct.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        drawn = _frames_of(
+            scene, scene.animate(stack, fps=2, update="in_place", **CLIM), 3
+        )
+        assert not np.array_equal(drawn[0], drawn[2]), (
+            "the first and last frame of a changing stack must not be the same picture"
+        )
+
+    def test_a_per_frame_title_is_restated_on_every_frame(self, stack):
+        """A title is the one piece of per-frame decoration, so an updated frame sets it too.
+
+        Test scenario:
+            Three titled frames are driven one at a time and the axes title is read after each. Updating
+            only the image left every frame carrying the first frame's title, which is the defect this
+            covers.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        titles = ["Jan", "Feb", "Mar"]
+        anim = scene.animate(stack, fps=2, titles=titles, **CLIM)
+        shown = []
+        for index in range(len(titles)):
+            anim._func(index)
+            shown.append(scene.ax.get_title())
+        assert shown == titles, f"each frame should show its own title, got {shown}"
+
+    def test_the_frame_function_hands_back_the_artist_it_changed(self, stack):
+        """Blitting needs the frame function to return what it redrew, so it does.
+
+        Test scenario:
+            The frame function's return value is inspected directly: it is a sequence holding the image
+            matplotlib must repaint for that frame.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        anim = scene.animate(stack, fps=2, **CLIM)
+        anim._func(0)
+        returned = list(anim._func(1))
+        assert len(returned) == 1, f"one artist changes per frame, got {returned!r}"
+        assert isinstance(returned[0], AxesImage), (
+            f"a field frame repaints an AxesImage, got {type(returned[0]).__name__}"
+        )
+
+    def test_a_mesh_kind_updates_its_cells_in_place(self, stack):
+        """``pcolormesh`` keeps its ``QuadMesh`` and swaps the cell values.
+
+        Test scenario:
+            A mesh animation is driven for two frames; the collection on the axes is the same object, and
+            the values it holds are the second frame's.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        anim = scene.animate(stack, kind="pcolormesh", fps=2, **CLIM)
+        anim._func(0)
+        mesh = scene.ax.collections[0]
+        anim._func(1)
+        assert scene.ax.collections[0] is mesh, "the frames must share one QuadMesh"
+        assert float(np.nanmax(mesh.get_array())) == pytest.approx(28.0, abs=0.5), (
+            f"the mesh should hold frame 1's values, got max {np.nanmax(mesh.get_array())}"
+        )
+
+    def test_the_redraw_mode_rebuilds_the_artist_every_frame(self, stack):
+        """``update="redraw"`` is the escape hatch, and still clears.
+
+        Test scenario:
+            The same animation under ``update="redraw"``: the image after frame 1 is a different object
+            from the one frame 0 drew, which is what clearing the axes means.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        anim = scene.animate(stack, fps=2, update="redraw", **CLIM)
+        anim._func(0)
+        first = scene.ax.images[0]
+        anim._func(1)
+        assert scene.ax.images[0] is not first, (
+            "update='redraw' must rebuild the layer rather than update it"
+        )
+
+    def test_an_unknown_update_mode_is_refused(self, stack):
+        """A misspelled mode fails at the call, naming the modes there are.
+
+        Test scenario:
+            ``update="inplace"`` (no underscore) is refused up front rather than silently redrawing.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="unknown update mode"):
+            scene.animate(stack, update="inplace")
+
+
+class TestInPlaceRefusals:
+    """What cannot be updated in place is named, not silently animated wrongly."""
+
+    def test_a_contour_kind_cannot_be_updated_in_place(self, stack):
+        """A contour set is rebuilt from the values, so there is no artist to hand new data to.
+
+        Test scenario:
+            ``update="in_place"`` with ``kind="contourf"`` is refused, and the message names the kind.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="contourf"):
+            scene.animate(stack, kind="contourf", update="in_place", **CLIM)
+
+    def test_a_composite_cannot_be_updated_in_place(self, rgb_stack):
+        """A composite's pixels are a frozen three-channel stretch, not the band's values.
+
+        Test scenario:
+            ``update="in_place"`` with ``kind="rgb_composite"`` is refused, naming the kind.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="rgb_composite"):
+            scene.animate(rgb_stack, kind="rgb_composite", update="in_place")
+
+    def test_classes_cut_per_frame_block_the_in_place_path(self, stack):
+        """``scheme=`` cuts its class edges from the frame being drawn, which a kept norm cannot follow.
+
+        Test scenario:
+            ``update="in_place"`` with ``scheme="quantiles"`` is refused, and the message names ``scheme``.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="scheme"):
+            scene.animate(stack, scheme="quantiles", k=4, update="in_place", **CLIM)
+
+    def test_auto_falls_back_to_a_redraw_naming_the_blocker(self, rgb_stack, caplog):
+        """The default mode animates whatever it is given, and says which path it took.
+
+        Test scenario:
+            A composite animation under the default ``update="auto"`` renders both frames, and the log
+            names the kind that cannot be updated in place rather than leaving the choice unexplained.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with caplog.at_level(logging.INFO, logger="digitalearth.static.maps.animation"):
+            anim = scene.animate(rgb_stack, kind="rgb_composite", fps=2)
+            anim._func(0)
+            anim._func(1)
+        assert "rgb_composite" in caplog.text, (
+            f"the fallback must name what blocked it, logged: {caplog.text!r}"
+        )
+        assert len(scene.ax.images) == 1, (
+            f"a redrawn composite leaves one image per frame, got {len(scene.ax.images)}"
+        )
+
+
+class TestBlit:
+    """``blit=True`` is opt-in, and refused wherever it would freeze part of the frame."""
+
+    def test_blitting_is_off_by_default(self, stack):
+        """An animation nobody asked to blit does not blit.
+
+        Test scenario:
+            The returned animation's blit flag is off unless ``blit=True`` was passed.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        anim = scene.animate(stack, fps=2, **CLIM)
+        assert anim._blit is False, "blitting must stay opt-in"
+
+    def test_blitting_is_on_when_asked(self, stack):
+        """``blit=True`` reaches the ``FuncAnimation``.
+
+        Test scenario:
+            The capability this row is about: the animation is built with blitting enabled.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        anim = scene.animate(stack, fps=2, blit=True, **CLIM)
+        assert anim._blit is True, "blit=True must reach the FuncAnimation"
+
+    def test_blit_is_refused_for_a_kind_that_cannot_update_in_place(self, stack):
+        """Blitting a redrawn frame would leave the previous frame standing underneath.
+
+        Test scenario:
+            ``blit=True`` with ``kind="contourf"`` is refused, naming the kind.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="contourf"):
+            scene.animate(stack, kind="contourf", blit=True, **CLIM)
+
+    def test_blit_is_refused_with_per_frame_titles(self, stack):
+        """A per-frame title lives outside the region blitting repaints, so it would freeze.
+
+        Test scenario:
+            ``blit=True`` together with ``titles=`` is refused, naming ``titles``.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="titles"):
+            scene.animate(stack, titles=["a", "b", "c"], blit=True, **CLIM)
+
+    def test_the_title_sits_outside_the_region_blitting_repaints(self, stack):
+        """The measurement behind that refusal, rather than an assertion about matplotlib.
+
+        Test scenario:
+            matplotlib blits the axes bounding box. The title's drawn extent is measured and sits wholly
+            above it, so nothing a blitted frame repaints can change the title.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.field(stack[0], **CLIM)
+        scene.set_title("January")
+        scene.fig.canvas.draw()
+        title = scene.ax.title.get_window_extent()
+        assert title.y0 >= scene.ax.bbox.y1, (
+            f"the title starts at y={title.y0} but the blitted axes box ends at {scene.ax.bbox.y1}"
+        )
+
+    def test_a_blitted_animation_saves_the_same_clip(self, stack, tmp_path):
+        """Saving is unaffected: matplotlib draws every frame in full when writing a file.
+
+        Test scenario:
+            The same stack is written twice, with and without ``blit=True``, and the two files are
+            compared byte for byte — the contract that ``blit=`` is a playback optimisation and never
+            changes what is saved.
+        """
+        blitted, plain = tmp_path / "blit.gif", tmp_path / "plain.gif"
+        with Map(crs=4326, figsize=(3, 3)) as scene:
+            scene.animate(stack, fps=2, blit=True, **CLIM)
+            scene.save_animation(str(blitted))
+        with Map(crs=4326, figsize=(3, 3)) as scene:
+            scene.animate(stack, fps=2, **CLIM)
+            scene.save_animation(str(plain))
+        assert blitted.stat().st_size > 0, "a blitted animation must still write a clip"
+        assert blitted.read_bytes() == plain.read_bytes(), (
+            "blitting must not change the frames that are written"
+        )
+
+    def test_rotate_refuses_to_blit(self, stack):
+        """A rotation reprojects every frame, so no artist survives for blitting to leave alone.
+
+        Test scenario:
+            ``rotate(blit=True)`` is refused with a message naming the sweep, rather than the keyword
+            reaching the renderer as unknown styling.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="reproject"):
+            scene.rotate(stack[0], n_frames=3, blit=True)
+
+
+class TestOffLimbFrames:
+    """A frame the display CRS cannot show must draw nothing, not repeat the frame before it."""
+
+    @pytest.fixture
+    def half_hidden(self):
+        """Two regional frames, the second of them at the antipode of the first.
+
+        Returns:
+            list[Dataset]: a visible frame followed by one no near-side orthographic view can show.
+        """
+        _, xx = np.mgrid[0:20, 0:24]
+        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+        return [
+            Dataset.from_array(
+                values,
+                geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+                no_data_value=-9999.0,
+            ),
+            Dataset.from_array(
+                values + 3.0,
+                geo_ref=GeoReference(
+                    geo=(-176.0, 0.02, 0.0, -53.0, 0.0, -0.02), epsg=4326
+                ),
+                no_data_value=-9999.0,
+            ),
+        ]
+
+    def test_an_off_limb_frame_hides_the_image_rather_than_repeating_the_last(
+        self, half_hidden
+    ):
+        """An un-drawable frame takes the kept image off the picture for that frame.
+
+        Test scenario:
+            A globe centred on the first frame animates a stack whose second frame is on the far side.
+            Frame 0 shows the image; frame 1 hides it, which is what "draws nothing" means for an artist
+            that is not rebuilt per frame.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(3, 3)
+        )
+        anim = scene.animate(half_hidden, fps=2, **CLIM)
+        anim._func(0)
+        assert scene.ax.images[0].get_visible() is True, (
+            "the first frame is on the view and must be drawn"
+        )
+        anim._func(1)
+        assert scene.ax.images[0].get_visible() is False, (
+            "a frame behind the limb must not leave the previous frame on screen"
+        )
+
+    def test_a_clip_whose_first_frame_is_hidden_still_renders(
+        self, half_hidden, tmp_path
+    ):
+        """With nothing drawn for frame 0 there is no artist to keep, so every frame is redrawn.
+
+        Test scenario:
+            The stack is animated from the antipode of its first frame, so frame 0 draws nothing. The
+            animation must still write a clip rather than failing on the artist it never got.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=-176, lat=-53), globe=True, figsize=(3, 3)
+        )
+        anim = scene.animate(half_hidden, fps=2, **CLIM)
+        out = tmp_path / "hidden-first.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, (
+            "an animation whose first frame is hidden should still render"
+        )
+
+
+def _coarser(offset: float) -> Dataset:
+    """The same global field on **half** the grid, so a stack can change shape between frames.
+
+    Args:
+        offset: Constant added to every cell, so the frame still differs by value as well as by shape.
+
+    Returns:
+        A 15x30 global EPSG:4326 raster — the same extent as :func:`_field`, at twice the cell size.
+    """
+    ny, nx = 15, 30
+    lat = np.linspace(90, -90, ny)[:, None]
+    plane = (np.cos(np.deg2rad(lat)) * 20 + offset) * np.ones((ny, nx), "float32")
+    return Dataset.from_array(
+        arr=plane.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 12.0, 0.0, 90.0, 0.0, -12.0), epsg=4326),
+    )
+
+
+def _antipodal_pair() -> list:
+    """Two small regional frames of one grid, the second at the antipode of the first.
+
+    Shared by the two stack-refusal suites below, because both need the same stack read from two
+    different globes: centred on the second frame it is a clip whose **first** frame draws nothing,
+    and centred on the first it is a clip whose *later* frame is merely hidden.
+
+    Returns:
+        list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
+    """
+    _, xx = np.mgrid[0:20, 0:24]
+    values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+    return [
+        Dataset.from_array(
+            values,
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        ),
+        Dataset.from_array(
+            values + 3.0,
+            geo_ref=GeoReference(geo=(-176.0, 0.02, 0.0, -53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        ),
+    ]
+
+
+class TestAFrameOnAnotherGridFallsBackMidClip:
+    """A stack whose frames are not all one shape: the in-place path gives up where it has to."""
+
+    def test_the_later_frame_is_drawn_on_a_rebuilt_artist(self):
+        """A frame on a coarser grid cannot refill the artist, so the artist is rebuilt for it.
+
+        Test scenario:
+            ``AxesImage.set_data`` with a differently shaped array leaves the image's extent describing
+            the first frame's grid, so the picture would be stretched rather than redrawn. The strategy
+            is chosen once, up front, from the *first* frame — nothing up there can know the third frame
+            is a different shape — so the fallback has to happen mid-clip.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        first = clip._func(0)
+        second = clip._func(1)
+        scene.close()
+        assert first[0] is not second[0], (
+            "a frame on another grid must be drawn on a rebuilt artist, not the kept one"
+        )
+
+    def test_the_fallback_says_which_frame_changed_shape(self, caplog):
+        """The switch is logged with both grids, so a slow clip is explained.
+
+        Test scenario:
+            The only other symptom is an animation that silently becomes as slow as the redrawing path.
+            Naming the frame and the two shapes is what lets a caller fix the stack instead.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        clip._func(0)
+        with caplog.at_level(logging.WARNING):
+            clip._func(1)
+        scene.close()
+        assert (
+            "holds a (15, 30) grid where the first frame held (30, 60)" in caplog.text
+        ), f"the fallback should name both grids; log was {caplog.text!r}"
+
+    def test_the_frames_after_the_change_keep_redrawing(self):
+        """Once the strategy is dropped it stays dropped, rather than being retried per frame.
+
+        Test scenario:
+            Retrying would re-measure the mismatch on every remaining frame and log it again. Read off
+            the artists: a third frame back on the *first* grid is still drawn on a new artist, because
+            the kept one was given up two frames ago.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0), _field(16.0)], fps=2, **CLIM)
+        drawn = [clip._func(index)[0] for index in range(3)]
+        scene.close()
+        assert drawn[2] is not drawn[0], (
+            "a frame after the fallback must be redrawn, not handed back the first artist"
+        )
+
+    def test_the_clip_still_renders_every_frame(self, tmp_path):
+        """And the clip saves — the fallback is a slower path, not a failure.
+
+        Args:
+            tmp_path: Where the GIF is written.
+
+        Test scenario:
+            The mid-clip switch happens inside matplotlib's frame function, where an exception would be
+            swallowed into a half-written file rather than reported. Writing the clip is what proves it
+            was not.
+        """
+        scene = Map(crs=4326)
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        out = tmp_path / "mixed-grids.gif"
+        clip.save(str(out), writer=PillowWriter(fps=2))
+        scene.close()
+        assert out.stat().st_size > 0, "a stack of mixed grids should still save a clip"
+
+
+class TestAKindWithNoReasonOnRecord:
+    """``FrameUpdate`` is built directly by the tiers, so it answers for a kind ``animate`` never passes."""
+
+    def test_an_unlisted_kind_is_blocked_with_a_general_reason(self):
+        """A kind in neither table is blocked rather than assumed updatable.
+
+        Test scenario:
+            ``animate`` validates ``kind`` against ``_ANIMATION_KINDS`` first, and every member of that
+            tuple is either in ``SETTERS`` or in ``UNUPDATABLE`` — so this default is the answer for a
+            kind added upstream before its row here, and the safe default is "cannot update in place".
+        """
+        scene = Map(crs=4326)
+        update = FrameUpdate(scene, [_field(0.0)], {}, kind="hexbin")
+        scene.close()
+        assert (
+            update.blocker
+            == "kind='hexbin' draws no artist whose values can be replaced"
+        ), f"an unlisted kind should be blocked by name; got {update.blocker!r}"
+
+    def test_an_unlisted_kind_is_not_updated_in_place(self):
+        """Which is to say the strategy reports itself unavailable.
+
+        Test scenario:
+            The blocker above is the message; this is the behaviour it stands for, so a change that kept
+            the string and let the kind through fails here.
+        """
+        scene = Map(crs=4326)
+        update = FrameUpdate(scene, [_field(0.0)], {}, kind="hexbin")
+        scene.close()
+        assert not update.in_place, (
+            "a kind with no setter must not take the in-place path"
+        )
+
+
+def _anomaly(low: float, high: float) -> Dataset:
+    """A global field running from ``low`` to ``high``, so a frame can straddle zero or not.
+
+    Args:
+        low: The field's smallest value.
+        high: The field's largest value.
+
+    Returns:
+        A 30x60 global EPSG:4326 raster spanning ``[low, high]``.
+    """
+    ny, nx = 30, 60
+    arr = np.linspace(low, high, ny * nx, dtype="float32").reshape(ny, nx)
+    return Dataset.from_array(
+        arr=arr,
+        geo_ref=GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326),
+    )
+
+
+def _ramps(stack, mode: str, **opts) -> list:
+    """Name the colormap each frame of ``stack`` is actually drawn with under ``mode``.
+
+    Args:
+        stack: The frames to animate.
+        mode: The ``update=`` path to drive.
+        **opts: Forwarded to :meth:`~digitalearth.static.map.Map.animate`.
+
+    Returns:
+        One colormap name per frame, in frame order.
+    """
+    scene = Map(crs=4326, figsize=(3, 3))
+    clip = scene.animate(stack, update=mode, fps=2, **opts)
+    names = []
+    for index in range(len(stack)):
+        clip._func(index)
+        names.append(scene.artist().get_cmap().name)
+    scene.close()
+    return names
+
+
+class TestOneAnimationWhicheverPathDrawsIt:
+    """``update=`` picks a path, not a picture: a per-frame colour decision must not ride on the choice."""
+
+    @pytest.fixture
+    def straddling(self):
+        """A 2-frame anomaly stack whose first frame crosses zero and whose second does not.
+
+        Returns:
+            list[Dataset]: a field running -5..5 followed by one running 1..5.
+        """
+        return [_anomaly(-5.0, 5.0), _anomaly(1.0, 5.0)]
+
+    def test_the_two_paths_agree_on_every_frame_s_ramp(self, straddling):
+        """``center=`` must colour a frame the same way whichever path drew it.
+
+        Test scenario:
+            ``FieldColors.ramp_over`` asks whether *the frame it is drawing* straddles the centre, so a
+            kept artist froze the answer at frame 0 while a redrawn one re-decided it per frame — the same
+            ``animate(stack, center=0.0)`` call drew two different clips.
+        """
+        assert _ramps(straddling, "redraw", center=0.0) == _ramps(
+            straddling, "auto", center=0.0
+        ), "the redraw and in-place paths must draw one animation, not two"
+
+    def test_the_ramp_is_decided_over_the_stack_not_per_frame(self, straddling):
+        """A stack that straddles the centre diverges throughout, rather than flickering back.
+
+        Test scenario:
+            Frame 1 runs 1..5 and so straddles nothing on its own. The animation's colour scale is the
+            stack's, resolved once like ``vmin``/``vmax``, so the ramp is the stack's too and frame 1 is
+            drawn on the same diverging map as frame 0.
+        """
+        assert _ramps(straddling, "redraw", center=0.0) == [
+            "viridis-diverging",
+            "viridis-diverging",
+        ], (
+            "a stack straddling the centre must keep one diverging ramp for the whole clip"
+        )
+
+    def test_a_centre_outside_the_stack_is_declined_once(self, straddling, caplog):
+        """And the decline is said once for the clip, not once per frame.
+
+        Test scenario:
+            A centre no frame straddles keeps the sequential ramp and says so at ``WARNING``. Said per
+            frame that is 60 lines for a 60-frame clip, which is the symptom of the decision being taken
+            in the wrong place.
+        """
+        with caplog.at_level(logging.WARNING):
+            _ramps(straddling, "redraw", center=100.0)
+        assert caplog.text.count("is not drawn") == 1, (
+            f"one decline per clip, not per frame; log was {caplog.text!r}"
+        )
+
+    def test_a_midpoint_scale_agrees_across_the_paths_too(self, straddling):
+        """``color_scale="midpoint"`` states the same request in cleopatra's other spelling.
+
+        Test scenario:
+            ``FieldColors._center_on`` reads both spellings into one centre, so both reach
+            ``ramp_over`` — and both drew two different clips before the ramp was resolved over the stack.
+        """
+        midpoint = {"color_scale": "midpoint", "midpoint": 0.0}
+        assert _ramps(straddling, "redraw", **midpoint) == _ramps(
+            straddling, "auto", **midpoint
+        ), "the midpoint spelling of a centre must also draw one animation"
+
+
+class TestBlitRefusesAStackItCannotHold:
+    """``blit=True`` must not survive into the clear-and-rebuild path ``settle()`` refuses it for."""
+
+    @pytest.fixture
+    def regional(self):
+        """Two small regional frames of one grid, the second at the antipode of the first.
+
+        Returns:
+            list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
+        """
+        return _antipodal_pair()
+
+    def test_a_stack_of_mixed_grids_is_refused_by_name(self):
+        """A frame on another grid clears the axes mid-clip, which is what blitting cannot be left over.
+
+        Test scenario:
+            The runtime fallback sets the strategy aside and rebuilds every remaining frame, so the
+            rebuilt coastlines, colorbar and projection frame are not in the artist list a blitted frame
+            hands back and are never repainted. The stack is read once up front instead, and the caller
+            told — which is where a refusal belongs.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="blit=True"):
+            scene.animate(mixed, fps=2, blit=True, **CLIM)
+        scene.close()
+
+    def test_the_refusal_names_the_frame_and_both_grids(self):
+        """So the stack can be fixed rather than the option merely dropped.
+
+        Test scenario:
+            The message is the one piece of evidence the caller has about which frame of a long stack is
+            the odd one.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(
+            ValueError, match=r"frame 1 is drawn on a \(15, 30\) grid"
+        ) as refusal:
+            scene.animate(mixed, fps=2, blit=True, **CLIM)
+        scene.close()
+        assert "(30, 60)" in str(refusal.value), (
+            f"the refusal should name the first frame's grid too; got {refusal.value}"
+        )
+
+    def test_a_stack_whose_first_frame_draws_nothing_is_refused(self, regional):
+        """With no artist kept from frame 0 every frame redraws itself, blit or no blit.
+
+        Test scenario:
+            A globe centred at the antipode of frame 0 cannot show it, so the clip has nothing to update
+            and falls to the redrawing path for its whole length — the same mode the mixed-grid fallback
+            lands in, reached a different way.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=-176, lat=-53), globe=True, figsize=(3, 3)
+        )
+        with pytest.raises(ValueError, match="first frame draws nothing"):
+            scene.animate(regional, fps=2, blit=True, **CLIM)
+        scene.close()
+
+    def test_a_later_off_limb_frame_still_blits(self, regional):
+        """A frame hidden *after* the first is not a fallback, so it is no reason to refuse.
+
+        Test scenario:
+            ``FrameUpdate.apply`` hides the kept artist for an off-limb frame and reports success, so the
+            axes is never cleared and the artist the frame hands back is still the only thing to repaint.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(3, 3)
+        )
+        clip = scene.animate(regional, fps=2, blit=True, **CLIM)
+        scene.close()
+        assert clip._blit is True, (
+            "a stack whose only oddity is a hidden later frame must keep the blitting it asked for"
+        )
+
+    def test_a_mixed_grid_stack_still_animates_without_blitting(self):
+        """The refusal is blitting's, not the stack's: unblitted, the fallback is still allowed.
+
+        Test scenario:
+            Clearing and rebuilding repaints the whole axes, so a frame on another grid is a slower path
+            rather than a broken picture — which is why the stack is only refused alongside ``blit=True``.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[1] is not drawn[0], (
+            "without blitting a mixed-grid stack must still fall back to a rebuilt artist"
+        )
+
+
+class TestInPlaceRefusesAStackItCannotHold:
+    """``update="in_place"`` refuses the stacks ``"auto"`` silently degrades on (round 2, M4).
+
+    ``"in_place"`` exists to be told when the fast path is unavailable — that is the whole difference
+    between it and ``"auto"``, and what its docstring promises: it *"insists, and refuses the call naming
+    the blocker rather than falling back"*. :meth:`FrameUpdate._stack_blocker` already computes the two
+    runtime degradations (a frame on another display grid; a first frame the display CRS cannot show), and
+    it was consulted for ``blit=True`` only, so the reason was computed and thrown away for the one mode
+    whose purpose is to refuse.
+    """
+
+    @pytest.fixture
+    def regional(self):
+        """Two small regional frames of one grid, the second at the antipode of the first.
+
+        Returns:
+            list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
+        """
+        return _antipodal_pair()
+
+    def test_a_mixed_grid_stack_is_refused_by_name(self):
+        """The mode the caller asked for is what the refusal names, not the fallback it avoided.
+
+        Test scenario:
+            A caller who writes ``update="in_place"`` to be told when the fast path is unavailable was
+            handed a clip that cleared the axes mid-run and reported it at WARNING — the ``"auto"``
+            behaviour they explicitly opted out of.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="update='in_place'"):
+            scene.animate(mixed, fps=2, update="in_place", **CLIM)
+        scene.close()
+
+    def test_the_refusal_names_the_frame_and_both_grids(self):
+        """So a long stack can be fixed rather than the mode merely dropped.
+
+        Test scenario:
+            The message is the only evidence the caller has about which frame of the stack is the odd
+            one — the same reason ``blit=True``'s refusal carries it.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(
+            ValueError, match=r"frame 1 is drawn on a \(15, 30\) grid"
+        ) as refusal:
+            scene.animate(mixed, fps=2, update="in_place", **CLIM)
+        scene.close()
+        assert "(30, 60)" in str(refusal.value), (
+            f"the refusal should name the first frame's grid too; got {refusal.value}"
+        )
+
+    def test_a_stack_whose_first_frame_draws_nothing_is_refused(self, regional):
+        """With no artist kept from frame 0 there is nothing to insist on keeping.
+
+        Args:
+            regional: The antipodal pair, read from the globe that hides its first frame.
+
+        Test scenario:
+            The second of the two degradations ``_stack_blocker`` computes, reached a different way: a
+            globe centred at the antipode of frame 0 cannot show it, so every frame draws itself for the
+            clip's whole length.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=-176, lat=-53), globe=True, figsize=(3, 3)
+        )
+        with pytest.raises(ValueError, match="first frame draws nothing"):
+            scene.animate(regional, fps=2, update="in_place", **CLIM)
+        scene.close()
+
+    def test_auto_still_degrades_on_the_very_same_stack(self):
+        """Which is the distinction between the two modes, and must survive the refusal above.
+
+        Test scenario:
+            ``"auto"`` is documented to take the cheapest correct path and clear the axes when it cannot,
+            so the stack is a slower clip rather than a refusal there. Refusing it for both modes would
+            have made ``update=`` a single setting with a new failure.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, update="auto", **CLIM)
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[1] is not drawn[0], (
+            "update='auto' must still fall back to a rebuilt artist on a mixed-grid stack"
+        )
+
+    def test_redraw_is_not_refused_for_it_either(self):
+        """``"redraw"`` clears every frame by construction, so a changing grid is nothing to it.
+
+        Test scenario:
+            The scan is behind the mode check, so the two modes that never promised the fast path pay
+            neither the read nor the refusal.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate(
+            [_field(0.0), _coarser(8.0)], fps=2, update="redraw", **CLIM
+        )
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[1] is not drawn[0], (
+            "update='redraw' must keep rebuilding the artist whatever the stack's grids"
+        )
+
+    def test_a_single_grid_stack_is_still_animated_in_place(self, stack):
+        """The refusal is the stack's, not the mode's: a stack every frame can refill still insists.
+
+        Args:
+            stack: Three frames of one global grid.
+
+        Test scenario:
+            The scan must not refuse what it was added to protect — an ordinary stack keeps the one
+            artist across every frame.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate(stack, fps=2, update="in_place", **CLIM)
+        drawn = [clip._func(index)[0] for index in range(len(stack))]
+        scene.close()
+        assert drawn[0] is drawn[1] is drawn[2], (
+            f"an in-place clip should keep one artist across its frames; got {drawn}"
+        )
+
+    def test_a_later_off_limb_frame_is_no_reason_to_refuse(self, regional):
+        """A frame hidden *after* the first leaves the kept artist in place, so it still insists.
+
+        Args:
+            regional: The antipodal pair, read from the globe that shows its first frame.
+
+        Test scenario:
+            ``FrameUpdate.apply`` hides the kept artist for an off-limb frame and reports success, so the
+            axes is never cleared — the same carve-out ``blit=True`` already makes.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(3, 3)
+        )
+        clip = scene.animate(regional, fps=2, update="in_place", **CLIM)
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[0] is drawn[1], (
+            f"a merely hidden later frame must keep the first frame's artist; got {drawn}"
+        )
+
+
+class TestAPerFrameCaptionIsNotTheFiguresHeading:
+    """``titles=`` captions the frames; the figure's described heading is ``set_title``'s to write."""
+
+    TITLES = ["Jan", "Feb"]
+
+    def _animated(self, stack, mode: str) -> Map:
+        """Drive every frame of a titled animation of ``stack`` and hand back the map it drew on.
+
+        Args:
+            stack: The frames to animate.
+            mode: The ``update=`` path to drive.
+
+        Returns:
+            The map, with the clip's last frame standing on it.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate(
+            stack[: len(self.TITLES)],
+            fps=2,
+            titles=self.TITLES,
+            update=mode,
+            **CLIM,
+        )
+        for index in range(len(self.TITLES)):
+            clip._func(index)
+        return scene
+
+    def test_the_in_place_path_does_not_record_the_last_caption(self, stack):
+        """The updated frame restates its caption on the axes and leaves the description alone.
+
+        Test scenario:
+            ``set_title`` records onto ``PanelSpec.title``, so restating a caption through it left the
+            figure describing itself as headed "Feb" — a heading nobody wrote, and one a map rebuilt from
+            the description would then draw.
+        """
+        scene = self._animated(stack, "auto")
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described is None, (
+            f"a per-frame caption must not become the figure's heading; described {described!r}"
+        )
+
+    def test_the_redrawing_path_does_not_record_it_either(self, stack):
+        """The same caption reaches the axes the other way and must be as quiet about it.
+
+        Test scenario:
+            A redrawn frame sets its caption in ``_draw_animation_frame`` rather than in
+            ``FrameUpdate.apply``, so the two paths had to be fixed together or ``update=`` would decide
+            what the figure says about itself.
+        """
+        scene = self._animated(stack, "redraw")
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described is None, (
+            f"the redrawing path must not record a caption either; described {described!r}"
+        )
+
+    def test_a_heading_the_caller_set_survives_the_clip(self, stack):
+        """And a real heading is still there afterwards, rather than overwritten by the last frame.
+
+        Test scenario:
+            ``Map.set_title("Monthly mean temperature").animate(..., titles=[...])`` is the shape the
+            notebooks use: one heading for the figure, one caption per frame.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title("Monthly mean temperature")
+        clip = scene.animate(
+            stack[:2], fps=2, titles=self.TITLES, update="auto", **CLIM
+        )
+        clip._func(0)
+        clip._func(1)
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described == "Monthly mean temperature", (
+            f"an animation must not rewrite the figure's own heading; described {described!r}"
+        )
+
+    def test_each_frame_still_shows_its_own_caption(self, stack):
+        """The caption is still drawn — this is about the record, not about the picture.
+
+        Test scenario:
+            Dropping the record by dropping the call would leave every frame carrying the first frame's
+            title, which is the defect ``apply``'s title restatement exists for.
+        """
+        scene = self._animated(stack, "auto")
+        shown = scene.ax.get_title()
+        scene.close()
+        assert shown == self.TITLES[-1], (
+            f"the last frame drawn should still be captioned {self.TITLES[-1]!r}, got {shown!r}"
+        )
+
+
+class TestATitledClipSaysItIsOverwritingAHeading:
+    """``titles=`` paints over the heading ``set_title`` recorded, and now says so (round 2, L11).
+
+    Round 1's L7 stopped a per-frame caption from being *recorded* as the figure's heading, which is
+    right: a caption is not a heading. What it left behind is the other half — the caller's heading is
+    still painted over on the axes by every frame, so the drawn title and the described one disagree for
+    the whole clip with nothing to notice. The captions stay (they are the point of ``titles=``); the
+    collision is named where the caller made it.
+    """
+
+    TITLES = ["Jan", "Feb"]
+    HEADING = "Monthly mean temperature"
+
+    @pytest.mark.parametrize("mode", ["auto", "redraw"])
+    def test_a_recorded_heading_is_named_in_a_warning(self, stack, caplog, mode):
+        """Both ``update=`` paths paint the caption on, so both have to warn.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+            mode: The ``update=`` path the clip is built for.
+
+        Test scenario:
+            The warning is emitted in ``animate`` itself, before the paths split, because the collision
+            is in the call rather than in the strategy — which is also what keeps the two paths from
+            disagreeing about whether to mention it.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, titles=self.TITLES, update=mode, **CLIM)
+        scene.close()
+        assert self.HEADING in caplog.text, (
+            f"the warning should quote the heading being painted over; log was {caplog.text!r}"
+        )
+
+    def test_the_warning_names_the_keyword_that_does_it(self, stack, caplog):
+        """So the caller knows which of the two to drop.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            A heading and per-frame captions are both legitimate on their own; only asking for both at
+            once is the mistake, and ``titles=`` is the half that wins on the axes.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+        scene.close()
+        assert "titles=" in caplog.text, (
+            f"the warning should name the keyword that overwrites it; log was {caplog.text!r}"
+        )
+
+    def test_it_is_said_once_per_call_not_once_per_frame(self, stack, caplog):
+        """A sixty-frame clip must not log sixty lines about one collision.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            The caption is restated on every frame, so warning where it is restated would scale with the
+            clip's length. Every frame is driven here to prove the count does not.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+            for index in range(2):
+                clip._func(index)
+        scene.close()
+        said = [record for record in caplog.records if "titles=" in record.getMessage()]
+        assert len(said) == 1, (
+            f"the collision should be named once per call; got {len(said)} records"
+        )
+
+    def test_a_map_with_no_heading_is_not_warned_at(self, stack, caplog):
+        """``titles=`` on its own is the ordinary case and overwrites nothing.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures anything logged.
+
+        Test scenario:
+            Warning unconditionally would make the common call noisy, and would train the caller to
+            ignore the line that matters.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+        scene.close()
+        assert caplog.text == "", (
+            f"an untitled map has no heading to paint over; log was {caplog.text!r}"
+        )
+
+    def test_a_heading_without_captions_is_not_warned_at_either(self, stack, caplog):
+        """A clip with a heading and no ``titles=`` keeps that heading drawn, so there is no collision.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures anything logged.
+
+        Test scenario:
+            The other half of the pair: ``Map.set_title(...).animate(stack)`` is the shape that already
+            agreed with itself, and must stay quiet.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            scene.animate(stack[:2], fps=2, **CLIM)
+        scene.close()
+        assert caplog.text == "", (
+            f"a heading alone is drawn and described alike; log was {caplog.text!r}"
+        )
+
+    def test_the_captions_are_still_drawn_over_it(self, stack, caplog):
+        """The warning is the fix, not a behaviour change: ``titles=`` still captions every frame.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            Dropping the overwrite instead would leave a titled clip showing one heading for all its
+            frames, which is the defect ``FrameUpdate.apply``'s title restatement exists for.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+            clip._func(1)
+        shown = scene.ax.get_title()
+        scene.close()
+        assert shown == self.TITLES[1], (
+            f"the frame drawn should still carry its own caption; got {shown!r}"
+        )
+
+    def test_the_recorded_heading_is_still_the_callers(self, stack, caplog):
+        """And the description still holds the heading, which is what makes the two disagree at all.
+
+        Args:
+            stack: Three frames of one global grid.
+            caplog: Captures the warning.
+
+        Test scenario:
+            Round 1's L7 put the heading beyond a caption's reach in the record; this pins that half, so
+            a later change that "fixed" the disagreement by recording the caption fails here.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        scene.set_title(self.HEADING)
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.maps.animation"
+        ):
+            clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
+            clip._func(1)
+        described = scene.figure_spec.panels[0].title
+        scene.close()
+        assert described == self.HEADING, (
+            f"the figure must keep describing the caller's heading; described {described!r}"
+        )
+
+
+class TestWhereABadBandIsRefused:
+    """``FrameUpdate`` validates the band it is about to read, and only that one."""
+
+    def test_the_strategy_that_will_read_a_band_refuses_a_bad_one(self, stack):
+        """An in-place animation reads the band itself, so it checks it where it is resolved.
+
+        Test scenario:
+            ``FrameUpdate.apply`` passes ``self.band`` to the field reader on every frame, and bands count
+            from 1 — a 0 reached pyramids as the 0-based band -1 and came back naming a band nobody asked
+            for.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            FrameUpdate(scene, stack, {"band": 0}, kind="imshow")
+        scene.close()
+
+    @pytest.mark.parametrize(
+        "kind",
+        [
+            pytest.param("contour", id="contour-set"),
+            pytest.param("rgb_composite", id="composite"),
+        ],
+    )
+    def test_a_blocked_strategy_does_not_read_the_band_at_all(self, stack, kind):
+        """So it does not validate one either, and its own ``Raises:`` says as much.
+
+        Args:
+            kind: A renderer that cannot update one artist in place.
+
+        Test scenario:
+            A composite names ``bands``, not ``band``, and a redrawn frame has its band checked where
+            every still checks it. Validating here would refuse a value the blocked path never reads —
+            which for a composite is a value that cannot reach the picture at all.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        plan = FrameUpdate(scene, stack, {"band": 0}, kind=kind)
+        scene.close()
+        assert plan.band == DEFAULT_BAND, (
+            f"a blocked strategy should leave the band at its default, got {plan.band}"
+        )
+
+    def test_the_public_call_refuses_it_on_a_redrawn_kind(self, stack):
+        """Which is the refusal a caller actually meets, and it covers the kinds this one does not.
+
+        Test scenario:
+            ``kind="contourf"`` blocks the in-place path, so the constructor above lets ``band=0``
+            through — and ``animate`` still refuses it, from ``_prime_animation``, before a frame is
+            drawn.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            scene.animate(stack, kind="contourf", band=0, fps=2)
+        scene.close()

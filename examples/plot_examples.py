@@ -150,11 +150,15 @@ if filterMax:
 def catchment_map(title):
     """Draw the grey sub-catchments and the river network, and return the scene to add gauges to."""
     scene = Map(crs=metrix.epsg, figsize=(8, 8))
-    catchments = scene.polygons(rhine_basin, line_width=0.2)
-    # A uniform fill is not one of the layer's keywords — it is a property of the collection it drew.
+    scene.polygons(rhine_basin, line_width=0.2)
+    # A uniform fill is not one of the layer's keywords — it is a property of the collection it drew, so it
+    # is set on the artist, which `Map.artist()` hands back for the layer just drawn (the builders return
+    # the map, so a figure chains).
+    catchments = scene.artist()
     catchments.set_facecolor("grey")
     catchments.set_edgecolor("grey")
-    network = scene.sankey(rhine_river)
+    scene.sankey(rhine_river)
+    network = scene.artist()
     network.set_color("C0")
     network.set_linewidth(2.0)
     scene.set_title(title, fontsize=15)

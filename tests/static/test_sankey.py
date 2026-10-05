@@ -30,7 +30,8 @@ def lines_fc():
 def test_sankey_plots(lines_fc):
     """sankey draws a LineCollection and registers one layer."""
     m = Map(crs=lines_fc.epsg)
-    lc = m.sankey(lines_fc, column="flow", scale="w")
+    m.sankey(lines_fc, column="flow", scale="w")
+    lc = m.artist()
     assert len(m.layers) == 1
     assert type(lc).__name__ == "LineCollection"
 
@@ -38,7 +39,8 @@ def test_sankey_plots(lines_fc):
 def test_sankey_width_scaling(lines_fc):
     """scale maps line widths across the width_limits range (varying widths)."""
     m = Map(crs=lines_fc.epsg)
-    lc = m.sankey(lines_fc, column="flow", scale="w", width_limits=(1, 8))
+    m.sankey(lines_fc, column="flow", scale="w", width_limits=(1, 8))
+    lc = m.artist()
     lw = np.asarray(lc.get_linewidths())
     assert lw.max() > lw.min()
 
@@ -85,7 +87,8 @@ def test_sankey_multilinestring_expands_parts():
         {"flow": [1.0, 2.0], "w": [1.0, 2.0]}, geometry=[multi, single], crs="EPSG:4326"
     )
     m = Map(crs=4326)
-    lc = m.sankey(FeatureCollection(gdf), column="flow", scale="w")
+    m.sankey(FeatureCollection(gdf), column="flow", scale="w")
+    lc = m.artist()
     assert len(m.layers) == 1, "sankey should register one layer"
     assert len(lc.get_paths()) == 3, (
         f"2 multi-parts + 1 line = 3 paths, got {len(lc.get_paths())}"

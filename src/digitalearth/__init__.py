@@ -15,7 +15,10 @@ except PackageNotFoundError:  # pragma: no cover
 
 __author__ = "Mostafa Farrag"
 __email__ = "moah.farag@gmail.com"
-#: Docstring dialect the API reference is rendered from.
+#: The legacy PEP-258 marker, kept because it is a conventional module attribute and third-party tools look
+#: for it. It is **not** what renders the API reference: that is mkdocstrings, configured in `mkdocs.yml`
+#: with `docstring_style: google`, and nothing in this repo reads this name. Docstrings here are therefore
+#: Google-style with single-backtick inline code; the rST roles still present in older ones are legacy.
 __docformat__ = "restructuredtext"
 
 #: Modules whose absence should be reported as one collected ImportError rather than as whichever
@@ -278,6 +281,7 @@ _LAZY_MODULES = {
     "digitalearth.ops.plugins": ("load_plugins",),
     "digitalearth.static": (
         "Map",
+        "Pick",
         "Scene",
         "TexturedGlobe",
         "facet",
@@ -331,6 +335,7 @@ if TYPE_CHECKING:
     from digitalearth.ops.plugins import load_plugins
     from digitalearth.static import (
         Map,
+        Pick,
         Scene,
         TexturedGlobe,
         facet,
@@ -363,6 +368,7 @@ __all__ = [
     "to_backend",
     "Map",
     "Scene",
+    "Pick",
     "TexturedGlobe",
     "facet",
     "grid",

@@ -78,8 +78,9 @@ def test_globe_coastlines(dataset):
     """Globe coastlines project per-line and split at the limb (real 110m data, seeded cache)."""
     m = Map(crs=projections.orthographic(10, 25), globe=True)
     m.field(dataset)
-    segs = m.coastlines(resolution="110m")
-    assert segs
+    m.coastlines(resolution="110m", name="coast")
+    segs = m.artist("coast")
+    assert segs, "the coastline layer must hand back the polylines it drew"
     assert m.ax.lines
     pts = np.vstack([line.get_xydata() for line in m.ax.lines])
     assert np.isfinite(pts).all()  # no inf/nan reached the axes
@@ -88,8 +89,9 @@ def test_globe_coastlines(dataset):
 def test_ocean_fills_disc_on_globe():
     """ocean() fills the whole projection disc on a globe with a single finite ring (no network)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.ocean()
-    assert pc is not None and len(pc.get_paths()) == 1
+    m.ocean(name="sea")
+    pc = m.artist("sea")
+    assert len(pc.get_paths()) == 1, f"the disc is one ring, got {len(pc.get_paths())}"
     verts = np.vstack([p.vertices for p in pc.get_paths()])
     assert np.isfinite(verts).all()
 
@@ -131,7 +133,8 @@ def test_globe_choropleth_drops_far_side():
     fc["geometry"] = fc.geometry.buffer(2.0)  # ~2-degree polygons in lon/lat
     fc["val"] = range(len(fc))
     m = Map(crs=projections.orthographic(lon=-9, lat=39), globe=True)
-    pc = m.choropleth(fc, column="val")
+    m.choropleth(fc, column="val")
+    pc = m.artist()
     verts = (
         np.vstack([p.vertices for p in pc.get_paths()])
         if pc.get_paths()
@@ -143,7 +146,8 @@ def test_globe_choropleth_drops_far_side():
 def test_globe_grid_cells_finite(global_field):
     """grid_cells on a globe renders finite cells (raster reprojection yields a finite projected grid)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.grid_cells(global_field)
+    m.grid_cells(global_field)
+    pc = m.artist()
     verts = np.vstack([p.vertices for p in pc.get_paths()])
     assert len(pc.get_paths()) > 0 and np.isfinite(verts).all()
 
@@ -201,7 +205,8 @@ def test_grid_cells_without_nodata(global_field, mocker):
         return_value=[None],
     )
     mocker.patch.object(m, "_reproject", return_value=reprojected)
-    pc = m.grid_cells(global_field)
+    m.grid_cells(global_field)
+    pc = m.artist()
     assert len(pc.get_paths()) > 0
 
 
@@ -304,8 +309,9 @@ def test_land_fill_finite_on_globe(land_fc, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.land()
-    assert pc is not None and pc.get_paths()
+    m.land(name="fill")
+    pc = m.artist("fill")
+    assert pc.get_paths(), "the land fill must have drawn at least one ring"
     verts = np.vstack([p.vertices for p in pc.get_paths()])
     assert np.isfinite(verts).all()
 
@@ -316,19 +322,21 @@ def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(-75, 42), globe=True)
-    img = m.field(dataset)
+    m.field(dataset)
+    img = m.artist()
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
-    pc = m.land()
-    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, (
-        "land() blew out the extent"
-    )
+    m.land(name="fill")
+    pc = m.artist("fill")
+    assert m.ax.get_xlim() == xlim0, "land() blew out the x extent"
+    assert m.ax.get_ylim() == ylim0, "land() blew out the y extent"
     assert pc.get_zorder() < img.get_zorder(), "land must draw beneath the data raster"
 
 
 def test_ocean_below_land_zorder():
     """ocean() draws below land() (ocean is the deepest background layer)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    ocean = m.ocean()
+    m.ocean(name="sea")
+    ocean = m.artist("sea")
     assert ocean.get_zorder() < -1.5, (
         f"ocean zorder should sit below land (-1.5), got {ocean.get_zorder()}"
     )
@@ -359,8 +367,9 @@ def test_lakes_fill_on_globe_above_land(land_fc, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    pc = m.lakes()
-    assert pc is not None and pc.get_paths()
+    m.lakes(name="water")
+    pc = m.artist("water")
+    assert pc.get_paths(), "the lakes fill must have drawn at least one ring"
     assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
     assert pc.get_zorder() > -1.5, "lakes should draw above land (-1.5)"
 
@@ -370,8 +379,9 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
     rv = [np.array([(-9, 39), (-8, 40), (-7, 41)], float)]
     mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=rv)
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
-    artists = m.rivers()
-    assert artists
+    m.rivers(name="rv")
+    artists = m.artist("rv")
+    assert artists, "the rivers layer must hand back the polylines it drew"
     assert m.ax.lines
 
 
@@ -381,8 +391,9 @@ def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
         "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=3857, globe=True)  # Web-Mercator boundary is a rectangle, not a circle
-    pc = m.land()
-    assert pc is not None and pc.get_paths()
+    m.land(name="fill")
+    pc = m.artist("fill")
+    assert pc.get_paths(), "the land fill must have drawn at least one ring"
     assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
 
 
@@ -445,7 +456,7 @@ class TestOffLimbDraw:
         )
 
     def test_a_static_off_limb_field_draws_nothing(self, regional):
-        """field on a hiding projection returns None rather than raising — no animation involved.
+        """field on a hiding projection draws nothing rather than raising — no animation involved.
 
         Test scenario:
             The reprojection to the display CRS raises out of GDAL when every sample point falls behind
@@ -455,15 +466,15 @@ class TestOffLimbDraw:
         m = Map(
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
         )
-        assert m.field(regional) is None, (
-            "an off-limb field should draw nothing, not raise"
-        )
+        m.field(regional)
+        assert m.layer_ids == [], "an off-limb field should draw nothing, not raise"
         assert not m.ax.images, "no raster should have been drawn"
 
     def test_an_on_limb_field_still_draws(self, regional):
         """The guard must not swallow a view that can see the data."""
         m = Map(crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4))
-        assert m.field(regional) is not None, "a visible field must still render"
+        m.field(regional)
+        assert m.artist() is not None, "a visible field must still render"
         assert m.ax.images, "the raster should have been drawn"
 
     def test_rotate_spins_a_regional_aoi(self, regional, tmp_path):
@@ -503,9 +514,8 @@ class TestOffLimbDraw:
         m = Map(
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
         )
-        assert m.field(regional) is None, (
-            "a partial count must be treated as off-limb too"
-        )
+        m.field(regional)
+        assert m.layer_ids == [], "a partial count must be treated as off-limb too"
 
     def test_an_unrelated_projection_failure_still_propagates(
         self, regional, monkeypatch
@@ -592,39 +602,44 @@ class TestOffLimbEveryLayerKind:
         "method", ["field", "contours", "pcolormesh", "grid_points", "grid_cells"]
     )
     def test_single_raster_layers_draw_nothing(self, hidden, regional, method):
-        """Every layer taking one raster returns None rather than raising."""
-        assert getattr(hidden, method)(regional) is None, (
+        """Every layer taking one raster draws nothing rather than raising."""
+        getattr(hidden, method)(regional)
+        assert hidden.layer_ids == [], (
             f"{method} should draw nothing when the data is behind the limb"
         )
 
     @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
     def test_composites_draw_nothing(self, hidden, regional_rgb, method):
         """The composites reproject before stretching, so they need the same guard."""
-        assert getattr(hidden, method)(regional_rgb) is None, (
+        getattr(hidden, method)(regional_rgb)
+        assert hidden.layer_ids == [], (
             f"{method} should draw nothing when the data is behind the limb"
         )
 
     @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
     def test_vector_field_layers_draw_nothing(self, hidden, regional, method):
         """The u/v vector fields prepare two rasters; either being hidden means nothing to draw."""
-        assert getattr(hidden, method)(regional, regional) is None, (
+        getattr(hidden, method)(regional, regional)
+        assert hidden.layer_ids == [], (
             f"{method} should draw nothing when the data is behind the limb"
         )
 
     @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
     def test_unstructured_layers_draw_nothing(self, hidden, regional, method):
         """The triangulated renders read scattered cells out of a reprojected raster."""
-        assert getattr(hidden, method)(regional) is None, (
+        getattr(hidden, method)(regional)
+        assert hidden.layer_ids == [], (
             f"{method} should draw nothing when the data is behind the limb"
         )
 
     def test_stock_img_handles_an_off_limb_backdrop(self, hidden, regional):
-        """stock_img consumes field's return, so it had to learn about the None too.
+        """stock_img answers None for a backdrop the display CRS could not place.
 
         Test scenario:
-            It set a z-order on whatever field handed back. Once a hidden layer returns None that became
-            "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard turning one crash
-            into another, in the one place inside src/ that consumes these returns.
+            It used to set a z-order on whatever field handed back, so once a hidden layer answered None
+            that became "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard
+            turning one crash into another. field hands back the map since ST-20, so stock_img reads the
+            artist of the layer id that appeared instead, and answers None when no id did.
         """
         assert hidden.stock_img(regional) is None, (
             "an off-limb backdrop should be absent, not an AttributeError"
@@ -633,12 +648,13 @@ class TestOffLimbEveryLayerKind:
     def test_spaghetti_keeps_one_entry_per_drawn_member(
         self, hidden, regional, tmp_path
     ):
-        """spaghetti returns drawn artists, so hidden members drop out rather than becoming None.
+        """spaghetti draws only the members it can see, so a hidden one leaves no artist behind.
 
         Test scenario:
-            It returned one entry per member regardless, so an off-limb collection produced [None, None]
-            — breaking both its own Returns contract and the len(artists) == len(m.layers) invariant its
-            callers rely on to pair artists with registered layers.
+            It drew one entry per member regardless, so an off-limb collection produced [None, None] in
+            the list it returned then — breaking the one-artist-per-registered-layer pairing its callers
+            rely on. spaghetti hands back the map since ST-20, so that pairing is read here as the
+            artists on the axes against the layers the scene registered.
         """
         from pyramids.dataset.collection import DatasetCollection
 
@@ -648,12 +664,14 @@ class TestOffLimbEveryLayerKind:
             regional.to_file(str(path))
             paths.append(str(path))
         collection = DatasetCollection.from_files(paths)
-        artists = hidden.spaghetti(collection)
-        assert artists == [], (
-            f"no member is on the view, so nothing is returned: {artists}"
+        hidden.spaghetti(collection)
+        drawn_on_axes = list(hidden.ax.collections)
+        assert drawn_on_axes == [], (
+            f"nothing is on the view, so the axes should be empty: {drawn_on_axes}"
         )
-        assert len(artists) == len(hidden.layers), (
-            f"artists ({len(artists)}) must match registered layers ({len(hidden.layers)})"
+        assert len(drawn_on_axes) == len(hidden.layers), (
+            f"artists on the axes ({len(drawn_on_axes)}) must match registered layers "
+            f"({len(hidden.layers)})"
         )
 
     @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
@@ -675,7 +693,8 @@ class TestOffLimbEveryLayerKind:
             geometry=[Point(4.0, 53.0), Point(4.5, 53.2), Point(4.2, 53.4)],
             crs=4326,
         )
-        assert getattr(hidden, method)(FeatureCollection(gdf)) is None, (
+        getattr(hidden, method)(FeatureCollection(gdf))
+        assert hidden.layer_ids == [], (
             f"{method} should draw nothing when its features are off the view"
         )
 
@@ -702,17 +721,22 @@ class TestOffLimbEveryLayerKind:
         "method", ["field", "contours", "pcolormesh", "grid_points", "grid_cells"]
     )
     def test_the_same_layers_still_draw_when_visible(self, regional, method):
-        """The positive control: every layer asserted to return None above must draw when it can see.
+        """The positive control: every layer asserted to draw nothing above must draw when it can see.
 
         Test scenario:
-            Without this, a regression that made these methods return None unconditionally would satisfy
-            the whole off-limb suite while silently drawing nothing anywhere.
+            The builders hand back the map whether or not they drew, so without this a regression that
+            made them draw nothing unconditionally would satisfy the whole off-limb suite while silently
+            drawing nothing anywhere.
         """
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     def test_a_broken_raster_on_an_unclipped_crs_warns(self, caplog):
@@ -734,7 +758,7 @@ class TestOffLimbEveryLayerKind:
             no_data_value=-9999.0,
         )
         with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
-            assert Map(crs=3857, figsize=(4, 4)).field(mislabelled) is None
+            assert Map(crs=3857, figsize=(4, 4)).field(mislabelled).layer_ids == []
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, (
             f"an unclipped projection that places no data should warn, got {caplog.records}"
@@ -759,8 +783,8 @@ class TestOffLimbEveryLayerKind:
 
         Test scenario:
             The off-limb arm fires when the reprojection loses the points. If there were never three to
-            begin with, no projection can fix that — reporting it as a hidden layer both returns the wrong
-            thing and logs a misleading reason for a map that is looking straight at the data.
+            begin with, no projection can fix that — reporting it as a hidden layer would both swallow a
+            caller error and log a misleading reason for a map that is looking straight at the data.
         """
         import geopandas as gpd
         from pyramids.feature import FeatureCollection
@@ -777,12 +801,16 @@ class TestOffLimbEveryLayerKind:
 
     @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
     def test_composites_still_draw_when_visible(self, regional_rgb, method):
-        """Positive control for the composites asserted to return None above."""
+        """Positive control for the composites asserted to draw nothing above."""
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional_rgb) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional_rgb)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
@@ -791,8 +819,12 @@ class TestOffLimbEveryLayerKind:
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional, regional) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional, regional)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
@@ -801,12 +833,16 @@ class TestOffLimbEveryLayerKind:
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
-        assert getattr(visible, method)(regional) is not None, (
-            f"{method} must still draw when the data is on the view"
+        getattr(visible, method)(regional)
+        assert visible.layer_ids, (
+            f"{method} must register a layer when the data is on the view"
+        )
+        assert visible.artist(visible.layer_ids[-1]) is not None, (
+            f"{method} must hand its registered layer a drawn artist"
         )
 
     def test_stock_img_and_spaghetti_still_draw_when_visible(self, regional, tmp_path):
-        """Positive control for the two remaining layers asserted to return None above."""
+        """Positive control for the two remaining layers asserted to draw nothing above."""
         from pyramids.dataset.collection import DatasetCollection
 
         visible = Map(
@@ -819,12 +855,27 @@ class TestOffLimbEveryLayerKind:
             path = tmp_path / f"visible{index}.tif"
             regional.to_file(str(path))
             paths.append(str(path))
-        artists = visible.spaghetti(DatasetCollection.from_files(paths))
-        assert len(artists) == 2, f"both visible members should draw, got {artists}"
+        visible.spaghetti(DatasetCollection.from_files(paths))
+        members = [
+            layer_id
+            for layer_id in visible.layer_ids
+            if layer_id.startswith("contours")
+        ]
+        assert len(members) == 2, f"both visible members should register, got {members}"
+        drawn_on_axes = list(visible.ax.collections)
+        assert len(drawn_on_axes) == len(members), (
+            f"artists on the axes ({len(drawn_on_axes)}) must match the registered "
+            f"members ({len(members)})"
+        )
+        missing = [layer_id for layer_id in members if visible.artist(layer_id) is None]
+        assert missing == [], (
+            f"every registered member must have a drawn artist, these have none: {missing}"
+        )
 
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
-        assert hidden.field(regional) is None
+        hidden.field(regional)
+        assert hidden.layer_ids == []
         assert not hidden.ax.images, "nothing should have been drawn"
         assert hidden.layers == [], "no layer should have been registered"
 
@@ -851,7 +902,9 @@ def _draw(m: Map, method: str, points, polygons, lines):
         lines: A line ``FeatureCollection`` carrying a numeric ``v``.
 
     Returns:
-        Whatever the builder returned.
+        The map the builder hands back (ST-20). What was *drawn* is read off the map — `layer_ids` for
+        whether the layer survived, `artist()` for the artist it owns — rather than off this return value,
+        which is the same object for a drawn layer and a skipped one.
     """
     calls = {
         "points": lambda: m.points(points),
@@ -957,9 +1010,10 @@ class TestOffLimbVectorLayers:
 
     @pytest.mark.parametrize("method", VECTOR_BUILDERS)
     def test_every_vector_builder_draws_nothing(self, method, points, polygons, lines):
-        """A hidden vector layer returns None and registers nothing, like every hidden raster layer."""
+        """A hidden vector layer draws nothing and registers nothing, like every hidden raster layer."""
         m = _far_side()
-        assert _draw(m, method, points, polygons, lines) is None, (
+        _draw(m, method, points, polygons, lines)
+        assert m.layer_ids == [], (
             f"{method} should draw nothing when its features are behind the limb"
         )
         assert m.layers == [], f"{method} must not register a layer it could not draw"
@@ -988,7 +1042,8 @@ class TestOffLimbVectorLayers:
             ``np.nanmin`` inside the colour scaling — a raw ``ValueError`` naming nothing the caller wrote.
         """
         m = _far_side()
-        assert m.choropleth(polygons, column="v") is None, (
+        m.choropleth(polygons, column="v")
+        assert m.layer_ids == [], (
             "an off-limb choropleth must skip, not crash in a reduction"
         )
 
@@ -998,7 +1053,8 @@ class TestOffLimbVectorLayers:
 
         m = Map(crs=projections.orthographic(lon=-175, lat=15), figsize=(4, 4))
         with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
-            assert m.points(points) is None
+            m.points(points)
+            assert m.layer_ids == []
         assert any("points" in record.getMessage() for record in caplog.records), (
             f"the warning must name the layer, got {[r.getMessage() for r in caplog.records]}"
         )
@@ -1007,11 +1063,12 @@ class TestOffLimbVectorLayers:
     def test_the_same_builders_still_draw_when_visible(
         self, method, points, polygons, lines
     ):
-        """The positive control: a guard that returned None unconditionally would pass everything above."""
+        """The positive control: a guard that drew nothing unconditionally would pass everything above."""
         visible = Map(
             crs=projections.orthographic(lon=4.5, lat=53.3), globe=True, figsize=(4, 4)
         )
-        assert _draw(visible, method, points, polygons, lines) is not None, (
+        _draw(visible, method, points, polygons, lines)
+        assert visible.artist() is not None, (
             f"{method} must still draw when its features are on the view"
         )
         assert len(visible.layers) == 1, f"{method} must register the layer it drew"

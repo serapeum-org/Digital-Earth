@@ -66,7 +66,8 @@ class TestTheCoreSpellingReachesTheArtist:
             drawn: The map under test.
             polygons: The polygon fixture.
         """
-        artist = drawn.choropleth(polygons, COLUMN, opacity=OPACITY)
+        drawn.choropleth(polygons, COLUMN, opacity=OPACITY)
+        artist = drawn.artist()
         assert artist.get_alpha() == OPACITY, artist.get_alpha()
 
     def test_it_is_absent_by_default(self, drawn, polygons):
@@ -81,5 +82,6 @@ class TestTheCoreSpellingReachesTheArtist:
             matplotlib's own "no alpha" is `None`, not `1.0`, and a layer left at `None` is what lets a
             colormap's own alpha channel through.
         """
-        artist = drawn.choropleth(polygons, COLUMN)
+        drawn.choropleth(polygons, COLUMN)
+        artist = drawn.artist()
         assert artist.get_alpha() is None, artist.get_alpha()

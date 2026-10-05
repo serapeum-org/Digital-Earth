@@ -877,21 +877,28 @@ class TestAFailingGraticuleLeavesNothingBehind:
     one, and the funnel only knows how to add. The rollback went with it, so a refused call left the figure
     naming a layer nothing drew — the invariant ``Scene._draw``'s own docstring states — and a refused
     *replacement* rewrote the description of a graticule that was still on the axes (round 2, M1).
+
+    The step these tests refuse with is now rejected one stage **earlier** — ``graticule()`` refuses a step
+    that is not a finite number of degrees greater than zero by the keyword that carried it, before the
+    layer is described (review R2-L4), where it used to reach the projection and divide by zero. So the
+    refusal is a ``ValueError`` rather than a ``ZeroDivisionError``, and each claim below holds because
+    there was never a description to put back rather than because the rollback put one back. The rollback
+    itself stays: it still guards every other way a drawer can fail after the layer is described.
     """
 
     def test_a_refused_graticule_is_not_in_the_figure(self):
-        """A spacing of zero divides by zero inside the projection; the layer goes with the refusal."""
+        """A spacing of zero is refused by name before the layer is described; nothing is left over."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         described = canvas.layer_ids
         canvas.close()
         assert described == [], described
 
     def test_a_refused_graticule_leaves_the_renderer_owning_nothing(self):
-        """The other spacing reaches the same divide, and the renderer must record neither."""
+        """The other spacing is refused the same way, and the renderer must record neither."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lat_step=0)
         recorded = sorted(canvas._renderer.drawn)
         canvas.close()
@@ -900,7 +907,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
     def test_a_refused_graticule_leaves_the_map_pointing_at_no_graticule(self):
         """The map remembers its graticule so a later call replaces it; a refused one must not be it."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         pointer = canvas._graticule_id
         canvas.close()
@@ -909,7 +916,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
     def test_a_graticule_after_a_refused_one_is_the_only_one_described(self):
         """A caller who watches one fail and asks again gets one graticule, not a ghost beside it."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         canvas.graticule(lon_step=30.0)
         described = canvas.layer_ids
@@ -921,7 +928,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
         canvas = Map(crs=4326)
         canvas.graticule(lon_step=30.0)
         described = canvas.layer_ids[0]
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         spacing = canvas.figure_spec.layers.get(described).symbology.props["lon_step"]
         canvas.close()
@@ -932,7 +939,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
         canvas = Map(crs=4326)
         canvas.graticule(lon_step=30.0)
         drawing = canvas._graticule_lines
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lat_step=0)
         kept = canvas._graticule_lines is drawing
         canvas.close()
@@ -1483,19 +1490,27 @@ class TestAskingWhetherALayerIsDrawn:
         """The half `all(())` got wrong: an empty aggregate answered `True` whatever was asked.
 
         Test scenario:
-            A **flat** graticule owns no artists at all — its lines reach the axes with a globe frame, and a
-            flat map has none — so `all(())` made `set_visible(id, False)` followed by `is_visible(id)`
-            answer `True` for the layer it had just hidden. No pixel was wrong either way, and that is the
-            point: what was wrong was the renderer's *answer*, which is what `Scene.set_visible`, the
-            behavioural conformance suite and any layer switcher read. Measured at the reviewed HEAD: `True`.
+            A graticule on an **unframed globe** owns no artists at all — its lines only reach the axes
+            when the projection frame goes on — so `all(())` made `set_visible(id, False)` followed by
+            `is_visible(id)` answer `True` for the layer it had just hidden. No pixel was wrong either way,
+            and that is the point: what was wrong was the renderer's *answer*, which is what
+            `Scene.set_visible`, the behavioural conformance suite and any layer switcher read. Measured at
+            the reviewed HEAD: `True`.
+
+            It was a *flat* graticule that owned nothing when this was written. #221 gave the flat frame a
+            drawer of its own, so the artist-less layer is the one the frame has not drawn yet — the same
+            scaffold `test_a_layer_with_no_addressable_artist_reads_back_drawn` above uses, and the claim
+            under test is unchanged.
         """
-        flat = Map(crs=4326)
+        flat = Map(crs=projections.orthographic(-9, 39), globe=True)
         flat.graticule(lon_step=30.0, lat_step=30.0)
         owned = flat._renderer.drawn["graticule-1"].artists
         flat.set_visible("graticule-1", False)
         answer = flat._renderer.is_visible("graticule-1")
         flat.close()
-        assert owned == (), f"a flat graticule owns no artists; got {owned}"
+        assert owned == (), (
+            f"an unframed globe's graticule owns no artists; got {owned}"
+        )
         assert answer is False, "a layer asked to hide must not read back drawn"
 
     def test_a_layer_with_no_artist_comes_back_on(self):

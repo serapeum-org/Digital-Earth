@@ -60,7 +60,8 @@ class TestABareArrayIsDrawnAtItsOwnIndices:
             -0.5 to 2.5, which is the same cell-edge rule a georeferenced raster is placed by.
         """
         with Map() as canvas:
-            image = canvas.field(GRID)
+            canvas.field(GRID)
+            image = canvas.artist()
             extent = list(image.get_extent())
         assert extent == [-0.5, 3.5, -0.5, 2.5], (
             f"a 3x4 grid at index coordinates covers [-0.5, 3.5, -0.5, 2.5]; got {extent}"
@@ -74,7 +75,8 @@ class TestABareArrayIsDrawnAtItsOwnIndices:
             first row lands at the extent's ``ymax``.
         """
         with Map() as canvas:
-            image = canvas.field(GRID)
+            canvas.field(GRID)
+            image = canvas.artist()
             origin = image.origin
         assert origin == "upper", (
             f"an array's first row is its top row, which is matplotlib's 'upper' origin; got {origin!r}"
@@ -91,7 +93,8 @@ class TestABareArrayIsDrawnAtItsOwnIndices:
             the image render, so neither side of the comparison is the other.
         """
         with Map() as canvas:
-            top = _top_row_value(canvas.pcolormesh(GRID))
+            canvas.pcolormesh(GRID)
+            top = _top_row_value(canvas.artist())
         assert top == GRID[0, 0], (
             f"the cell render put {top} at the top; row 0 of the grid starts at {GRID[0, 0]}"
         )
@@ -123,7 +126,8 @@ class TestABareArrayIsDrawnAtItsOwnIndices:
 
         monkeypatch.setattr(base, "reproject", refuse)
         with Map(crs=3857) as canvas:
-            image = canvas.field(GRID)
+            canvas.field(GRID)
+            image = canvas.artist()
         assert image is not None, "the array was not drawn at all"
 
     def test_the_layer_is_described_as_a_raster(self):
@@ -143,7 +147,8 @@ class TestABareArrayIsDrawnAtItsOwnIndices:
             cells around it have to be untouched, which is the half a blanket "fill everything" would fail.
         """
         with Map() as canvas:
-            image = canvas.field(np.ma.masked_equal(GRID, 11.0))
+            canvas.field(np.ma.masked_equal(GRID, 11.0))
+            image = canvas.artist()
             drawn = np.asarray(image.get_array(), dtype="float64")
         assert np.isnan(drawn[1, 1]), f"the masked cell came through as {drawn[1, 1]}"
         assert drawn[1, 2] == 12.0, f"an unmasked neighbour became {drawn[1, 2]}"
@@ -330,7 +335,8 @@ class TestEverythingElseIsRefusedByName:
             dataset: Unused for its object; its path is what the layer references.
         """
         with Map(crs=dataset.epsg) as canvas:
-            drawn = canvas.field("examples/data/acc4000.tif")
+            canvas.field("examples/data/acc4000.tif")
+            drawn = canvas.artist()
         assert drawn is not None, "a path-referenced raster was not drawn"
 
     def test_an_unreadable_path_still_fails_in_the_readers_words(self):

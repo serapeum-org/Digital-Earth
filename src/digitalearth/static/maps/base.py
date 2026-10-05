@@ -22,7 +22,103 @@ logger = logging.getLogger(__name__)
 
 
 class GeoLayerBase(Scene):
-    """A :class:`~digitalearth.static.scene.Scene` with a display CRS and reproject/extract helpers."""
+    """A :class:`~digitalearth.static.scene.Scene` with a display CRS and reproject/extract helpers.
+
+    The protected base `Map` inherits and every capability mixin under `static/maps/` is typed against. It
+    adds two things to a `Scene`: the **display-CRS state** a geospatial figure is drawn in, and the
+    **reproject-then-extract plumbing** every builder funnels its data through — `_reproject` to place a
+    pyramids `Dataset` in that CRS, then `_prepare` to read it as a uniform
+    `digitalearth.base.sources.source.Source`. A builder therefore never warps or reads a raster itself; it
+    asks `self._prepare(dataset, band)` and hands what comes back to a cleopatra glyph.
+
+    It is not instantiated directly. `Map` is the composition callers use, and at runtime the mixins' own
+    `_MixinBase` is plain `object`, so this class appears in the MRO once, through `Map` alone.
+
+    Attributes:
+        crs: The display CRS every layer is placed in before drawing. Anything pyramids resolves — an EPSG
+            code, an `"EPSG:3857"` string, a proj string from `digitalearth.static.projections`. Reassigning
+            it does not redraw what is already on the axes.
+        domain: The named region or bbox the map was built on, or `None`. It is what the view *declares*;
+            `ProjectionMixin.set_domain` is what frames the axes from it.
+        globe: Whether the map is drawn on a globe frame — the projection boundary, the limb clipping and
+            the graticule applied once, at `render()`/`save()`/`show()` rather than as each layer is built.
+
+    Examples:
+        - The state a `Map` carries from here. The axes limits are deliberately not consulted, so an
+          unframed figure says `bounds=None` rather than reporting matplotlib's unit square as an extent:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth import Map
+            >>> m = Map(crs=4326, domain="europe")
+            >>> m.crs, m.domain, m.globe
+            (4326, 'europe', False)
+            >>> view = m.viewport
+            >>> view.crs, view.bounds, view.domain
+            (4326, None, 'europe')
+            >>> m.close()
+
+            ```
+        - `Map.viewport` is **not** this property: `ProjectionMixin` overrides it and comes first in the
+          MRO. Framing the map shows the two apart — the override reports the region and drops the domain,
+          this one still reports the domain, and the `domain` attribute is untouched by either:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth import Map
+            >>> from digitalearth.static.maps.base import GeoLayerBase
+            >>> m = Map(crs=4326, domain="europe")
+            >>> _ = m.set_domain()
+            >>> m.viewport.bounds.as_bbox(), m.viewport.domain
+            ([-25.0, 34.0, 45.0, 72.0], None)
+            >>> base_view = GeoLayerBase.viewport.fget(m)
+            >>> base_view.bounds, base_view.domain, m.domain
+            (None, 'europe', 'europe')
+            >>> m.close()
+
+            ```
+        - The extract half, on a bare array. It carries no CRS, so there is nothing to warp from and it is
+          placed at its own indices — with the row axis handed over **descending**, which is why both
+          `field` and `contours` draw row 0 at the top (#343):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from digitalearth import Map
+            >>> m = Map(crs=4326)
+            >>> arr = np.arange(12.0).reshape(3, 4)
+            >>> m._reproject(arr) is arr
+            True
+            >>> source = m._prepare(arr)
+            >>> [float(value) for value in source.y.values]
+            [2.0, 1.0, 0.0]
+            >>> [float(value) for value in source.x.values]
+            [0.0, 1.0, 2.0, 3.0]
+            >>> source.z.values.shape
+            (3, 4)
+            >>> m.close()
+
+            ```
+        - A non-2-D array is refused by the extractor rather than drawn flat:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from digitalearth import Map
+            >>> m = Map(crs=4326)
+            >>> try:
+            ...     m._prepare(np.arange(8.0).reshape(2, 2, 2))
+            ... except ValueError as error:
+            ...     print(error)
+            numpy Source expects a 2-D array, got 3-D
+            >>> m.close()
+
+            ```
+
+    See Also:
+        digitalearth.static.map.Map: the composition callers build, which this class supplies the state for.
+        digitalearth.static.scene.Scene: the engine-level figure/axes host underneath it.
+    """
 
     def __init__(
         self,
@@ -70,16 +166,35 @@ class GeoLayerBase(Scene):
 
     @property
     def viewport(self) -> Viewport:
-        """Where the map is looking, as a value.
+        """Where the map is looking, as a value — the declared half of it.
 
         The axes limits are deliberately *not* read here. They are whatever the last draw autoscaled them to
         — matplotlib's unit square on an empty figure — so a view taken from them would say a map showed a
         one-by-one metre rectangle off the coast of Africa. What the map was *asked* to show is the display
         CRS and the domain, and those are what a figure carries.
 
+        **This is not the property a `Map` answers with.** `ProjectionMixin` overrides it and sits ahead of
+        this class in the MRO, so `Map.viewport` is that one: it starts from the view built here and then
+        adds the region the last framing call settled on. Three classes in the `Map` MRO define the name —
+        `ProjectionMixin`, this class and `Scene` — and only the first is reached through an instance. Read
+        this one directly (`GeoLayerBase.viewport.fget(m)`) and the two can disagree about the same map,
+        which is the next paragraph.
+
+        Because a `Viewport` holds a region **or** a named domain and never both, framing a map **clears the
+        domain from the view** while leaving the `domain` attribute alone. Measured on
+        `Map(crs=4326, domain="europe")` after `set_domain()`: `Map.viewport` answers
+        `bounds=Bounds(-25.0, 34.0, 45.0, 72.0, crs=4326)` with `domain=None`, this property still answers
+        `domain='europe'` with `bounds=None`, and `m.domain` is still `'europe'`. So the domain does not
+        travel beside a frame through a stored figure — the resolved rectangle replaces it, which is what
+        keeps a stale domain from sitting next to a live frame.
+
         Returns:
             A :class:`~digitalearth.base.spec.Viewport` in the CRS this tier places data in, carrying the
-            declared domain and whether the map is drawn on a globe frame.
+            declared domain and whether the map is drawn on a globe frame. Never a `bounds` — that is the
+            override's to add.
+
+        See Also:
+            digitalearth.static.maps.projection.ProjectionMixin.viewport: what `Map.viewport` actually is.
         """
         return Viewport(crs=self.crs, domain=self.domain, globe=bool(self.globe))
 

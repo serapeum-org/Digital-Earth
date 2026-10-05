@@ -77,7 +77,8 @@ class TestTheCallersNormIsDrawn:
         """
         caller_norm = LogNorm(vmin=1.0, vmax=1000.0)
         with Map() as canvas:
-            artist = canvas.field(raster, norm=caller_norm)
+            canvas.field(raster, norm=caller_norm)
+            artist = canvas.artist()
         assert artist.norm is caller_norm, artist.norm
 
     def test_norm_through_the_color_group_on_a_field(self, raster):
@@ -92,7 +93,8 @@ class TestTheCallersNormIsDrawn:
         """
         caller_norm = LogNorm(vmin=1.0, vmax=1000.0)
         with Map() as canvas:
-            artist = canvas.field(raster, color=caller_norm)
+            canvas.field(raster, color=caller_norm)
+            artist = canvas.artist()
         assert artist.norm is caller_norm, artist.norm
 
     def test_the_limits_drawn_are_the_norms_own(self, raster):
@@ -103,7 +105,8 @@ class TestTheCallersNormIsDrawn:
         """
         caller_norm = Normalize(vmin=-5.0, vmax=5.0)
         with Map() as canvas:
-            artist = canvas.field(raster, norm=caller_norm)
+            canvas.field(raster, norm=caller_norm)
+            artist = canvas.artist()
         assert artist.get_clim() == (-5.0, 5.0), artist.get_clim()
 
     def test_a_boundary_norm_on_value_coloured_points(self, raster):
@@ -118,7 +121,8 @@ class TestTheCallersNormIsDrawn:
         """
         caller_norm = BoundaryNorm([0, 10, 100, 1000], 256)
         with Map() as canvas:
-            artist = canvas.grid_points(raster, norm=caller_norm)
+            canvas.grid_points(raster, norm=caller_norm)
+            artist = canvas.artist()
         assert artist.norm is caller_norm, artist.norm
 
     def test_a_norm_that_is_not_a_normalize_is_refused(self, raster):

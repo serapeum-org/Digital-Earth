@@ -564,3 +564,32 @@ class TestItStaysAValue:
         assert Scale.from_limits(0.0, 1.0) == Scale(0.0, 1.0), (
             "the builder and the constructor must produce equal domains"
         )
+
+
+class TestTheConstructorChecksWhatTheBuildersDo:
+    """`Scale(...)` is public, so the two refusals only its builders reached have to hold there too."""
+
+    def test_the_constructor_refuses_a_colour_list_that_does_not_match_the_categories(
+        self,
+    ):
+        """One colour per category, checked where a hand-built scale arrives.
+
+        Test scenario:
+            `categorical()` already refuses this, but the constructor is public and `color_for` indexes
+            the colours by the category's position — so a short list reached from here raises
+            `IndexError` out of a lookup, far from the cause. The round trip through `from_dict` builds a
+            scale exactly this way, which is how a truncated stored figure would get in.
+        """
+        with pytest.raises(ValueError, match="one colour per category"):
+            Scale(0.0, 1.0, categories=("land", "sea"), _colors=("#8b4513",))
+
+    def test_class_edges_given_as_a_set_are_refused(self):
+        """A `set` of edges is refused rather than ordered by hash.
+
+        Test scenario:
+            `scheme` accepts a sequence of class edges on three tiers, and `tuple(set)` would pick an
+            order from the hash — so the same edges would cut different classes on different runs.
+            Refusing names the one thing the caller can do about it.
+        """
+        with pytest.raises(ValueError, match="a set has no ordering"):
+            Scale(0.0, 10.0, scheme={0.0, 4.0, 10.0})

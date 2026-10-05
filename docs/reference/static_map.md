@@ -54,6 +54,54 @@ the display CRS, so mixing them is refused rather than drawn with one of them as
 a bare array is a masked array, since there is no sidecar to carry a `no_data_value`. Anything else is refused
 by name, saying what the call takes.
 
+## The domain the ramp spans
+
+`robust=True` clips the colour limits to the 2nd and 98th percentile of the band, xarray-style, so a single
+outlier stops flattening the rest of the field.
+
+`center=` states the value a **diverging** scale is built around — zero for an anomaly, a difference or a
+trend, and whatever the reference is otherwise. The limits are symmetrised on it, so one unit of departure is
+one step of colour on either side, and the ramp becomes a diverging one centred there: its lightest colour
+lands on the centre and the two arms darken away from it. `color_scale="midpoint", midpoint=` is the other
+spelling, and a different request — it keeps the data's own asymmetric limits and moves the colour centre
+instead. Both get the diverging ramp.
+
+```python
+m.field(anomaly, center=0, robust=True)
+m.field(anomaly, color_scale="midpoint", midpoint=0)   # asymmetric limits, colour centred on zero
+```
+
+The ramp is only substituted where no colormap was named: `cmap=` is always what draws. And the centre has to
+be **inside** the data — a ramp centred outside it draws every value in one arm, which is worse than the
+sequential ramp it would replace — so for a centre the band does not straddle the *diverging ramp* is
+declined, the resolved colormap is kept, and the decline is logged at `WARNING` naming the centre and the
+range it measured.
+
+Only the ramp is declined. `center=` is cleopatra's own keyword and it symmetrises the colour limits whether
+the band straddles the centre or not, so an off-band centre still widens the colour domain to reach it:
+measured, a band running `12` to `88` drawn with `center=0` goes through limits `(-88.0, 88.0)` instead of
+`(12.0, 88.0)`, leaving the data in the top 43% of the ramp. The `color_scale="midpoint", midpoint=`
+spelling has no such effect — it keeps the data's own limits — so an off-band centre there costs nothing but
+the ramp. Either way the remedy the warning names is the same: move the centre inside the data, or drop it.
+
+## The colours a ramp cannot place
+
+Three values fall outside a colour ramp, and a field render takes a colour for each: `missing=` for a cell with
+no value, `under=` for a value below `vmin` and `over=` for one above `vmax`. They are stated on the call and
+folded onto the layer's colormap, so they also reach the figure's description — the layer's colour `Scale`
+carries them, so a backend that read them back could colour the same values the same way. None does yet: the
+static style schema declares `missing`/`over`/`under` and the interactive one declares none of the three, so the
+round trip that works today is this tier reading back its own figure.
+
+```python
+m.field(dataset, vmin=0, vmax=100, missing="#cccccc", under="#0000ff", over="#ff0000")
+```
+
+Stating one is **opt-in and leaves the rest alone**. Without `missing=` a nodata cell keeps matplotlib's default
+— fully transparent, so the gap shows through — and without `over=` a clipped value keeps the ramp's own end
+colour, which is why a field clipped at `vmax` reads the same as one that really peaks there. A colormap you
+built yourself keeps the extremes it already carried; only the ones named in the call are restated.
+
 ## Small multiples on one scale
 
 `facet(stack)` draws a raster stack — a multi-band `Dataset`, a `DatasetCollection` or a list of frames — as

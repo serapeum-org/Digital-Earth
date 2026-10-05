@@ -25,8 +25,12 @@ else, so a figure read back elsewhere draws *those* with the engine's defaults i
 **This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
 :meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
 drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as well as its own record when
-a figure is refused half-way — the web and interactive tiers rebuild their engine object on every render and
-can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
+a figure is refused half-way. The web and interactive tiers hold their picture as a value the map owns — a
+render queue plus its band counts there, the overlay list here — so a rollback puts those back by
+reassignment alongside the `_drawn` record; on this tier an artist already added to the axes stays on it
+until something takes it off. Neither of those two rebuilds everything, either: the interactive reconcile
+re-overlays the element the map already holds for a layer it did not touch, because `.opts()` writes into
+HoloViews' option store against the object it was called on.
 
 **:meth:`Renderer.apply` has a caller.** It reaches the axes and this module's record of what is on it,
 and it reached nothing else for a wave: no code in ``src/`` called it, so a map's description was written by
@@ -42,11 +46,22 @@ reorder changed every tier's description and none of their figures. :meth:`Rende
 half: matplotlib paints the artists of one z-order in the order they were added, so re-arranging that list
 re-arranges the picture.
 
-**The drawer table is keyed by kind and then by recipe.** Several builders draw one kind: ``imshow`` and
-``block`` are both a field render, and ``choropleth``, ``voronoi``, ``cartogram``, ``quadtree`` and
-``grid_cells`` are all a ``choropleth``. The kind vocabulary is shared with every other tier and names *what*
-a layer is, so it cannot say which builder made it — each builder records that under ``via``, and that is the
-second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
+**The drawer table is keyed by kind and then by recipe.** The kind vocabulary is shared with every other
+tier and names *what* a layer is, so it cannot say which builder made it — each builder records that under
+`via`, and that is the second key (the shape :mod:`digitalearth.interactive.renderer` settled on). Seven
+kinds are drawn more than one way, and these are all of them (measured off `_recipes()`):
+
+* `choropleth` — `cartogram`, `choropleth`, `grid_cells`, `hexbin`, `quadtree`, `voronoi`
+* `unstructured` — `tricontour`, `tricontourf`, `tripcolor`
+* `polygons` — `cartogram`, `shapes`, `voronoi`
+* `points` — `grid_points`, `scatter`
+* `rgb` — `hsv_composite`, `rgb_composite`
+* `text` — `annotate`, `text`
+* `vectors` — `barbs`, `quiver`
+
+Every other kind has exactly one recipe, `raster` included: a field render is `raster` drawn `via="imshow"`,
+and `Map.block` is not a second recipe for it but the separate `mesh` kind drawn `via="pcolormesh"` (the two
+share a word only in `Map.animate`'s own `kind=` vocabulary, which is a list of render *methods*).
 """
 
 import logging
@@ -106,8 +121,30 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
             >>> from digitalearth.base.spec import LayerSpec
             >>> from digitalearth.static import Scene
             >>> from digitalearth.static.renderer import drawing_opts
-            >>> drawing_opts(Scene(), LayerSpec("a", "raster"))
+            >>> scene = Scene()
+            >>> drawing_opts(scene, LayerSpec("a", "raster"))
             {}
+            >>> scene.close()
+
+            ```
+        - A keyword with no JSON form comes back as the caller's own object, and the layer's description
+            carries no trace of it — which is the whole reason this half of the pair exists:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from matplotlib.colors import Normalize
+            >>> from digitalearth.static import Map
+            >>> from digitalearth.static.renderer import drawing_opts
+            >>> norm = Normalize(vmin=0.0, vmax=15.0)
+            >>> m = Map(globe=False)
+            >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="f", norm=norm)
+            >>> held = drawing_opts(m, m.get_layer("f"))
+            >>> sorted(held), held["norm"] is norm
+            (['norm'], True)
+            >>> "norm" in m.get_layer("f").symbology.props
+            False
+            >>> m.close()
 
             ```
     """
@@ -1609,6 +1646,209 @@ class Renderer:
         if not drawn.artists:
             return self._asked.get(layer_id, True)
         return all(_is_visible(artist) for artist in drawn.artists)
+
+    def layer_of(self, artist: Any) -> Optional[str]:
+        """Return the id of the layer that owns one matplotlib artist.
+
+        The lookup a pick needs (ST-25). matplotlib hands a canvas event an *artist*, and a caller asked
+        "what did I click on?" wants the **layer id** they named the thing by — the id
+        :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, :meth:`get_layer` describes and
+        :meth:`~digitalearth.static.scene.Scene.remove_layer` takes off. This is the only place that
+        mapping exists, because this is the only record of which artists a layer put on the axes.
+
+        **One layer can own several artists** — :attr:`DrawnLayer.artists` is a tuple, and a limb-split
+        coastline is one polyline per piece — so every one of them maps back to the same id rather than
+        only the first.
+
+        Args:
+            artist: The artist to look up, as matplotlib hands it over.
+
+        Returns:
+            The layer's id, or ``None`` for an artist no layer owns: one a caller drew straight onto
+            :attr:`~digitalearth.static.scene.Scene.ax` (the escape hatch, which is outside the description
+            by design), one left by a layer that has since been removed, or a figure-level artist such as
+            the axes' spines.
+
+            Matched by **identity**, never by equality: two artists of one class can compare equal while
+            belonging to different layers, and the question here is which layer put *this* object on the
+            axes.
+
+        Examples:
+            - The artist a field drew answers with that field's id, and an artist nothing drew answers
+              ``None``:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from matplotlib.text import Text
+                >>> from digitalearth.static import Map
+                >>> m = Map()
+                >>> _ = m.text(4.9, 52.4, "Amsterdam", name="ams")
+                >>> m._renderer.layer_of(m.artist("ams"))
+                'ams'
+                >>> print(m._renderer.layer_of(Text(0.0, 0.0, "mine")))
+                None
+                >>> m.close()
+
+                ```
+            - Every artist of a many-artist layer answers with the one id: a flat map's graticule is a
+              `LineCollection` plus one `Text` per labelled line, and all 19 map back to it:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> m = Map(crs=4326)
+                >>> _ = m.graticule(spacing=30.0)
+                >>> held = m._renderer.drawn["graticule-1"].artists
+                >>> len(held), sorted({m._renderer.layer_of(a) for a in held})
+                (19, ['graticule-1'])
+                >>> m.close()
+
+                ```
+        """
+        for layer_id, drawn in self._drawn.items():
+            if any(held is artist for held in drawn.artists):
+                return layer_id
+        return None
+
+    def hits(self, event: Any) -> Tuple[str, ...]:
+        """Return the ids of the drawn layers under one mouse event, topmost first.
+
+        The other half of what a pick needs, and the half that has to agree with what the reader sees:
+        layers overlap, so a click can land on several at once, and the one a pick *reports* is the one
+        painted last — matplotlib paints by z-order, and within one z-order in the order the artists were
+        added. So the ranking is ``(z-order, draw order)`` and the answer is read off the top of it, which
+        is the same rule :meth:`_repaint` and :func:`_rank_zorders` arrange the picture by.
+
+        Args:
+            event: A matplotlib mouse event, already known to be over the scene's axes — the caller
+                (:meth:`~digitalearth.static.scene.Scene._deliver_pick`) is what checks ``inaxes``, because
+                only the scene knows which axes is its own.
+
+        Returns:
+            One id per layer hit, **topmost first**, so ``hits[0]`` is the layer a pick reports and the
+            rest are what lies under it. Empty for a click on no layer at all.
+
+            Two kinds of layer are never in it. A **hidden** layer is excluded, and has to be asked about
+            rather than inferred: `Artist.contains` ignores the visibility flag — measured, an
+            `AxesImage` hidden with `set_visible(False)` still answers `True` for a point inside it — so a
+            pick that trusted it would report a layer the reader cannot see. A layer owning **no** artist
+            is excluded too: a graticule on a **globe** is computed and handed to the projection frame, so
+            until that frame goes on it has nothing on the axes to be under a pointer, and
+            :meth:`is_visible` answers for it from what was last asked instead. On a *flat* map the same
+            graticule does own artists — one `LineCollection` plus its degree labels — and is picked like
+            any other layer.
+
+            A layer that has been **removed** is absent for the plainest reason: the ranking is built from
+            :attr:`drawn` at the moment of the click, and :meth:`remove` has already dropped it.
+
+        Examples:
+            - Two fields over one another: the click reports both, the one drawn last first, and hiding
+              that one drops it out of the answer:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="bottom")
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="top")
+                >>> m.fig.canvas.draw()
+                >>> px, py = m.ax.transData.transform((1.5, 2.0))
+                >>> click = MouseEvent("button_press_event", m.fig.canvas, px, py, button=1)
+                >>> m._renderer.hits(click)
+                ('top', 'bottom')
+                >>> _ = m.set_visible("top", False)
+                >>> m._renderer.hits(click)
+                ('bottom',)
+                >>> m.close()
+
+                ```
+            - A click on no layer — here far outside the axes — hits nothing, which is what stops a pick
+              being delivered at all:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> m = Map(globe=False)
+                >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="grid")
+                >>> m.fig.canvas.draw()
+                >>> m._renderer.hits(MouseEvent("button_press_event", m.fig.canvas, -50, -50, button=1))
+                ()
+                >>> m.close()
+
+                ```
+            - A graticule is pickable on a flat map and not on a globe, because only the flat frame has
+              put anything on the axes yet:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from matplotlib.backend_bases import MouseEvent
+                >>> from digitalearth.static import Map
+                >>> def hit_at_origin(scene):
+                ...     scene.fig.canvas.draw()
+                ...     px, py = scene.ax.transData.transform((0.0, 0.0))
+                ...     return scene._renderer.hits(
+                ...         MouseEvent("button_press_event", scene.fig.canvas, px, py, button=1)
+                ...     )
+                >>> flat = Map(crs=4326)
+                >>> _ = flat.graticule(spacing=30.0)
+                >>> hit_at_origin(flat)
+                ('graticule-1',)
+                >>> flat.close()
+                >>> globe = Map(crs=4326, globe=True)
+                >>> _ = globe.graticule(spacing=30.0)
+                >>> hit_at_origin(globe)
+                ()
+                >>> globe.close()
+
+                ```
+        """
+        ranked: List[Tuple[float, int, str]] = []
+        for index, (layer_id, drawn) in enumerate(self._drawn.items()):
+            if not drawn.artists or not self.is_visible(layer_id):
+                continue
+            touched = [
+                artist for artist in drawn.artists if self._touches(artist, event)
+            ]
+            if touched:
+                ranked.append(
+                    (max(_zorder_of(artist) for artist in touched), index, layer_id)
+                )
+        ranked.sort()
+        return tuple(layer_id for _zorder, _index, layer_id in reversed(ranked))
+
+    @staticmethod
+    def _touches(artist: Any, event: Any) -> bool:
+        """Whether one artist is under a mouse event.
+
+        Args:
+            artist: The artist to hit-test.
+            event: The mouse event.
+
+        Returns:
+            ``True`` when the artist is drawn **and** matplotlib says the event is inside it. The
+            visibility flag is read here as well as per layer in :meth:`hits`, because the two answer
+            different questions: that one asks whether the *layer* is shown, this one whether this artist
+            is — and ``contains`` itself ignores the flag entirely.
+
+        Note:
+            ``contains`` is called and its failure answered, rather than probed for with ``hasattr``, for
+            the reason :func:`_set_visible` gives. It raises for an artist that cannot be hit-tested at the
+            moment it is asked — one that was never added to an axes, or a ``Text`` on a canvas that has
+            not been drawn and so has no renderer to measure it with — and a pick is a pointer gesture: it
+            must report what it can find rather than take the figure down over an artist it cannot measure.
+        """
+        if not _is_visible(artist):
+            return False
+        try:
+            hit, _details = artist.contains(event)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            logger.debug("%r cannot be hit-tested; treating it as not picked", artist)
+            return False
+        return bool(hit)
 
     def band_for(self, layer: LayerSpec) -> str:
         """Return the draw-order band a layer belongs to.

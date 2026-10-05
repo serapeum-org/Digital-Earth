@@ -60,7 +60,8 @@ class TestWhatDrivesTheColourIsPublished:
             matplotlib coloured through rather than a second computation beside it.
         """
         with Map(crs=dataset.epsg) as canvas:
-            image = canvas.field(dataset, name="acc")
+            canvas.field(dataset, name="acc")
+            image = canvas.artist()
             encoding = canvas.get_layer("acc").symbology.encoding("color")
             assert encoding is not None, "the field published no colour encoding"
             assert encoding.field == "Band_1", encoding.field
@@ -81,9 +82,10 @@ class TestWhatDrivesTheColourIsPublished:
             reading `Scene._record_class_edges` takes for ``last_breaks``.
         """
         with Map(crs=polygons.epsg) as canvas:
-            fill = canvas.choropleth(
+            canvas.choropleth(
                 polygons, column="fid", scheme="quantiles", k=3, name="grad"
             )
+            fill = canvas.artist()
             scale = canvas.get_layer("grad").symbology.encoding("color").scale
             assert scale.is_classified, "a classified fill published a continuous scale"
             assert list(scale.breaks) == [float(edge) for edge in fill.norm.boundaries]
@@ -119,7 +121,8 @@ class TestWhatDrivesTheColourIsPublished:
         """
         bare = points_fc[["geometry"]]
         with Map(crs=points_fc.epsg) as canvas:
-            markers = canvas.points(bare, name="plain")
+            canvas.points(bare, name="plain")
+            markers = canvas.artist()
             assert markers.get_array() is None, (
                 "the fixture is colouring by value after all, so it proves nothing"
             )

@@ -1167,13 +1167,18 @@ class TestANamedArgumentIsNormalisedForTheDescription:
         from pyramids.base.crs import crs_from_user_input
 
         canvas = Map(crs=dataset.epsg)
-        placed = canvas.text(4.9, 52.4, "Amsterdam", crs=crs_from_user_input(4326))
-        by_code = Map(crs=dataset.epsg).text(4.9, 52.4, "Amsterdam", crs=4326)
+        canvas.text(4.9, 52.4, "Amsterdam", crs=crs_from_user_input(4326))
+        other = Map(crs=dataset.epsg)
+        other.text(4.9, 52.4, "Amsterdam", crs=4326)
         recorded = canvas.figure_spec.layers.get("text-1").symbology.props["crs"]
         json.dumps(canvas.figure_spec.layers.to_dict(), allow_nan=False)
+        # Read off the layers before the figures go, since the builders hand back the map now (round-1 L6).
+        placed = canvas.artist("text-1").get_position()
+        by_code = other.artist("text-1").get_position()
         canvas.close()
+        other.close()
         assert recorded == "EPSG:4326", recorded
-        assert placed.get_position() == by_code.get_position()
+        assert placed == by_code, (placed, by_code)
 
     def test_a_channel_with_no_limits_to_freeze_is_recorded_as_none(self, dataset):
         """``channel_limits`` documents ``(nan, nan)`` for an unmeasurable channel; JSON has no nan.
@@ -1326,11 +1331,13 @@ class TestAUvFieldTakesAPathLikeEveryOtherBuilder:
             dataset: The same raster, already open.
         """
         by_path = Map(crs=dataset.epsg)
-        from_path = by_path.quiver(RASTER_PATH, RASTER_PATH)
+        by_path.quiver(RASTER_PATH, RASTER_PATH)
+        from_path = by_path.artist()
         eastward = np.asarray(from_path.U)
         by_path.close()
         by_object = Map(crs=dataset.epsg)
-        expected = np.asarray(by_object.quiver(dataset, dataset).U)
+        by_object.quiver(dataset, dataset)
+        expected = np.asarray(by_object.artist().U)
         by_object.close()
         assert np.array_equal(eastward, expected), (eastward[:3], expected[:3])
 
@@ -1359,9 +1366,8 @@ class TestAQuadtreeRedrawsWithTheReducerItWasBuiltWith:
             the replay is a real JSON round trip onto a map that holds nothing of the first one's.
         """
         canvas = Map(crs=32618)
-        built = _cell_values(
-            canvas.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
-        )
+        canvas.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        built = _cell_values(canvas.artist())
         figure = _written_and_read_back(canvas.figure_spec)
         canvas.close()
         target = Map(crs=32618)
@@ -1378,31 +1384,29 @@ class TestAQuadtreeRedrawsWithTheReducerItWasBuiltWith:
             ``max`` and ``sum`` over the same points must disagree, or the round-trip check proves nothing.
         """
         by_max = Map(crs=32618)
-        highest = _cell_values(
-            by_max.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
-        )
+        by_max.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        highest = _cell_values(by_max.artist())
         by_max.close()
         by_sum = Map(crs=32618)
-        totals = _cell_values(
-            by_sum.quadtree(POINTS_PATH, column="fid", agg="sum", nmax=6)
-        )
+        by_sum.quadtree(POINTS_PATH, column="fid", agg="sum", nmax=6)
+        totals = _cell_values(by_sum.artist())
         by_sum.close()
         assert highest != totals, (highest, totals)
 
     def test_a_reducer_of_the_callers_own_is_held_and_still_colours_the_cells(self):
         """A callable has no JSON form, so it travels beside the layer — and the figure still writes."""
         canvas = Map(crs=32618)
-        drawn = canvas.quadtree(
+        canvas.quadtree(
             POINTS_PATH, column="fid", agg=lambda values: float(np.max(values)), nmax=6
         )
+        drawn = canvas.artist()
         by_callable = _cell_values(drawn)
         recorded = canvas.figure_spec.layers.get(canvas.layer_ids[0]).symbology.props
         written = json.dumps(canvas.figure_spec.to_dict(), allow_nan=False)
         canvas.close()
         by_name = Map(crs=32618)
-        expected = _cell_values(
-            by_name.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
-        )
+        by_name.quadtree(POINTS_PATH, column="fid", agg="max", nmax=6)
+        expected = _cell_values(by_name.artist())
         by_name.close()
         assert recorded["agg"] is None, dict(recorded)
         assert by_callable == expected, (by_callable, expected)
