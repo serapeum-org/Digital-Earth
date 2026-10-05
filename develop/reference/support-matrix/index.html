@@ -4531,14 +4531,17 @@ omissions with no positive counterpart on any backend, so they appear only in th
   index to ask which ones overlap, so <code>labels</code> takes no allow_overlap= and a crowded column is thinned by
   filtering the features before drawing them. MapLibre's symbol layer is where that decision is made for the
   tier that has one</li>
-<li><strong><code>layer_switcher</code></strong> — the figure is drawn once and does not respond to a pointer, so there is nothing for a
-  switch to toggle; layers are chosen before the figure is drawn</li>
+<li><strong><code>layer_switcher</code></strong> — the tier draws no control onto the figure for a reader to toggle: visibility is set
+  from code, with <code>set_visible</code> before or between draws, and a live canvas can do that from a <code>Scene.on_pick</code>
+  callback — but the switch itself is a widget the other tiers' engines provide and this one does not</li>
 <li><strong><code>measure</code></strong> — there is no pointer to measure with; a distance is drawn as a layer of its own</li>
 <li><strong><code>navigation</code></strong> — there is no viewport to pan: the extent is set by <code>set_bounds</code> before drawing</li>
 <li><strong><code>time_slider</code></strong> — a sequence over time is written out as an animation here rather than scrubbed, which is
   what <code>animate</code> is</li>
-<li><strong><code>tooltip</code></strong> — a matplotlib figure is a picture: there is no pointer over it to hover, so a value is read
-  from the colorbar or printed into the cell</li>
+<li><strong><code>tooltip</code></strong> — nothing follows the pointer: a saved figure is a picture, and on a live canvas the gesture
+  this tier delivers is a click, not a hover — <code>Scene.on_pick</code> reports the layer a click landed on and its data
+  coordinates, which a caller prints or annotates themselves. A value is otherwise read from the colorbar or
+  printed into the cell</li>
 </ul>
 <h3 id="web"><a class="toclink" href="#web">web</a><a class="headerlink" href="#web" title="Permanent link">#</a></h3>
 <ul>
