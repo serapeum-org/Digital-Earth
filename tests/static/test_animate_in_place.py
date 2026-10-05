@@ -760,3 +760,110 @@ class TestOneAnimationWhicheverPathDrawsIt:
         assert _ramps(straddling, "redraw", **midpoint) == _ramps(
             straddling, "auto", **midpoint
         ), "the midpoint spelling of a centre must also draw one animation"
+
+
+class TestBlitRefusesAStackItCannotHold:
+    """``blit=True`` must not survive into the clear-and-rebuild path ``settle()`` refuses it for."""
+
+    @pytest.fixture
+    def regional(self):
+        """Two small regional frames of one grid, the second at the antipode of the first.
+
+        Returns:
+            list[Dataset]: a frame near 4E/53N followed by one at 176W/53S.
+        """
+        _, xx = np.mgrid[0:20, 0:24]
+        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+        return [
+            Dataset.from_array(
+                values,
+                geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+                no_data_value=-9999.0,
+            ),
+            Dataset.from_array(
+                values + 3.0,
+                geo_ref=GeoReference(
+                    geo=(-176.0, 0.02, 0.0, -53.0, 0.0, -0.02), epsg=4326
+                ),
+                no_data_value=-9999.0,
+            ),
+        ]
+
+    def test_a_stack_of_mixed_grids_is_refused_by_name(self):
+        """A frame on another grid clears the axes mid-clip, which is what blitting cannot be left over.
+
+        Test scenario:
+            The runtime fallback sets the strategy aside and rebuilds every remaining frame, so the
+            rebuilt coastlines, colorbar and projection frame are not in the artist list a blitted frame
+            hands back and are never repainted. The stack is read once up front instead, and the caller
+            told — which is where a refusal belongs.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="blit=True"):
+            scene.animate(mixed, fps=2, blit=True, **CLIM)
+        scene.close()
+
+    def test_the_refusal_names_the_frame_and_both_grids(self):
+        """So the stack can be fixed rather than the option merely dropped.
+
+        Test scenario:
+            The message is the one piece of evidence the caller has about which frame of a long stack is
+            the odd one.
+        """
+        mixed = [_field(0.0), _coarser(8.0)]
+        scene = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(
+            ValueError, match=r"frame 1 is drawn on a \(15, 30\) grid"
+        ) as refusal:
+            scene.animate(mixed, fps=2, blit=True, **CLIM)
+        scene.close()
+        assert "(30, 60)" in str(refusal.value), (
+            f"the refusal should name the first frame's grid too; got {refusal.value}"
+        )
+
+    def test_a_stack_whose_first_frame_draws_nothing_is_refused(self, regional):
+        """With no artist kept from frame 0 every frame redraws itself, blit or no blit.
+
+        Test scenario:
+            A globe centred at the antipode of frame 0 cannot show it, so the clip has nothing to update
+            and falls to the redrawing path for its whole length — the same mode the mixed-grid fallback
+            lands in, reached a different way.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=-176, lat=-53), globe=True, figsize=(3, 3)
+        )
+        with pytest.raises(ValueError, match="first frame draws nothing"):
+            scene.animate(regional, fps=2, blit=True, **CLIM)
+        scene.close()
+
+    def test_a_later_off_limb_frame_still_blits(self, regional):
+        """A frame hidden *after* the first is not a fallback, so it is no reason to refuse.
+
+        Test scenario:
+            ``FrameUpdate.apply`` hides the kept artist for an off-limb frame and reports success, so the
+            axes is never cleared and the artist the frame hands back is still the only thing to repaint.
+        """
+        scene = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(3, 3)
+        )
+        clip = scene.animate(regional, fps=2, blit=True, **CLIM)
+        scene.close()
+        assert clip._blit is True, (
+            "a stack whose only oddity is a hidden later frame must keep the blitting it asked for"
+        )
+
+    def test_a_mixed_grid_stack_still_animates_without_blitting(self):
+        """The refusal is blitting's, not the stack's: unblitted, the fallback is still allowed.
+
+        Test scenario:
+            Clearing and rebuilding repaints the whole axes, so a frame on another grid is a slower path
+            rather than a broken picture — which is why the stack is only refused alongside ``blit=True``.
+        """
+        scene = Map(crs=4326, figsize=(3, 3))
+        clip = scene.animate([_field(0.0), _coarser(8.0)], fps=2, **CLIM)
+        drawn = [clip._func(index)[0] for index in range(2)]
+        scene.close()
+        assert drawn[1] is not drawn[0], (
+            "without blitting a mixed-grid stack must still fall back to a rebuilt artist"
+        )

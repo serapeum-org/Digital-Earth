@@ -445,8 +445,10 @@ class FrameUpdate:
 
         Raises:
             ValueError: when ``blit=True`` or ``update="in_place"`` was asked for and this animation cannot
-                be drawn that way, with :attr:`blocker` as the reason; and when ``blit=True`` is combined
-                with per-frame ``titles``, which blitting cannot repaint.
+                be drawn that way, with :attr:`blocker` as the reason; when ``blit=True`` is combined
+                with per-frame ``titles``, which blitting cannot repaint; and when ``blit=True`` is asked
+                for a stack that would take the clip into the rebuilding path at playback, with
+                :meth:`_stack_blocker` as the reason.
 
         Examples:
             - The two answers the frame loop reads: the strategy itself, or ``None`` for "clear and
@@ -498,6 +500,15 @@ class FrameUpdate:
                 "blits, and the title is drawn above it, so every frame would show the first frame's "
                 "title. Drop one of the two"
             )
+        if blit:
+            standing = self._stack_blocker()
+            if standing is not None:
+                raise ValueError(
+                    f"blit=True needs every frame to refill the artist the first frame drew, and this "
+                    f"stack does not: {standing}. Blitting leaves everything the frame function does not "
+                    "return standing, so a rebuilt frame would stack on the one before it. Drop "
+                    "blit=True, or animate frames that share one grid"
+                )
         if self.blocker is None:
             return self
         if self.mode == "in_place":
@@ -508,6 +519,62 @@ class FrameUpdate:
         logger.info(
             "animate: clearing the axes and redrawing every frame — %s", self.blocker
         )
+        return None
+
+    def _display_grid(self, index: int) -> Optional[Tuple[int, ...]]:
+        """Return the grid frame ``index`` is **drawn** on, or ``None`` when it draws nothing.
+
+        Read through :func:`~digitalearth.static.maps.raster._field_source`, the same reader
+        :meth:`apply` compares against, so the answer here and the answer at playback cannot disagree.
+        The raster's own shape is not that answer: a frame is warped into the display CRS and decimated to
+        the canvas before it reaches an artist, so two frames of one source shape can be drawn on two
+        grids and two source shapes can be drawn on one.
+
+        Args:
+            index: Which frame to measure.
+
+        Returns:
+            The drawn array's shape, or ``None`` for a frame the display CRS cannot show — which draws
+            nothing and so matches no grid.
+        """
+        try:
+            src, _ = _field_source(self.scene, self.frames[index], self.band)
+        except OffLimbError:
+            return None
+        return tuple(np.shape(src.z.values))
+
+    def _stack_blocker(self) -> Optional[str]:
+        """Return why this stack cannot be blitted all the way through, or ``None`` when it can.
+
+        :meth:`settle` refuses ``blit=True`` for what the *kind and the options* make impossible, which is
+        a static fact. A stack can take the same animation into the clear-and-rebuild path at **runtime**
+        instead: a frame on another grid cannot refill the artist (:meth:`apply` answers ``False``, and
+        :meth:`AnimationMixin._animate_frames` rebuilds every frame from there on), and a first frame the
+        display CRS cannot show leaves no artist to keep at all, so every frame draws itself. Either way
+        the rebuilt decoration is absent from the artist list a blitted frame hands back and is never
+        repainted — which is exactly what :meth:`settle`'s own refusal text says must not happen. So the
+        stack is read here, before the first frame, and the caller is told.
+
+        This costs one read of every frame, which is why it is behind the ``blit=True`` check rather than
+        done for every animation. An unblitted stack needs no such scan: clearing and rebuilding repaints
+        the whole axes, so the fallback is a slower path rather than a broken picture.
+
+        Returns:
+            A sentence naming what stands in the way, or ``None``.
+        """
+        first = self._display_grid(0) if self.frames else None
+        if self.frames and first is None:
+            return (
+                "its first frame draws nothing — the display CRS cannot show it — so there is no artist "
+                "to keep and every frame after it draws itself"
+            )
+        for index in range(1, len(self.frames)):
+            grid = self._display_grid(index)
+            if grid is not None and grid != first:
+                return (
+                    f"frame {index} is drawn on a {grid} grid where the first frame is drawn on {first}, "
+                    "so the axes would be cleared and every layer redrawn from there on"
+                )
         return None
 
     def apply(self, index: int, artist: Any) -> bool:
@@ -640,8 +707,10 @@ class AnimationMixin(_MixinBase):
             draw_one: Draws frame ``i`` from scratch, returning the data artist it drew (or ``None``).
             n_frames: How many frames the animation runs for.
             fps: Frames per second, as the inter-frame interval.
-            blit: Passed to :class:`FuncAnimation`. Only ever ``True`` alongside ``updates``;
-                :meth:`FrameUpdate.settle` refuses the combination that would blit a rebuilt frame.
+            blit: Passed to :class:`FuncAnimation`. Only ever ``True`` alongside ``updates``, and only for
+                a stack :meth:`FrameUpdate.settle` has already read as one every frame can update:
+                ``FuncAnimation._blit`` cannot be turned off mid-run, so the degrade below must be
+                unreachable under blitting rather than compensated for.
             updates: The :class:`FrameUpdate` to run for the frames after the first, or ``None`` to redraw
                 every frame. A ``False`` from :meth:`FrameUpdate.apply` degrades the rest of the animation
                 to redrawing, rather than letting one odd frame fail the run.
@@ -1388,7 +1457,11 @@ class AnimationMixin(_MixinBase):
                 ``"redraw"`` always clears, which is what every animation did before ST-9.
             blit: When True, build the animation with matplotlib's blitting, which repaints only the artist
                 each frame returns. It requires the in-place path and is refused without it, and it is
-                refused alongside ``titles`` (see the note below). It changes **playback only**: saving a
+                refused alongside ``titles`` (see the note below). It is also refused for a **stack** that
+                would leave that path mid-clip — one whose frames are not all drawn on a single grid, or
+                whose first frame the display CRS cannot show, either of which clears the axes and rebuilds
+                every layer from there on. That is read off the stack once, before the first frame, so the
+                refusal reaches the caller rather than the playback. It changes **playback only**: saving a
                 clip draws every frame in full whatever this says.
             **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,
                 ``vmax`` and the rest of its styling — the shared colour scale is measured from that same
@@ -1404,7 +1477,8 @@ class AnimationMixin(_MixinBase):
             ValueError: if ``kind`` is not a known renderer, ``update`` is not one of
                 :attr:`FrameUpdate.MODES`, ``stack`` is empty, ``titles`` is given with a mismatched length,
                 ``colorbar=True`` is combined with a composite ``kind``, or ``blit=True`` /
-                ``update="in_place"`` is asked for where the frames cannot update one artist.
+                ``update="in_place"`` is asked for where the frames cannot update one artist — including a
+                ``blit=True`` stack whose frames are not all drawn on one grid.
 
         Note:
             ``blit=True`` repaints only what the frame function returns, which is the data artist and
