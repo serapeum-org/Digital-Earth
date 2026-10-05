@@ -176,8 +176,14 @@ EXTREME_KEYS: Tuple[str, ...] = ("missing", "over", "under")
 #: signature and no schema, which is what ST-3 declares it for.
 ROBUST_KEY = "robust"
 
-#: The value a diverging scale is built around, also cleopatra's own keyword: it symmetrises the limits to
-#: ``center ± max|data - center|``. Declared here beside ``robust`` for the same reason, and honoured one
+#: The value a diverging scale is built around, also cleopatra's own keyword: it symmetrises the **resolved**
+#: limits on it — cleopatra's ``_center_limits`` takes the larger of ``|vmin - center|`` and
+#: ``|vmax - center|`` as the half-range and returns ``center ± that``. So a ``vmin``/``vmax`` the call stated
+#: is what gets symmetrised, and the band's own range is symmetrised only when the call stated neither.
+#: Measured: a band running ``-3`` to ``8`` with ``center=0`` draws through ``(-8.0, 8.0)``, but the same
+#: band with ``center=0, vmax=2`` draws through ``(-3.0, 3.0)`` and with ``center=0, vmin=-1, vmax=2``
+#: through ``(-2.0, 2.0)``. ``FieldColors._center_on`` in the raster mixin states the same rule.
+#: Declared here beside ``robust`` for the same reason, and honoured one
 #: step further — :class:`~digitalearth.static.maps.raster.FieldColors` supplies the diverging *ramp*
 #: cleopatra would have defaulted to, which this tier's own colormap resolution suppresses.
 CENTER_KEY = "center"
