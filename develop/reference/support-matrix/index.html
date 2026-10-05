@@ -4523,14 +4523,15 @@ omissions with no positive counterpart on any backend, so they appear only in th
 <ul>
 <li><strong><code>attribution</code></strong> — a credit is text placed on the figure — <code>text</code> or <code>stamp</code> — rather than a control the tier
   draws</li>
-<li><strong><code>export_html</code></strong> — the figure is written as an image, not as a page; an HTML export is the interactive or web
-  tier's</li>
+<li><strong><code>export_html</code></strong> — the figure is written as an image, not as a page; an HTML export is every other tier's —
+  interactive, web and 3-D all declare <code>export_html</code> as a feature, and this is the only tier that does not</li>
 <li><strong><code>fullscreen</code></strong> — a saved image has no screen to fill; its size is the figure's</li>
 <li><strong><code>height</code></strong> — an axes is flat; a layer raised by a column is the 3-D tier's extrusion or the web tier's</li>
 <li><strong><code>label_collision</code></strong> — matplotlib draws every label it is given, wherever it lands; there is no collision
   index to ask which ones overlap, so <code>labels</code> takes no allow_overlap= and a crowded column is thinned by
   filtering the features before drawing them. MapLibre's symbol layer is where that decision is made for the
-  tier that has one</li>
+  tier that has one: the web tier's <code>labels</code> takes an <code>allow_overlap=</code> of its own (False by default) and hands
+  it straight to <code>text-allow-overlap</code></li>
 <li><strong><code>layer_switcher</code></strong> — the tier draws no control onto the figure for a reader to toggle: visibility is set
   from code, with <code>set_visible</code> before or between draws, and a live canvas can do that from a <code>Scene.on_pick</code>
   callback — but the switch itself is a widget the interactive and web tiers' engines provide and this one does
