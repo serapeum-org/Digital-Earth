@@ -579,6 +579,7 @@ class InsetMixin(_MixinBase):
         self,
         *,
         crs: Any = None,
+        globe: Optional[bool] = None,
         position: Any = "upper right",
         size: Any = _DEFAULT_SIZE,
         extent: Optional[Sequence[float]] = None,
@@ -598,6 +599,14 @@ class InsetMixin(_MixinBase):
         have to be handed both anyway, and would have no way to place the inset inside one panel of a
         :func:`~digitalearth.static.figure.grid`.
 
+        Note:
+            **A globe locator is framed as it is built**, not at render time. Nothing else ever renders
+            it: `render`, `save` and `show` are called on the *map*, and the locator is a scene of its
+            own, so its frame would never go on at all. The frame therefore lands after the reference
+            geography and the extent box, which is what clips both at the limb — and a layer drawn on
+            the locator *afterwards* is not clipped, because `_apply_frame` is applied once per axes.
+            Draw everything the locator shows through `inset(reference=)`, or keep the locator flat.
+
         Warning:
             **The locator shares this map's figure, so do not close it or context-manage it.**
             :meth:`~digitalearth.static.scene.Scene.close` calls `pyplot.close` on whatever figure a
@@ -610,6 +619,13 @@ class InsetMixin(_MixinBase):
                 is the one case where the extent box needs no reprojection and so is a true rectangle. A
                 different CRS is honoured and the box is reprojected edge-wise into it; note a geographic
                 locator cannot draw an extent that straddles its antimeridian without the ring wrapping.
+            globe: Whether the locator is drawn on a globe frame — its reference geography re-closed at
+                the projection limb, its boundary drawn, its layers clipped to it. `None` (default)
+                **follows this map**, because a locator that renders differently from the map it sits in
+                is a second picture rather than a smaller one; before #389 it was always flat, so a globe's
+                locator went through the flat path with no limb clipping and no boundary. `True` draws a
+                globe locator inside a flat map, and `False` the flat locator every caller used to get.
+                Naming an `extent` implies `False` (see below).
             position: Where the inset sits — `"upper right"` (default), `"upper left"`,
                 `"lower right"`, `"lower left"`, or four axes fractions
                 `(x0, y0, width, height)` used as given.
@@ -618,7 +634,11 @@ class InsetMixin(_MixinBase):
                 side would hang outside the map. An explicit `position` rectangle places the inset
                 itself and is not bounded that way.
             extent: The wider area the locator shows, as `(west, south, east, north)` in the locator's
-                CRS. `None` (default) shows the whole projection domain.
+                CRS. `None` (default) shows the whole projection domain. A globe frame cannot hold one
+                — it sets the projection's own limits, measured: a globe locator asked for
+                `[-4e6, -4e6, 4e6, 4e6]` came back holding the whole disc — so naming an extent is the
+                caller asking for a flat locator, and naming it beside `globe=True` is refused rather
+                than half-honoured.
             reference: The Natural-Earth layers drawn into the locator, in order. Default
                 `("land", "coastlines")`; `()` draws none, for a caller supplying their own geography
                 on the locator afterwards.
@@ -629,8 +649,9 @@ class InsetMixin(_MixinBase):
             axes and sharing this map's figure.
 
         Raises:
-            ValueError: for a `size` that is not a fraction in `(0, 1]` or one above `0.94` beside a
-                named corner, a `position` that is neither a corner nor four numbers, a `reference` naming something that is not a
+            ValueError: for `globe=True` beside an `extent`, which cannot both be drawn, for a `size`
+                that is not a fraction in `(0, 1]` or one above `0.94` beside a named corner, a
+                `position` that is neither a corner nor four numbers, a `reference` naming something that is not a
                 Natural-Earth layer, or a map that has not been framed — there is then no extent to mark,
                 and the refusal happens **before** the inset axes is created, so nothing half-built is
                 left on the figure. Each of the four names `inset()`, including the last: the extent is
@@ -715,6 +736,26 @@ class InsetMixin(_MixinBase):
 
                 ```
 
+            - A globe's locator is a globe as well: its land comes back as the limb-clipped rings the
+              globe path fills, and the frame puts a boundary on the inset axes:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from matplotlib.patches import PathPatch
+                >>> from digitalearth.static import Map, projections
+                >>> m = Map(crs=projections.orthographic(10, 20), globe=True)
+                >>> _ = m.set_bounds([-1.0e6, -1.0e6, 1.0e6, 1.0e6])
+                >>> locator = m.inset(reference=("land",)).locator
+                >>> locator.globe
+                True
+                >>> type(locator.artist("land-1")).__name__
+                'PolyCollection'
+                >>> any(isinstance(patch, PathPatch) for patch in locator.ax.patches)
+                True
+                >>> m.close()
+
+                ```
+
         See Also:
             mark_extent: the box on its own, for marking one map's extent on any other.
         """
@@ -726,11 +767,13 @@ class InsetMixin(_MixinBase):
                     f"inset(reference={tuple(reference)!r}) names {layer!r}, which is not a reference "
                     f"layer; use any of {list(_REFERENCE_LAYERS)}"
                 )
+        on_a_globe = self._locator_globe(globe, extent)
         box = _ExtentBox.of(self, caller="inset")
         locator = type(self)(
             crs=self.crs if crs is None else crs,
             ax=self.ax.inset_axes(frame.as_bounds()),
             fig=self.fig,
+            globe=on_a_globe,
         )
         # A locator is a thumbnail, not a plot: at a quarter of the map's size its tick labels overlap
         # into illegibility.
@@ -745,5 +788,38 @@ class InsetMixin(_MixinBase):
         else:
             locator.set_bounds(list(extent))
         locator._mark(box)
+        # The frame goes on here rather than at render time: nothing else renders the locator, and the
+        # geography and the box have to be on the axes before they can be clipped to the limb. `render`
+        # answers a flat locator with nothing, so this is the globe case only.
+        locator.render()
         self._locator = locator
         return self
+
+    def _locator_globe(self, globe: Optional[bool], extent: Any) -> bool:
+        """Settle whether the locator is drawn on a globe frame, refusing the pair that cannot be.
+
+        Args:
+            globe: What the caller wrote — ``True``, ``False``, or ``None`` for "the same frame as this
+                map".
+            extent: The region the caller framed the locator on, or ``None``.
+
+        Returns:
+            Whether the locator is a globe: what the caller asked for; else this map's own frame, unless
+            an ``extent`` was named, which only a flat frame can hold.
+
+        Raises:
+            ValueError: for ``globe=True`` beside an ``extent``. The globe frame sets the projection's own
+                limits, so the extent would be dropped in silence — measured, a globe locator asked for
+                ``[-4e6, -4e6, 4e6, 4e6]`` came back holding the whole disc.
+        """
+        if globe and extent is not None:
+            raise ValueError(
+                "inset(globe=True, extent=...) cannot both be drawn: the globe frame sets the "
+                "projection's own limits, so the extent would be thrown away (measured: a locator asked "
+                f"for {list(extent)!r} came back holding the whole disc). Ask for one or the other — an "
+                "extent draws a flat locator framed on it, and globe=True draws the whole disc"
+            )
+        if globe is not None:
+            return bool(globe)
+        # A caller who named a region asked for the one frame that can hold it, whatever this map is.
+        return False if extent is not None else bool(self.globe)

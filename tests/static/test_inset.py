@@ -10,9 +10,10 @@ figure is measured rather than assumed.
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib.patches import PathPatch
 from pyramids.base.crs import reproject_coordinates
 
-from digitalearth.static import Map
+from digitalearth.static import Map, projections
 from digitalearth.static.maps.inset import _CORNER_PAD, _CORNERS
 
 #: The largest side a named corner can hold: the inset keeps :data:`_CORNER_PAD` on both sides of it.
@@ -51,6 +52,26 @@ def framed(closed_figures):
     def make(crs, bounds=PLAIN_BOX):
         main = Map(crs=crs)
         main.set_bounds(list(bounds))
+        return main
+
+    return make
+
+
+@pytest.fixture
+def globe(closed_figures):
+    """Return a factory for a framed ``globe=True`` map — the map whose locator should be a globe.
+
+    Args:
+        closed_figures: Teardown fixture, so every map this builds has its figure closed.
+
+    Returns:
+        A callable taking no arguments and returning a framed orthographic
+        :class:`~digitalearth.static.map.Map` drawn on a globe frame.
+    """
+
+    def make():
+        main = Map(crs=projections.orthographic(10.0, 20.0), globe=True)
+        main.set_bounds([-1.0e6, -1.0e6, 1.0e6, 1.0e6])
         return main
 
     return make
@@ -742,6 +763,161 @@ class TestARefusedInsetNamesWhatWasWrong:
         main = framed(4326)
         with pytest.raises(ValueError, match=r"inset\(size="):
             main.inset(size=bad)
+
+
+class TestALocatorOnAGlobe:
+    """A globe's locator is a globe, so its geography is limb-clipped and its frame is drawn (M6).
+
+    Measured on the parent commit, ``Map(crs=orthographic(10, 20), globe=True).inset()``: the locator came
+    back with ``globe=False``, its land layer drawn through cleopatra's flat ``add_features`` and no
+    boundary patch on the axes. The claims here read the **artist** each layer owns, because that is what
+    the two paths differ in: the globe fill answers a ``PolyCollection`` and the flat one answers the axes
+    it drew on.
+    """
+
+    def test_a_globe_maps_locator_is_a_globe_as_well(self, globe):
+        """The frame is inherited, so the locator renders the way the map it sits in does.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            ``inset()`` built the locator with ``crs=``, ``ax=`` and ``fig=`` and nothing else, so a globe
+            map's locator was a flat map carrying a globe CRS.
+        """
+        locator = globe().inset().locator
+        assert locator.globe is True, (
+            f"a globe's locator should be a globe; got globe={locator.globe!r}"
+        )
+
+    def test_the_locators_land_is_filled_through_the_globe_path(self, globe):
+        """The reference geography is re-closed at the limb rather than drawn flat.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            The two paths are told apart by what they hand back:
+            ``DecorationMixin._fill_globe_polygons`` owns a ``PolyCollection`` of limb-clipped rings,
+            while the flat path lets cleopatra draw onto the axes and so owns the ``Axes``.
+        """
+        locator = globe().inset().locator
+        drawn = type(locator.artist("land-1")).__name__
+        assert drawn == "PolyCollection", (
+            f"a globe locator's land should be limb-clipped rings; got {drawn}"
+        )
+
+    def test_the_locator_carries_the_projection_boundary(self, globe):
+        """The limb is drawn on the locator too, which is what makes it read as a globe.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            Nothing else ever renders the locator — ``render``/``save``/``show`` are called on the *map*,
+            and the locator is a separate scene — so the frame has to go on as the locator is built.
+        """
+        locator = globe().inset().locator
+        assert any(isinstance(patch, PathPatch) for patch in locator.ax.patches), (
+            f"the frame should put a boundary on the locator; patches are {locator.ax.patches}"
+        )
+
+    def test_a_caller_can_ask_for_a_flat_locator_on_a_globe(self, globe):
+        """``globe=False`` is the way out, since the default is now to inherit.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            A flat locator in a globe CRS is a legitimate picture — the whole disc on a plain axes — and
+            it is what every caller got before, so it stays reachable by name.
+        """
+        locator = globe().inset(globe=False).locator
+        assert locator.globe is False, (
+            f"globe=False should be honoured; got globe={locator.globe!r}"
+        )
+
+    def test_a_flat_map_can_still_ask_its_locator_for_a_globe(self, framed):
+        """The keyword works the other way round as well, from a flat map.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            The default follows the map, and the keyword overrides it in both directions rather than only
+            switching the inheritance off.
+        """
+        main = framed(
+            projections.orthographic(10.0, 20.0), (-1.0e6, -1.0e6, 1.0e6, 1.0e6)
+        )
+        locator = main.inset(globe=True).locator
+        assert locator.globe is True, (
+            f"globe=True should be honoured on a flat map; got globe={locator.globe!r}"
+        )
+
+    def test_a_flat_maps_locator_is_still_flat(self, framed):
+        """Nothing changes for the maps that are not globes.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            The inheritance is from the map, so a flat map's locator keeps the flat render every existing
+            caller and baseline has.
+        """
+        locator = framed(4326).inset().locator
+        assert locator.globe is False, (
+            f"a flat map's locator should stay flat; got globe={locator.globe!r}"
+        )
+
+    def test_an_extent_makes_the_locator_flat_even_on_a_globe(self, globe):
+        """A caller who frames the locator has asked for the frame that can hold a frame.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            ``apply_projection_frame`` sets the projection's own x/y limits, so a globe locator cannot
+            honour an ``extent`` at all — measured: a globe locator asked for
+            ``[-4e6, -4e6, 4e6, 4e6]`` came back holding ``[-6378058, 6378064]``. Naming an extent is
+            therefore the caller saying otherwise, and the locator is drawn flat on it.
+        """
+        locator = globe().inset(extent=[-4.0e6, -4.0e6, 4.0e6, 4.0e6]).locator
+        held = [round(float(value)) for value in locator.ax.get_ylim()]
+        assert held == [-4000000, 4000000], (
+            f"the extent should be the locator's frame; got {held}"
+        )
+
+    def test_a_globe_locator_framed_on_an_extent_is_refused(self, globe):
+        """Asking for both is a contradiction, and it is named rather than half-honoured.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            The globe frame would throw the extent away silently, which is the shape of defect this row
+            exists to end — so the two arguments together are refused.
+        """
+        main = globe()
+        with pytest.raises(ValueError, match=r"inset\(globe=True, extent="):
+            main.inset(globe=True, extent=[-4.0e6, -4.0e6, 4.0e6, 4.0e6])
+
+    def test_that_refusal_leaves_no_axes_behind(self, globe):
+        """It lands with the other front-of-method refusals, before the inset axes exists.
+
+        Args:
+            globe: Factory for the framed globe map.
+
+        Test scenario:
+            The same contract the size/position/reference refusals keep: nothing half-built is left on
+            the figure.
+        """
+        main = globe()
+        with pytest.raises(ValueError, match=r"inset\(globe=True, extent="):
+            main.inset(globe=True, extent=[-4.0e6, -4.0e6, 4.0e6, 4.0e6])
+        assert main.ax.child_axes == [], (
+            f"a refused inset should leave no axes; got {main.ax.child_axes}"
+        )
 
 
 class TestAnExtentPROJCannotTransformMarksNothing:
