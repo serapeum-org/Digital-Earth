@@ -1145,13 +1145,18 @@ class _ProjectedReference:
             parts: The raw lon/lat arrays a read returned.
 
         Returns:
-            A hashable summary. ``()`` for a layer with no vertices at all.
+            A hashable summary, always of three fields: the per-part vertex counts, the layer's first
+            vertex and its last. A layer with no vertices at all has no ends to read, so both ends are
+            ``None`` — never a shorter tuple, because this is a **cache key** and a key whose shape
+            varies with its own content is a key two unlike geometries can be compared across
+            (SonarCloud python:S8495). ``None`` cannot collide with a real end, which is always a tuple
+            of floats, and the counts still separate one empty layer from another.
         """
         shaped = [np.asarray(part) for part in parts]
         counts = tuple(len(part) for part in shaped)
         drawn = [part for part in shaped if part.size]
         if not drawn:
-            return ()
+            return (counts, None, None)
         return (
             counts,
             tuple(np.asarray(drawn[0], dtype=float)[0].tolist()),

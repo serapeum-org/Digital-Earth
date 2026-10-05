@@ -331,21 +331,60 @@ class TestTheProjectedGeometryIsKept:
 class TestTheFingerprintOfAGeometryWithNothingInIt:
     """The cache key reads the first and last coordinate of the geometry — which may not exist."""
 
-    def test_a_layer_whose_every_part_is_empty_fingerprints_to_nothing(self):
-        """A reference layer with no coordinate at all has an empty fingerprint, not an `IndexError`.
+    def test_a_layer_whose_every_part_is_empty_fingerprints_to_its_counts_and_no_ends(
+        self,
+    ):
+        """A reference layer with no coordinate at all keys on its counts, not on an `IndexError`.
 
         Test scenario:
             The fingerprint exists so that geometry changed under one name is not served from the cache,
             and it reads `drawn[0][0]` and `drawn[-1][-1]`. A layer whose parts are all empty — a
             resolution that clipped everything away, or an upstream read that answered nothing — has no
-            such coordinate, so the reader stops at the count instead of indexing into nothing.
+            such coordinate, so the two ends are `None` rather than indexed out of nothing.
         """
         fingerprint = decoration._ProjectedReference._fingerprint(
             [np.empty((0, 2)), np.empty((0, 2))]
         )
-        assert fingerprint == (), (
-            f"an all-empty layer should fingerprint to nothing; got {fingerprint!r}"
+        assert fingerprint == ((0, 0), None, None), (
+            f"an all-empty layer should key on its counts alone; got {fingerprint!r}"
         )
+
+    def test_the_key_is_three_fields_whether_the_geometry_has_ends_or_not(self):
+        """Both arms of the reader answer a three-field key (SonarCloud python:S8495).
+
+        Test scenario:
+            This is a **cache key**: a key whose arity varies with its own content is a key across which
+            two unlike geometries can be compared, and `()` against a three-tuple is exactly that shape.
+            The lengths are compared to each other rather than each to `3`, so the test says the two arms
+            agree rather than restating the constant twice.
+        """
+        empty = decoration._ProjectedReference._fingerprint([np.empty((0, 2))])
+        drawn = decoration._ProjectedReference._fingerprint([np.array([[1.0, 2.0]])])
+        assert len(empty) == len(drawn), (empty, drawn)
+
+    def test_an_empty_layer_cannot_collide_with_a_drawn_one(self):
+        """No real layer's key can read as an empty layer's, because a real end is never `None`.
+
+        Test scenario:
+            The sentinel has to be something no coordinate can be. A drawn layer's ends are tuples of
+            floats, so `None` is unreachable from any geometry — which is what makes the padded key safe
+            to put in the same dict as the real ones.
+        """
+        empty = decoration._ProjectedReference._fingerprint([np.empty((0, 2))])
+        drawn = decoration._ProjectedReference._fingerprint([np.array([[0.0, 0.0]])])
+        assert empty != drawn, (empty, drawn)
+
+    def test_two_differently_shaped_empty_layers_still_key_apart(self):
+        """Padding the ends must not throw away what the counts already separated.
+
+        Test scenario:
+            A layer of one empty part and a layer of three are different reads under one name — the case
+            the fingerprint exists for — so keying both on `(None, None)` alone would serve one the
+            other's projection. The counts are what keeps them apart, and they are still in the key.
+        """
+        one = decoration._ProjectedReference._fingerprint([np.empty((0, 2))])
+        three = decoration._ProjectedReference._fingerprint([np.empty((0, 2))] * 3)
+        assert one != three, (one, three)
 
     def test_a_layer_with_one_coordinate_still_fingerprints_to_something(self):
         """One point is enough, so the empty answer above is about emptiness and not about shape.
