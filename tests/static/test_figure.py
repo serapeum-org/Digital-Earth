@@ -1,10 +1,12 @@
 """Tests for digitalearth.static.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
 
+import inspect
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from digitalearth.static import Map, grid, shared_colorbar
+from digitalearth.static import Map, facet, figure, grid, shared_colorbar
 
 
 @pytest.fixture
@@ -423,4 +425,39 @@ class TestGridFigureTitle:
         fig, _maps = grid(1, 2, crs=4326, suptitle=blank)
         assert [text.get_text() for text in fig.texts] == [], (
             f"suptitle={blank!r} should draw no figure text; got {fig.texts}"
+        )
+
+
+class TestWhatFacetReadsTheSharedMappableThrough:
+    """The shared colorbar is keyed through the public accessor, not the renderer's private record."""
+
+    def test_the_module_reads_no_private_drawn_record(self):
+        """``figure.py`` reaches a drawn artist through ``Map.artist`` and nowhere else.
+
+        Test scenario:
+            ``Map.artist(layer_id)`` is the accessor this row added so callers stopped reaching into
+            ``_renderer.drawn`` — and ``facet``, in the same package, still read the private record to key
+            its shared colorbar (L9). The source is the only place that invariant can be stated: both
+            spellings return the same object, so no behaviour distinguishes them.
+        """
+        source = inspect.getsource(figure)
+        assert "_renderer.drawn" not in source, (
+            "digitalearth.static.figure should read a drawn artist through Map.artist()"
+        )
+
+    def test_the_shared_bar_is_keyed_to_the_first_panel_that_drew(self, dataset):
+        """The bar represents the artist the first drawn panel hands back.
+
+        Args:
+            dataset: The raster fixture, read once per test session.
+
+        Test scenario:
+            The accessor swap must key the bar to the same mappable the private record held: the colorbar
+            carries the colormap of the first panel's own artist, which is what one shared scale over the
+            small multiples means.
+        """
+        _fig, maps = facet([dataset, dataset], crs=dataset.epsg, colorbar=True)
+        drawn = maps[0].artist(maps[0].layer_ids[-1])
+        assert drawn.colorbar.mappable is drawn, (
+            f"the shared bar should be keyed to the first panel's artist; got {drawn.colorbar}"
         )
