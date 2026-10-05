@@ -19996,12 +19996,7 @@ reference it by path to keep such a figure readable.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2572">2572</a></span>
-<span class="normal"><a href="#__codelineno-0-2573">2573</a></span>
-<span class="normal"><a href="#__codelineno-0-2574">2574</a></span>
-<span class="normal"><a href="#__codelineno-0-2575">2575</a></span>
-<span class="normal"><a href="#__codelineno-0-2576">2576</a></span>
-<span class="normal"><a href="#__codelineno-0-2577">2577</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2577">2577</a></span>
 <span class="normal"><a href="#__codelineno-0-2578">2578</a></span>
 <span class="normal"><a href="#__codelineno-0-2579">2579</a></span>
 <span class="normal"><a href="#__codelineno-0-2580">2580</a></span>
@@ -20039,50 +20034,55 @@ reference it by path to keep such a figure readable.</p>
 <span class="normal"><a href="#__codelineno-0-2612">2612</a></span>
 <span class="normal"><a href="#__codelineno-0-2613">2613</a></span>
 <span class="normal"><a href="#__codelineno-0-2614">2614</a></span>
-<span class="normal"><a href="#__codelineno-0-2615">2615</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2572" name="__codelineno-0-2572"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
-<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a>
-<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
-<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
-<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
-<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
-<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a><span class="sd">    ``with`` calls on the way out.</span>
-<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a>
-<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
-<a id="__codelineno-0-2582" name="__codelineno-0-2582"></a>
-<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
-<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
-<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
-<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a>
-<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">    .. warning::</span>
-<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">        This closes the **entire** ``self.fig``. The panels returned by</span>
-<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
-<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a><span class="sd">        close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
-<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a><span class="sd">        whole workflow or call :meth:`save` and close the figure yourself instead.</span>
-<a id="__codelineno-0-2592" name="__codelineno-0-2592"></a>
-<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
-<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
-<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a>
-<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a>
-<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
-<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
-<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
-<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a>    <span class="c1"># whose data has just been let go (see `on_pick`).</span>
-<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
-<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-2615">2615</a></span>
+<span class="normal"><a href="#__codelineno-0-2616">2616</a></span>
+<span class="normal"><a href="#__codelineno-0-2617">2617</a></span>
+<span class="normal"><a href="#__codelineno-0-2618">2618</a></span>
+<span class="normal"><a href="#__codelineno-0-2619">2619</a></span>
+<span class="normal"><a href="#__codelineno-0-2620">2620</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
+<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a>
+<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
+<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
+<a id="__codelineno-0-2582" name="__codelineno-0-2582"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
+<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
+<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">    ``with`` calls on the way out.</span>
+<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a>
+<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
+<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a>
+<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
+<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
+<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
+<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a>
+<a id="__codelineno-0-2592" name="__codelineno-0-2592"></a><span class="sd">    .. warning::</span>
+<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">        This closes the **entire** ``self.fig``. The panels returned by</span>
+<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
+<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">        close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
+<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a><span class="sd">        whole workflow or call :meth:`save` and close the figure yourself instead.</span>
+<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a>
+<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
+<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
+<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a>
+<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a>
+<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
+<a id="__codelineno-0-2616" name="__codelineno-0-2616"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
+<a id="__codelineno-0-2617" name="__codelineno-0-2617"></a>    <span class="c1"># whose data has just been let go (see `on_pick`).</span>
+<a id="__codelineno-0-2618" name="__codelineno-0-2618"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
+<a id="__codelineno-0-2619" name="__codelineno-0-2619"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-2620" name="__codelineno-0-2620"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
