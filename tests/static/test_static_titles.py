@@ -17,6 +17,8 @@ pins: the title is recorded on the figure's panel the way the 3-D tier records i
 falls back to the source's own units when the library resolves none.
 """
 
+from dataclasses import replace
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -24,6 +26,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.sources import DimensionInfo, Source
+from digitalearth.base.spec import FigureSpec
 from digitalearth.static import Map, Scene
 from digitalearth.static.figure import grid
 
@@ -443,3 +446,81 @@ class TestAPanelDoesNotWriteTheSharedFiguresHeading:
             assert lone.fig.get_suptitle() == "INCOMING", (
                 f"a map owning its figure should take the heading; got {lone.fig.get_suptitle()!r}"
             )
+
+
+class TestABlankTitleIsNotPainted:
+    """`None`, `""`, `"   "` and `"\t"` are the one request "no title" in the **drawing** too (R2-L5).
+
+    `set_title`'s own `Args:` already said the four are one request, and `_recorded_title` made that true
+    of the record alone: measured on the branch before the fix, `set_title("   ")` left
+    `ax.get_title() == '   '` while the record read `None`, and a spec carrying `title='   '` was drawn as
+    `'   '` and then described as `None` -- so the drawing and the description disagreed, and the
+    description was not what a redraw would produce. `grid(suptitle=)` already normalised its draw (R1-L4);
+    these two did not.
+    """
+
+    @pytest.mark.parametrize("blank", [None, "", "   ", "\t"])
+    def test_a_blank_title_draws_nothing_on_the_axes(self, blank):
+        """Each of the four spellings leaves the axes title empty.
+
+        Args:
+            blank: A way of asking for no title.
+
+        Test scenario:
+            Read off the axes, which is the half a reader sees. `None` and `""` already drew nothing;
+            `"   "` and `"\t"` painted their own characters.
+        """
+        with Scene() as scene:
+            scene.set_title(blank)
+            assert scene.ax.get_title() == "", (
+                f"set_title({blank!r}) should draw no title; got {scene.ax.get_title()!r}"
+            )
+
+    @pytest.mark.parametrize("blank", ["   ", "\t"])
+    def test_a_blank_heading_in_a_spec_draws_no_heading(self, blank):
+        """`draw_figure` normalises the heading it restores, as `grid` normalises the one it is passed.
+
+        Args:
+            blank: A way of asking for no heading, as a `FigureSpec` can carry it.
+
+        Test scenario:
+            `FigureSpec` refuses `""` and accepts `"   "`, so whitespace is the spelling that reaches
+            this tier; the restore guarded on `if figure.title:`, which whitespace passes.
+        """
+        donor = Map(crs=4326)
+        spec = replace(donor.figure_spec, title=blank)
+        donor.close()
+        with Map(crs=4326) as m:
+            m.draw_figure(spec)
+            assert m.fig.get_suptitle() == "", (
+                f"a {blank!r} heading should draw none; got {m.fig.get_suptitle()!r}"
+            )
+
+    @pytest.mark.parametrize("blank", ["   ", "\t"])
+    def test_a_blank_heading_survives_a_round_trip_through_a_dict(self, blank):
+        """The figure a description rebuilds carries the same heading as the figure it came from.
+
+        Args:
+            blank: A way of asking for no heading.
+
+        Test scenario:
+            This is the instability L5 names. The first map draws the blank-headed spec; the second is
+            rebuilt from the first's `to_dict()`/`from_dict()`. Before the fix the first drew `'   '` and
+            the second drew `''`, because the record normalised and the draw did not -- so writing a
+            figure down and reading it back changed the picture. The two headings are read off two
+            different figures reached by different routes, so this is not a value compared with itself.
+        """
+        donor = Map(crs=4326)
+        spec = replace(donor.figure_spec, title=blank)
+        donor.close()
+        with Map(crs=4326) as first:
+            first.draw_figure(spec)
+            stored = FigureSpec.from_dict(first.figure_spec.to_dict())
+            second = Map.from_figure(stored)
+            try:
+                assert second.fig.get_suptitle() == first.fig.get_suptitle(), (
+                    f"the rebuilt figure's heading {second.fig.get_suptitle()!r} should match the "
+                    f"original's {first.fig.get_suptitle()!r}"
+                )
+            finally:
+                second.close()

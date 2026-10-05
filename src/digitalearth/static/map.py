@@ -151,7 +151,11 @@ class Map(
         `set_title` paints the axes and that is panel-local.
 
         **A title is written only when the incoming figure carries one**, so drawing an untitled figure does
-        not blank a heading the map already had. The layers are reconciled, not merely added — that part
+        not blank a heading the map already had. "Carries one" is decided by
+        :meth:`~digitalearth.static.scene.Scene._recorded_title`, the same normaliser `set_title` and
+        `grid(suptitle=)` use: a `FigureSpec` refuses `""` but accepts `"   "`, and a whitespace heading is
+        the request "no heading" rather than a heading made of spaces. It used to be painted and then
+        described as none, so a figure written down and read back drew a different picture (R2-L5). The layers are reconciled, not merely added — that part
         really does bring the map from whatever it showed before.
 
         One asymmetry is worth knowing, because the two titles live in different places. The figure's
@@ -294,15 +298,19 @@ class Map(
         # `'INCOMING'` into `maps[1]` left `fig.get_suptitle()` as `'INCOMING'`, and `maps[0]` — never
         # drawn into — then described `'INCOMING'` as its own (R2-M1). The panel's title above is
         # unguarded because `set_title` paints the **axes**, which is panel-local.
-        if figure.title:
+        # Through `_recorded_title`, like `set_title` and `grid(suptitle=)`: a `FigureSpec` refuses `""`
+        # but accepts `"   "`, so whitespace is the blank spelling that reaches this tier, and the
+        # `if figure.title:` guard let it through to be painted and then described as no heading (R2-L5).
+        heading = self._recorded_title(figure.title)
+        if heading is not None:
             if self._owns_fig:
-                self.fig.suptitle(figure.title)
+                self.fig.suptitle(heading)
             else:
                 warnings.warn(
-                    f"draw_figure() did not restore the figure heading {figure.title!r}: this map was "
+                    f"draw_figure() did not restore the figure heading {heading!r}: this map was "
                     f"built on an axes somebody else laid out, and the heading belongs to the figure "
                     f"that axes is in, which its siblings share. Call "
-                    f"`map.fig.suptitle({figure.title!r})` yourself if the whole figure should carry it.",
+                    f"`map.fig.suptitle({heading!r})` yourself if the whole figure should carry it.",
                     UserWarning,
                     stacklevel=2,
                 )

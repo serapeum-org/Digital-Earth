@@ -2374,6 +2374,12 @@ class Scene(WatermarkMixin):
         refusing a call that has always worked, and a title with nothing readable in it is recorded as no
         title.
 
+        It also normalises the **drawing**, because the two have to agree: :meth:`set_title` hands the axes
+        what this returns rather than what the caller passed, and
+        :meth:`~digitalearth.static.map.Map.draw_figure` passes a restored heading through it too. Without
+        that, `set_title("   ")` painted the spaces matplotlib measured above while recording `None`, and a
+        figure written down and read back drew a different picture (R2-L5).
+
         Args:
             title: What the caller passed to :meth:`set_title`.
 
@@ -2445,9 +2451,11 @@ class Scene(WatermarkMixin):
         there (M4).
 
         Args:
-            title: The text to place above the axes. Recorded as the text matplotlib draws for it
-                (:meth:`_recorded_title`), so ``None``, ``""`` and ``"   "`` are the one request "no title"
-                and are recorded as none.
+            title: The text to place above the axes. Normalised by :meth:`_recorded_title`, so ``None``,
+                ``""`` and any whitespace-only string (``"   "``, ``"	"``) are the one request "no
+                title": none is recorded **and none is drawn**. Anything else is drawn as the text
+                matplotlib renders for it, and recorded as that same text. The drawing was not normalised
+                before, so `set_title("   ")` painted the spaces and described no title (R2-L5).
             **kwargs: Forwarded to ``Axes.set_title`` (``fontsize``, ``loc``, ``pad``, …). Styling for the
                 drawing only: ``loc="left"`` moves where the text is painted and the figure still records
                 the heading, because where a tier paints it is not what travels.
@@ -2520,10 +2528,14 @@ class Scene(WatermarkMixin):
 
                 ```
         """
-        self.ax.set_title(title, **kwargs)
-        # After the draw, not before it: matplotlib owns what a title may be, and a record written first
-        # would outlive a `set_title` the axes refused.
-        self._title = self._recorded_title(title)
+        # Normalised before the draw as well as after it, so the drawing and the record agree: the four
+        # spellings of "no title" are one request, and `set_title("   ")` painted the spaces while
+        # recording `None` (R2-L5). `grid(suptitle=)` already normalised its own draw (R1-L4); this is
+        # the same rule on the axes. The record is still written *after* the draw, so a `set_title` the
+        # axes refuses leaves no record behind.
+        recorded = self._recorded_title(title)
+        self.ax.set_title("" if recorded is None else recorded, **kwargs)
+        self._title = recorded
         return self
 
     def on_pick(self, callback: Callable[[Pick], Any]) -> Self:
