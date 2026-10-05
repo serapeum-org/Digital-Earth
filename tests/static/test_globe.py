@@ -449,7 +449,7 @@ class TestOffLimbDraw:
         )
 
     def test_a_static_off_limb_field_draws_nothing(self, regional):
-        """field on a hiding projection returns None rather than raising — no animation involved.
+        """field on a hiding projection draws nothing rather than raising — no animation involved.
 
         Test scenario:
             The reprojection to the display CRS raises out of GDAL when every sample point falls behind
@@ -626,12 +626,13 @@ class TestOffLimbEveryLayerKind:
         )
 
     def test_stock_img_handles_an_off_limb_backdrop(self, hidden, regional):
-        """stock_img consumes field's return, so it had to learn about the None too.
+        """stock_img answers None for a backdrop the display CRS could not place.
 
         Test scenario:
-            It set a z-order on whatever field handed back. Once a hidden layer returns None that became
-            "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard turning one crash
-            into another, in the one place inside src/ that consumes these returns.
+            It used to set a z-order on whatever field handed back, so once a hidden layer answered None
+            that became "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard
+            turning one crash into another. field hands back the map since ST-20, so stock_img reads the
+            artist of the layer id that appeared instead, and answers None when no id did.
         """
         assert hidden.stock_img(regional) is None, (
             "an off-limb backdrop should be absent, not an AttributeError"
@@ -640,12 +641,13 @@ class TestOffLimbEveryLayerKind:
     def test_spaghetti_keeps_one_entry_per_drawn_member(
         self, hidden, regional, tmp_path
     ):
-        """spaghetti returns drawn artists, so hidden members drop out rather than becoming None.
+        """spaghetti draws only the members it can see, so a hidden one leaves no artist behind.
 
         Test scenario:
-            It returned one entry per member regardless, so an off-limb collection produced [None, None]
-            — breaking both its own Returns contract and the len(artists) == len(m.layers) invariant its
-            callers rely on to pair artists with registered layers.
+            It drew one entry per member regardless, so an off-limb collection produced [None, None] in
+            the list it returned then — breaking the one-artist-per-registered-layer pairing its callers
+            rely on. spaghetti hands back the map since ST-20, so that pairing is read here as the
+            artists on the axes against the layers the scene registered.
         """
         from pyramids.dataset.collection import DatasetCollection
 
@@ -712,11 +714,12 @@ class TestOffLimbEveryLayerKind:
         "method", ["field", "contours", "pcolormesh", "grid_points", "grid_cells"]
     )
     def test_the_same_layers_still_draw_when_visible(self, regional, method):
-        """The positive control: every layer asserted to return None above must draw when it can see.
+        """The positive control: every layer asserted to draw nothing above must draw when it can see.
 
         Test scenario:
-            Without this, a regression that made these methods return None unconditionally would satisfy
-            the whole off-limb suite while silently drawing nothing anywhere.
+            The builders hand back the map whether or not they drew, so without this a regression that
+            made them draw nothing unconditionally would satisfy the whole off-limb suite while silently
+            drawing nothing anywhere.
         """
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
@@ -773,8 +776,8 @@ class TestOffLimbEveryLayerKind:
 
         Test scenario:
             The off-limb arm fires when the reprojection loses the points. If there were never three to
-            begin with, no projection can fix that — reporting it as a hidden layer both returns the wrong
-            thing and logs a misleading reason for a map that is looking straight at the data.
+            begin with, no projection can fix that — reporting it as a hidden layer would both swallow a
+            caller error and log a misleading reason for a map that is looking straight at the data.
         """
         import geopandas as gpd
         from pyramids.feature import FeatureCollection
@@ -791,7 +794,7 @@ class TestOffLimbEveryLayerKind:
 
     @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
     def test_composites_still_draw_when_visible(self, regional_rgb, method):
-        """Positive control for the composites asserted to return None above."""
+        """Positive control for the composites asserted to draw nothing above."""
         visible = Map(
             crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
         )
@@ -832,7 +835,7 @@ class TestOffLimbEveryLayerKind:
         )
 
     def test_stock_img_and_spaghetti_still_draw_when_visible(self, regional, tmp_path):
-        """Positive control for the two remaining layers asserted to return None above."""
+        """Positive control for the two remaining layers asserted to draw nothing above."""
         from pyramids.dataset.collection import DatasetCollection
 
         visible = Map(
@@ -1000,7 +1003,7 @@ class TestOffLimbVectorLayers:
 
     @pytest.mark.parametrize("method", VECTOR_BUILDERS)
     def test_every_vector_builder_draws_nothing(self, method, points, polygons, lines):
-        """A hidden vector layer returns None and registers nothing, like every hidden raster layer."""
+        """A hidden vector layer draws nothing and registers nothing, like every hidden raster layer."""
         m = _far_side()
         _draw(m, method, points, polygons, lines)
         assert m.layer_ids == [], (
@@ -1053,7 +1056,7 @@ class TestOffLimbVectorLayers:
     def test_the_same_builders_still_draw_when_visible(
         self, method, points, polygons, lines
     ):
-        """The positive control: a guard that returned None unconditionally would pass everything above."""
+        """The positive control: a guard that drew nothing unconditionally would pass everything above."""
         visible = Map(
             crs=projections.orthographic(lon=4.5, lat=53.3), globe=True, figsize=(4, 4)
         )
