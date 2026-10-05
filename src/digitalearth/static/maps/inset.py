@@ -147,11 +147,16 @@ class _ExtentBox:
     crs: Any
 
     @classmethod
-    def of(cls, scene: Any) -> "_ExtentBox":
+    def of(cls, scene: Any, caller: str = "mark_extent") -> "_ExtentBox":
         """Read the extent a map is holding off its axes.
 
         Args:
             scene: The map whose extent is wanted — anything carrying a matplotlib ``ax`` and a ``crs``.
+            caller: The method to name in the not-framed refusal, since both
+                :meth:`InsetMixin.mark_extent` and :meth:`InsetMixin.inset` read their extent here and a
+                caller can only act on the name they typed (round 1, L2). The `TypeError` below keeps
+                ``mark_extent``'s own wording because only that call can reach it: :meth:`InsetMixin.inset`
+                reads the extent off ``self``, which is a map by construction.
 
         Returns:
             The box, in that map's display CRS.
@@ -179,7 +184,7 @@ class _ExtentBox:
         # unit square, so the coordinate half can only ever fire on one that is also in the default state.
         if cls._untouched(axes) and (west, south, east, north) == (0.0, 0.0, 1.0, 1.0):
             raise ValueError(
-                "mark_extent(): the map has not been framed — its axes still hold matplotlib's default "
+                f"{caller}(): the map has not been framed — its axes still hold matplotlib's default "
                 "unit square, so there is no extent to mark. Draw a layer or call set_bounds() first"
             )
         return cls(west, south, east, north, getattr(scene, "crs", None))
@@ -595,7 +600,9 @@ class InsetMixin(_MixinBase):
                 neither a corner nor four numbers, a `reference` naming something that is not a
                 Natural-Earth layer, or a map that has not been framed — there is then no extent to mark,
                 and the refusal happens **before** the inset axes is created, so nothing half-built is
-                left on the figure.
+                left on the figure. Each of the four names `inset()`, including the last: the extent is
+                read by the same value object :meth:`mark_extent` reads it with, and it is told which
+                call to name.
 
         Examples:
             - It chains, because it hands back the map: the locator is a side effect read from
@@ -686,7 +693,7 @@ class InsetMixin(_MixinBase):
                     f"inset(reference={tuple(reference)!r}) names {layer!r}, which is not a reference "
                     f"layer; use any of {list(_REFERENCE_LAYERS)}"
                 )
-        box = _ExtentBox.of(self)
+        box = _ExtentBox.of(self, caller="inset")
         locator = type(self)(
             crs=self.crs if crs is None else crs,
             ax=self.ax.inset_axes(frame.as_bounds()),

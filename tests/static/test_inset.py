@@ -632,7 +632,24 @@ class TestWhatTheLocatorIsBeforeAndAfter:
 
 
 class TestARefusedInsetNamesWhatWasWrong:
-    """The two refusals whose *message* is the only thing a caller can act on."""
+    """The refusals whose *message* is the only thing a caller can act on."""
+
+    def test_the_not_framed_refusal_names_the_call_that_was_made(self, closed_figures):
+        """``inset()`` on an unframed map says ``inset()``, not ``mark_extent()``.
+
+        Args:
+            closed_figures: Teardown fixture closing the figures.
+
+        Test scenario:
+            Both calls read the extent through the same value object, which used to hardcode the other
+            call's name — so a caller who never typed ``mark_extent`` was told to look at it (round 1,
+            L2). The message is the only thing they can act on, so it names what they wrote.
+        """
+        main = Map(crs=4326)
+        with pytest.raises(
+            ValueError, match=r"^inset\(\): the map has not been framed"
+        ):
+            main.inset()
 
     @pytest.mark.parametrize("bad", [(0.1, 0.2), 42, "0.1 0.2 0.3 0.4"])
     def test_a_position_that_is_neither_a_corner_nor_four_fractions_is_refused(
