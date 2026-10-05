@@ -2476,7 +2476,12 @@ class Scene(WatermarkMixin):
             none at all — the colorbar's axes is on this figure too and is not the map), one on no layer,
             and one on a figure whose callbacks have all been taken off. The callbacks are iterated over a
             **copy**, so a callback that calls :meth:`off_pick` — a "pick once" handler — does not change
-            the list being walked underneath it.
+            the list being walked underneath it. The copy is load-bearing rather than defensive, and
+            measured: walking the live list, a handler that takes itself off makes the loop skip the
+            handler that shifts into the index just consumed, silently (its neighbour is simply never
+            called). It is spelled ``list.copy`` because ``list(...)`` over something already iterable
+            reads as a redundant cast — to a reader and to a linter (SonarCloud python:S7504) — where
+            this is a snapshot taken on purpose.
         """
         if getattr(event, "inaxes", None) is not self.ax:
             return
@@ -2484,7 +2489,7 @@ class Scene(WatermarkMixin):
         if not hits:
             return
         pick = Pick(hits[0], float(event.xdata), float(event.ydata), hits, event)
-        for callback in list(self._pick_handlers):
+        for callback in self._pick_handlers.copy():
             callback(pick)
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:

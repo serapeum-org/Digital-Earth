@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
+from matplotlib.backend_bases import MouseEvent
 
 from digitalearth.static import Map, Scene
 
@@ -620,3 +621,52 @@ class TestHowOffPickMatchesACallback:
             canvas.on_pick(_EqualToEveryHandler())
             with pytest.raises(ValueError, match="is not registered on this figure"):
                 canvas.off_pick(print)
+
+
+def _click(scene, x, y):
+    """Drive one click at data coordinates ``(x, y)`` through a scene's canvas.
+
+    The canvas is drawn first, because a hit test runs against what is on screen.
+
+    Args:
+        scene: The scene to click on.
+        x: Data x coordinate.
+        y: Data y coordinate.
+    """
+    scene.fig.canvas.draw()
+    px, py = scene.ax.transData.transform((x, y))
+    event = MouseEvent("button_press_event", scene.fig.canvas, px, py, button=1)
+    scene.fig.canvas.callbacks.process("button_press_event", event)
+
+
+class TestDeliveringOnePickToSeveralCallbacks:
+    """One delivery, and what a callback that unsubscribes mid-delivery must not do to its neighbour."""
+
+    def test_a_callback_that_unsubscribes_does_not_skip_the_next_one(self):
+        """A handler taking itself off mid-delivery leaves the next handler still called.
+
+        Test scenario:
+            `_deliver_pick` walks a **snapshot** of the handler list, and this is the invariant that
+            depends on it: a "pick once" handler calls `off_pick(itself)` from inside the call, which
+            shortens the live list under the loop. Walking the live list would skip the handler that
+            shifted into the index just consumed — silently, with no exception and no sign that a
+            registered callback never ran.
+        """
+        seen = []
+        with Map(globe=False) as canvas:
+
+            def first(pick):
+                """Record the delivery and stop listening.
+
+                Args:
+                    pick: The pick delivered.
+                """
+                seen.append("first")
+                canvas.off_pick(first)
+
+            canvas.field(np.array([[0.0, 1.0], [2.0, 3.0]]), name="grid")
+            canvas.on_pick(first).on_pick(lambda pick: seen.append("second"))
+            _click(canvas, 0.5, 0.5)
+            assert seen == ["first", "second"], (
+                f"the second callback should still have been called; got {seen}"
+            )
