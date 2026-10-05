@@ -422,12 +422,14 @@ class InsetMixin(_MixinBase):
     (`land`, `coastlines`, `set_global`, `set_bounds`, `add_layer`) through `self`, so they only run
     inside a composed `Map`.
 
-    :meth:`inset` returns `self` like every other builder on the tier, and the locator it builds is read
-    back from :attr:`locator`. The alternative — handing the locator back directly — reads well for one call
-    but breaks the chain every other method keeps, and `tests/test_mixin_contract.py` holds the tier to it.
-    :meth:`mark_extent` is the exception, and for the reason
-    :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is: the one patch it draws is
-    what a caller restyles afterwards, so handing it back is the point of the call.
+    **Both methods return `self`**, like every other builder on the tier, and what each one built is read
+    back off an accessor rather than off the call: the locator from :attr:`locator`, the extent box from
+    :meth:`~digitalearth.static.scene.Scene.artist` by its layer id. The alternative — handing the thing
+    back directly — reads well for one call but breaks the chain every other method keeps, and
+    `tests/test_mixin_contract.py` holds the tier to it. Neither is a carve-out, which is what keeps the
+    tier's censuses true:
+    :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is still the only one
+    (round 2, L7).
     """
 
     #: The locator :meth:`inset` built, or `None` before the first call. Set on the *main* map, so
@@ -521,7 +523,7 @@ class InsetMixin(_MixinBase):
 
     def mark_extent(
         self, other: Any, *, name: Optional[str] = None, **style: Any
-    ) -> Optional[Polygon]:
+    ) -> Self:
         """Draw the extent ``other`` is looking at as an outline on **this** map.
 
         The outline is placed in **this** map's display CRS, by reprojecting the extent's four *edges*
@@ -541,24 +543,33 @@ class InsetMixin(_MixinBase):
                 ``linewidth``, ``linestyle``, ``facecolor``, ``zorder``, …).
 
         Returns:
-            The :class:`~matplotlib.patches.Polygon` drawn, or `None` when this map's CRS has no finite
-            image of the extent at all — the skip is logged and the figure is left without a box rather
-            than given a wrong one.
-
-            **An artist rather than `self`**, unlike the data builders and unlike :meth:`inset`: the box
-            is one patch a caller restyles afterwards, so handing it back is the point of the call. It is
-            registered as a layer all the same — `custom-1` by default — so
-            :meth:`~digitalearth.static.scene.Scene.set_visible`,
+            This map, so the call chains like every other builder on the tier — including
+            :meth:`inset`, the sibling on this mixin. The box itself is read back by id through
+            :meth:`~digitalearth.static.scene.Scene.artist`: `custom-1` by default, or whatever
+            ``name=`` asked for. :meth:`~digitalearth.static.scene.Scene.set_visible`,
             :meth:`~digitalearth.static.scene.Scene.get_layer` and
-            :meth:`~digitalearth.static.scene.Scene.remove_layer` reach it, and
-            :meth:`~digitalearth.static.scene.Scene.artist` hands back this same patch by that id.
+            :meth:`~digitalearth.static.scene.Scene.remove_layer` reach it by the same id.
+
+            It returned the ``Polygon`` until round 2's L7, which made this the tier's **second**
+            artist-returning carve-out while the censuses — ``raster.py``'s canonical chaining note and
+            ``tests/static/test_decoration_chaining.py`` — both name
+            :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` as the one. The
+            rationale it carried ("one patch a caller restyles afterwards") is the reasoning this package
+            rejected for ``text``/``annotate``, and it bought nothing, since the patch was already
+            registered and already reachable by id.
+
+            A box this map's CRS has no finite image of **registers no layer**, so there is no id to read
+            and :meth:`~digitalearth.static.scene.Scene.artist` refuses the name — the signal the old
+            ``None`` return carried, in the tier's own words. The skip is logged at ``WARNING`` as well,
+            because a locator with no box on it looks exactly like a call that never happened.
 
         Raises:
             TypeError: when ``other`` is not a map (nothing to read an extent off).
             ValueError: when ``other`` has not been framed and still holds matplotlib's unit square.
 
         Examples:
-            - A Web Mercator extent marked on a lon/lat locator lands in degrees:
+            - A Web Mercator extent marked on a lon/lat locator lands in degrees, and the box is read
+              back by its id:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -566,7 +577,9 @@ class InsetMixin(_MixinBase):
                 >>> main = Map(crs=3857)
                 >>> _ = main.set_bounds([0.0, 0.0, 1113194.9, 1118889.97])
                 >>> locator = Map(crs=4326)
-                >>> ring = locator.mark_extent(main).get_xy()
+                >>> locator.mark_extent(main) is locator
+                True
+                >>> ring = locator.artist("custom-1").get_xy()
                 >>> [round(float(ring[:, 0].max()), 3), round(float(ring[:, 1].max()), 3)]
                 [10.0, 10.0]
                 >>> locator.layer_ids
@@ -575,7 +588,8 @@ class InsetMixin(_MixinBase):
                 >>> locator.close()
 
                 ```
-            - An extent with no image in the locator's CRS draws nothing rather than a part of itself:
+            - An extent with no image in the locator's CRS draws nothing rather than a part of itself.
+              The call still chains, and the absent box is the id that is not there:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -583,14 +597,19 @@ class InsetMixin(_MixinBase):
                 >>> main = Map(crs=projections.orthographic(0, 0))
                 >>> _ = main.set_bounds([2.0e7, 2.0e7, 3.0e7, 3.0e7])   # far off the limb
                 >>> locator = Map(crs=4326)
-                >>> print(locator.mark_extent(main))
-                None
+                >>> locator.mark_extent(main).layer_ids
+                []
+                >>> locator.artist("custom-1")
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no layer 'custom-1' on this figure; its layers are []"
                 >>> main.close()
                 >>> locator.close()
 
                 ```
         """
-        return self._mark(_ExtentBox.of(other), name=name, **style)
+        self._mark(_ExtentBox.of(other), name=name, **style)
+        return self
 
     def inset(
         self,

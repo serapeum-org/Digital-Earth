@@ -10,7 +10,7 @@ figure is measured rather than assumed.
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from matplotlib.patches import PathPatch
+from matplotlib.patches import PathPatch, Polygon
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.static import Map, projections
@@ -24,6 +24,24 @@ POLAR_BOX = (-2.0e6, -2.0e6, 2.0e6, 2.0e6)
 
 #: The lon/lat rectangle the locator's extent box is checked against in the same-CRS cases.
 PLAIN_BOX = (2.0, 3.0, 8.0, 9.0)
+
+
+def _marked_ring(locator, main) -> np.ndarray:
+    """Mark ``main``'s extent on ``locator`` and return the ring of the box that was drawn.
+
+    ``mark_extent`` hands back the map (round 2, L7), so the patch is read off
+    :meth:`~digitalearth.static.scene.Scene.artist` by the id the call was given — which also means a
+    box that was skipped raises here rather than reading as an empty ring.
+
+    Args:
+        locator: The map the box is drawn on.
+        main: The map whose extent is marked.
+
+    Returns:
+        The drawn ``Polygon``'s vertices, as an ``(n, 2)`` float array.
+    """
+    locator.mark_extent(main, name="box")
+    return np.asarray(locator.artist("box").get_xy(), dtype=float)
 
 
 @pytest.fixture
@@ -77,6 +95,114 @@ def globe(closed_figures):
     return make
 
 
+class TestMarkExtentChainsLikeEveryOtherBuilder:
+    """``mark_extent`` hands back the map, not its patch (round 2, L7).
+
+    It was the tier's **second** artist-returning carve-out, and the censuses say there is one: both
+    ``raster.py``'s canonical chaining note and this suite's sibling
+    ``tests/static/test_decoration_chaining.py`` name ``stock_img`` as "the one deliberate exception".
+    The rationale the return carried — *"the box is one patch a caller restyles afterwards"* — is also
+    verbatim the reasoning the PR **rejected** for ``text``/``annotate``, and it bought nothing: the
+    patch was already registered as a layer and already reachable by id. So the carve-out is gone rather
+    than written into two more places, and the censuses are true as they stand.
+    """
+
+    def test_it_hands_back_the_map_it_drew_on(self, framed):
+        """The value is the locator itself, like every other builder on the tier.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            ``Map.inset`` already answers this way and ``tests/test_mixin_contract.py`` holds the tier
+            to it; the sibling method on the same mixin answered with a ``Polygon``.
+        """
+        locator = Map(crs=4326)
+        assert locator.mark_extent(framed(4326)) is locator, (
+            "mark_extent should hand back the map it drew on"
+        )
+
+    def test_it_does_not_break_a_chain_mid_expression(self, framed):
+        """Which is what the return convention is *for*.
+
+        Test scenario:
+            ``loc.coastlines().mark_extent(detail).set_title("locator")`` raised
+            ``AttributeError: 'Polygon' object has no attribute 'set_title'`` — the same shape of break
+            round 1's L6 fixed across the decoration methods.
+        """
+        locator = Map(crs=4326)
+        shown = locator.mark_extent(framed(4326)).set_title("locator").ax.get_title()
+        assert shown == "locator", (
+            f"the chain should carry on through mark_extent; got {shown!r}"
+        )
+
+    def test_the_patch_is_reachable_by_the_name_that_was_asked_for(self, framed):
+        """The artist is not lost by chaining — it is read back the public way (ST-20's own route).
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            This is the half that makes the carve-out unnecessary: ``_mark`` registers the patch through
+            ``add_layer`` before anything is returned, so ``Scene.artist`` has always had it.
+        """
+        locator = Map(crs=4326)
+        locator.mark_extent(framed(4326), name="where")
+        assert isinstance(locator.artist("where"), Polygon), (
+            f"artist('where') should be the box; got {type(locator.artist('where'))}"
+        )
+
+    def test_the_generated_name_reaches_it_too(self, framed):
+        """A caller who named nothing still gets at the patch, by the id the call generated.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            ``name=None`` generates ``custom-1``, which is what the method's docstring promises and the
+            only route left once the patch is not the return value.
+        """
+        locator = Map(crs=4326)
+        locator.mark_extent(framed(4326))
+        assert isinstance(locator.artist("custom-1"), Polygon), (
+            f"the generated id should reach the box; got {locator.layer_ids}"
+        )
+
+    def test_a_box_that_could_not_be_placed_has_no_artist_to_hand_back(self, framed):
+        """And that is the signal the old ``None`` return carried, in the tier's own words.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            An extent with no finite image in the locator's CRS draws nothing, so no layer is registered
+            and ``Scene.artist`` refuses the id — a refusal a test cannot pass vacuously, unlike reading
+            a ``None`` back off the call.
+        """
+        main = framed(projections.orthographic(0, 0), (2.0e7, 2.0e7, 3.0e7, 3.0e7))
+        locator = Map(crs=4326)
+        locator.mark_extent(main, name="where")
+        with pytest.raises(KeyError, match="no layer 'where'"):
+            locator.artist("where")
+
+    def test_chaining_on_from_a_box_that_was_not_drawn_still_works(self, framed):
+        """The skip is not a failure, so the expression it sits in carries on.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            The old ``None`` return turned a skipped box into an ``AttributeError`` one call later,
+            which is a worse report than the warning the skip already logs.
+        """
+        main = framed(projections.orthographic(0, 0), (2.0e7, 2.0e7, 3.0e7, 3.0e7))
+        locator = Map(crs=4326)
+        shown = locator.mark_extent(main).set_title("no box").ax.get_title()
+        assert shown == "no box", (
+            f"a skipped box must not break the chain; got {shown!r}"
+        )
+
+
 class TestMarkExtent:
     """Map.mark_extent — one map's extent, drawn on another."""
 
@@ -110,7 +236,7 @@ class TestMarkExtent:
             it reads whether the axes was ever framed at all (round 1, M5).
         """
         main = framed(4326, (0.0, 0.0, 1.0, 1.0))
-        ring = np.asarray(Map(crs=4326).mark_extent(main).get_xy(), dtype=float)
+        ring = _marked_ring(Map(crs=4326), main)
         envelope = (
             float(ring[:, 0].min()),
             float(ring[:, 1].min()),
@@ -137,9 +263,10 @@ class TestMarkExtent:
         """
         main = Map(crs=4326)
         main.ax.imshow(np.arange(4.0).reshape(2, 2), extent=(0.0, 1.0, 0.0, 1.0))
-        marked = Map(crs=4326).mark_extent(main)
-        assert marked is not None, (
-            "a map framed by its own data should have an extent to mark"
+        locator = Map(crs=4326)
+        locator.mark_extent(main, name="box")
+        assert locator.layer_ids == ["box"], (
+            f"a map framed by its own data should have an extent to mark; got {locator.layer_ids}"
         )
 
     def test_something_that_is_not_a_scene_is_refused(self, closed_figures):
@@ -170,7 +297,7 @@ class TestMarkExtent:
             [1113194.9], [1118889.97], from_crs=3857, to_crs=4326
         )
         main = framed(3857, (0.0, 0.0, 1113194.9, 1118889.97))
-        ring = np.asarray(Map(crs=4326).mark_extent(main).get_xy(), dtype=float)
+        ring = _marked_ring(Map(crs=4326), main)
         corner = (round(float(ring[:, 0].max()), 4), round(float(ring[:, 1].max()), 4))
         assert corner == (
             round(float(expected_x[0]), 4),
@@ -195,7 +322,7 @@ class TestMarkExtent:
         )
         corner_span = max(corner_lats) - min(corner_lats)
         main = framed(3031, POLAR_BOX)
-        ring = np.asarray(Map(crs=4326).mark_extent(main).get_xy(), dtype=float)
+        ring = _marked_ring(Map(crs=4326), main)
         drawn_span = float(ring[:, 1].max() - ring[:, 1].min())
         assert drawn_span > corner_span + 1.0, (
             f"the edge-sampled box should be taller than the {corner_span}-degree corner box; "
@@ -213,7 +340,7 @@ class TestMarkExtent:
             rectangle. Its envelope must be the four numbers the main map was framed on.
         """
         main = framed(4326)
-        ring = np.asarray(Map(crs=4326).mark_extent(main).get_xy(), dtype=float)
+        ring = _marked_ring(Map(crs=4326), main)
         envelope = (
             float(ring[:, 0].min()),
             float(ring[:, 1].min()),
@@ -238,9 +365,10 @@ class TestMarkExtent:
         from digitalearth.static import projections
 
         main = framed(projections.orthographic(0, 0), (2.0e7, 2.0e7, 3.0e7, 3.0e7))
-        marked = Map(crs=4326).mark_extent(main)
-        assert marked is None, (
-            f"an unplaceable extent should mark nothing; got {marked}"
+        locator = Map(crs=4326)
+        locator.mark_extent(main, name="box")
+        assert locator.layer_ids == [], (
+            f"an unplaceable extent should mark nothing; got {locator.layer_ids}"
         )
 
     def test_the_skip_is_logged(self, framed, caplog):
@@ -291,7 +419,9 @@ class TestMarkExtent:
         """
         from matplotlib.colors import to_hex
 
-        patch = Map(crs=4326).mark_extent(framed(4326), edgecolor="#00ff00")
+        locator = Map(crs=4326)
+        locator.mark_extent(framed(4326), name="box", edgecolor="#00ff00")
+        patch = locator.artist("box")
         assert to_hex(patch.get_edgecolor()) == "#00ff00", (
             f"the caller's edgecolor should be used; got {patch.get_edgecolor()}"
         )
@@ -306,7 +436,9 @@ class TestMarkExtent:
             A filled box over a locator's land and coastlines would cover exactly the part of the world
             the reader is being pointed at.
         """
-        patch = Map(crs=4326).mark_extent(framed(4326))
+        locator = Map(crs=4326)
+        locator.mark_extent(framed(4326), name="box")
+        patch = locator.artist("box")
         assert patch.get_facecolor()[3] == 0.0, (
             f"the box should be unfilled; got facecolor {patch.get_facecolor()}"
         )
@@ -947,8 +1079,11 @@ class TestAnExtentPROJCannotTransformMarksNothing:
             "digitalearth.static.maps.inset.reproject_coordinates",
             side_effect=RuntimeError("PROJ refused the transform"),
         )
-        marked = Map(crs=3857).mark_extent(main)
-        assert marked is None, f"a refused transform should mark nothing; got {marked}"
+        locator = Map(crs=3857)
+        locator.mark_extent(main, name="box")
+        assert locator.layer_ids == [], (
+            f"a refused transform should mark nothing; got {locator.layer_ids}"
+        )
 
     def test_the_refusal_is_logged(self, framed, mocker, caplog):
         """And it is named in a warning, not dropped silently.
