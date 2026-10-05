@@ -486,3 +486,67 @@ class TestWhatTheCacheHandsOutCannotReachBackIntoIt:
         paths = len(second.artist("fill").get_paths())
         second.close()
         assert paths > 0, "an emptied cache entry left the next map's land unfilled"
+
+
+class TestWhatTheReadOnlyFlagOnAKeptArrayIsWorth:
+    """The flag stops the stray assignment in a drawer; it is not a guarantee, and the docstring says so.
+
+    Round 2, L2. The class docstring used to promise the flag "turns that into an error at the write rather
+    than a wrong picture three draws later" — which is exactly what a determined caller still gets, in one
+    line. Measured on the parent of this fix:
+
+    ```
+      writeable: False  owns data (base is None): True
+      direct write refused: ValueError: assignment destination is read-only
+      arr.view().writeable: False
+      np.asarray(arr) is arr: True
+      *** setflags(write=True) SUCCEEDED -> wrote 12345.0 (was -1663957.807005 )
+      a later read of the cache sees: 12345.0
+    ```
+
+    The three tests below pin the two defences that do hold and the one that does not, so the prose and the
+    behaviour cannot drift apart again. ``test_the_kept_geometry_cannot_be_written_through`` above covers
+    the direct assignment.
+    """
+
+    def test_a_view_of_a_kept_array_inherits_the_read_only_flag(self, globe):
+        """``arr.view()`` is the cheapest way around a flag, and it does not work.
+
+        Args:
+            globe: The map being drawn on.
+        """
+        kept = decoration.PROJECTED_REFERENCE.projected(globe, "coastline", RESOLUTION)
+        assert not kept[0].view().flags.writeable, "a view of a kept array is writable"
+
+    def test_asarray_of_a_kept_array_hands_back_that_array_and_not_a_writable_copy(
+        self, globe
+    ):
+        """The second way around a flag: ask numpy to re-wrap it.
+
+        Args:
+            globe: The map being drawn on.
+
+        Test scenario:
+            ``np.asarray`` copies only when it has to, so it answers the same object here — which means a
+            drawer that normalised its input through it is still holding the frozen array, not a writable
+            twin of it.
+        """
+        kept = decoration.PROJECTED_REFERENCE.projected(globe, "coastline", RESOLUTION)
+        assert np.asarray(kept[0]) is kept[0], "asarray handed back a different array"
+
+    def test_the_flag_is_not_proof_against_a_caller_that_resets_it(self, globe):
+        """The limit the docstring now states, pinned so the prose cannot over-promise again.
+
+        Args:
+            globe: The map being drawn on.
+
+        Test scenario:
+            The arrays own their data (``base is None``), and numpy lets the owner of a buffer re-enable
+            writing on it. Handing out views of a privately held read-only owner is no stronger — measured,
+            ``setflags(write=True)`` on such a view succeeds too — so there is no arrangement of flags that
+            makes the guarantee real, and the docstring claims only what this test shows. Nothing is written
+            through the array here, and the autouse fixture drops the entry afterwards.
+        """
+        kept = decoration.PROJECTED_REFERENCE.projected(globe, "coastline", RESOLUTION)
+        kept[0].setflags(write=True)
+        assert kept[0].flags.writeable, "numpy refused to re-enable writing after all"

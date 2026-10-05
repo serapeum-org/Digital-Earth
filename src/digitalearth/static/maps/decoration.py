@@ -1022,9 +1022,17 @@ class _ProjectedReference:
     into every later fill. So the container is a ``tuple``: ``clear``/``append`` are an ``AttributeError``
     and ``kept[0] = …`` a ``TypeError``, at the attempt rather than three draws later.
 
-    The arrays inside it carry ``writeable=False``, so an artist that wrote through one gets an error at
-    the write rather than a wrong picture three draws later. matplotlib reads vertices and does not write
-    them, which the globe fill and line paths in this module are the proof of.
+    The arrays inside it carry ``writeable=False``, which is what stops the *accidental* write — the stray
+    assignment in a drawer, which is the one that would otherwise be a wrong picture three draws later.
+    A direct assignment is numpy's ``ValueError: assignment destination is read-only``, a ``.view()``
+    inherits the flag, and ``np.asarray`` hands the same array back rather than a writable copy, so neither
+    reaches around it. It is **not** proof against a caller who means it, and numpy cannot make it one: the
+    arrays own their data, so ``setflags(write=True)`` re-enables writing in one line and a later read of
+    the cache then sees what was written (measured: ``12345.0`` where the vertex ``-1663957.807005`` was).
+    Handing out views of a privately held read-only owner is no stronger — measured, ``setflags(write=True)``
+    on such a view succeeds too. So the sentence the flag earns is "a drawer cannot corrupt this by
+    accident", not "this cannot be corrupted". matplotlib reads vertices and does not write them, which the
+    globe fill and line paths in this module are the proof of.
 
     What a caller can still reach deliberately is :meth:`clear` and :attr:`keep` on the cache object, both
     of which only ever cost a recomputation — never a wrong picture — which is why they stay public.
@@ -1056,6 +1064,26 @@ class _ProjectedReference:
             Traceback (most recent call last):
             ...
             AttributeError: 'tuple' object has no attribute 'clear'
+            >>> m.close()
+
+            ```
+        - The write flag stops a stray assignment, not a caller who means it:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from digitalearth.static import Map, projections
+            >>> from digitalearth.static.maps.decoration import _ProjectedReference
+            >>> cache = _ProjectedReference()
+            >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
+            >>> kept = cache.projected(m, "coastline", "110m")
+            >>> kept[0].flags.writeable, kept[0].view().flags.writeable
+            (False, False)
+            >>> np.asarray(kept[0]) is kept[0]
+            True
+            >>> kept[0].setflags(write=True)  # the array owns its data, so numpy allows this
+            >>> kept[0].flags.writeable
+            True
             >>> m.close()
 
             ```
