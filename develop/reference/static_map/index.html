@@ -14769,6 +14769,49 @@ when neither resolves to a domain.</p>
     </table>
 
 
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>This map, so the call chains like :meth:<code>set_bounds</code>, which it frames through. **The no-op</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>path answers the map as well**: a call with nothing to resolve frames nothing, and a chain</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>must survive it (L6).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 <p><span class="doc-section-title">Raises:</span></p>
     <table>
       <thead>
@@ -14800,7 +14843,7 @@ crossing the antimeridian, which a single rectangle cannot express.</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;Agg&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">set_domain</span><span class="p">(</span><span class="s2">&quot;europe&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">set_domain</span><span class="p">(</span><span class="s2">&quot;europe&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">get_xlim</span><span class="p">()]</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">[</span><span class="o">-</span><span class="mf">25.0</span><span class="p">,</span> <span class="mf">45.0</span><span class="p">]</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">get_ylim</span><span class="p">()]</span>
@@ -14853,7 +14896,12 @@ crossing the antimeridian, which a single rectangle cannot express.</p>
 <span class="normal"><a href="#__codelineno-0-1296">1296</a></span>
 <span class="normal"><a href="#__codelineno-0-1297">1297</a></span>
 <span class="normal"><a href="#__codelineno-0-1298">1298</a></span>
-<span class="normal"><a href="#__codelineno-0-1299">1299</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1257" name="__codelineno-0-1257"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_domain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DomainLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-1299">1299</a></span>
+<span class="normal"><a href="#__codelineno-0-1300">1300</a></span>
+<span class="normal"><a href="#__codelineno-0-1301">1301</a></span>
+<span class="normal"><a href="#__codelineno-0-1302">1302</a></span>
+<span class="normal"><a href="#__codelineno-0-1303">1303</a></span>
+<span class="normal"><a href="#__codelineno-0-1304">1304</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1257" name="__codelineno-0-1257"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_domain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DomainLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
 <a id="__codelineno-0-1258" name="__codelineno-0-1258"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.</span>
 <a id="__codelineno-0-1259" name="__codelineno-0-1259"></a>
 <a id="__codelineno-0-1260" name="__codelineno-0-1260"></a><span class="sd">    Args:</span>
@@ -14861,41 +14909,46 @@ crossing the antimeridian, which a single rectangle cannot express.</p>
 <a id="__codelineno-0-1262" name="__codelineno-0-1262"></a><span class="sd">            bbox in EPSG:4326, or ``None`` to fall back to the domain passed at construction. A no-op</span>
 <a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><span class="sd">            when neither resolves to a domain.</span>
 <a id="__codelineno-0-1264" name="__codelineno-0-1264"></a>
-<a id="__codelineno-0-1265" name="__codelineno-0-1265"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1266" name="__codelineno-0-1266"></a><span class="sd">        ValueError: if a caller-supplied bbox has its corners the wrong way round — including one</span>
-<a id="__codelineno-0-1267" name="__codelineno-0-1267"></a><span class="sd">            crossing the antimeridian, which a single rectangle cannot express.</span>
-<a id="__codelineno-0-1268" name="__codelineno-0-1268"></a>
-<a id="__codelineno-0-1269" name="__codelineno-0-1269"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1270" name="__codelineno-0-1270"></a><span class="sd">        - In a geographic CRS the axes limits equal the named region&#39;s bounds:</span>
-<a id="__codelineno-0-1271" name="__codelineno-0-1271"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1272" name="__codelineno-0-1272"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1273" name="__codelineno-0-1273"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1274" name="__codelineno-0-1274"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-1275" name="__codelineno-0-1275"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1276" name="__codelineno-0-1276"></a><span class="sd">            &gt;&gt;&gt; m.set_domain(&quot;europe&quot;)</span>
-<a id="__codelineno-0-1277" name="__codelineno-0-1277"></a><span class="sd">            &gt;&gt;&gt; [float(v) for v in m.ax.get_xlim()]</span>
-<a id="__codelineno-0-1278" name="__codelineno-0-1278"></a><span class="sd">            [-25.0, 45.0]</span>
-<a id="__codelineno-0-1279" name="__codelineno-0-1279"></a><span class="sd">            &gt;&gt;&gt; [float(v) for v in m.ax.get_ylim()]</span>
-<a id="__codelineno-0-1280" name="__codelineno-0-1280"></a><span class="sd">            [34.0, 72.0]</span>
-<a id="__codelineno-0-1281" name="__codelineno-0-1281"></a>
-<a id="__codelineno-0-1282" name="__codelineno-0-1282"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1283" name="__codelineno-0-1283"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1284" name="__codelineno-0-1284"></a>    <span class="n">bbox</span> <span class="o">=</span> <span class="n">resolve_domain</span><span class="p">(</span><span class="n">domain</span> <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">)</span>
-<a id="__codelineno-0-1285" name="__codelineno-0-1285"></a>    <span class="k">if</span> <span class="n">bbox</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1286" name="__codelineno-0-1286"></a>        <span class="k">return</span>
-<a id="__codelineno-0-1287" name="__codelineno-0-1287"></a>    <span class="c1"># A resolved domain is always EPSG:4326 (see `static/domains.py`), which is exactly the assumption</span>
-<a id="__codelineno-0-1288" name="__codelineno-0-1288"></a>    <span class="c1"># a bare 4-tuple used to carry implicitly. Bounds makes it a value, and does the warp through pyramids.</span>
-<a id="__codelineno-0-1289" name="__codelineno-0-1289"></a>    <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-1290" name="__codelineno-0-1290"></a>        <span class="n">box</span> <span class="o">=</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span><span class="n">bbox</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
-<a id="__codelineno-0-1291" name="__codelineno-0-1291"></a>    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
-<a id="__codelineno-0-1292" name="__codelineno-0-1292"></a>        <span class="c1"># Bounds refuses corners the wrong way round, and its message names only the numbers. A caller</span>
-<a id="__codelineno-0-1293" name="__codelineno-0-1293"></a>        <span class="c1"># who wrote a bbox crossing the antimeridian needs to hear which argument and which ordering.</span>
-<a id="__codelineno-0-1294" name="__codelineno-0-1294"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1295" name="__codelineno-0-1295"></a>            <span class="sa">f</span><span class="s2">&quot;set_domain got a bbox whose corners are the wrong way round: </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">bbox</span><span class="p">)</span><span class="si">}</span><span class="s2">. It takes &quot;</span>
-<a id="__codelineno-0-1296" name="__codelineno-0-1296"></a>            <span class="s2">&quot;(west, south, east, north) in EPSG:4326, and cannot express a region crossing the &quot;</span>
-<a id="__codelineno-0-1297" name="__codelineno-0-1297"></a>            <span class="sa">f</span><span class="s2">&quot;antimeridian — split it into two, or set the extent directly (</span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">)&quot;</span>
-<a id="__codelineno-0-1298" name="__codelineno-0-1298"></a>        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
-<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">(</span><span class="n">box</span><span class="o">.</span><span class="n">to_crs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">))</span>
+<a id="__codelineno-0-1265" name="__codelineno-0-1265"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1266" name="__codelineno-0-1266"></a><span class="sd">        This map, so the call chains like :meth:`set_bounds`, which it frames through. **The no-op</span>
+<a id="__codelineno-0-1267" name="__codelineno-0-1267"></a><span class="sd">        path answers the map as well**: a call with nothing to resolve frames nothing, and a chain</span>
+<a id="__codelineno-0-1268" name="__codelineno-0-1268"></a><span class="sd">        must survive it (L6).</span>
+<a id="__codelineno-0-1269" name="__codelineno-0-1269"></a>
+<a id="__codelineno-0-1270" name="__codelineno-0-1270"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1271" name="__codelineno-0-1271"></a><span class="sd">        ValueError: if a caller-supplied bbox has its corners the wrong way round — including one</span>
+<a id="__codelineno-0-1272" name="__codelineno-0-1272"></a><span class="sd">            crossing the antimeridian, which a single rectangle cannot express.</span>
+<a id="__codelineno-0-1273" name="__codelineno-0-1273"></a>
+<a id="__codelineno-0-1274" name="__codelineno-0-1274"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1275" name="__codelineno-0-1275"></a><span class="sd">        - In a geographic CRS the axes limits equal the named region&#39;s bounds:</span>
+<a id="__codelineno-0-1276" name="__codelineno-0-1276"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1277" name="__codelineno-0-1277"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1278" name="__codelineno-0-1278"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1279" name="__codelineno-0-1279"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-1280" name="__codelineno-0-1280"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-1281" name="__codelineno-0-1281"></a><span class="sd">            &gt;&gt;&gt; _ = m.set_domain(&quot;europe&quot;)</span>
+<a id="__codelineno-0-1282" name="__codelineno-0-1282"></a><span class="sd">            &gt;&gt;&gt; [float(v) for v in m.ax.get_xlim()]</span>
+<a id="__codelineno-0-1283" name="__codelineno-0-1283"></a><span class="sd">            [-25.0, 45.0]</span>
+<a id="__codelineno-0-1284" name="__codelineno-0-1284"></a><span class="sd">            &gt;&gt;&gt; [float(v) for v in m.ax.get_ylim()]</span>
+<a id="__codelineno-0-1285" name="__codelineno-0-1285"></a><span class="sd">            [34.0, 72.0]</span>
+<a id="__codelineno-0-1286" name="__codelineno-0-1286"></a>
+<a id="__codelineno-0-1287" name="__codelineno-0-1287"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1288" name="__codelineno-0-1288"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1289" name="__codelineno-0-1289"></a>    <span class="n">bbox</span> <span class="o">=</span> <span class="n">resolve_domain</span><span class="p">(</span><span class="n">domain</span> <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">)</span>
+<a id="__codelineno-0-1290" name="__codelineno-0-1290"></a>    <span class="k">if</span> <span class="n">bbox</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1291" name="__codelineno-0-1291"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-1292" name="__codelineno-0-1292"></a>    <span class="c1"># A resolved domain is always EPSG:4326 (see `static/domains.py`), which is exactly the assumption</span>
+<a id="__codelineno-0-1293" name="__codelineno-0-1293"></a>    <span class="c1"># a bare 4-tuple used to carry implicitly. Bounds makes it a value, and does the warp through pyramids.</span>
+<a id="__codelineno-0-1294" name="__codelineno-0-1294"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-1295" name="__codelineno-0-1295"></a>        <span class="n">box</span> <span class="o">=</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span><span class="n">bbox</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
+<a id="__codelineno-0-1296" name="__codelineno-0-1296"></a>    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+<a id="__codelineno-0-1297" name="__codelineno-0-1297"></a>        <span class="c1"># Bounds refuses corners the wrong way round, and its message names only the numbers. A caller</span>
+<a id="__codelineno-0-1298" name="__codelineno-0-1298"></a>        <span class="c1"># who wrote a bbox crossing the antimeridian needs to hear which argument and which ordering.</span>
+<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-1300" name="__codelineno-0-1300"></a>            <span class="sa">f</span><span class="s2">&quot;set_domain got a bbox whose corners are the wrong way round: </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">bbox</span><span class="p">)</span><span class="si">}</span><span class="s2">. It takes &quot;</span>
+<a id="__codelineno-0-1301" name="__codelineno-0-1301"></a>            <span class="s2">&quot;(west, south, east, north) in EPSG:4326, and cannot express a region crossing the &quot;</span>
+<a id="__codelineno-0-1302" name="__codelineno-0-1302"></a>            <span class="sa">f</span><span class="s2">&quot;antimeridian — split it into two, or set the extent directly (</span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-1303" name="__codelineno-0-1303"></a>        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
+<a id="__codelineno-0-1304" name="__codelineno-0-1304"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">(</span><span class="n">box</span><span class="o">.</span><span class="n">to_crs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">))</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -15070,6 +15123,79 @@ does not put it back on screen (review R-L5).</p>
     </table>
 
 
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>This map, so the call chains like every other layer builder on the tier</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(<code>m.graticule(spacing=30.0).set_global()</code>). It registers <code>graticule-1</code> and draws, which</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>makes it a builder by every other test here; it used to hand back nothing, which broke the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>chain on the one tier whose <code>visible</code>/<code>name</code> contract is the most elaborate (L6). The lines</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>themselves are reached by id through :meth:<code>~digitalearth.static.scene.Scene.artist</code>, which</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><strong>raises</strong> <code>KeyError</code> for a layer that drew nothing.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 <p><span class="doc-section-title">Warns:</span></p>
     <table>
       <thead>
@@ -15143,7 +15269,7 @@ map is still drawing (round 2, M1).</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">([</span><span class="o">-</span><span class="mf">35.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">35.0</span><span class="p">,</span> <span class="mf">65.0</span><span class="p">])</span>  <span class="c1"># doctest: +ELLIPSIS</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="o">&lt;</span><span class="n">digitalearth</span><span class="o">.</span><span class="n">static</span><span class="o">.</span><span class="n">map</span><span class="o">.</span><span class="n">Map</span> <span class="nb">object</span> <span class="n">at</span> <span class="o">...&gt;</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">text</span><span class="o">.</span><span class="n">get_text</span><span class="p">()</span> <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">texts</span><span class="p">})</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">[</span><span class="s1">&#39;0°&#39;</span><span class="p">,</span> <span class="s1">&#39;30°E&#39;</span><span class="p">,</span> <span class="s1">&#39;30°N&#39;</span><span class="p">,</span> <span class="s1">&#39;30°W&#39;</span><span class="p">,</span> <span class="s1">&#39;60°N&#39;</span><span class="p">]</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -15153,7 +15279,7 @@ map is still drawing (round 2, M1).</p>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;Agg&quot;</span><span class="p">)</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">texts</span><span class="p">)</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="mi">0</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -15166,8 +15292,8 @@ map is still drawing (round 2, M1).</p>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">([</span><span class="o">-</span><span class="mf">35.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">35.0</span><span class="p">,</span> <span class="mf">65.0</span><span class="p">])</span>  <span class="c1"># doctest: +ELLIPSIS</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="o">&lt;</span><span class="n">digitalearth</span><span class="o">.</span><span class="n">static</span><span class="o">.</span><span class="n">map</span><span class="o">.</span><span class="n">Map</span> <span class="nb">object</span> <span class="n">at</span> <span class="o">...&gt;</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mf">45.0</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mf">60.0</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mf">45.0</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mf">60.0</span><span class="p">)</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">props</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">_graticule_id</span><span class="p">)</span><span class="o">.</span><span class="n">symbology</span><span class="o">.</span><span class="n">props</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="o">&gt;&gt;&gt;</span> <span class="p">(</span><span class="n">props</span><span class="p">[</span><span class="s2">&quot;lon_step&quot;</span><span class="p">],</span> <span class="n">props</span><span class="p">[</span><span class="s2">&quot;lat_step&quot;</span><span class="p">],</span> <span class="n">props</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">])</span>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">(</span><span class="mf">60.0</span><span class="p">,</span> <span class="mf">45.0</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
@@ -15181,7 +15307,7 @@ map is still drawing (round 2, M1).</p>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s2">&quot;Agg&quot;</span><span class="p">)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">globe</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">globe</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">globe</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">globe</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">texts</span><span class="p">)</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="mi">0</span>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">globe</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># doctest: +ELLIPSIS</span>
@@ -15200,7 +15326,7 @@ map is still drawing (round 2, M1).</p>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">set_bounds</span><span class="p">([</span><span class="o">-</span><span class="mf">3.0e6</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.0e6</span><span class="p">,</span> <span class="mf">3.0e6</span><span class="p">,</span> <span class="mf">3.0e6</span><span class="p">])</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">(</span><span class="n">record</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">as</span> <span class="n">caught</span><span class="p">:</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="o">...</span>     <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s2">&quot;always&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="o">...</span>     <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="o">...</span>     <span class="n">_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">spacing</span><span class="o">=</span><span class="mf">30.0</span><span class="p">)</span>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">message</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">caught</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">message</span><span class="p">)</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">message</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
 <a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="s1">&#39;graticule() could not place 8 degree label(s)&#39;</span>
@@ -15215,12 +15341,7 @@ map is still drawing (round 2, M1).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1303">1303</a></span>
-<span class="normal"><a href="#__codelineno-0-1304">1304</a></span>
-<span class="normal"><a href="#__codelineno-0-1305">1305</a></span>
-<span class="normal"><a href="#__codelineno-0-1306">1306</a></span>
-<span class="normal"><a href="#__codelineno-0-1307">1307</a></span>
-<span class="normal"><a href="#__codelineno-0-1308">1308</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1308">1308</a></span>
 <span class="normal"><a href="#__codelineno-0-1309">1309</a></span>
 <span class="normal"><a href="#__codelineno-0-1310">1310</a></span>
 <span class="normal"><a href="#__codelineno-0-1311">1311</a></span>
@@ -15397,189 +15518,212 @@ map is still drawing (round 2, M1).</p>
 <span class="normal"><a href="#__codelineno-0-1482">1482</a></span>
 <span class="normal"><a href="#__codelineno-0-1483">1483</a></span>
 <span class="normal"><a href="#__codelineno-0-1484">1484</a></span>
-<span class="normal"><a href="#__codelineno-0-1485">1485</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1303" name="__codelineno-0-1303"></a><span class="k">def</span><span class="w"> </span><span class="nf">graticule</span><span class="p">(</span>
-<a id="__codelineno-0-1304" name="__codelineno-0-1304"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1305" name="__codelineno-0-1305"></a>    <span class="n">lon_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1306" name="__codelineno-0-1306"></a>    <span class="n">lat_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1307" name="__codelineno-0-1307"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1308" name="__codelineno-0-1308"></a>    <span class="n">spacing</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1309" name="__codelineno-0-1309"></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1310" name="__codelineno-0-1310"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1311" name="__codelineno-0-1311"></a>    <span class="n">visible</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1312" name="__codelineno-0-1312"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1313" name="__codelineno-0-1313"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a lon/lat graticule to the map, with its degrees labelled.</span>
-<a id="__codelineno-0-1314" name="__codelineno-0-1314"></a>
-<a id="__codelineno-0-1315" name="__codelineno-0-1315"></a><span class="sd">    A second call **replaces** the first — the map holds one set of graticule lines, so it draws one</span>
-<a id="__codelineno-0-1316" name="__codelineno-0-1316"></a><span class="sd">    graticule — and the description follows: the layer keeps its id and its place in the tree and only</span>
-<a id="__codelineno-0-1317" name="__codelineno-0-1317"></a><span class="sd">    what the replacing call named changes. Describing the second call as a second layer would say the</span>
-<a id="__codelineno-0-1318" name="__codelineno-0-1318"></a><span class="sd">    map draws two grids where it draws one — and that is also why a ``name`` on a *replacing* call</span>
-<a id="__codelineno-0-1319" name="__codelineno-0-1319"></a><span class="sd">    names nothing: the layer already has its id, and taking a new one would break every caller holding</span>
-<a id="__codelineno-0-1320" name="__codelineno-0-1320"></a><span class="sd">    the old one.</span>
-<a id="__codelineno-0-1321" name="__codelineno-0-1321"></a>
-<a id="__codelineno-0-1322" name="__codelineno-0-1322"></a><span class="sd">    **One rule for the rest of the arguments: a replacing call keeps every option it does not name.**</span>
-<a id="__codelineno-0-1323" name="__codelineno-0-1323"></a><span class="sd">    A call that names a spacing is asking for a spacing, not for a hidden grid to come back</span>
-<a id="__codelineno-0-1324" name="__codelineno-0-1324"></a><span class="sd">    (``visible``, review R-L5), nor for the degrees of a deliberately bare grid to come back</span>
-<a id="__codelineno-0-1325" name="__codelineno-0-1325"></a><span class="sd">    (``labels``), nor for the step it did not mention to be re-cut at the default (``lon_step`` /</span>
-<a id="__codelineno-0-1326" name="__codelineno-0-1326"></a><span class="sd">    ``lat_step``) — the last two used to fall back to their construction defaults, which relabelled</span>
-<a id="__codelineno-0-1327" name="__codelineno-0-1327"></a><span class="sd">    and re-cut grids in silence (round 1, M7). ``spacing`` is the one argument that overrides what the</span>
-<a id="__codelineno-0-1328" name="__codelineno-0-1328"></a><span class="sd">    grid carries without being asked twice, because it names both steps by definition. The frame still</span>
-<a id="__codelineno-0-1329" name="__codelineno-0-1329"></a><span class="sd">    outranks all of it: ``labels=True`` on a globe is refused whatever the grid it replaces carried.</span>
-<a id="__codelineno-0-1330" name="__codelineno-0-1330"></a>
-<a id="__codelineno-0-1331" name="__codelineno-0-1331"></a><span class="sd">    **Which frame draws it, and when.** On a flat map — the default — the lines and their labels go on</span>
-<a id="__codelineno-0-1332" name="__codelineno-0-1332"></a><span class="sd">    the axes as this call runs. On a ``globe=True`` map they are drawn later, by the projection frame</span>
-<a id="__codelineno-0-1333" name="__codelineno-0-1333"></a><span class="sd">    (``render()``/``save()``/``show()``), because a globe&#39;s grid has to be clipped at the limb with</span>
-<a id="__codelineno-0-1334" name="__codelineno-0-1334"></a><span class="sd">    everything else. Before #221 the *flat* map had no such pass, so this call computed a grid, stored</span>
-<a id="__codelineno-0-1335" name="__codelineno-0-1335"></a><span class="sd">    it, and drew nothing at all while the figure described a layer that was drawn.</span>
-<a id="__codelineno-0-1336" name="__codelineno-0-1336"></a>
-<a id="__codelineno-0-1337" name="__codelineno-0-1337"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1338" name="__codelineno-0-1338"></a><span class="sd">        lon_step: Meridian spacing in degrees; ``None`` (default) means</span>
-<a id="__codelineno-0-1339" name="__codelineno-0-1339"></a><span class="sd">            :data:`DEFAULT_GRATICULE_STEP` on the call that **creates** the graticule, and the step</span>
-<a id="__codelineno-0-1340" name="__codelineno-0-1340"></a><span class="sd">            the grid already carries on a *replacing* one.</span>
-<a id="__codelineno-0-1341" name="__codelineno-0-1341"></a><span class="sd">        lat_step: Parallel spacing in degrees, the same way round.</span>
-<a id="__codelineno-0-1342" name="__codelineno-0-1342"></a><span class="sd">        spacing: One step for both, for a caller who wants a square grid; it overrides the two</span>
-<a id="__codelineno-0-1343" name="__codelineno-0-1343"></a><span class="sd">            above, and **warns** when it does, because a call that names all three has had two of</span>
-<a id="__codelineno-0-1344" name="__codelineno-0-1344"></a><span class="sd">            its own arguments thrown away (review R2-L3). The same **keyword** the web and</span>
-<a id="__codelineno-0-1345" name="__codelineno-0-1345"></a><span class="sd">            interactive tiers take, so one call draws one grid on every tier that draws a graticule</span>
-<a id="__codelineno-0-1346" name="__codelineno-0-1346"></a><span class="sd">            at all (#324). The **values** are each engine&#39;s own: this tier generates its meridians,</span>
-<a id="__codelineno-0-1347" name="__codelineno-0-1347"></a><span class="sd">            so any positive step draws, and so does the web tier — while the interactive tier draws</span>
-<a id="__codelineno-0-1348" name="__codelineno-0-1348"></a><span class="sd">            Natural Earth&#39;s pre-cut layers and honours only ``1``, ``5``, ``10``, ``15``, ``20`` and</span>
-<a id="__codelineno-0-1349" name="__codelineno-0-1349"></a><span class="sd">            ``30``. ``spacing=7.5`` draws here and raises there (review R-L10).</span>
-<a id="__codelineno-0-1350" name="__codelineno-0-1350"></a><span class="sd">        labels: Whether each line carries its degree — ``&quot;30°E&quot;``, ``&quot;60°N&quot;``, the web tier&#39;s own</span>
-<a id="__codelineno-0-1351" name="__codelineno-0-1351"></a><span class="sd">            spelling. ``None`` (the default) labels the frames that can be labelled, which is every</span>
-<a id="__codelineno-0-1352" name="__codelineno-0-1352"></a><span class="sd">            flat map and no globe — and on a *replacing* call means whatever the grid already</span>
-<a id="__codelineno-0-1353" name="__codelineno-0-1353"></a><span class="sd">            carries, so restyling a bare grid leaves it bare; ``True`` asks for them and **raises** on</span>
-<a id="__codelineno-0-1354" name="__codelineno-0-1354"></a><span class="sd">            a globe, where there is no edge to hang a degree on (see *Raises*); ``False`` draws the</span>
-<a id="__codelineno-0-1355" name="__codelineno-0-1355"></a><span class="sd">            lines bare. Each label sits on</span>
-<a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">            its own line, just inside the lower edge of the view for a meridian and the left edge for a</span>
-<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">            parallel, and a degree the display CRS cannot place there is **named in a warning** rather</span>
-<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">            than dropped in silence.</span>
-<a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label on the call that</span>
-<a id="__codelineno-0-1360" name="__codelineno-0-1360"></a><span class="sd">            **creates** it; ``None`` (default) generates one from the kind (#321). A *replacing*</span>
-<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">            call cannot rename the layer, so one that names a different name **warns** rather than</span>
-<a id="__codelineno-0-1362" name="__codelineno-0-1362"></a><span class="sd">            dropping it in silence (review R2-L3).</span>
-<a id="__codelineno-0-1363" name="__codelineno-0-1363"></a><span class="sd">        visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327). ``None`` (default)</span>
-<a id="__codelineno-0-1365" name="__codelineno-0-1365"></a><span class="sd">            leaves the flag as it is: on the call that creates the layer that means drawn, and on a</span>
-<a id="__codelineno-0-1366" name="__codelineno-0-1366"></a><span class="sd">            *replacing* call it means whatever the caller last chose, so restyling a hidden graticule</span>
-<a id="__codelineno-0-1367" name="__codelineno-0-1367"></a><span class="sd">            does not put it back on screen (review R-L5).</span>
-<a id="__codelineno-0-1368" name="__codelineno-0-1368"></a>
-<a id="__codelineno-0-1369" name="__codelineno-0-1369"></a><span class="sd">    Warns:</span>
-<a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><span class="sd">        UserWarning: when ``spacing`` is given beside either step, which discards the step; when a</span>
-<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">            *replacing* call names a ``name`` the layer does not already carry, which is discarded</span>
-<a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><span class="sd">            because the id is the one thing a replacement cannot change (review R2-L3); and when a</span>
-<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">            degree label cannot be placed, which names it.</span>
-<a id="__codelineno-0-1374" name="__codelineno-0-1374"></a>
-<a id="__codelineno-0-1375" name="__codelineno-0-1375"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">        ValueError: for ``labels=True`` on a ``globe=True`` map, which cannot carry them — see</span>
-<a id="__codelineno-0-1377" name="__codelineno-0-1377"></a><span class="sd">            :meth:`_labels_asked`. Raised before anything is described, so the refusal costs the figure</span>
-<a id="__codelineno-0-1378" name="__codelineno-0-1378"></a><span class="sd">            nothing.</span>
-<a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">        Exception: whatever computing the grid raises — a spacing of zero divides by zero in the</span>
-<a id="__codelineno-0-1380" name="__codelineno-0-1380"></a><span class="sd">            projection — after the description has been put back as it was. A figure must not name a</span>
-<a id="__codelineno-0-1381" name="__codelineno-0-1381"></a><span class="sd">            layer that was not drawn, and a refused *replacement* must not restyle the graticule the</span>
-<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">            map is still drawing (round 2, M1).</span>
-<a id="__codelineno-0-1383" name="__codelineno-0-1383"></a>
-<a id="__codelineno-0-1384" name="__codelineno-0-1384"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1385" name="__codelineno-0-1385"></a><span class="sd">        - A flat map&#39;s grid is one collection, and every line in view carries its degree:</span>
-<a id="__codelineno-0-1386" name="__codelineno-0-1386"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1387" name="__codelineno-0-1387"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1388" name="__codelineno-0-1388"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1389" name="__codelineno-0-1389"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-1390" name="__codelineno-0-1390"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><span class="sd">            &gt;&gt;&gt; m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><span class="sd">            &lt;digitalearth.static.map.Map object at ...&gt;</span>
-<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">            &gt;&gt;&gt; m.graticule(spacing=30.0)</span>
-<a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><span class="sd">            &gt;&gt;&gt; sorted({text.get_text() for text in m.ax.texts})</span>
-<a id="__codelineno-0-1395" name="__codelineno-0-1395"></a><span class="sd">            [&#39;0°&#39;, &#39;30°E&#39;, &#39;30°N&#39;, &#39;30°W&#39;, &#39;60°N&#39;]</span>
-<a id="__codelineno-0-1396" name="__codelineno-0-1396"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a>
-<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><span class="sd">        - The lines can be drawn bare:</span>
-<a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1401" name="__codelineno-0-1401"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1402" name="__codelineno-0-1402"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-1404" name="__codelineno-0-1404"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><span class="sd">            &gt;&gt;&gt; m.graticule(spacing=60.0, labels=False)</span>
-<a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.texts)</span>
-<a id="__codelineno-0-1407" name="__codelineno-0-1407"></a><span class="sd">            0</span>
-<a id="__codelineno-0-1408" name="__codelineno-0-1408"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-1409" name="__codelineno-0-1409"></a>
-<a id="__codelineno-0-1410" name="__codelineno-0-1410"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1411" name="__codelineno-0-1411"></a><span class="sd">        - A replacing call keeps what it does not name: the grid is re-cut at 60 degrees and stays</span>
-<a id="__codelineno-0-1412" name="__codelineno-0-1412"></a><span class="sd">          bare, and its parallels keep the step only the first call named:</span>
+<span class="normal"><a href="#__codelineno-0-1485">1485</a></span>
+<span class="normal"><a href="#__codelineno-0-1486">1486</a></span>
+<span class="normal"><a href="#__codelineno-0-1487">1487</a></span>
+<span class="normal"><a href="#__codelineno-0-1488">1488</a></span>
+<span class="normal"><a href="#__codelineno-0-1489">1489</a></span>
+<span class="normal"><a href="#__codelineno-0-1490">1490</a></span>
+<span class="normal"><a href="#__codelineno-0-1491">1491</a></span>
+<span class="normal"><a href="#__codelineno-0-1492">1492</a></span>
+<span class="normal"><a href="#__codelineno-0-1493">1493</a></span>
+<span class="normal"><a href="#__codelineno-0-1494">1494</a></span>
+<span class="normal"><a href="#__codelineno-0-1495">1495</a></span>
+<span class="normal"><a href="#__codelineno-0-1496">1496</a></span>
+<span class="normal"><a href="#__codelineno-0-1497">1497</a></span>
+<span class="normal"><a href="#__codelineno-0-1498">1498</a></span>
+<span class="normal"><a href="#__codelineno-0-1499">1499</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1308" name="__codelineno-0-1308"></a><span class="k">def</span><span class="w"> </span><span class="nf">graticule</span><span class="p">(</span>
+<a id="__codelineno-0-1309" name="__codelineno-0-1309"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1310" name="__codelineno-0-1310"></a>    <span class="n">lon_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1311" name="__codelineno-0-1311"></a>    <span class="n">lat_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1312" name="__codelineno-0-1312"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1313" name="__codelineno-0-1313"></a>    <span class="n">spacing</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1314" name="__codelineno-0-1314"></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1315" name="__codelineno-0-1315"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1316" name="__codelineno-0-1316"></a>    <span class="n">visible</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1317" name="__codelineno-0-1317"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-1318" name="__codelineno-0-1318"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a lon/lat graticule to the map, with its degrees labelled.</span>
+<a id="__codelineno-0-1319" name="__codelineno-0-1319"></a>
+<a id="__codelineno-0-1320" name="__codelineno-0-1320"></a><span class="sd">    A second call **replaces** the first — the map holds one set of graticule lines, so it draws one</span>
+<a id="__codelineno-0-1321" name="__codelineno-0-1321"></a><span class="sd">    graticule — and the description follows: the layer keeps its id and its place in the tree and only</span>
+<a id="__codelineno-0-1322" name="__codelineno-0-1322"></a><span class="sd">    what the replacing call named changes. Describing the second call as a second layer would say the</span>
+<a id="__codelineno-0-1323" name="__codelineno-0-1323"></a><span class="sd">    map draws two grids where it draws one — and that is also why a ``name`` on a *replacing* call</span>
+<a id="__codelineno-0-1324" name="__codelineno-0-1324"></a><span class="sd">    names nothing: the layer already has its id, and taking a new one would break every caller holding</span>
+<a id="__codelineno-0-1325" name="__codelineno-0-1325"></a><span class="sd">    the old one.</span>
+<a id="__codelineno-0-1326" name="__codelineno-0-1326"></a>
+<a id="__codelineno-0-1327" name="__codelineno-0-1327"></a><span class="sd">    **One rule for the rest of the arguments: a replacing call keeps every option it does not name.**</span>
+<a id="__codelineno-0-1328" name="__codelineno-0-1328"></a><span class="sd">    A call that names a spacing is asking for a spacing, not for a hidden grid to come back</span>
+<a id="__codelineno-0-1329" name="__codelineno-0-1329"></a><span class="sd">    (``visible``, review R-L5), nor for the degrees of a deliberately bare grid to come back</span>
+<a id="__codelineno-0-1330" name="__codelineno-0-1330"></a><span class="sd">    (``labels``), nor for the step it did not mention to be re-cut at the default (``lon_step`` /</span>
+<a id="__codelineno-0-1331" name="__codelineno-0-1331"></a><span class="sd">    ``lat_step``) — the last two used to fall back to their construction defaults, which relabelled</span>
+<a id="__codelineno-0-1332" name="__codelineno-0-1332"></a><span class="sd">    and re-cut grids in silence (round 1, M7). ``spacing`` is the one argument that overrides what the</span>
+<a id="__codelineno-0-1333" name="__codelineno-0-1333"></a><span class="sd">    grid carries without being asked twice, because it names both steps by definition. The frame still</span>
+<a id="__codelineno-0-1334" name="__codelineno-0-1334"></a><span class="sd">    outranks all of it: ``labels=True`` on a globe is refused whatever the grid it replaces carried.</span>
+<a id="__codelineno-0-1335" name="__codelineno-0-1335"></a>
+<a id="__codelineno-0-1336" name="__codelineno-0-1336"></a><span class="sd">    **Which frame draws it, and when.** On a flat map — the default — the lines and their labels go on</span>
+<a id="__codelineno-0-1337" name="__codelineno-0-1337"></a><span class="sd">    the axes as this call runs. On a ``globe=True`` map they are drawn later, by the projection frame</span>
+<a id="__codelineno-0-1338" name="__codelineno-0-1338"></a><span class="sd">    (``render()``/``save()``/``show()``), because a globe&#39;s grid has to be clipped at the limb with</span>
+<a id="__codelineno-0-1339" name="__codelineno-0-1339"></a><span class="sd">    everything else. Before #221 the *flat* map had no such pass, so this call computed a grid, stored</span>
+<a id="__codelineno-0-1340" name="__codelineno-0-1340"></a><span class="sd">    it, and drew nothing at all while the figure described a layer that was drawn.</span>
+<a id="__codelineno-0-1341" name="__codelineno-0-1341"></a>
+<a id="__codelineno-0-1342" name="__codelineno-0-1342"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1343" name="__codelineno-0-1343"></a><span class="sd">        lon_step: Meridian spacing in degrees; ``None`` (default) means</span>
+<a id="__codelineno-0-1344" name="__codelineno-0-1344"></a><span class="sd">            :data:`DEFAULT_GRATICULE_STEP` on the call that **creates** the graticule, and the step</span>
+<a id="__codelineno-0-1345" name="__codelineno-0-1345"></a><span class="sd">            the grid already carries on a *replacing* one.</span>
+<a id="__codelineno-0-1346" name="__codelineno-0-1346"></a><span class="sd">        lat_step: Parallel spacing in degrees, the same way round.</span>
+<a id="__codelineno-0-1347" name="__codelineno-0-1347"></a><span class="sd">        spacing: One step for both, for a caller who wants a square grid; it overrides the two</span>
+<a id="__codelineno-0-1348" name="__codelineno-0-1348"></a><span class="sd">            above, and **warns** when it does, because a call that names all three has had two of</span>
+<a id="__codelineno-0-1349" name="__codelineno-0-1349"></a><span class="sd">            its own arguments thrown away (review R2-L3). The same **keyword** the web and</span>
+<a id="__codelineno-0-1350" name="__codelineno-0-1350"></a><span class="sd">            interactive tiers take, so one call draws one grid on every tier that draws a graticule</span>
+<a id="__codelineno-0-1351" name="__codelineno-0-1351"></a><span class="sd">            at all (#324). The **values** are each engine&#39;s own: this tier generates its meridians,</span>
+<a id="__codelineno-0-1352" name="__codelineno-0-1352"></a><span class="sd">            so any positive step draws, and so does the web tier — while the interactive tier draws</span>
+<a id="__codelineno-0-1353" name="__codelineno-0-1353"></a><span class="sd">            Natural Earth&#39;s pre-cut layers and honours only ``1``, ``5``, ``10``, ``15``, ``20`` and</span>
+<a id="__codelineno-0-1354" name="__codelineno-0-1354"></a><span class="sd">            ``30``. ``spacing=7.5`` draws here and raises there (review R-L10).</span>
+<a id="__codelineno-0-1355" name="__codelineno-0-1355"></a><span class="sd">        labels: Whether each line carries its degree — ``&quot;30°E&quot;``, ``&quot;60°N&quot;``, the web tier&#39;s own</span>
+<a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">            spelling. ``None`` (the default) labels the frames that can be labelled, which is every</span>
+<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">            flat map and no globe — and on a *replacing* call means whatever the grid already</span>
+<a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">            carries, so restyling a bare grid leaves it bare; ``True`` asks for them and **raises** on</span>
+<a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">            a globe, where there is no edge to hang a degree on (see *Raises*); ``False`` draws the</span>
+<a id="__codelineno-0-1360" name="__codelineno-0-1360"></a><span class="sd">            lines bare. Each label sits on</span>
+<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">            its own line, just inside the lower edge of the view for a meridian and the left edge for a</span>
+<a id="__codelineno-0-1362" name="__codelineno-0-1362"></a><span class="sd">            parallel, and a degree the display CRS cannot place there is **named in a warning** rather</span>
+<a id="__codelineno-0-1363" name="__codelineno-0-1363"></a><span class="sd">            than dropped in silence.</span>
+<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label on the call that</span>
+<a id="__codelineno-0-1365" name="__codelineno-0-1365"></a><span class="sd">            **creates** it; ``None`` (default) generates one from the kind (#321). A *replacing*</span>
+<a id="__codelineno-0-1366" name="__codelineno-0-1366"></a><span class="sd">            call cannot rename the layer, so one that names a different name **warns** rather than</span>
+<a id="__codelineno-0-1367" name="__codelineno-0-1367"></a><span class="sd">            dropping it in silence (review R2-L3).</span>
+<a id="__codelineno-0-1368" name="__codelineno-0-1368"></a><span class="sd">        visible: Whether the graticule is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-1369" name="__codelineno-0-1369"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327). ``None`` (default)</span>
+<a id="__codelineno-0-1370" name="__codelineno-0-1370"></a><span class="sd">            leaves the flag as it is: on the call that creates the layer that means drawn, and on a</span>
+<a id="__codelineno-0-1371" name="__codelineno-0-1371"></a><span class="sd">            *replacing* call it means whatever the caller last chose, so restyling a hidden graticule</span>
+<a id="__codelineno-0-1372" name="__codelineno-0-1372"></a><span class="sd">            does not put it back on screen (review R-L5).</span>
+<a id="__codelineno-0-1373" name="__codelineno-0-1373"></a>
+<a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1375" name="__codelineno-0-1375"></a><span class="sd">        This map, so the call chains like every other layer builder on the tier</span>
+<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">        (``m.graticule(spacing=30.0).set_global()``). It registers ``graticule-1`` and draws, which</span>
+<a id="__codelineno-0-1377" name="__codelineno-0-1377"></a><span class="sd">        makes it a builder by every other test here; it used to hand back nothing, which broke the</span>
+<a id="__codelineno-0-1378" name="__codelineno-0-1378"></a><span class="sd">        chain on the one tier whose `visible`/`name` contract is the most elaborate (L6). The lines</span>
+<a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">        themselves are reached by id through :meth:`~digitalearth.static.scene.Scene.artist`, which</span>
+<a id="__codelineno-0-1380" name="__codelineno-0-1380"></a><span class="sd">        **raises** ``KeyError`` for a layer that drew nothing.</span>
+<a id="__codelineno-0-1381" name="__codelineno-0-1381"></a>
+<a id="__codelineno-0-1382" name="__codelineno-0-1382"></a><span class="sd">    Warns:</span>
+<a id="__codelineno-0-1383" name="__codelineno-0-1383"></a><span class="sd">        UserWarning: when ``spacing`` is given beside either step, which discards the step; when a</span>
+<a id="__codelineno-0-1384" name="__codelineno-0-1384"></a><span class="sd">            *replacing* call names a ``name`` the layer does not already carry, which is discarded</span>
+<a id="__codelineno-0-1385" name="__codelineno-0-1385"></a><span class="sd">            because the id is the one thing a replacement cannot change (review R2-L3); and when a</span>
+<a id="__codelineno-0-1386" name="__codelineno-0-1386"></a><span class="sd">            degree label cannot be placed, which names it.</span>
+<a id="__codelineno-0-1387" name="__codelineno-0-1387"></a>
+<a id="__codelineno-0-1388" name="__codelineno-0-1388"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1389" name="__codelineno-0-1389"></a><span class="sd">        ValueError: for ``labels=True`` on a ``globe=True`` map, which cannot carry them — see</span>
+<a id="__codelineno-0-1390" name="__codelineno-0-1390"></a><span class="sd">            :meth:`_labels_asked`. Raised before anything is described, so the refusal costs the figure</span>
+<a id="__codelineno-0-1391" name="__codelineno-0-1391"></a><span class="sd">            nothing.</span>
+<a id="__codelineno-0-1392" name="__codelineno-0-1392"></a><span class="sd">        Exception: whatever computing the grid raises — a spacing of zero divides by zero in the</span>
+<a id="__codelineno-0-1393" name="__codelineno-0-1393"></a><span class="sd">            projection — after the description has been put back as it was. A figure must not name a</span>
+<a id="__codelineno-0-1394" name="__codelineno-0-1394"></a><span class="sd">            layer that was not drawn, and a refused *replacement* must not restyle the graticule the</span>
+<a id="__codelineno-0-1395" name="__codelineno-0-1395"></a><span class="sd">            map is still drawing (round 2, M1).</span>
+<a id="__codelineno-0-1396" name="__codelineno-0-1396"></a>
+<a id="__codelineno-0-1397" name="__codelineno-0-1397"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1398" name="__codelineno-0-1398"></a><span class="sd">        - A flat map&#39;s grid is one collection, and every line in view carries its degree:</span>
+<a id="__codelineno-0-1399" name="__codelineno-0-1399"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1400" name="__codelineno-0-1400"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1401" name="__codelineno-0-1401"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1402" name="__codelineno-0-1402"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-1403" name="__codelineno-0-1403"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-1404" name="__codelineno-0-1404"></a><span class="sd">            &gt;&gt;&gt; m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-1405" name="__codelineno-0-1405"></a><span class="sd">            &lt;digitalearth.static.map.Map object at ...&gt;</span>
+<a id="__codelineno-0-1406" name="__codelineno-0-1406"></a><span class="sd">            &gt;&gt;&gt; _ = m.graticule(spacing=30.0)</span>
+<a id="__codelineno-0-1407" name="__codelineno-0-1407"></a><span class="sd">            &gt;&gt;&gt; sorted({text.get_text() for text in m.ax.texts})</span>
+<a id="__codelineno-0-1408" name="__codelineno-0-1408"></a><span class="sd">            [&#39;0°&#39;, &#39;30°E&#39;, &#39;30°N&#39;, &#39;30°W&#39;, &#39;60°N&#39;]</span>
+<a id="__codelineno-0-1409" name="__codelineno-0-1409"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-1410" name="__codelineno-0-1410"></a>
+<a id="__codelineno-0-1411" name="__codelineno-0-1411"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1412" name="__codelineno-0-1412"></a><span class="sd">        - The lines can be drawn bare:</span>
 <a id="__codelineno-0-1413" name="__codelineno-0-1413"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-1414" name="__codelineno-0-1414"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
 <a id="__codelineno-0-1415" name="__codelineno-0-1415"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
 <a id="__codelineno-0-1416" name="__codelineno-0-1416"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
 <a id="__codelineno-0-1417" name="__codelineno-0-1417"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-1418" name="__codelineno-0-1418"></a><span class="sd">            &gt;&gt;&gt; m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-1419" name="__codelineno-0-1419"></a><span class="sd">            &lt;digitalearth.static.map.Map object at ...&gt;</span>
-<a id="__codelineno-0-1420" name="__codelineno-0-1420"></a><span class="sd">            &gt;&gt;&gt; m.graticule(lon_step=30.0, lat_step=45.0, labels=False)</span>
-<a id="__codelineno-0-1421" name="__codelineno-0-1421"></a><span class="sd">            &gt;&gt;&gt; m.graticule(lon_step=60.0)</span>
-<a id="__codelineno-0-1422" name="__codelineno-0-1422"></a><span class="sd">            &gt;&gt;&gt; props = m._layer_tree.get(m._graticule_id).symbology.props</span>
-<a id="__codelineno-0-1423" name="__codelineno-0-1423"></a><span class="sd">            &gt;&gt;&gt; (props[&quot;lon_step&quot;], props[&quot;lat_step&quot;], props[&quot;labels&quot;])</span>
-<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a><span class="sd">            (60.0, 45.0, False)</span>
-<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.texts)</span>
-<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a><span class="sd">            0</span>
-<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a>
-<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a><span class="sd">        - A globe draws the grid unlabelled, and **refuses** `labels=True` rather than dropping them</span>
-<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a><span class="sd">          quietly — the default `labels=None` is what lets one line serve both frames:</span>
-<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1434" name="__codelineno-0-1434"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1435" name="__codelineno-0-1435"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-1436" name="__codelineno-0-1436"></a><span class="sd">            &gt;&gt;&gt; globe = Map(crs=4326, globe=True)</span>
-<a id="__codelineno-0-1437" name="__codelineno-0-1437"></a><span class="sd">            &gt;&gt;&gt; globe.graticule(spacing=30.0)</span>
-<a id="__codelineno-0-1438" name="__codelineno-0-1438"></a><span class="sd">            &gt;&gt;&gt; len(globe.ax.texts)</span>
+<a id="__codelineno-0-1418" name="__codelineno-0-1418"></a><span class="sd">            &gt;&gt;&gt; _ = m.graticule(spacing=60.0, labels=False)</span>
+<a id="__codelineno-0-1419" name="__codelineno-0-1419"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.texts)</span>
+<a id="__codelineno-0-1420" name="__codelineno-0-1420"></a><span class="sd">            0</span>
+<a id="__codelineno-0-1421" name="__codelineno-0-1421"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-1422" name="__codelineno-0-1422"></a>
+<a id="__codelineno-0-1423" name="__codelineno-0-1423"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a><span class="sd">        - A replacing call keeps what it does not name: the grid is re-cut at 60 degrees and stays</span>
+<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a><span class="sd">          bare, and its parallels keep the step only the first call named:</span>
+<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a><span class="sd">            &gt;&gt;&gt; m.set_bounds([-35.0, -5.0, 35.0, 65.0])  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a><span class="sd">            &lt;digitalearth.static.map.Map object at ...&gt;</span>
+<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a><span class="sd">            &gt;&gt;&gt; _ = m.graticule(lon_step=30.0, lat_step=45.0, labels=False)</span>
+<a id="__codelineno-0-1434" name="__codelineno-0-1434"></a><span class="sd">            &gt;&gt;&gt; _ = m.graticule(lon_step=60.0)</span>
+<a id="__codelineno-0-1435" name="__codelineno-0-1435"></a><span class="sd">            &gt;&gt;&gt; props = m._layer_tree.get(m._graticule_id).symbology.props</span>
+<a id="__codelineno-0-1436" name="__codelineno-0-1436"></a><span class="sd">            &gt;&gt;&gt; (props[&quot;lon_step&quot;], props[&quot;lat_step&quot;], props[&quot;labels&quot;])</span>
+<a id="__codelineno-0-1437" name="__codelineno-0-1437"></a><span class="sd">            (60.0, 45.0, False)</span>
+<a id="__codelineno-0-1438" name="__codelineno-0-1438"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.texts)</span>
 <a id="__codelineno-0-1439" name="__codelineno-0-1439"></a><span class="sd">            0</span>
-<a id="__codelineno-0-1440" name="__codelineno-0-1440"></a><span class="sd">            &gt;&gt;&gt; globe.graticule(spacing=30.0, labels=True)  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-1441" name="__codelineno-0-1441"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-1442" name="__codelineno-0-1442"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-1443" name="__codelineno-0-1443"></a><span class="sd">            ValueError: graticule(labels=True) cannot place degree labels on a globe frame...</span>
-<a id="__codelineno-0-1444" name="__codelineno-0-1444"></a><span class="sd">            &gt;&gt;&gt; globe.close()</span>
-<a id="__codelineno-0-1445" name="__codelineno-0-1445"></a>
-<a id="__codelineno-0-1446" name="__codelineno-0-1446"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1447" name="__codelineno-0-1447"></a><span class="sd">        - A degree the frame cannot place is **named in a warning**, not silently missing: a polar</span>
-<a id="__codelineno-0-1448" name="__codelineno-0-1448"></a><span class="sd">          projection framed on a square puts most meridians&#39; anchors outside the view:</span>
-<a id="__codelineno-0-1449" name="__codelineno-0-1449"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1450" name="__codelineno-0-1450"></a><span class="sd">            &gt;&gt;&gt; import warnings</span>
-<a id="__codelineno-0-1451" name="__codelineno-0-1451"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-1453" name="__codelineno-0-1453"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-1454" name="__codelineno-0-1454"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=3413)</span>
-<a id="__codelineno-0-1455" name="__codelineno-0-1455"></a><span class="sd">            &gt;&gt;&gt; _ = m.set_bounds([-3.0e6, -3.0e6, 3.0e6, 3.0e6])</span>
-<a id="__codelineno-0-1456" name="__codelineno-0-1456"></a><span class="sd">            &gt;&gt;&gt; with warnings.catch_warnings(record=True) as caught:</span>
-<a id="__codelineno-0-1457" name="__codelineno-0-1457"></a><span class="sd">            ...     warnings.simplefilter(&quot;always&quot;)</span>
-<a id="__codelineno-0-1458" name="__codelineno-0-1458"></a><span class="sd">            ...     m.graticule(spacing=30.0)</span>
-<a id="__codelineno-0-1459" name="__codelineno-0-1459"></a><span class="sd">            &gt;&gt;&gt; message = str(caught[0].message)</span>
-<a id="__codelineno-0-1460" name="__codelineno-0-1460"></a><span class="sd">            &gt;&gt;&gt; message.split(&quot;:&quot;)[0]</span>
-<a id="__codelineno-0-1461" name="__codelineno-0-1461"></a><span class="sd">            &#39;graticule() could not place 8 degree label(s)&#39;</span>
-<a id="__codelineno-0-1462" name="__codelineno-0-1462"></a><span class="sd">            &gt;&gt;&gt; &quot;150°W&quot; in message, &quot;120°E&quot; in message</span>
-<a id="__codelineno-0-1463" name="__codelineno-0-1463"></a><span class="sd">            (True, True)</span>
-<a id="__codelineno-0-1464" name="__codelineno-0-1464"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.texts)</span>
-<a id="__codelineno-0-1465" name="__codelineno-0-1465"></a><span class="sd">            5</span>
-<a id="__codelineno-0-1466" name="__codelineno-0-1466"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-1467" name="__codelineno-0-1467"></a>
-<a id="__codelineno-0-1468" name="__codelineno-0-1468"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a>    <span class="c1"># Read before anything is described: a replacing call keeps every option it does not name, and</span>
-<a id="__codelineno-0-1471" name="__codelineno-0-1471"></a>    <span class="c1"># the layer it replaces is the only record of what those options were.</span>
-<a id="__codelineno-0-1472" name="__codelineno-0-1472"></a>    <span class="n">carried</span> <span class="o">=</span> <span class="n">_GraticuleSteps</span><span class="o">.</span><span class="n">held_by</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_graticule_held</span><span class="p">())</span>
-<a id="__codelineno-0-1473" name="__codelineno-0-1473"></a>    <span class="n">steps</span> <span class="o">=</span> <span class="n">_GraticuleSteps</span><span class="o">.</span><span class="n">asked</span><span class="p">(</span>
-<a id="__codelineno-0-1474" name="__codelineno-0-1474"></a>        <span class="n">lon_step</span><span class="p">,</span> <span class="n">lat_step</span><span class="p">,</span> <span class="n">spacing</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_labels_asked</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">carried</span><span class="p">),</span> <span class="n">carried</span>
-<a id="__codelineno-0-1475" name="__codelineno-0-1475"></a>    <span class="p">)</span>
-<a id="__codelineno-0-1476" name="__codelineno-0-1476"></a>    <span class="n">edit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_graticule</span><span class="p">(</span><span class="n">steps</span><span class="o">.</span><span class="n">symbology</span><span class="p">(),</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
-<a id="__codelineno-0-1477" name="__codelineno-0-1477"></a>    <span class="c1"># Described first, then drawn — but through the renderer directly rather than through</span>
-<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a>    <span class="c1"># `Scene._draw`, because a second call replaces the layer it already has rather than adding one,</span>
-<a id="__codelineno-0-1479" name="__codelineno-0-1479"></a>    <span class="c1"># and the funnel only knows how to add. The undo the funnel owns is therefore spelled by the edit,</span>
-<a id="__codelineno-0-1480" name="__codelineno-0-1480"></a>    <span class="c1"># which is the only thing that knows which of the two shapes this call took.</span>
-<a id="__codelineno-0-1481" name="__codelineno-0-1481"></a>    <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-1482" name="__codelineno-0-1482"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">draw_layer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">figure_spec</span><span class="p">,</span> <span class="n">edit</span><span class="o">.</span><span class="n">held</span><span class="p">)</span>
-<a id="__codelineno-0-1483" name="__codelineno-0-1483"></a>    <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
-<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a>        <span class="n">edit</span><span class="o">.</span><span class="n">undo</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a>        <span class="k">raise</span>
+<a id="__codelineno-0-1440" name="__codelineno-0-1440"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-1441" name="__codelineno-0-1441"></a>
+<a id="__codelineno-0-1442" name="__codelineno-0-1442"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1443" name="__codelineno-0-1443"></a><span class="sd">        - A globe draws the grid unlabelled, and **refuses** `labels=True` rather than dropping them</span>
+<a id="__codelineno-0-1444" name="__codelineno-0-1444"></a><span class="sd">          quietly — the default `labels=None` is what lets one line serve both frames:</span>
+<a id="__codelineno-0-1445" name="__codelineno-0-1445"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1446" name="__codelineno-0-1446"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1447" name="__codelineno-0-1447"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1448" name="__codelineno-0-1448"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-1449" name="__codelineno-0-1449"></a><span class="sd">            &gt;&gt;&gt; globe = Map(crs=4326, globe=True)</span>
+<a id="__codelineno-0-1450" name="__codelineno-0-1450"></a><span class="sd">            &gt;&gt;&gt; _ = globe.graticule(spacing=30.0)</span>
+<a id="__codelineno-0-1451" name="__codelineno-0-1451"></a><span class="sd">            &gt;&gt;&gt; len(globe.ax.texts)</span>
+<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a><span class="sd">            0</span>
+<a id="__codelineno-0-1453" name="__codelineno-0-1453"></a><span class="sd">            &gt;&gt;&gt; globe.graticule(spacing=30.0, labels=True)  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-1454" name="__codelineno-0-1454"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-1455" name="__codelineno-0-1455"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-1456" name="__codelineno-0-1456"></a><span class="sd">            ValueError: graticule(labels=True) cannot place degree labels on a globe frame...</span>
+<a id="__codelineno-0-1457" name="__codelineno-0-1457"></a><span class="sd">            &gt;&gt;&gt; globe.close()</span>
+<a id="__codelineno-0-1458" name="__codelineno-0-1458"></a>
+<a id="__codelineno-0-1459" name="__codelineno-0-1459"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1460" name="__codelineno-0-1460"></a><span class="sd">        - A degree the frame cannot place is **named in a warning**, not silently missing: a polar</span>
+<a id="__codelineno-0-1461" name="__codelineno-0-1461"></a><span class="sd">          projection framed on a square puts most meridians&#39; anchors outside the view:</span>
+<a id="__codelineno-0-1462" name="__codelineno-0-1462"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1463" name="__codelineno-0-1463"></a><span class="sd">            &gt;&gt;&gt; import warnings</span>
+<a id="__codelineno-0-1464" name="__codelineno-0-1464"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-1465" name="__codelineno-0-1465"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-1466" name="__codelineno-0-1466"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-1467" name="__codelineno-0-1467"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=3413)</span>
+<a id="__codelineno-0-1468" name="__codelineno-0-1468"></a><span class="sd">            &gt;&gt;&gt; _ = m.set_bounds([-3.0e6, -3.0e6, 3.0e6, 3.0e6])</span>
+<a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="sd">            &gt;&gt;&gt; with warnings.catch_warnings(record=True) as caught:</span>
+<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="sd">            ...     warnings.simplefilter(&quot;always&quot;)</span>
+<a id="__codelineno-0-1471" name="__codelineno-0-1471"></a><span class="sd">            ...     _ = m.graticule(spacing=30.0)</span>
+<a id="__codelineno-0-1472" name="__codelineno-0-1472"></a><span class="sd">            &gt;&gt;&gt; message = str(caught[0].message)</span>
+<a id="__codelineno-0-1473" name="__codelineno-0-1473"></a><span class="sd">            &gt;&gt;&gt; message.split(&quot;:&quot;)[0]</span>
+<a id="__codelineno-0-1474" name="__codelineno-0-1474"></a><span class="sd">            &#39;graticule() could not place 8 degree label(s)&#39;</span>
+<a id="__codelineno-0-1475" name="__codelineno-0-1475"></a><span class="sd">            &gt;&gt;&gt; &quot;150°W&quot; in message, &quot;120°E&quot; in message</span>
+<a id="__codelineno-0-1476" name="__codelineno-0-1476"></a><span class="sd">            (True, True)</span>
+<a id="__codelineno-0-1477" name="__codelineno-0-1477"></a><span class="sd">            &gt;&gt;&gt; len(m.ax.texts)</span>
+<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a><span class="sd">            5</span>
+<a id="__codelineno-0-1479" name="__codelineno-0-1479"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-1480" name="__codelineno-0-1480"></a>
+<a id="__codelineno-0-1481" name="__codelineno-0-1481"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1482" name="__codelineno-0-1482"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1483" name="__codelineno-0-1483"></a>    <span class="c1"># Read before anything is described: a replacing call keeps every option it does not name, and</span>
+<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a>    <span class="c1"># the layer it replaces is the only record of what those options were.</span>
+<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a>    <span class="n">carried</span> <span class="o">=</span> <span class="n">_GraticuleSteps</span><span class="o">.</span><span class="n">held_by</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_graticule_held</span><span class="p">())</span>
+<a id="__codelineno-0-1486" name="__codelineno-0-1486"></a>    <span class="n">steps</span> <span class="o">=</span> <span class="n">_GraticuleSteps</span><span class="o">.</span><span class="n">asked</span><span class="p">(</span>
+<a id="__codelineno-0-1487" name="__codelineno-0-1487"></a>        <span class="n">lon_step</span><span class="p">,</span> <span class="n">lat_step</span><span class="p">,</span> <span class="n">spacing</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_labels_asked</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">carried</span><span class="p">),</span> <span class="n">carried</span>
+<a id="__codelineno-0-1488" name="__codelineno-0-1488"></a>    <span class="p">)</span>
+<a id="__codelineno-0-1489" name="__codelineno-0-1489"></a>    <span class="n">edit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_graticule</span><span class="p">(</span><span class="n">steps</span><span class="o">.</span><span class="n">symbology</span><span class="p">(),</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
+<a id="__codelineno-0-1490" name="__codelineno-0-1490"></a>    <span class="c1"># Described first, then drawn — but through the renderer directly rather than through</span>
+<a id="__codelineno-0-1491" name="__codelineno-0-1491"></a>    <span class="c1"># `Scene._draw`, because a second call replaces the layer it already has rather than adding one,</span>
+<a id="__codelineno-0-1492" name="__codelineno-0-1492"></a>    <span class="c1"># and the funnel only knows how to add. The undo the funnel owns is therefore spelled by the edit,</span>
+<a id="__codelineno-0-1493" name="__codelineno-0-1493"></a>    <span class="c1"># which is the only thing that knows which of the two shapes this call took.</span>
+<a id="__codelineno-0-1494" name="__codelineno-0-1494"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-1495" name="__codelineno-0-1495"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">draw_layer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">figure_spec</span><span class="p">,</span> <span class="n">edit</span><span class="o">.</span><span class="n">held</span><span class="p">)</span>
+<a id="__codelineno-0-1496" name="__codelineno-0-1496"></a>    <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+<a id="__codelineno-0-1497" name="__codelineno-0-1497"></a>        <span class="n">edit</span><span class="o">.</span><span class="n">undo</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<a id="__codelineno-0-1498" name="__codelineno-0-1498"></a>        <span class="k">raise</span>
+<a id="__codelineno-0-1499" name="__codelineno-0-1499"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -20222,29 +20366,29 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1704">1704</a></span>
-<span class="normal"><a href="#__codelineno-0-1705">1705</a></span>
-<span class="normal"><a href="#__codelineno-0-1706">1706</a></span>
-<span class="normal"><a href="#__codelineno-0-1707">1707</a></span>
-<span class="normal"><a href="#__codelineno-0-1708">1708</a></span>
-<span class="normal"><a href="#__codelineno-0-1709">1709</a></span>
-<span class="normal"><a href="#__codelineno-0-1710">1710</a></span>
-<span class="normal"><a href="#__codelineno-0-1711">1711</a></span>
-<span class="normal"><a href="#__codelineno-0-1712">1712</a></span>
-<span class="normal"><a href="#__codelineno-0-1713">1713</a></span>
-<span class="normal"><a href="#__codelineno-0-1714">1714</a></span>
-<span class="normal"><a href="#__codelineno-0-1715">1715</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1704" name="__codelineno-0-1704"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<a id="__codelineno-0-1705" name="__codelineno-0-1705"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the projection frame (for a globe map) then save the figure.</span>
-<a id="__codelineno-0-1706" name="__codelineno-0-1706"></a>
-<a id="__codelineno-0-1707" name="__codelineno-0-1707"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1708" name="__codelineno-0-1708"></a><span class="sd">        path: Destination file path; the extension picks the format matplotlib writes.</span>
-<a id="__codelineno-0-1709" name="__codelineno-0-1709"></a><span class="sd">        **kwargs: Forwarded to :meth:`~digitalearth.static.scene.Scene.save` / ``Figure.savefig``.</span>
-<a id="__codelineno-0-1710" name="__codelineno-0-1710"></a>
-<a id="__codelineno-0-1711" name="__codelineno-0-1711"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1712" name="__codelineno-0-1712"></a><span class="sd">        The path that was written, as a :class:`pathlib.Path`.</span>
-<a id="__codelineno-0-1713" name="__codelineno-0-1713"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1714" name="__codelineno-0-1714"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_frame</span><span class="p">()</span>
-<a id="__codelineno-0-1715" name="__codelineno-0-1715"></a>    <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1738">1738</a></span>
+<span class="normal"><a href="#__codelineno-0-1739">1739</a></span>
+<span class="normal"><a href="#__codelineno-0-1740">1740</a></span>
+<span class="normal"><a href="#__codelineno-0-1741">1741</a></span>
+<span class="normal"><a href="#__codelineno-0-1742">1742</a></span>
+<span class="normal"><a href="#__codelineno-0-1743">1743</a></span>
+<span class="normal"><a href="#__codelineno-0-1744">1744</a></span>
+<span class="normal"><a href="#__codelineno-0-1745">1745</a></span>
+<span class="normal"><a href="#__codelineno-0-1746">1746</a></span>
+<span class="normal"><a href="#__codelineno-0-1747">1747</a></span>
+<span class="normal"><a href="#__codelineno-0-1748">1748</a></span>
+<span class="normal"><a href="#__codelineno-0-1749">1749</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1738" name="__codelineno-0-1738"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-1739" name="__codelineno-0-1739"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the projection frame (for a globe map) then save the figure.</span>
+<a id="__codelineno-0-1740" name="__codelineno-0-1740"></a>
+<a id="__codelineno-0-1741" name="__codelineno-0-1741"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1742" name="__codelineno-0-1742"></a><span class="sd">        path: Destination file path; the extension picks the format matplotlib writes.</span>
+<a id="__codelineno-0-1743" name="__codelineno-0-1743"></a><span class="sd">        **kwargs: Forwarded to :meth:`~digitalearth.static.scene.Scene.save` / ``Figure.savefig``.</span>
+<a id="__codelineno-0-1744" name="__codelineno-0-1744"></a>
+<a id="__codelineno-0-1745" name="__codelineno-0-1745"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1746" name="__codelineno-0-1746"></a><span class="sd">        The path that was written, as a :class:`pathlib.Path`.</span>
+<a id="__codelineno-0-1747" name="__codelineno-0-1747"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1748" name="__codelineno-0-1748"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_frame</span><span class="p">()</span>
+<a id="__codelineno-0-1749" name="__codelineno-0-1749"></a>    <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -20267,13 +20411,13 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1717">1717</a></span>
-<span class="normal"><a href="#__codelineno-0-1718">1718</a></span>
-<span class="normal"><a href="#__codelineno-0-1719">1719</a></span>
-<span class="normal"><a href="#__codelineno-0-1720">1720</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1717" name="__codelineno-0-1717"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1718" name="__codelineno-0-1718"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the projection frame (for a globe map) then show the figure.&quot;&quot;&quot;</span>
-<a id="__codelineno-0-1719" name="__codelineno-0-1719"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_frame</span><span class="p">()</span>
-<a id="__codelineno-0-1720" name="__codelineno-0-1720"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1751">1751</a></span>
+<span class="normal"><a href="#__codelineno-0-1752">1752</a></span>
+<span class="normal"><a href="#__codelineno-0-1753">1753</a></span>
+<span class="normal"><a href="#__codelineno-0-1754">1754</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1751" name="__codelineno-0-1751"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1752" name="__codelineno-0-1752"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the projection frame (for a globe map) then show the figure.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1753" name="__codelineno-0-1753"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_frame</span><span class="p">()</span>
+<a id="__codelineno-0-1754" name="__codelineno-0-1754"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
