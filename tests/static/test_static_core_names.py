@@ -99,17 +99,18 @@ def _drawn_by(spelling: str, core: str):
         core: The Core name, which chooses the data.
 
     Returns:
-        `(artist type name, layer kind, recipe key, count of artists on the axes)`. Deliberately not the
-        artist itself: what has to be right is what kind of thing landed and what the figure says about it.
+        `(layer kind, recipe key, count of artists on the axes)`. Deliberately not the artist itself: what
+        has to be right is what kind of thing landed and what the figure says about it. It led with
+        `type(artist).__name__` until round-1 L8, which ST-20 turned into the constant `'Map'` for every
+        spelling, since the builders hand back the map rather than the artist.
     """
     scene = Map(crs=4326)
     try:
-        artist = getattr(scene, spelling)(DATA[core]())
+        getattr(scene, spelling)(DATA[core]())
         figure = scene.figure_spec
         layer = figure.layers.get(figure.layers.ids[-1])
         on_axes = len(scene.ax.images) + len(scene.ax.collections)
         return (
-            type(artist).__name__,
             layer.kind,
             layer.symbology.props.get("via"),
             on_axes,
@@ -128,7 +129,7 @@ class TestTheTierAnswersToItsCoreSpelling:
         Args:
             core: The Core name under test.
         """
-        _, _, via, on_axes = _drawn_by(core, core)
+        _, via, on_axes = _drawn_by(core, core)
         assert (via, on_axes) == (VIA[core], 1), (
             f"Map.{core}() recorded via={via!r} and left {on_axes} artists on the axes"
         )
