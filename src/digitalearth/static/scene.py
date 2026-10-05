@@ -470,6 +470,7 @@ class Scene(WatermarkMixin):
                 so one bad frame does not abort a batch; `True` raises `OffLimbError` instead, which is what
                 a pipeline that must not publish a map with a layer missing should pass.
         """
+        made_figure = ax is None
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         # Derived when the caller names only the axes, which is what `fig`'s own documentation has always
@@ -484,6 +485,12 @@ class Scene(WatermarkMixin):
         # are handed and neither takes a subfigure.
         self.fig: Figure = fig if fig is not None else ax.get_figure(root=True)
         self.ax: Axes = ax
+        # Whether this scene made the figure, or was handed one somebody else lays out. Recorded here
+        # rather than counted later, because `len(self.fig.axes)` does not answer it: a lone map that
+        # has drawn a colorbar holds two axes, and a `grid` panel whose siblings have been removed holds
+        # one. It is what tells a figure-level restore it is writing shared state (R2-M1) — a `grid`
+        # panel is given `ax=`, so it never owns its figure, while `Map(crs=...)` always does.
+        self._owns_fig: bool = made_figure
         self.strict: bool = bool(strict)
         self.layers: List[Tuple[Any, Any]] = []
         #: One entry per registered layer (same order as :attr:`layers`): the label :meth:`colorbar` falls

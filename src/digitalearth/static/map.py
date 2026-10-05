@@ -15,6 +15,7 @@ file.
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.static.maps.animation import AnimationMixin
@@ -138,6 +139,17 @@ class Map(
         `(fig.get_suptitle(), ax.get_title())`, and redescribed unchanged; `to_dict()` of the figure before
         and after is equal, and equal again on a third pass.
 
+        **The heading is figure-wide, so it is restored only onto a figure this map owns.** A `grid` panel
+        is built on an axes :func:`~digitalearth.static.figure.grid` laid out, and every panel of that grid
+        shares one figure — so writing the described heading through ``Figure.suptitle`` from one panel
+        reaches the whole figure and its siblings, which then describe the incoming heading as their own.
+        Measured on a two-panel grid headed `'grid heading'`, drawing a description headed `'INCOMING'`
+        into `maps[1]`: before the guard `fig.get_suptitle()` became `'INCOMING'` and `maps[0]` described
+        `'INCOMING'`; now both still read `'grid heading'` and the declined heading is named in a
+        ``UserWarning``. A map that made its own figure — `Map(crs=4326)`, and so every
+        :meth:`from_figure` round trip — restores it as before. The panel's title is not guarded, because
+        `set_title` paints the axes and that is panel-local.
+
         **A title is written only when the incoming figure carries one**, so drawing an untitled figure does
         not blank a heading the map already had. The layers are reconciled, not merely added — that part
         really does bring the map from whatever it showed before.
@@ -167,6 +179,10 @@ class Map(
             KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know —
                 `"the static tier does not draw 'terrain' layers; it draws [...]"`.
             OffLimbError: when a layer's data cannot be placed and the map is ``strict``.
+
+        Warns:
+            UserWarning: when the incoming figure carries a heading and this map does not own its figure —
+                naming the heading that was not drawn, and the ``fig.suptitle`` call that would draw it.
 
         Examples:
             - A figure drawn into a fresh map comes back describing exactly what it described, each title
@@ -272,8 +288,24 @@ class Map(
         # `(fig.get_suptitle(), ax.get_title())`, and redescribed `(None, 'rainfall, 2020')`.
         if figure.panels[0].title:
             self.set_title(figure.panels[0].title)
+        # Only onto a figure this map owns. `Figure.suptitle` is figure-level, and in a `grid` every panel
+        # shares one figure, so an unguarded restore is a per-panel call rewriting the whole figure's
+        # heading: measured on a two-panel grid headed `'grid heading'`, drawing a description headed
+        # `'INCOMING'` into `maps[1]` left `fig.get_suptitle()` as `'INCOMING'`, and `maps[0]` — never
+        # drawn into — then described `'INCOMING'` as its own (R2-M1). The panel's title above is
+        # unguarded because `set_title` paints the **axes**, which is panel-local.
         if figure.title:
-            self.fig.suptitle(figure.title)
+            if self._owns_fig:
+                self.fig.suptitle(figure.title)
+            else:
+                warnings.warn(
+                    f"draw_figure() did not restore the figure heading {figure.title!r}: this map was "
+                    f"built on an axes somebody else laid out, and the heading belongs to the figure "
+                    f"that axes is in, which its siblings share. Call "
+                    f"`map.fig.suptitle({figure.title!r})` yourself if the whole figure should carry it.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         # The view's explicit framing is not a layer, so `_change` does not carry it: restore any `set_bounds`
         # region from the panel's viewport, or a map framed on a subregion replays showing the full data
         # extent. `set_bounds` reprojects a `Bounds` in any CRS, so a figure another tier described frames

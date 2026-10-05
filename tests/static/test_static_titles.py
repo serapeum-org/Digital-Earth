@@ -17,6 +17,7 @@ pins: the title is recorded on the figure's panel the way the 3-D tier records i
 falls back to the source's own units when the library resolves none.
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
@@ -24,6 +25,7 @@ from pyramids.dataset import Dataset, GeoReference
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.sources import DimensionInfo, Source
 from digitalearth.static import Map, Scene
+from digitalearth.static.figure import grid
 
 #: A 2x2 lat/lon geo-reference, so a field can be drawn on a `Map(crs=4326)` without reading a file.
 GEO = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
@@ -324,4 +326,120 @@ class TestATitleThatIsNotAString:
             scene.set_title(_Blank())
             assert scene.title is None, (
                 f"a title rendering as whitespace should clear the record; got {scene.title!r}"
+            )
+
+
+class TestAPanelDoesNotWriteTheSharedFiguresHeading:
+    """`draw_figure` restores the heading only onto a figure the scene owns (R2-M1).
+
+    `FigureSpec.title` is the figure's ``suptitle``, and in a `grid` every panel shares one figure — so a
+    restore that reaches ``Figure.suptitle`` is a per-panel call mutating state the whole figure owns.
+    Measured on the branch before the guard: drawing a heading into `maps[1]` of a two-panel grid replaced
+    the grid's own `'grid heading'` with `'INCOMING'`, and `maps[0]` — never touched — then described
+    `'INCOMING'` as its heading.
+    """
+
+    @staticmethod
+    def _headed_spec():
+        """Return a one-map description carrying a figure heading and a panel title.
+
+        Returns:
+            The `FigureSpec` of a map headed ``INCOMING`` whose panel is titled ``donor panel``.
+        """
+        donor = Map(crs=4326)
+        donor.set_title("donor panel")
+        donor.fig.suptitle("INCOMING")
+        spec = donor.figure_spec
+        donor.close()
+        return spec
+
+    @pytest.fixture
+    def two_panels(self):
+        """A two-panel grid headed "grid heading", with the incoming description to draw into it.
+
+        Yields:
+            The `(fig, maps, spec)` triple: the shared figure, its two panels, and a description carrying
+            a heading of its own.
+        """
+        fig, maps = grid(1, 2, crs=4326, suptitle="grid heading")
+        yield fig, maps, self._headed_spec()
+        plt.close(fig)
+
+    def test_the_grids_own_heading_survives_a_panels_restore(self, two_panels):
+        """Drawing a headed description into one panel leaves the shared figure's heading standing.
+
+        Args:
+            two_panels: The shared figure, its panels, and the incoming description.
+
+        Test scenario:
+            The panel is `maps[1]`; the heading read back is the figure's, which belongs to both panels
+            and to `grid`'s caller.
+        """
+        fig, maps, spec = two_panels
+        with pytest.warns(UserWarning):
+            maps[1].draw_figure(spec)
+        assert fig.get_suptitle() == "grid heading", (
+            f"a panel should not rewrite the shared heading; got {fig.get_suptitle()!r}"
+        )
+
+    def test_the_untouched_sibling_still_describes_the_grids_heading(self, two_panels):
+        """`maps[0]` is never drawn into, so its description is unchanged by `maps[1]`'s restore.
+
+        Args:
+            two_panels: The shared figure, its panels, and the incoming description.
+
+        Test scenario:
+            The sibling reads the heading off the figure the two share, so a write by one panel is read
+            back by the other as its own — which is the half of M1 a reader sees.
+        """
+        _fig, maps, spec = two_panels
+        with pytest.warns(UserWarning):
+            maps[1].draw_figure(spec)
+        assert maps[0].figure_spec.title == "grid heading", (
+            f"the sibling should still describe the grid's heading; got {maps[0].figure_spec.title!r}"
+        )
+
+    def test_the_declined_heading_is_named_in_the_warning(self, two_panels):
+        """The restore is declined out loud, naming the heading that was not drawn.
+
+        Args:
+            two_panels: The shared figure, its panels, and the incoming description.
+
+        Test scenario:
+            Silently dropping half a round trip is the failure mode the warning exists for: a caller
+            replaying a figure into a panel has to learn that the heading did not travel.
+        """
+        _fig, maps, spec = two_panels
+        with pytest.warns(UserWarning, match="INCOMING"):
+            maps[1].draw_figure(spec)
+
+    def test_the_panels_own_title_is_still_restored(self, two_panels):
+        """Only the figure-level half is declined; the panel's title is painted as always.
+
+        Args:
+            two_panels: The shared figure, its panels, and the incoming description.
+
+        Test scenario:
+            `set_title` paints the **axes**, which is panel-local, so the guard must not reach it — a
+            restore that dropped both halves would trade one bug for another.
+        """
+        _fig, maps, spec = two_panels
+        with pytest.warns(UserWarning):
+            maps[1].draw_figure(spec)
+        assert maps[1].ax.get_title() == "donor panel", (
+            f"the panel's own title should still be restored; got {maps[1].ax.get_title()!r}"
+        )
+
+    def test_a_map_that_owns_its_figure_still_takes_the_heading(self):
+        """A map that made its own figure restores the heading there, as M4 settled.
+
+        Test scenario:
+            The guard is about *sharing*, not about the slot: the one-map round trip `Map.from_figure`
+            performs must still come back headed, or the fix would undo Round 1's M4.
+        """
+        spec = self._headed_spec()
+        with Map(crs=4326) as lone:
+            lone.draw_figure(spec)
+            assert lone.fig.get_suptitle() == "INCOMING", (
+                f"a map owning its figure should take the heading; got {lone.fig.get_suptitle()!r}"
             )
