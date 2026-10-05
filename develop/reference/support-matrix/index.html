@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4533,9 +4533,7 @@ omissions with no positive counterpart on any backend, so they appear only in th
   tier that has one</li>
 <li><strong><code>layer_switcher</code></strong> — the tier draws no control onto the figure for a reader to toggle: visibility is set
   from code, with <code>set_visible</code> before or between draws, and a live canvas can do that from a <code>Scene.on_pick</code>
-  callback — but the switch itself is a widget the interactive and web tiers' engines provide and this one does
-  not. The 3-D tier has none either, and gives its own reason: its layers are switched by id through the scene's
-  API rather than from a panel</li>
+  callback — but the switch itself is a widget the other tiers' engines provide and this one does not</li>
 <li><strong><code>measure</code></strong> — there is no pointer to measure with; a distance is drawn as a layer of its own</li>
 <li><strong><code>navigation</code></strong> — there is no viewport to pan: the extent is set by <code>set_bounds</code> before drawing</li>
 <li><strong><code>time_slider</code></strong> — a sequence over time is written out as an animation here rather than scrubbed, which is
