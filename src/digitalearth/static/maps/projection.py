@@ -500,7 +500,10 @@ class _Graticule:
     - a **globe** is clipped at its limb, and cleopatra's `apply_projection_frame` draws its grid after
       every data layer — so :meth:`draw` hands the lines over and leaves the axes alone;
     - a **flat** map has no such pass, so :meth:`draw` puts the grid on now, as one `LineCollection`
-      plus one :class:`~matplotlib.text.Text` per labelled line.
+      plus one :class:`~matplotlib.text.Text` per labelled line — and a labelled one is built again by
+      :meth:`ProjectionMixin.set_bounds`, the framing funnel, because :meth:`labels` places a degree in
+      the view it is read off and a flat map would otherwise keep the degrees of a view it has left
+      (review R2-M2).
 
     Until #221 the flat map had no pass at all: the lines were computed, stored, and nothing ever read
     them, so `Map(crs=4326).graticule()` — the default frame — registered a layer and drew nothing while
@@ -603,7 +606,9 @@ class _Graticule:
         per-label call costs more in PROJ overhead than the projection itself.
 
         Returns:
-            One :class:`_DegreeLabel` per line that could be placed, meridians first.
+            One :class:`_DegreeLabel` per line that could be placed, meridians first — and so a count that
+            moves with the view, which is why :meth:`ProjectionMixin.set_bounds` runs this again rather
+            than leaving a grid labelled for a view the figure has left (review R2-M2).
 
         Warns:
             UserWarning: naming every degree the display CRS or the view would not take. A graticule that
@@ -1124,6 +1129,14 @@ class ProjectionMixin(_MixinBase):
                 from the call being dropped; or, from `Bounds`, for a non-finite edge or a ``padding``
                 below ``-0.5``, which would turn the frame inside out.
 
+        Warns:
+            UserWarning: naming every degree a **labelled graticule**'s re-label cannot place in the view
+                this call has just framed — ``graticule()``'s own warning, reaching the caller from here
+                because this is the call that moved the view out from under the labels. Measured on
+                ``Map(crs=3413)``: a 30-degree grid built unframed carries 18 degrees, and framing it on
+                ``[-3e6, -3e6, 3e6, 3e6]`` leaves 5 and names the 8 the polar projection puts outside that
+                square. matplotlib raises one of its own for a singular limit, as the note below says.
+
         Notes:
             A **flipped** pair is honoured in the sequence form: an ``east`` west of its ``west`` inverts the
             x axis, which is how matplotlib expresses ``invert_xaxis`` through the limits, and ``padding``
@@ -1136,6 +1149,12 @@ class ProjectionMixin(_MixinBase):
             spelling in the package that read four bare numbers that way, so one call framed two different
             rectangles across the 2-D tiers; the matplotlib ordering is reachable from `Bounds` alone now,
             through :meth:`~digitalearth.base.spec.bounds.Bounds.as_mpl`.
+
+            A **labelled graticule** is re-labelled against the view this call leaves behind, because a
+            degree label is positioned in the view it is read off and a flat map has no render-time pass to
+            revisit it (:meth:`_relabel_graticule`, review R2-M2). The grid's lines are untouched. This is
+            therefore the one call that redraws a graticule layer without ``graticule()`` being written, so
+            it carries that method's placement warning — see *Warns*.
 
             What :attr:`viewport` reports is read **back off the axes** once the limits are set, so it is the
             rectangle the figure is holding rather than the one that was asked for. The two differ for a frame
@@ -1194,7 +1213,42 @@ class ProjectionMixin(_MixinBase):
         # so a zero-span frame — a fit onto one point, or `padding=-0.5` — was recorded as a rectangle the
         # axes was not holding and the figure never showed (review R2-M10).
         self._frame_bounds = self._frame_held(frame.box.crs)
+        self._relabel_graticule()
         return self
+
+    def _relabel_graticule(self) -> None:
+        """Re-place a labelled flat graticule's degrees against the view that was just framed.
+
+        **Why framing is where this happens.** A degree label is positioned in the view it is read off —
+        just inside the lower edge for a meridian, the left edge for a parallel — so it is the one part of
+        a graticule that depends on the limits rather than on the display CRS and the two steps. A globe
+        revisits its whole grid at render time, through :meth:`_apply_frame`; a flat map has no such pass,
+        so a labelled grid built before the framing call kept the labels of a view the figure no longer
+        showed: ``graticule(spacing=30.0)`` then :meth:`set_domain` left all 18 degrees outside the axes
+        and off the canvas, silently, while the record and the `FigureSpec` both still said 18 (review
+        R2-M2). The reverse order worked, which is what made it quiet.
+
+        :meth:`set_bounds` is the single funnel every framing call reaches — :meth:`set_domain` and
+        :meth:`set_global` both frame through it — so one call here covers all three.
+
+        The **lines** are left to the redraw to re-cut identically: they span the world whatever the map is
+        looking at, which is why this is a re-label rather than a rebuild in anything but name. The redraw
+        goes through ``Renderer.draw_layer``, so the grid replaces its own drawing (the collection is
+        reused, the old labels come off), the described ``visible`` flag is re-applied, and a draw that
+        raises takes its own artists back off.
+
+        Note:
+            A grid drawn ``labels=False`` is left alone: a framing call is not a request for the degrees of
+            a deliberately bare grid to come back, which is the rule a *replacing* ``graticule()`` call
+            already follows. A globe is left alone because its grid carries no degrees at all.
+        """
+        held = self._graticule_held()
+        if self.globe or held is None:
+            return
+        steps = _GraticuleSteps.held_by(held)
+        if steps is None or not steps.labels:
+            return
+        self._renderer.draw_layer(self.figure_spec, held.id)
 
     def _frame_held(self, crs: Any) -> Bounds:
         """Return the rectangle the axes is holding, as a region in `crs`.
@@ -1413,6 +1467,16 @@ class ProjectionMixin(_MixinBase):
         everything else. Before #221 the *flat* map had no such pass, so this call computed a grid, stored
         it, and drew nothing at all while the figure described a layer that was drawn.
 
+        **A later framing call re-labels it.** A degree label is positioned in the view it is read off, so
+        a labelled grid drawn before :meth:`set_bounds`, :meth:`set_domain` or :meth:`set_global` is
+        re-placed by that call against the view it leaves behind
+        (:meth:`_relabel_graticule`) — the lines are unchanged, since they span the world whatever the map
+        is looking at. Until then the labels were placed once: ``graticule(spacing=30.0)`` followed by
+        ``set_domain("europe")`` left all 18 degrees outside the axes and off the canvas without a word,
+        and the reverse order of the same two calls drew three (review R2-M2). A bare grid is not
+        re-labelled — a framing call is not a request for the degrees of a ``labels=False`` grid to come
+        back, the rule a *replacing* call here already follows.
+
         Args:
             lon_step: Meridian spacing in degrees; ``None`` (default) means
                 :data:`DEFAULT_GRATICULE_STEP` on the call that **creates** the graticule, and the step
@@ -1459,11 +1523,24 @@ class ProjectionMixin(_MixinBase):
             drawer's value, and it answers that way even on a globe whose lines are not on the axes yet.
             What is *on* the axes is `Renderer.drawn[layer_id].artists`, and it is a different shape per
             frame. A flat map carries one `LineCollection` for the whole grid plus one `Text` per
-            **labelled line** — a count that tracks the degrees the *view* holds rather than the polylines
-            (measured on `Map(crs=4326)`: 18 polylines and 18 `Text` unframed at `spacing=30.0`, but 6
-            `Text` once framed on `[-35, -5, 35, 65]`, and 9 polylines beside 10 `Text` at
-            `spacing=60.0`). With `labels=False` the axes carry the `LineCollection` alone (measured: 1
-            artist). A globe's grid is instead drawn by `apply_projection_frame` as one `Line2D` per
+            **labelled line** — a count that tracks the degrees the *view* holds rather than the
+            polylines, and tracks them whichever order the framing call and this one are written in, since
+            a framing call re-labels the grid. Measured on `Map(crs=4326)`, both orders:
+
+            ```
+            unframed, spacing=30                  polylines=18  LineCollection=1  Text=18
+            framed THEN graticule, spacing=30     polylines=18  LineCollection=1  Text=6
+            graticule THEN framed, spacing=30     polylines=18  LineCollection=1  Text=6
+            unframed, spacing=60                  polylines= 9  LineCollection=1  Text=10
+            framed THEN graticule, spacing=60     polylines= 9  LineCollection=1  Text=3
+            graticule THEN framed, spacing=60     polylines= 9  LineCollection=1  Text=3
+            labels=False, either order            polylines=18  LineCollection=1
+            ```
+
+            ("framed" is `[-35, -5, 35, 65]`.) The two orders differed before R2-M2: the second row of
+            each pair carried the first row's count, placed against a view the figure had already left.
+
+            A globe's grid is instead drawn by `apply_projection_frame` as one `Line2D` per
             polyline (measured: 18, and 0 artists before `render()`). `set_visible` and `remove_layer` act
             on that second list, so both reach every frame's grid. Neither spelling raises for a graticule
             this call built — the `KeyError` `Scene.artist` documents is for an id the figure does not hold.
